@@ -2,6 +2,12 @@
 
 # Deployments
 
+**Reference** · [Documentation](../README.md)
+
+> Sauce's own contracts and programs: the Kitchen that makes Pots, the engine that runs programs,
+> and the Routers that help with swaps. They sit at the same address on every chain, so this one
+> page lists them. You rarely need them: the `sauce` command and the SDK fill them in for you.
+
 The Sauce contracts have the same address on every EVM chain, and its programs the same id on
 every Solana cluster, so this page is the one place the manual lists them: each chain's page
 points here. An address is where the contract is deployed, not proof that it is there: before

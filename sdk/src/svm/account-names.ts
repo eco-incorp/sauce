@@ -6,7 +6,10 @@
  *   pot | owner          the cook's Pot, or its owner (the signer)
  *   self                 the authority the program acts with: the Pot, cooked through the Kitchen;
  *                        the owner, cooked directly on the engine (`via: "engine"`)
- *   <base58>             that address
+ *   <key>                that address: base58, or its 32 bytes as `0x` and 64 hex digits — the
+ *                        spelling a program holds a key in, and `sauce globals` prints a mint's
+ *                        `address` and the release its `key` in (`svmPublicKey`); wherever a name
+ *                        below takes a base58 key, it takes this spelling too
  *   system               the System program
  *   @<param>             the key given as main's argument `<param>`
  *   <holder>:<token>     the holder's associated token account for the mint, under the token
@@ -18,7 +21,8 @@
  *                        one of the nine accounts `@sauce/router`'s swap at a price takes for the
  *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
  *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
- *                        pool's own state through `load` (`svm/pool-slot.ts`)
+ *                        pool's own state through `load` (`svm/pool-slot.ts`); a pool that is the
+ *                        System Program is an empty slot, whose nine are the System Program
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -35,7 +39,13 @@
  * The derivation is the ADDRESS the transaction attaches; what a program does with the account is
  * its own to check (the token methods check each holder's account on chain).
  */
-import { address, getAddressEncoder, isAddress, type Address } from "@solana/kit";
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  isAddress,
+  type Address,
+} from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
@@ -43,7 +53,11 @@ import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./p
 import { svmTokenAccount } from "./token-accounts.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./token-program.js";
-import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
+import {
+  memoizedAssociatedTokenAccountSync,
+  memoizedFindProgramAddressSync,
+  memoizedGetProgramDerivedAddress,
+} from "./venues/pda-memo.js";
 
 /** A mint's token program, read from the cluster: the owner of the mint's account. */
 export type SvmMintProgramOf = (mint: Address) => Promise<Address>;
@@ -137,19 +151,39 @@ type Parsed =
 
 const PARAM = /^@([A-Za-z_$][A-Za-z0-9_$]*)$/;
 const SYMBOL = /^[A-Za-z0-9_]+$/;
+const HEX_KEY = /^0x[0-9a-fA-F]{64}$/;
+
+/**
+ * A Solana public key in either spelling the SDK writes one in: base58, or its 32 bytes as `0x`
+ * and 64 hex digits — how a program holds a key (an `Address` value), and how `sauce globals`
+ * prints a mint's `address` and deployments.json a program's `key`. The key in base58, which every
+ * Solana client takes; `undefined` for any other text.
+ */
+export function svmPublicKey(text: string): Address | undefined {
+  if (HEX_KEY.test(text)) {
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) bytes[i] = parseInt(text.slice(2 + 2 * i, 4 + 2 * i), 16);
+
+    return getAddressDecoder().decode(bytes);
+  }
+
+  return isAddress(text) ? address(text) : undefined;
+}
 
 function parseHolder(text: string): Holder | undefined {
   if (text === "pot" || text === "owner" || text === "self") return { kind: text };
   const param = PARAM.exec(text);
   if (param !== null) return { kind: "arg", param: param[1]! };
+  const key = svmPublicKey(text);
 
-  return isAddress(text) ? { kind: "address", key: text } : undefined;
+  return key === undefined ? undefined : { kind: "address", key };
 }
 
 function parseToken(text: string): Token | undefined {
   const param = PARAM.exec(text);
   if (param !== null) return { kind: "arg", param: param[1]! };
-  if (isAddress(text)) return { kind: "address", key: text };
+  const key = svmPublicKey(text);
+  if (key !== undefined) return { kind: "address", key };
 
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
@@ -364,16 +398,29 @@ function holderOf(
   }
 }
 
-/**
- * Resolves one name to the account a cook attaches. `pot` and `owner` stay as they are (and `self`
- * becomes one of them), so the cook gives each its signing role; every other name becomes an
- * address. Throws `SvmAccountNameError` for a name the language does not have, a symbol the chain
- * does not register, the Pot's token account cooked with no Pot, or an argument not given.
- */
-export async function resolveSvmAccountName(
-  value: string,
-  ctx: SvmAccountNameContext,
-): Promise<ResolvedSvmAccountName> {
+/** A name parsed and checked: resolved already, or what its address derives from. */
+type Planned =
+  | { readonly kind: "done"; readonly resolved: ResolvedSvmAccountName }
+  | {
+      readonly kind: "token";
+      /** `mint:` gives the mint itself (`done`); these need its program, which an unregistered
+       *  mint's is read from the cluster for. */
+      readonly need: "program" | "account";
+      readonly mint: Address;
+      readonly row?: SvmTokenRow;
+      readonly what: string;
+      readonly holder?: { readonly key: Address; readonly whose: string };
+    }
+  | { readonly kind: "slot"; readonly parsed: Extract<Parsed, { kind: "slot" }> }
+  | {
+      readonly kind: "pda";
+      readonly program: Address;
+      readonly seeds: readonly Uint8Array[];
+      readonly text: string;
+    };
+
+/** Everything about a name that needs no read and no derivation. */
+function plan(value: string, ctx: SvmAccountNameContext): Planned {
   const parsed = parse(value);
   if (parsed === undefined && value.startsWith("system:"))
     throw new SvmAccountNameError(SYSTEM_HOLDER(value));
@@ -385,52 +432,155 @@ export async function resolveSvmAccountName(
         'program, and pda:<program>:"seed",@to,u64:7 an address a program derives',
     );
   }
+  const done = (resolved: ResolvedSvmAccountName): Planned => ({ kind: "done", resolved });
   if (parsed.kind === "holder") {
     const { holder } = parsed;
     switch (holder.kind) {
       case "pot":
-        return { value: "pot", kind: "pot" };
+        return done({ value: "pot", kind: "pot" });
       case "owner":
-        return { value: "owner", kind: "owner" };
+        return done({ value: "owner", kind: "owner" });
       case "self":
-        return ctx.via === "engine"
-          ? { value: "owner", kind: "owner" }
-          : { value: "pot", kind: "pot" };
+        return done(
+          ctx.via === "engine" ? { value: "owner", kind: "owner" } : { value: "pot", kind: "pot" },
+        );
       case "arg":
-        return {
+        return done({
           value: argument(holder.param, ctx),
           label: `main's argument ${holder.param}`,
           kind: "address",
-        };
+        });
       case "address":
-        return { value: address(holder.key), kind: "address" };
+        return done({ value: address(holder.key), kind: "address" });
     }
   }
 
   const rows = svmTokenRows(ctx.chain);
-  if (parsed.kind === "slot") return resolveSlot(parsed, ctx, rows);
-  if (parsed.kind === "pda") return resolvePda(parsed, ctx, rows);
+  if (parsed.kind === "slot") return { kind: "slot", parsed };
+  if (parsed.kind === "pda") return { kind: "pda", ...pdaSeeds(parsed, ctx, rows) };
   const tokenText = value.slice(value.indexOf(":") + 1);
   const whose = value.slice(0, value.indexOf(":"));
   const { mint, row, what } = mintOf(parsed.token, whose, ctx, rows);
-  if (parsed.kind === "mint") return { value: mint, label: `the ${what} mint`, kind: "mint" };
-  const program = row !== undefined ? address(row.tokenProgram) : await programOfMint(mint, ctx);
-  if (parsed.kind !== "account") {
+  if (parsed.kind === "mint") return done({ value: mint, label: `the ${what} mint`, kind: "mint" });
+
+  return {
+    kind: "token",
+    need: parsed.kind === "account" ? "account" : "program",
+    mint,
+    ...(row === undefined ? {} : { row }),
+    what,
+    ...(parsed.kind === "account" ? { holder: holderOf(parsed.holder, ctx, tokenText) } : {}),
+  };
+}
+
+/** A token name finished with its mint's program and, for an account, the account. */
+function tokenName(
+  planned: Extract<Planned, { kind: "token" }>,
+  program: Address,
+  account: Address | undefined,
+): ResolvedSvmAccountName {
+  if (planned.need === "program") {
     return {
       value: program,
-      label: `${what}'s token program, ${programName(program)}`,
+      label: `${planned.what}'s token program, ${programName(program)}`,
       kind: "program",
     };
   }
-  const holder = holderOf(parsed.holder, ctx, tokenText);
-  const account = await svmTokenAccount({ mint, tokenProgram: program }, holder.key);
 
   return {
-    value: account,
-    label: `${holder.whose} ${what} account`,
+    value: account!,
+    label: `${planned.holder!.whose} ${planned.what} account`,
     kind: "account",
-    account: { mint, holder: holder.key, program },
+    account: { mint: planned.mint, holder: planned.holder!.key, program },
   };
+}
+
+/**
+ * Resolves one name to the account a cook attaches. `pot` and `owner` stay as they are (and `self`
+ * becomes one of them), so the cook gives each its signing role; every other name becomes an
+ * address. Throws `SvmAccountNameError` for a name the language does not have, a symbol the chain
+ * does not register, the Pot's token account cooked with no Pot, or an argument not given.
+ */
+export async function resolveSvmAccountName(
+  value: string,
+  ctx: SvmAccountNameContext,
+): Promise<ResolvedSvmAccountName> {
+  const planned = plan(value, ctx);
+  switch (planned.kind) {
+    case "done":
+      return planned.resolved;
+    case "slot":
+      return resolveSlot(planned.parsed, ctx, svmTokenRows(ctx.chain));
+    case "pda":
+      return {
+        value: await memoizedGetProgramDerivedAddress(planned.program, planned.seeds),
+        label: `the address ${planned.program} derives for ${planned.text}`,
+        kind: "address",
+      };
+    case "token": {
+      const program =
+        planned.row !== undefined
+          ? address(planned.row.tokenProgram)
+          : await programOfMint(planned.mint, ctx);
+      const account =
+        planned.need === "account"
+          ? await svmTokenAccount(
+              { mint: planned.mint, tokenProgram: program },
+              planned.holder!.key,
+            )
+          : undefined;
+
+      return tokenName(planned, program, account);
+    }
+  }
+}
+
+/**
+ * {@link resolveSvmAccountName}, synchronously, for a name that needs nothing read from the
+ * cluster — every name but a pool's slot and an unregistered mint's token account or program, which
+ * it refuses (`ctx.programOf` and `ctx.load` are not consulted). For a caller that cannot await: the
+ * intent lowering, which resolves an intent's cook on Solana inside the synchronous compile.
+ */
+export function resolveSvmAccountNameSync(
+  value: string,
+  ctx: Omit<SvmAccountNameContext, "programOf" | "load" | "slots">,
+): ResolvedSvmAccountName {
+  const planned = plan(value, ctx);
+  switch (planned.kind) {
+    case "done":
+      return planned.resolved;
+    case "slot":
+      throw new SvmAccountNameError(
+        `${value} is read from the pool on the cluster when the transaction is built, and this ` +
+          "account is derived before anything is read: name the account by its address",
+      );
+    case "pda":
+      return {
+        value: memoizedFindProgramAddressSync(planned.program, planned.seeds)[0],
+        label: `the address ${planned.program} derives for ${planned.text}`,
+        kind: "address",
+      };
+    case "token": {
+      if (planned.row === undefined) {
+        throw new SvmAccountNameError(
+          `mint ${planned.mint} is not one ${ctx.chain.slug} registers, and its token program ` +
+            "can only be read from the cluster, which this resolution does not do: use a " +
+            `registered token (sauce globals --chain ${ctx.chain.slug} --tokens)`,
+        );
+      }
+      const program = address(planned.row.tokenProgram);
+      const account =
+        planned.need === "account"
+          ? memoizedAssociatedTokenAccountSync({
+              owner: planned.holder!.key,
+              mint: planned.mint,
+              tokenProgram: program,
+            })
+          : undefined;
+
+      return tokenName(planned, program, account);
+    }
+  }
 }
 
 /** One account of a pool's slot, the slot read once per resolution (`slots`), pool and token paid. */
@@ -444,6 +594,10 @@ async function resolveSlot(
       ? argument(parsed.pool.param, ctx)
       : address((parsed.pool as { key: string }).key);
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
+  // An empty slot, which `@sauce/router`'s `trySwap` skips: nothing to read.
+  if (pool === SYSTEM_PROGRAM) {
+    return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
+  }
   const load = ctx.load;
   if (load === undefined) {
     throw new SvmAccountNameError(
@@ -491,12 +645,12 @@ function integerArgument(param: string, ctx: SvmAccountNameContext): bigint {
   return value;
 }
 
-/** A program-derived address, its seeds made from the cook and main's arguments. */
-async function resolvePda(
+/** A program-derived address's program and seeds, made from the cook and main's arguments. */
+function pdaSeeds(
   parsed: Extract<Parsed, { kind: "pda" }>,
   ctx: SvmAccountNameContext,
   rows: readonly SvmTokenRow[],
-): Promise<ResolvedSvmAccountName> {
+): { readonly program: Address; readonly seeds: readonly Uint8Array[]; readonly text: string } {
   const encoder = getAddressEncoder();
   const keyOf = (holder: Holder): Address => {
     switch (holder.kind) {
@@ -547,7 +701,6 @@ async function resolvePda(
   if (seeds.length > 16) {
     throw new SvmAccountNameError(`${seeds.length} seeds; an address derives from at most 16`);
   }
-  const value = await memoizedGetProgramDerivedAddress(program, seeds);
 
-  return { value, label: `the address ${program} derives for ${parsed.text}`, kind: "address" };
+  return { program, seeds, text: parsed.text };
 }

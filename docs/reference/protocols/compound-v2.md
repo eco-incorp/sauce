@@ -2,6 +2,12 @@
 
 # Compound V2 (`compound-v2`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Compound V2 is a lending market: deposit tokens to earn interest, or borrow against them. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Legacy algorithmic money market protocol on Ethereum. Pioneered cToken model where deposits mint interest-bearing tokens.
 
 | Fact | Value |

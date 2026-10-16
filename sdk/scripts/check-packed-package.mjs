@@ -43,6 +43,13 @@ const RUNTIME = ["@modelcontextprotocol/sdk", "litesvm", "zod"];
 // What a plain install of the package never brings: those, the web servers the MCP SDK brings, and
 // TypeScript and dotenv, which it once depended on and nothing of it imports.
 const NEVER_IN_A_LIBRARY_INSTALL = [...RUNTIME, "express", "hono", "typescript", "dotenv"];
+// The Solana packages a project writing Solana code installs itself — Kit and the program clients
+// for the System and Token programs — at the ranges the package depends on them by: the current
+// majors, so a project on today's Kit shares the package's one copy.
+const SOLANA_PROJECT = ["@solana/kit", "@solana-program/system", "@solana-program/token"].map(
+  (dependency) =>
+    `${dependency}@${JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).dependencies[dependency]}`,
+);
 // The runtime packages' own install, as the package ships it: the versions it pins.
 const RUNTIME_PINS = JSON.parse(
   readFileSync(resolve(root, "sdk/runtime/package.json"), "utf8"),
@@ -423,6 +430,13 @@ try {
     } else {
       console.log('Clean package install: ./testing resolves (no anvil, or no engine artifacts, to run it here)');
     }
+    // Solana runs in the project's own LiteSVM, which no install of the package brings: the kit
+    // names what to install.
+    await assert.rejects(
+      testing.local({ chain: 'solana' }),
+      /this project does not have: npm i -D litesvm@${RUNTIME_PINS.litesvm}/,
+    );
+    console.log('Clean package install: ./testing on Solana names the LiteSVM to install');
   `,
   );
   // Force the packaged path: the resolvers read no environment, and scrubbing CI's SAUCE_* paths
@@ -787,6 +801,60 @@ try {
         `(${installedSize(folder).text}, ${binaries[0]} among it) and simulates a Solana cook in ` +
         "its local copy",
     );
+  }
+
+  // The testing kit on Solana from a clean install: the tarball and the LiteSVM it pins, and nothing
+  // else, a Solana cook in LiteSVM with the packaged engine and Kitchen, staged too.
+  if (shipsEngine && shipsAddresses) {
+    const kit = mkdtempSync(join(tmpdir(), "sauce-solana-kit-"));
+    try {
+      writeFileSync(join(kit, "package.json"), JSON.stringify({ private: true, type: "module" }));
+      execFileSync(
+        "npm",
+        [
+          ...["install", "--engine-strict", "--ignore-scripts", "--prefer-offline"],
+          ...["--no-audit", "--no-fund", join(work, filename), `litesvm@${RUNTIME_PINS.litesvm}`],
+        ],
+        { cwd: kit, stdio: "inherit" },
+      );
+      writeFileSync(
+        join(kit, "solana-kit.mjs"),
+        `
+        import assert from 'node:assert/strict';
+        import { CookReverted, local } from '${name}/testing';
+        const solana = await local({ chain: 'solana' });
+        try {
+          const twice = await solana.run({ source: 'function main(a: Uint256): Uint256 {\\n  return a * 2;\\n}\\n' }, { args: [21n] });
+          assert.equal(twice.returned, 42n, 'a Solana cook returns what main returned');
+          await assert.rejects(
+            solana.simulate({ source: 'function main(a: Uint256) {\\n  require(a < 10, "too big");\\n}\\n' }, { args: [11n] }),
+            (error) => error instanceof CookReverted && error.reason === 'too big',
+          );
+          let body = '  let x = a;\\n';
+          for (let i = 0; i < 300; i++) body += '  x = (x * ' + (i + 3) + ' + ' + (i + 1) + ') % 1000003;\\n';
+          const staged = await solana.run({ source: 'function main(a: Uint256): Uint256 {\\n' + body + '  return x;\\n}\\n' }, { args: [7n] });
+          assert.equal(staged.staged, true, 'a program past one transaction is staged');
+          const to = solana.account(1).address;
+          await solana.fund(solana.account(0).pot, { WSOL: '1' });
+          const paid = await solana.run({ source: 'function main(to: Address, amount: Uint256) {\\n  WSOL.transfer(to, amount);\\n}\\n' }, { args: [to, 1000n] });
+          assert.equal(paid.delta(to, 'WSOL'), 1000n, 'the token methods move wrapped SOL');
+        } finally {
+          await solana.stop();
+        }
+        `,
+      );
+      execFileSync(process.execPath, [join(kit, "solana-kit.mjs")], {
+        cwd: kit,
+        stdio: "inherit",
+        env: smokeEnv,
+      });
+      console.log(
+        "Clean package install: ./testing runs Solana cooks in the project's LiteSVM, with the " +
+          "packaged engine and Kitchen",
+      );
+    } finally {
+      rmSync(kit, { recursive: true, force: true });
+    }
   }
 
   // `sauce update` tells a copy's install from its real path. This one is a project's own (the
@@ -1302,6 +1370,35 @@ try {
   } finally {
     rmSync(mismatch, { recursive: true, force: true });
   }
+  // A project on Solana's Kit adds the package, and a project with the package adds Kit and the
+  // program clients: either way npm resolves the one Kit both use and refuses nothing. With a Kit
+  // a major behind, the second was refused (ERESOLVE): today's program clients peer-require
+  // today's Kit, and the package's older copy stood at the project's root.
+  for (const packageFirst of [false, true]) {
+    const solana = mkdtempSync(join(tmpdir(), "sauce-solana-project-"));
+    try {
+      writeFileSync(join(solana, "package.json"), JSON.stringify({ private: true }));
+      const npmInstall = (...specs) =>
+        execFileSync(
+          "npm",
+          ["install", "--ignore-scripts", "--prefer-offline", "--no-audit", "--no-fund", ...specs],
+          { cwd: solana, stdio: "inherit" },
+        );
+      const steps = [[join(work, filename)], SOLANA_PROJECT];
+      for (const specs of packageFirst ? steps : steps.reverse()) npmInstall(...specs);
+      assert.equal(
+        existsSync(join(solana, "node_modules", name, "node_modules", "@solana", "kit")),
+        false,
+        "the package and the project share one Kit",
+      );
+    } finally {
+      rmSync(solana, { recursive: true, force: true });
+    }
+  }
+  console.log(
+    `Clean package install: a project on Solana's Kit adds the package, and one with the package ` +
+      `adds Kit and its program clients (${SOLANA_PROJECT.join(", ")}): one Kit, no conflict`,
+  );
   // Where it may not install, it refuses on one line: --offline; no npm; npm with no registry.
   const offlineHome = home("offline");
   const offline = spawnSync(process.execPath, [bin, "mcp", "--offline"], {

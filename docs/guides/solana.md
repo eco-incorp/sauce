@@ -1,6 +1,12 @@
 # Solana programs and execution
 
-[Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
+**How-to guide** · [Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
+
+> On Solana, a transaction must list every account it will touch before it starts: every wallet,
+> every token balance, every program. Sauce works that list out for the usual things, such as paying
+> and reading tokens. This page is for everything else: calling other Solana programs, Token-2022
+> tokens, Solana's pools, programs too big for one transaction, and running a program without a Pot.
+> New to Solana? Start with the [Solana quick start](solana-quick-start.md).
 
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
@@ -82,9 +88,29 @@ It runs with `sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 
 
 ## Venues by namespace
 
-A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain:
+A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain. This program is [solana-swap.sauce.ts](../examples/solana-swap.sauce.ts), and [solana-swap.ts](../examples/solana-swap.ts) compiles it and lists the accounts every cook derives for it:
 
 ```ts
+// Solana: buy WSOL with up to `amountIn` of the Pot's USDC at one Orca whirlpool, never paying more
+// than `maxPrice` for any unit, and send what arrived to `to`. The pool is main's argument, and
+// compiling adds every account the swap takes to main — the pool's nine, read from the pool when the
+// cook is built, and the Pot's own — so the command is given none. A pool already past `maxPrice` is
+// skipped (`trySwap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
+//
+//   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
+//     --args <pool> <to> <amountIn> <maxPrice> <minOut>
+//
+//   pool: Address       an Orca whirlpool trading USDC and WSOL (sauce pools --chain solana USDC WSOL)
+//   to: Address         who gets the WSOL bought: a wallet's key
+//   amountIn: Uint256   the most USDC to pay, in its smallest units (6 decimals): 100000000 is 100
+//   maxPrice: Uint256   the most one WSOL may cost, fee included: USDC base units per WSOL base unit,
+//                       times 10^18 (sauce pools prints each pool's own as maxPrice)
+//   minOut: Uint256     the least WSOL to receive, in its smallest units (9 decimals)
+//
+// On Solana, 100 USDC at up to 200 USDC per SOL, for at least 0.4 SOL:
+//
+//   sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
+//     --args <pool> <recipient> 100000000 200000000000000000 400000000
 function main(
   pool: Address,
   to: Address,
@@ -106,6 +132,8 @@ The namespaces are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `O
   - The trader's are the Pot's.
   - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
 - **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
+
+`Solana.swap` and `Solana.trySwap` take the same arguments at a pool of any of the nine: the venue is read from the pool's owner as the program runs, so a program can take its pools as `main`'s arguments without knowing their venues, and still name no account. Each such call carries every venue's code, a larger program than one venue's. A pool given as the System Program, `11111111111111111111111111111111`, is an empty slot, which `trySwap` skips.
 
 `sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools whose venues its program reads as it runs, and takes their accounts itself.
 
@@ -179,12 +207,12 @@ export async function planTransfer(rpcUrl: string, mint: Address, pot: Address, 
 }
 ```
 
-`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli.md#solana)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
+`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli-solana.md)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
 
 ## Two ways to run a program
 
 The released engine has two entry points, and the SDK builds a cook for each. A client chooses with
-`via`, and the `sauce` command with `--via` ([CLI guide](cli.md#solana)).
+`via`, and the `sauce` command with `--via` ([CLI guide](cli-solana.md)).
 
 |                                 | Through the Kitchen: `via: "kitchen"` (the default)                      | Direct to the engine: `via: "engine"`                                                  |
 | ------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -260,7 +288,39 @@ Pass `{ accounts: [...] }` to `simulate` to see what the cook would move: the re
 holds each one's state after the transaction (`lamports`, `owner`, `data`), or `null` where it no
 longer exists, read without sending anything.
 
-After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
+After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it.
+
+### When the accounts do not fit
+
+A Solana transaction holds at most 1,232 bytes, and every account it lists takes 32 of them, so a cook that names about thirty accounts no longer fits. An address lookup table is the way around it: a list of addresses kept on chain, which a transaction points into for one byte per account instead of 32. You write no code for it:
+
+- `client.execute` and `client.executeStaged` measure the cook first. When it does not fit, they create a lookup table holding exactly the accounts a table may hold (every account the cook lists except its signers and the programs it calls), wait until the table can be used, and send the cook through it. The payer pays the table's rent and owns it. The result's `lookupTableAddress` names the table: pass it as `lookupTable` to a later cook with the same accounts, and the client uses it again, adding any account it lacks. `lookupTable: false` sends the cook as it is.
+- To simulate such a cook first, or to build its transaction yourself, ask for its table with `client.cookLookupTable(bytecode, manifest, resolution)` (`stagedCookLookupTable` for a staged program). It returns `undefined` when the cook fits without one, and otherwise the ready table, whose `lookupTables` you pass on. `simulate` refuses a cook that does not fit and says so.
+
+```ts
+import type { CompileResult } from "@eco-incorp/sauce/compiler";
+import type { AccountResolution, SauceSvmClient } from "@eco-incorp/sauce/svm";
+
+export async function simulateThenSend(
+  client: SauceSvmClient,
+  compiled: CompileResult,
+  accounts: AccountResolution,
+) {
+  if (!compiled.manifest) throw new Error("Expected an SVM account manifest");
+  const table = await client.cookLookupTable(compiled.bytecode, compiled.manifest, accounts);
+  const simulated = await client.simulate(compiled.bytecode, compiled.manifest, accounts, {
+    ...(table === undefined ? {} : { lookupTables: table.lookupTables }),
+  });
+  if (!simulated.ok) throw new Error(`The cook would fail: ${JSON.stringify(simulated.err)}`);
+
+  return client.execute(compiled.bytecode, compiled.manifest, accounts, {
+    computeUnitLimit: "auto",
+    ...(table === undefined ? {} : { lookupTable: table.lookupTableAddress }),
+  });
+}
+```
+
+`ensureLookupTable(addresses)` is the step underneath, for a table of addresses you choose.
 
 ### Select the released programs and quote the fee
 
@@ -362,26 +422,42 @@ Direct, the engine checks nothing about the code account — not its owner, not 
 
 ## SVM destinations in Eco intents
 
-**Build Solana execution with the SVM client (`createSauceSvmClient`), not the SVM route helpers.**
+**The easy way: write the intent in a program.** `Solana(() => { ... }).reward({ ... })` in a
+program published from Ethereum or Base builds the Solana route for you
+([Sending to Solana](intents.md#sending-to-solana)):
 
-`Solana(body, { execution, ... }).reward(...)`, `routes.compileSauceRoute()`,
-`buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an `execute_from_account`
-instruction carrying only its 8-byte discriminator. The engine needs 65 further
-bytes of Pot derivation material and a trailing Pot signer that the Kitchen
-supplies, so that instruction is not one it will run — and pointing the helper at
-a different engine id does not add the missing bytes.
+- a body that only pays wallets (`USDC.transfer(recipient, amount)`) becomes Solana's own token
+  transfers: the Associated Token Account program's `CreateIdempotent` for each wallet with no
+  account yet, the Portal's executor paying the rent, then `TransferChecked` from the executor's
+  account;
+- any other body is compiled for Solana and cooked through the Kitchen on the executor's Pot. The
+  route first creates that Pot if it is missing (`create_pot` needs its owner's signature, and only
+  the Portal signs for the executor, so only a route can), creates each token account the program
+  names that is missing, and moves what the solver delivered into the Pot.
+
+Which accounts exist decides the route, so it is read from the cluster first: with
+`compileSauceProgram`, pass it as `intents.svm` (`potExists`, the token accounts in `existing`,
+and the Kitchen's fee as `executionFee`). The `sauce` command reads it for you.
+
+**Building a route by hand.** `Solana(body, { execution, ... }).reward(...)` in TypeScript,
+`routes.compileSauceRoute()`, `buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an
+`execute_from_account` instruction carrying only its 8-byte discriminator. The engine needs 65
+further bytes of Pot derivation material and a trailing Pot signer that the Kitchen supplies, so
+that instruction is not one it will run — and pointing the helper at a different engine id does
+not add the missing bytes.
 
 The [SVM Portal's fulfillment](https://github.com/eco/eco-routes-svm/blob/5e544b72d368d9d1f0ee5269e2a1a5d2a9f8c2f2/programs/portal/src/instructions/fulfill.rs#L139-L192)
 forwards a route's instruction bytes to their target unchanged and signs each
 call for its own executor PDA. So the executor can own a Kitchen Pot and cook on
 it: the Solana counterpart of an EVM intent's cook on the Executor's shared Pot.
-`svm` builds that route:
+`svm` has the pieces the program path is built from:
 
 - `svmIntentPot({ portal, kitchen })` is the executor's Pot (the zero salt by
   convention), which every intent's cook through that Portal shares: send on in the
   program what the intent delivers.
 - `svmIntentPotInstruction(...)` is the Kitchen's `create_pot` with the executor as
-  owner and rent payer. One route carries it once, the rent its native amount.
+  owner and rent payer. One route carries it once, the rent its native amount; a
+  second route carrying it fails, the Pot existing.
 - `svmIntentCookInstruction({ portal, kitchen, engineProgram, bytecode, manifest,
 resolution, maxExecutionFee })` is the Kitchen's `cook` with the executor as owner
   and fee payer, the fee the route's native amount, the program's accounts resolved
@@ -393,12 +469,13 @@ resolution, maxExecutionFee })` is the Kitchen's `cook` with the executor as own
   committed writable everywhere, and the executor never as a signer. A route committed
   with each call's own flags is another intent, which no fill matches.
 
-Publish the route with the EVM Portal helpers (`routes.publishAndFundTx`); the
-intent syntax does not build it yet. Moving delivered tokens from the executor's
-token account into the Pot's is a route call before the cook (an SPL
-`TransferChecked`, the executor its authority). The fill must request the
-engine's heap frame, as every cook does; `sauce intent fill` adds it when a route
-call is the Kitchen's.
+Publish a hand-built route with the EVM Portal helpers (`routes.publishAndFundTx`).
+The fill must request the engine's heap frame, as every cook does; `sauce intent fill`
+adds it when a route call is the Kitchen's. The whole route rides in the solver's one
+fill transaction, which Solana caps at 1,232 bytes, and a program's bytecode is most
+of it; a fill too large as it is takes its accounts through an address lookup table
+the solver creates first, which `sauce intent fill` builds (`lookupTable` in its
+result, the table's transactions first).
 
 A route's program runs through the Kitchen, on the executor's Pot: that is what
 these builders make, and the `sauce intent` commands take no `--via`. The direct
@@ -412,15 +489,22 @@ gas for Hyperlane's delivery paid in the same transaction) and
 `buildPortalCancelInstruction`. `decodeFulfillMarker` reads what the Portal
 recorded, and `svmTokenTransferCall` is the route call eco-routes' Solana deposit
 addresses publish. `sauce intent fill`, `prove` and `cancel` send them
-([CLI guide](cli.md#an-intent-to-solana)).
+([CLI guide](cli-intents.md#an-intent-to-solana)).
 
 One detail worth knowing if you are reading routes somebody already built:
 `execution.code` there means the finalized **code account**, not its metadata
 address, and the helper neither stages that code nor checks it against the bytes
 it just compiled. Keep the direct compilation result when you inspect one.
 
-The EVM-source Portal helpers can encode a Solana destination perfectly well.
-That is about encoding, not about submitting from Solana.
+An intent can also start on Solana, its reward held by Solana's Portal. The
+builders for that side are `buildPortalFundInstruction` (moves the reward into the
+intent's vault, `svmVaultPda`), `buildPortalPublishInstruction` (announces the
+intent), `buildPortalWithdrawInstruction` (pays the claimant once the proof is
+recorded) and `buildPortalRefundInstruction` (returns the reward to its creator).
+`decodeSvmProof` reads the proof the HyperProver records when Hyperlane delivers
+it. `sauce intent publish --chain solana`, `claim` and `refund` send them
+([CLI guide](cli-intents.md#an-intent-from-solana)). A Sauce program running on Solana
+cannot open an intent itself: the wallet calls the Portal.
 
 ## Venue accessors
 

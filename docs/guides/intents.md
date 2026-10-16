@@ -1,6 +1,11 @@
 # Create and fund an Eco intent
 
-[Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
+**How-to guide** · [Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
+
+> An intent is a job posting with a bounty: "do this on that chain, and the reward waiting here is
+> yours". Solvers watch for jobs, do the work with their own money, and collect the reward once they
+> prove it. This page builds, funds and follows one from TypeScript, with every option. For a gentler
+> start, read [your first cross-chain intent](first-intent.md).
 
 An Eco intent is an offer: _run this program on that chain, and the reward escrowed on this one is
 yours_. `Base(body, options).reward(reward)` builds one. The chain you call names the **destination**
@@ -26,7 +31,7 @@ what the route's calls spend, and resolves registered token and protocol address
 deadlines and the creator, read the Kitchen fee, fund the reward and submit. A solver then decides
 whether to fulfill it; the SDK does not price the reward or promise a fill.
 
-The SDK builds an intent between any two registry chains. For the initial release, Sauce supports
+The SDK builds an intent between any two registry chains. Sauce sends
 transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
 [MCP server](mcp.md) publish an intent only when its source and every destination it opens, nested
 ones included, are among them; each step after publishing is refused on a preview chain by the
@@ -166,7 +171,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 }
 ```
 
-The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
+The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana; a program builds that route for you, as [Sending to Solana](#sending-to-solana) shows. An intent can also start on Solana, published from a Solana wallet: see [An intent from Solana](cli-intents.md#an-intent-from-solana).
 
 The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above, and the route's `nativeAmount`, which the solver sends, is that fee. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
@@ -456,6 +461,56 @@ Each of these is a compile error naming the construct, never a silently differen
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.
 
+### Sending to Solana
+
+An intent's destination can be Solana. You still publish it from Ethereum or Base: that is where
+the reward waits. A solver then does the work on Solana and collects the reward back home.
+
+The simplest one pays a Solana wallet. Write it like any other intent:
+
+```js
+// Pays a Solana wallet USDC, for a USDC reward on the chain that publishes it.
+function main(recipient: Address, amount: Uint256, reward: Uint256) {
+  Solana(() => {
+    USDC.transfer(recipient, amount);
+  }).reward({ tokens: [{ token: USDC, amount: reward }] });
+}
+```
+
+Inside the braces, `USDC` means Solana's USDC mint, and `recipient` is a Solana wallet
+([the complete example](../examples/ethereum-to-solana.ts)). When you publish from a wallet, pass the
+recipient in base58, the way Solana writes addresses:
+
+```sh
+sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --keystore <path> \
+  --intent-deadline <unix seconds> --intent-creator <your address> \
+  --args <solana wallet> 1000000 1050000
+```
+
+Three things are different from an EVM destination:
+
+- **Solana keeps tokens in token accounts.** Each wallet holds its USDC in its own account. If the
+  wallet has none yet, the intent's route creates it first. The solver pays its rent (about 0.002
+  SOL), and the command adds that to what the solver must bring.
+- **Amounts are fixed before anything runs.** A Solana route is built whole when the intent is
+  made, so every amount inside the braces is a literal or one of `main`'s arguments. A value the
+  program measures while it runs is refused, with its name.
+- **A token needs to be one the package knows.** USDC, USDT, PYUSD and the tokenized stocks are
+  among them (`sauce globals --chain solana --tokens`). The route has to name each mint's program
+  and decimals.
+
+A body that does more than pay wallets is a program. It runs on the Pot that Solana's Portal
+owns, which every intent through that Portal shares. Only an intent's route can create that Pot,
+so the first one does it, and the `sauce` command reads whether it exists before building yours.
+Two intents built before either is filled would both try to create it, and the second could never
+be filled; its reward would come back to you after its deadline, and the command warns you.
+
+A program's bytecode travels inside the solver's one fill transaction, which Solana caps at 1,232
+bytes. When the fill's accounts make it too large, the solver first puts them in an address lookup
+table, where each costs one byte instead of 32; `sauce intent fill` does that for you. Even so, only
+a small program fits, such as one that checks a value and pays it on. The command refuses an intent
+whose fill would not fit, so you never publish one nobody can fill.
+
 ## Callbacks are compiled source
 
 A callback is read with `Function.prototype.toString()`, parsed, and compiled as SauceScript. It is never invoked as a JavaScript callback and captures no outer variables. An `amount` in surrounding JavaScript does not become a value inside the program.
@@ -491,7 +546,7 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 **Pass the vault you read.** `vault` is checked against `predictVault()`, the SDK's own derivation, and a mismatch throws `IntentVaultMismatchError` before anything is built: a transfer is final, so an address two sources disagree on is not paid. Without `vault`, the derivation alone is used. It is held to the `intentVaultAddress` of every eco-routes Portal the SDK records.
 
-**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) does all of this for you.
+**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce intent publish`](cli-intents.md) does all of this for you.
 
 `sourceTxs({ fundVia: "publishAndFund" })`, or `IntentOptions.fundVia: "publishAndFund"`, returns `[...approvals(), publishAndFundCalldata(allowPartial)]` instead. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the vault, records the intent `Funded` and emits `IntentFunded`. Native rewards are included as transaction `value`. Wait for successful approvals before funding. `allowPartial` defaults to `false`; use partial funding only when the application deliberately supports it. Choose this mode when something you rely on reads the `IntentFunded` event or the `Funded` status rather than the vault's balance.
 
@@ -524,12 +579,12 @@ export function solverTransactions(built: routes.BuiltIntent, claimant: routes.H
 Simulate them before publishing. A route that cooks needs the shared Pot deployed first, so a
 simulation on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
 of the fill, in the same simulated block. From the command line,
-[`sauce intent fill`](cli.md#simulating-the-fill-sauce-intent-fill) does all of it with no key: it
+[`sauce intent fill`](cli-intents.md#simulating-a-fill-in-detail) does all of it with no key: it
 builds the file's intents as `sauce intent publish` does, gives a solver the route's tokens by
 state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
 the destination, and prints what moved, what the shared Pot and the Executor were left holding, and
 the decoded reason when it reverts. With `--send` and a signer it then sends them, the signer being
-the solver ([`fill --send`](cli.md#filling-it-for-real-sauce-intent-fill---send)), on a supported
+the solver ([`fill --send`](cli-intents.md#filling-for-real-in-detail)), on a supported
 destination only.
 
 ## After the fill: prove, claim, refund, cancel
@@ -596,9 +651,9 @@ export function afterTheFill(intent: routes.Intent, fee: bigint) {
 
 `routes.fulfillAndProveTx(intent, { claimant, ...proof })` is the fill and its proof in one, and
 `routes.cancelAndProveTx(intent, proof)` the cancellation and its. From the command line,
-[`sauce intent prove, claim, refund and cancel`](cli.md#after-the-fill-prove-claim-refund-cancel)
+[`sauce intent prove, claim, refund and cancel`](cli-intents.md#after-the-fill)
 send them on a supported chain, reading the state first and saying why not, and
-[`sauce intent status`](cli.md#after-the-fill-prove-claim-refund-cancel) reads where an intent
+[`sauce intent status`](cli-intents.md#after-the-fill) reads where an intent
 stands on both chains. `routes.intentFromPublished(log, sourceChainId)` rebuilds an intent from its
 `IntentPublished` log, which `sauce intent import` stores.
 
@@ -623,4 +678,4 @@ export async function readVault(
 
 Execute this read on the source chain. `hashCall()` cross-checks hashes against the Portal; `fundedCall()` checks funding. `predictVault()` is the offline CREATE2 prediction of the same address, with nothing read from a chain: an eco-routes Portal's vaults are clones, salted with the intent hash, of a Proxy over the Portal's first `CREATE`, so the address follows from the Portal's own. For a Portal built some other way, pass its configuration: `predictVault({ portal, vaultInitCodeHash })`.
 
-For a Solana destination, build the execution with the Kitchen client rather than the SVM route helpers: the instruction those helpers emit is not one the Solana engine accepts, and staging the code does not change that. The [Solana guide](solana.md) has the supported path.
+For a Solana destination, write the intent in a program instead ([Sending to Solana](#sending-to-solana)): the SDK builds Solana's route itself. The SVM route helpers emit an instruction the Solana engine does not accept, and staging the code does not change that.

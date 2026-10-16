@@ -7,7 +7,7 @@
  */
 import { parseArgs } from "node:util";
 import { getAddressEncoder, isAddress as isSolanaAddress } from "@solana/kit";
-import { bytesToBigInt, getAddress, isAddress, type Address, type Hex } from "viem";
+import { bytesToBigInt, bytesToHex, getAddress, isAddress, type Address, type Hex } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
@@ -201,6 +201,29 @@ export function parseAddress(flag: string, raw: string): Address {
   }
 
   return getAddress(raw);
+}
+
+/** An intent's creator or prover, an account on its source `chain`: an EVM address, or on Solana
+ *  a base58 key, as the 32 bytes an intent records. */
+export function parseIntentParty(flag: string, raw: string, chain: CanonicalChain): Hex {
+  if (chain.kind !== "svm") return parseAddress(flag, raw);
+  if (!isSolanaAddress(raw)) {
+    throw new UsageError(
+      `--${flag}: '${raw}' is not a Solana key (base58), as ${chain.slug} names one`,
+    );
+  }
+
+  return bytesToHex(new Uint8Array(getAddressEncoder().encode(raw)));
+}
+
+/** A fill's claimant, the account on the intent's source its reward pays: an EVM address or 32
+ *  bytes of hex, or a Solana key (base58), as the 32 bytes a fill records for it. */
+export function parseClaimant(flag: string, raw: string): Hex {
+  if (/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(raw)) return raw as Hex;
+  if (isSolanaAddress(raw)) return bytesToHex(new Uint8Array(getAddressEncoder().encode(raw)));
+  throw new UsageError(
+    `--${flag}: '${raw}' is neither an address (20 bytes), 32 bytes of hex nor a Solana key`,
+  );
 }
 
 /** A non-negative integer amount in wei: decimal digits, or 0x-prefixed hex. */

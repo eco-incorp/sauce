@@ -54,6 +54,7 @@ import {
   MAX_POT_LEN,
 } from "./kitchen.js";
 import { resolveAccounts, type AccountResolution } from "./resolve.js";
+import { svmRouteCallsFor } from "./intent-route.js";
 import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 
 // ---------------------------------------------------------------------------------------------
@@ -594,40 +595,13 @@ export async function svmRouteCalls(
   tokens: readonly SvmRouteToken[] = [],
 ): Promise<Array<{ target: UniversalAddress; data: Hex; value: bigint }>> {
   const executor = await svmExecutorPda(portal);
-  const writable = new Set<string>();
-  const signers = new Set<string>();
-  for (const token of tokens) {
-    writable.add(
-      await associatedTokenAccount(executor, token.mint, token.tokenProgram ?? TOKEN_PROGRAM_ID),
-    );
-  }
-  for (const instruction of instructions) {
-    for (const meta of instruction.accounts ?? []) {
-      if (!("address" in meta)) throw new Error("a route call cannot use a lookup table");
-      if (meta.role === AccountRole.WRITABLE || meta.role === AccountRole.WRITABLE_SIGNER) {
-        writable.add(meta.address);
-      }
-      if (
-        (meta.role === AccountRole.READONLY_SIGNER || meta.role === AccountRole.WRITABLE_SIGNER) &&
-        meta.address !== executor
-      ) {
-        signers.add(meta.address);
-      }
-    }
-  }
+  const writable = await Promise.all(
+    tokens.map((token) =>
+      associatedTokenAccount(executor, token.mint, token.tokenProgram ?? TOKEN_PROGRAM_ID),
+    ),
+  );
 
-  return instructions.map((instruction) => ({
-    target: universalOfSvmKey(instruction.programAddress),
-    data: encodePortalCalldataWithAccounts({
-      instructionData: new Uint8Array(instruction.data ?? new Uint8Array()),
-      accounts: (instruction.accounts ?? []).map((meta) => ({
-        pubkey: meta.address,
-        isSigner: signers.has(meta.address),
-        isWritable: writable.has(meta.address),
-      })),
-    }),
-    value: 0n,
-  }));
+  return svmRouteCallsFor(executor, instructions, writable);
 }
 
 /** The Kitchen Pot the Portal's executor owns under `salt`, which every intent's cook through

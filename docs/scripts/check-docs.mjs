@@ -25,6 +25,7 @@ import {
   releaseAddresses,
   releaseAddressProblems,
 } from "./release-addresses.mjs";
+import { simulateWordingProblems } from "./simulate-wording.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
@@ -84,6 +85,18 @@ for (const file of manual) {
 }
 if (failures.length) throw new Error(`Broken manual links:\n${failures.join("\n")}`);
 console.log(`Manual links: ${manual.length} files checked`);
+// The LiteSVM the testing guide installs is the one the testing kit takes: the package's pin.
+{
+  const pin = JSON.parse(readFileSync(join(root, "sdk/runtime/package.json"), "utf8")).dependencies
+    .litesvm;
+  const guide = readFileSync(join(root, "docs/guides/testing.md"), "utf8");
+  const named = [...guide.matchAll(/litesvm@(\S+)/g)].map((match) => match[1]);
+  if (named.length === 0 || named.some((version) => version !== pin)) {
+    throw new Error(
+      `docs/guides/testing.md installs litesvm@${named.join(", litesvm@")}; the package pins ${pin}`,
+    );
+  }
+}
 // No page teaches a define: `--define` and `--defines` are the command's low-level flags, and a value
 // a reader supplies is a `main` argument (`example-programs.mjs`). The manual and its examples; the
 // skills are skills:check's.
@@ -101,6 +114,25 @@ console.log(`Manual links: ${manual.length} files checked`);
     defineFlagProblems({ where: file.slice(root.length + 1), text: readFileSync(file, "utf8") }),
   );
   if (taught.length) throw new Error(`Low-level flags taught:\n${taught.join("\n")}`);
+}
+// A run with no key and nothing sent is a simulation, and the manual says so
+// (`simulate-wording.mjs`): the README, every page and every example. The skills are skills:check's.
+{
+  const pages = [
+    join(root, "README.md"),
+    ...markdownFiles(join(root, "docs")),
+    ...readdirSync(join(root, "docs/examples"))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => join(root, "docs/examples", name)),
+  ];
+  const problems = pages.flatMap((file) =>
+    simulateWordingProblems({
+      where: relative(root, file).split("\\").join("/"),
+      text: readFileSync(file, "utf8"),
+    }),
+  );
+  if (problems.length) throw new Error(`Simulate, never rehearse:\n${problems.join("\n")}`);
+  console.log(`Wording: ${pages.length} files say simulate`);
 }
 
 // ---- The manual's shape: one place per fact, and a reader never sent into the skills ----------------
@@ -152,6 +184,77 @@ console.log(`Manual links: ${manual.length} files checked`);
     const times = listed.filter((to) => to === path).length;
     if (times !== 1)
       shape.push(`docs/README.md: lists ${path} ${times} times; the index lists each page once`);
+  }
+  // Every page opens with a plain-words intro, a blockquote after its title and its breadcrumb
+  // line, before anything else: the manual is for people (CLAUDE.md). A generated page gets its
+  // intro from its generator, under the note that opens it.
+  for (const file of markdownFiles(docs)) {
+    const lines = readFileSync(file, "utf8").split("\n");
+    let at = lines.findIndex((line) => line.startsWith("# ")) + 1;
+    const skipBlank = () => {
+      while (lines[at] === "") at++;
+    };
+    skipBlank();
+    if (/^(\*\*[^*]+\*\* · )?\[[^\]]*\]\([^)]*\)( · |$)/.test(lines[at] ?? "")) {
+      at++;
+      skipBlank();
+    }
+    if (!(lines[at] ?? "").startsWith("> "))
+      shape.push(
+        `${page(file)}: opens with no plain-words intro; begin with a short blockquote after its title and breadcrumb` +
+          (lines[0].startsWith("<!-- Generated") ? " (in its generator)" : ""),
+      );
+  }
+  // The manual is in four parts, Diátaxis's: the index places every page under one of its four
+  // sections, and the page says which on its breadcrumb line, `**How-to guide** · [Documentation]…`,
+  // so a reader knows what kind of page it is and a page stays in that mode (CLAUDE.md).
+  const generatedPage = (file) => readFileSync(file, "utf8").startsWith("<!-- Generated");
+  /** The first line after a page's title: its breadcrumb. */
+  const crumbOf = (file) => {
+    const lines = readFileSync(file, "utf8").split("\n");
+    const title = lines.findIndex((one) => one.startsWith("# "));
+    return lines.slice(title + 1).find((one) => one !== "") ?? "";
+  };
+  const KINDS = {
+    Tutorials: "Tutorial",
+    "How-to guides": "How-to guide",
+    Concepts: "Concept",
+    Reference: "Reference",
+  };
+  let part;
+  for (const line of readFileSync(index, "utf8").split("\n")) {
+    const heading = /^## (.+)$/.exec(line);
+    if (heading) {
+      part = heading[1];
+      if (!(part in KINDS))
+        shape.push(
+          `docs/README.md: "## ${part}" is not one of the manual's parts: ${Object.keys(KINDS).join(", ")}`,
+        );
+      continue;
+    }
+    const entry = /^- \[[^\]]*\]\(([^)#\s]+)/.exec(line);
+    if (!entry || /^[a-z]+:/i.test(entry[1])) continue;
+    const file = resolve(docs, entry[1]);
+    const path = page(file);
+    const kind = KINDS[part];
+    if (kind === undefined) {
+      shape.push(`docs/README.md: lists ${path} outside the four parts`);
+      continue;
+    }
+    if (!existsSync(file)) continue;
+    if (!crumbOf(file).startsWith(`**${kind}** · `))
+      shape.push(
+        `${path}: is listed under ${part}, so its breadcrumb line starts \`**${kind}** · \`` +
+          (generatedPage(file) ? " (in its generator)" : ""),
+      );
+  }
+  // A page the index does not list, a chain's or a protocol's, says its part as well.
+  for (const file of markdownFiles(docs)) {
+    if (file === index) continue;
+    if (!Object.values(KINDS).some((kind) => crumbOf(file).startsWith(`**${kind}** · `)))
+      shape.push(
+        `${page(file)}: its breadcrumb line names no part of the manual: ${Object.values(KINDS).join(", ")}`,
+      );
   }
   // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.
   const lists = new Set([

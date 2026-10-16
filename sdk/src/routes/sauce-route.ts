@@ -16,7 +16,8 @@
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
-import { bytesToHex } from "viem";
+import { getAddressDecoder, type Address as SvmAddress } from "@solana/kit";
+import { bytesToHex, hexToBytes } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
@@ -36,7 +37,20 @@ import { rewriteAvailability } from "./available.js";
 import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
-import { v12KitchenAddress } from "../deployments/index.js";
+import {
+  v12KitchenAddress,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../deployments/index.js";
+import { resolveSvmAccountNameSync, type ResolvedSvmAccountName } from "../svm/account-names.js";
+import {
+  svmCookRoute,
+  svmIntentExecutor,
+  svmIntentPotOf,
+  svmTransferRoute,
+  type SvmIntentRoute,
+  type SvmRouteMint,
+} from "../svm/intent-route.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
@@ -50,6 +64,7 @@ import {
 } from "../protocols/eco-routes/lookup.js";
 import {
   rewriteIntentSugar,
+  type IntentSugarContext,
   type IntentSugarDefaults,
   type LoweredIntent,
 } from "./intent-sugar.js";
@@ -342,6 +357,119 @@ function compileIntentChild(
   };
 }
 
+/** A 32-byte word as the Solana key it is. */
+function svmKeyOfWord(value: bigint, what: string): SvmAddress {
+  if (value < 0n || value >= 1n << 256n) throw new Error(`${what} is not a 32-byte Solana key`);
+
+  return getAddressDecoder().decode(hexToBytes(`0x${value.toString(16).padStart(64, "0")}`));
+}
+
+/** A mint `chain` registers, with what a route moving it needs: its program and decimals. */
+function svmMintOf(chain: CanonicalChain, mint: bigint): SvmRouteMint {
+  const row = svmTokenRows(chain).find((candidate) => BigInt(candidate.address) === mint);
+  if (row === undefined) {
+    throw new Error(
+      `intent sugar: ${svmKeyOfWord(mint, "a mint")} is not a mint ${chain.slug} registers: a ` +
+        "route there moves a registered token (sauce globals --chain solana --tokens), whose " +
+        "program and decimals a transfer names",
+    );
+  }
+
+  return {
+    mint: getAddressDecoder().decode(hexToBytes(row.address)),
+    tokenProgram: row.tokenProgram as SvmAddress,
+    decimals: row.decimals,
+  };
+}
+
+/**
+ * Compiles an intent's body for Solana, and builds the route that cooks it on the Pot the Portal's
+ * executor owns (`svm/intent-route.ts#svmCookRoute`): the body's accounts, which the token methods
+ * and account expressions add to its `main` with how each is derived, resolved for that cook — the
+ * Pot its `self`, the executor its `owner` — before anything is read from the cluster. It re-enters
+ * the route compile as `compileIntentChild` does, with the options and scope `levelOn` gives the
+ * chain.
+ */
+function compileSvmIntentChild(
+  destination: CanonicalChain,
+  childSource: string,
+  portalInput: AddressInput,
+  delivered: readonly { readonly token: bigint; readonly amount: bigint }[],
+  level: { readonly options: SauceCompileOptions; readonly scope: RouteScope },
+): SvmIntentRoute {
+  const state = level.options.intents?.svm ?? {};
+  const executionFee = state.executionFee ?? level.options.intents?.executionFee;
+  if (executionFee === undefined) {
+    throw new Error(
+      `intent sugar: the intent on ${destination.slug} runs a program, so its cook pays the ` +
+        "Kitchen's fee there, in lamports: set `intents.svm.executionFee`, read from the Kitchen's " +
+        "fee config on the cluster (the sauce command's --intent-execution-fee auto reads it).",
+    );
+  }
+  if (state.potExists === undefined) {
+    throw new Error(
+      `intent sugar: the intent on ${destination.slug} runs a program on the Pot the Portal's ` +
+        "executor owns, and whether that Pot exists decides the route: one that does not creates " +
+        "it (only a route can), and a route creating a Pot that exists can never be filled. Read " +
+        "it from the cluster and set `intents.svm.potExists` (the sauce command reads it).",
+    );
+  }
+  const portal = svmKeyOfWord(BigInt(toUniversalAddress(portalInput)), "the Portal");
+  const kitchen = v12SvmKitchenProgramId() as SvmAddress;
+  const { options } = level;
+  const program = compileForChain(
+    destination,
+    childSource,
+    { ...options, target: undefined, compactArgs: false },
+    level.scope,
+  );
+  const manifest = program.manifest ?? { accounts: [] };
+  const context = {
+    chain: destination,
+    owner: svmIntentExecutor(portal),
+    pot: svmIntentPotOf({ portal, kitchen }),
+    via: "kitchen" as const,
+  };
+  const accounts: Record<string, ResolvedSvmAccountName> = {};
+  for (const entry of manifest.accounts) {
+    if (entry.kind !== "slot") continue;
+    const derivation = program.derivedAccounts?.[entry.name];
+    if (derivation === undefined) {
+      throw new Error(
+        `intent sugar: the intent's body on ${destination.slug} takes the account ` +
+          `\`${entry.name}\`, which nothing derives: write it where it is used ` +
+          "(Solana.account(<key>), Solana.pda(...), USDC.accountOf(holder)), so the route can " +
+          "attach it",
+      );
+    }
+    try {
+      accounts[entry.name] = resolveSvmAccountNameSync(derivation, context);
+    } catch (error) {
+      throw new Error(
+        `intent sugar: the intent's account \`${entry.name}\` (${derivation}) on ` +
+          `${destination.slug}: ${(error as Error).message}`,
+        { cause: error },
+      );
+    }
+  }
+
+  return svmCookRoute({
+    portal,
+    kitchen,
+    engine: v12SvmEngineProgramId() as SvmAddress,
+    bytecode: program.compiled.bytecode[0]!,
+    manifest,
+    accounts,
+    executionFee,
+    delivered: delivered.map((token) => ({
+      ...svmMintOf(destination, token.token),
+      amount: token.amount,
+    })),
+    potExists: state.potExists,
+    existing: new Set(state.existing ?? []),
+  });
+}
+
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -529,6 +657,91 @@ export function compileSauceProgram(
   };
 }
 
+/** What the intent sugar needs of a program compiled for `chain`, the intents' source. */
+function intentSugarContext(
+  chain: CanonicalChain,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+  publishOnly?: boolean,
+): IntentSugarContext {
+  return {
+    source: chain,
+    chains: chainAccessorNames(),
+    // This chain's values for this chain — the program's own names and the reward it funds — and
+    // each other chain's own for a body there: see `levelOn`.
+    definesFor: (destination) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileTimeValues(destination, level.options, level.scope);
+    },
+    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
+    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
+    defaults: options.intents ?? {},
+    compileChild: (destination, childSource, captures, destinationPortal) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileIntentChild(
+        destination,
+        childSource,
+        captures,
+        destinationPortal,
+        level.options,
+        level.scope,
+      );
+    },
+    svmTransfers: (destination, portal, transfers) =>
+      svmTransferRoute({
+        portal: svmKeyOfWord(BigInt(toUniversalAddress(portal)), "the Portal"),
+        transfers: transfers.map((transfer) => ({
+          ...svmMintOf(destination, transfer.mint),
+          recipient: svmKeyOfWord(transfer.recipient, "a transfer's recipient"),
+          amount: transfer.amount,
+        })),
+        existing: new Set(options.intents?.svm?.existing ?? []),
+      }),
+    svmProgram: (destination, childSource, portal, delivered) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileSvmIntentChild(destination, childSource, portal, delivered, level);
+    },
+    ...(publishOnly === true ? { publishOnly } : {}),
+  };
+}
+
+/**
+ * The intents a program opens, as {@link compileSauceProgram} lowers them, without compiling the
+ * program that would publish them: what a WALLET publishes. The only way to build an intent whose
+ * source is Solana, whose Portal a wallet calls itself (`svm/portal-source.ts`): a program running
+ * on Solana does not open one, and its compile says so.
+ */
+export function lowerProgramIntents(
+  chain: ChainRef,
+  source: string,
+  options: SauceProgramOptions = {},
+): {
+  readonly chain: CanonicalChain;
+  readonly intents: readonly LoweredIntent[];
+  readonly entryParams: readonly EntryParam[];
+} {
+  const resolved = requireChain(chain);
+  const { args, ...given } = options;
+  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
+  const compile: SauceCompileOptions =
+    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
+  const scope: RouteScope = { chainDefines: (on) => definesOf(on, compile.tokens) };
+  const text = bound?.source ?? source;
+  const available = rewriteAvailability(text, resolved, resolveTokenMap(resolved, compile.tokens));
+  const sugar = rewriteIntentSugar(
+    available.source,
+    intentSugarContext(resolved, compile, scope, true),
+  );
+
+  return {
+    chain: resolved,
+    intents: sugar.intents,
+    entryParams: mainParams(text).filter(
+      (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
+    ),
+  };
+}
+
 /**
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
  * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
@@ -583,30 +796,7 @@ function compileForChain(
   // that had already turned `USDC.transfer(...)` into `__sauce_transfer(USDC, ...)` would leave it
   // nothing it recognises. What it leaves behind is ordinary `evm.call` statements, which every
   // later pass is free to walk over.
-  const sugar = rewriteIntentSugar(source, {
-    source: chain,
-    chains: chainAccessorNames(),
-    // This chain's values for this chain — the program's own names and the reward it funds — and
-    // each other chain's own for a body there: see `levelOn`.
-    definesFor: (destination) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileTimeValues(destination, level.options, level.scope);
-    },
-    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
-    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
-    defaults: options.intents ?? {},
-    compileChild: (destination, childSource, captures, destinationPortal) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileIntentChild(
-        destination,
-        childSource,
-        captures,
-        destinationPortal,
-        level.options,
-        level.scope,
-      );
-    },
-  });
+  const sugar = rewriteIntentSugar(source, intentSugarContext(chain, options, scope));
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
@@ -660,6 +850,13 @@ function compileForChain(
       source,
       svmTokenValues(tokenMap, options.defines),
       svmTokenRows(chain),
+      // The caller's values, which a holder may name as a key: main's arguments bound into the
+      // program (`args`), an intent's body reading the enclosing program's.
+      new Map(
+        Object.entries(options.defines ?? {}).filter(
+          (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
+        ),
+      ),
     );
     if (lowered.rewrote) {
       source = lowered.source;

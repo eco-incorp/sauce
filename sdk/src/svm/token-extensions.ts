@@ -254,6 +254,42 @@ export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
 }
 
 /** The TransferFee active at `epoch`: newer if epoch >= newer.epoch, else older. */
+/**
+ * The extensions a Token-2022 account of a mint must carry, by the mint's own, and the bytes each
+ * holds (`ExtensionType::get_required_init_account_extensions`): a transfer fee's withheld amount,
+ * a hook's transferring flag, and the non-transferable and paused markers. (A confidential
+ * transfer fee's amount is added only where an account is configured for confidential transfers.)
+ */
+const ACCOUNT_EXTENSION_BYTES: ReadonlyMap<number, number> = new Map([
+  [EXT_TRANSFER_FEE_CONFIG, 8],
+  [EXT_NON_TRANSFERABLE, 0],
+  [EXT_TRANSFER_HOOK, 1],
+  [EXT_PAUSABLE, 0],
+]);
+
+/**
+ * The size of the associated token account the Associated Token Account program creates for a
+ * mint, which its rent is for: SPL Token's 165 bytes; under Token-2022, the account type byte and
+ * every extension the mint requires of an account, with the ImmutableOwner the ATA program adds.
+ */
+export function associatedTokenAccountLength(mintData: Uint8Array, token2022: boolean): number {
+  if (!token2022) return 165;
+  // The base, the account type byte, and ImmutableOwner's entry, which holds nothing.
+  let length = 165 + 1 + 4;
+  if (!isToken2022Mint(mintData)) return length;
+  let offset = T22_TLV_START;
+  while (offset + 4 <= mintData.length) {
+    const type = mintData[offset]! | (mintData[offset + 1]! << 8);
+    const size = mintData[offset + 2]! | (mintData[offset + 3]! << 8);
+    if (type === EXT_UNINITIALIZED) break;
+    const bytes = ACCOUNT_EXTENSION_BYTES.get(type);
+    if (bytes !== undefined) length += 4 + bytes;
+    offset += 4 + size;
+  }
+
+  return length;
+}
+
 export function getEpochFee(cfg: TransferFeeConfig, epoch: bigint): TransferFee {
   return epoch >= cfg.newerTransferFee.epoch ? cfg.newerTransferFee : cfg.olderTransferFee;
 }

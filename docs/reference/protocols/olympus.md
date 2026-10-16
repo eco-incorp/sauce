@@ -2,6 +2,12 @@
 
 # Olympus DAO (`olympus`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Olympus DAO is a staking protocol: lock a token to earn rewards. This page lists the chains it is
+> deployed on, the name a program writes for each of its contracts, and the functions a program can
+> call.
+
 Decentralized reserve currency protocol. OHM staking and bonding mechanism with protocol-owned liquidity and treasury management.
 
 | Fact | Value |

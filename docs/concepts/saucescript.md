@@ -1,6 +1,11 @@
 # Writing SauceScript
 
-[Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
+**Concept** · [Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
+
+> SauceScript is the language you write programs in. It looks like TypeScript, but it is smaller and
+> stricter, like a recipe card with a fixed set of words: the compiler checks every line before
+> anything runs. Once your program is running on the chain, it cannot ask your app for anything, so
+> whatever it needs, you hand it at the start.
 
 SauceScript is a checked subset of TypeScript. It has the familiar things —
 variables, functions, conditions, loops, arrays, records — but it does not run in
@@ -30,7 +35,7 @@ mean something to the Sauce compiler and nothing to `tsc`. A source error points
 a location and span; an error about an option, a resolver or an unavailable
 target feature has nothing to point at. An editor learns SauceScript's names from the
 `tsconfig.json` that `sauce init` writes beside a directory of programs
-([In an editor](../guides/cli.md#in-an-editor)).
+([In an editor](../guides/cli-programs.md#in-an-editor)).
 
 A function declared `: void` can finish without returning a value. Other
 functions must return on every path. Annotate helper functions returning arrays,

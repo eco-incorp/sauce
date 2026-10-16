@@ -2,6 +2,11 @@
 
 # Base
 
+**Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
+
+> Everything a program can name on Base: its tokens, and every protocol deployed there with the name
+> a program writes for each contract. The `sauce` command builds and sends transactions on Base.
+
 **Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
 Base a program compiles and simulates, and the `sauce` command and the MCP server build
 its transactions and send them.

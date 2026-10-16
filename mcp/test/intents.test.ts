@@ -183,7 +183,7 @@ describe("sauce_intent_fill", () => {
       failed(
         await mcp.call("sauce_intent_fill", { intent: record, from: OWNER, claimant: "0x12" }),
       ),
-      /claimant: '0x12' is neither an address \(20 bytes\) nor 32 bytes of hex/,
+      /claimant: '0x12' is neither an address \(20 bytes\), 32 bytes of hex nor a Solana key/,
     );
     assert.match(
       failed(

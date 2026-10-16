@@ -13,6 +13,8 @@ export {
   addressDefinesOf,
   CliError,
   parseAddress,
+  parseClaimant,
+  parseIntentParty,
   parseChain,
   parseDefineMap,
   parseLamports,
@@ -104,6 +106,8 @@ export { potImportCommand, potListCommand } from "../../sdk/dist/cli/pot-command
 export { PotStore } from "../../sdk/dist/cli/pot-store.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
+export { publishSvmCommand } from "../../sdk/dist/cli/publish-svm.js";
+export { solanaIntentState } from "../../sdk/dist/cli/intent-solana.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";

@@ -6,6 +6,20 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
+**Tutorials** (learn by doing: the EVM quick start `docs/guides/quick-start.md`, the Solana quick
+start and the first intent, on `docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`),
+**How-to guides** (one task a page), **Concepts** (explanation: what a Pot is, why atomic) and
+**Reference** (flags, API, the generated pages). `docs/README.md` is the map: every page is listed
+under exactly one of its four `##` sections, and says which on its breadcrumb line (`**How-to
+guide** · ` before its links); `docs:check` holds both. A page stays in its mode: a
+how-to does not wander into a concept essay, a concept page lists no flags, and a fact has one
+owning page that the others link instead of repeating. No history or changelog prose. Every page
+then opens with a short plain-words intro in a blockquote: a few short sentences and an everyday
+analogy, any Sauce word in it explained on the spot (the [glossary](docs/concepts/glossary.md) maps
+each to a familiar one). The real content follows it, examples before rules, edge cases in a section
+at the end. Say "simulate", never "rehearse".
+
 ## What this repo is
 
 **Sauce** — the developer-facing package for the **Sauce protocol**, whose on-chain bytecode engines
@@ -444,8 +458,9 @@ repository's documentation is not an independent correctness check.
 **The language reference is held to the compiler, and there is one.**
 `skills/sauce-script/references/builtins.md` (the SauceScript reference) and its `builtins.json`
 (every builtin, with an example program per target and the error on a target that lacks it) are the
-`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte as
-`docs/reference/saucescript.md` (see "The manual renders the same facts" below), so edit the skill's.
+`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte,
+under its plain-words intro, as `docs/reference/saucescript.md` (see "The manual renders the same
+facts" below), so edit the skill's.
 `pnpm skills:check` (`sdk/scripts/skills-check/builtins.mjs`) holds them: every builtin example
 compiles on each target it lists, every table example compiles on each target its row claims, and
 every error the page quotes (`…` and `N` as wildcards) is produced by a rejected program — a
@@ -1012,6 +1027,14 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
+`cli-intent-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.sauce.ts`
+the same way from an Ethereum anvil, published with `sauce intent publish` (with LiteSVM running the
+released engine and Kitchen, for the program bodies that cook on the Portal executor's Pot). jest
+(`moduleNameMapper`) and `sdk/tsconfig.test.json` (`paths`) map `@eco-incorp/sauce`, `/svm` and
+`/protocols/*` to `src`, so a suite may import a manual example, which imports the package by its
+name, with no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
+header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the page makes) and
+`cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 `cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
 (`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the
@@ -1270,6 +1293,21 @@ Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions doc
 contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
 them, `references/`.
 
+- **One shape, one owner per fact.** Every `SKILL.md` opens with a scope paragraph saying what the
+  skill owns, then `## When to use` (a table: this skill, or which neighbour instead) and
+  `## Core model`, then its body (decision tables, numbered steps with exact commands, API tables),
+  and ends with `## Pitfalls` (mistake, then what to do) and `## Files` (each example and reference,
+  and what it pins). Each fact has one owning skill, and the others point at it rather than repeat
+  it: which chains take transactions and the chain-support request links are `sauce-overview`'s,
+  the program header `sauce-script`'s, Solana's accounts and running `sauce-solana`'s, namespace
+  members, aliases and `available(...)` `sauce-globals`'s, the units of each flag `sauce-cli`'s,
+  intents `sauce-intents`'s. `sauce-overview` is the router: the model, the protocol with a user,
+  the rules, the chain policy, and the skill map in layers (Start, Write, Build, Compose, Target,
+  Run, Index) with routes by need. `skills:check` holds the first two and last two sections of
+  every `SKILL.md` (`TEMPLATE_FIRST`, `TEMPLATE_LAST`) and fails any skill but `sauce-overview` that
+  links the chain-support requests (`CHAIN_POLICY_SKILL`). The directory names are stable: the MCP
+  prompts, the generators, the tests and the manual name them, so a change of ownership moves
+  prose, not directories.
 - **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
   the per-protocol documents. `gen-embedded-sources.mjs` embeds them (top-level `*.md` only) for
   `src/skills/loader.ts`, so the `/skills` export (`getProtocolSkill`, unchanged API) returns
@@ -1304,17 +1342,21 @@ them, `references/`.
   `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
   issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
   byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
-  rendered as a guide (its example's whole file in place of the code the skill quotes). The two
+  rendered as a guide (its example's whole file in place of the code the skill quotes, and its
+  agent-only sections, When to use and Files, left out: `AGENT_SECTIONS`). The two
   renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
   manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
-  never sent into `skills/`, nor an agent into `docs/`. `docs/reference/` is generated whole (a page
+  never sent into `skills/`, nor an agent into `docs/`. And each manual page opens with the
+  plain-words intro every page of the manual has, which the generator writes (`docsIntros`) and
+  only the manual's rendering carries. `docs/reference/` is generated whole (a page
   written there by hand is removed: hand-written reference pages belong in `docs/api/`), committed,
   prettier-ignored, and held like the skills' references: CI fails when the build changed it, and
   `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
   README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
   exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
-  than an index with more than 3 links per 100 words; and `docs/guides/skills.md`'s table naming
-  exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
+  than an index with more than 3 links per 100 words; every page, generated or not, opening with a
+  plain-words intro (a blockquote after its title and breadcrumb); and `docs/guides/skills.md`'s
+  table naming exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
   operation) is written once, in the manual.
 - **One place per release.** The release's addresses (EVM engine, Routers, Kitchen and its
@@ -1388,6 +1430,13 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
   documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
+- **Simulate, never rehearse, enforced.** What runs with no key and sends nothing —
+  `sauce simulate`, a dry run, a fill without `--send` — is a simulation, in everything a user or
+  an agent reads. `docs/scripts/simulate-wording.mjs` is the rule; `skills:check` applies it to every
+  file of the skills, comments included, `docs:check` to the README, `docs/` and the examples, and
+  `sdk/test/simulate-wording.test.ts` to every string literal in `sdk/src`, `mcp/src` and
+  `actions/src` (the `sauce` command's `--help` and output, the MCP server's tools and
+  instructions). Code comments, identifiers and file names (`rehearse.ts`) are not held to it.
 - **Plain integers, enforced.** SauceScript a reader sees writes `3000`, never `3000n`: the
   compiler reads a literal from its text as a 256-bit integer, so both are the same program
   (`sdk/test/integer-literals.test.ts`, both targets), and agents copy whichever they are shown.
@@ -1446,8 +1495,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 harness for developing the SDK (local node scripts, compile helpers, the SVM Kitchen runner), which
 does not ship. The kit is `src/testing/`, built by `tsconfig.build.json` (strict; only that
 directory) to `dev-tools/dist/testing`, which alone is in the root `files`; `recorder.mjs` is copied
-beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY`) and EVM-only,
-needs anvil on `PATH`, and reads no environment: the RPC, block and state file are arguments.
+beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY`), needs anvil on
+`PATH` for an EVM chain, and reads no environment: the RPC, block and state file are arguments.
 `fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
 live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
 recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
@@ -1491,6 +1540,37 @@ replayed from `test/testing/state/base.json.gz`; record that again as the action
 and hook `--test-timeout`, as the guide tells consumers to.
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
+
+**Solana in the kit** (`solana*.ts`): `fork("solana", { state, rpcUrl, mode })` and
+`local({ chain: "solana" })` give a `SolanaTestChain` over a LiteSVM bank (`solana-bank.ts`) with
+the packaged `engine-mainnet.so` and `kitchen.so` at the release ids. LiteSVM is the project's own,
+an optional peer at the `sdk/runtime` pin exactly (the guide's `npm i -D litesvm@…` line is held to
+it by `docs:check`), imported dynamically by `solana-bank.ts` alone, which `optional-dependencies.test.ts`
+allows; no litesvm type reaches a `.d.ts` (the bank keeps them private), so an EVM-only consumer's
+typecheck never needs it. There is no anvil-style lazy fork: a transaction names every account it
+touches, so the bank reads each the first time a message (or a name the cook resolves) names it —
+from the cluster (`clusterSource`, a hundred to a request, a program's code from its program data,
+errors scrubbed of the URL), from a state file (`stateSource`), or nowhere (`local`). A Solana node
+serves accounts only as they are now, so a recording pins the slot it read at (the Clock, Rent and
+EpochSchedule sysvars go in its header) and has no `block` option. The file is gzipped
+`{ sauce: { version: 1, chain, clock, rent, epochSchedule }, accounts, programs }`, sorted, so the
+same reads record the same bytes, and must not mention the RPC. A replayed key the file lacks reads
+as missing and is noted on the `CookReverted` (or a missing mint's error). LiteSVM has no snapshots:
+the bank snapshots every account it ever read or wrote, plus the clock, and puts back each key read
+since a snapshot as it was first read. Cooks (`solana-cook.ts`) are `sauce run`'s, rebuilt without
+importing the command: names resolved by `svm/account-names.ts#resolveSvmAccountName` over the
+compile's `derivedAccounts`, missing token accounts created first (owner pays), inline when it fits,
+else staged (code buffer at the first free nonce, closed after) and through a lookup table the bank
+writes in place, as `sauce simulate`'s copy does. `simulate` is a snapshot, the same cook, a revert
+(the Pot it creates is kept, as on EVM). Test accounts come from fixed seeds so recordings replay.
+`solana-local.test.ts`, `solana-record.test.ts` (records from the SDK's pinned mainnet dumps served
+by `sdk/scripts/solana-rpc-stub.mjs` on loopback — `solana-support.ts#pinnedCluster` — then replays
+with it closed) and `solana-examples.test.ts`, which runs the skills' Solana examples (listed in
+`skills-check/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
+one CI runs) from `test/testing/state/solana-examples.json.gz`. Record that again with
+`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC; the packed check runs a Solana cook,
+staged too, from a clean install with LiteSVM beside it, and checks the error naming LiteSVM
+without it.
 
 `start:local`/`start:fork` start anvil (a fork keeps its chain id; an empty node takes Base's, since
 the `sauce` command refuses an unknown one) and run `scripts/deploy.ts`, which sets the stack up

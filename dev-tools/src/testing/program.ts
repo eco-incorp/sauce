@@ -7,6 +7,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { address, getAddressEncoder, isAddress } from "@solana/kit";
+import type { AccountManifest } from "sauce-compiler";
 import { BaseError, bytesToHex, concat, decodeErrorResult, hexToBytes, type Hex } from "viem";
 
 import {
@@ -16,6 +18,7 @@ import {
   mainReturnType,
   parseEntryType,
   type CanonicalChain,
+  type CompiledSauceProgram,
   type EntryType,
   type EntryValue,
   type Returned,
@@ -37,6 +40,14 @@ export interface CompiledProgram {
   readonly params: ReadonlyArray<{ readonly name: string; readonly type: string }>;
   /** `main`'s declared return type, if it declares one. */
   readonly returnType: string | undefined;
+  /** On Solana, the accounts the cook attaches, in order, with the role each needs. */
+  readonly manifest?: AccountManifest;
+  /**
+   * On Solana, the accounts the SDK added to `main` for the token methods and the venues, by name,
+   * with how each is derived (`self:USDC`, the Pot's USDC account; `@to:USDC`, that of `main`'s
+   * argument `to`). A cook fills each itself.
+   */
+  readonly derivedAccounts?: Readonly<Record<string, string>>;
   /** The program with `args` encoded after it: the `program` of `Pot.cook(engine, program)`. */
   payload(args?: readonly EntryValue[]): Hex;
   /** `data`, a cook's return data, read as `main`'s return type. */
@@ -75,6 +86,71 @@ function valueOf(type: EntryType, returned: Returned): Value {
   }
 }
 
+/**
+ * `value`, of `type`, with every `Address` in it as the word the engine reads on Solana: the public
+ * key's 32 bytes, whole, where the EVM's ABI encoding keeps 20. A key is given in base58, or as 32
+ * bytes of hex.
+ */
+function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
+  switch (type.kind) {
+    case "address": {
+      if (typeof value === "string" && isAddress(value)) {
+        return bytesToHex(new Uint8Array(getAddressEncoder().encode(address(value))));
+      }
+      if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) return value;
+      throw new TypeError(
+        `${at}: ${JSON.stringify(value)} is not a Solana public key (base58, or 32 bytes of hex)`,
+      );
+    }
+    case "array":
+      return Array.isArray(value)
+        ? value.map((item: EntryValue, index) => keyWords(type.of, item, `${at}[${index}]`))
+        : value;
+    case "tuple": {
+      if (Array.isArray(value)) {
+        return value.map((item: EntryValue, index) =>
+          index < type.fields.length
+            ? keyWords(type.fields[index]!.type, item, `${at}.${type.fields[index]!.name}`)
+            : item,
+        );
+      }
+      if (value === null || typeof value !== "object" || value instanceof Uint8Array) return value;
+      const record = value as { readonly [field: string]: EntryValue };
+
+      return Object.fromEntries(
+        Object.entries(record).map(([name, item]) => {
+          const field = type.fields.find((candidate) => candidate.name === name);
+
+          return [name, field === undefined ? item : keyWords(field.type, item, `${at}.${name}`)];
+        }),
+      );
+    }
+    default:
+      return value;
+  }
+}
+
+/** `main`'s arguments encoded after the program, each `Address` on Solana as a whole key. */
+function encodeArguments(compiled: CompiledSauceProgram, args: readonly EntryValue[]): Uint8Array {
+  if (compiled.chain.kind !== "svm") return encodeEntryArguments(compiled, args);
+  const params = compiled.entryParams;
+
+  return encodeEntryArguments(
+    {
+      ...compiled,
+      entryParams: params.map((param) => ({
+        ...param,
+        type: param.type.replace(/\bAddress\b/g, "Uint256"),
+      })),
+    },
+    args.map((value, index) =>
+      index < params.length
+        ? keyWords(parseEntryType(params[index]!.type), value, params[index]!.name)
+        : value,
+    ),
+  );
+}
+
 export function compileProgram(input: ProgramInput, chain: CanonicalChain): CompiledProgram {
   const { source, path } = load(input);
   // Relative imports resolve beside the file, or the working directory for source text.
@@ -104,10 +180,14 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
     bytecode,
     params: compiled.entryParams.map(({ name, type }) => ({ name, type })),
     returnType,
+    ...(compiled.manifest === undefined ? {} : { manifest: compiled.manifest }),
+    ...(compiled.derivedAccounts === undefined
+      ? {}
+      : { derivedAccounts: compiled.derivedAccounts }),
     payload(args = []) {
       if (args.length === 0 && compiled.entryParams.length === 0) return bytecode;
 
-      return concat([bytecode, bytesToHex(encodeEntryArguments(compiled, args))]);
+      return concat([bytecode, bytesToHex(encodeArguments(compiled, args))]);
     },
     decode(data) {
       if (returnType === undefined) return undefined;
@@ -120,15 +200,23 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
 
 /** Thrown by a cook that reverts, with the reason when the revert data carries one. */
 export class CookReverted extends Error {
+  /** On Solana, the transaction's program logs, which say where it failed. */
+  readonly logs?: readonly string[];
+
   constructor(
     /** The decoded reason (`require`'s message, a panic, a custom error's name), if any. */
     readonly reason: string | undefined,
     /** The raw revert data. */
     readonly data: Hex | undefined,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; logs?: readonly string[]; note?: string },
   ) {
-    super(`the cook reverted${reason === undefined ? "" : `: ${reason}`}`, options);
+    super(
+      `the cook reverted${reason === undefined ? "" : `: ${reason}`}` +
+        (options?.note === undefined ? "" : ` (${options.note})`),
+      options?.cause === undefined ? undefined : { cause: options.cause },
+    );
     this.name = "CookReverted";
+    if (options?.logs !== undefined) this.logs = options.logs;
   }
 }
 

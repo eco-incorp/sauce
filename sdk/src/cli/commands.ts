@@ -33,11 +33,13 @@ import { v12PredictPot } from "../deployments/pot.js";
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
+import type { IntentSvmState } from "../routes/intent-sugar.js";
 import type { IntentFundVia } from "../routes/portal.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
+  lowerProgramIntents,
   type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
@@ -78,7 +80,7 @@ import { rehearse } from "./rehearse.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
-import { svmCookSize, svmPayload } from "./solana.js";
+import { svmAccountsToGive, svmCookSize, svmPayload } from "./solana.js";
 import type { Funding } from "./funding.js";
 import {
   intentDestinations,
@@ -170,13 +172,17 @@ export interface ProgramInput {
     readonly deadline?: bigint;
     /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
     readonly rewardDeadline?: bigint;
-    readonly creator?: Address;
+    /** An EVM address; on Solana a key, as its 32 bytes. */
+    readonly creator?: Hex;
     /** The reward's prover; the registry's for the pair by default. */
-    readonly prover?: Address;
+    readonly prover?: Hex;
     readonly executionFee?: bigint;
     /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
     readonly fundVia?: IntentFundVia;
+    /** For an intent to Solana: the cluster's state its route is built against
+     *  (`intent-solana.ts#solanaIntentState` reads it). */
+    readonly svm?: IntentSvmState;
   };
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
@@ -257,8 +263,9 @@ function compileOptions(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia } = input.intents;
+  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia, svm } = input.intents;
   const intents = {
+    ...(svm === undefined ? {} : { svm }),
     ...(deadline === undefined ? {} : { deadline }),
     ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
     ...(creator === undefined ? {} : { creator }),
@@ -308,17 +315,51 @@ export function compileProgram(
 }
 
 /**
+ * The intents the file opens, lowered as {@link compileProgram} lowers them but with no program
+ * compiled: what a wallet publishes. The only way to build an intent from Solana
+ * (`routes/sauce-route.ts#lowerProgramIntents`).
+ */
+export function lowerProgram(
+  input: ProgramInput,
+  files: CliFiles,
+): ReturnType<typeof lowerProgramIntents> {
+  try {
+    return lowerProgramIntents(input.chain, input.text, compileOptions(input, files));
+  } catch (error) {
+    throw new CliError(
+      `${input.file} does not lower for ${input.chain.slug}\n` +
+        describeCompileError(error, input.file, input.text, input.chain),
+    );
+  }
+}
+
+/**
  * The chains a cook of `input` is refused by: its own, and the destination of each intent it opens
  * — what {@link requireSupported} is asked about before anything that publishes them. A fee the
  * intents' cooks are not given yet is zero here: the chains do not depend on it.
  */
 export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  const probe = compileProgram(
-    { ...input, intents: { ...input.intents, executionFee: input.intents.executionFee ?? 0n } },
-    files,
-  );
+  const probe = compileProgram(probeInput(input), files);
 
   return [input.chain, ...intentDestinations(probe.intents)];
+}
+
+/**
+ * `input` with what its intents' routes are built against filled in where it is not given, for a
+ * compile that only asks which intents a program opens and what their routes touch: a fee of zero,
+ * and on Solana no account existing. Never what is published.
+ */
+export function probeInput(input: ProgramInput): ProgramInput {
+  const { svm } = input.intents;
+
+  return {
+    ...input,
+    intents: {
+      ...input.intents,
+      executionFee: input.intents.executionFee ?? 0n,
+      svm: { ...svm, potExists: svm?.potExists ?? false },
+    },
+  };
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -394,6 +435,12 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           program.derivedAccounts,
         )
       : undefined;
+  // On Solana, the accounts main takes that no cook derives, each given by name: what suits each, as
+  // a cook command refuses a cook without them.
+  const toGive =
+    program.manifest === undefined
+      ? []
+      : svmAccountsToGive(program.manifest, program.derivedAccounts, input.accounts, input.via);
   const cooks = intentCooks(program.intents);
   const pots: readonly PotCheck[] =
     input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
@@ -439,7 +486,9 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
-      ...(program.manifest === undefined ? {} : { manifest: manifestJson(program) }),
+      ...(program.manifest === undefined
+        ? {}
+        : { manifest: manifestJson(program), accountsToGive: toGive }),
     },
     ...(notes.length === 0 ? {} : { notes }),
   };

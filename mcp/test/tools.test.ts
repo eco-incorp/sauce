@@ -159,12 +159,14 @@ describe("the sauce command's flags as the tools' inputs", () => {
     }
   });
 
-  it("says it in the server's instructions and in the MCP guide, one table", () => {
+  it("says it in the server's instructions and in the MCP tools guide, one table", () => {
     const instructions = mcp.client.getInstructions() ?? "";
     for (const line of flagInputLines()) assert.ok(instructions.includes(line), line);
     assert.match(instructions, /`sauce <command>` is the tool sauce_<command>/);
-    const guide = readFileSync(new URL("../../docs/guides/mcp.md", import.meta.url), "utf8");
-    const section = guide.slice(guide.indexOf("### The command's flags as inputs"));
+    const guide = readFileSync(new URL("../../docs/guides/mcp-tools.md", import.meta.url), "utf8");
+    const at = guide.indexOf("### The command's flags as inputs");
+    assert.ok(at >= 0, "the MCP tools guide has its flags table");
+    const section = guide.slice(at);
     const rows = [...section.matchAll(/^\| (`--[^|]+?) +\| `([^`]+)` +\|$/gm)].map(
       ([, flags, input]) => ({
         flags: flags!.split(", ").map((flag) => flag.replace(/^`--|`$/g, "")),
@@ -1356,6 +1358,50 @@ describe("sauce_intent_publish", () => {
     assert.match(
       failed(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] })),
       /goes with dryRun/,
+    );
+  });
+
+  it("builds an intent paying a Solana wallet, given in base58, as the command does", async () => {
+    const out = ok(
+      await mcp.call("sauce_intent_publish", {
+        source: [
+          "function main(recipient: Address, amount: Uint256) {",
+          "  Solana(() => {",
+          "    USDC.transfer(recipient, amount);",
+          "  }).reward({ tokens: [{ token: USDC, amount: 2000000 }] });",
+          "}",
+        ].join("\n"),
+        chain: "base",
+        args: ["9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", "1000000"],
+        intentDeadline: 2_000_000_000,
+        intentCreator: CREATOR,
+      }),
+    ) as Published;
+    assert.equal(out.intents[0]!.destination, "solana");
+    // With no Solana endpoint, the wallet's token account is created whether or not it exists.
+    assert.ok(out.notes.some((note) => /no solana endpoint: the route creates each/.test(note)));
+  });
+
+  it("refuses a Solana program body with no endpoint to read whether its Pot exists", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", {
+          source: [
+            "function main(recipient: Address, amount: Uint256) {",
+            "  Solana(() => {",
+            "    const sent = amount;",
+            "    USDC.transfer(recipient, sent);",
+            "  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount: 2000000 }] });",
+            "}",
+          ].join("\n"),
+          chain: "base",
+          args: ["9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", "1000000"],
+          intentDeadline: 2_000_000_000,
+          intentCreator: CREATOR,
+          intentExecutionFee: "5000",
+        }),
+      ),
+      /runs a program on the Pot its Portal's executor owns[^]*give solana's endpoint/,
     );
   });
 

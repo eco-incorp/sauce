@@ -22,6 +22,7 @@ import { CliError, UsageError } from "./args.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
 import {
   compileProgram,
+  lowerProgram,
   type CliFiles,
   unapproved,
   type Approver,
@@ -104,13 +105,10 @@ export function storedTargets(store: IntentStore, hash: Hex): Target[] {
 
 /** The intents a file opens, each published through its source chain's registry Portal. */
 export function fileTargets(input: ProgramInput, files: CliFiles, store: IntentStore): Target[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `the intents ${input.file} opens would be published on ${input.chain.slug}, and the ` +
-        "eco-routes Portal this SDK publishes through is EVM only",
-    );
-  }
-  const intents = compileProgram(input, files).intents;
+  // From Solana only the intents are built: a wallet publishes them (`publish-svm.ts`).
+  const intents = (
+    input.chain.kind === "svm" ? lowerProgram(input, files) : compileProgram(input, files)
+  ).intents;
   if (intents.length === 0) throw new UsageError(`${input.file} opens no intent`);
   const measured = intents.find((intent) => intent.captures.length > 0);
   if (measured !== undefined) {
@@ -491,12 +489,13 @@ export async function claimCommand(
 ): Promise<CommandOutput> {
   const records = targets.map((target) => target.record);
   const endpoints = endpointsOf(targets, context);
-  const plan = await buildClaim(records, endpoints);
+  const source = requireChain(records[0]!.source.chainId);
+  const payer = svmFrom(source, context);
+  const plan = await buildClaim(records, endpoints, payer);
   if (!plan.ready) {
-    const source = requireChain(records[0]!.source.chainId);
     const url = context.endpoint(source);
     const now =
-      url === undefined
+      url === undefined || source.kind === "svm"
         ? undefined
         : await connect(url, source)
             .then((client) => client.getBlock())
@@ -510,12 +509,28 @@ export async function claimCommand(
       exitCode: 1,
     };
   }
+  if (source.kind === "svm") {
+    // Solana's: one transaction a claim, each paying its claimant.
+    const sent = await sendAll(plan.transactions, context, records);
+
+    return {
+      text: [
+        ...sent.flatMap(sentLines),
+        ...plan.claims.flatMap((claim) => [
+          `Claimed ${claim.intentHash} for ${claim.claimant}:`,
+          ...claim.moves.map((move) => `  ${moveText(move)}`),
+        ]),
+      ].join("\n"),
+      json: { ready: true, sent: true, transactions: sent.map(sentJson), claims: plan.claims },
+      notes: plan.notes,
+    };
+  }
   if (context.account === undefined) return unsigned(plan.transactions, "claim");
   const sent = onEvm((await sendAll(plan.transactions, context, records))[0]);
   const effects = await moved(context, sent, [
     [getAddress(records[0]!.source.portal), "Portal"],
-    ...plan.claims.map((claim) => [claim.vault, "the intent's vault"] as const),
-    ...plan.claims.map((claim) => [claim.claimant, "the claimant"] as const),
+    ...plan.claims.map((claim) => [claim.vault as Address, "the intent's vault"] as const),
+    ...plan.claims.map((claim) => [claim.claimant as Address, "the claimant"] as const),
   ]);
 
   return {
@@ -549,11 +564,31 @@ export async function refundCommand(
   const notes: string[] = [];
   let failed = false;
   for (const target of targets) {
-    const plan = await buildRefund(target.record, endpoints);
+    const source = requireChain(target.record.source.chainId);
+    const payer = svmFrom(source, context);
+    const plan = await buildRefund(target.record, endpoints, payer);
     if (!plan.ready) {
       failed = true;
       texts.push(`${target.record.intentHash}: not refundable yet: ${plan.why}`);
       json.push({ intentHash: target.record.intentHash, ready: false, why: plan.why });
+      continue;
+    }
+    if (source.kind === "svm") {
+      const sent = await sendAll(plan.transactions, context, [target.record]);
+      texts.push(
+        ...sent.flatMap(sentLines),
+        `Refunded ${target.record.intentHash} to its creator ${plan.refundee}:`,
+        ...plan.moves.map((move) => `  ${moveText(move)}`),
+      );
+      json.push({
+        intentHash: target.record.intentHash,
+        ready: true,
+        sent: true,
+        transactions: sent.map(sentJson),
+        refundee: plan.refundee,
+        moves: plan.moves,
+      });
+      notes.push(...plan.notes);
       continue;
     }
     if (context.account === undefined) {
@@ -569,8 +604,8 @@ export async function refundCommand(
     const sent = onEvm((await sendAll(plan.transactions, context, [target.record]))[0]);
     const effects = await moved(context, sent, [
       [getAddress(target.record.source.portal), "Portal"],
-      [plan.vault, "the intent's vault"],
-      [plan.refundee, "the creator"],
+      [plan.vault as Address, "the intent's vault"],
+      [plan.refundee as Address, "the creator"],
     ]);
     texts.push(
       ...sentLines(sent),
@@ -875,7 +910,7 @@ async function inBatches<T, R>(
 
 /** `sauce intent import`: the intents a transaction published, rebuilt and stored. */
 export async function importCommand(
-  ref: { readonly txHash: Hex; readonly chain: CanonicalChain; readonly index?: number },
+  ref: { readonly txHash: string; readonly chain: CanonicalChain; readonly index?: number },
   context: LifecycleContext,
 ): Promise<CommandOutput> {
   const url = context.endpoint(ref.chain);

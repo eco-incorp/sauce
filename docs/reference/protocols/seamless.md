@@ -2,6 +2,12 @@
 
 # Seamless (`seamless`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Seamless is a lending market: deposit tokens to earn interest, or borrow against them. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Native lending and borrowing protocol on Base. Aave V3 fork with integrated leverage strategies (ILMs) for one-click leveraged yield.
 
 | Fact | Value |

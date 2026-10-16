@@ -221,6 +221,53 @@ export function memoizedCreateProgramAddress(
 }
 
 /**
+ * {@link memoizedGetProgramDerivedAddressWithBump}, synchronously: the same search kit's
+ * `getProgramDerivedAddress` makes (bump 255 down to 0, the first `create_program_address` off the
+ * curve), hashed with the synchronous SHA-256 {@link memoizedCreateProgramAddress} uses, for a
+ * caller that cannot await — the intent lowering, which runs inside the synchronous compile. Same
+ * key and map as the asynchronous find, so the two share each result.
+ */
+export function memoizedFindProgramAddressSync(
+  programAddress: Address,
+  seeds: readonly ReadonlyUint8Array[],
+): ProgramDerivedAddress {
+  const key = memoKey(programAddress, seeds);
+  const cached = recall(bumpMemo, key);
+  if (cached !== undefined) return cached;
+  misses += 1;
+  if (seeds.length > 15) throw new Error(`${seeds.length} seeds; a find takes at most 15`);
+  const long = seeds.findIndex((seed) => seed.length > 32);
+  if (long >= 0) throw new Error(`seed ${long} is ${seeds[long]!.length} bytes; at most 32`);
+  const program = getAddressEncoder().encode(programAddress) as Uint8Array;
+  for (let bump = 255; bump >= 0; bump--) {
+    const candidate = getAddressDecoder().decode(
+      sha256(
+        ...(seeds as readonly Uint8Array[]),
+        Uint8Array.of(bump),
+        program,
+        "ProgramDerivedAddress",
+      ),
+    );
+    if (isOffCurveAddress(candidate)) {
+      const derived = [candidate, bump] as unknown as ProgramDerivedAddress;
+      remember(bumpMemo, key, derived);
+      return derived;
+    }
+  }
+  throw new Error(`no off-curve address for ${programAddress}'s seeds`);
+}
+
+/** {@link memoizedFindAssociatedTokenPda}, synchronously (see {@link memoizedFindProgramAddressSync}). */
+export function memoizedAssociatedTokenAccountSync(seeds: AssociatedTokenSeeds): Address {
+  const encoder = getAddressEncoder();
+  return memoizedFindProgramAddressSync(ASSOCIATED_TOKEN_PROGRAM_ADDRESS, [
+    encoder.encode(seeds.owner),
+    encoder.encode(seeds.tokenProgram),
+    encoder.encode(seeds.mint),
+  ])[0];
+}
+
+/**
  * Memoized associated-token-account address — the drop-in, memoized twin of
  * `@solana-program/token`'s `findAssociatedTokenPda`. BYTE-IDENTICAL to it: the
  * same Associated-Token program id and the same `[owner, tokenProgram, mint]`

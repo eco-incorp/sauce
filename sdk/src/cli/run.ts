@@ -24,6 +24,8 @@ import {
   CliError,
   describeFlags,
   parseAddress,
+  parseClaimant,
+  parseIntentParty,
   parseChain,
   parseDefines,
   parseDefinesFile,
@@ -52,6 +54,8 @@ import {
   type CommandOutput,
   compileCommand,
   compileProgram,
+  lowerProgram,
+  probeInput,
   type Confirm,
   type CookInput,
   expectingRevert,
@@ -120,6 +124,8 @@ import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } 
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
+import { publishSvmCommand } from "./publish-svm.js";
+import { solanaIntentState } from "./intent-solana.js";
 import { reclaimCommand } from "./reclaim.js";
 import { sendCommand, signedChain } from "./send.js";
 import { simulateCommand } from "./simulate.js";
@@ -144,6 +150,7 @@ import {
   svmVerifyCommand,
   type SvmCookInput,
 } from "./solana.js";
+import { address as svmAddress } from "@solana/kit";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { passwordSource, type CapturedCommand, type PasswordSource } from "./password.js";
@@ -675,11 +682,16 @@ async function autoExecutionFee(
   endpoints: Endpoints,
   gate: Gate | undefined,
 ): Promise<bigint | undefined> {
-  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
+  const probe = compileProgram(
+    probeInput({ ...input, intents: { ...input.intents, executionFee: 0n } }),
+    io,
+  );
   // Before the fee is read: a command refused on these chains reads nothing for them.
   if (gate !== undefined) gated(gate, input.chain, probe.intents);
   const cooks = intentCooks(probe.intents);
   if (cooks.length === 0) {
+    // An intent to Solana's cook reads its fee there (`solanaIntentState`).
+    if (probe.intents.some((intent) => intent.solana?.pot !== undefined)) return undefined;
     io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
 
     return undefined;
@@ -787,8 +799,10 @@ async function programInput(
       ...(rewardDeadline === undefined
         ? {}
         : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
-      ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
-      ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
+      ...(creator === undefined
+        ? {}
+        : { creator: parseIntentParty("intent-creator", creator, chain) }),
+      ...(prover === undefined ? {} : { prover: parseIntentParty("intent-prover", prover, chain) }),
       ...(fee === undefined || fee === "auto"
         ? {}
         : { executionFee: parseWei("intent-execution-fee", fee) }),
@@ -796,7 +810,13 @@ async function programInput(
     },
   };
   bind?.before?.(given);
-  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
+  const bound = bind === undefined ? given : bindMainArguments(given, bind.args);
+  // An intent to Solana is built against the cluster's state, read first (`intent-solana.ts`).
+  const solana = await solanaIntentState(bound, io, endpointsOf(args, io, chain), {
+    autoFee: fee === "auto",
+  });
+  for (const note of solana.notes) io.stderr(`${note}\n`);
+  const input = solana.input;
   if (fee !== "auto") return input;
   const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
 
@@ -1275,6 +1295,55 @@ async function lifecycleOf(
   return { targets, context: await lifecycleContext(args, io) };
 }
 
+/** `sauce intent publish --chain solana`: the file's intents published from a Solana wallet. */
+async function publishFromSolana(
+  args: ParsedArgs,
+  io: CliIo,
+  program: ProgramInput,
+  format: string | undefined,
+): Promise<CommandOutput> {
+  if (format === "cast") {
+    throw new UsageError("--format cast prints EVM transactions: from Solana, --format json");
+  }
+  if (assumedBalancesOf(args, program.chain).length > 0) {
+    throw new UsageError(
+      "--assume-balance overrides an EVM chain's state for a simulation: a Solana simulation runs " +
+        "on the accounts as they are",
+    );
+  }
+  if (program.intents.fundVia !== undefined) {
+    throw new UsageError(
+      "--intent-fund-via chooses how an EVM wallet funds the vault: Solana's Portal funds it " +
+        "with its own `fund`, in the publishing transaction",
+    );
+  }
+  const signer = await svmSigner(args, io);
+  const from = stringFlag(args, "from");
+  if (from !== undefined && signer !== undefined) {
+    throw new UsageError("--from is for when there is no signer: the signer's wallet publishes");
+  }
+  let fromKey: SvmAddress | undefined;
+  if (from !== undefined) {
+    try {
+      fromKey = svmAddress(from);
+    } catch {
+      throw new UsageError(`--from: '${from}' is not a Solana key (base58)`);
+    }
+  }
+
+  return publishSvmCommand(
+    {
+      ...program,
+      ...(format === undefined ? {} : { format: "json" as const }),
+      dryRun: args.values["dry-run"] === true,
+      rpcUrl: requiredEndpoint(args, io, program.chain),
+      ...(signer === undefined ? {} : { signer }),
+      ...(fromKey === undefined ? {} : { from: fromKey }),
+    },
+    io,
+  );
+}
+
 /** The questions `sauce intent publish` asks with no file, as flags. */
 const CREATE: FlagSpecs = {
   source: { type: "string", value: "<chain>", help: "No file: the source chain (the reward's)" },
@@ -1348,20 +1417,27 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
         "--intent-creator with --format json to print the transactions unsigned",
     );
   }
-  const program: ProgramInput = {
-    file: created.file,
-    text: created.text,
-    chain: created.source,
-    compactArgs: false,
-    defines: {},
-    intents: {
-      deadline: created.deadline,
-      rewardDeadline: created.rewardDeadline,
-      creator,
-      prover: created.prover,
-      fundVia: created.fundVia,
+  // An intent to Solana is built against the cluster's state, read first (`intent-solana.ts`).
+  const solana = await solanaIntentState(
+    {
+      file: created.file,
+      text: created.text,
+      chain: created.source,
+      compactArgs: false,
+      defines: {},
+      intents: {
+        deadline: created.deadline,
+        rewardDeadline: created.rewardDeadline,
+        creator,
+        prover: created.prover,
+        fundVia: created.fundVia,
+      },
     },
-  };
+    io,
+    lookup,
+  );
+  for (const note of solana.notes) io.stderr(`${note}\n`);
+  const program: ProgramInput = solana.input;
   const rpcUrl = lookup(created.source);
   if (rpcUrl === undefined) {
     throw new UsageError(`publishing needs ${created.source.slug}'s endpoint: --config with it`);
@@ -1375,7 +1451,13 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       notes: [`${created.file} is written, and not published: the simulation reverts`],
     };
   }
-  if (lookup(created.destination) !== undefined) {
+  if (created.destination.kind === "svm") {
+    // Solana's simulation takes no state overrides: a fill is simulated from a solver's own accounts.
+    io.stderr(
+      `Filling on ${created.destination.slug} is simulated from a solver's accounts, once ` +
+        "published: sauce intent fill <intent hash> --solver <solana key> --claimant <address>\n\n",
+    );
+  } else if (lookup(created.destination) !== undefined) {
     const fill = await fillCommand({
       intents: fillTargets(program, io),
       from: created.file,
@@ -1438,7 +1520,7 @@ const LIFECYCLE: FlagSpecs = {
   keypair: {
     type: "string",
     value: "<path>",
-    help: "Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file",
+    help: "Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file",
     only: "svm",
   },
   yes: YES,
@@ -1626,6 +1708,8 @@ function hexOperand(args: ParsedArgs, what: string): `0x${string}` {
 }
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+/** A Solana transaction's signature: 64 bytes in base58. */
+const SVM_SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{64,88}$/;
 
 /** A cursor from a file: the cursor itself, or the JSON a step was printed as (its `cursor`, or its
  *  `next.cursor`). */
@@ -1751,6 +1835,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can",
       "simulate publishing it.",
       "",
+      "From Solana (--chain solana), the wallet is a Solana one (--keypair, or a Solana --wallet)",
+      "and Solana's Portal escrows the reward: two transactions an intent, Portal.fund (the reward",
+      "into the vault the Portal derives) then Portal.publish, each simulated on the cluster first.",
+      "The reward's names are Solana's, and --intent-creator is a Solana key. --format json prints",
+      "them unsigned for --from <key>. The route travels whole in one Solana transaction: a body of",
+      "token transfers fits, a program body does not.",
+      "",
       "With no <file>, it makes one: which chains, what is delivered and to whom, the reward",
       "(suggested: what is delivered plus a margin over the solver's destination costs — gas, the",
       "proof's fee, a Kitchen fee where one runs — priced through a Uniswap V3 pool there, and",
@@ -1767,6 +1858,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "Examples:",
       "  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \\",
       "    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…",
+      "  sauce intent publish pay.sauce.ts --chain solana --keypair ~/.config/solana/id.json \\",
+      "    --intent-deadline 2000000000 --intent-creator <Solana key> --args 0x…",
       "  sauce intent publish --keystore ~/.keys/me.json",
       "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
@@ -1786,20 +1879,21 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
           : { action: "publishing intents", by: "all" };
       const program = await programInput(args, io, undefined, undefined, gate, {
         ...argsInput(args, io, trailing),
-        // Before main's arguments: no argument makes a Solana file publishable.
-        before: ({ chain }) => {
-          if (chain.kind !== "svm") return;
+        // Before main's arguments: a Solana program that opens no intent runs on a Pot, and its
+        // accounts are no arguments to bind.
+        before: (input) => {
+          if (input.chain.kind !== "svm" || lowerProgram(input, io).intents.length > 0) return;
           throw new UsageError(
-            "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
-              "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
-              "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
-              "EVM chain; its destination may be Solana.",
+            `${input.file} opens no intent — there is nothing to publish. Run it on a Pot with ` +
+              "`sauce run`.",
           );
         },
       });
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
+      // From Solana the wallet calls Solana's Portal itself: `publish-svm.ts`.
+      if (program.chain.kind === "svm") return publishFromSolana(args, io, program, format);
       // Compiled once: refused before the signer or any endpoint, then the Pots checked.
       const compiled = compileProgram(program, io);
       if (gate !== undefined) gated(gate, program.chain, compiled.intents);
@@ -1955,12 +2049,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       const store = storeOf(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
       const solver = stringFlag(args, "solver");
-      const claimant = stringFlag(args, "claimant");
-      if (claimant !== undefined && !/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(claimant)) {
-        throw new UsageError(
-          `--claimant: '${claimant}' is neither an address (20 bytes) nor 32 bytes of hex`,
-        );
-      }
+      const given = stringFlag(args, "claimant");
+      const claimant = given === undefined ? undefined : parseClaimant("claimant", given);
       const sending = args.values.send === true;
       if (!sending && (hasSigner(args, io) || hasSvmSigner(args, io))) {
         throw new UsageError(
@@ -2048,7 +2138,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
                 : { record };
             }),
             ...(solver === undefined ? {} : { solver: parsePubkey("solver", solver) }),
-            ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
+            ...(claimant === undefined ? {} : { claimant }),
             ...(args.values["no-prove"] === true ? { prove: false } : {}),
             send: sending,
           },
@@ -2067,7 +2157,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ...(lookup === undefined ? {} : { sourceEndpointOf: lookup }),
         endpointFlag: rpcUrl === undefined ? "--config" : "--rpc-url",
         ...(solver === undefined ? {} : { solver: parseAddress("solver", solver) }),
-        ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
+        ...(claimant === undefined ? {} : { claimant }),
         ...(args.values["no-prove"] === true ? { prove: false } : {}),
         ...(account === undefined ? {} : { send: { account, approver: approverOf(args, io) } }),
       });
@@ -2117,10 +2207,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "While the proof has not arrived it says so (exit 1), with when the store saw the intent",
       "filled and the Hyperlane message its proof travels as, which the Hyperlane explorer shows by",
       "id. A proven CANCELLATION pays no claimant: refund it instead.",
+      "",
+      "An intent from Solana is claimed on Solana, one transaction an intent, paid by --keypair",
+      "(any key): the claimant's token account opened where it has none, then Portal.withdraw.",
       ...SUPPORTED_ONLY("Claims (or prints the transaction)"),
       "",
       "Example:",
       "  sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json",
+      "  sauce intent claim 0x<intent hash> --keypair ~/.config/solana/id.json",
     ].join("\n"),
     run: async (args, io) => {
       const { targets, context } = await lifecycleOf(args, io, {
@@ -2143,11 +2237,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "  a proof of a fill        only after the claimant has withdrawn: the leftovers.",
       "It reads the status first and says why not, with the time left (exit 1). There is no batch",
       "refund: several intents are refunded one transaction each. With no signer, prints the",
-      "unsigned transactions.",
+      "unsigned transactions. An intent from Solana is refunded on Solana, paid by --keypair (any",
+      "key): the creator's token account opened where it has none, then Portal.refund.",
       ...SUPPORTED_ONLY("Refunds (or prints the transactions)"),
       "",
       "Example:",
       "  sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json",
+      "  sauce intent refund 0x<intent hash> --keypair ~/.config/solana/id.json",
     ].join("\n"),
     run: async (args, io) => {
       const { targets, context } = await lifecycleOf(args, io, {
@@ -2272,7 +2368,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   import: {
-    usage: "sauce intent import <tx-hash> --chain <source> [--index <n>]",
+    usage: "sauce intent import <tx-hash | signature> --chain <source> [--index <n>]",
     summary: "Store the intents a transaction published, rebuilt from its logs",
     flags: {
       chain: PROGRAM.chain!,
@@ -2292,17 +2388,25 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "and the whole reward — checking each one hashes to the hash its log names, and stores it",
       "with the Portal that emitted it and the vault that Portal derives. Then every intent",
       "command takes it by hash. For an intent someone else published, or one published before",
-      "the store kept it.",
+      "the store kept it. On Solana, by the transaction's signature: each publish of Solana's",
+      "Portal it ran, rebuilt from the instruction and checked against the hash the Portal logged.",
       "",
       "Example:",
       "  sauce intent import 0x<tx hash> --chain ethereum",
+      "  sauce intent import <signature> --chain solana",
     ].join("\n"),
     run: async (args, io) => {
       const [hash, ...more] = args.positionals;
-      if (hash === undefined || !TX_HASH.test(hash) || more.length > 0) {
-        throw new UsageError("import takes one <tx-hash>: the transaction that published");
-      }
       const chain = parseChain(requiredFlag(args, "chain", "<source>"));
+      const valid =
+        chain.kind === "svm" ? SVM_SIGNATURE.test(hash ?? "") : TX_HASH.test(hash ?? "");
+      if (hash === undefined || !valid || more.length > 0) {
+        throw new UsageError(
+          chain.kind === "svm"
+            ? "import takes one <signature>: the Solana transaction that published"
+            : "import takes one <tx-hash>: the transaction that published",
+        );
+      }
       const index = stringFlag(args, "index");
       if (index !== undefined && !/^\d+$/.test(index)) {
         throw new UsageError(`--index: '${index}' is not a whole number`);
@@ -2310,7 +2414,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
 
       return importCommand(
         {
-          txHash: hash as `0x${string}`,
+          txHash: hash,
           chain,
           ...(index === undefined ? {} : { index: Number(index) }),
         },

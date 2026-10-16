@@ -1,14 +1,19 @@
 # Compiler API
 
-[Documentation](../README.md) · [Compiling programs](../guides/compiling.md)
+**Reference** · [Documentation](../README.md) · [Compiling programs](../guides/compiling.md)
+
+> The compiler is the translator: it takes your program's text and turns it into the bytecode the
+> chain runs. This page is its exact interface for TypeScript: every option you can pass, and
+> everything it gives back.
 
 `@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
 argument format. Both ship with the SDK; there is nothing extra to install. It runs in
 Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
 
 This SDK pins compiler **2.5.0**, EVM engine/Kitchen **1.2.0**, SVM engine **1.3.0**, and SVM Kitchen
-**1.0.0**. Deploy the matching stack before using the release defaults on-chain. Existing EVM Pots
-from Kitchen 1.1.0 retain their old bytecode and require their previous engine and SDK pairing.
+**1.0.0**. Deploy the matching stack before using the release defaults on-chain. A Pot keeps the
+code of the Kitchen that deployed it, so a Pot from Kitchen 1.1.0 runs only with that release's
+engine and SDK.
 
 ```ts
 import {

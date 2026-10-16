@@ -2,6 +2,12 @@
 
 # ZeroLend (`zerolend`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> ZeroLend is a lending market: deposit tokens to earn interest, or borrow against them. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Leading lending protocol on zkSync Era. Aave V3 fork optimized for zero-knowledge rollups with low transaction costs.
 
 | Fact | Value |

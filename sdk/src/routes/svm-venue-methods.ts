@@ -12,6 +12,15 @@
  * the pair — and its contract: the try form returns 0 having moved nothing, the plain one reverts
  * there, and a swap that ran is held to `minOut` and returns at least 1.
  *
+ *   Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
+ *   Solana.trySwap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
+ *
+ * are the same at a pool of ANY of the nine, the venue read from the pool's owner as the program
+ * runs: they lower to `@sauce/router`'s own `swap` and `trySwap`, which carry every venue's code, for
+ * a program that takes its pools as arguments and so cannot know their venues — the distributed
+ * swap. A pool given as the System Program (`11111111111111111111111111111111`, the zero key) is an
+ * empty slot: its nine accounts are the System Program, and `trySwap` returns 0 for it.
+ *
  * The function takes the pool's slot of nine accounts and the trader's seven as arrays; both are
  * ADDED to `main`, as the token methods' accounts are (`svm-lowering.ts`), each with how it is
  * derived:
@@ -73,6 +82,9 @@ export const SVM_VENUE_METHODS: readonly string[] = [
 
 /** The methods each namespace offers, and the arguments they take. */
 const METHODS = ["swap", "trySwap"] as const;
+
+/** The namespace whose swap takes a pool of any of the venues: the chain's own. */
+export const SVM_ANY_VENUE = "Solana";
 const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "maxPrice", "minOut"] as const;
 
 export const isVenueNamespace = (name: string): boolean =>
@@ -85,7 +97,10 @@ export function collectVenueMethods(l: SvmLowering): void {
     const site = methodCall(n);
     if (site === undefined || site.object.type !== "Identifier") return;
     const namespace = nameOf(site.object);
-    if (!isVenueNamespace(namespace) || l.declared.has(namespace)) return;
+    if (l.declared.has(namespace)) return;
+    // `Solana.pda(…)` and the chain's other members are not swaps: only its two are taken here.
+    const any = namespace === SVM_ANY_VENUE && (METHODS as readonly string[]).includes(site.method);
+    if (!any && !isVenueNamespace(namespace)) return;
     const spelled = `\`${namespace}.${site.method}(…)\``;
     if (!(METHODS as readonly string[]).includes(site.method)) {
       throw new Error(
@@ -139,8 +154,10 @@ export function collectVenueMethods(l: SvmLowering): void {
       l.account(MEMO_PROGRAM, "memoProgram", {}),
     ];
     const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
-    const venue = SVM_VENUE_NAMESPACES[namespace]!;
-    const fn = site.method === "swap" ? venue.swap : venue.trySwap;
+    const venue = SVM_VENUE_NAMESPACES[namespace];
+    // At any venue, the router's own: it reads the venue from the pool's owner as it runs.
+    const fn =
+      venue === undefined ? site.method : site.method === "swap" ? venue.swap : venue.trySwap;
     l.spliceCall(
       site,
       amountIn,

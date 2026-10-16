@@ -1,16 +1,22 @@
 # Protocols and tokens
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Tokens](../reference/tokens.md) · [Protocols](../reference/protocols.md)
+**How-to guide** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Tokens](../reference/tokens.md) · [Protocols](../reference/protocols.md)
 
-Every protocol in the registry is a namespace, and every registered token a name, in both languages
-the SDK speaks. Inside a program they are names the compiler resolves against the chain the program
-runs on:
+> Sauce carries an address book of tokens and protocols on every chain. In a program you write
+> `USDC` or `UniswapV3.Factory` instead of a long address, and Sauce fills in the right one for the
+> chain the program runs on. So one program can run on several chains, each with its own addresses.
+
+## In a program
+
+Write the name. The compiler puts in the address for the chain the program runs on:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
-In host TypeScript the same names hang off a chain export:
+## From TypeScript
+
+The same names hang off each chain's export:
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
@@ -19,14 +25,13 @@ Base.USDC.address; // the address `USDC` resolves to in a program compiled for B
 Base.UniswapV4.UniversalRouter.address; // the address `UniswapV4.UniversalRouter` resolves to there
 ```
 
-`USDC` resolves to the chain's registered token address. `Uniswap.UniversalRouter` resolves to the
-registered contract address when used as a value, and exposes its ABI methods when used as a call
-target. Amounts are integers in the token's smallest units; the SDK does not infer decimal
-conversions. The reference lists every name with its address: [tokens](../reference/tokens.md),
-[protocols](../reference/protocols.md), and each [chain](../reference/chains.md)'s tokens and
-contracts.
+`USDC` is the chain's USDC. `Uniswap.UniversalRouter` is the router's address when you use it as a
+value, and has the router's functions when you call it. Amounts are whole numbers in the token's
+smallest unit: 1000000 is 1 USDC, and nothing converts decimals for you. The reference lists every
+name with its address: [tokens](../reference/tokens.md), [protocols](../reference/protocols.md),
+and each [chain](../reference/chains.md)'s tokens and contracts.
 
-### Tokenized stocks
+## Tokenized stocks
 
 Ethereum, Base and Solana also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)`
 reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. On Solana each is a
@@ -243,7 +248,7 @@ The Permit2 signature is EIP-712 over `PermitTransferFrom(TokenPermissions permi
 spender, uint256 nonce, uint256 deadline)`, with `TokenPermissions(address token, uint256 amount)`,
 in Permit2's domain: name `Permit2`, the chain id, and Permit2's address. Permit2's nonces are
 unordered: any unused one will do. The `sauce` command's `run --fund` makes the signature and the
-pull for you ([Funding a run](cli.md#funding-a-run---fund)).
+pull for you ([Funding a run](cli-run.md#put-tokens-in-your-pot)).
 
 ## Route source and host JavaScript
 

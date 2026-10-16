@@ -2,6 +2,12 @@
 
 # MUX Protocol (`mux-protocol`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> MUX Protocol is a perpetuals exchange: bet on a price, with leverage and no expiry date. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs for best execution with shared liquidity pool.
 
 | Fact | Value |

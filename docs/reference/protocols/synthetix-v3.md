@@ -2,6 +2,12 @@
 
 # Synthetix V3 (`synthetix-v3`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Synthetix V3 is a synthetic assets protocol: tokens that follow the price of something else. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Modular liquidity protocol powering perpetual futures and synthetic assets on Base. Account-based system with collateral delegation to liquidity pools.
 
 | Fact | Value |

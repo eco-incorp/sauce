@@ -84,7 +84,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda, fetchAlt } from "../svm/index.js";
+import { derivePotPda, fetchAlt, svmPublicKey } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
@@ -231,7 +231,8 @@ export function parsePolicy(text: string, path: string): Policy {
   });
   const to = list("to")?.map((raw) => {
     if (typeof raw === "string" && isAddress(raw, { strict: false })) return raw.toLowerCase();
-    if (typeof raw === "string" && isSolanaAddress(raw)) return raw;
+    const key = typeof raw === "string" ? svmPublicKey(raw) : undefined;
+    if (key !== undefined) return key;
     throw new UsageError(`${path}: to names ${JSON.stringify(raw)}, which is not an address`);
   });
   const notes: string[] = [];
@@ -247,11 +248,8 @@ export function parsePolicy(text: string, path: string): Policy {
     for (const [key, raw] of Object.entries(fields.tokens)) {
       const named = isAddress(key, { strict: false })
         ? key.toLowerCase()
-        : isSolanaAddress(key)
-          ? key
-          : /^[A-Za-z][A-Za-z0-9.]{0,15}$/.test(key)
-            ? key.toUpperCase()
-            : undefined;
+        : (svmPublicKey(key) ??
+          (/^[A-Za-z][A-Za-z0-9.]{0,15}$/.test(key) ? key.toUpperCase() : undefined));
       if (named === undefined) {
         throw new UsageError(`${path}: tokens.${key} is neither a token symbol nor an address`);
       }

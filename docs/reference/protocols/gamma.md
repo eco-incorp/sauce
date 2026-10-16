@@ -2,6 +2,12 @@
 
 # Gamma Strategies (`gamma`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Gamma Strategies is a yield vault: deposits are put to work to earn interest. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Active concentrated liquidity management protocol. Manages Uniswap V3, Algebra, and other CL DEX positions with automated rebalancing via Hypervisor vaults.
 
 | Fact | Value |
