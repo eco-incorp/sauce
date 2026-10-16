@@ -7,7 +7,8 @@
  * cluster. It proves what the skill says the program does: one exact-input order split over
  * price-limited pools, each stopping exactly at its own fee-adjusted limit; an empty slot, a pool
  * past its limit, an empty pool, a pool whose fee is more than one rate, a paused pool and a market
- * whose book is past the limit skipped; the minimum-output and average-price checks; only the
+ * whose book is past the limit skipped; a Meteora DLMM pool's bins walked to the limit, within the
+ * cook's compute; the minimum-output and average-price checks; only the
  * unspent budget refunded and the Pot's other balance untouched; what was bought and the rest kept
  * in the Pot when the recipient and refund are the Pot; and the refusals of a budget the Pot does
  * not hold, a pool that is not the pair, a venue the program does not take, a slot whose program
@@ -15,7 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { AccountRole, getAddressCodec } from "@solana/kit";
+import { AccountRole, address, getAddressCodec, lamports } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
 
@@ -29,10 +30,13 @@ import {
   getTransactionSize,
 } from "../../src/svm/index.js";
 import { fetchPhoenixConfig } from "../../src/svm/venues/phoenix/index.js";
+import { venueProgram } from "../std/router/exact-in-harness.js";
+import { loadFixtures } from "./fixtures.js";
 import {
   describeSvm,
   fabricateAlt,
   HARNESS_POT_SALT,
+  loadFixtureAccounts,
   randomAddress,
   setTokenAccount,
   stageProgram,
@@ -124,6 +128,33 @@ type Outcome =
     }
   | { ok: false; reason: string; logs: string[] };
 
+/**
+ * Meteora DLMM's SOL/USDC pool as a slot, from the exact-input suite's fixtures: an older snapshot
+ * than the other pools', its price well below theirs. Paying USDC, its token Y, the walk goes up its
+ * bin arrays -90 and -89; paying SOL, down -90 and -91.
+ */
+const DLMM_FIXTURES = fileURLToPath(new URL("./fixtures/meteora-dlmm/", import.meta.url));
+const DLMM: Pool = {
+  name: "meteora-dlmm-sol-usdc",
+  venue: "meteora-dlmm",
+  program: address("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"),
+  pool: address("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"),
+  config: address("D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6"),
+  vaultA: address("EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o"),
+  vaultB: address("CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz"),
+  extra: address("59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li"),
+  payA: [
+    address("EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC"),
+    address("BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv"),
+    address("11111111111111111111111111111111"),
+  ],
+  payB: [
+    address("EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC"),
+    address("8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF"),
+    address("11111111111111111111111111111111"),
+  ],
+};
+
 /** A key as the engine reads an `Address` argument on Solana: its 32 bytes, as one word. */
 const word = (at: Address): bigint => key(at);
 
@@ -138,6 +169,20 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     // A little after the snapshot: a whirlpool refuses a clock before its last update.
     harness = await startEngine(BigInt(manifest.unixTimestamp) + 60n);
     loadVenues(harness.svm);
+    // Meteora DLMM's program and pool. Its reserve of wrapped SOL holds its amount in lamports too.
+    harness.svm.addProgram(DLMM.program, venueProgram("meteora-dlmm.so.gz"));
+    const dlmm = loadFixtures(DLMM_FIXTURES).filter(
+      (one) => !BYTES.has(one.address as Address) || one.address === DLMM.pool,
+    );
+    loadFixtureAccounts(harness, dlmm);
+    const reserve = harness.svm.getAccount(DLMM.vaultA);
+    if (!reserve.exists) throw new Error("no DLMM reserve");
+    harness.svm.setAccount({
+      ...reserve,
+      lamports: lamports(
+        harness.svm.minimumBalanceForRentExemption(165n) + le(reserve.data, 64, 8),
+      ),
+    });
   }, 120_000);
 
   const cook = async (order: Order, compiled = program): Promise<Outcome> => {
@@ -383,6 +428,26 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(outcome.size).toBeLessThanOrEqual(1232);
     console.log(
       `five pools (the fifth ${pastLimit ? "past its limit" : "trading"}): ${outcome.units} compute units, ${outcome.size}-byte transaction, ${outcome.accounts} accounts, ${program5.bytecode.length}-byte program`,
+    );
+  }, 120_000);
+
+  it("walks a Meteora DLMM pool's bins in a slot to the limit, within the cook's compute", async () => {
+    // Its price far below the others': within maxPrice its walk goes the most bins it walks, eight
+    // up from its active bin, the dearest the swap costs. The rest of the budget the next pools
+    // take to their own limits.
+    const slots = [DLMM, ...DEEP.slice(0, 3)];
+    const budget = 1_000_000n * 10n ** 6n;
+    const outcome = succeeded(await cook({ slots, pay: USDC, buy: WSOL, budget, maxPrice }));
+    const pair = harness.svm.getAccount(DLMM.pool);
+    if (!pair.exists) throw new Error("no DLMM pool");
+    const active = new DataView(pair.data.buffer, pair.data.byteOffset).getInt32(76, true);
+    expect(active).toBe(-6260 + 7);
+    for (const p of DEEP.slice(0, 3)) expect(priceOf(p)).toBe(ownLimit(p, maxPrice, false));
+    expect(outcome.spent + outcome.unspent).toBe(budget);
+    expect(outcome.spent * E18).toBeLessThanOrEqual(maxPrice * outcome.bought);
+    expect(outcome.units).toBeLessThan(1_400_000);
+    console.log(
+      `four pools, one Meteora DLMM walking eight bins: ${outcome.units} compute units, ${outcome.size}-byte transaction, ${outcome.accounts} accounts`,
     );
   }, 120_000);
 
