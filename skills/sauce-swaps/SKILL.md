@@ -312,6 +312,13 @@ transaction and cannot be caught, so these are checks made before the swap. The 
 caller's, so a pool that is not the pair, a slot whose program is not the venue's, and a pool of
 another venue or of none revert; only the System program itself as the pool is a missing slot.
 
+A concentrated-liquidity swap walks only the tick arrays its slot gives it, and past them its
+program fails the whole transaction. So each of these holds its limit a tick inside them: Raydium's
+code and Crema's to where the furthest array that way begins (or, for the array holding the price,
+its last initialized tick that way), a whirlpool's to the far end of its three. A `priceLimit` past
+the window buys up to it. A limit far past every price, with a large input, can still run a deep
+pool out of the cook's compute before then: keep it tight.
+
 Three more forms, for a program that wants less:
 
 - **At a limit in the pool's own terms**, `<venue>AtLimit`, for those nine and `invariantAtLimit`
@@ -361,7 +368,7 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.6 KB of program, past
+A program carries only the venues it calls: one venue's function is about 2.0 KB of program, past
 one transaction, so the program is staged (`sauce-solana`).
 
 ## Exact input on Solana

@@ -376,12 +376,13 @@ async function raydiumTickArrays(
   // Past the pool's own bitmap, the extension takes the first place.
   const places = outside ? 2 : 3;
   const chosen = await Promise.all(starts.slice(0, places).map(at));
-  // Fewer with liquidity than there are places: the nearest that exist with none, nearest first,
-  // every candidate read at once.
+  // Fewer with liquidity than there are places: the nearest that exist with none, the price's own
+  // array and those behind it, nearest first, every candidate read at once. Never one past the price
+  // that way: the swap at a price stops where the furthest array it is given that way begins, which
+  // must be one its bitmap marks (`router.svm.js`).
   if (chosen.length < places) {
     const candidates: number[] = [current];
-    for (let distance = 1; distance <= 8; distance++)
-      candidates.push(current + distance * span, current - distance * span);
+    for (let distance = 1; distance <= 16; distance++) candidates.push(current - distance * step);
     const unmarked = candidates.filter((start) => !starts.includes(start));
     const keys = await Promise.all(unmarked.map(at));
     const exist = await Promise.all(keys.map(async (key) => (await load(key)) !== null));

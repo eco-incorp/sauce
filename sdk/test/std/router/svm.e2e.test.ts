@@ -58,6 +58,7 @@ import {
   ownLimit,
   pool,
   restoreVenues,
+  windowBound,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -389,6 +390,60 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         plain.paid,
         plain.price,
       ]);
+    },
+    120_000,
+  );
+
+  // A swap walks the tick arrays its slot gives it and no further: past them each program fails the
+  // whole transaction (Raydium's code `NotEnoughTickArrayAccount`, or
+  // `MissingTickArrayBitmapExtensionAccount` where its lookup runs past the pool's own bitmap; the
+  // whirlpools' `TickArraySequenceInvalidIndex`; Crema's `NextTickNotFound`). A swap at a price holds
+  // its limit a tick inside its window's last safe tick, so an order with a limit at three times the
+  // pool's price and the input to reach it stops there, its pool's price exactly the window's bound.
+  it.each(["RaydiumClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
+    "%s: a limit far past its window stops a tick inside it, where the cook used to fail",
+    async (venue) => {
+      const entry = VENUES.find((one) => one.venue === venue)!;
+      const base = await orderFor(entry);
+      const paysA = key(USDC) < key(base.buy);
+      const order = {
+        ...base,
+        priceLimit: (allIn(base.pool, paysA) * 3n) / 1n,
+        amountIn: 10_000_000_000n * 10n ** 6n,
+      };
+      const bound = windowBound(order.pool, paysA);
+      const own = ownLimit(order.pool, order.priceLimit, paysA);
+      expect(paysA ? own < bound : own > bound).toBe(true);
+      const outcome = succeeded(await cook(compiled(lower(venue)), order));
+      expect(outcome.received).toBeGreaterThan(0n);
+      expect(outcome.price).toBe(bound);
+    },
+    120_000,
+  );
+
+  // Where the furthest array a slot gives that way is the one holding the price, the window ends at
+  // its last initialized tick that way, read from a fixed array (Raydium's) or a dynamic one
+  // (Byreal's): the slot here is that array and two from behind the price.
+  it.each(["RaydiumClmm", "Byreal"])(
+    "%s: a slot of the price's own array stops at its last initialized tick",
+    async (venue) => {
+      const entry = VENUES.find((one) => one.venue === venue)!;
+      const base = await orderFor(entry);
+      const p = base.pool;
+      const paysA = key(USDC) < key(base.buy);
+      const [walk, behind] = paysA ? [p.payA, p.payB] : [p.payB, p.payA];
+      const ticks = [walk[0]!, behind[1]!, behind[2]!];
+      const order = {
+        ...base,
+        priceLimit: allIn(p, paysA) * 3n,
+        amountIn: 10_000_000_000n * 10n ** 6n,
+        ticks,
+      };
+      const bound = windowBound(p, paysA, ticks);
+      expect(bound).not.toBe(le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16));
+      const outcome = succeeded(await cook(compiled(lower(venue)), order));
+      expect(outcome.received).toBeGreaterThan(0n);
+      expect(outcome.price).toBe(bound);
     },
     120_000,
   );

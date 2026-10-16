@@ -63,6 +63,7 @@ import {
   ownLimit,
   pool,
   restoreVenues,
+  windowBound,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -430,6 +431,25 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(alone.bought).toBeGreaterThan(0n);
     expect(priceOf(PANCAKE)).toBe(ownLimit(PANCAKE, priceLimit, false));
     expect(alone.spent * E18).toBeLessThanOrEqual(priceLimit * alone.bought);
+  }, 120_000);
+
+  it("stops PancakeSwap's far-priced pool a tick inside the two arrays its slot gives it", async () => {
+    // Its slot paying USDC is its bitmap extension and two arrays, which its swap walks and no
+    // further: a limit at three times its price, with the budget to reach it, used to fail the cook
+    // (`NotEnoughTickArrayAccount`); it stops a tick inside the window, the pool's price exactly the
+    // window's bound.
+    const wide = allIn(PANCAKE, false) * 3n;
+    const bound = windowBound(PANCAKE, false);
+    expect(ownLimit(PANCAKE, wide, false)).toBeGreaterThan(bound);
+    const alone = succeeded(
+      await cook({
+        budget: 10_000_000n * 10n ** 6n,
+        priceLimit: wide,
+        edit: emptied(RAYDIUM, BYREAL),
+      }),
+    );
+    expect(alone.bought).toBeGreaterThan(0n);
+    expect(priceOf(PANCAKE)).toBe(bound);
   }, 120_000);
 
   it("finds Orca's pool on its adaptive fee tier by that tier, and skips it at a price", async () => {
