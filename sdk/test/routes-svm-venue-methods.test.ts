@@ -1,8 +1,9 @@
 /**
  * Solana's venue namespaces (`svm-venue-methods.ts`): `<Protocol>.<Program>.swap(…)` (`Orca.Whirlpool`)
  * lowered to that venue's own `@sauce/router` function, the pool's slot and the trader's accounts
- * added to `main` with how each is derived. Compiled through `compileSauceProgram` and the real
- * compiler; executed in `cli-solana-venues.e2e.test.ts`.
+ * added to `main` with how each is derived; its pool found by key (`Orca.Whirlpool.pool(USDC, WSOL,
+ * 4)`), and a loop over keys written out once per key. Compiled through `compileSauceProgram` and
+ * the real compiler; executed in `cli-solana-venues.e2e.test.ts` and the distributed swap's suites.
  */
 import { getAddressCodec } from "@solana/kit";
 
@@ -11,11 +12,11 @@ import { SVM_VENUE_NAMESPACES } from "../src/routes/svm-venue-methods.js";
 
 const compile = (source: string) => compileSauceProgram("solana", source);
 const SWAP =
-  "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-  "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n";
+  "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+  "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}\n";
 
 describe("Solana's venue namespaces", () => {
-  it("lowers to the venue's own function, never swap, its slot and trader added to main", () => {
+  it("lowers to the venue's own function, its slot and trader added to main", () => {
     const program = compile(SWAP);
     expect(program.source).toContain(
       'import { orcaWhirlpool as __sauce_orcaWhirlpool } from "@sauce/router";',
@@ -23,7 +24,7 @@ describe("Solana's venue namespaces", () => {
     expect(program.source).toContain(
       "return __sauce_orcaWhirlpool([poolProgram, poolAccount, poolConfig, poolVaultA, poolVaultB, " +
         "poolExtra, poolTicks0, poolTicks1, poolTicks2], [pot, potUSDC, mintUSDC, mintWSOL, " +
-        "tokenProgram, token2022Program, memoProgram], amountIn, maxPrice, 1, potWSOL);",
+        "tokenProgram, token2022Program, memoProgram], amountIn, priceLimit, 1, potWSOL);",
     );
     expect(program.derivedAccounts).toMatchObject({
       poolProgram: "slot:@pool:USDC.program",
@@ -48,9 +49,7 @@ describe("Solana's venue namespaces", () => {
       potUSDC: "writable",
       potWSOL: "writable",
     });
-    // One venue's function is a fraction of swap's every venue.
     expect(program.bytecode.length).toBeLessThan(2_200);
-    expect(program.source).not.toContain("{ swap as");
   });
 
   it("names every venue, its protocol then its program, each to its function", () => {
@@ -82,8 +81,8 @@ describe("Solana's venue namespaces", () => {
 
   it("forwards what arrived with the token methods, the accounts shared between them", () => {
     const program = compile(
-      "function main(pool: Address, to: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  const got = Raydium.CLMM.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n" +
+      "function main(pool: Address, to: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  const got = Raydium.CLMM.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n" +
         "  if (got > 0) WSOL.transfer(to, got);\n" +
         "  return got;\n}\n",
     );
@@ -122,9 +121,9 @@ describe("Solana's venue namespaces", () => {
       expect(() =>
         compile("function main(pool: Address) {\n  Orca.Whirlpool.trySwap(pool);\n}\n"),
       ).toThrow(
-        "`Orca.Whirlpool.trySwap(…)` on Solana: Orca.Whirlpool offers swap, taking (pool, tokenIn, " +
-          "tokenOut, amountIn, maxPrice, minOut): it returns 0 having moved nothing where the pool " +
-          "cannot trade, and reverts below minOut",
+        "`Orca.Whirlpool.trySwap(…)` on Solana: Orca.Whirlpool offers swap and pool, swap taking " +
+          "(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut): it returns 0 having moved " +
+          "nothing where the pool cannot trade, and reverts below minOut",
       );
       expect(() =>
         compile(
@@ -133,15 +132,10 @@ describe("Solana's venue namespaces", () => {
       ).toThrow("`Orca.Splash.swap(…)` on Solana: Orca's swap is Orca.Whirlpool");
       expect(() =>
         compile(
-          "function main(pool: Address) {\n  Solana.trySwap(pool, USDC, WSOL, 1, 1, 1);\n}\n",
-        ),
-      ).toThrow("`Solana.trySwap(…)` on Solana: Solana.swap is the one swap");
-      expect(() =>
-        compile(
           "function main(pool: Address): Uint256 {\n  return Crema.CLMM.swap(pool, USDC, WSOL);\n}\n",
         ),
       ).toThrow(
-        "`Crema.CLMM.swap(…)` takes 6 arguments (pool, tokenIn, tokenOut, amountIn, maxPrice, minOut), got 3.",
+        "`Crema.CLMM.swap(…)` takes 6 arguments (pool, tokenIn, tokenOut, amountIn, priceLimit, minOut), got 3.",
       );
       expect(() =>
         compile(
@@ -162,25 +156,163 @@ describe("Solana's venue namespaces", () => {
     });
   });
 
-  it("Solana.swap takes a pool of any venue: the router's own swap, reading it", () => {
+  it("finds a pool by key, as an EVM factory's getPool: its slot derived from the pair and key", () => {
     const program = compile(
-      "function main(pool: Address): Uint256 {\n  return Solana.swap(pool, USDC, WSOL, 5, 10, 1);\n}\n",
+      "function main(amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  return Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0)\n" +
+        "    + Raydium.CLMM.swap(Raydium.CLMM.pool(WSOL, USDC, 400), USDC, WSOL, amountIn, priceLimit, 0);\n}\n",
     );
-    expect(program.source).toContain('import { swap as __sauce_swap } from "@sauce/router";');
     expect(program.derivedAccounts).toMatchObject({
-      poolProgram: "slot:@pool:USDC.program",
-      poolAccount: "slot:@pool:USDC.pool",
-      potWSOL: "self:WSOL",
+      orcaWhirlpool4Program: "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.program",
+      orcaWhirlpool4Account: "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.pool",
+      orcaWhirlpool4Ticks2: "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.ticks2",
+      raydiumClmm400Account: "slot:Raydium.CLMM(WSOL,USDC,400):USDC.pool",
+      potUSDC: "self:USDC",
     });
-    // Two pools, one trader: each pool its own nine, the Pot's accounts shared.
-    const two = compile(
-      "function main(a: Address, b: Address): Uint256 {\n" +
-        "  return Solana.swap(a, USDC, WSOL, 5, 10, 0) + Solana.swap(b, USDC, WSOL, 5, 10, 0);\n}\n",
+    // No pool argument: the pools are the program's own.
+    expect(program.entryParams.map((param) => param.name)).toEqual(["amountIn", "priceLimit"]);
+    // A fee two configs charge takes the tick spacing after it.
+    const spaced = compile(
+      "function main(): Uint256 {\n" +
+        "  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 100, 1), USDC, WSOL, 5, 10, 0);\n}\n",
     );
-    const names = two.manifest!.accounts.map((slot) => (slot as { name: string }).name);
-    expect(names.filter((name) => name.startsWith("a") || name.startsWith("b"))).toHaveLength(18);
-    expect(names.filter((name) => name === "potUSDC")).toHaveLength(1);
-    // The chain's other members are left to the account expressions.
+    expect(spaced.derivedAccounts).toMatchObject({
+      raydiumClmm100x1Account: "slot:Raydium.CLMM(USDC,WSOL,100,1):USDC.pool",
+    });
+  });
+
+  it("writes a loop over keys out once per key, each key's pool its own slot", () => {
+    const program = compile(
+      "function main(priceLimit: Uint256): Uint256 {\n" +
+        "  let bought = 0;\n" +
+        "  for (const spacing of [1, 4, 64]) {\n" +
+        "    bought += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, spacing), USDC, WSOL, self.USDC, priceLimit, 0);\n" +
+        "  }\n" +
+        "  return bought;\n}\n",
+    );
+    for (const spacing of [1, 4, 64]) {
+      expect(program.source).toContain(`if (true) { const spacing = ${spacing};`);
+      expect(program.derivedAccounts![`orcaWhirlpool${spacing}Account`]).toBe(
+        `slot:Orca.Whirlpool(USDC,WSOL,${spacing}):USDC.pool`,
+      );
+    }
+    expect(program.source).not.toContain("for (");
+    // A loop whose body takes continue stays a loop, of one key each; nested loops each written out.
+    const skipping = compile(
+      "function main(): Uint256 {\n  let t = 0;\n  for (const s of [1, 4]) {\n" +
+        "    if (t > 5) continue;\n" +
+        "    for (const f of [400]) {\n" +
+        "      t += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, s), USDC, WSOL, 5, 10, 0)\n" +
+        "        + Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, f), USDC, WSOL, 5, 10, 0);\n" +
+        "    }\n  }\n  return t;\n}\n",
+    );
+    // A body of one statement, with no braces, is written out the same way.
+    const bare = compile(
+      "function main(): Uint256 {\n  let t = 0;\n" +
+        "  for (const s of [4, 1]) t += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, s), USDC, WSOL, 5, 10, 0);\n" +
+        "  return t;\n}\n",
+    );
+    expect(Object.values(bare.derivedAccounts!)).toEqual(
+      expect.arrayContaining([
+        "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.pool",
+        "slot:Orca.Whirlpool(USDC,WSOL,1):USDC.pool",
+      ]),
+    );
+    expect(skipping.source).toContain("for (const s of [1]) {");
+    expect(skipping.source).toContain("for (const s of [4]) {");
+    expect(skipping.source).toContain("if (true) { const f = 400;");
+    expect(Object.values(skipping.derivedAccounts!)).toEqual(
+      expect.arrayContaining([
+        "slot:Orca.Whirlpool(USDC,WSOL,1):USDC.pool",
+        "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.pool",
+        "slot:Raydium.CLMM(USDC,WSOL,400):USDC.pool",
+      ]),
+    );
+  });
+
+  describe("refusals of a pool by key", () => {
+    const swapAt = (pool: string, body = "") =>
+      compile(
+        `function main(k: Uint256): Uint256 {\n${body}  return Orca.Whirlpool.swap(${pool}, USDC, WSOL, 5, 10, 1);\n}\n`,
+      );
+
+    it("a pool anywhere but a swap's, another venue's, another pair's, a market's", () => {
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  const p = Orca.Whirlpool.pool(USDC, WSOL, 4);\n  return 0;\n}\n",
+        ),
+      ).toThrow(
+        "`Orca.Whirlpool.pool(…)` on Solana names the pool a swap trades at, found when the " +
+          "transaction is built: write it as the pool of `Orca.Whirlpool.swap(…)`, its first argument.",
+      );
+      expect(() => swapAt("Raydium.CLMM.pool(USDC, WSOL, 400)")).toThrow(
+        "`Orca.Whirlpool.swap(…)` trades at a pool of Orca.Whirlpool's, and " +
+          "`Raydium.CLMM.pool(USDC, WSOL, 400)` is Raydium.CLMM's",
+      );
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, USDT, 4)")).toThrow(
+        "`Orca.Whirlpool.pool(USDC, USDT, 4)` is a pool of USDC and USDT, and " +
+          "`Orca.Whirlpool.swap(…)` pays USDC for WSOL",
+      );
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  return Phoenix.Market.swap(Phoenix.Market.pool(USDC, WSOL, 1), USDC, WSOL, 5, 10, 1);\n}\n",
+        ),
+      ).toThrow("Phoenix's markets are not found by key");
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL)")).toThrow(
+        "`Orca.Whirlpool.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 2.",
+      );
+    });
+
+    it("a key not written out, or not one the venue has", () => {
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, k)")).toThrow(
+        "its tickSpacing must be known when the program compiles",
+      );
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 0)")).toThrow(
+        "Orca.Whirlpool's key is a tick spacing, from 1 to 65535, and 0 is not one",
+      );
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 123), USDC, WSOL, 5, 10, 1);\n}\n",
+        ),
+      ).toThrow(
+        "Raydium.CLMM's key is a pool's fee, in millionths (400 is 0.04%), and it has no config at 123",
+      );
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 100, 60), USDC, WSOL, 5, 10, 1);\n}\n",
+        ),
+      ).toThrow("Raydium.CLMM's configs at fee 100 have tick spacing 10 and 1, not 60");
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 4, 4)")).toThrow(
+        "`Orca.Whirlpool.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 4.",
+      );
+    });
+
+    it("a loop over keys whose body declares its variable again", () => {
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  let t = 0;\n  for (const s of [1, 4]) {\n" +
+            "    const s = 8;\n" +
+            "    t += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, s), USDC, WSOL, 5, 10, 0);\n" +
+            "  }\n  return t;\n}\n",
+        ),
+      ).toThrow("the loop over s declares s again in its body");
+    });
+
+    it("a loop over keys that breaks out of it, or is labelled", () => {
+      const loop = (head: string, exit: string) =>
+        compile(
+          `function main(): Uint256 {\n  let t = 0;\n  ${head}for (const s of [1, 4]) {\n` +
+            "    t += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, s), USDC, WSOL, 5, 10, 0);\n" +
+            `    ${exit}\n  }\n  return t;\n}\n`,
+        );
+      expect(() => loop("", "if (t > 0) break;")).toThrow(
+        "the loop over s breaks out of it: a loop over pool keys is written out once per key",
+      );
+      expect(() => loop("keys: ", "")).toThrow("the loop over s is labelled");
+    });
+  });
+
+  it("keeps the chain's own members to the account expressions", () => {
     const pda = compile(
       'function main(): Uint256 {\n  const state = Solana.pda(Solana.systemProgram, ["s"]);\n  return state.dataLen;\n}\n',
     );

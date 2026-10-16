@@ -1,6 +1,7 @@
-// Compiles solana-swap.sauce.ts — one swap at an Orca whirlpool, the pool and amounts given as
-// `main`'s arguments — for Solana, and lists the accounts compiling added to `main`: each with how a
-// cook derives it, from the pool, the Pot and the arguments, so no one names an account by hand.
+// Compiles solana-swap.sauce.ts — one swap at an Orca whirlpool, the pool found by its key and the
+// amounts given as `main`'s arguments — for Solana, and lists the accounts compiling added to
+// `main`: each with how a cook derives it, from the pool, the Pot and the arguments, so no one names
+// an account by hand.
 //
 // The SauceScript is its own file so it is the same text the Solana guide shows. Everything here is
 // offline: nothing is read from a cluster and nothing is sent.
@@ -17,8 +18,9 @@ const source = readFileSync(
 
 export const program = routes.compileSauceProgram("solana", source);
 
-// `slot:@pool:USDC.vaultA` is one of the pool's nine accounts paying USDC, read from the pool;
-// `self:USDC` the Pot's USDC account; `@to:WSOL` the WSOL account of main's argument `to`.
+// `slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA` is one of the pool's nine accounts paying USDC,
+// read from the pool its key finds; `self:USDC` the Pot's USDC account; `@to:WSOL` the WSOL
+// account of main's argument `to`.
 export const derived = program.derivedAccounts ?? {};
 if (
   program.manifest?.accounts.some(

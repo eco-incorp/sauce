@@ -1,76 +1,71 @@
-// A limit buy over Solana's price-limited pools: up to `budget` of one token for another, never
-// more than `maxPrice` for any unit, fees included. Four pools, each at any venue that
-// `sauce pools --chain solana` lists, given by its address: compiling adds each pool's accounts to
-// main, read from the pool on the cluster when the cook is built, with the Pot's own, so the
-// command is given no account.
+// SOL for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
+// `priceLimit` for any SOL, fees included, and at least `minTokens` SOL or nothing. The pools are
+// found by key, as an EVM program finds a Uniswap pool by its fee: Orca's whirlpools of the pair at
+// tick spacing 4 and 1, then Raydium's CLMM pools at fee 0.04% and 0.02%. The keys are chosen for
+// SOL/USDC, its four deepest pools on mainnet, the deepest of each venue first; a key with no pool
+// is skipped. Each pool is offered what is left of the budget and trades until its price, fee
+// paid, reaches priceLimit. Compiling adds each pool's accounts to main, read from the pool when the
+// cook is built, so the command is given no account.
 //
 //   sauce run solana-distributed-swap.sauce.ts --chain <chain> --keypair <keypair> \
-//     --args <pay> <buy> <pool0> <pool1> <pool2> <pool3> \
-//     <budget> <maxPrice> <minTokens> <maxAvgPrice> <recipient> <refund>
+//     --args <budget> <priceLimit> <minTokens> <maxAvgPrice> <recipient>
 //
-//   pay: Address          the token paid, its mint or symbol (USDC); the budget must be in the Pot
-//   buy: Address          the token bought, the same way (WSOL)
-//   pool0: Address        the first pool, as sauce pools --pay gives the pools (poolArgs, in slot
-//                         order); an empty slot is the System program,
-//                         11111111111111111111111111111111
-//   pool1: Address        the second pool, the same way
-//   pool2: Address        the third pool, the same way
-//   pool3: Address        the fourth pool, the same way
-//   budget: Uint256       the most payToken to spend, in its base units: 1000000000 is 1,000 USDC
-//   maxPrice: Uint256     the most one buyToken may cost, fees included: the price in whole tokens
-//                         times 10^(18 + payDecimals − buyDecimals)
-//   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
-//   maxAvgPrice: Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
-//   recipient: Address    receives what is bought; the Pot's own address keeps it in the Pot
-//   refund: Address       receives what is left of the budget; the Pot's own address keeps it there
+//   budget: Uint256       the most USDC to spend, in its base units: 1000000000 is 1,000 USDC; it
+//                         must be in the Pot's USDC account
+//   priceLimit: Uint256   the most one SOL may cost, fees included: USDC base units per lamport,
+//                         times 10^18; 120 USDC a SOL is 120000000000000000
+//   minTokens: Uint256    the least SOL to buy, in lamports; less reverts the cook
+//   maxAvgPrice: Uint256  the most the average may cost, in priceLimit's units; 0 turns it off
+//   recipient: Address    receives the SOL bought, as wrapped SOL, and the USDC left unspent
 //
-//   SOL for all of 1,000 USDC or nothing, at most 120 USDC each, simulated with no key:
+//   All of 1,000 USDC or nothing, at most 120 USDC a SOL, simulated with no key:
 //   sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
-//     --assume-balance USDC:1000 --args USDC WSOL <pool0> <pool1> <pool2> <pool3> \
-//     1000000000 120000000000000000 8333333334 0 <recipient> <refund>
+//     --assume-balance USDC:1000 --args 1000000000 120000000000000000 8333333334 0 <recipient>
 
-// Each `Solana.swap` is `@sauce/router`'s swap at the pool's venue, read from the pool's owner: it
-// returns 0 having moved nothing for an empty slot, a spent budget, an empty, paused or past-limit
-// pool and one whose fee is not one rate, else offers the pool the amount it is given up to its own
-// fee-adjusted limit, and returns what arrived in the Pot.
+// Each pool is found by its key: `Orca.Whirlpool.pool(USDC, WSOL, 4)` is the pool Orca's program
+// keeps for the pair at tick spacing 4, and a loop over keys finds one pool for each. Each swap is
+// `@sauce/router`'s at that venue: it returns 0 having moved nothing for a key with no pool, a spent
+// budget, an empty or past-limit pool and one whose fee is not one rate, else offers the pool the
+// amount it is given up to its own fee-adjusted limit, and returns what arrived in the Pot.
 function main(
-  pay: Address,
-  buy: Address,
-  pool0: Address,
-  pool1: Address,
-  pool2: Address,
-  pool3: Address,
   budget: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minTokens: Uint256,
   maxAvgPrice: Uint256,
   recipient: Address,
-  refund: Address,
 ): { spent: Uint256; bought: Uint256; unspent: Uint256 } {
-  require(maxPrice > 0, "maxPrice is 0");
-  const held = Token(pay).balanceOf(ctx.self());
-  require(held >= budget, "budget is not in the Pot");
-  const kept = held - budget; // the Pot's other payToken, never spent
-  const before = Token(buy).balanceOf(ctx.self());
+  require(self.USDC >= budget, "budget is not in the Pot");
+  const kept = self.USDC - budget; // the Pot's other USDC, never spent
 
-  // Each slot in turn, offered all of the budget still unspent; swap decides and swaps.
-  Solana.swap(pool0, pay, buy, Token(pay).balanceOf(ctx.self()) - kept, maxPrice, 0);
-  Solana.swap(pool1, pay, buy, Token(pay).balanceOf(ctx.self()) - kept, maxPrice, 0);
-  Solana.swap(pool2, pay, buy, Token(pay).balanceOf(ctx.self()) - kept, maxPrice, 0);
-  Solana.swap(pool3, pay, buy, Token(pay).balanceOf(ctx.self()) - kept, maxPrice, 0);
+  // Each pool in turn, offered what is left of the budget.
+  let bought = 0;
+  for (const spacing of [4, 1]) {
+    bought += Orca.Whirlpool.swap(
+      Orca.Whirlpool.pool(USDC, WSOL, spacing),
+      USDC,
+      WSOL,
+      self.USDC - kept,
+      priceLimit,
+      0,
+    );
+  }
+  for (const fee of [400, 200]) {
+    bought += Raydium.CLMM.swap(
+      Raydium.CLMM.pool(USDC, WSOL, fee),
+      USDC,
+      WSOL,
+      self.USDC - kept,
+      priceLimit,
+      0,
+    );
+  }
 
-  // Settle: what was bought goes to the recipient, what is left of the budget to refund, each only
-  // when it is not the Pot itself.
-  const unspent = Token(pay).balanceOf(ctx.self()) - kept;
+  const unspent = self.USDC - kept;
   const spent = budget - unspent;
-  const bought = Token(buy).balanceOf(ctx.self()) - before;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
-  if (bought > 0 && recipient != Solana.self.address) {
-    Token(buy).transfer(recipient, bought);
-  }
-  if (unspent > 0 && refund != Solana.self.address) {
-    Token(pay).transfer(refund, unspent);
-  }
+  // The SOL bought and what is left of the budget both go to the recipient.
+  if (bought > 0) WSOL.transfer(recipient, bought);
+  if (unspent > 0) USDC.transfer(recipient, unspent);
   return { spent, bought, unspent };
 }

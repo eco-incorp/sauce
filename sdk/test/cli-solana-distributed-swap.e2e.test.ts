@@ -1,19 +1,19 @@
 /**
- * The `sauce-solana-distributed-swap` skill's programs run as their headers say, through the `sauce`
- * command itself, with `--args` alone: the pay and buy tokens, the pools in slot order, the amounts,
- * the recipient and the refund. Every account the program names is derived as the cook is built:
- * each pool's nine read from the pool on the cluster, the Pot's, the mints' and the recipient's and
- * refund's token accounts. `sauce run` stages the program (6 KB, past one transaction), finds its
- * accounts past one transaction too, creates an address lookup table holding them, creates the
- * token accounts the cook names that do not exist yet, and cooks on the owner's Pot, which it creates
- * first. Against the released Kitchen and engine and the venues' own mainnet programs and pools
- * (`svm/venue-fixture.ts`) in LiteSVM, behind a JSON-RPC shim (`svm/rpc-shim.ts`). A second run
- * takes the table the first created with `--lookup-table`. `sauce simulate` runs it in a local copy
- * of the accounts it reads, holds each guard to its revert with `--expect-revert`, and simulates for
- * an owner with nothing given `--assume-balance`; `sauce tx` prints it as a plan of steps. `sauce
- * pools --pay` gives the pools in slot order, which the simulation takes as they are, and the
- * five-slot program takes five. The program's own behavior is held in
- * `svm/distributed-swap.e2e.test.ts`.
+ * The `sauce-solana-distributed-swap` skill's program run as its header says, through the `sauce`
+ * command itself, with `--args` alone: the amounts and the recipient. The program finds its pools by
+ * key (`Orca.Whirlpool.pool(USDC, WSOL, spacing)`), and every account it names is derived as the cook
+ * is built: each pool its keys find read from the cluster with its nine accounts, a key with no pool
+ * an empty slot, the Pot's, the mints' and the recipient's token accounts. `sauce run` stages the
+ * program (past one transaction), finds its accounts past one transaction too, creates an address
+ * lookup table holding them, creates the token accounts the cook names that do not exist yet, and
+ * cooks on the owner's Pot, which it creates first. Against the released Kitchen and engine and the
+ * venues' own mainnet programs and pools (`svm/venue-fixture.ts`) in LiteSVM, behind a JSON-RPC shim
+ * (`svm/rpc-shim.ts`). A second run takes the table the first created with `--lookup-table`. `sauce
+ * simulate` runs it in a local copy of the accounts it reads, holds each guard to its revert with
+ * `--expect-revert`, and simulates for an owner with nothing given `--assume-balance`; `sauce tx`
+ * prints it as a plan of steps. `sauce pools` lists each pool with the key a program finds it by. A
+ * program whose keys find more pools than one transaction locks is refused, naming each key's pool.
+ * The program's own behavior is held in `svm/distributed-swap.e2e.test.ts`.
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -64,16 +64,10 @@ import {
 } from "./svm/venue-fixture.js";
 import type { Pool } from "./svm/venue-fixture.js";
 
-/** The skill's program, and the same with a fifth slot. */
+/** The skill's program. */
 const PROGRAM = fileURLToPath(
   new URL(
     "../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts",
-    import.meta.url,
-  ),
-);
-const PROGRAM_5 = fileURLToPath(
-  new URL(
-    "../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts",
     import.meta.url,
   ),
 );
@@ -81,8 +75,6 @@ const PROGRAM_5 = fileURLToPath(
 const SOLANA_URL = "http://127.0.0.1:65533/";
 const KITCHEN = address(v12SvmKitchenProgramId());
 const ENGINE = address(v12SvmEngineProgramId());
-/** An empty slot: no pool. */
-const EMPTY = "11111111111111111111111111111111";
 
 interface Run {
   readonly code: number;
@@ -184,34 +176,21 @@ describeSvm(
       if (work !== undefined) rmSync(work, { recursive: true, force: true });
     });
 
-    const DEEP = [
-      pool("orca-whirlpool-sol-usdc"),
-      pool("raydium-clmm-sol-usdc"),
-      pool("pancakeswap-clmm-sol-usdc"),
-      pool("defituna-sol-usdc"),
-    ];
-    const maxPrice =
-      (DEEP.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b)) * 10003n) / 10000n;
+    /** The pools of the program's keys the fixture holds; its other keys find none there. */
+    const FOUND = [pool("orca-whirlpool-sol-usdc"), pool("raydium-clmm-sol-usdc")];
+    const priceLimit =
+      (FOUND.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b)) * 10003n) / 10000n;
     const budget = 1_000_000n * 10n ** 6n;
     const priceOf = (p: Pool): bigint => {
       const account = harness.svm.getAccount(p.pool);
       if (!account.exists) throw new Error(`pool ${p.pool} is gone`);
       return le(account.data, LAYOUT[p.venue]!.price, 16);
     };
-    /** main's arguments, as the header gives them: the pools padded with empty slots. */
-    const args = (
-      pools: readonly Pool[],
-      recipient: Address,
-      refund: Address,
-      { minTokens = 0n, maxAvgPrice = 0n, slots = 4 } = {},
-    ): string[] => {
-      const given = pools.map((p) => p.pool as string);
-      while (given.length < slots) given.push(EMPTY);
-      return [
-        ...["--args", "USDC", "WSOL", ...given, String(budget), String(maxPrice)],
-        ...[String(minTokens), String(maxAvgPrice), recipient, refund],
-      ];
-    };
+    /** main's arguments, as the header gives them. */
+    const args = (recipient: Address, { minTokens = 0n, maxAvgPrice = 0n } = {}): string[] => [
+      ...["--args", String(budget), String(priceLimit), String(minTokens), String(maxAvgPrice)],
+      recipient,
+    ];
     const ok = (run: Run): Record<string, unknown> => {
       if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}\n${run.stdout}`);
       return JSON.parse(run.stdout) as Record<string, unknown>;
@@ -221,15 +200,14 @@ describeSvm(
       restoreVenues(harness.svm);
       const source = await potAccount(USDC, budget + 3n);
       // The Pot's WSOL account, which the cook buys into, does not exist yet, nor do the
-      // recipient's WSOL account and the refund's USDC account: the run creates them.
+      // recipient's WSOL and USDC accounts: the run creates them.
       const output = await ata(pot, WSOL);
       expect(harness.svm.getAccount(output).exists).toBe(false);
       const recipient = randomAddress();
-      const refund = randomAddress();
       const out = ok(
         await sauce(
           ...["run", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--keypair", owner.path, "--yes", "--json", ...args(DEEP, recipient, refund)],
+          ...["--keypair", owner.path, "--yes", "--json", ...args(recipient)],
         ),
       ) as {
         createTokenAccounts?: { accounts: string[] };
@@ -243,16 +221,17 @@ describeSvm(
       expect(out.createTokenAccounts?.accounts).toHaveLength(3);
       expect(out.cook.status).toBe("success");
       expect(out.staged?.transactions.length).toBeGreaterThan(1);
-      expect(out.lookupTable?.accounts).toBeGreaterThan(40);
-      for (const p of DEEP) expect(priceOf(p)).toBe(ownLimit(p, maxPrice, false));
+      expect(out.lookupTable?.accounts).toBeGreaterThan(25);
+      for (const p of FOUND) expect(priceOf(p)).toBe(ownLimit(p, priceLimit, false));
       const bought = tokenAmount(harness, await ata(recipient, WSOL));
-      const refunded = tokenAmount(harness, await ata(refund, USDC));
+      const refunded = tokenAmount(harness, await ata(recipient, USDC));
       expect(bought).toBeGreaterThan(0n);
       expect(refunded).toBeGreaterThan(0n);
-      // The Pot's own 3 USDC beside the budget stay; nothing bought stays.
+      // What was bought and what is left of the budget went to the recipient: the Pot keeps only
+      // its own 3 USDC, and nothing bought.
       expect(tokenAmount(harness, source)).toBe(3n);
       expect(tokenAmount(harness, output)).toBe(0n);
-      expect((budget - refunded) * E18).toBeLessThanOrEqual(maxPrice * bought);
+      expect((budget - refunded) * E18).toBeLessThanOrEqual(priceLimit * bought);
 
       // The table stays: a second cook naming the same accounts takes it, and creates none.
       restoreVenues(harness.svm);
@@ -261,7 +240,7 @@ describeSvm(
         await sauce(
           ...["run", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
           ...["--keypair", owner.path, "--json", "--lookup-table", out.lookupTable!.address],
-          ...args(DEEP, recipient, refund),
+          ...args(recipient),
         ),
       ) as { createTokenAccounts?: unknown; lookupTable?: unknown; cook: { status: string } };
       expect(second.cook.status).toBe("success");
@@ -276,17 +255,17 @@ describeSvm(
       const out = ok(
         await sauce(
           ...["run", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--keypair", owner.path, "--yes", "--json", ...args(DEEP, pot, pot)],
+          ...["--keypair", owner.path, "--yes", "--json", ...args(pot)],
         ),
       ) as { createTokenAccounts?: { accounts: string[] }; cook: { status: string } };
       expect(out.cook.status).toBe("success");
-      // The Pot's two accounts exist, and the recipient's and the refund's are those: nothing made.
+      // The Pot's two accounts exist, and the recipient's is the Pot's: nothing made.
       expect(out.createTokenAccounts).toBeUndefined();
       const bought = tokenAmount(harness, output);
       expect(bought).toBeGreaterThan(0n);
       const unspent = tokenAmount(harness, source);
       expect(unspent).toBeGreaterThan(0n);
-      expect((budget - unspent) * E18).toBeLessThanOrEqual(maxPrice * bought);
+      expect((budget - unspent) * E18).toBeLessThanOrEqual(priceLimit * bought);
     }, 300_000);
 
     it("simulates it in a local copy of its accounts, holds each guard to its revert, and prints it as a plan of steps", async () => {
@@ -294,10 +273,9 @@ describeSvm(
       await potAccount(USDC, budget);
       await potAccount(WSOL, 0n);
       const recipient = randomAddress();
-      const refund = randomAddress();
       const argv = (command: string, checks: { minTokens?: bigint; maxAvgPrice?: bigint } = {}) => [
         ...[command, PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-        ...["--owner", owner.signer.address, ...args(DEEP, recipient, refund, checks)],
+        ...["--owner", owner.signer.address, ...args(recipient, checks)],
         ...(command === "simulate" ? ["--json"] : []),
       ];
       const out = ok(await sauce(...argv("simulate"))) as {
@@ -312,7 +290,7 @@ describeSvm(
       expect(bought).toBeGreaterThan(0n);
       expect(spent + BigInt(out.returned.unspent)).toBe(budget);
       // Nothing happened on the cluster: the pools and the accounts are as they were.
-      for (const p of DEEP)
+      for (const p of FOUND)
         expect(priceOf(p)).toBe(le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16));
       expect(held(await ata(recipient, WSOL))).toBe(0n);
 
@@ -375,7 +353,7 @@ describeSvm(
       expect(pooled.stderr).toContain("not a wallet");
     }, 300_000);
 
-    it("finds the pair's pools with sauce pools, which gives them in slot order for --args", async () => {
+    it("lists the pair's pools with sauce pools, each with the key a program finds it by", async () => {
       restoreVenues(harness.svm);
       // SOL names the wrapped SOL a pool holds.
       const listed = ok(
@@ -387,6 +365,8 @@ describeSvm(
         pools: {
           venue: string;
           pool: Address;
+          byKey?: string;
+          sides: { pay: string; priceLimit: string }[];
           slots: Record<
             string,
             {
@@ -403,19 +383,21 @@ describeSvm(
         skipped: { venue: string; pool: Address; why: string }[];
       };
       expect(listed.tokens.map((t) => t.symbol)).toEqual(["USDC", "WSOL"]);
-      // Every SOL/USDC pool of the fixture, its slot paying USDC the one a cook derives.
-      for (const name of [
-        "raydium-clmm-sol-usdc",
-        "pancakeswap-clmm-sol-usdc",
-        "orca-whirlpool-sol-usdc",
-        "cropper-sol-usdc",
-        "defituna-sol-usdc",
-        "crema-sol-usdc",
-        "phoenix-sol-usdc",
-      ]) {
+      // Every SOL/USDC pool of the fixture, its slot paying USDC the one a cook derives, and the
+      // key a program finds it by where its venue finds pools by key.
+      for (const [name, key] of [
+        ["raydium-clmm-sol-usdc", "Raydium.CLMM.pool(USDC, WSOL, 400)"],
+        ["pancakeswap-clmm-sol-usdc", "Pancakeswap.CLMM.pool(USDC, WSOL, 100, 10)"],
+        ["orca-whirlpool-sol-usdc", "Orca.Whirlpool.pool(USDC, WSOL, 4)"],
+        ["cropper-sol-usdc", "Cropper.Whirlpool.pool(USDC, WSOL, 2)"],
+        ["defituna-sol-usdc", "Defituna.Fusion.pool(USDC, WSOL, 4)"],
+        ["crema-sol-usdc", "Crema.CLMM.pool(USDC, WSOL, 50)"],
+        ["phoenix-sol-usdc", undefined],
+      ] as const) {
         const p = pool(name);
         const found = listed.pools.find((one) => one.pool === p.pool);
         if (found === undefined) throw new Error(`sauce pools does not list ${name}`);
+        expect(found.byKey).toBe(key);
         expect(found.slots.USDC).toEqual({
           program: p.program,
           pool: p.pool,
@@ -426,49 +408,32 @@ describeSvm(
           ticks: p.payB,
         });
       }
+      // Each side's price, fee included, as a swap's priceLimit.
+      const orca = listed.pools.find((one) => one.pool === FOUND[0]!.pool)!;
+      expect(BigInt(orca.sides.find((side) => side.pay === "USDC")!.priceLimit)).toBe(
+        allIn(FOUND[0]!, false),
+      );
       // Byreal's SOL/USDC pool adds fees past its rate: skipped, as the program skips it.
       expect(listed.skipped.find((one) => one.pool === pool("byreal-sol-usdc").pool)?.why).toMatch(
         /more than one rate/,
       );
-
-      // Chosen for a swap paying USDC within maxPrice, one pool a venue: the pools in slot order,
-      // which a simulation takes as they are.
-      const choosing = await sauce(
+      const text = await sauce(
         ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", SOLANA_URL],
-        ...["--pay", "USDC", "--max-price", String(maxPrice), "--per-venue"],
       );
+      expect(text.stdout).toContain("found by key: Orca.Whirlpool.pool(USDC, WSOL, 4)");
+
+      // Chosen for a program that takes its pools as arguments, paying USDC within a priceLimit,
+      // one pool a venue: the pools in slot order.
       const picked = ok(
         await sauce(
           ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", SOLANA_URL, "--json"],
-          ...["--pay", "USDC", "--max-price", String(maxPrice), "--per-venue"],
+          ...["--pay", "USDC", "--price-limit", String(priceLimit), "--per-venue"],
         ),
       ) as { chosen: { venue: string; pool: Address }[]; poolArgs: string[] };
-      expect(picked.chosen).toHaveLength(4);
-      expect(new Set(picked.chosen.map((one) => one.venue)).size).toBe(4);
-      expect(picked.poolArgs).toEqual(picked.chosen.map((one) => one.pool));
-      expect(choosing.stdout).toContain(`in slot order: ${picked.poolArgs.join(" ")}`);
-      const stranger = (await keypairFile(work)).signer.address;
-      const simulated = ok(
-        await sauce(
-          ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--owner", stranger, "--assume-balance", "USDC:1000000", "--json"],
-          ...["--args", "USDC", "WSOL", ...picked.poolArgs, String(budget), String(maxPrice)],
-          ...["0", "0", randomAddress(), randomAddress()],
-        ),
-      ) as { returned: { bought: string } };
-      expect(BigInt(simulated.returned.bought)).toBeGreaterThan(0n);
-
-      // Five slots: the fifth an empty one where fewer pools are chosen.
-      const five = ok(
-        await sauce(
-          ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", SOLANA_URL, "--json"],
-          ...["--pay", "USDC", "--max-price", String(maxPrice), "--per-venue", "--slots", "5"],
-        ),
-      ) as { chosen: { pool: Address }[]; poolArgs: string[] };
-      expect(five.poolArgs).toHaveLength(5);
-      expect(five.poolArgs.slice(0, five.chosen.length)).toEqual(five.chosen.map((p) => p.pool));
-      expect(new Set(five.poolArgs.slice(five.chosen.length))).toEqual(
-        new Set(five.chosen.length === 5 ? [] : [EMPTY]),
+      expect(picked.chosen.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(picked.chosen.map((one) => one.venue)).size).toBe(picked.chosen.length);
+      expect(picked.poolArgs.slice(0, picked.chosen.length)).toEqual(
+        picked.chosen.map((one) => one.pool),
       );
     }, 300_000);
 
@@ -478,7 +443,7 @@ describeSvm(
       const run = await sauce(
         ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL, "--owner", stranger],
         ...["--assume-balance", "USDC:1000000", "--json"],
-        ...args(DEEP, randomAddress(), randomAddress()),
+        ...args(randomAddress()),
       );
       const out = ok(run) as { createPot: unknown; returned: { spent: string; bought: string } };
       expect(out.createPot).not.toBeNull();
@@ -488,23 +453,48 @@ describeSvm(
       expect(run.stderr).toContain("assumed: the Pot's USDC account");
     }, 300_000);
 
-    it("runs the five-slot program with five pools, each trading to its own limit or sitting out", async () => {
+    it("refuses keys that find more pools than one transaction locks, naming each key's pool", async () => {
       restoreVenues(harness.svm);
-      await potAccount(USDC, budget);
-      const cropper = pool("cropper-sol-usdc");
-      const recipient = randomAddress();
-      const out = ok(
-        await sauce(
-          ...["simulate", PROGRAM_5, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--owner", owner.signer.address, "--json"],
-          ...args([...DEEP, cropper], recipient, randomAddress(), { slots: 5 }),
-        ),
-      ) as { units: number; returned: { spent: string; bought: string; unspent: string } };
-      expect(BigInt(out.returned.bought)).toBeGreaterThan(0n);
-      expect(BigInt(out.returned.spent) + BigInt(out.returned.unspent)).toBe(budget);
-      expect(BigInt(out.returned.spent) * E18).toBeLessThanOrEqual(
-        maxPrice * BigInt(out.returned.bought),
+      // Every SOL/USDC pool the fixture holds that a key finds, each a slot of its own.
+      const greedy = join(work, "greedy.sauce.ts");
+      const swaps = [
+        "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4)",
+        "Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 400)",
+        "Pancakeswap.CLMM.swap(Pancakeswap.CLMM.pool(USDC, WSOL, 100)",
+        "Defituna.Fusion.swap(Defituna.Fusion.pool(USDC, WSOL, 4)",
+        "Crema.CLMM.swap(Crema.CLMM.pool(USDC, WSOL, 50)",
+        "Cropper.Whirlpool.swap(Cropper.Whirlpool.pool(USDC, WSOL, 2)",
+        "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 1)",
+      ];
+      writeFileSync(
+        greedy,
+        "function main(priceLimit: Uint256): Uint256 {\n  let bought = 0;\n" +
+          swaps
+            .map((swap) => `  bought += ${swap}, USDC, WSOL, self.USDC, priceLimit, 0);\n`)
+            .join("") +
+          "  return bought;\n}\n",
       );
+      const run = await sauce(
+        ...["simulate", greedy, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", owner.signer.address, "--args", String(priceLimit)],
+      );
+      expect(run.code).toBe(1);
+      expect(run.stderr).toMatch(
+        /the cook names \d+ accounts, and a Solana transaction locks at most 64/,
+      );
+      expect(run.stderr).toContain(
+        `Orca.Whirlpool.pool(USDC, WSOL, 4) is ${pool("orca-whirlpool-sol-usdc").pool}`,
+      );
+      expect(run.stderr).toContain("Orca.Whirlpool.pool(USDC, WSOL, 1) finds none");
+      for (const [key, name] of [
+        ["Raydium.CLMM.pool(USDC, WSOL, 400)", "raydium-clmm-sol-usdc"],
+        ["Pancakeswap.CLMM.pool(USDC, WSOL, 100)", "pancakeswap-clmm-sol-usdc"],
+        ["Defituna.Fusion.pool(USDC, WSOL, 4)", "defituna-sol-usdc"],
+        ["Crema.CLMM.pool(USDC, WSOL, 50)", "crema-sol-usdc"],
+        ["Cropper.Whirlpool.pool(USDC, WSOL, 2)", "cropper-sol-usdc"],
+      ] as const)
+        expect(run.stderr).toContain(`${key} is ${pool(name).pool}`);
+      expect(run.stderr).toContain("name fewer keys");
     }, 300_000);
   },
 );

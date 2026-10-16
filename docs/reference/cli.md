@@ -1691,7 +1691,7 @@ Examples:
 List a pair's price-limit pools on a chain, deepest first, with their prices.
 
 Usage: sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--block <number|tag>] [--json]
-       sauce pools --chain solana <pay token> <buy token> [--pay <token> [--max-price <n>] [--per-venue] [--slots <n>]] [--json]
+       sauce pools --chain solana <pay token> <buy token> [--pay <token> [--price-limit <n>] [--per-venue] [--slots <n>]] [--json]
 
 Options:
       --chain <slug|id>  The chain the pools are on
@@ -1707,10 +1707,10 @@ EVM chains only:
       --block <number|tag>    Read the pools at this block: a number, or latest, safe, finalized (default: latest)
 
 Solana only:
-      --pay <token>    Choose the pools a distributed swap paying this token takes, and print their slots' accounts
-      --max-price <n>  With --pay: only pools whose price with the fee is within this maxPrice
-      --per-venue      With --pay: the deepest pool of each venue only
-      --slots <n>      With --pay: how many slots the program has (default 4)
+      --pay <token>      Choose the pools a distributed swap paying this token takes, and print their slots' accounts
+      --price-limit <n>  With --pay: only pools whose price with the fee is within this priceLimit
+      --per-venue        With --pay: the deepest pool of each venue only
+      --slots <n>        With --pay: how many slots the program has (default 4)
 
 Every pool of the pair at the price-limit venues the registry records on the chain:
 Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables, Aerodrome Slipstream
@@ -1737,22 +1737,23 @@ simulate --block to run on the prices maxPrice was taken from.
 On Solana: every pool of the pair at each venue whose swap takes a price limit that stops
 it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,
 DefiTuna, Crema, and Phoenix's markets), found with getProgramAccounts on each venue's
-program. For each: its fee, liquidity and price both ways with the fee and as maxPrice, and
-its slot paying each token: the nine accounts a swap at it takes (program, pool, config, the
-two vaults, one more account its swap takes, three tick arrays), each unused one the System
-program. A pool the distributed swap skips is listed as skipped with why. A token is a symbol
-the chain registers (SOL for WSOL), or a mint. --pay chooses the pools a swap paying that
-token takes (within --max-price, one a venue with --per-venue, --slots of them) and prints
-them in slot order for main's --args (the System program for a slot with none), and their
-slots as accounts. A venue it could not read leaves the listing partial: a note says which,
-and the command exits 1.
+program. For each: its fee, liquidity and price both ways with the fee and as a swap's
+priceLimit, how a program finds it by key (Orca.Whirlpool.pool(USDC, WSOL, 4)) where its
+venue finds pools by key, and its slot paying each token: the nine accounts a swap at it
+takes (program, pool, config, the two vaults, one more account its swap takes, three tick
+arrays), each unused one the System program. A pool the distributed swap skips is listed as
+skipped with why. A token is a symbol the chain registers (SOL for WSOL), or a mint. --pay
+chooses the pools a swap paying that token takes (within --price-limit, one a venue with
+--per-venue, --slots of them) and prints them in slot order for main's --args (the System
+program for a slot with none), and their slots as accounts. A venue it could not read leaves
+the listing partial: a note says which, and the command exits 1.
 
 Examples:
   sauce pools --chain base USDC WETH
   sauce pools --chain base USDC 0x… --json
   sauce pools --chain base WETH USDC --v4-key 50:1
   sauce pools --chain solana USDC WSOL --json
-  sauce pools --chain solana USDC WSOL --pay USDC --max-price 119047619047619047 --per-venue --slots 5 --json
+  sauce pools --chain solana USDC WSOL --pay USDC --price-limit 119047619047619047 --per-venue --slots 5 --json
 ```
 
 ## `sauce inspect`
