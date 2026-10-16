@@ -15,10 +15,12 @@ import {
   bytesToHex,
   decodeFunctionData,
   encodeAbiParameters,
+  encodeFunctionData,
   getAddress,
   hexToBytes,
   keccak256,
   numberToHex,
+  parseAbi,
   stringToBytes,
   type Hex,
   type PublicClient,
@@ -1178,6 +1180,63 @@ describe("sauce tx", () => {
       `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <keystore>)`,
     );
     expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
+  });
+
+  it("plans the owner's transfers into the Pot before the cook with --fund, ETH as its value", async () => {
+    const run = await sauce(
+      ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES, "--value", "1234"],
+      ...["--fund", "USDC:1.5", "--fund", "ETH:0.000000000000001"],
+    );
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as {
+      pot: Address;
+      transactions: Array<Record<string, unknown>>;
+      sendCalls: { chain: string; calls: Array<Record<string, unknown>> };
+    };
+    const pot = v12PredictPot(OWNER, SAUCE_INTENT_POT_SALT);
+    const usdc = getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDC")!.address);
+    const transfer = encodeFunctionData({
+      abi: parseAbi(["function transfer(address, uint256) returns (bool)"]),
+      functionName: "transfer",
+      args: [pot, 1_500_000n],
+    });
+    // No endpoint, so no Pot read: the transfer, then the cook, carrying the fee and the ETH.
+    expect(out.pot).toBe(pot);
+    expect(out.transactions).toEqual([
+      {
+        what: "transfer 1500000 USDC to the Pot",
+        chainId: 1,
+        to: usdc,
+        data: transfer,
+        value: "0x0",
+      },
+      expect.objectContaining({ chainId: 1, to: pot, value: `0x${(1234n + 1000n).toString(16)}` }),
+    ]);
+    expect(out.sendCalls).toEqual({
+      chain: "ethereum",
+      calls: out.transactions.map(({ to, value, data }) => ({ to, value, data })),
+    });
+    expect(run.stderr).toMatch(
+      /--fund: the owner's transfer into the Pot comes before the cook\. Sent as one batch \(sendCalls, a smart wallet's single approval\), the Pot is funded and cooked on at once, or not at all\./,
+    );
+  });
+
+  it("refuses a --fund it cannot plan: a token twice, a token's decimals with no endpoint, Solana", async () => {
+    const tx = (...fund: string[]) =>
+      sauce(
+        ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES],
+        ...["--value", "0", ...fund.flatMap((value) => ["--fund", value])],
+      );
+    const twice = await tx("USDC:1", "usdc:2");
+    expect(twice.code).toBe(2);
+    expect(twice.stderr).toMatch(/--fund names USDC twice: give it once, with the total/);
+    const unread = await tx(`${RECIPIENT}:1.5`);
+    expect(unread.code).toBe(2);
+    expect(unread.stderr).toMatch(
+      /reading .* decimals needs an endpoint; or give the amount in base units/,
+    );
+    // In base units it needs no read.
+    expect((await tx(`${RECIPIENT}:1500000n`)).code).toBe(0);
   });
 
   it("prints a cast send line only when asked to, with the endpoint and key left open", async () => {

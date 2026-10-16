@@ -121,6 +121,10 @@ what a wallet's MCP server takes, and `sendCalls` is the same as one batch
 When the Pot does not exist yet, it prints a plan of two instead, the Pot's creation then the cook,
 each with the `gas` to sign it with. Sign and send them in that order.
 
+`--fund USDC:100` puts the tokens the program spends into the plan too: a transfer from you into the
+Pot, right before the cook. A wallet that sends a batch then creates the Pot, fills it and runs the
+program in one go.
+
 `sauce send` takes the signed transactions, in order. It checks each would succeed before sending
 it, waits for each to land, and prints what it did, as `sauce run` does. It takes no key.
 

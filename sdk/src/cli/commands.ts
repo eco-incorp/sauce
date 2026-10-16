@@ -1051,10 +1051,10 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(transfers.length === 0
           ? []
           : [
-              `--fund: the owner's ${transfers.length === 1 ? "transfer" : `${transfers.length} transfers`} ` +
-                "into the Pot come before the cook. Sent as one batch (sendCalls, a smart " +
-                "wallet's single approval), the Pot is deployed, funded and cooked on at once, " +
-                "or not at all.",
+              `--fund: the owner's ${transfers.length === 1 ? "transfer into the Pot comes" : `${transfers.length} transfers into the Pot come`} ` +
+                "before the cook. Sent as one batch (sendCalls, a smart wallet's single " +
+                `approval), the Pot is ${deployFirst ? "deployed, funded" : "funded"} and cooked ` +
+                "on at once, or not at all.",
             ]),
         ...(funds?.notes ?? []),
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
