@@ -746,8 +746,8 @@ read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through in
 the pool at its venue's offsets, ~250 bytes smaller and ~5k CU a pool dearer than reading at
 each call site — `clmmCan`, `settled`): a program carries only the venues it calls (`swap` ~4.4
 KB, one venue's function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the
-distributed swap, 6,291 bytes with four slots and 6,362 with five, cooks four trading pools in
-941,176 CU, where #102's 6,319 bytes cooked in 955,936). `compile.test.ts` pins its exports, each family's argument order, each venue's
+distributed swap, its pools `Address` arguments each swapped by `Solana.swap`, 6,283 bytes with
+four and 6,432 with five, cooks four trading pools in about 951,000 CU). `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from
