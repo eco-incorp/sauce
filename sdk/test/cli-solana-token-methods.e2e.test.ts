@@ -14,6 +14,10 @@
  * withhold). Each holder's account is checked on chain, so a wrong account given in place of a
  * derived one is refused, and the derivation is the cook's: `--via engine` spends the owner's.
  *
+ * The manual's quick start, `docs/examples/pay.sauce.ts`, runs here as its header's Solana lines
+ * say: simulated, then run from the Solana wallet the page makes, the Pot and the recipient's USDC
+ * account created when the run asks.
+ *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
  */
@@ -299,6 +303,63 @@ describeSvm("the token methods on Solana: every account derived by the command",
       ok: false,
       reason: 'the program threw "not enough USDC"',
     });
+  }, 120_000);
+
+  it("runs the manual's quick start, docs/examples/pay.sauce.ts, on Solana as its header says, from a wallet", async () => {
+    const file = join(HERE, "../../docs/examples/pay.sauce.ts");
+    // The page's reader types the wallet's password at the prompt; here it comes from a variable.
+    const password = `throwaway-${process.pid}-${Date.now()}`;
+    const PASSWORD = ["--password-env", "SAUCE_WALLET_PASSWORD"];
+    const asReader = async (...argv: string[]): Promise<Run> => {
+      let stdout = "";
+      let stderr = "";
+      const code = await runCli(argv, {
+        ...nodeIo(),
+        walletsDir: join(work, "wallets"),
+        readEnv: (name) => (name === "SAUCE_WALLET_PASSWORD" ? password : undefined),
+        canAsk: () => true,
+        confirm: async () => true,
+        stdout: (text) => void (stdout += text),
+        stderr: (text) => void (stderr += text),
+      });
+
+      return { code, stdout, stderr };
+    };
+    const recipient = randomAddress();
+    /** The example's `sauce <command> pay.sauce.ts --chain solana` line, as words, filled in. */
+    const usage = (command: string): string[] => {
+      const line = readFileSync(file, "utf8")
+        .split("\n")
+        .map((one) => one.replace(/^\/\/\s*/, ""))
+        .find((one) => one.startsWith(`sauce ${command} pay.sauce.ts --chain solana `))!;
+      const argv = line
+        .split(/\s+/)
+        .slice(1)
+        .map((word) => ({ "pay.sauce.ts": file, "<recipient>": recipient })[word] ?? word);
+      expect(argv).not.toContain("--account");
+
+      return [...argv, "--rpc-url", SOLANA_URL];
+    };
+
+    // The page's wallet, made as the page makes it, given SOL for the fees and the rent.
+    const made = json(
+      await asReader("wallet", "new", "me-solana", "--solana", ...PASSWORD, "--json"),
+    );
+    const me = address(made.address as string);
+    harness.svm.airdrop(me, lamports(1_000_000_000n));
+
+    // Simulated first: no password, the Pot not created yet, its USDC assumed.
+    const simulated = json(await asReader(...usage("simulate"), "--json"));
+    expect(simulated).toMatchObject({ ok: true });
+
+    // Then run: the page has its reader send the Pot 1 USDC first, and the run asks to create the
+    // Pot and the recipient's USDC account before the cook.
+    const mePot = (await derivePotPda(KITCHEN, me, new Uint8Array(32))).address;
+    const potUsdcOfMe = await account(usdc, mePot, 1_000_000n, TOKEN_PROGRAM, 6);
+    const ran = await asReader(...usage("run"), ...PASSWORD);
+    expect(ran.code).toBe(0);
+    expect(tokenAmount(harness, await ataOf(usdc, recipient, TOKEN_PROGRAM))).toBe(1_000_000n);
+    expect(tokenAmount(harness, potUsdcOfMe)).toBe(0n);
   }, 120_000);
 
   it("runs the sauce-solana wrap example as its header says: the owner's SOL into the Pot's WSOL", async () => {

@@ -1,106 +1,167 @@
 # Quick start
 
-[Documentation](../README.md) · [Protocols and tokens](protocols-and-tokens.md) · [Create an intent](intents.md)
+[Documentation](../README.md) · [Solana quick start](solana-quick-start.md) · [Glossary](../concepts/glossary.md)
+
+> You are going to write a tiny program that pays someone 1 USDC, try it for free, and then run it
+> for real on Base. Think of the program as a recipe. Sauce gives you your own kitchen counter on
+> the blockchain, called a **Pot**. You put ingredients (tokens) on the counter, and the Pot follows
+> your recipe step by step. If any step goes wrong, nothing happens at all, as if you never started.
+
+It takes about ten minutes. Trying the program costs nothing. Running it for real costs a few cents
+of ETH on Base, plus the 1 USDC it pays.
+
+## 1. Install
+
+You need [Node.js](https://nodejs.org) 24 or newer (`node --version` tells you). Then install the
+`sauce` command:
 
 ```sh
-pnpm add @eco-incorp/sauce
+npm install -g @eco-incorp/sauce
+sauce --version
 ```
 
-Node.js **24 or newer**. The SauceScript compiler is a dependency of this package — there is nothing
-else to install and no compiler checkout to keep in sync. For [the `sauce` command](cli.md), install
-the package once globally: `npm i -g @eco-incorp/sauce`, then `sauce --version`
-(`npm i -g @eco-incorp/sauce@latest` upgrades it).
+## 2. Make a wallet
 
-## Where a program runs
-
-A compiled program runs in a **cook**: one transaction to a **Pot**, the contract that holds what the
-program spends and makes its calls. Every cook pays a flat fee to the **Kitchen**, the contract that
-creates Pots. Your own programs run on your Pot, which only you can cook on. The intent below runs
-its body on another Pot, the one the destination chain's intent contracts own and every solver's
-fulfillment cooks on. [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md) explains the three.
-
-## Build your first intent
-
-This is a complete program. It builds an Eco intent offline: the creator and the fee are fixtures
-and nothing is sent to a chain.
-
-```ts
-import { Base } from "@eco-incorp/sauce";
-
-const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
-
-const built = Base(
-  () => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
-
-console.log(built.hash().intentHash);
+```sh
+sauce wallet new me
 ```
 
-`Base` names the **destination**, the chain the program runs on; `.reward(...)` names the
-**source**, where the reward is escrowed. That one expression does what an intent otherwise takes
-by hand:
+It asks for a password twice, then prints the wallet's address. The key is stored encrypted in
+`~/.sauce/wallets`, and the password unlocks it whenever you send something. Keep only small amounts
+in it: it lives on your computer.
 
-- looks up USDC and the Universal Router on Base, and binds the ERC-20 ABI;
-- compiles the body, so there is no contract to write or deploy;
-- derives the Pot and engine, and encodes the `cook(engine, program)` call on that Pot — the shared
-  one the solver deploys for that Portal;
-- looks up the eco-routes Portal on both chains, and the prover for the pair;
-- sets the route's native amount, what the solver sends with the fill, to what its calls spend: here
-  the cook's fee;
-- assembles the route and reward, which is all `built.hash()` and the source Portal requests need.
+Already have a key? `sauce wallet import me <file>` keeps it as a wallet instead.
 
-Each of those is an option you can override, for a deployment the registry does not carry. What
-stays yours: the deadlines, the creator, the Kitchen fee, and a reward that pays a solver to fill
-the intent. The fee is on-chain state, so the SDK builds its read, `destinationExecutionFee()`, and
-does not guess it. The SDK sends nothing, and it does not price the reward.
+## 3. Write the program
 
-Ethereum and Base are two of the three chains the initial release supports, with Solana. Every
-other chain in the registry is a preview chain: the SDK builds for it at your own risk, and the
-`sauce` command and MCP server compile and simulate there but build no transaction
-([Chains](../reference/chains.md)).
+Save this as `pay.sauce.ts`:
 
-## The three things that trip people up
+```js
+// Pays `amount` of USDC from your Pot to `to`, and stops if the Pot holds less.
+// The same file runs on Base and on Solana.
+//
+// Try it on a copy of the chain first: no password, no money, nothing sent.
+//
+//   sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args <recipient> 1000000
+//
+// Then run it for real: your wallet signs and pays the fee, and your Pot pays the USDC.
+//
+//   sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
+//
+// On Solana, the same way, with a Solana wallet:
+//
+//   sauce simulate pay.sauce.ts --chain solana --wallet me-solana --assume-balance USDC:5 --args <recipient> 1000000
+//   sauce run pay.sauce.ts --chain solana --wallet me-solana --args <recipient> 1000000
+//
+//   to: Address       who gets the USDC, an address on the chain it runs on
+//   amount: Uint256   how much, in USDC's smallest unit: USDC has 6 decimals, so 1000000 is 1 USDC
+function main(to: Address, amount: Uint256) {
+  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  USDC.transfer(to, amount);
+}
+```
 
-**The callback is source, not a function.** It is read with `Function.prototype.toString()`, parsed
-and compiled. It never runs as JavaScript, so it captures nothing: a surrounding `const amount` is
-invisible inside it. Pass application values through `defines`, or write the body as a string. If
-your bundler rewrites function bodies, use a string or a source file.
+The comments are for you; the program is the last four lines.
 
-**`USDC` and `Uniswap` are not imports.** They are program syntax the compiler resolves against the
-destination chain. The package ships TypeScript declarations so a typed body checks, but there is no
-JavaScript object to import. `Base`, by contrast, _is_ a named export. The registered spelling of the
-router is `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as an unambiguous family alias;
-`UniswapV3.UniversalRouter` does not exist. [Protocols](../reference/protocols.md) lists what is registered.
+- `main` is where the program starts. Its parameters are its inputs: who to pay, and how much.
+- `USDC` needs no import and no address. Sauce knows where USDC lives on every chain it supports.
+- `ctx.self()` is your Pot, so `USDC.balanceOf(ctx.self())` is how much USDC your Pot holds.
+- `require` checks something. If it is false, the whole run stops and nothing moves.
+- `USDC.transfer(to, amount)` pays, from your Pot.
 
-**The Pot is not yours alone.** For a Portal-driven intent the Pot's owner is the destination
-`Portal.executor()`, which every solver can drive. The SDK derives that Pot, so the example names
-none; the solver deploys it before the intent is fulfilled. Deliver assets into it, use them, and
-take the remainder out inside the same fulfillment. Every cook also pays the Kitchen's current fee in native value.
-[The destination Pot](intents.md#the-destination-pot) covers deployment and overrides.
+Check that it compiles:
 
-## Deliver assets and fund the reward
+```sh
+sauce compile pay.sauce.ts --chain base
+```
 
-The destination assets and the source reward are separate things. Destination `tokens` arrive at the
-Portal's Executor, so a program that spends them needs a transfer precall moving them into the Pot
-first. Source reward tokens are approved to the source Portal, which escrows them in the intent vault.
+It prints the compiled program as hex. That is what runs on chain: there is no contract to write or
+deploy.
 
-[first-intent.ts](../examples/first-intent.ts) builds both sides and returns the source transaction
-requests. Read [create an intent](intents.md) before submitting them, and
-[nested intents](nested-intents.md) to chain a second execution onto the first.
+## 4. Try it for free
 
-## Compile without an intent
+```sh
+sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
+  --args <recipient> 1000000
+```
 
-Reach for `@eco-incorp/sauce/compiler` when you want raw bytecode, runtime entry arguments or a
-Solana account manifest — a reusable program you supply values to at execution time rather than one
-specialised at compile time.
+Put any Base address in place of `<recipient>`. Your own works: `sauce wallet address me` prints it.
 
-[compile-program.ts](../examples/compile-program.ts) compiles a typed entry point and appends compact
-arguments. [Compiling programs](compiling.md) explains module resolution and how the raw compiler
-differs from the route wrapper.
+- `--wallet me` says whose Pot to use. No password is needed, because nothing is signed.
+- `--assume-balance USDC:5` pretends your Pot holds 5 USDC, for this simulation only.
+- `--args` gives `main` its inputs: the recipient, then the amount. 1000000 is 1 USDC.
+
+`sauce simulate` runs the program on a copy of Base as it is right now, and tells you what would
+happen:
+
+```text
+The cook succeeds from 0x028e…4822: gas used 111821 for the cook, after the Pot's deploy (1. below), returns 0x
+Left in the Pot, not in the owner's wallet:
+  4 USDC (it held 5 USDC before)
+…
+What moved, in order:
+  [1] wallet 0x028e…4822 -> Pot 0x4955…aD84      0.00000374478538635 ETH  the cook's value
+  [2] Pot                -> Kitchen 0x1984…506b  0.00000374478538635 ETH  the Kitchen's fee
+  [3] Pot                -> 0x2222…2222          1 USDC
+```
+
+Your addresses and numbers will differ. Read it from the bottom: your Pot paid 1 USDC to the
+recipient, and paid the Kitchen a small fee for running the program. That transaction is called a
+**cook**, and the **Kitchen** is the contract that makes Pots and charges that fee. Your Pot does
+not exist yet, so the simulation creates it first, as the real run will.
+
+Now ask for more than the Pot holds, `--assume-balance USDC:0.5`, and the simulation says
+`The cook reverts: the program threw "not enough USDC"`. That is your `require` doing its job.
+
+## 5. Run it on Base
+
+Two things need money:
+
+- **Your wallet pays the fees**, in ETH on Base. 0.001 ETH is plenty.
+- **Your Pot pays the USDC.** Send it 1 USDC on Base.
+
+Your Pot's address is known before the Pot exists, so you can send it tokens now:
+
+```sh
+sauce pot --chain base --wallet me
+```
+
+It prints the address as `"pot"`. From an exchange or another wallet, send 1 USDC on Base to that
+address, and a little ETH on Base to your wallet's address. Then run:
+
+```sh
+sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
+```
+
+It asks for your password. The first time, it also asks to create your Pot, which is one extra
+transaction. Then it simulates the cook again, sends it, waits for it, and prints what happened:
+
+```text
+cook 0x5f…: success, gas used 184211, block 21004500
+  explorer: https://basescan.org/tx/0x5f…
+…
+What moved, in order:
+  [1] Pot 0x8a… -> 0x66…  1 USDC
+```
+
+The explorer link shows the transaction on Basescan.
+
+Rather not send the Pot USDC first? `--fund USDC:1` has the run pull 1 USDC from your wallet into the
+Pot, in the same transaction as the cook.
+
+## What just happened
+
+You wrote a program, and Sauce compiled it. Your wallet sent one transaction, a cook, to your Pot.
+The Pot ran the program: it checked its USDC, paid the recipient and paid the Kitchen's fee. Had the
+check failed, nothing at all would have moved, and only the gas would have been spent.
+
+What the Pot holds stays there until a program moves it. It is yours, but your wallet app will not
+show it. [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md) explains the Pot in full.
+
+## Next
+
+- Run the same file on Solana: the [Solana quick start](solana-quick-start.md).
+- Swap, lend or bridge by name: [protocols and tokens](protocols-and-tokens.md).
+- Reach another chain: [your first cross-chain intent](first-intent.md).
+- Every word Sauce uses, next to one you know: the [glossary](../concepts/glossary.md).
+- Every command and flag: [the sauce command](cli.md).
