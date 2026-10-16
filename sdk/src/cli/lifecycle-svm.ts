@@ -15,18 +15,22 @@ import {
   AccountRole,
   address,
   appendTransactionMessageInstructions,
+  compileTransaction,
   createSolanaRpc,
   createTransactionMessage,
   generateKeyPairSigner,
+  getAddressDecoder,
   getBase64Decoder,
   getBase64Encoder,
   getBase64EncodedWireTransaction,
   getTransactionDecoder,
+  getTransactionEncoder,
   partiallySignTransactionMessageWithSigners,
   pipe,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
   type Address as SvmAddress,
+  type Blockhash,
   type Base64EncodedWireTransaction,
   type Instruction,
   type TransactionMessageBytesBase64,
@@ -46,6 +50,7 @@ import {
   svmFulfillMarkerPda,
   svmKeyOf,
 } from "../svm/portal.js";
+import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import { buildHeapFramePrepend } from "../svm/prepends.js";
 import { CliError } from "./args.js";
@@ -368,8 +373,6 @@ export async function planSvmFill(
     claimant: options.claimant,
     tokenPrograms,
   });
-  const kitchen = v12SvmKitchenProgramId();
-  const cooks = intent.route.calls.some((call) => svmKeyOf(call.target) === kitchen);
   const notes: string[] = [];
   for (const token of tokens) {
     if (token.held < token.amount) {
@@ -395,15 +398,7 @@ export async function planSvmFill(
       rpc,
       chain,
       options.solver,
-      // A route that cooks on the executor's Pot runs the engine, whose memory is the
-      // transaction's heap frame: the fill requests it, as every cook does.
-      cooks
-        ? [
-            buildHeapFramePrepend(),
-            getSetComputeUnitLimitInstruction({ units: 1_400_000 }),
-            fulfill,
-          ]
-        : [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill],
+      fillInstructions(intent, fulfill),
       `Portal.fulfill(${hashIntent(intent).intentHash}, route, rewardHash, ${options.claimant}) on ${chain.slug}`,
     ),
     tokens,
@@ -411,6 +406,50 @@ export async function planSvmFill(
     touched,
     notes,
   };
+}
+
+/** A fill's instructions: its fulfill after the compute budget it needs. A route that cooks
+ *  through the Kitchen runs the engine, whose memory is the transaction's heap frame: the fill
+ *  requests it, as every cook does. */
+function fillInstructions(intent: Intent, fulfill: Instruction): Instruction[] {
+  const kitchen = v12SvmKitchenProgramId();
+
+  return intent.route.calls.some((call) => svmKeyOf(call.target) === kitchen)
+    ? [buildHeapFramePrepend(), getSetComputeUnitLimitInstruction({ units: 1_400_000 }), fulfill]
+    : [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill];
+}
+
+/** Any key stands for the solver in a size: 32 bytes like every other. */
+const PLACEHOLDER_SOLVER = getAddressDecoder().decode(new Uint8Array(32).fill(7));
+
+/**
+ * The size of `intent`'s fill on the wire, as {@link planSvmFill} builds it for any solver: whether
+ * a solver can send it in one transaction ({@link SVM_PACKET_BYTES}). Reads nothing: the solver is
+ * a placeholder key, which changes no size.
+ */
+export async function svmFillBytes(intent: Intent): Promise<number> {
+  const solver = PLACEHOLDER_SOLVER;
+  const fulfill = await buildPortalFulfillInstruction({
+    intent,
+    portal: svmKeyOf(intent.route.portal),
+    solver,
+    claimant: `0x${"11".repeat(32)}`,
+    tokenPrograms: Object.fromEntries(
+      intent.route.tokens.map((token) => [svmKeyOf(token.token), TOKEN_PROGRAM_ID]),
+    ),
+  });
+  const message = pipe(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayer(solver, m),
+    (m) => appendTransactionMessageInstructions(fillInstructions(intent, fulfill), m),
+    (m) =>
+      setTransactionMessageLifetimeUsingBlockhash(
+        { blockhash: solver as unknown as Blockhash, lastValidBlockHeight: 0n },
+        m,
+      ),
+  );
+
+  return getTransactionEncoder().encode(compileTransaction(message)).length;
 }
 
 // ---------------------------------------------------------------------------------------------

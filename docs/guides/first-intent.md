@@ -145,10 +145,27 @@ transactions that post it.
 
 ## To Solana
 
-An intent can pay a Solana wallet too, and you still only send a transaction on Ethereum.
-[ethereum-to-solana.ts](../examples/ethereum-to-solana.ts) builds one: 1 USDC to a Solana wallet,
-1.05 USDC of reward on Ethereum, and the two transactions your wallet sends to post it. The solver
-pays the wallet's USDC account, so the wallet must have held USDC before.
+An intent can pay a Solana wallet too, and you still only send transactions on Ethereum. Inside
+the braces, `USDC` is Solana's USDC and `recipient` a Solana wallet, given in base58:
+
+```js
+// Pays a Solana wallet USDC, for a USDC reward on the chain that publishes it.
+function main(recipient: Address, amount: Uint256, reward: Uint256) {
+  Solana(() => {
+    USDC.transfer(recipient, amount);
+  }).reward({ tokens: [{ token: USDC, amount: reward }] });
+}
+```
+
+```sh
+sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --keystore <path> \
+  --intent-deadline <unix seconds> --intent-creator <your address> \
+  --args <solana wallet> 1000000 1050000
+```
+
+If the wallet has no USDC account yet, the solver creates one first, and the command adds its rent
+to what the solver brings. [ethereum-to-solana.ts](../examples/ethereum-to-solana.ts) builds the
+same intent from TypeScript.
 
 ## Next
 

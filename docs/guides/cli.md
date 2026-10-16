@@ -1266,6 +1266,25 @@ unsigned, each is refused on a preview chain: `prove` and `cancel` by the intent
 
 ### An intent to Solana
 
+You publish an intent to Solana from Ethereum or Base, like any other: write a file whose body
+pays a Solana wallet, and give the wallet in base58.
+
+```sh
+sauce intent publish pay-on-solana.sauce.ts --chain base --keystore ~/.keys/me.json \
+  --intent-deadline 1900000000 --intent-creator 0xYou --args <solana wallet> 1000000 1050000
+sauce intent publish --source base --destination solana --token USDC --amount 1 \
+  --recipient <solana wallet> --reward-token USDC --reward 1.05 --prover HyperProver
+```
+
+The first publishes a file such as `Solana(() => { USDC.transfer(recipient, amount) })
+.reward({ tokens: [{ token: USDC, amount: reward }] })` with `main(recipient: Address, amount:
+Uint256, reward: Uint256)`. The second makes that file for you, step by step. Before building
+either, the command reads Solana (`--config` with chain id `1399811149`, or its public endpoint):
+which token accounts exist, and for a program, whether the Pot Solana's Portal owns exists. A
+wallet with no account for the token gets one, created by the route, its rent (about 0.002 SOL)
+added to what the solver delivers. An intent whose fill would not fit one Solana transaction is
+refused before anything is sent.
+
 An intent an EVM chain publishes for Solana (eco-routes' Solana deposit addresses publish one per
 deposit) is filled, proven and cancelled through Solana's Portal program, and claimed or refunded on
 its source like any other. Store it from the transaction that published it, then:
@@ -1673,7 +1692,7 @@ engine invocation it made, against the SDK's settle program recompiled for that 
 is not one it checks.
 
 `sauce intent publish` does not work from Solana: open the intent from an EVM chain; its
-destination may be Solana, and `sauce intent fill`, `prove` and `cancel` act on it there
+destination may be Solana, where `sauce intent fill`, `prove` and `cancel` act on it
 ([An intent to Solana](#an-intent-to-solana)). A `main` argument of type `Address` is a 32-byte
 public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
 key as the word the engine reads (ABI-v1 only, not under `--compact-args`).

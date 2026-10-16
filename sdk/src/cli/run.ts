@@ -52,6 +52,7 @@ import {
   type CommandOutput,
   compileCommand,
   compileProgram,
+  probeInput,
   type Confirm,
   type CookInput,
   expectingRevert,
@@ -120,6 +121,7 @@ import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } 
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
+import { solanaIntentState } from "./intent-solana.js";
 import { reclaimCommand } from "./reclaim.js";
 import { sendCommand, signedChain } from "./send.js";
 import { simulateCommand } from "./simulate.js";
@@ -675,11 +677,16 @@ async function autoExecutionFee(
   endpoints: Endpoints,
   gate: Gate | undefined,
 ): Promise<bigint | undefined> {
-  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
+  const probe = compileProgram(
+    probeInput({ ...input, intents: { ...input.intents, executionFee: 0n } }),
+    io,
+  );
   // Before the fee is read: a command refused on these chains reads nothing for them.
   if (gate !== undefined) gated(gate, input.chain, probe.intents);
   const cooks = intentCooks(probe.intents);
   if (cooks.length === 0) {
+    // An intent to Solana's cook reads its fee there (`solanaIntentState`).
+    if (probe.intents.some((intent) => intent.solana?.pot !== undefined)) return undefined;
     io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
 
     return undefined;
@@ -796,7 +803,13 @@ async function programInput(
     },
   };
   bind?.before?.(given);
-  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
+  const bound = bind === undefined ? given : bindMainArguments(given, bind.args);
+  // An intent to Solana is built against the cluster's state, read first (`intent-solana.ts`).
+  const solana = await solanaIntentState(bound, io, endpointsOf(args, io, chain), {
+    autoFee: fee === "auto",
+  });
+  for (const note of solana.notes) io.stderr(`${note}\n`);
+  const input = solana.input;
   if (fee !== "auto") return input;
   const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
 
@@ -1348,20 +1361,27 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
         "--intent-creator with --format json to print the transactions unsigned",
     );
   }
-  const program: ProgramInput = {
-    file: created.file,
-    text: created.text,
-    chain: created.source,
-    compactArgs: false,
-    defines: {},
-    intents: {
-      deadline: created.deadline,
-      rewardDeadline: created.rewardDeadline,
-      creator,
-      prover: created.prover,
-      fundVia: created.fundVia,
+  // An intent to Solana is built against the cluster's state, read first (`intent-solana.ts`).
+  const solana = await solanaIntentState(
+    {
+      file: created.file,
+      text: created.text,
+      chain: created.source,
+      compactArgs: false,
+      defines: {},
+      intents: {
+        deadline: created.deadline,
+        rewardDeadline: created.rewardDeadline,
+        creator,
+        prover: created.prover,
+        fundVia: created.fundVia,
+      },
     },
-  };
+    io,
+    lookup,
+  );
+  for (const note of solana.notes) io.stderr(`${note}\n`);
+  const program: ProgramInput = solana.input;
   const rpcUrl = lookup(created.source);
   if (rpcUrl === undefined) {
     throw new UsageError(`publishing needs ${created.source.slug}'s endpoint: --config with it`);
@@ -1375,7 +1395,13 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       notes: [`${created.file} is written, and not published: the simulation reverts`],
     };
   }
-  if (lookup(created.destination) !== undefined) {
+  if (created.destination.kind === "svm") {
+    // Solana's simulation takes no state overrides: a fill is simulated from a solver's own accounts.
+    io.stderr(
+      `Filling on ${created.destination.slug} is simulated from a solver's accounts, once ` +
+        "published: sauce intent fill <intent hash> --solver <solana key> --claimant <address>\n\n",
+    );
+  } else if (lookup(created.destination) !== undefined) {
     const fill = await fillCommand({
       intents: fillTargets(program, io),
       from: created.file,

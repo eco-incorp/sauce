@@ -261,6 +261,9 @@ export class SvmLowering {
     readonly source: string,
     readonly tokens: ReadonlyMap<string, bigint>,
     rows: readonly SvmTokenRow[],
+    /** Compile-time values a holder may name, by name: a key bound before the program compiles —
+     *  main's `Address` argument, bound into an intent's body — which the cook attaches by value. */
+    private readonly keys: ReadonlyMap<string, bigint> = new Map(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -390,6 +393,10 @@ export class SvmLowering {
       }
       if (param?.kind === "account") {
         return { kind: "account", param: name, writable: param.writable };
+      }
+      const key = this.keys.get(name);
+      if (key !== undefined && param === undefined && !this.declared.has(name)) {
+        return { kind: "key", name: base58(keyHex(key)), stem: name, value: name };
       }
     }
     // As a token's holder, `ctx.self()` is the program's own account, the Pot, as on the EVM, so a
