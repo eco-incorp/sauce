@@ -35,6 +35,13 @@ import {
 import { fetchPhoenixConfig } from "../../../src/svm/venues/phoenix/index.js";
 import { raydiumSqrtPriceAtTick } from "../../../src/svm/venues/raydium-clmm/tick-math.js";
 import {
+  SVM_COOK_FIXED,
+  SVM_COOK_UNITS,
+  SVM_SWAP_FIXED,
+  svmComputeStops,
+  type SvmComputeStop,
+} from "../../../src/svm/compute-stops.js";
+import {
   describeSvm,
   fabricateAlt,
   HARNESS_POT_SALT,
@@ -102,6 +109,10 @@ type Outcome =
       changed: Address[];
     }
   | { ok: false; reason: string; logs: string[] };
+
+/** A signed i32 at `at` of an account's data. */
+const i32 = (data: Uint8Array, at: number): number =>
+  new DataView(data.buffer, data.byteOffset).getInt32(at, true);
 
 /** What the paying account holds beside the amount offered: never offered, never spent. */
 const KEPT = 7n;
@@ -410,10 +421,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   // whirlpools' `TickArraySequenceInvalidIndex`; Crema's `NextTickNotFound`). A swap at a price holds
   // its limit a tick inside its window's last safe tick, so an order with a limit at three times the
   // pool's price and the input to reach it stops there, its pool's price exactly the window's bound.
-  // PancakeSwap's pool stops at its window on about 1,360,000 compute units; Byreal's fixture pool
-  // runs out of compute walking its own ticks before it reaches its window (at 1.6 times its price),
-  // and stops at its window in the cell for the price's own array below.
-  it.each(["RaydiumClmm", "PancakeswapClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
+  // PancakeSwap's and Byreal's fixture pools run out of compute units walking their own ticks before
+  // they reach their windows with no stop (below, with the one the command works out); Byreal's
+  // stops at its window in the cell for the price's own array below.
+  it.each(["RaydiumClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
     "%s: a limit far past its window stops a tick inside it, where the cook used to fail",
     async (venue) => {
       const entry = VENUES.find((one) => one.venue === venue)!;
@@ -433,6 +444,104 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     },
     120_000,
   );
+
+  // A pool's stop, as the command works it out for a cook of this one swap: the venues' share of the
+  // cook's compute units, by the cost table, with nothing else to share it with.
+  const stopOf = (order: Order): SvmComputeStop => {
+    const p = order.pool;
+    const paysA = key(USDC) < key(order.buy);
+    const layout = (
+      {
+        "raydium-clmm": "raydium",
+        "pancakeswap-clmm": "raydium",
+        byreal: "raydium",
+        "stabble-clmm": "raydium",
+        "orca-whirlpool": "whirlpool",
+        cropper: "whirlpool",
+        defituna: "defituna",
+        crema: "crema",
+      } as const
+    )[p.venue as "byreal"];
+    const [stop] = svmComputeStops(
+      [
+        {
+          name: "stop",
+          program: p.program,
+          layout,
+          pool: BYTES.get(p.pool)!,
+          fee: LAYOUT[p.venue]!.fee(p),
+          arrays: (order.ticks ?? (paysA ? p.payA : p.payB)).map((at) => BYTES.get(at)),
+          paysA,
+          priceLimit: order.priceLimit,
+        },
+      ],
+      SVM_COOK_UNITS - SVM_COOK_FIXED - SVM_SWAP_FIXED,
+    );
+    return stop!;
+  };
+  /** The swap's ran out of compute units: its program, or the engine running it. */
+  const ranOut = (outcome: Outcome): boolean =>
+    !outcome.ok && outcome.logs.some((line) => line.includes("exceeded CUs meter"));
+
+  // Pools that cross more initialized ticks on the way to their limit than one cook's compute units
+  // pay for: with no stop the whole cook fails, out of units; with the one the command works out
+  // they stop a tick inside the first initialized tick their share does not pay to cross, and the
+  // cook completes. PancakeSwap's SOL/USDC pool at three times its price, Orca's at 1.3 times,
+  // Byreal's at three times.
+  it.each([
+    ["PancakeswapClmm", 30000n],
+    ["OrcaWhirlpool", 13000n],
+    ["Byreal", 30000n],
+  ] as const)(
+    "%s: a limit whose walk runs a cook out of compute units completes at the stop the command works out",
+    async (venue, times) => {
+      const entry = VENUES.find((one) => one.venue === venue)!;
+      const base = await orderFor(entry);
+      const p = base.pool;
+      const paysA = key(USDC) < key(base.buy);
+      const order = {
+        ...base,
+        priceLimit: (allIn(p, paysA) * times) / 10000n,
+        amountIn: 10_000_000_000n * 10n ** 6n,
+      };
+      expect(ranOut(await cook(compiled(lower(venue)), order))).toBe(true);
+      const stop = stopOf(order);
+      expect(stop.share).toBeLessThan(stop.estimatedUnits);
+      const outcome = succeeded(await cook(compiled(lower(venue)), { ...order, stop: stop.stop }));
+      expect(outcome.received).toBeGreaterThan(0n);
+      // Its price ends a tick inside the initialized tick it was held short of, past its own.
+      const tickAt = p.venue === "orca-whirlpool" ? 81 : 269;
+      const tick = i32(BYTES.get(p.pool)!, tickAt);
+      const moved = i32(harness.svm.getAccount(p.pool).data as Uint8Array, tickAt);
+      expect(paysA ? moved >= stop.stopTick! : moved < stop.stopTick!).toBe(true);
+      expect(paysA ? moved < tick : moved > tick).toBe(true);
+    },
+    300_000,
+  );
+
+  // Raydium's SOL/USDC pool at 3% above its price walks past where its window used to end, on into
+  // its furthest array, for the stop the command works out: the cook that ran out of units when the
+  // router read that array's ticks itself completes, the pool held within its share.
+  it("RaydiumClmm: a limit 3% past its price walks on into its furthest array within its share", async () => {
+    const entry = VENUES.find((one) => one.venue === "RaydiumClmm")!;
+    const base = await orderFor(entry);
+    const p = base.pool;
+    const paysA = key(USDC) < key(base.buy);
+    const order = {
+      ...base,
+      priceLimit: (allIn(p, paysA) * 10300n) / 10000n,
+      amountIn: 10_000_000_000n * 10n ** 6n,
+    };
+    const stop = stopOf(order);
+    const outcome = succeeded(
+      await cook(compiled(lower("RaydiumClmm")), { ...order, stop: stop.stop }),
+    );
+    expect(outcome.received).toBeGreaterThan(0n);
+    // Past the router's own window, which ends where the furthest array begins.
+    const near = windowStop(p, paysA)!;
+    const moved = i32(harness.svm.getAccount(p.pool).data as Uint8Array, 269);
+    expect(paysA ? moved < near : moved > near).toBe(true);
+  }, 300_000);
 
   // Crema's window is wide: tick spacing 50, arrays of 3,200 ticks, its edge about 6,300 ticks from
   // the price. The limit is held a tick inside that edge, within a millionth of its exact sqrt price

@@ -453,11 +453,18 @@ function compileSvmIntentChild(
     }
   }
 
+  // A venue's swap in the body takes a stop the cook's builder would work out; an intent's cook is
+  // built with the route, before the fill, so each is 0, none: the body's `main` takes nothing else.
+  const stops = Object.keys(program.derivedValues ?? {}).length;
+  const code = program.compiled.bytecode[0]!;
+  const bytecode = new Uint8Array(code.length + 32 * stops);
+  bytecode.set(code);
+
   return svmCookRoute({
     portal,
     kitchen,
     engine: v12SvmEngineProgramId() as SvmAddress,
-    bytecode: program.compiled.bytecode[0]!,
+    bytecode,
     manifest,
     accounts,
     executionFee,
@@ -572,6 +579,13 @@ export interface CompiledSauceProgram {
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**
+   * The `Uint256` values the SDK added to `main` after its accounts, in order, which no caller
+   * gives: each with how the cook's builder works it out — on Solana, a venue's swap at a price
+   * takes its pool's `stop` (`stop:<pool>:<token>:<limit>`, `svm/compute-stops.ts`). They are
+   * encoded after the caller's arguments; `entryParams` leaves them out. Absent when it added none.
+   */
+  readonly derivedValues?: readonly DerivedValue[];
+  /**
    * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
    * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
    * Portal transactions that publish it, can be built without running the program. One that
@@ -581,6 +595,14 @@ export interface CompiledSauceProgram {
   readonly intents: readonly LoweredIntent[];
   /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
   readonly source: string;
+}
+
+/** A `Uint256` the SDK added to `main`, which the cook's builder works out. */
+export interface DerivedValue {
+  readonly name: string;
+  readonly type: "Uint256";
+  /** How it is worked out: `stop:<pool>:<token>:<limit>`. */
+  readonly derive: string;
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
@@ -638,9 +660,17 @@ export function compileSauceProgram(
     { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
   );
+  const values = program.derivedValues ?? {};
   const entryParams = mainParams(program.source).filter(
-    (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
+    (param) =>
+      (resolved.kind !== "svm" || !/^Account\b/.test(param.type)) &&
+      !Object.hasOwn(values, param.name),
   );
+  const derivedValues = Object.entries(values).map(([name, derive]): DerivedValue => ({
+    name,
+    type: "Uint256",
+    derive,
+  }));
 
   return {
     chain: resolved,
@@ -652,6 +682,7 @@ export function compileSauceProgram(
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     ...(program.derivedAccounts === undefined ? {} : { derivedAccounts: program.derivedAccounts }),
+    ...(derivedValues.length === 0 ? {} : { derivedValues }),
     intents: program.intents,
     source: program.source,
   };
@@ -760,6 +791,7 @@ function compileForChain(
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
   readonly derivedAccounts?: Readonly<Record<string, string>>;
+  readonly derivedValues?: Readonly<Record<string, string>>;
   readonly intents: readonly LoweredIntent[];
 } {
   const chain = requireChain(destination);
@@ -845,6 +877,7 @@ function compileForChain(
   // On svm the same syntax lowers to @sauce/token's SVM arm instead, with the accounts each call
   // moves through added to `main`, and how each is derived reported beside the manifest.
   let derivedAccounts: Readonly<Record<string, string>> | undefined;
+  let derivedValues: Readonly<Record<string, string>> | undefined;
   if (chain.kind === "svm") {
     const lowered = rewriteSvmTokenSyntax(
       source,
@@ -861,6 +894,7 @@ function compileForChain(
     if (lowered.rewrote) {
       source = lowered.source;
       derivedAccounts = lowered.derived;
+      derivedValues = lowered.values;
     }
   } else {
     if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
@@ -930,6 +964,7 @@ function compileForChain(
     entryEncoding,
     ...(manifest === undefined ? {} : { manifest }),
     ...(derivedAccounts === undefined ? {} : { derivedAccounts }),
+    ...(derivedValues === undefined ? {} : { derivedValues }),
     intents,
   };
 }

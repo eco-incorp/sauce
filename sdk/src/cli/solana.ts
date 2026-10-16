@@ -130,6 +130,14 @@ import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
 import {
+  svmCookFixedUnits,
+  svmRanOutOfUnits,
+  svmStopLines,
+  svmStopsJson,
+  svmStopsOf,
+  type SvmStops,
+} from "./svm-stops.js";
+import {
   accountsNow,
   messageAccounts,
   movedBy,
@@ -1341,7 +1349,38 @@ function keyWords(
  * 32-byte word, a public key, where the EVM's ABI encoding keeps 20 bytes: each is encoded as that
  * word, from base58 (or 32 bytes of hex).
  */
-export function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined): Uint8Array {
+export function svmPayload(
+  program: CompiledSauceProgram,
+  args: ArgsInput | undefined,
+  derived: readonly bigint[] = [],
+): Uint8Array {
+  const added = program.derivedValues ?? [];
+  if (added.length > 0) {
+    // The values the SDK added to main come after the caller's arguments, which are checked first,
+    // against main's own parameters: those are the ones a caller gives.
+    const given = args ?? { from: "--args", values: [] };
+    if (given.values.length !== program.entryParams.length) {
+      payloadOf(program, args);
+    }
+    const values = derived.length === 0 ? added.map(() => 0n) : derived;
+    if (values.length !== added.length) {
+      throw new Error(`svmPayload: ${added.length} derived values, got ${values.length}`);
+    }
+
+    return svmPayload(
+      {
+        ...program,
+        entryParams: [
+          ...program.entryParams,
+          ...added.map((value) => ({ name: value.name, type: value.type })),
+        ],
+        derivedValues: [],
+      },
+      given.from === "--args"
+        ? { from: "--args", values: [...given.values, ...values.map(String)] }
+        : { from: "--args-json", values: [...given.values, ...values] },
+    );
+  }
   const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
   if (keyed && program.entryEncoding === "compact-v1") {
     throw new UsageError(
@@ -1478,6 +1517,10 @@ interface Prepared {
   readonly derived: ReadonlySet<string>;
   /** `--lookup-table`'s tables, each with the addresses it holds now. */
   readonly lookupTables: AddressesByLookupTableAddress;
+  /** Each swap at a price's stop, in the payload's arguments: none for a program with none. */
+  readonly stops?: SvmStops;
+  /** Works the stops out again, for the cook's own units measured, or given less (`scale`). */
+  readonly restop: (fixed?: number, scale?: number) => Promise<Prepared>;
 }
 
 /** Each of `tables`, read from the cluster: the addresses it holds. */
@@ -1507,16 +1550,22 @@ const tablesOption = (
 ): { lookupTables?: AddressesByLookupTableAddress } =>
   Object.keys(tables).length === 0 ? {} : { lookupTables: tables };
 
-/** Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. */
+/**
+ * Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. `stops` are
+ * the swaps' stops where a simulation settled them already (`sauce run`); else they are worked out
+ * from the cost table.
+ */
 async function prepare(
   input: SvmCookInput,
   files: CliFiles,
   signer: TransactionSigner,
+  settled?: { readonly fixed?: number; readonly scale?: number },
 ): Promise<Prepared> {
   refusePastDeadline(input);
   const via = input.via ?? "kitchen";
   const program = compileProgram(input, files);
-  const bytecode = svmPayload(program, input.args);
+  // The arguments are checked before anything is read: the stops come after them.
+  svmPayload(program, input.args);
   const manifest = program.manifest ?? { accounts: [] };
   requireSvmAccounts(manifest, program.derivedAccounts, input.accounts, via);
   const rpc = createSolanaRpc(input.rpcUrl);
@@ -1528,6 +1577,10 @@ async function prepare(
     ),
   );
   const found = new Map<string, Address | null>();
+  // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster, and so are
+  // the pools and tick arrays a swap's stop is worked out from.
+  const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
+  const keyArguments = svmKeyArguments(program, input.args);
   const given = await resolveTokenAccounts(
     svmAccountsWanted(program, input.accounts),
     input.owner,
@@ -1535,12 +1588,17 @@ async function prepare(
     input.chain,
     via,
     mintProgramOn(rpc, input.rpcUrl),
-    svmKeyArguments(program, input.args),
+    keyArguments,
     derived,
-    // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster.
-    coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc)),
+    load,
     found,
   );
+  const stopsFor = (fixed?: number, scale?: number): Promise<SvmStops | undefined> =>
+    ask(input.rpcUrl, "the pools the swaps stop in", () =>
+      svmStopsOf(program, input.chain, given.accounts, keyArguments.integers, load, fixed, scale),
+    );
+  const stops = await stopsFor(settled?.fixed, settled?.scale);
+  const bytecode = svmPayload(program, input.args, stops?.values ?? []);
   refuseTooManyAccounts(
     given.accounts,
     input.owner,
@@ -1568,7 +1626,7 @@ async function prepare(
   });
   const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
 
-  return {
+  const prepared: Prepared = {
     rpc,
     via,
     pot,
@@ -1581,7 +1639,18 @@ async function prepare(
     given,
     derived,
     lookupTables,
+    ...(stops === undefined ? {} : { stops }),
+    restop: async (fixed, scale) => {
+      const again = await stopsFor(fixed, scale);
+      return {
+        ...prepared,
+        bytecode: svmPayload(program, input.args, again?.values ?? []),
+        ...(again === undefined ? {} : { stops: again }),
+      };
+    },
   };
+
+  return prepared;
 }
 
 /** The most accounts a Solana transaction may lock. */
@@ -1829,6 +1898,78 @@ export async function svmSimulateCommand(
 
 async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
+  const { output } = await withStops(prepared, (again) => simulatePrepared(again, input));
+
+  return output;
+}
+
+/** The share of their units the venues are given, round by round, in a cook that runs out. */
+const TIGHTENED = [0.6, 0.3] as const;
+
+/**
+ * Simulates the cook with its swaps' stops (`prepared.stops`), and, where it runs out of compute
+ * units anyway, works them out again with the venues given less and simulates again, at most twice:
+ * then it is refused with the numbers. Where it succeeds with a pool held, the venues are given the
+ * rest of the cook's own units as the simulation measured them, kept where the cook succeeds again.
+ * What the stops held is added to the result.
+ */
+async function withStops(
+  first: Prepared,
+  simulate: (prepared: Prepared) => Promise<CommandOutput>,
+): Promise<{ readonly output: CommandOutput; readonly prepared: Prepared }> {
+  let prepared = first;
+  let output = await simulate(prepared);
+  const logsOf = (out: CommandOutput): string[] =>
+    Array.isArray(out.json.logs) ? (out.json.logs as string[]) : [];
+  const ranOut = (out: CommandOutput): boolean =>
+    out.json.ok === false && svmRanOutOfUnits(logsOf(out));
+  const holds = (stops: SvmStops | undefined): boolean =>
+    stops !== undefined &&
+    stops.stops.some((stop) => stop.stop === 1n || stop.stopTick !== undefined);
+  // A cook that succeeds with a pool held: the cook's own units, measured, are what the venues are
+  // given the rest of, once more, kept where that cook succeeds too.
+  if (holds(prepared.stops) && output.json.ok !== false && output.json.computeUnits !== undefined) {
+    const fixed = svmCookFixedUnits(BigInt(output.json.computeUnits as string), logsOf(output));
+    if (fixed < prepared.stops!.fixed.units) {
+      const loosened = await prepared.restop(fixed);
+      if (loosened.stops!.values.some((value, i) => value !== prepared.stops!.values[i])) {
+        const again = await simulate(loosened);
+        if (again.json.ok !== false) {
+          prepared = loosened;
+          output = again;
+        }
+      }
+    }
+  }
+  for (const scale of TIGHTENED) {
+    if (prepared.stops === undefined || !ranOut(output)) break;
+    prepared = await prepared.restop(undefined, scale);
+    output = await simulate(prepared);
+  }
+  const stops = prepared.stops;
+  if (stops === undefined) return { output, prepared };
+  const refused = ranOut(output);
+  const refusal = refused
+    ? [
+        "The cook runs out of compute units with every pool's stop worked out three times, the " +
+          `venues given ${stops.budget.toLocaleString("en-US")} units at the last: offer fewer ` +
+          "pools, or a tighter priceLimit, and simulate again",
+      ]
+    : [];
+
+  return {
+    prepared,
+    output: {
+      ...output,
+      text: [...refusal, ...svmStopLines(stops), output.text].join("\n"),
+      json: { ...output.json, ...svmStopsJson(stops) },
+      ...(refused ? { exitCode: 1 } : {}),
+    },
+  };
+}
+
+/** `sauce simulate`'s one simulation of a prepared cook. */
+async function simulatePrepared(prepared: Prepared, input: SvmCookInput): Promise<CommandOutput> {
   const direct = prepared.via === "engine";
   // The size first: it is the program's own, whatever the cluster holds.
   const alone = await fits(prepared);
@@ -2400,6 +2541,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
     ...(step.fails === undefined ? {} : { fails: step.fails.reason, logs: step.fails.logs }),
     ...(step.wait === undefined ? {} : { wait: step.wait }),
+    ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
     cursor,
   };
   const potNote = direct
@@ -2420,6 +2562,14 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     notes: [
       potNote,
       ...step.notes,
+      ...(prepared.stops === undefined
+        ? []
+        : [
+            ...svmStopLines(prepared.stops),
+            "Each pool's stop comes from the cost table, with no simulation: `sauce simulate` and " +
+              "`sauce run` check the stops in a simulation, and tighten them where the cook would " +
+              "run out of compute units.",
+          ]),
       single
         ? `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
           `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
@@ -2644,7 +2794,28 @@ export async function svmTokenAccountsToCreate(
  */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
   requireSupported("sending the cook", [input.chain]);
-  const prepared = await prepare(input, files, input.signer);
+  let prepared = await prepare(input, files, input.signer);
+  // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
+  // would run out of compute units; one it still runs out with is refused here.
+  const stopNotes: string[] = [];
+  if (prepared.stops !== undefined) {
+    try {
+      const checked = await withStops(prepared, (again) => simulatePrepared(again, input));
+      const logs = Array.isArray(checked.output.json.logs)
+        ? (checked.output.json.logs as string[])
+        : [];
+      if (checked.output.json.ok === false && svmRanOutOfUnits(logs)) {
+        throw new CliError(checked.output.text.split("\n")[0]!);
+      }
+      prepared = checked.prepared;
+    } catch (error) {
+      if (error instanceof CliError && /runs out of compute units/.test(error.message)) throw error;
+      stopNotes.push(
+        `the stops could not be checked in a simulation first (${(error as Error).message.split("\n")[0]}): ` +
+          "they are the cost table's, and the cook is simulated on the cluster before it is sent",
+      );
+    }
+  }
   const direct = prepared.via === "engine";
   const ctx: StepContext = {
     rpc: prepared.rpc,
@@ -2810,6 +2981,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
               `accounts in ${tabled.length} transactions; a later cook naming them reuses it with ` +
               `--lookup-table ${table}, and sauce reclaim closes it once none will`,
           ]),
+      ...(prepared.stops === undefined ? [] : svmStopLines(prepared.stops)),
       ...sentLines(direct ? "cook (direct to the engine)" : "cook", cook),
       ...(cook.ok ? [`execution fee: ${step.fee ?? prepared.fee} lamports`] : []),
       ...(left === undefined ? [] : svmLeftInPotLines(left, "your wallet")),
@@ -2819,8 +2991,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         ? []
         : sentLines("closed the code buffer in", closed.sent)),
     ].join("\n"),
-    ...(closed?.open === undefined ? {} : { notes: [`warning: ${closed.open}`] }),
+    ...(closed?.open === undefined && stopNotes.length === 0
+      ? {}
+      : {
+          notes: [...stopNotes, ...(closed?.open === undefined ? [] : [`warning: ${closed.open}`])],
+        }),
     json: {
+      ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
       chain: "solana",
       via: prepared.via,
       owner: input.owner,

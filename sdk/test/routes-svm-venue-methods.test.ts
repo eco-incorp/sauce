@@ -24,8 +24,18 @@ describe("Solana's venue namespaces", () => {
     expect(program.source).toContain(
       "return __sauce_orcaWhirlpool([poolProgram, poolAccount, poolConfig, poolVaultA, poolVaultB, " +
         "poolExtra, poolTicks0, poolTicks1, poolTicks2], [pot, potUSDC, mintUSDC, mintWSOL, " +
-        "tokenProgram, token2022Program, memoProgram], amountIn, priceLimit, 1, potWSOL);",
+        "tokenProgram, token2022Program, memoProgram], amountIn, priceLimit, 1, potWSOL, poolStop);",
     );
+    // Its stop is a value added to main after the accounts, which the cook's builder works out from
+    // the pool and main's priceLimit: not one of main's arguments.
+    expect(program.derivedValues).toEqual([
+      { name: "poolStop", type: "Uint256", derive: "stop:@pool:USDC:@priceLimit" },
+    ]);
+    expect(program.entryParams.map((param) => param.name)).toEqual([
+      "pool",
+      "amountIn",
+      "priceLimit",
+    ]);
     expect(program.derivedAccounts).toMatchObject({
       poolProgram: "slot:@pool:USDC.program",
       poolTicks2: "slot:@pool:USDC.ticks2",
@@ -49,7 +59,7 @@ describe("Solana's venue namespaces", () => {
       potUSDC: "writable",
       potWSOL: "writable",
     });
-    expect(program.bytecode.length).toBeLessThan(2_200);
+    expect(program.bytecode.length).toBeLessThan(2_400);
   });
 
   it("names every venue, its protocol then its program, each to its function", () => {
