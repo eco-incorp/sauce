@@ -8,8 +8,13 @@
  *   await base.fund(base.account(0).pot, { USDC: "100" });
  *   const result = await base.run("swap.sauce.ts", { args: [100_000_000n, 0n, base.account(0).address] });
  *
- * Node.js only; needs Foundry's `anvil` on PATH. Reads no environment: the RPC, the block and the
- * state file are arguments.
+ *   const solana = await fork("solana", { state: "test/state/pay.json.gz", rpcUrl });
+ *   await solana.fund(solana.account(0).pot, { USDC: "100" });
+ *   await solana.run("pay.sauce.ts", { args: [solana.account(1).address, 400n] });
+ *
+ * Node.js only. An EVM chain needs Foundry's `anvil` on PATH; Solana runs in LiteSVM, which the
+ * project installs (`npm i -D litesvm` at the version the package pins). Reads no environment: the
+ * RPC, the block and the state file are arguments.
  */
 import { createPublicClient, createTestClient, getAddress, http, type Address } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
@@ -17,6 +22,7 @@ import { mnemonicToAccount } from "viem/accounts";
 import { TestChain } from "./chain.js";
 import { startAnvil } from "./node.js";
 import { requireChain, type CanonicalChain, type ChainRef } from "./sdk.js";
+import { forkSolana, localSolana, type SolanaForkOptions, type SolanaTestChain } from "./solana.js";
 import { setUpStack } from "./stack.js";
 import { recorded, startForkNode, type ForkMode } from "./state.js";
 
@@ -27,6 +33,15 @@ export type { Effects, Movement } from "./sdk.js";
 export { CookReverted } from "./program.js";
 export type { CompiledProgram, ProgramInput, Value } from "./program.js";
 export type { ForkMode } from "./state.js";
+export { SolanaTestChain } from "./solana.js";
+export type {
+  SolanaAccount,
+  SolanaChange,
+  SolanaCookOptions,
+  SolanaCookResult,
+  SolanaForkOptions,
+  SolanaTestAccount,
+} from "./solana.js";
 
 export interface ForkOptions {
   /** The block the fork starts at. Pin it: a test that forks "latest" changes under you. */
@@ -53,16 +68,7 @@ export interface ForkOptions {
   readonly anvil?: string;
 }
 
-function evmChain(ref: ChainRef): CanonicalChain {
-  const chain = requireChain(ref);
-  if (chain.kind !== "evm") {
-    throw new Error(`${chain.slug} is not an EVM chain: the testing kit runs EVM chains only`);
-  }
-
-  return chain;
-}
-
-function forkMode(options: ForkOptions): ForkMode {
+function forkMode(options: Pick<ForkOptions, "state" | "rpcUrl" | "mode">): ForkMode {
   const mode = options.mode ?? "auto";
   if (
     mode === "replay" ||
@@ -117,14 +123,29 @@ async function ready(
 }
 
 /**
+ * Forks Solana in LiteSVM, ready to cook: the released engine and Kitchen, ten test accounts each
+ * holding 1,000 SOL, account 0's Pot created. Every account a test names is read when it is first
+ * named: from the cluster (recording it), or from a recorded state file. Stop it with `stop()`; a
+ * recording is written then.
+ */
+export function fork(chain: "solana", options: SolanaForkOptions): Promise<SolanaTestChain>;
+/**
  * Forks `chain` at `options.block` on a local anvil, ready to cook: the released stack (the chain's
  * own, or deployed), and anvil's dev accounts as test accounts, account 0's Pot deployed. Replays a
  * recorded state file, records one, or forks live (see {@link ForkOptions.mode}). Stop it with
  * `stop()`; a recording is written then.
  */
-export async function fork(chain: ChainRef, options: ForkOptions): Promise<TestChain> {
-  const resolved = evmChain(chain);
+export function fork(chain: ChainRef, options: ForkOptions): Promise<TestChain>;
+export async function fork(
+  chain: ChainRef,
+  options: ForkOptions | SolanaForkOptions,
+): Promise<TestChain | SolanaTestChain> {
+  const resolved = requireChain(chain);
   const mode = forkMode(options);
+  if (resolved.kind === "svm") return forkSolana(resolved, mode, options);
+  if (!("block" in options)) {
+    throw new Error(`forking ${resolved.slug} needs \`block\`, the block it starts at`);
+  }
   const node = await startForkNode({
     chainId: resolved.id,
     block: Number(options.block),
@@ -145,12 +166,20 @@ export interface LocalOptions {
 }
 
 /**
+ * An empty Solana chain in LiteSVM — no programs but the runtime's own, no tokens but wrapped SOL —
+ * with the released engine and Kitchen at their program ids and no Kitchen fee. For programs that
+ * need nothing deployed; fork Solana for anything that calls a program or moves a token.
+ */
+export function local(options: { readonly chain: "solana" }): Promise<SolanaTestChain>;
+/**
  * An empty local chain — no protocols, no tokens — with the released stack deployed at its release
  * addresses and no Kitchen fee, running as `options.chain` (Base by default). For programs that
  * need nothing deployed; fork a chain for anything that calls a protocol.
  */
-export async function local(options: LocalOptions = {}): Promise<TestChain> {
-  const chain = evmChain(options.chain ?? "base");
+export function local(options?: LocalOptions): Promise<TestChain>;
+export async function local(options: LocalOptions = {}): Promise<TestChain | SolanaTestChain> {
+  const chain = requireChain(options.chain ?? "base");
+  if (chain.kind === "svm") return localSolana(chain);
   const node = await startAnvil(
     ["--chain-id", String(chain.id), "--gas-limit", "100000000"],
     options.anvil === undefined ? {} : { binary: options.anvil },
