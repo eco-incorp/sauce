@@ -1409,6 +1409,13 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
   documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
+- **Simulate, never rehearse, enforced.** What runs with no key and sends nothing —
+  `sauce simulate`, a dry run, a fill without `--send` — is a simulation, in everything a user or
+  an agent reads. `docs/scripts/simulate-wording.mjs` is the rule; `skills:check` applies it to every
+  file of the skills, comments included, `docs:check` to the README, `docs/` and the examples, and
+  `sdk/test/simulate-wording.test.ts` to every string literal in `sdk/src`, `mcp/src` and
+  `actions/src` (the `sauce` command's `--help` and output, the MCP server's tools and
+  instructions). Code comments, identifiers and file names (`rehearse.ts`) are not held to it.
 - **Plain integers, enforced.** SauceScript a reader sees writes `3000`, never `3000n`: the
   compiler reads a literal from its text as a 256-bit integer, so both are the same program
   (`sdk/test/integer-literals.test.ts`, both targets), and agents copy whichever they are shown.
