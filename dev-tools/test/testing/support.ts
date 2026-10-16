@@ -130,6 +130,11 @@ export async function uniswapV3Pool(chain: TestChain, funded = 10n ** 21n): Prom
   );
   const { abi: poolAbi } = v3Core("UniswapV3Pool");
   await write(pool, poolAbi, "initialize", [2n ** 96n]);
+  // Every later block a second past the pool's first. What a mint costs depends on whether its
+  // block falls in the second the pool's oracle last observed: in it the oracle writes nothing, in a
+  // later one it writes a new observation. On a chain on the wall clock, the mint's gas could be
+  // estimated in the initialization's second and the mint mined in the next, short of that write.
+  await chain.increaseTime(1);
   const liquidity = poolsFixture("PoolsLiquidity");
   const helper = await deploy(liquidity);
   const owner = chain.account(0);
