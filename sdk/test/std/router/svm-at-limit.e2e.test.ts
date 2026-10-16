@@ -779,7 +779,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           const atPrice = await w.viaAtLimit({
             name: lower(VENUE[t.venue]!.fn),
             slot: w.slot.slice(0, 9),
-            args: [amountIn, priceLimit, 0n],
+            // Its stop 0: none, the router's own window alone.
+            args: [amountIn, priceLimit, 0n, 0n],
           });
           // An adaptive-fee pool is one it skips.
           if (atPrice.ok && atPrice.paid > 0n) priced = atPrice.units;

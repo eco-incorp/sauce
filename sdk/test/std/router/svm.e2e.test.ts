@@ -457,6 +457,12 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     120_000,
   );
 
+  /** A pool's account as the last cook left it. */
+  const poolData = (p: Pool): Uint8Array => {
+    const account = harness.svm.getAccount(p.pool);
+    if (!account.exists) throw new Error(`pool ${p.pool} is gone`);
+    return account.data;
+  };
   /** A swap's pool as the command reads it for its stop. */
   const poolOf = (order: Order): SvmStopPool => {
     const p = order.pool;
@@ -521,7 +527,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       // Its price ends a tick inside the initialized tick it was held short of, past its own.
       const tickAt = p.venue === "orca-whirlpool" ? 81 : 269;
       const tick = i32(BYTES.get(p.pool)!, tickAt);
-      const moved = i32(harness.svm.getAccount(p.pool).data as Uint8Array, tickAt);
+      const moved = i32(poolData(p), tickAt);
       expect(paysA ? moved >= stop.stopTick! : moved < stop.stopTick!).toBe(true);
       expect(paysA ? moved < tick : moved > tick).toBe(true);
     },
@@ -565,7 +571,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         const outcome = succeeded(
           await cook(compiled(lower(venue)), { ...order, stop: stop.stop }),
         );
-        const ended = i32(harness.svm.getAccount(p.pool).data as Uint8Array, tickAt);
+        const ended = i32(poolData(p), tickAt);
         expect([times, ended]).toEqual([times, walk.limitTick]);
         const estimate = cost.base + cost.tick * walk.crossed.length;
         expect(estimate).toBeGreaterThanOrEqual(outcome.venueUnits!);
@@ -595,7 +601,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     expect(outcome.received).toBeGreaterThan(0n);
     // Past the router's own window, which ends where the furthest array begins.
     const near = windowStop(p, paysA)!;
-    const moved = i32(harness.svm.getAccount(p.pool).data as Uint8Array, 269);
+    const moved = i32(poolData(p), 269);
     expect(paysA ? moved < near : moved > near).toBe(true);
   }, 300_000);
 
