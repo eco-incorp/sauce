@@ -1,6 +1,6 @@
 # Run a program
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Programs and arguments](cli-programs.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [Programs and arguments](cli-programs.md)
 
 > Running a program is like baking from a recipe. First you check the recipe makes sense
 > (`sauce compile`). Then you try it in a play kitchen, where nothing real gets used up

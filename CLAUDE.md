@@ -6,13 +6,19 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
-The manual is written for people and the skills for agents. Every hand-written page of the manual
-opens, after its breadcrumb line, with a short plain-words intro in a blockquote: a few short
-sentences and an everyday analogy, any Sauce word in it explained on the spot (the
-[glossary](docs/concepts/glossary.md) maps each to a familiar one). The real content follows it,
-examples before rules, edge cases in a section at the end. Its starting path is the EVM quick start
-(`docs/guides/quick-start.md`), the Solana quick start and the first intent, all on
-`docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`. Say "simulate", never "rehearse".
+The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
+**Tutorials** (learn by doing: the EVM quick start `docs/guides/quick-start.md`, the Solana quick
+start and the first intent, on `docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`),
+**How-to guides** (one task a page), **Concepts** (explanation: what a Pot is, why atomic) and
+**Reference** (flags, API, the generated pages). `docs/README.md` is the map: every page is listed
+under exactly one of its four `##` sections, and says which on its breadcrumb line (`**How-to
+guide** · ` before its links); `docs:check` holds both. A page stays in its mode: a
+how-to does not wander into a concept essay, a concept page lists no flags, and a fact has one
+owning page that the others link instead of repeating. No history or changelog prose. Every page
+then opens with a short plain-words intro in a blockquote: a few short sentences and an everyday
+analogy, any Sauce word in it explained on the spot (the [glossary](docs/concepts/glossary.md) maps
+each to a familiar one). The real content follows it, examples before rules, edge cases in a section
+at the end. Say "simulate", never "rehearse".
 
 ## What this repo is
 

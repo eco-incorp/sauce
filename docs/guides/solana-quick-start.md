@@ -1,6 +1,6 @@
 # Solana quick start
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Solana](solana.md)
+**Tutorial** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Solana](solana.md)
 
 > Solana is a tidy chain. Before a transaction starts, it must list every box it will open: your
 > wallet, your token balances, the token program, everyone it pays. Those boxes are called

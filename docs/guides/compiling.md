@@ -1,6 +1,6 @@
 # Compiling programs
 
-[Documentation](../README.md) · [Compiler API](../api/compiler.md) · [SauceScript](../concepts/saucescript.md)
+**How-to guide** · [Documentation](../README.md) · [Compiler API](../api/compiler.md) · [SauceScript](../concepts/saucescript.md)
 
 > Compiling turns your program into the compact code the chain runs, like translating a recipe into
 > the cook's shorthand. `sauce compile` does it from a terminal. This page does it from your app, in

@@ -1,6 +1,6 @@
 # Builders
 
-[Documentation](../README.md) · [Protocol calls](protocols-and-tokens.md) · [Compiler](../api/compiler.md)
+**How-to guide** · [Documentation](../README.md) · [Protocol calls](protocols-and-tokens.md) · [Compiler](../api/compiler.md)
 
 > Sometimes your app already knows what it wants: a token, an amount, a vault. Builders are forms
 > that fill in a program for you from those facts. You get the program's text back, and compile it

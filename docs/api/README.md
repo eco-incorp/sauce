@@ -1,5 +1,7 @@
 # API reference
 
+**Reference** · [Documentation](../README.md)
+
 > This is the index of everything you can import from the package, like the index at the back of a
 > book. Each line says which import holds what.
 

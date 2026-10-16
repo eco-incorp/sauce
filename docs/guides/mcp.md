@@ -1,6 +1,6 @@
 # The MCP server
 
-[Documentation](../README.md) · [Tools](mcp-tools.md) · [What a local server keeps](mcp-local.md)
+**How-to guide** · [Documentation](../README.md) · [Tools](mcp-tools.md) · [What a local server keeps](mcp-local.md)
 
 > A coding agent, such as Claude Code, Codex or Cursor, can use Sauce for you. `sauce mcp` is a
 > plugin that gives the agent Sauce's commands as tools: compile a program, try it, build the

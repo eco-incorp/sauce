@@ -1,6 +1,6 @@
 # The MCP server's tools
 
-[Documentation](../README.md) · [The MCP server](mcp.md) · [What a local server keeps](mcp-local.md)
+**Reference** · [Documentation](../README.md) · [The MCP server](mcp.md) · [What a local server keeps](mcp-local.md)
 
 > Each tool is a button your coding agent can press. Most are the `sauce` command's own commands
 > under another name: `sauce_compile` is `sauce compile`, `sauce_simulate` is `sauce simulate`.

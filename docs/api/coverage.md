@@ -1,6 +1,6 @@
 # What is actually registered
 
-[API reference](README.md) · [Chains](../reference/chains.md) · [Protocols](../reference/protocols.md) · [Tokens](../reference/tokens.md)
+**Reference** · [API reference](README.md) · [Chains](../reference/chains.md) · [Protocols](../reference/protocols.md) · [Tokens](../reference/tokens.md)
 
 > Sauce carries several lists: the protocols it knows about, the names a program can use, and where
 > each one is deployed. They answer different questions. This page says which list to ask which

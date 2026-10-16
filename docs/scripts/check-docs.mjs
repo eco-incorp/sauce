@@ -163,7 +163,7 @@ console.log(`Manual links: ${manual.length} files checked`);
       while (lines[at] === "") at++;
     };
     skipBlank();
-    if (/^\[[^\]]*\]\([^)]*\)( · |$)/.test(lines[at] ?? "")) {
+    if (/^(\*\*[^*]+\*\* · )?\[[^\]]*\]\([^)]*\)( · |$)/.test(lines[at] ?? "")) {
       at++;
       skipBlank();
     }
@@ -171,6 +171,46 @@ console.log(`Manual links: ${manual.length} files checked`);
       shape.push(
         `${page(file)}: opens with no plain-words intro; begin with a short blockquote after its title and breadcrumb` +
           (lines[0].startsWith("<!-- Generated") ? " (in its generator)" : ""),
+      );
+  }
+  // The manual is in four parts, Diátaxis's: the index places every page under one of its four
+  // sections, and the page says which on its breadcrumb line, `**How-to guide** · [Documentation]…`,
+  // so a reader knows what kind of page it is and a page stays in that mode (CLAUDE.md).
+  const KINDS = {
+    Tutorials: "Tutorial",
+    "How-to guides": "How-to guide",
+    Concepts: "Concept",
+    Reference: "Reference",
+  };
+  let part;
+  for (const line of readFileSync(index, "utf8").split("\n")) {
+    const heading = /^## (.+)$/.exec(line);
+    if (heading) {
+      part = heading[1];
+      if (!(part in KINDS))
+        shape.push(
+          `docs/README.md: "## ${part}" is not one of the manual's parts: ${Object.keys(KINDS).join(", ")}`,
+        );
+      continue;
+    }
+    const entry = /^- \[[^\]]*\]\(([^)#\s]+)/.exec(line);
+    if (!entry || /^[a-z]+:/i.test(entry[1])) continue;
+    const file = resolve(docs, entry[1]);
+    const path = page(file);
+    const kind = KINDS[part];
+    if (kind === undefined) {
+      shape.push(`docs/README.md: lists ${path} outside the four parts`);
+      continue;
+    }
+    if (!existsSync(file)) continue;
+    const text = readFileSync(file, "utf8");
+    if (text.startsWith("<!-- Generated")) continue;
+    const lines = text.split("\n");
+    const title = lines.findIndex((one) => one.startsWith("# "));
+    const crumb = lines.slice(title + 1).find((one) => one !== "") ?? "";
+    if (!crumb.startsWith(`**${kind}** · `))
+      shape.push(
+        `${path}: is listed under ${part}, so its breadcrumb line starts \`**${kind}** · \``,
       );
   }
   // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.

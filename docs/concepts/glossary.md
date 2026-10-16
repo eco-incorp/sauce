@@ -1,6 +1,6 @@
 # Glossary
 
-[Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Kitchen, Pot and cook](kitchen-pot-cook.md)
+**Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Kitchen, Pot and cook](kitchen-pot-cook.md)
 
 > Sauce has a few words of its own, mostly borrowed from a kitchen. Each one stands for something
 > you probably know already. This page puts the two side by side, so you can read every other page

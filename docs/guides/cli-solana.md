@@ -1,6 +1,6 @@
 # Solana from the command line
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Solana quick start](solana-quick-start.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [Solana quick start](solana-quick-start.md)
 
 > On Solana, `sauce` works the way it does on Base: you simulate a program, then run it. What
 > differs is under the hood. A Solana transaction must list every account it touches, so `sauce`

@@ -1,6 +1,6 @@
 # How Sauce fits together
 
-[Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [SauceScript](saucescript.md)
+**Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [SauceScript](saucescript.md)
 
 > You write a program in words you can read. The compiler translates it into a compact code card.
 > On the chain, the engine is the cook who reads that card and follows it, inside your Pot. This

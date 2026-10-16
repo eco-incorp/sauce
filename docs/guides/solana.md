@@ -1,6 +1,6 @@
 # Solana programs and execution
 
-[Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
+**How-to guide** · [Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
 
 > On Solana, a transaction must list every account it will touch before it starts: every wallet,
 > every token balance, every program. Sauce works that list out for the usual things, such as paying

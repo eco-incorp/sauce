@@ -1,6 +1,6 @@
 # Programs and arguments
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Run a program](cli-run.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [Run a program](cli-run.md)
 
 > A program is a file whose name ends in `.sauce.ts`. Its `main` function is where it starts, and
 > `main`'s parameters are its inputs, like the blanks on a form. You fill in the blanks each time

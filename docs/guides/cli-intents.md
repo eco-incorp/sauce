@@ -1,6 +1,6 @@
 # Intents from the command line
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Your first cross-chain intent](first-intent.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [Your first cross-chain intent](first-intent.md)
 
 > An intent is a job posted on one chain, with a reward, and done on another. You post it
 > (**publish**). Someone called a solver does it (**fill**), proves it was done (**prove**), and

@@ -1,6 +1,6 @@
 # Kitchen, Pot and cook
 
-[Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Architecture](architecture.md)
+**Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Architecture](architecture.md)
 
 > Your program is a recipe. Your **Pot** is your own kitchen counter on the blockchain: it holds your
 > ingredients (tokens) and follows your recipe step by step. A **cook** is one go at the recipe, and

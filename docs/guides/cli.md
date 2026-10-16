@@ -1,6 +1,6 @@
 # The sauce command
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Command reference](../reference/cli.md)
+**How-to guide** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Command reference](../reference/cli.md)
 
 > `sauce` is a command you type in a terminal. Think of it as the remote control for your Pot: it
 > turns a program file into a transaction, tries it for free, signs it and sends it. It also has

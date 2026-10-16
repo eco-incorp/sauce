@@ -1,6 +1,6 @@
 # Self-hosting over HTTP
 
-[Documentation](../README.md) · [The MCP server](mcp.md) · [Tools](mcp-tools.md)
+**How-to guide** · [Documentation](../README.md) · [The MCP server](mcp.md) · [Tools](mcp-tools.md)
 
 > Usually your agent starts the server on your own computer. You can also run one server for a
 > whole team, on a machine of your own, and point everyone's agent at its web address. That server

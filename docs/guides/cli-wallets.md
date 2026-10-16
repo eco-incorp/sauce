@@ -1,6 +1,6 @@
 # Wallets and signing
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Run a program](cli-run.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [Run a program](cli-run.md)
 
 > To send anything, someone has to sign it with a key. A wallet is a key with a lock on it: `sauce`
 > keeps your keys in a folder on your computer, each locked with a password, and `--wallet <name>`

@@ -1,6 +1,6 @@
 # What a local server keeps
 
-[Documentation](../README.md) · [The MCP server](mcp.md) · [Tools](mcp-tools.md)
+**How-to guide** · [Documentation](../README.md) · [The MCP server](mcp.md) · [Tools](mcp-tools.md)
 
 > When the server runs on your own computer, it can keep things for your agent, like a desk drawer:
 > wallets to send from, a list of the Pots it made, and the intents it posted. They are the same

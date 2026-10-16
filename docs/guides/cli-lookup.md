@@ -1,6 +1,6 @@
 # Look things up
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Programs and arguments](cli-programs.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [Programs and arguments](cli-programs.md)
 
 > Before you write a program, you want to know what is out there: which tokens a chain has, which
 > pools trade a pair and at what price, what a transaction someone sent actually did. These commands
