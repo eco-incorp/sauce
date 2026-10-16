@@ -456,6 +456,14 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           `where it is that chain's own: a define of a name each chain sets holds on ` +
           `${input.chain.slug} alone, so this one changes nothing`,
     ),
+    ...(program.derivedValues === undefined
+      ? []
+      : [
+          `main also takes ${program.derivedValues.length} stop${program.derivedValues.length === 1 ? "" : "s"}, one ` +
+            "for each swap at a price, after its own arguments: `sauce tx`, `sauce simulate` and " +
+            "`sauce run` work each out from its pool's tick arrays as they build the cook; the " +
+            "payload here carries 0, no stop, for each",
+        ]),
     ...(cook === undefined || cook.fits
       ? []
       : [
@@ -480,6 +488,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ...(cook === undefined ? {} : { cook }),
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
+      ...(program.derivedValues === undefined ? {} : { derivedValues: program.derivedValues }),
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: mainReturnType(input.text) ?? null,
