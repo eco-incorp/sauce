@@ -1,19 +1,19 @@
 /**
- * `@sauce/router`'s Solana arm at a pool's own limit, executed: each `try…AtLimit` and `…AtLimit`
- * function, each instruction-only `…Cpi`, and Manifest's, compiled into a program that calls it once
- * on one pool, staged and cooked through the released Kitchen on the harness Pot, against the venues'
- * own mainnet programs and the pools' mainnet accounts (`svm/venue-fixture.ts`). It proves what the
+ * `@sauce/router`'s Solana arm at a pool's own limit, executed: each `…AtLimit` function, each
+ * instruction-only `…Cpi`, and Manifest's, compiled into a program that calls it once on one pool,
+ * staged and cooked through the released Kitchen on the harness Pot, against the venues' own
+ * mainnet programs and the pools' mainnet accounts (`svm/venue-fixture.ts`). It proves what the
  * library's header says:
  *
  *   - for every swap eco-incorp/sauce-recipes builds for the fixture's pools
  *     (`fixtures/recipes-swap-templates.json`, both ways, the served window-bounded one and the plain
  *     one), the venue receives the same instruction, byte for byte and account for account, from the
  *     recipes' own hand-built CPI, from that CPI with `…Data`'s data, from `…Cpi` given that account
- *     list, and from `try…AtLimit` given the pool's slot — read back from the transaction's inner
+ *     list, and from `…AtLimit` given the pool's slot — read back from the transaction's inner
  *     instructions — and all four move the same amounts; `…Cpi` returns what the paying account
- *     paid, `try…AtLimit` what the recipient received;
- *   - a `try…AtLimit` returns 0 having moved nothing for every skip its header names, its plain form
- *     reverts there, and a swap below its floor reverts, the venue's own floor first where it has one;
+ *     paid, `…AtLimit` what the recipient received;
+ *   - an `…AtLimit` returns 0 having moved nothing for every skip its header names, and a swap
+ *     below its floor reverts, the venue's own floor first where it has one;
  *   - Raydium's bitmap extension is optional, a Crema slot of fewer arrays passes fewer, Phoenix and
  *     OpenBook trade at a price as well as at any, an adaptive-fee Orca pool trades at a limit, and
  *     Invariant's program refuses an input past its limit rather than stopping there;
@@ -162,8 +162,8 @@ const VENUE: Record<
 };
 const FIRST = new Set(["0to1", "aToB", "baseIn", "xToY"]);
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
-const tryName = (venue: string): string =>
-  venue === "manifest" ? "tryManifest" : `try${VENUE[venue]!.fn}AtLimit`;
+const atLimitName = (venue: string): string =>
+  venue === "manifest" ? "manifest" : `${lower(VENUE[venue]!.fn)}AtLimit`;
 const cpiName = (venue: string): string => `${lower(VENUE[venue]!.fn)}Cpi`;
 /** A template's `…Data` function: Orca's classic `swap` takes eleven accounts, `swap_v2` fifteen. */
 const dataName = (t: Template): string =>
@@ -509,8 +509,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
 
   /**
    * The four ways a template's swap is sent, from one state: the recipes' own hand-built CPI, the
-   * same CPI with `…Data`'s data, `…Cpi` on the template's account list, and `try…AtLimit` on the
-   * pool's slot (Manifest: `tryManifest`), each with `amountIn` of the mint the template's direction
+   * same CPI with `…Data`'s data, `…Cpi` on the template's account list, and `…AtLimit` on the
+   * pool's slot (Manifest: `manifest`), each with `amountIn` of the mint the template's direction
    * pays. The two instruction-only forms are compiled for the one trade, as the hand-built one is:
    * every argument but the amount a literal.
    */
@@ -627,16 +627,16 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       );
     };
 
-    // `try…AtLimit` on the pool's slot, each account with the role the recipes give it.
+    // `…AtLimit` on the pool's slot, each account with the role the recipes give it.
     const slot = slotOf(t);
     const writable = new Set(t.accounts.filter((a) => a.writable).map(accountAt));
-    const tryArgs =
+    const atLimitArgs =
       t.venue === "manifest"
         ? [amountIn, floor]
         : t.venue === "openbook-v2"
           ? [amountIn, 0n, orders, floor]
           : [amountIn, limit, floor];
-    const viaTry = (
+    const viaAtLimit = (
       overrides: {
         name?: string;
         slot?: Address[];
@@ -650,22 +650,25 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         address,
         role: writable.has(address) ? AccountRole.WRITABLE : AccountRole.READONLY,
       });
-      return cook(compiled(svmProgramCalling(overrides.name ?? tryName(t.venue), s.length - 9)), {
-        ...order,
-        args: overrides.args ?? tryArgs,
-        edit: overrides.edit,
-        named: {
-          ...Object.fromEntries(
-            [...SVM_SLOT, ...SVM_MORE].slice(0, s.length).map((name, j) => [name, metaOf(s[j]!)]),
-          ),
-          authority: metaOf(owner),
-          payMint: { address: pay, role: AccountRole.READONLY },
-          buyMint: { address: overrides.buyMint ?? buy, role: AccountRole.READONLY },
-          tokenProgram: { address: TOKEN, role: AccountRole.READONLY },
-          token2022: { address: TOKEN_2022, role: AccountRole.READONLY },
-          memo: { address: MEMO, role: AccountRole.READONLY },
+      return cook(
+        compiled(svmProgramCalling(overrides.name ?? atLimitName(t.venue), s.length - 9)),
+        {
+          ...order,
+          args: overrides.args ?? atLimitArgs,
+          edit: overrides.edit,
+          named: {
+            ...Object.fromEntries(
+              [...SVM_SLOT, ...SVM_MORE].slice(0, s.length).map((name, j) => [name, metaOf(s[j]!)]),
+            ),
+            authority: metaOf(owner),
+            payMint: { address: pay, role: AccountRole.READONLY },
+            buyMint: { address: overrides.buyMint ?? buy, role: AccountRole.READONLY },
+            tokenProgram: { address: TOKEN, role: AccountRole.READONLY },
+            token2022: { address: TOKEN_2022, role: AccountRole.READONLY },
+            memo: { address: MEMO, role: AccountRole.READONLY },
+          },
         },
-      });
+      );
     };
     return {
       p,
@@ -676,9 +679,9 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       viaData,
       viaLotsData,
       viaCpi,
-      viaTry,
+      viaAtLimit,
       slot,
-      tryArgs,
+      atLimitArgs,
       limit,
       floor,
     };
@@ -697,8 +700,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     hand: number;
     data: number;
     cpi: number;
-    tried: number;
-    /** The same pool's `try<Venue>` at a price a few basis points past the pool's own. */
+    atLimit: number;
+    /** The same pool's `<venue>` at a price a few basis points past the pool's own. */
     priced?: number;
   }[] = [];
   const refusedByVenue: string[] = [];
@@ -714,7 +717,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     return String(moved < 0n ? -moved : moved);
   };
 
-  describe("each swap the recipes build reaches the venue byte for byte: by hand, with …Data, through …Cpi and through try…AtLimit", () => {
+  describe("each swap the recipes build reaches the venue byte for byte: by hand, with …Data, through …Cpi and through …AtLimit", () => {
     it.each(TEMPLATES.map((t) => [`${t.pool} ${t.direction} ${t.builder}`, t] as const))(
       "%s",
       async (_, t) => {
@@ -723,15 +726,16 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         const theirs = await w.hand();
         const data = await w.viaData();
         const ours = await w.viaCpi();
-        const tried = await w.viaTry();
-        for (const outcome of [theirs, data, ours, tried]) expect(outcome.cpi).toEqual(w.expected);
+        const atLimit = await w.viaAtLimit();
+        for (const outcome of [theirs, data, ours, atLimit])
+          expect(outcome.cpi).toEqual(w.expected);
         // A template the venue refuses for this pool's state (an unbounded walk past the slot's tick
         // arrays, a tick array that is not the pool's first, a limit on the wrong side) is refused
         // the same way, all four ways.
         if (!theirs.ok) {
           const failure = venueFailure(theirs, t.programId);
           expect(failure).toHaveLength(1);
-          for (const outcome of [data, ours, tried])
+          for (const outcome of [data, ours, atLimit])
             expect(venueFailure(outcome, t.programId)).toEqual(failure);
           refusedByVenue.push(`${t.pool} ${t.direction} ${t.builder}: ${failure[0]}`);
           return;
@@ -740,7 +744,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           succeeded(theirs),
           succeeded(data),
           succeeded(ours),
-          succeeded(tried),
+          succeeded(atLimit),
         ];
         const ticks = tickMoved(w.p);
         expect(h.paid).toBeGreaterThan(0n);
@@ -757,7 +761,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         expect(h.returned).toBe(h.paid);
         expect(d.returned).toBe(d.paid);
         expect(c.returned).toBe(c.paid); // …Cpi returns what was paid
-        expect(r.returned).toBe(r.received); // try…AtLimit what was received
+        expect(r.returned).toBe(r.received); // …AtLimit what was received
         // OpenBook's data in lots, divided beforehand: the same instruction and the same swap.
         if (t.venue === "openbook-v2") {
           const lots = succeeded(await w.viaLotsData());
@@ -772,8 +776,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         let priced: number | undefined;
         if (LAYOUT[t.venue] !== undefined && w.p.venue !== "invariant") {
           const maxPrice = (allIn(w.p, key(w.pay) < key(w.buy)) * 10005n) / 10000n;
-          const atPrice = await w.viaTry({
-            name: `try${VENUE[t.venue]!.fn}`,
+          const atPrice = await w.viaAtLimit({
+            name: lower(VENUE[t.venue]!.fn),
             slot: w.slot.slice(0, 9),
             args: [amountIn, maxPrice, 0n],
           });
@@ -788,7 +792,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           hand: h.units,
           data: d.units,
           cpi: c.units,
-          tried: r.units,
+          atLimit: r.units,
           priced,
         });
       },
@@ -797,7 +801,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
   });
 
   // -----------------------------------------------------------------------------------------
-  // What a try…AtLimit skips, what reverts, and what each venue's own instruction takes
+  // What an …AtLimit skips, what reverts, and what each venue's own instruction takes
   // -----------------------------------------------------------------------------------------
 
   /** The swap a pool serves, one way: the window-bounded one where the recipes build it. */
@@ -805,8 +809,6 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     TEMPLATES.find(
       (t) => t.pool === name && t.direction === direction && t.builder === "buildBakedCpiSwap",
     ) ?? TEMPLATES.find((t) => t.pool === name && t.direction === direction)!;
-  const plainOf = (venue: string): string =>
-    venue === "manifest" ? "manifest" : `${lower(VENUE[venue]!.fn)}AtLimit`;
   /** The concentrated-liquidity pools, each the way its window-bounded swap runs first. */
   const CLMM: [string, string][] = [
     ["raydium-clmm-sol-usdc", "0to1"],
@@ -820,7 +822,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     ["invariant-usdc-usdt", "xToY"],
   ];
 
-  describe("a try…AtLimit skips, having moved nothing; its plain form reverts", () => {
+  describe("an …AtLimit skips, having moved nothing", () => {
     const skips: {
       why: string;
       pool: string;
@@ -844,7 +846,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         direction,
         args: (t, w) => {
           const price = le(BYTES.get(w.p.pool)!, VENUE[t.venue]!.price!, 16);
-          return [w.tryArgs[0]!, price, w.tryArgs[2]!];
+          return [w.atLimitArgs[0]!, price, w.atLimitArgs[2]!];
         },
       });
       skips.push({
@@ -919,9 +921,9 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         const amountIn = c.amountIn ?? amountOf(pairOf(pool(t.pool), t.direction)[0]);
         const w = ways(t, amountIn);
         const edit = c.edit?.(t, w.p);
-        const args = c.args?.(t, w) ?? w.tryArgs;
+        const args = c.args?.(t, w) ?? w.atLimitArgs;
         const slot = c.slot?.(w.slot) ?? w.slot;
-        const outcome = succeeded(await w.viaTry({ slot, args, edit }));
+        const outcome = succeeded(await w.viaAtLimit({ slot, args, edit }));
         expect({
           returned: outcome.returned,
           received: outcome.received,
@@ -933,9 +935,6 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           paid: 0n,
           changed: edit === undefined ? [] : [edit.address],
         });
-        expect(failed(await w.viaTry({ name: plainOf(t.venue), slot, args, edit })).reason).toBe(
-          "nothing swapped",
-        );
       },
       120_000,
     );
@@ -955,15 +954,12 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         const w = ways(t, amountOf(pairOf(pool(name), direction)[0]));
         const at = (price: bigint): bigint[] =>
           t.venue === "phoenix"
-            ? [w.tryArgs[0]!, price, 0n]
-            : [w.tryArgs[0]!, price, w.tryArgs[2]!, 0n];
-        const nothing = succeeded(await w.viaTry({ args: at(none) }));
+            ? [w.atLimitArgs[0]!, price, 0n]
+            : [w.atLimitArgs[0]!, price, w.atLimitArgs[2]!, 0n];
+        const nothing = succeeded(await w.viaAtLimit({ args: at(none) }));
         expect([nothing.returned, nothing.received, nothing.paid]).toEqual([0n, 0n, 0n]);
-        expect(failed(await w.viaTry({ name: plainOf(t.venue), args: at(none) })).reason).toBe(
-          "nothing swapped",
-        );
-        const market = succeeded(await w.viaTry());
-        const priced = succeeded(await w.viaTry({ args: at(any) }));
+        const market = succeeded(await w.viaAtLimit());
+        const priced = succeeded(await w.viaAtLimit({ args: at(any) }));
         expect(market.received).toBeGreaterThan(0n);
         expect([priced.received, priced.paid]).toEqual([market.received, market.paid]);
       },
@@ -983,26 +979,26 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       async (name, direction) => {
         const t = served(name, direction);
         const w = ways(t, amountOf(pairOf(pool(name), direction)[0]));
-        const { received } = succeeded(await w.viaTry());
-        const above = [...w.tryArgs];
+        const { received } = succeeded(await w.viaAtLimit());
+        const above = [...w.atLimitArgs];
         above[above.length - 1] = received + 1n;
-        const refused = failed(await w.viaTry({ args: above }));
+        const refused = failed(await w.viaAtLimit({ args: above }));
         // The venues whose instruction carries a least out refuse it themselves.
         const own = !["phoenix", "invariant", "openbook-v2"].includes(t.venue);
         if (own) expect(venueFailure(refused, t.programId)).toHaveLength(1);
         else expect(refused.reason).toBe("below minOut");
-        const exact = [...w.tryArgs];
+        const exact = [...w.atLimitArgs];
         exact[exact.length - 1] = received;
-        expect(succeeded(await w.viaTry({ args: exact })).received).toBe(received);
+        expect(succeeded(await w.viaAtLimit({ args: exact })).received).toBe(received);
         if (own) {
           for (const sent of [w.viaData, w.viaCpi]) {
             expect(venueFailure(failed(await sent(received + 1n)), t.programId)).toHaveLength(1);
             expect(failed(await sent(2n ** 64n)).reason).toBe("minOut past 64 bits");
           }
-          // So does try…AtLimit's, before it moves anything.
-          const past = [...w.tryArgs];
+          // So does …AtLimit's, before it moves anything.
+          const past = [...w.atLimitArgs];
           past[past.length - 1] = 2n ** 64n;
-          expect(failed(await w.viaTry({ args: past })).reason).toBe("minOut past 64 bits");
+          expect(failed(await w.viaAtLimit({ args: past })).reason).toBe("minOut past 64 bits");
         }
       },
       120_000,
@@ -1026,19 +1022,19 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       ["invariant-usdc-usdt", "xToY"],
       ["invariant-usdc-usdt", "yToX"],
     ] as const)(
-      "%s %s: …Data, …Cpi and try…AtLimit",
+      "%s %s: …Data, …Cpi and …AtLimit",
       async (name, direction) => {
         const t = served(name, direction);
         const w = ways(t, amountOf(pairOf(pool(name), direction)[0]));
         const wide = 2n ** 128n;
         expect(failed(await w.viaData(w.floor, wide)).reason).toBe("limit past 128 bits");
         expect(failed(await w.viaCpi(w.floor, wide)).reason).toBe("limit past 128 bits");
-        const args = [...w.tryArgs];
+        const args = [...w.atLimitArgs];
         args[1] = wide;
-        expect(failed(await w.viaTry({ args })).reason).toBe("limit past 128 bits");
+        expect(failed(await w.viaAtLimit({ args })).reason).toBe("limit past 128 bits");
         // The widest limit the field carries is the venue's to take or refuse, not this one's.
         args[1] = wide - 1n;
-        const widest = await w.viaTry({ args });
+        const widest = await w.viaAtLimit({ args });
         expect(widest.ok ? "" : widest.reason).not.toBe("limit past 128 bits");
       },
       120_000,
@@ -1145,7 +1141,10 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       const t = served("invariant-usdc-usdt", "yToX");
       const w = ways(t, amountOf(pairOf(pool(t.pool), t.direction)[0]));
       expect(
-        venueFailure(failed(await w.viaTry({ args: [w.tryArgs[0]!, 0n, 0n] })), t.programId),
+        venueFailure(
+          failed(await w.viaAtLimit({ args: [w.atLimitArgs[0]!, 0n, 0n] })),
+          t.programId,
+        ),
       ).toEqual([`Program ${t.programId} failed: custom program error: 0x1773`]);
     }, 120_000);
 
@@ -1157,7 +1156,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       async (direction, amountIn) => {
         const t = served("invariant-usdc-usdt", direction);
         const w = ways(t, amountIn);
-        for (const sent of [w.hand, w.viaData, w.viaCpi, w.viaTry])
+        for (const sent of [w.hand, w.viaData, w.viaCpi, w.viaAtLimit])
           expect(venueFailure(failed(await sent()), t.programId)).toEqual([
             `Program ${t.programId} failed: custom program error: 0x1778`,
           ]);
@@ -1181,15 +1180,15 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       "openbook-v2": "not an OpenBook v2 market",
     };
     // The authority signs the swap, so the program it calls must be the venue's own: `…Cpi` checks
-    // the program it is given, `try…AtLimit` the slot's against the pool's owner.
+    // the program it is given, `…AtLimit` the slot's against the pool's owner.
     // The trader's mints are the caller's too: a pool or market that is not the pair reverts.
     it.each(Object.keys(REASONS))(
-      "%s: a pool or market not the pair reverts through try…AtLimit",
+      "%s: a pool or market not the pair reverts through …AtLimit",
       async (venue) => {
         const t = TEMPLATES.find((x) => x.venue === venue)!;
         const w = ways(t, amountOf(pairOf(pool(t.pool), t.direction)[0]));
         const book = ["phoenix", "manifest", "openbook-v2"].includes(venue);
-        expect(failed(await w.viaTry({ buyMint: randomAddress() })).reason).toBe(
+        expect(failed(await w.viaAtLimit({ buyMint: randomAddress() })).reason).toBe(
           book ? "market is not the pair" : "pool is not the pair",
         );
       },
@@ -1197,7 +1196,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     );
 
     it.each(Object.entries(REASONS))(
-      "%s: another venue's program or pool reverts, through …Cpi and through try…AtLimit",
+      "%s: another venue's program or pool reverts, through …Cpi and through …AtLimit",
       async (venue, reason) => {
         const t = TEMPLATES.find((x) => x.venue === venue)!;
         const w = ways(t, amountOf(pairOf(pool(t.pool), t.direction)[0]));
@@ -1207,12 +1206,12 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         // `…Cpi` given another program for this venue's accounts: refused before the call.
         const misnamed = { ...t, programId: other.program };
         expect(failed(await ways(misnamed, amountOf(w.pay)).viaCpi()).reason).toBe(reason);
-        // `try…AtLimit` given a slot naming another program, or another venue's pool.
-        expect(failed(await w.viaTry({ slot: [other.program, ...w.slot.slice(1)] })).reason).toBe(
-          reason,
-        );
+        // `…AtLimit` given a slot naming another program, or another venue's pool.
         expect(
-          failed(await w.viaTry({ slot: [w.slot[0]!, other.pool, ...w.slot.slice(2)] })).reason,
+          failed(await w.viaAtLimit({ slot: [other.program, ...w.slot.slice(1)] })).reason,
+        ).toBe(reason);
+        expect(
+          failed(await w.viaAtLimit({ slot: [w.slot[0]!, other.pool, ...w.slot.slice(2)] })).reason,
         ).toBe(reason);
       },
       120_000,
@@ -1220,14 +1219,14 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
 
     it("a limit an instruction cannot carry reverts rather than being cut to another price", async () => {
       const phoenix = ways(served("phoenix-sol-usdc", "baseIn"), 10n ** 10n);
-      expect(failed(await phoenix.viaTry({ args: [10n ** 10n, 2n ** 64n, 0n] })).reason).toBe(
+      expect(failed(await phoenix.viaAtLimit({ args: [10n ** 10n, 2n ** 64n, 0n] })).reason).toBe(
         "limit past 64 bits",
       );
       const openbook = ways(served("openbook-v2-bonk-usdc", "baseIn"), 10n ** 9n);
-      expect(failed(await openbook.viaTry({ args: [10n ** 9n, 2n ** 63n, 4n, 0n] })).reason).toBe(
-        "limit past its field",
-      );
-      expect(failed(await openbook.viaTry({ args: [10n ** 9n, 0n, 256n, 0n] })).reason).toBe(
+      expect(
+        failed(await openbook.viaAtLimit({ args: [10n ** 9n, 2n ** 63n, 4n, 0n] })).reason,
+      ).toBe("limit past its field");
+      expect(failed(await openbook.viaAtLimit({ args: [10n ** 9n, 0n, 256n, 0n] })).reason).toBe(
         "limit past its field",
       );
     }, 120_000);
@@ -1241,9 +1240,9 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       async (name) => {
         const t = served(name, "0to1");
         const w = ways(t, amountOf(pairOf(pool(name), "0to1")[0]));
-        const extended = succeeded(await w.viaTry());
+        const extended = succeeded(await w.viaAtLimit());
         expect(extended.cpi!.accounts).toHaveLength(17);
-        const nine = succeeded(await w.viaTry({ slot: w.slot.slice(0, 9) }));
+        const nine = succeeded(await w.viaAtLimit({ slot: w.slot.slice(0, 9) }));
         expect(nine.cpi!.accounts).toEqual(extended.cpi!.accounts.filter((_, i) => i !== 13));
         expect([nine.paid, nine.received]).toEqual([extended.paid, extended.received]);
       },
@@ -1254,8 +1253,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     it("Crema: a slot of one tick array passes one", async () => {
       const t = served("crema-sol-usdc", "bToA");
       const w = ways(t, amountOf(pairOf(pool(t.pool), t.direction)[0]));
-      const all = succeeded(await w.viaTry());
-      const one = succeeded(await w.viaTry({ slot: [...w.slot.slice(0, 7), SYSTEM, SYSTEM] }));
+      const all = succeeded(await w.viaAtLimit());
+      const one = succeeded(await w.viaAtLimit({ slot: [...w.slot.slice(0, 7), SYSTEM, SYSTEM] }));
       expect(one.cpi!.accounts).toEqual(all.cpi!.accounts.slice(0, 12));
       expect([one.paid, one.received]).toEqual([all.paid, all.received]);
     }, 120_000);
@@ -1275,13 +1274,13 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         const w = ways(t, amountIn);
         const theirs = await w.hand();
         const ticks = tickMoved(w.p);
-        const [data, ours, tried] = [await w.viaData(), await w.viaCpi(), await w.viaTry()];
+        const [data, ours, atLimit] = [await w.viaData(), await w.viaCpi(), await w.viaAtLimit()];
         // A walk too long for one transaction's compute, or that leaves the slot's ticks, fails
         // the same way all four ways.
         if (!theirs.ok) {
           const failure = venueFailure(theirs, t.programId);
           expect(failure).toHaveLength(1);
-          for (const outcome of [data, ours, tried])
+          for (const outcome of [data, ours, atLimit])
             expect(venueFailure(outcome, t.programId)).toEqual(failure);
           refusedByVenue.push(`${t.pool} ${t.direction} past the window: ${failure[0]}`);
           return;
@@ -1290,7 +1289,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           succeeded(theirs),
           succeeded(data),
           succeeded(ours),
-          succeeded(tried),
+          succeeded(atLimit),
         ];
         expect({
           d: [d.paid, d.received],
@@ -1311,7 +1310,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           hand: h.units,
           data: d.units,
           cpi: c.units,
-          tried: r.units,
+          atLimit: r.units,
         });
       },
       120_000,
@@ -1323,11 +1322,11 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     const sign = (n: number): string => (n >= 0 ? `+${n}` : String(n));
     const rows = units.map(
       (u) =>
-        `| ${u.template.pool} | ${u.template.direction} | ${u.template.builder} | ${u.size} | ${u.ticks} | ${u.venue} | ${u.hand} | ${u.data} (${sign(u.data - u.hand)}) | ${u.cpi} (${sign(u.cpi - u.hand)}) | ${u.tried} (${sign(u.tried - u.hand)}) | ${u.priced === undefined ? "" : `${u.priced} (${sign(u.priced - u.hand)})`} |`,
+        `| ${u.template.pool} | ${u.template.direction} | ${u.template.builder} | ${u.size} | ${u.ticks} | ${u.venue} | ${u.hand} | ${u.data} (${sign(u.data - u.hand)}) | ${u.cpi} (${sign(u.cpi - u.hand)}) | ${u.atLimit} (${sign(u.atLimit - u.hand)}) | ${u.priced === undefined ? "" : `${u.priced} (${sign(u.priced - u.hand)})`} |`,
     );
     console.log(
       [
-        "| pool | direction | template | size | ticks moved | venue CU | hand-built cook CU | …Data cook CU | …Cpi cook CU | try…AtLimit cook CU | try… at a price cook CU |",
+        "| pool | direction | template | size | ticks moved | venue CU | hand-built cook CU | …Data cook CU | …Cpi cook CU | …AtLimit cook CU | at a price cook CU |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ...rows,
         "",

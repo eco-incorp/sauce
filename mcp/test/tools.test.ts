@@ -276,26 +276,26 @@ describe("sauce_globals", () => {
     assert.deepEqual(
       listed.venues.map((venue) => venue.namespace),
       [
-        "RaydiumClmm",
-        "PancakeswapClmm",
-        "Byreal",
-        "StabbleClmm",
-        "OrcaWhirlpool",
-        "Cropper",
-        "Defituna",
-        "Crema",
-        "Phoenix",
+        "Raydium.CLMM",
+        "Pancakeswap.CLMM",
+        "Byreal.CLMM",
+        "Stabble.CLMM",
+        "Orca.Whirlpool",
+        "Cropper.Whirlpool",
+        "Defituna.Fusion",
+        "Crema.CLMM",
+        "Phoenix.Market",
       ],
     );
     assert.equal(
-      listed.venues.find((venue) => venue.namespace === "OrcaWhirlpool")!.program,
+      listed.venues.find((venue) => venue.namespace === "Orca.Whirlpool")!.program,
       "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
     );
     const compiled = ok(
       await mcp.call("sauce_compile", {
         source:
           "function main(pool: Address, amountIn: Uint256): Uint256 {\n" +
-          "  return OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, 1, 1);\n}\n",
+          "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, 1, 1);\n}\n",
         chain: "solana",
       }),
     );

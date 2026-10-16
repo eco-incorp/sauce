@@ -1698,7 +1698,11 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
   const contracts = new Set(GLOBALS.contracts.map((c) => c.name));
   const aliases = new Set(GLOBALS.aliases.map((a) => a.name));
   const interfaces = new Set(GLOBALS.interfaces.map((one) => one.name));
-  const namespaces = new Set([...contracts, ...aliases, ...interfaces].map((n) => n.split(".")[0]));
+  // Solana's venues, each its protocol then its program (`Orca.Whirlpool`), as the SDK names them.
+  const venues = new Set(sdk.routes.sourceGlobals("solana").venues.map((one) => one.namespace));
+  const namespaces = new Set(
+    [...contracts, ...aliases, ...interfaces, ...venues].map((n) => n.split(".")[0]),
+  );
   const symbols = new Set(GLOBALS.tokens.flatMap((entry) => entry.tokens.map((t) => t.symbol)));
   const chainNames = new Set(GLOBALS.chains.map((c) => c.key));
   // A family's member namespaces, from the contracts its aliases name: `Uniswap` -> UniswapV2, …
@@ -1751,7 +1755,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
         continue;
       }
       if (!strict && (!namespaces.has(name.split(".")[0]) || ambiguous(name))) continue; // prose may name what fails
-      if (!contracts.has(name) && !aliases.has(name) && !interfaces.has(name))
+      if (!contracts.has(name) && !aliases.has(name) && !interfaces.has(name) && !venues.has(name))
         fail(where, `uses the global ${name}, which the index does not list`);
     }
     const declared = new Set([...text.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\b/g)].map((m) => m[1]));

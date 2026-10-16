@@ -1303,8 +1303,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "writing a program, to call tokens and protocols by name instead of by address: token " +
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
         "address (with `protocol`, also its methods), on Solana the venue namespaces " +
-        "(`venues`: OrcaWhirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut) and " +
-        "eight more, each pool's accounts derived as the cook is built) and the accounts a " +
+        "(`venues`: Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut) and " +
+        "eight more, and Solana.swap(…) at a pool of any of them, each pool's accounts derived " +
+        "as the cook is built) and the accounts a " +
         "program writes where it uses them (`accounts`: Solana.pda(program, [seeds]), " +
         "USDC.accountOf(holder), Solana.systemProgram, …), the chain names that open intents, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +

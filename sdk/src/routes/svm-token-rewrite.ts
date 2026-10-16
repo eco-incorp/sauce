@@ -71,7 +71,7 @@ import {
   type SvmLoweringResult,
   type TokenRef,
 } from "./svm-lowering.js";
-import { collectVenueMethods, isVenueNamespace } from "./svm-venue-methods.js";
+import { collectVenueMethods, isVenueProtocol } from "./svm-venue-methods.js";
 import { ACCOUNT_EXPRESSION_ROOT, collectAccountExpressions } from "./svm-account-expressions.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
@@ -121,7 +121,7 @@ export function rewriteSvmTokenSyntax(
     !source.includes(TOKEN_FACTORY_NAME) &&
     !namesAny(
       source,
-      (name) => tokens.has(name) || isVenueNamespace(name) || name === ACCOUNT_EXPRESSION_ROOT,
+      (name) => tokens.has(name) || isVenueProtocol(name) || name === ACCOUNT_EXPRESSION_ROOT,
     )
   ) {
     return { source, rewrote: false, derived: {} };

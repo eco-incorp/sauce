@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router, the swap library, on EVM chains and Solana. One function per EVM venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin) and a try form of each, every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, and the pool families its callbacks service; exact input only; sqrtPriceLimitX96 and sauce price; partial fills; the reverts; the guard every leg needs. On Solana, a namespace per price-limited venue (OrcaWhirlpool.swap(pool, …), its accounts derived), the limit functions and trySwap, and every exact-input venue's forms. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
+description: Swapping inside a Sauce program with @sauce/router, the swap library, on EVM chains and Solana. One function per EVM venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin) and a try form of each, every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, and the pool families its callbacks service; exact input only; sqrtPriceLimitX96 and sauce price; partial fills; the reverts; the guard every leg needs. On Solana, a namespace per price-limited venue (Orca.Whirlpool.swap(pool, …), its accounts derived), Solana.swap(pool, …) at any of them, one swap returning 0 where the pool cannot trade, and every exact-input venue's forms. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
 ---
 
 # Swaps with `@sauce/router`
@@ -231,7 +231,7 @@ function main(
   maxPrice: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  const got = OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+  const got = Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
   if (got > 0) WSOL.transfer(to, got);
   return got;
 }
@@ -242,14 +242,21 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
   --args <pool> <recipient> 100000000 200000000000000000 400000000
 ```
 
-- **The namespaces** are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`,
-  `OrcaWhirlpool`, `Cropper`, `Defituna`, `Crema` and `Phoenix`, each with
-  `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`, which returns what arrived, and
-  `trySwap(…)`, the same arguments, returning `0` where `swap` reverts.
-  `sauce globals --chain solana` lists them.
-- **Each call compiles to that venue's function below** (`orcaWhirlpool`, `tryOrcaWhirlpool`), never
-  the all-venue one, keeping every check: the venue's program, the pool's owner, the pair, `minOut`.
-  A pool of another venue reverts on chain (`not an Orca whirlpool`).
+- **The namespaces** are each venue's protocol then its program: `Raydium.CLMM`,
+  `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`,
+  `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`, each with one
+  `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived; where the
+  pool cannot trade (below) it returns `0` having moved nothing, and below `minOut` the cook
+  reverts. `sauce globals --chain solana` lists them.
+- **Each call compiles to that venue's function below** (`orcaWhirlpool`), never the all-venue one,
+  keeping every check: the venue's program, the pool's owner, the pair, `minOut`. A pool of another
+  venue reverts on chain (`not an Orca whirlpool`).
+- **`Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`** is the same at a pool of
+  any of the nine, its venue read from the pool's owner as the program runs: for a program that
+  takes its pools as `main`'s arguments without knowing their venues
+  (`sauce-solana-distributed-swap`). It carries every venue's code. A pool given as the System
+  program, `11111111111111111111111111111111`, is an empty slot: its accounts are the System
+  program, and `swap` returns `0` for it.
 - **The pool and both tokens are known when the cook is built**: a `main` parameter declared
   `Address`, a 32-byte key written out, or a registered symbol. The pool's nine accounts are read
   from the pool on the cluster for the token paid; the trader's are the Pot's (the authority, its
@@ -265,14 +272,12 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
 ### The functions
 
 One function per venue whose swap stops at a price limit and leaves the rest of the input:
-`tryRaydiumClmm`, `tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`, `tryOrcaWhirlpool`,
-`tryCropper`, `tryDefituna`, `tryCrema` and `tryPhoenix` (an immediate-or-cancel order on its book),
-and `trySwap`, which takes a pool at any of them and reads its venue from the pool's owner. Each
-`try` form has a plain one (`raydiumClmm`, …, `phoenix`, and `swap`) that reverts where it returns
-`0`. Every one takes the same arguments:
+`raydiumClmm`, `pancakeswapClmm`, `byreal`, `stabbleClmm`, `orcaWhirlpool`, `cropper`, `defituna`,
+`crema` and `phoenix` (an immediate-or-cancel order on its book), and `swap`, which takes a pool at
+any of them and reads its venue from the pool's owner. Every one takes the same arguments:
 
 ```text
-trySwap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
+swap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
 ```
 
 | Argument    | What it is                                                                                                                                                                                                                                                                                                   |
@@ -282,7 +287,7 @@ trySwap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
 | `maxPrice`  | the most one unit bought may cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the pool's fee and stops where its last unit, fee paid, costs `maxPrice`; the rest of `amountIn` stays in `source`                                                               |
 | `recipient` | the token account the output lands in; Crema and Phoenix pay only into the authority's own. The function returns what it gained                                                                                                                                                                              |
 
-A `try` form returns `0` having moved nothing for a missing slot (the System program as its pool),
+Each returns `0` having moved nothing for a missing slot (the System program as its pool),
 no input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than
 one rate, an empty pool, a pool already past its limit, an input too small to buy one unit at the
 pool's price after its fee (dust), and a book with no offer within it. A swap that ran returns at
@@ -294,9 +299,9 @@ slot.
 
 Three more forms, for a program that wants less:
 
-- **At a limit in the pool's own terms**, `try<Venue>AtLimit` and its plain `<venue>AtLimit`, for
-  those nine and `tryInvariantAtLimit` and `tryOpenbookV2AtLimit`, and Manifest's book,
-  `tryManifest`, which has no limit: `(slot, trader, amountIn, limit, minOut, recipient)`, `limit`
+- **At a limit in the pool's own terms**, `<venue>AtLimit`, for those nine and `invariantAtLimit`
+  and `openbookV2AtLimit`, and Manifest's book, `manifest`, which has no limit:
+  `(slot, trader, amountIn, limit, minOut, recipient)`, `limit`
   the sqrt price the pool's swap takes (Phoenix's order price in ticks, OpenBook's
   `priceLots, orders`; `0` none, where the venue takes that). No fee is read, so an adaptive-fee
   whirlpool trades there, and `minOut` rides in the venue's own least-out field where it has one.
@@ -342,20 +347,19 @@ function main(
 ```
 
 A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
-`trySwap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
-keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
+`swap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
+keeps `swap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`).
 
 ## Exact input on Solana
 
 Every other Solana venue `@sauce/router` serves swaps exactly `amountIn`, with no price limit: the
-venue takes the whole input or the transaction fails. Each has four functions:
+venue takes the whole input or the transaction fails. Each has three functions:
 
 ```text
 raydiumCpSwapData(amountIn, minOut): bytes
 raydiumCpSwapCpi(program, accounts, source, amountIn, minOut): Uint256
 raydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
-tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
 ```
 
 The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `tokenSwapV1`,
@@ -368,7 +372,7 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
 
 | Venues                           | What to know                                                                                                                                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `solfiV1` through `goonfiV2`     | market makers pricing off their own oracle, quote or book; they refuse a swap on a quote gone stale, which a `try` form cannot see. SolFi v1's pools all hold an empty vault, its liquidity moved to SolFi v2 |
+| `solfiV1` through `goonfiV2`     | market makers pricing off their own oracle, quote or book; they refuse a swap on a quote gone stale, which a swap cannot see first. SolFi v1's pools all hold an empty vault, its liquidity moved to SolFi v2 |
 | `meteoraDbc` through `virtuals`  | bonding curves; Virtuals only sells its token                                                                                                                                                                 |
 | `xorca` through `heliumTreasury` | stake, deposit, unstake or redeem at the venue's own rate: xORCA only stakes, the liquid-unstake vault only unstakes, Huma only deposits, Helium's treasury only redeems                                      |
 
@@ -385,10 +389,9 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
 - **`slot`** is the venue's own accounts, its program first and the pool second, then the rest in
   the order the venue's comment in the library gives; a pool's accounts for each token come in the
   pool's own order, and the function reads which one is paid from `payMint`. **`trader`** and
-  **`recipient`** are the limit functions' own. The plain form returns what the recipient
-  received, held to `minOut` and at least 1.
-- **`try<Venue>`** returns `0` having moved nothing for a missing slot, no input, and what the venue
-  refuses that it can see first (swaps switched off, an empty side, dust).
+  **`recipient`** are the limit functions' own. It returns what the recipient received, held to
+  `minOut` and at least 1, or `0` having moved nothing for a missing slot, no input, and what the
+  venue refuses that it can see first (swaps switched off, an empty side, dust).
 - **Cost**, measured on the released engine: a `Data` form about 3,300 compute units more than its
   data written by hand, a `Cpi` form about 7,500 more, and the slot forms about 1,400 more for each
   account they read out of `slot` or `trader`.

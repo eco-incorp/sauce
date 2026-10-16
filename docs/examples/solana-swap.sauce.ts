@@ -2,7 +2,7 @@
 // than `maxPrice` for any unit, and send what arrived to `to`. The pool is main's argument, and
 // compiling adds every account the swap takes to main — the pool's nine, read from the pool when the
 // cook is built, and the Pot's own — so the command is given none. A pool already past `maxPrice` is
-// skipped (`trySwap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
+// skipped (`swap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
 //
 //   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <pool> <to> <amountIn> <maxPrice> <minOut>
@@ -25,7 +25,7 @@ function main(
   maxPrice: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  const got = OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+  const got = Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
   if (got > 0) WSOL.transfer(to, got);
   return got;
 }

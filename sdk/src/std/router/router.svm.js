@@ -9,26 +9,26 @@
 // limit. Every swap is EXACT INPUT up to the limit: nothing here can express an exact-output swap.
 // Every function takes RUN-TIME arguments. There are four forms of each venue's swap:
 //
-//   try<Venue>(slot, trader, amountIn, maxPrice, minOut, recipient)          at a price
-//   try<Venue>AtLimit(slot, trader, amountIn, limit, minOut, recipient)      at the pool's own limit
-//   <venue>Cpi(program, accounts, source, amountIn, limit, …)                its instruction alone
-//   <venue>Data(amountIn, limit, …)                                          its instruction's data
+//   <venue>(slot, trader, amountIn, maxPrice, minOut, recipient)          at a price
+//   <venue>AtLimit(slot, trader, amountIn, limit, minOut, recipient)      at the pool's own limit
+//   <venue>Cpi(program, accounts, source, amountIn, limit, …)             its instruction alone
+//   <venue>Data(amountIn, limit, …)                                       its instruction's data
 //
-// with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
-// it returns 0, and `trySwap`/`swap`, which take a pool at any of the nine venues of the first form
-// and read its venue from `pool.owner`. The first form is the nine venues' (Raydium CLMM,
+// and `swap`, which takes a pool at any of the nine venues of the first form and reads its venue
+// from `pool.owner`. The first form is the nine venues' (Raydium CLMM,
 // PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix); the
 // other three are theirs and Invariant's and OpenBook v2's, which take `priceLots` and `orders` in
-// place of `limit`; Manifest's swap takes no limit, so its functions (`tryManifest`, `manifest`,
-// `manifestCpi`, `manifestData`) take none. Orca has two data functions, its classic `swap`'s
+// place of `limit`; Manifest's swap takes no limit, so its functions (`manifest`, `manifestCpi`,
+// `manifestData`) take none. Orca has two data functions, its classic `swap`'s
 // (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`), and OpenBook a second that takes
-// the order in lots, divided already (`openbookV2LotsData`). The `try` forms return what the
-// recipient received; `…Cpi` what the paying account paid; `…Data` the bytes. Every form sends the
+// the order in lots, divided already (`openbookV2LotsData`). The first two forms return what the
+// recipient received, or 0 having moved nothing (SKIPS, below); `…Cpi` what the paying account
+// paid; `…Data` the bytes. Every form sends the
 // same instruction for the same amount, limit and floor, Orca's excepted: at a price every pool's
 // swap is `swap_v2`, and at its own limit a pool of two SPL Token mints takes the classic `swap`. The
-// `try…AtLimit` forms build it with `…Data`. The forms at a price write it themselves and check none
+// `…AtLimit` forms build it with `…Data`. The forms at a price write it themselves and check none
 // of its fields: their floor is 0 and their limit fits, so no check of `…Data`'s could fail there,
-// and every program calling `trySwap` would carry them. `…Cpi` writes the same bytes itself too,
+// and every program calling `swap` would carry them. `…Cpi` writes the same bytes itself too,
 // because a call into `…Data` would cost it about 2k compute units (Phoenix's excepted, which is
 // cheaper through `phoenixData`).
 //
@@ -112,8 +112,8 @@
 // takes at its own limit for a pool of two SPL Token mints (`swap_v2`, which names each mint and its
 // token program, for the rest, and at a price for every pool).
 //
-// TRY FORMS. A failed call into another program aborts the whole Solana transaction and cannot be
-// caught, so a Solana `try` form checks before anything moves: it returns 0 having moved nothing for
+// SKIPS. A failed call into another program aborts the whole Solana transaction and cannot be
+// caught, so a Solana swap here checks before anything moves: it returns 0 having moved nothing for
 // a missing slot (the System program as its pool), no input, a pool whose swaps are switched off, a
 // paused pool or a market not open for taking, a pool with no liquidity at its price, a pool already
 // at or past its limit, an input too small to buy one unit at the pool's price after its fee (the
@@ -127,7 +127,7 @@
 // foresee still aborts the transaction: a tick array missing from the slot, and an Invariant input
 // past its limit. A slot that is not the
 // pair, whose program is not the venue's or not the pool's owner, or whose pool no venue here owns
-// (`trySwap`: "not a supported venue's pool"; a venue's own function: "not a <venue> pool"), and a
+// (`swap`: "not a supported venue's pool"; a venue's own function: "not a <venue> pool"), and a
 // limit or a floor its order cannot carry, revert: those are the caller's, not the pool's state. Only
 // a missing slot, the System program itself as its pool, is skipped.
 //
@@ -139,12 +139,12 @@
 //
 // SIZE. A Solana program rides in transactions, so the arm shares code through functions (each
 // venue's data, its accounts from a slot, its checks, `clmmOrder`, `settled`) where the EVM arm keeps
-// each function flat, and only the functions a program calls are compiled into it. `trySwap` takes
+// each function flat, and only the functions a program calls are compiled into it. `swap` takes
 // any of the nine, so it carries all nine venues' code: a program calling it is about 4.4 KB, one
 // calling a single venue's function about 0.9 to 1.7 KB, its instruction alone about 0.4 to 0.5 KB,
-// its data alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `trySwap` is
+// its data alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `swap` is
 // for slots whose venue is only known when the program runs. Each venue's functions check its own program id, so a direct call never
-// signs into a program the caller names; only `trySwap`'s internal path relies on its one read of the
+// signs into a program the caller names; only `swap`'s internal path relies on its one read of the
 // pool's owner.
 //
 // No module-level `const` here: a compile-time define replaces a same-named `const` in every module,
@@ -243,7 +243,7 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 // Each venue's instruction data
 // ---------------------------------------------------------------------------------------------
 //
-// `<venue>Data` is a swap's instruction data alone, the encoding the `try` forms send: a caller
+// `<venue>Data` is a swap's instruction data alone, the encoding `<venue>AtLimit` sends: a caller
 // that keeps the venue's accounts and program itself (`@eco-incorp/sauce/svm`'s
 // `routerSvmAccountOrder` names them in order) calls `svm.call(program, [accounts…], <venue>Data(…))`,
 // the cheapest way to send it on chain. A program that knows every field but the amount when it is
@@ -915,7 +915,7 @@ function cpiOpenbookV2(
 //
 // Each writes its instruction itself, from `clmmOrder`'s bytes (Phoenix's from its ticks), and checks
 // none of its fields: its floor is 0 and its limit fits, so no check of `…Data`'s could fail here,
-// and every program calling `trySwap` would carry them. Its accounts are a slot's nine: Raydium's code
+// and every program calling `swap` would carry them. Its accounts are a slot's nine: Raydium's code
 // with no bitmap extension, and Orca's `swap_v2` for every pool. Each sends the bytes its `…Data`
 // writes for the same amount and limit and a floor of 0.
 // ---------------------------------------------------------------------------------------------
@@ -1265,8 +1265,8 @@ function settled(
 // ---------------------------------------------------------------------------------------------
 
 // A pool at any of the nine venues, or nothing: the venue is the program that owns the pool, and a
-// pool no venue here owns reverts. The `try` contract above.
-export function trySwap(
+// pool no venue here owns reverts. Skipped as SKIPS above says.
+export function swap(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1308,7 +1308,7 @@ export function trySwap(
     throw "not a supported venue's pool";
   }
   // `settled`, written out: the distributed swap calls this once per slot, and the call costs bytes
-  // every program that takes `trySwap` carries.
+  // every program that takes `swap` carries.
   if (svm.sload(trader[1], 64, 8).toLe() == held) {
     return 0;
   }
@@ -1317,26 +1317,12 @@ export function trySwap(
   return received;
 }
 
-// `trySwap`, or revert.
-export function swap(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = trySwap(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // ---------------------------------------------------------------------------------------------
 // One venue each
 // ---------------------------------------------------------------------------------------------
 
 // Raydium CLMM, CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK.
-export function tryRaydiumClmm(
+export function raydiumClmm(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1356,21 +1342,8 @@ export function tryRaydiumClmm(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function raydiumClmm(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryRaydiumClmm(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // PancakeSwap CLMM, HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq: Raydium's code.
-export function tryPancakeswapClmm(
+export function pancakeswapClmm(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1390,21 +1363,8 @@ export function tryPancakeswapClmm(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function pancakeswapClmm(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryPancakeswapClmm(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Byreal, REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2: Raydium's code, with fees a pool may add.
-export function tryByreal(
+export function byreal(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1424,21 +1384,8 @@ export function tryByreal(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function byreal(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryByreal(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Stabble CLMM, 6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6: Raydium's code.
-export function tryStabbleClmm(
+export function stabbleClmm(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1458,21 +1405,8 @@ export function tryStabbleClmm(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function stabbleClmm(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryStabbleClmm(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Orca Whirlpools, whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc.
-export function tryOrcaWhirlpool(
+export function orcaWhirlpool(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1492,22 +1426,9 @@ export function tryOrcaWhirlpool(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function orcaWhirlpool(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryOrcaWhirlpool(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Cropper, H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt: Orca's code. It needs every tick array its
 // walk reaches to exist.
-export function tryCropper(
+export function cropper(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1527,21 +1448,8 @@ export function tryCropper(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function cropper(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryCropper(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // DefiTuna, fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9.
-export function tryDefituna(
+export function defituna(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1561,21 +1469,8 @@ export function tryDefituna(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function defituna(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryDefituna(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Crema, CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR.
-export function tryCrema(
+export function crema(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1595,22 +1490,9 @@ export function tryCrema(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function crema(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryCrema(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Phoenix, PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY. Its checks cannot see the book: an order
 // whose book has no offer within the limit runs and fills nothing, and returns 0, having moved nothing.
-export function tryPhoenix(
+export function phoenix(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1630,35 +1512,22 @@ export function tryPhoenix(
   return settled(trader[1], recipient, held, before, minOut);
 }
 
-export function phoenix(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryPhoenix(slot, trader, amountIn, maxPrice, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // ---------------------------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------------------------
 // At a limit in the pool's own terms
 // ---------------------------------------------------------------------------------------------
 //
-// `try…AtLimit` and `…AtLimit` take a slot and the trader like the functions above, and the pool's
+// `…AtLimit` takes a slot and the trader like the functions above, and the pool's
 // own limit in place of `maxPrice`: no fee is read for it and no root taken, and the instruction is
 // the one a caller would build by hand for that limit, `minOut` in the venue's own floor where its
 // instruction has one. `…Cpi` is that instruction alone, on the accounts the caller lists in the
 // venue's own order: it checks nothing but the program, reads nothing but the paying account, and
-// returns what that account paid. `try…AtLimit` builds its data with the venue's `…Data`; `…Cpi`
+// returns what that account paid. `…AtLimit` builds its data with the venue's `…Data`; `…Cpi`
 // writes the same bytes itself, which costs it about 2k compute units less than calling `…Data`
 // (Phoenix's excepted).
 
-// The checks a Raydium-layout pool's `try…AtLimit` makes past its program and owner: swaps on, and
+// The checks a Raydium-layout pool's `…AtLimit` makes past its program and owner: swaps on, and
 // the pool able to trade toward the limit, dust judged at its config's rate (fees a Byreal pool adds
 // on top only make dust more likely).
 function canRaydium(
@@ -1710,7 +1579,7 @@ function canWhirlpool(
 
 // Raydium CLMM, CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK, at `limit`, its own
 // `sqrt_price_limit_x64` (0: the program's own bound).
-export function tryRaydiumClmmAtLimit(
+export function raydiumClmmAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1734,19 +1603,6 @@ export function tryRaydiumClmmAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiRaydium(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function raydiumClmmAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryRaydiumClmmAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // Raydium CLMM's `swap_v2` alone. `accounts` in its order: the authority, the pool's `AmmConfig`, the pool,
@@ -1779,7 +1635,7 @@ export function raydiumClmmCpi(
 }
 
 // PancakeSwap CLMM, HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq: Raydium's code.
-export function tryPancakeswapClmmAtLimit(
+export function pancakeswapClmmAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1803,19 +1659,6 @@ export function tryPancakeswapClmmAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiRaydium(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function pancakeswapClmmAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryPancakeswapClmmAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // PancakeSwap CLMM's `swap_v2` alone, `accounts` as `raydiumClmmCpi` takes them.
@@ -1846,7 +1689,7 @@ export function pancakeswapClmmCpi(
 
 // Byreal, REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2: Raydium's code. A limit in the pool's own
 // terms holds whatever fees the pool adds, so its pools with fees of their own trade here.
-export function tryByrealAtLimit(
+export function byrealAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1870,19 +1713,6 @@ export function tryByrealAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiRaydium(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function byrealAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryByrealAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // Byreal's `swap_v2` alone, `accounts` as `raydiumClmmCpi` takes them.
@@ -1912,7 +1742,7 @@ export function byrealCpi(
 }
 
 // Stabble CLMM, 6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6: Raydium's code.
-export function tryStabbleClmmAtLimit(
+export function stabbleClmmAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -1936,19 +1766,6 @@ export function tryStabbleClmmAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiRaydium(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function stabbleClmmAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryStabbleClmmAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // Stabble CLMM's `swap_v2` alone, `accounts` as `raydiumClmmCpi` takes them.
@@ -1982,7 +1799,7 @@ export function stabbleClmmCpi(
 // fee the pool charges, so an adaptive-fee pool trades here; it writes its oracle, the slot's
 // `extra`, which must then be writable, as it must for any pool its `swap_v2` takes (a Token-2022
 // mint), which declares the oracle writable whatever the fee.
-export function tryOrcaWhirlpoolAtLimit(
+export function orcaWhirlpoolAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2006,19 +1823,6 @@ export function tryOrcaWhirlpoolAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiWhirlpool(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function orcaWhirlpoolAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryOrcaWhirlpoolAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // A whirlpool's swap alone, A to B when `aToB`. `accounts` in its order: for the classic `swap` (both
@@ -2060,7 +1864,7 @@ export function orcaWhirlpoolCpi(
 
 // Cropper, H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt: Orca's code. Its program takes no 0 as a
 // limit: give it its own bound.
-export function tryCropperAtLimit(
+export function cropperAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2084,19 +1888,6 @@ export function tryCropperAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiCropper(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function cropperAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryCropperAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // Cropper's `swap` alone, `accounts` as a whirlpool's classic `swap` takes them.
@@ -2128,7 +1919,7 @@ export function cropperCpi(
 
 // DefiTuna, fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9, at `limit`, its own `sqrt_price_limit` (0:
 // the program's own bound).
-export function tryDefitunaAtLimit(
+export function defitunaAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2165,19 +1956,6 @@ export function tryDefitunaAtLimit(
   return settled(source, recipient, held, before, minOut);
 }
 
-export function defitunaAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryDefitunaAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // DefiTuna's `swap` alone, A to B when `aToB`. `accounts` in its order: token A's and token B's
 // token programs, the memo program, the authority, the pool, mint A, mint B, token A's and token B's
 // accounts, vault A, vault B and the three tick arrays.
@@ -2209,7 +1987,7 @@ export function defitunaCpi(
 
 // Crema, CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR, at `limit`, its own `sqrt_price_limit`,
 // which its program takes explicitly: give it its own bound, not 0.
-export function tryCremaAtLimit(
+export function cremaAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2249,19 +2027,6 @@ export function tryCremaAtLimit(
   return settled(source, recipient, held, before, minOut);
 }
 
-export function cremaAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryCremaAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Crema's `swap` alone, A to B when `aToB`. `accounts` in its order: the `clmm_config`, the pool,
 // mint A, mint B, token A's and token B's accounts, vault A, vault B, the tick-array map, the
 // authority, SPL Token, then the tick arrays its map marks, in walk order.
@@ -2295,7 +2060,7 @@ export function cremaCpi(
 // market's ticks (0: none, an order that takes the book at any price, as far as the input goes).
 // An order whose book has no offer within it fills nothing, and returns 0, having moved nothing. Its
 // instruction carries no least out: the recipient's balance is held to `minOut`.
-export function tryPhoenixAtLimit(
+export function phoenixAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2325,19 +2090,6 @@ export function tryPhoenixAtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiPhoenix(slot, trader, paysBase, amountIn, lot, ticks, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function phoenixAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  ticks: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryPhoenixAtLimit(slot, trader, amountIn, ticks, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // Phoenix's immediate-or-cancel order alone, selling base when `paysBase`. `accounts` in its order:
@@ -2375,7 +2127,7 @@ export function phoenixCpi(
 // X). Its program does not stop there: a swap that reaches the limit with input left is refused
 // (custom error 0x1778), and the whole transaction with it, so `amountIn` must fit inside the limit.
 // Its instruction carries no least out: the recipient's balance is held to `minOut`.
-export function tryInvariantAtLimit(
+export function invariantAtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2417,19 +2169,6 @@ export function tryInvariantAtLimit(
   return settled(source, recipient, held, before, minOut);
 }
 
-export function invariantAtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  limit: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryInvariantAtLimit(slot, trader, amountIn, limit, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
-}
-
 // Invariant's `swap` alone, selling token X when `xToY`. `accounts` in its order: the program's state,
 // the pool, its tickmap, the X and Y token accounts, the X and Y reserves, the authority, the
 // program's authority, SPL Token, then the ticks the swap may cross. It carries no least out.
@@ -2459,7 +2198,7 @@ export function invariantCpi(
 
 // Manifest, MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms: its swap takes no price limit, so neither do
 // these; it takes the book as far as the input goes. `minOut` is its own least out.
-export function tryManifest(
+export function manifest(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2483,18 +2222,6 @@ export function tryManifest(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiManifest(slot, trader, amountIn, minOut, paysBase, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function manifest(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryManifest(slot, trader, amountIn, minOut, recipient);
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // Manifest's `Swap` alone, selling base when `paysBase`. `accounts` in its order: the authority (it
@@ -2530,7 +2257,7 @@ export function manifestCpi(
 // the market's lots (0: a market order, at any price), matching at most `orders` resting orders. An
 // order whose book has no offer within it fills nothing, and returns 0. Its instruction carries no
 // least out: the recipient's balance is held to `minOut`.
-export function tryOpenbookV2AtLimit(
+export function openbookV2AtLimit(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2557,28 +2284,6 @@ export function tryOpenbookV2AtLimit(
   const before = svm.sload(recipient, 64, 8).toLe();
   cpiOpenbookV2(slot, trader, amountIn, priceLots, orders, paysBase, recipient);
   return settled(source, recipient, held, before, minOut);
-}
-
-export function openbookV2AtLimit(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  priceLots: Uint256,
-  orders: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const received = tryOpenbookV2AtLimit(
-    slot,
-    trader,
-    amountIn,
-    priceLots,
-    orders,
-    minOut,
-    recipient,
-  );
-  require(received > 0, "nothing swapped");
-  return received;
 }
 
 // OpenBook v2's `place_take_order` alone, selling base when `paysBase`. `accounts` in its order: the
@@ -2633,10 +2338,9 @@ export function openbookV2Cpi(
 // =============================================================================================
 //
 // Every function below is a MARKET ORDER at one pool: it pays exactly `amountIn` and takes what the
-// pool gives for it, with no price limit, or the transaction fails. Four forms of each venue:
+// pool gives for it, with no price limit, or the transaction fails. Three forms of each venue:
 //
 //   <venue>(slot, trader, amountIn, minOut, recipient): Uint256
-//   try<Venue>(slot, trader, amountIn, minOut, recipient): Uint256
 //   <venue>Cpi(program, accounts, source, amountIn, …, minOut, <direction>): Uint256
 //   <venue>Data(amountIn, …, minOut, <direction>): bytes
 //
@@ -2649,16 +2353,16 @@ export function openbookV2Cpi(
 // paying the pool's first token, `paysBase` the base token, `xToY` token X), and absent where the
 // accounts alone say it. Every form sends the same bytes for the same amount, floor and direction.
 //
-// `<venue>` and `try<Venue>` take a slot instead and read the direction from it: `trader` and
+// `<venue>` takes a slot instead and reads the direction from it: `trader` and
 // `recipient` are the limit functions' own, and `slot` is the venue's own accounts, its program
 // first, the pool second, then the rest in the order each venue's comment gives. Where a pool keeps
 // an account per token (its vaults, a fee account), the slot carries both in the POOL's order and
 // the function works out which is paid from `payMint`, so one slot serves both ways. Each token's
-// program is the one that owns its mint (`tokenProgram` or `token2022`). `<venue>` swaps, or the
+// program is the one that owns its mint (`tokenProgram` or `token2022`). `<venue>` returns 0, having
+// moved nothing, for what it can see before the swap: a missing slot (the System program as its
+// pool), no input, and the venue's own refusals its comment names; otherwise it swaps, or the
 // transaction fails, and returns what the recipient received, held to `minOut` and at least 1, which
-// it also writes into the venue's least out; `try<Venue>` returns 0, having moved nothing, for what
-// it can see before the swap: a missing slot (the System program as its pool), no input, and the
-// venue's own refusals its comment names; otherwise it is `<venue>`. A function reading its accounts
+// it also writes into the venue's least out. A function reading its accounts
 // out of `slot` and `trader` cannot hand over more than sixteen: a venue whose swap takes more has
 // only its `Cpi` and `Data` forms.
 //
@@ -2715,22 +2419,8 @@ export function raydiumCpSwapData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function raydiumCpSwap(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapRaydiumCp(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips swaps switched off (status bit 2), a pool not open yet, an empty side, and dust.
-export function tryRaydiumCpSwap(
+export function raydiumCpSwap(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2833,22 +2523,8 @@ export function gammaData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function gamma(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapGamma(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips swaps switched off (status bit 2), a pool not open yet, an empty side, and dust.
-export function tryGamma(
+export function gamma(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -2932,23 +2608,9 @@ export function raydiumAmmV4Data(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function raydiumAmmV4(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapRaydiumAmmV4(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a pool that does not swap (a status other than 1, 6 or 7, or 7 before its open time), an
 // empty side, and dust.
-export function tryRaydiumAmmV4(
+export function raydiumAmmV4(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3097,24 +2759,8 @@ export function orcaLegacyTokenSwapData(amountIn: Uint256, minOut: Uint256): byt
   return ix.concat(word.toBytesLe(16));
 }
 
-export function orcaLegacyTokenSwap(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0x7e54771a57a6f14ca9e402d54aee45f7378aca365c7b169a7ec83f5182b298f0, "not an Orca legacy pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryOrcaLegacyTokenSwap(
+export function orcaLegacyTokenSwap(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3171,24 +2817,8 @@ export function tokenSwapV1Data(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function tokenSwapV1(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0x06a53aae36bf486fb5d938264ee645d74b6016e0f47aebb3ec16438bf7bffbe1, "not a Token Swap pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryTokenSwapV1(
+export function tokenSwapV1(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3245,24 +2875,8 @@ export function orcaV1Data(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function orcaV1(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0xbd2e8d50bc09278e5e14bf65629a4896f5819ecac40f50c84b757847ba9464dc, "not an Orca v1 pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryOrcaV1(
+export function orcaV1(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3319,24 +2933,8 @@ export function penguinData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function penguin(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0x05c01c06e46f4190c7755e2c25ed0cd6b204441e1d128b79df6118292787613c, "not a Penguin pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryPenguin(
+export function penguin(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3393,24 +2991,8 @@ export function stepnData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function stepn(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0xbe49a1eeb81bf889c158fd8b7496ff9141d4aa433eae3948d0d8488f78951b78, "not a STEPN pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryStepn(
+export function stepn(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3467,24 +3049,8 @@ export function sarosData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function saros(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0x0684da16a689c2c3896a8411715be9432eec1ca71a1ce2087286c67677cf65bd, "not a Saros pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function trySaros(
+export function saros(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3542,24 +3108,8 @@ export function fluxbeamData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function fluxbeam(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0xd500c8ab3ffad0a86bab5f536531c6dd5e62b0626d33cdeddf82ead7eec50e46, "not a Fluxbeam pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap2022(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryFluxbeam(
+export function fluxbeam(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3617,24 +3167,8 @@ export function dexlabData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function dexlab(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0xb8f1c03e5ed760c8ed35ab17b673ccf00f9f3a9fca650c81e2c66f078a16b1e3, "not a Dexlab pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTokenSwap2022(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an uninitialized pool, an empty side, and dust.
-export function tryDexlab(
+export function dexlab(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3734,22 +3268,8 @@ export function meteoraDammV2Data(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function meteoraDammV2(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapMeteoraDammV2(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a disabled pool (pool_status) and one with no liquidity.
-export function tryMeteoraDammV2(
+export function meteoraDammV2(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3845,22 +3365,8 @@ export function meteoraDammV1Data(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function meteoraDammV1(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapMeteoraDammV1(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a disabled pool (`enabled` cleared).
-export function tryMeteoraDammV1(
+export function meteoraDammV1(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -3952,22 +3458,8 @@ export function aldrinData(amountIn: Uint256, minOut: Uint256, paysBase: bool): 
   return ix.concat(word.toBytesLe(17));
 }
 
-export function aldrin(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapAldrin(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side, and dust.
-export function tryAldrin(
+export function aldrin(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4066,22 +3558,8 @@ export function omnipairData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function omnipair(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapOmnipair(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side, and dust.
-export function tryOmnipair(
+export function omnipair(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4174,22 +3652,8 @@ export function saberData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function saber(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapSaber(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a paused pool and an empty side.
-export function trySaber(
+export function saber(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4282,23 +3746,9 @@ export function saberDecimalsWrapperData(amountIn: Uint256, aToB: bool): bytes {
   return ix.concat(amount.toBytesLe(8));
 }
 
-export function saberDecimalsWrapper(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapSaberDecimalsWrapper(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a withdrawal the vault cannot pay at the wrapper's rate: `amountIn ÷ multiplier` underlying
 // units, nothing or past the vault's balance.
-export function trySaberDecimalsWrapper(
+export function saberDecimalsWrapper(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4405,24 +3855,8 @@ export function stabbleStableSwapData(amountIn: Uint256, minOut: Uint256): bytes
   return ix.concat(word.toBytesLe(16));
 }
 
-export function stabbleStableSwap(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0x0d0cc1f8ef8deeaf90449e237f383c976e36bd53652d3679e0118d158b731e42, "not a Stabble stable pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapStabble(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an inactive pool and an empty side.
-export function tryStabbleStableSwap(
+export function stabbleStableSwap(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4480,24 +3914,8 @@ export function stabbleWeightedSwapData(amountIn: Uint256, minOut: Uint256): byt
   return ix.concat(word.toBytesLe(16));
 }
 
-export function stabbleWeightedSwap(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  require(slot[0].address ==
-    0x0d0cc1f637510d78a412fc17cf986f99cec3e78884317596d2a84c14e2565535, "not a Stabble weighted pool");
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapStabble(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an inactive pool and an empty side.
-export function tryStabbleWeightedSwap(
+export function stabbleWeightedSwap(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4574,22 +3992,8 @@ export function mercurialData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(16));
 }
 
-export function mercurial(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapMercurial(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryMercurial(
+export function mercurial(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4709,22 +4113,8 @@ export function perenaData(
   return ix.concat(word.toBytesLe(18));
 }
 
-export function perena(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapPerena(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a paused pool (its status odd) and an empty side.
-export function tryPerena(
+export function perena(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -4820,22 +4210,8 @@ export function metadaoFutarchyData(amountIn: Uint256, minOut: Uint256, paysBase
   return ix.concat(word.toBytesLe(17));
 }
 
-export function metadaoFutarchy(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapMetadaoFutarchy(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a DAO not in its spot state (a conditional market runs another routine) and an empty side.
-export function tryMetadaoFutarchy(
+export function metadaoFutarchy(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5138,8 +4514,8 @@ export function sarosDlmmCpi(
 }
 
 // Proprietary and oracle-priced venues. Each prices off its market maker's own oracle or quote, which a
-// keeper keeps fresh, and refuses a swap on a quote gone stale: a `try` form cannot see that, so a
-// stale quote fails the transaction.
+// keeper keeps fresh, and refuses a swap on a quote gone stale: a swap cannot see that before it
+// runs, so a stale quote fails the transaction.
 
 // SolFi v2, SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF: `swap`, priced off its oracle and the
 // program's
@@ -5193,22 +4569,8 @@ export function solfiV2Data(amountIn: Uint256, minOut: Uint256, aToB: bool): byt
   return ix.concat(word.toBytesLe(17));
 }
 
-export function solfiV2(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapSolfiV2(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function trySolfiV2(
+export function solfiV2(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5316,22 +4678,8 @@ export function hadronData(amountIn: Uint256, minOut: Uint256, aToB: bool): byte
   return ix.concat(word.toBytesLe(25));
 }
 
-export function hadron(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapHadron(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryHadron(
+export function hadron(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5440,22 +4788,8 @@ export function taurusfiData(amountIn: Uint256): bytes {
   return ix.concat(word.toBytesLe(10));
 }
 
-export function taurusfi(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTaurusfi(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryTaurusfi(
+export function taurusfi(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5556,22 +4890,8 @@ export function riptideData(amountIn: Uint256, aToB: bool): bytes {
   return ix.concat(word.toBytesLe(11));
 }
 
-export function riptide(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapRiptide(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryRiptide(
+export function riptide(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5670,22 +4990,8 @@ export function denaliData(amountIn: Uint256, minOut: Uint256, aToB: bool): byte
   return ix.concat(word.toBytesLe(17));
 }
 
-export function denali(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapDenali(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryDenali(
+export function denali(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5779,22 +5085,8 @@ export function gavelData(amountIn: Uint256, minOut: Uint256, paysBase: bool): b
   return word.toBytesLe(19);
 }
 
-export function gavel(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapGavel(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryGavel(
+export function gavel(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -5895,22 +5187,8 @@ export function tesseravData(amountIn: Uint256, minOut: Uint256): bytes {
   return ix.concat(word.toBytesLe(17));
 }
 
-export function tesserav(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTesserav(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryTesserav(
+export function tesserav(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6007,22 +5285,8 @@ export function flintData(amountIn: Uint256): bytes {
   return ix.concat(word.toBytesLe(10));
 }
 
-export function flint(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapFlint(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryFlint(
+export function flint(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6133,22 +5397,8 @@ export function deriverseData(
   return word.toBytesLe(32);
 }
 
-export function deriverse(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapDeriverse(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryDeriverse(
+export function deriverse(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6259,22 +5509,8 @@ export function goonfiV2Data(amountIn: Uint256, minOut: Uint256, aToB: bool): by
   return word.toBytesLe(19);
 }
 
-export function goonfiV2(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapGoonfiV2(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryGoonfiV2(
+export function goonfiV2(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6383,22 +5619,8 @@ export function meteoraDbcData(amountIn: Uint256, minOut: Uint256): bytes {
   return swap.concat(word.toBytesLe(16));
 }
 
-export function meteoraDbc(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapMeteoraDbc(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryMeteoraDbc(
+export function meteoraDbc(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6500,22 +5722,8 @@ export function trendsData(amountIn: Uint256, minOut: Uint256): bytes {
   return swap.concat(word.toBytesLe(16));
 }
 
-export function trends(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapTrends(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryTrends(
+export function trends(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6624,22 +5832,8 @@ export function heavenData(amountIn: Uint256, minOut: Uint256, aToB: bool): byte
   return ix.concat(word.toBytesLe(20));
 }
 
-export function heaven(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapHeaven(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryHeaven(
+export function heaven(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6736,22 +5930,8 @@ export function virtualsData(amountIn: Uint256, minOut: Uint256): bytes {
   return sell.concat(word.toBytesLe(16));
 }
 
-export function virtuals(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapVirtuals(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function tryVirtuals(
+export function virtuals(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -6964,22 +6144,8 @@ export function xorcaData(amountIn: Uint256): bytes {
   return stake.concat(word.toBytesLe(8));
 }
 
-export function xorca(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapXorca(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips nothing past a missing slot and no input: the stake mints what it is paid for.
-export function tryXorca(
+export function xorca(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -7063,22 +6229,8 @@ export function solayerData(amountIn: Uint256, aToB: bool): bytes {
   return ix.concat(word.toBytesLe(8));
 }
 
-export function solayer(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapSolayer(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an undelegation the vault holds nothing for.
-export function trySolayer(
+export function solayer(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -7201,22 +6353,8 @@ export function voltrData(amountIn: Uint256, aToB: bool): bytes {
   return aToB ? deposit.concat(word.toBytesLe(8)) : withdraw.concat(word.toBytesLe(8), inLp);
 }
 
-export function voltr(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapVoltr(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips a withdrawal its idle account holds nothing for.
-export function tryVoltr(
+export function voltr(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -7313,22 +6451,8 @@ export function vaultLiquidUnstakeData(amountIn: Uint256): bytes {
   return unstake.concat(word.toBytesLe(9));
 }
 
-export function vaultLiquidUnstake(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapVaultLiquidUnstake(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips nothing past a missing slot and no input.
-export function tryVaultLiquidUnstake(
+export function vaultLiquidUnstake(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -7444,22 +6568,8 @@ export function hyloStabilityPoolData(amountIn: Uint256, aToB: bool): bytes {
   return ix.concat(word.toBytesLe(9));
 }
 
-export function hyloStabilityPool(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapHyloStabilityPool(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips nothing past a missing slot and no input.
-export function tryHyloStabilityPool(
+export function hyloStabilityPool(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -7557,22 +6667,8 @@ export function humaData(amountIn: Uint256): bytes {
   return deposit.concat(word.toBytesLe(8), commitment);
 }
 
-export function huma(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapHuma(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips nothing past a missing slot and no input.
-export function tryHuma(
+export function huma(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -7660,22 +6756,8 @@ export function heliumTreasuryData(amountIn: Uint256, minOut: Uint256): bytes {
   return redeem.concat(word.toBytesLe(16));
 }
 
-export function heliumTreasury(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapHeliumTreasury(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty treasury.
-export function tryHeliumTreasury(
+export function heliumTreasury(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
@@ -8078,22 +7160,8 @@ export function solfiV1Data(amountIn: Uint256, minOut: Uint256, aToB: bool): byt
   return swap.concat(word.toBytesLe(17));
 }
 
-export function solfiV1(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const before = svm.sload(recipient, 64, 8).toLe();
-  swapSolfiV1(slot, trader, amountIn, minOut, recipient);
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
 // Skips an empty side.
-export function trySolfiV1(
+export function solfiV1(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,

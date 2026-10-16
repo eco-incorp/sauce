@@ -474,7 +474,7 @@ async function resolveSlot(
       ? argument(parsed.pool.param, ctx)
       : address((parsed.pool as { key: string }).key);
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
-  // An empty slot, which `@sauce/router`'s `trySwap` skips: nothing to read.
+  // An empty slot, which `@sauce/router`'s `swap` skips: nothing to read.
   if (pool === SYSTEM_PROGRAM) {
     return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
   }

@@ -1,7 +1,7 @@
 // Buys WSOL with up to `amountIn` of the Pot's USDC at one Orca whirlpool, never paying more than
 // `maxPrice` for any unit, and forwards what arrived to `to`. The pool is main's argument: compiling
 // adds its nine accounts to main, read from the pool on the cluster when the cook is built, with the
-// Pot's own, so the command is given none. A pool already past `maxPrice` is skipped (`trySwap`
+// Pot's own, so the command is given none. A pool already past `maxPrice` is skipped (`swap`
 // returns 0, and nothing moves); below `minOut` the cook reverts.
 //
 //   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
@@ -25,7 +25,7 @@ function main(
   maxPrice: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  const got = OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+  const got = Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
   if (got > 0) WSOL.transfer(to, got);
   return got;
 }

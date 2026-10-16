@@ -245,15 +245,15 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     const width = Math.max(0, ...globals.venues.map((venue) => venue.namespace.length));
     text.push(
       "",
-      `Venues (${globals.venues.length}): <Venue>.swap(pool, tokenIn, tokenOut, amountIn, ` +
-        "maxPrice, minOut), and trySwap(…), which returns 0 where swap reverts; the pool's " +
-        "accounts, and the Pot's, are derived when the cook is built",
+      `Venues (${globals.venues.length}): <Protocol>.<Program>.swap(pool, tokenIn, tokenOut, ` +
+        "amountIn, maxPrice, minOut), which returns 0 having moved nothing where the pool cannot " +
+        "trade and reverts below minOut; the pool's accounts, and the Pot's, are derived when the " +
+        "cook is built",
       ...globals.venues.map(
         (venue) => `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name})`,
       ),
-      "  Solana.swap(…) and Solana.trySwap(…) take a pool of any of them, its venue read from the " +
-        "pool's owner as the program runs; the System Program as the pool is an empty slot, which " +
-        "trySwap skips",
+      "  Solana.swap(…) takes a pool of any of them, its venue read from the pool's owner as the " +
+        "program runs; the System Program as the pool is an empty slot, which it skips",
       "Protocols: none. Protocol namespaces are EVM contracts.",
     );
   } else if (showProtocols) {
