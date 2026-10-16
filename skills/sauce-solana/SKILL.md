@@ -539,8 +539,10 @@ only as they are now.
   delta.
 - **The Pot's own account passed as its token account.** `pot` is the Pot; its USDC is `pot:USDC`.
 - **An SPL derivation for a Token-2022 account.** An ATA derives under the mint's own token program.
-- **`--fund` or `sauce intent publish` on Solana.** Both are EVM only: fund the Pot's token account by
-  a transfer; open intents from Ethereum or Base (`sauce-intents`).
+- **`--fund` on Solana.** It is EVM only: fund the Pot's token account by a transfer.
+- **A program on Solana opening an intent.** A program running on Solana does not open one: an
+  intent starts on Solana from a wallet, `sauce intent publish <file> --chain solana --keypair
+<keypair>` (`sauce-intents`).
 - **A program past 1,232 bytes sent by another tool unstaged.** Use `sauce run`, or the plan
   `sauce tx` prints.
 

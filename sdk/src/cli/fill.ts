@@ -60,6 +60,7 @@ import { assumeTokenBalance } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
 import {
   compileProgram,
+  lowerProgram,
   kitchenAddress,
   type CliFiles,
   unapproved,
@@ -88,6 +89,7 @@ import {
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf } from "./receipt.js";
 import { knowIntents } from "./keep.js";
+import { svmRpc } from "./lifecycle-svm.js";
 import { requireSupported } from "./support.js";
 
 /** The solver a rehearsal fills from when none is named: an address nobody holds the key of. */
@@ -198,13 +200,10 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
 
 /** The intents the file opens, each one a solver could fill from what the file says. */
 export function fillTargets(input: ProgramInput, files: CliFiles): readonly FillTarget[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `sauce intent fill simulates intents an EVM chain opens, and ${input.chain.slug} is not one: ` +
-        "the eco-routes Portal this SDK publishes through is EVM only",
-    );
-  }
-  const intents = compileProgram(input, files).intents;
+  // From Solana only the intents are built: a wallet publishes them (`publish-svm.ts`).
+  const intents = (
+    input.chain.kind === "svm" ? lowerProgram(input, files) : compileProgram(input, files)
+  ).intents;
   if (intents.length === 0) {
     throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);
   }
@@ -329,7 +328,13 @@ async function rehearseFill(input: FillInput, target: FillTarget): Promise<Fill>
   const chain = target.destination;
   const client = await destinationClient(input, target);
   const sourceUrl = input.sourceEndpointOf?.(target.source);
-  const source = sourceUrl === undefined ? undefined : await connect(sourceUrl, target.source);
+  // An intent Solana published is checked against Solana's HyperProver, read there.
+  const svmSource =
+    sourceUrl === undefined || target.source.kind !== "svm" ? undefined : svmRpc(sourceUrl);
+  const source =
+    sourceUrl === undefined || svmSource !== undefined
+      ? undefined
+      : await connect(sourceUrl, target.source);
   const sending = input.send !== undefined;
   const solver = input.send?.account.address ?? input.solver ?? DEFAULT_SOLVER;
   const plan = await planFill(client, target.intent, {
@@ -337,6 +342,7 @@ async function rehearseFill(input: FillInput, target: FillTarget): Promise<Fill>
     ...(input.claimant === undefined ? {} : { claimant: input.claimant }),
     ...(input.prove === undefined ? {} : { prove: input.prove }),
     ...(source === undefined ? {} : { source }),
+    ...(svmSource === undefined ? {} : { svmSource }),
   });
   const notes = [...plan.notes];
   const overrides: StateOverride[number][] = [];

@@ -146,7 +146,10 @@ export async function svmProgramExists(rpc: SvmRpc, program: SvmAddress): Promis
 const portalCode = new Map<string, Uint8Array>();
 
 /** An upgradeable program's ELF (its ProgramData past the 45-byte header), read once per id. */
-async function programCode(rpc: SvmRpc, program: SvmAddress): Promise<Uint8Array | undefined> {
+export async function programCode(
+  rpc: SvmRpc,
+  program: SvmAddress,
+): Promise<Uint8Array | undefined> {
   const cached = portalCode.get(program);
   if (cached !== undefined) {
     // Least recently used goes first: a hit moves to the end.
