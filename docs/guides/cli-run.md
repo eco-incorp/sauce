@@ -233,6 +233,12 @@ under `--json`, which gives the moves as `moves`, each with `fromRole` and `toRo
 named by its role, `mint` and `burn` for the zero address, with its short address the first time
 and alone when nothing names it.
 
+A program that opens an intent shows it too. The reward it pays into the intent's vault is a move
+to `vault of intent 0x1234…`, noted as the intent's reward, and the Portal's announcement becomes
+an entry under `Intents published:`: the intent's hash and its destination, how many calls its
+route makes and what the solver delivers, and its reward, with when it becomes refundable and the
+vault that holds it. `--json` lists them as `intents`.
+
 An endpoint without `eth_simulateV1` falls back to `eth_call` with state overrides. A Pot that is
 not deployed is then put in place as its deployment would leave it: an `eth_call` creation runs the
 real `Kitchen.deployPot` and returns the Pot's code, and the cook runs from the owner against that
