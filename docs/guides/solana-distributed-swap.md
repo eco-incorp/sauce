@@ -454,9 +454,18 @@ starts paying the lower-key token, higher starts paying the other. An array is t
 of `["tick_array", pool, start]` under the venue's program, `start` as a big-endian i32, and spans
 60 ticks times the pool's tick spacing. **This swap loads every account given as a tick array**, so
 all three must exist: a pool with fewer than three that way fills the rest with its arrays the
-other way, or with arrays holding no liquidity, which the swap loads and never walks into. A pool
-whose price is far from 1 may also need its bitmap extension, the program address of
-`["pool_tick_array_bitmap_extension", pool]`, in one of the three.
+other way, or with arrays holding no liquidity, which the swap loads and never walks into.
+
+The pool's own bitmap reaches 512 arrays each way from tick 0. A pool priced past that (tick
+spacing 1 and a price past tick ±30,720: PancakeSwap's SPCX_US/USDC pool, at tick 49,856) keeps
+its arrays' bits in its bitmap extension, the program address of
+`["pool_tick_array_bitmap_extension", pool]`: from 40, 14 bitmaps of 512 arrays (64 bytes each)
+past the pool's own, upward; from 936, the same downward. Bitmap `k` holds the array starting at
+`(512 × (k + 1) + i) × 60 × spacing` at bit `i` upward, and the array starting at
+`−(512 × (k + 1) + 512 − i) × 60 × spacing` at bit `i` downward (bit 0 the lowest start, at a whole
+multiple of 512 arrays). Its swap takes the extension wherever it is among the tick arrays, and
+without it fails the whole transaction (`MissingTickArrayBitmapExtensionAccount`), so the slot of
+such a pool is the extension in the first place, then its two nearest arrays that hold liquidity.
 
 ### Orca Whirlpools and Cropper
 

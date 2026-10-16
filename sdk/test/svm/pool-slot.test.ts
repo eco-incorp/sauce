@@ -3,7 +3,7 @@
  * mainnet held it (`venue-fixture.ts`): the nine accounts, paying either token, are the fixture's
  * own — the slot the distributed swap's suites run on these pools.
  */
-import { address, type Address } from "@solana/kit";
+import { address, getAddressEncoder, type Address } from "@solana/kit";
 
 import { requireChain } from "../../src/chains/canonical.js";
 import {
@@ -12,8 +12,27 @@ import {
   type SvmAccountNameContext,
 } from "../../src/svm/account-names.js";
 import { SVM_SLOT_PARTS, svmPoolSlot, svmSlotAccounts } from "../../src/svm/pool-slot.js";
+import { memoizedGetProgramDerivedAddress } from "../../src/svm/venues/pda-memo.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import { BYTES, SNAPSHOT, pool, USDC, USDT, WSOL, key } from "./venue-fixture.js";
+
+const SPCX_US = address("SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb");
+
+/** A Raydium-layout pool's tick array starting at `start`, and its bitmap extension. */
+const tickArray = async (p: { program: Address; pool: Address }, start: number) => {
+  const seed = new Uint8Array(4);
+  new DataView(seed.buffer).setInt32(0, start, false);
+  return memoizedGetProgramDerivedAddress(p.program, [
+    new TextEncoder().encode("tick_array"),
+    new Uint8Array(getAddressEncoder().encode(p.pool)),
+    seed,
+  ]);
+};
+const bitmapExtension = (p: { program: Address; pool: Address }) =>
+  memoizedGetProgramDerivedAddress(p.program, [
+    new TextEncoder().encode("pool_tick_array_bitmap_extension"),
+    new Uint8Array(getAddressEncoder().encode(p.pool)),
+  ]);
 
 /** The fixture's accounts, as an owner-aware loader reads them. */
 const load: OwnedAccountLoader = async (at) => {
@@ -34,6 +53,9 @@ describe("svmPoolSlot", () => {
     ["defituna-sol-usdc", WSOL, USDC],
     ["crema-sol-usdc", WSOL, USDC],
     ["phoenix-sol-usdc", WSOL, USDC],
+    ["raydium-clmm-spcx-usdc", SPCX_US, USDC],
+    ["byreal-spcx-usdc", SPCX_US, USDC],
+    ["pancakeswap-clmm-spcx-usdc", SPCX_US, USDC],
   ] as const)("%s: the slot paying either token is the fixture's", async (name, a, b) => {
     const p = pool(name);
     // The lower-key token pays toward the falling price.
@@ -160,6 +182,71 @@ describe("svmPoolSlot", () => {
         WSOL,
       ),
     ).rejects.toThrow("no bin array holds liquidity below its active bin");
+  });
+
+  it("takes a pool priced past its own bitmap with its bitmap extension first, then the arrays it marks", async () => {
+    // PancakeSwap's SPCX_US/USDC pool: tick spacing 1, so its own bitmap marks the arrays starting
+    // in [-30720, 30720), and its price, at tick 49856, is past it. The extension's first positive
+    // bitmap marks arrays 263, 278, 289, 319, 322, 323, … of 60 ticks each, from 30720.
+    const p = pool("pancakeswap-clmm-spcx-usdc");
+    const data = BYTES.get(p.pool)!;
+    const view = new DataView(data.buffer, data.byteOffset);
+    expect([view.getUint16(235, true), view.getInt32(269, true)]).toEqual([1, 49856]);
+    const extension = await bitmapExtension(p);
+    expect(p.more).toEqual([extension]);
+    const at = (index: number) => tickArray(p, 30720 + 60 * index);
+    // Paying USDC the price rises: from its array at 49800, which holds nothing, up to the marked
+    // 49860 and 50040. Paying SPCX_US it falls: to 48060 and 47400.
+    expect((await svmPoolSlot(load, p.pool, USDC)).ticks).toEqual([
+      extension,
+      await at(319),
+      await at(322),
+    ]);
+    expect((await svmPoolSlot(load, p.pool, SPCX_US)).ticks).toEqual([
+      extension,
+      await at(289),
+      await at(278),
+    ]);
+    // With no extension there, the pool's swap cannot run: its slot is refused, never half made.
+    const without: OwnedAccountLoader = async (at) => (at === extension ? null : load(at));
+    await expect(svmPoolSlot(without, p.pool, USDC)).rejects.toThrow(
+      "its price is past its own tick bitmap, and it has no bitmap extension",
+    );
+  });
+
+  it("reads an extension's negative bitmaps as Raydium does: the array 60 ticks under -30720 is bit 511", async () => {
+    // Raydium's own arithmetic (`TickArrayBitmapExtension::get_bitmap_offset` and
+    // `tick_array_offset_in_bitmap`): past -30720 at tick spacing 1, the first negative bitmap holds
+    // -30780 at bit 511 down to -61440 at bit 0, and the second -61500 at bit 511.
+    const p = pool("pancakeswap-clmm-spcx-usdc");
+    const extension = await bitmapExtension(p);
+    const priced = new Uint8Array(BYTES.get(p.pool)!);
+    new DataView(priced.buffer).setInt32(269, -40000, true); // in the array at -40020
+    const marks = new Uint8Array(BYTES.get(extension)!);
+    marks.fill(0, 40);
+    const mark = (level: number, bit: number) =>
+      (marks[936 + 64 * level + (bit >> 3)]! |= 1 << (bit & 7));
+    mark(0, 511); // -30780
+    mark(0, 0); // -61440
+    mark(1, 511); // -61500
+    const marked: OwnedAccountLoader = async (at) =>
+      at === p.pool
+        ? { data: priced, owner: p.program }
+        : at === extension
+          ? { data: marks, owner: p.program }
+          : load(at);
+    // Paying SPCX_US, the lower key, the price falls: -61440, then -61500.
+    expect((await svmPoolSlot(marked, p.pool, SPCX_US)).ticks).toEqual([
+      extension,
+      await tickArray(p, -61440),
+      await tickArray(p, -61500),
+    ]);
+    // Paying USDC it rises: -30780 that way, then the nearest the other way, -61440.
+    expect((await svmPoolSlot(marked, p.pool, USDC)).ticks).toEqual([
+      extension,
+      await tickArray(p, -30780),
+      await tickArray(p, -61440),
+    ]);
   });
 
   it("reads a Raydium-layout pool's tick arrays that hold nothing together, not one by one", async () => {
