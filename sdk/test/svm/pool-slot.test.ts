@@ -186,12 +186,12 @@ describe("svmPoolSlot", () => {
 
   it("takes a pool priced past its own bitmap with its bitmap extension first, then the arrays it marks", async () => {
     // PancakeSwap's SPCX_US/USDC pool: tick spacing 1, so its own bitmap marks the arrays starting
-    // in [-30720, 30720), and its price, at tick 49856, is past it. The extension's first positive
+    // in [-30720, 30720), and its price, at tick 49832, is past it. The extension's first positive
     // bitmap marks arrays 263, 278, 289, 319, 322, 323, … of 60 ticks each, from 30720.
     const p = pool("pancakeswap-clmm-spcx-usdc");
     const data = BYTES.get(p.pool)!;
     const view = new DataView(data.buffer, data.byteOffset);
-    expect([view.getUint16(235, true), view.getInt32(269, true)]).toEqual([1, 49856]);
+    expect([view.getUint16(235, true), view.getInt32(269, true)]).toEqual([1, 49832]);
     const extension = await bitmapExtension(p);
     expect(p.more).toEqual([extension]);
     const at = (index: number) => tickArray(p, 30720 + 60 * index);

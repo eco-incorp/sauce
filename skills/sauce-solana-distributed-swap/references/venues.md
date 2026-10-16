@@ -50,7 +50,7 @@ all three must exist: a pool with fewer than three that way fills the rest with 
 other way, or with arrays holding no liquidity, which the swap loads and never walks into.
 
 The pool's own bitmap reaches 512 arrays each way from tick 0. A pool priced past that (tick
-spacing 1 and a price past tick ±30,720: PancakeSwap's SPCX_US/USDC pool, at tick 49,856) keeps
+spacing 1 and a price past tick ±30,720: PancakeSwap's SPCX_US/USDC pool, near tick 49,800) keeps
 its arrays' bits in its bitmap extension, the program address of
 `["pool_tick_array_bitmap_extension", pool]`: from 40, 14 bitmaps of 512 arrays (64 bytes each)
 past the pool's own, upward; from 936, the same downward. Bitmap `k` holds the array starting at
