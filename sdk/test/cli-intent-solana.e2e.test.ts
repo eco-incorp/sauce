@@ -270,6 +270,36 @@ describeEvm("sauce intent: Base to Solana, filled and proven on Solana, claimed;
     expect(claimed.code).toBe(0);
     expect(await base.balanceOf(usdc, SOLVER.address)).toBe(before + REWARD);
 
+    // Settled, read back from both chains: Base's Portal records the reward withdrawn and its vault
+    // empty, its prover the fill on Solana for the solver; Solana's Portal keeps the fill's claimant.
+    // Nothing is left to do but read it.
+    const settled = jsonOf(await run(store, "show", hash, "--json")).status;
+    expect(settled).toMatchObject({
+      state: "claimed",
+      source: {
+        chain: "base",
+        rewardStatus: "Withdrawn",
+        vaultHolds: [{ holds: "0", reward: REWARD.toString() }],
+        proof: { claimant: SOLVER.address, destination: "1399811149" },
+      },
+      destination: {
+        chain: "solana",
+        claimant: toUniversalAddress(SOLVER.address),
+        cancelled: false,
+      },
+      can: {
+        fill: { ok: false },
+        prove: { ok: false },
+        claim: { ok: false, why: "the reward was claimed" },
+        refund: { ok: false },
+        cancel: { ok: false },
+      },
+    });
+    const again = await run(store, "claim", hash, "--private-key", SOLVER_KEY);
+    expect(again.code).toBe(1);
+    expect(again.stdout).toContain("claimed already");
+    expect(await base.balanceOf(usdc, SOLVER.address)).toBe(before + REWARD);
+
     // Each step recorded as it landed, from the chain: Solana's Portal instructions and its
     // Mailbox's message, Base's Portal events.
     const events = jsonOf(await run(store, "show", hash, "--json")).events as Array<{
@@ -324,6 +354,13 @@ describeEvm("sauce intent: Base to Solana, filled and proven on Solana, claimed;
     const refunded = await run(store, "refund", hash, "--private-key", OWNER_KEY);
     expect(refunded.code).toBe(0);
     expect(await base.balanceOf(usdc, OWNER.address)).toBe(before + REWARD);
+    const settled = jsonOf(await run(store, "show", hash, "--json")).status;
+    expect(settled).toMatchObject({
+      state: "refunded",
+      source: { rewardStatus: "Refunded", vaultHolds: [{ holds: "0" }] },
+      destination: { chain: "solana", cancelled: true },
+      can: { fill: { ok: false }, claim: { ok: false }, refund: { ok: false } },
+    });
 
     const events = jsonOf(await run(store, "show", hash, "--json")).events as Array<{
       event: string;
