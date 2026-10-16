@@ -14,6 +14,7 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { basename, dirname } from "node:path";
 
 import {
   AccountRole,
@@ -190,6 +191,7 @@ export async function loadKeypair(path: string, files: CliFiles): Promise<KeyPai
   }
   secret(text.trim());
   let bytes: Uint8Array | undefined;
+  let wallet = false;
   try {
     const parsed = JSON.parse(text) as unknown;
     if (
@@ -199,8 +201,22 @@ export async function loadKeypair(path: string, files: CliFiles): Promise<KeyPai
     ) {
       bytes = Uint8Array.from(parsed as number[]);
     }
+    // A wallet `sauce wallet` keeps: the same keypair, encrypted under its password.
+    wallet =
+      typeof parsed === "object" &&
+      parsed !== null &&
+      (parsed as { kind?: unknown }).kind === "solana" &&
+      typeof (parsed as { crypto?: unknown }).crypto === "object";
   } catch {
     // Reported below, without the text.
+  }
+  if (wallet) {
+    const name = basename(path).replace(/\.json$/, "");
+    throw new UsageError(
+      `--keypair ${path} is a sauce wallet, its keypair encrypted: sign with --wallet ${name} ` +
+        `--wallets ${dirname(path)} (--wallet ${name} alone for one in ~/.sauce/wallets), which ` +
+        "unlocks it with its password",
+    );
   }
   if (bytes === undefined) {
     throw new UsageError(

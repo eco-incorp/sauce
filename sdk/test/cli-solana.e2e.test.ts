@@ -1842,6 +1842,14 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const keypair = await sauce(...base, "--keypair", bad);
     expect(keypair.stderr).toMatch(/not a Solana keypair file/);
     expect(keypair.stderr).not.toContain("[1, 2, 3]");
+    // A wallet `sauce wallet` keeps is that keypair encrypted: named for --wallet, not read.
+    const kept = join(work, "kept.json");
+    writeFileSync(kept, JSON.stringify({ version: 3, kind: "solana", crypto: { cipher: "x" } }));
+    const asKeypair = await sauce(...base, "--keypair", kept);
+    expect(asKeypair.stderr).toContain(
+      `--keypair ${kept} is a sauce wallet, its keypair encrypted: sign with --wallet kept ` +
+        `--wallets ${work}`,
+    );
   }, 60_000);
 
   describe("--via engine: the engine's own paid cook, with no Kitchen and no Pot", () => {
