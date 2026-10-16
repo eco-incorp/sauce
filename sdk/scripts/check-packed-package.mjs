@@ -423,6 +423,13 @@ try {
     } else {
       console.log('Clean package install: ./testing resolves (no anvil, or no engine artifacts, to run it here)');
     }
+    // Solana runs in the project's own LiteSVM, which no install of the package brings: the kit
+    // names what to install.
+    await assert.rejects(
+      testing.local({ chain: 'solana' }),
+      /this project does not have: npm i -D litesvm@${RUNTIME_PINS.litesvm}/,
+    );
+    console.log('Clean package install: ./testing on Solana names the LiteSVM to install');
   `,
   );
   // Force the packaged path: the resolvers read no environment, and scrubbing CI's SAUCE_* paths
@@ -787,6 +794,60 @@ try {
         `(${installedSize(folder).text}, ${binaries[0]} among it) and simulates a Solana cook in ` +
         "its local copy",
     );
+  }
+
+  // The testing kit on Solana from a clean install: the tarball and the LiteSVM it pins, and nothing
+  // else, a Solana cook in LiteSVM with the packaged engine and Kitchen, staged too.
+  if (shipsEngine && shipsAddresses) {
+    const kit = mkdtempSync(join(tmpdir(), "sauce-solana-kit-"));
+    try {
+      writeFileSync(join(kit, "package.json"), JSON.stringify({ private: true, type: "module" }));
+      execFileSync(
+        "npm",
+        [
+          ...["install", "--engine-strict", "--ignore-scripts", "--prefer-offline"],
+          ...["--no-audit", "--no-fund", join(work, filename), `litesvm@${RUNTIME_PINS.litesvm}`],
+        ],
+        { cwd: kit, stdio: "inherit" },
+      );
+      writeFileSync(
+        join(kit, "solana-kit.mjs"),
+        `
+        import assert from 'node:assert/strict';
+        import { CookReverted, local } from '${name}/testing';
+        const solana = await local({ chain: 'solana' });
+        try {
+          const twice = await solana.run({ source: 'function main(a: Uint256): Uint256 {\\n  return a * 2;\\n}\\n' }, { args: [21n] });
+          assert.equal(twice.returned, 42n, 'a Solana cook returns what main returned');
+          await assert.rejects(
+            solana.simulate({ source: 'function main(a: Uint256) {\\n  require(a < 10, "too big");\\n}\\n' }, { args: [11n] }),
+            (error) => error instanceof CookReverted && error.reason === 'too big',
+          );
+          let body = '  let x = a;\\n';
+          for (let i = 0; i < 300; i++) body += '  x = (x * ' + (i + 3) + ' + ' + (i + 1) + ') % 1000003;\\n';
+          const staged = await solana.run({ source: 'function main(a: Uint256): Uint256 {\\n' + body + '  return x;\\n}\\n' }, { args: [7n] });
+          assert.equal(staged.staged, true, 'a program past one transaction is staged');
+          const to = solana.account(1).address;
+          await solana.fund(solana.account(0).pot, { WSOL: '1' });
+          const paid = await solana.run({ source: 'function main(to: Address, amount: Uint256) {\\n  WSOL.transfer(to, amount);\\n}\\n' }, { args: [to, 1000n] });
+          assert.equal(paid.delta(to, 'WSOL'), 1000n, 'the token methods move wrapped SOL');
+        } finally {
+          await solana.stop();
+        }
+        `,
+      );
+      execFileSync(process.execPath, [join(kit, "solana-kit.mjs")], {
+        cwd: kit,
+        stdio: "inherit",
+        env: smokeEnv,
+      });
+      console.log(
+        "Clean package install: ./testing runs Solana cooks in the project's LiteSVM, with the " +
+          "packaged engine and Kitchen",
+      );
+    } finally {
+      rmSync(kit, { recursive: true, force: true });
+    }
   }
 
   // `sauce update` tells a copy's install from its real path. This one is a project's own (the
