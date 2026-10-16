@@ -41,11 +41,7 @@ import { resolveProtocolContract } from "./protocol-rewrite.js";
 import type { StockToken } from "./token-registry.js";
 import { svmTokenRows, TOKEN_REGISTRY } from "./token-registry.js";
 import { SVM_ACCOUNT_EXPRESSIONS, type SvmAccountExpression } from "./svm-account-expressions.js";
-import {
-  SVM_EXACT_VENUE_METHODS,
-  SVM_VENUE_METHODS,
-  SVM_VENUE_NAMESPACES,
-} from "./svm-venue-methods.js";
+import { svmVenueMethods, SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
 
 export interface SourceToken {
   readonly symbol: string;
@@ -325,7 +321,7 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
             namespace,
             name: venue.name,
             program: venue.program,
-            methods: venue.exact ? SVM_EXACT_VENUE_METHODS : SVM_VENUE_METHODS,
+            methods: svmVenueMethods(namespace),
           }))
         : [],
     accounts: resolved.kind === "svm" ? SVM_ACCOUNT_EXPRESSIONS : [],

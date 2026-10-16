@@ -155,11 +155,10 @@ export const SVM_LIMIT_VENUES = ["Invariant", "OpenbookV2"] as const;
 
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
 
-/** Every function of the SVM arm: `swap`; each of the nine venues at a price; each venue at its own
- *  limit, its instruction alone and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s;
+/** Every function of the SVM arm: each of the nine venues at a price; each venue at its own limit,
+ *  its instruction alone and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s;
  *  OpenBook's two: from an amount and from lots); and Manifest's. */
 export const SVM_FUNCTIONS = [
-  "swap",
   ...SVM_VENUES.map(lower),
   ...[...SVM_VENUES, ...SVM_LIMIT_VENUES].flatMap((venue) => [
     `${lower(venue)}AtLimit`,
@@ -184,7 +183,7 @@ export const svmArguments = (name: string): string[] =>
       ? ["amountIn", "priceLots", "orders", "minOut"]
       : /AtLimit$/.test(name)
         ? ["amountIn", "limit", "minOut"]
-        : ["amountIn", "maxPrice", "minOut"];
+        : ["amountIn", "priceLimit", "minOut"];
 
 /** An instruction-only `…Cpi` function's arguments after `program`, `accounts` and `source`, by
  *  venue: what its instruction carries, and its direction. */

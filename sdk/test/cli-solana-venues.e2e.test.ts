@@ -1,13 +1,13 @@
 /**
  * Solana's venue namespaces, EXECUTED: `Orca.Whirlpool.swap(pool, USDC, WSOL, …)`,
- * `Raydium.CLMM.swap(…)`, `Phoenix.Market.swap(…)`, every other price-limit venue's, `Solana.swap(…)`
- * at a pool of any of them, and Meteora DLMM's exact input, `Meteora.DLMM.swap(…)`, compiled for Solana
- * and run through the `sauce`
- * command with the pool as main's argument and no `--account` — the pool's nine accounts read from
- * the pool on the cluster as the cook is built (`svm/pool-slot.ts`), the trader's derived from the
- * owner and the Pot — against the released Kitchen and engine and the venues' own mainnet programs
- * and pools (`svm/venue-fixture.ts`; Meteora DLMM's program and SOL/USDC pool from the exact-input
- * suite's fixtures) in LiteSVM, behind a JSON-RPC shim (`svm/rpc-shim.ts`).
+ * `Raydium.CLMM.swap(…)`, `Phoenix.Market.swap(…)`, every other price-limit venue's and Meteora DLMM's
+ * exact input, `Meteora.DLMM.swap(…)`, compiled for Solana and run through the `sauce` command with
+ * no `--account`, the pool found by its key (`Orca.Whirlpool.pool(USDC, WSOL, 4)`) or given as main's
+ * argument — the pool's nine accounts read from the pool on the cluster as the cook is built
+ * (`svm/pool-slot.ts`), a key with no pool an empty slot, the trader's derived from the owner and the
+ * Pot — against the released Kitchen and engine and the venues' own mainnet programs and pools
+ * (`svm/venue-fixture.ts`; Meteora DLMM's program and SOL/USDC pool from the exact-input suite's
+ * fixtures) in LiteSVM, behind a JSON-RPC shim (`svm/rpc-shim.ts`).
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -205,7 +205,7 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     ["the sauce-swaps skill's", "../../skills/sauce-swaps/examples/solana-swap.sauce.ts"],
     ["the manual's", "../../docs/examples/solana-swap.sauce.ts"],
   ])(
-    "runs %s Solana swap as its header says: the pool and amounts as --args",
+    "runs %s Solana swap as its header says: the amounts as --args, the pool found by its key",
     async (whose, path) => {
       restoreVenues(harness.svm);
       const file = fileURLToPath(new URL(path, import.meta.url));
@@ -220,14 +220,9 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
         .slice(first, first + 2)
         .map((one) => one.replace(/\\$/, ""))
         .join(" ");
-      const orca = pool("orca-whirlpool-sol-usdc");
       const to = randomAddress();
       const [toWsol] = await findAssociatedTokenPda({ owner: to, mint: WSOL, tokenProgram: TOKEN });
-      const filled: Record<string, string> = {
-        "<keypair>": owner.path,
-        "<pool>": orca.pool,
-        "<recipient>": to,
-      };
+      const filled: Record<string, string> = { "<keypair>": owner.path, "<recipient>": to };
       const argv = line
         .split(/\s+/)
         .filter((word) => word !== "")
@@ -254,8 +249,8 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
   it("`sauce compile --json` lists the pool's slot and the trader's accounts with their derivations", async () => {
     const file = program(
       "orca-compile",
-      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+      "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}\n",
     );
     const out = json(await sauce("compile", file, "--chain", "solana", "--json"));
     const derive = (out.manifest as { accounts: { name: string; derive?: string }[] }).accounts.map(
@@ -286,8 +281,8 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     restoreVenues(harness.svm);
     const file = program(
       "orca",
-      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+      "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}\n",
     );
     const orca = pool("orca-whirlpool-sol-usdc");
     const amount = 100n * 10n ** 6n;
@@ -310,8 +305,8 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     restoreVenues(harness.svm);
     const file = program(
       "raydium-forward",
-      "function main(pool: Address, to: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  const got = Raydium.CLMM.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n" +
+      "function main(pool: Address, to: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  const got = Raydium.CLMM.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n" +
         "  if (got > 0) WSOL.transfer(to, got);\n" +
         "  return got;\n}\n",
     );
@@ -346,8 +341,8 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     restoreVenues(harness.svm);
     const file = program(
       "phoenix",
-      "function main(market: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return Phoenix.Market.swap(market, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+      "function main(market: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  return Phoenix.Market.swap(market, USDC, WSOL, amountIn, priceLimit, 1);\n}\n",
     );
     const phoenix = pool("phoenix-sol-usdc");
     // Any limit above the book's best offer: Phoenix's own arithmetic is the router's to hold.
@@ -371,13 +366,13 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
       restoreVenues(harness.svm);
       const file = program(
         `venue-${namespace}`,
-        "function main(pool: Address, buy: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-          `  return ${namespace}.swap(pool, USDC, buy, amountIn, maxPrice, 1);\n}\n`,
+        "function main(pool: Address, buy: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+          `  return ${namespace}.swap(pool, USDC, buy, amountIn, priceLimit, 1);\n}\n`,
       );
       const p = pool(name);
       const amount = 5n * 10n ** 6n;
-      const maxPrice = (allIn(p, key(USDC) < key(buy)) * 10003n) / 10000n;
-      const args = ["--args", p.pool, buy, String(amount), String(maxPrice)];
+      const priceLimit = (allIn(p, key(USDC) < key(buy)) * 10003n) / 10000n;
+      const args = ["--args", p.pool, buy, String(amount), String(priceLimit)];
       const mint = harness.svm.getAccount(buy);
       if (!mint.exists) throw new Error(`the fixture has no mint ${buy}`);
       const [potBuy] = await findAssociatedTokenPda({
@@ -403,16 +398,16 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     300_000,
   );
 
-  it("Solana.swap takes a pool of any venue, and an empty slot, given by --args alone", async () => {
+  it("finds each venue's pool by its key, and skips a key with no pool, given --args alone", async () => {
     restoreVenues(harness.svm);
-    // Three slots, each a pool at whichever venue it is, or none: what a distributed swap takes.
+    // Three keys: Orca's spacing 1, where the fixture has no pool, its spacing 4, and Raydium's fee 400.
     const file = program(
-      "any-venue",
-      "function main(pool0: Address, pool1: Address, pool2: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  const first = Solana.swap(pool0, USDC, WSOL, amountIn, maxPrice, 0);\n" +
-        "  const second = Solana.swap(pool1, USDC, WSOL, amountIn, maxPrice, 0);\n" +
-        "  const third = Solana.swap(pool2, USDC, WSOL, amountIn, maxPrice, 0);\n" +
-        "  return first + second + third;\n}\n",
+      "by-key",
+      "function main(amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  const none = Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 1), USDC, WSOL, amountIn, priceLimit, 0);\n" +
+        "  const first = Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0);\n" +
+        "  const second = Raydium.CLMM.swap(Raydium.CLMM.pool(WSOL, USDC, 400), USDC, WSOL, amountIn, priceLimit, 0);\n" +
+        "  return none + first + second;\n}\n",
     );
     const compiled = json(await sauce("compile", file, "--chain", "solana", "--json")) as {
       manifest: { accounts: { name: string; derive?: string }[] };
@@ -421,27 +416,26 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     // Every account derived: nothing to give.
     expect(compiled.accountsToGive).toEqual([]);
     expect(compiled.manifest.accounts.map((slot) => slot.derive)).toContain(
-      "slot:@pool1:USDC.vaultA",
+      "slot:Raydium.CLMM(WSOL,USDC,400):USDC.vaultA",
     );
     const orca = pool("orca-whirlpool-sol-usdc");
     const raydium = pool("raydium-clmm-sol-usdc");
     const amount = 20n * 10n ** 6n;
-    const maxPrice = [priceAbove(orca.name), priceAbove(raydium.name)].reduce((a, b) =>
+    const priceLimit = [priceAbove(orca.name), priceAbove(raydium.name)].reduce((a, b) =>
       a > b ? a : b,
     );
-    const empty = "11111111111111111111111111111111";
-    const args = ["--args", orca.pool, empty, raydium.pool, String(amount), String(maxPrice)];
+    const args = ["--args", String(amount), String(priceLimit)];
     const before = tokenAmount(harness, potUsdc);
     const held = harness.svm.getAccount(potWsol).exists ? tokenAmount(harness, potWsol) : 0n;
 
-    const rehearsed = json(await simulate(file, ...args));
-    expect(rehearsed).toMatchObject({ ok: true });
+    const simulated = json(await simulate(file, ...args));
+    expect(simulated).toMatchObject({ ok: true });
     const out = json(await run(file, ...args));
     expect(out).toMatchObject({ cook: { status: "success" } });
-    // Two pools swapped, the empty slot skipped: what main returned is what arrived in the Pot.
+    // Two pools swapped, the key with none skipped: what main returned is what arrived in the Pot.
     const bought = tokenAmount(harness, potWsol) - held;
     expect(bought).toBeGreaterThan(0n);
-    expect(BigInt(rehearsed.returned as string)).toBe(bought);
+    expect(BigInt(simulated.returned as string)).toBe(bought);
     expect(tokenAmount(harness, potUsdc)).toBe(before - 2n * amount);
   }, 300_000);
 
@@ -468,7 +462,7 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     expect(bought).toBeGreaterThan(0n);
     expect(BigInt(simulated.returned as string)).toBe(bought);
     expect(tokenAmount(harness, potUsdc)).toBe(before - amount);
-    // Its swap takes no maxPrice: a price-limit venue's arguments are refused, naming its own.
+    // Its swap takes no priceLimit: a price-limit venue's arguments are refused, naming its own.
     const priced = program(
       "dlmm-priced",
       "function main(pool: Address, amountIn: Uint256): Uint256 {\n" +
@@ -482,8 +476,8 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
   it("refuses a pool no price-limit venue owns before the cook, and another venue's on chain", async () => {
     const file = program(
       "orca-refused",
-      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+      "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}\n",
     );
     const book = pool("manifest-sol-usdc");
     const wrong = await simulate(file, "--args", book.pool, "1", "1");

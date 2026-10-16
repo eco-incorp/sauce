@@ -3795,7 +3795,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   pools: {
     usage: [
       "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--block <number|tag>] [--json]",
-      "sauce pools --chain solana <pay token> <buy token> [--pay <token> [--max-price <n>] [--per-venue] [--slots <n>]] [--json]",
+      "sauce pools --chain solana <pay token> <buy token> [--pay <token> [--price-limit <n>] [--per-venue] [--slots <n>]] [--json]",
     ],
     summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
     flags: {
@@ -3819,10 +3819,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "Choose the pools a distributed swap paying this token takes, and print their slots' accounts",
         only: "svm",
       },
-      "max-price": {
+      "price-limit": {
         type: "string",
         value: "<n>",
-        help: "With --pay: only pools whose price with the fee is within this maxPrice",
+        help: "With --pay: only pools whose price with the fee is within this priceLimit",
         only: "svm",
       },
       "per-venue": {
@@ -3866,22 +3866,23 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "On Solana: every pool of the pair at each venue whose swap takes a price limit that stops",
       "it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,",
       "DefiTuna, Crema, and Phoenix's markets), found with getProgramAccounts on each venue's",
-      "program. For each: its fee, liquidity and price both ways with the fee and as maxPrice, and",
-      "its slot paying each token: the nine accounts a swap at it takes (program, pool, config, the",
-      "two vaults, one more account its swap takes, three tick arrays), each unused one the System",
-      "program. A pool the distributed swap skips is listed as skipped with why. A token is a symbol",
-      "the chain registers (SOL for WSOL), or a mint. --pay chooses the pools a swap paying that",
-      "token takes (within --max-price, one a venue with --per-venue, --slots of them) and prints",
-      "them in slot order for main's --args (the System program for a slot with none), and their",
-      "slots as accounts. A venue it could not read leaves the listing partial: a note says which,",
-      "and the command exits 1.",
+      "program. For each: its fee, liquidity and price both ways with the fee and as a swap's",
+      "priceLimit, how a program finds it by key (Orca.Whirlpool.pool(USDC, WSOL, 4)) where its",
+      "venue finds pools by key, and its slot paying each token: the nine accounts a swap at it",
+      "takes (program, pool, config, the two vaults, one more account its swap takes, three tick",
+      "arrays), each unused one the System program. A pool the distributed swap skips is listed as",
+      "skipped with why. A token is a symbol the chain registers (SOL for WSOL), or a mint. --pay",
+      "chooses the pools a swap paying that token takes (within --price-limit, one a venue with",
+      "--per-venue, --slots of them) and prints them in slot order for main's --args (the System",
+      "program for a slot with none), and their slots as accounts. A venue it could not read leaves",
+      "the listing partial: a note says which, and the command exits 1.",
       "",
       "Examples:",
       "  sauce pools --chain base USDC WETH",
       "  sauce pools --chain base USDC 0x… --json",
       "  sauce pools --chain base WETH USDC --v4-key 50:1",
       "  sauce pools --chain solana USDC WSOL --json",
-      "  sauce pools --chain solana USDC WSOL --pay USDC --max-price 119047619047619047 --per-venue --slots 5 --json",
+      "  sauce pools --chain solana USDC WSOL --pay USDC --price-limit 119047619047619047 --per-venue --slots 5 --json",
     ].join("\n"),
     run: async (args, io) => {
       const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
@@ -3896,17 +3897,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             throw new UsageError(`--${flag} is for an EVM chain's pools`);
         const url = requiredEndpoint(args, io, chain);
         const pay = stringFlag(args, "pay");
-        const maxPrice = stringFlag(args, "max-price");
+        const priceLimit = stringFlag(args, "price-limit");
         const slots = stringFlag(args, "slots");
         if (
           pay === undefined &&
-          (maxPrice !== undefined || slots !== undefined || args.values["per-venue"])
+          (priceLimit !== undefined || slots !== undefined || args.values["per-venue"])
         )
           throw new UsageError(
-            "--max-price, --per-venue and --slots choose pools for --pay <token>",
+            "--price-limit, --per-venue and --slots choose pools for --pay <token>",
           );
-        if (maxPrice !== undefined && !/^\d+$/.test(maxPrice))
-          throw new UsageError(`--max-price ${maxPrice}: a whole number, maxPrice's units`);
+        if (priceLimit !== undefined && !/^\d+$/.test(priceLimit))
+          throw new UsageError(
+            `--price-limit ${priceLimit}: a whole number, a swap's priceLimit's units`,
+          );
         if (slots !== undefined && !/^[1-9]$/.test(slots))
           throw new UsageError(`--slots ${slots}: a number from 1 to 9`);
 
@@ -3919,7 +3922,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             : {
                 choose: {
                   pay,
-                  ...(maxPrice === undefined ? {} : { maxPrice: BigInt(maxPrice) }),
+                  ...(priceLimit === undefined ? {} : { priceLimit: BigInt(priceLimit) }),
                   perVenue: args.values["per-venue"] === true,
                   ...(slots === undefined ? {} : { slots: Number(slots) }),
                 },

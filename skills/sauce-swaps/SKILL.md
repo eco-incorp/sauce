@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router, the swap library, on EVM chains and Solana. One function per EVM venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin) and a try form of each, every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, and the pool families its callbacks service; exact input only; sqrtPriceLimitX96 and sauce price; partial fills; the reverts; the guard every leg needs. On Solana, a namespace per price-limited venue (Orca.Whirlpool.swap(pool, …), its accounts derived), Solana.swap(pool, …) at any of them, one swap returning 0 where the pool cannot trade, and every exact-input venue's forms. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
+description: Swapping inside a Sauce program with @sauce/router, the swap library, on EVM chains and Solana. One function per EVM venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin) and a try form of each, every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, and the pool families its callbacks service; exact input only; sqrtPriceLimitX96 and sauce price; partial fills; the reverts; the guard every leg needs. On Solana, a namespace per price-limited venue (Orca.Whirlpool.swap(pool, …), its pool found by key with Orca.Whirlpool.pool(USDC, WSOL, 4), its accounts derived), one swap returning 0 where the pool cannot trade, and every exact-input venue's forms. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
 ---
 
 # Swaps with `@sauce/router`
@@ -220,18 +220,19 @@ cook reverts as a whole either way.
 
 ### A venue by its namespace
 
-A program that knows its pool calls the venue by its namespace, as a program on an EVM chain calls a
-protocol, and is given no accounts:
+A program calls a venue by its namespace, as a program on an EVM chain calls a protocol, finds the
+pool by its key, as an EVM program asks a factory for a pool, and is given no accounts:
 
 ```sauce chain=solana
-function main(
-  pool: Address,
-  to: Address,
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-): Uint256 {
-  const got = Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+function main(to: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint256): Uint256 {
+  const got = Orca.Whirlpool.swap(
+    Orca.Whirlpool.pool(USDC, WSOL, 4),
+    USDC,
+    WSOL,
+    amountIn,
+    priceLimit,
+    minOut,
+  );
   if (got > 0) WSOL.transfer(to, got);
   return got;
 }
@@ -239,58 +240,64 @@ function main(
 
 ```sh
 sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
-  --args <pool> <recipient> 100000000 200000000000000000 400000000
+  --args <recipient> 100000000 200000000000000000 400000000
 ```
 
 - **The namespaces** are each venue's protocol then its program: `Raydium.CLMM`,
   `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`,
   `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`, each with one
-  `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived; where the
+  `swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)`. It returns what arrived; where the
   pool cannot trade (below) it returns `0` having moved nothing, and below `minOut` the cook
   reverts. `sauce globals --chain solana` lists them.
-- **`Meteora.DLMM`**'s `swap(pool, tokenIn, tokenOut, amountIn, minOut)` is Meteora DLMM's own swap, an
-  exact input with no price limit: it pays all of `amountIn` or the cook fails, and reverts below
-  `minOut`. Its pool's accounts are derived the same way, its bin arrays the first two its bitmap
-  marks in the trade's direction (the first alone for a pool with a Token-2022 mint): an input past
-  them fails the cook.
-- **Each call compiles to that venue's function below** (`orcaWhirlpool`), never the all-venue one,
-  keeping every check: the venue's program, the pool's owner, the pair, `minOut`. A pool of another
-  venue reverts on chain (`not an Orca whirlpool`).
-- **`Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`** is the same at a pool of
-  any of the nine, its venue read from the pool's owner as the program runs: for a program that
-  takes its pools as `main`'s arguments without knowing their venues
-  (`sauce-solana-distributed-swap`). It carries every venue's code. A pool given as the System
-  program, `11111111111111111111111111111111`, is an empty slot: its accounts are the System
-  program, and `swap` returns `0` for it.
-- **The pool and both tokens are known when the cook is built**: a `main` parameter declared
-  `Address`, a 32-byte key written out, or a registered symbol. The pool's nine accounts are read
-  from the pool on the cluster for the token paid; the trader's are the Pot's (the authority, its
-  account for `tokenIn`, the two mints, the token programs, the memo program). All are added to
-  `main`, and `sauce compile --json` shows how each is derived (`slot:@pool:USDC.vaultA`,
-  `self:USDC`). A pool no price-limit venue owns is refused before the cook.
+- **`pool(tokenA, tokenB, key)` finds the pool by its key**: the pool the venue's program keeps for
+  the pair at a tick spacing (`Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
+  `Crema.CLMM`) or a fee in millionths (`Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`,
+  `Stabble.CLMM`: 400 is 0.04%), either token first. It is written as the swap's pool, its key a
+  number written out or a loop's variable over numbers written out
+  (`for (const spacing of [4, 1]) { … }`, one pool per key). Where the venue keeps two configs at
+  one fee (Raydium's and PancakeSwap's 0.01% and 0.05%), the tick spacing follows the fee
+  (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`), and the fee alone is refused for a pair with a pool
+  under both. Where the venue has no pool at the key, the swap returns `0`.
+  `sauce pools --chain solana USDC WSOL` prints how a program finds each pool (`byKey`).
+  Phoenix's markets are named by their address instead: a `main` parameter declared `Address`.
+- **`Meteora.DLMM`**'s `swap(pool, tokenIn, tokenOut, amountIn, minOut)` is Meteora DLMM's own swap,
+  an exact input with no price limit: it pays all of `amountIn` or the cook fails, and reverts below
+  `minOut`. Its pool is named by its address, its accounts derived the same way, its bin arrays the
+  first two its bitmap marks in the trade's direction (the first alone for a pool with a Token-2022
+  mint): an input past them fails the cook.
+- **Each call compiles to that venue's function below** (`orcaWhirlpool`), keeping every check: the
+  venue's program, the pool's owner, the pair, `minOut`. A pool of another venue reverts on chain
+  (`not an Orca whirlpool`).
+- **The pool and both tokens are known when the cook is built**: a pool by key, a `main` parameter
+  declared `Address`, or a 32-byte key; a token by a registered symbol, a parameter or a key. The
+  pool's nine accounts are read from the pool on the cluster for the token paid; the trader's are
+  the Pot's (the authority, its account for `tokenIn`, the two mints, the token programs, the memo
+  program). All are added to `main`, and `sauce compile --json` shows how each is derived
+  (`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`, `self:USDC`). A pool no price-limit venue owns
+  is refused before the cook.
 - **What is bought lands in the Pot's own account for `tokenOut`** (Crema and Phoenix pay nowhere
   else); `sauce run` creates it when it is missing, asking first or with `--yes`. Forward what
   arrived with the token methods (`WSOL.transfer(to, got)`).
-- **Finding a pool**: `sauce pools --chain solana USDC WSOL` lists a pair's pools at each venue,
-  deepest first, each with its `maxPrice` (its price, fee included).
+- **Choosing a pool**: `sauce pools --chain solana USDC WSOL` lists a pair's pools at each venue,
+  deepest first, each with its key and its `priceLimit` (its price, fee included).
 
 ### The functions
 
 One function per venue whose swap stops at a price limit and leaves the rest of the input:
 `raydiumClmm`, `pancakeswapClmm`, `byreal`, `stabbleClmm`, `orcaWhirlpool`, `cropper`, `defituna`,
-`crema` and `phoenix` (an immediate-or-cancel order on its book), and `swap`, which takes a pool at
-any of them and reads its venue from the pool's owner. Every one takes the same arguments:
+`crema` and `phoenix` (an immediate-or-cancel order on its book). Every one takes the same
+arguments:
 
 ```text
-swap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
+orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, recipient): Uint256
 ```
 
-| Argument    | What it is                                                                                                                                                                                                                                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `slot`      | the pool's nine accounts, `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`, the System program for any the venue does not take; `sauce pools --chain solana` prints each pool's slot for the direction paid, and `sauce-solana-distributed-swap` says what each account is per venue |
-| `trader`    | `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the authority that signs (the Pot), the token account paid from, the two mints, the two token programs, the memo program                                                                                                             |
-| `maxPrice`  | the most one unit bought may cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the pool's fee and stops where its last unit, fee paid, costs `maxPrice`; the rest of `amountIn` stays in `source`                                                               |
-| `recipient` | the token account the output lands in; Crema and Phoenix pay only into the authority's own. The function returns what it gained                                                                                                                                                                              |
+| Argument     | What it is                                                                                                                                                                                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `slot`       | the pool's nine accounts, `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`, the System program for any the venue does not take; `sauce pools --chain solana` prints each pool's slot for the direction paid, and `sauce-solana-distributed-swap` says what each account is per venue |
+| `trader`     | `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the authority that signs (the Pot), the token account paid from, the two mints, the two token programs, the memo program                                                                                                             |
+| `priceLimit` | the most one unit bought may cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the pool's fee and stops where its last unit, fee paid, costs `priceLimit`; the rest of `amountIn` stays in `source`                                                             |
+| `recipient`  | the token account the output lands in; Crema and Phoenix pay only into the authority's own. The function returns what it gained                                                                                                                                                                              |
 
 Each returns `0` having moved nothing for a missing slot (the System program as its pool), no
 input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than one
@@ -298,8 +305,8 @@ rate, an empty pool, a pool already past its limit, an input too small to buy on
 price after its fee (dust), and a book with no offer within it. A swap that ran returns at least 1,
 and below `minOut` the cook reverts. A failed call into another program fails the whole Solana
 transaction and cannot be caught, so these are checks made before the swap. The accounts are the
-caller's, so a pool that is not the pair, a slot whose program is not the pool's owner, and a pool
-of another venue or of none revert; only the System program itself as the pool is a missing slot.
+caller's, so a pool that is not the pair, a slot whose program is not the venue's, and a pool of
+another venue or of none revert; only the System program itself as the pool is a missing slot.
 
 Three more forms, for a program that wants less:
 
@@ -341,19 +348,17 @@ function main(
   memo: Account,
   output: Account<Writable>,
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
 ): Uint256 {
   const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
   const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
-  return orcaWhirlpool(slot, trader, amountIn, maxPrice, minOut, output);
+  return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output);
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
-`swap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
-keeps `swap` for slots whose venue it learns as it runs. Either is past one transaction, so the
-program is staged (`sauce-solana`).
+A program carries only the venues it calls: one venue's function is about 1.6 KB of program, past
+one transaction, so the program is staged (`sauce-solana`).
 
 ## Exact input on Solana
 
@@ -440,7 +445,7 @@ against the deployed program before sending it.
 - [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts): one guarded Uniswap V3 leg that
   returns its unspent input.
 - [examples/solana-swap.sauce.ts](examples/solana-swap.sauce.ts): a swap at one Orca whirlpool by
-  its namespace, what arrived forwarded.
+  its namespace, the pool found by its key, what arrived forwarded.
 - [examples/swaps.mts](examples/swaps.mts) compiles the leg and pins the library's functions and
   their argument order, the Router's entry points, their price parameters and callbacks, and on
   Solana the functions, their arguments and size, and the namespace example's accounts.

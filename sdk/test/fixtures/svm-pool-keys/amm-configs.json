@@ -1,0 +1,586 @@
+{
+  "$comment": "Every AmmConfig of the four Raydium-code programs, index 0 to 199 (the program address of [\"amm_config\", index] as a big-endian u16), as mainnet-beta held them when read: each account's owner, lamports and data, its trade fee rate (millionths) a u32 at 47 and its tick spacing a u16 at 51. Written by scripts/dump-amm-configs.mjs --redump --rpc-config <file>; svm/pool-keys.test.ts holds svm/pool-keys.ts's table to it.",
+  "read": "2026-10-16T10:41:38.091Z",
+  "venues": {
+    "Raydium.CLMM": {
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "configs": [
+        {
+          "index": 0,
+          "address": "4BLNHtVe942GSs4teSZqGX24xwKNkqU7bGgNn3iUiUpw",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//AAAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQBkAAAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 1,
+          "address": "E64NGkDLLCdQ2yFNPcavaKptrEgmiQaNykUuLC1Qgwyp",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1792525",
+          "base64Data": "2vQhaMvLK2//AQAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQDECQAAPABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 2,
+          "address": "HfERMT5DRA6C1TAqecrJQFpmkf3wsWTMncqnj3RDg5aw",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+AgAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQD0AQAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 3,
+          "address": "A1BBtTYJd4i3xU8D6Tc2FzU6ZN4oXZWXKZnCxwbHXr8x",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1754219",
+          "base64Data": "2vQhaMvLK2//AwAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQAQJwAAeABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 4,
+          "address": "9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1804445",
+          "base64Data": "2vQhaMvLK2/5BAAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQBkAAAAAQBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 5,
+          "address": "3XCQJQryqpDvvZBfGxR7CLAw5dpGJ9aa7kt1jRLdyxuZ",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705201",
+          "base64Data": "2vQhaMvLK2/9BQAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQD0AQAAAQBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 6,
+          "address": "EdPxg8QaeFSrTYqdWJn6Kezwy9McWncTYueD9eMGCuzR",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1723503",
+          "base64Data": "2vQhaMvLK2//BgAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQDIAAAAAQBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 7,
+          "address": "9EeWRCL8CJnikDFCDzG8rtmBs5KQR1jEYKCR5rRZ2NEi",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+BwAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQAsAQAAAQBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 8,
+          "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "2155204",
+          "base64Data": "2vQhaMvLK2/7CAAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQCQAQAAAQBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 9,
+          "address": "Gex2NJRS3jVLPfbzSFM5d5DRsNoL5ynnwT1TXoDEhanz",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1735201",
+          "base64Data": "2vQhaMvLK2/+CQAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQAgTgAAeABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 10,
+          "address": "DrdecJVzkaRsf1TQu1g7iFncaokikVTHqpzPjenjRySY",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1795203",
+          "base64Data": "2vQhaMvLK2/+CgAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQDoAwAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 11,
+          "address": "J8u7HvA1g1p2CdhBFdsnTxDzGkekRpdw4GrL9MKU2D3U",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//CwAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQDcBQAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 12,
+          "address": "RPxHtdN5V7ajwkoG6NnwSBAeaX5k9giY37dpp98xTjD",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/4DAAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQBABgAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 13,
+          "address": "9WjDVMHWCirG9jkchbetHTnSzdXbAPnD9bsoGRcz1xUw",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DQAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQAIBwAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 14,
+          "address": "FMrUDGjEe1izXPbn8SZPNjMfB5JvvhVq5ymmpZDebB5R",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705203",
+          "base64Data": "2vQhaMvLK2/8DgAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQDQBwAACgBAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 15,
+          "address": "Y6YhgJbt9FRk3JVjwdZtsioVCJwCKhy1hum8HMDYyB1",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+DwAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQCgDwAAPABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 16,
+          "address": "47Nq74YtwjVeTQF6KFKRKU4cY1Vd5AXBHpYRkubkDLZi",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9EAAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQBwFwAAPABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 17,
+          "address": "DQeN7dZyQvXKT7YwmgqyuC7AYFkwMoP7RwtucsDEdfYZ",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705201",
+          "base64Data": "2vQhaMvLK2/+EQAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQBAHwAAPABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 18,
+          "address": "CDpiwv9eLsRvvuzZEJ8CBtK14wdvkSnkub4vmGtzzdK8",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/8EgAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQAwdQAAeABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 19,
+          "address": "6tBc3ABLaYTTWu94DiRD5PWi92HML34UpAQ8pPTYgudw",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//EwAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQBAnAAAeABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 20,
+          "address": "HH4gP3a2edTL8hwTcN5qjxkPbGKNpKSHkCbmWpzH5HTT",
+          "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "lamports": "1551585",
+          "base64Data": "2vQhaMvLK2//FAAMQp0XD//kFvH0bshXTH95CgVQFr7cVCJx/Cp2eMCy6cDUAQCIEwAAPABAnAAAAAAAAN2JaHqSiXZJS7Te58XKrpNlU2qJ9oFAfTjo+MajHRPDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    },
+    "Pancakeswap.CLMM": {
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "configs": [
+        {
+          "index": 0,
+          "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1953201",
+          "base64Data": "2vQhaMvLK2/+AADH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgBkAAAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 1,
+          "address": "He4brjK7TRKiqJ8szpRmhuueDwC4837BFRRBmWfmjo14",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/6AQDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgDECQAAPAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 2,
+          "address": "GUNzSDNbhcWpS6Ymj7kgyYmhgHimwfzpRdhJnbKDAi9K",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705201",
+          "base64Data": "2vQhaMvLK2/+AgDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgD0AQAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 3,
+          "address": "EtgcyD5Yk6Kuqf1fahAjTrsRCDgoUmgeZ7xJDS3giaE",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/7AwDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgAQJwAAeAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 4,
+          "address": "EvKEMSRSdxJUcpVTaB2isqMyF5G4yETvMbQxbfwSuwZa",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BADH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgBkAAAAAQAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 5,
+          "address": "2cc6jRdZgmN7uG3PxbuVEkYwQNPS7qQinKYYCwG53cpr",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BQDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgD0AQAAAQAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 6,
+          "address": "GcJVsj5MxokA4eRMUkB4cJHuZ6o9Y8MooXBViN5F1mYW",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "2032202",
+          "base64Data": "2vQhaMvLK2//BgDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgDIAAAAAQAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 7,
+          "address": "2zmg7259ahZkrSn6M3PEM7eFvEfBU8obgfVHT3AL9Qwu",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1776201",
+          "base64Data": "2vQhaMvLK2//BwDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgAsAQAAAQAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 8,
+          "address": "5kosJrgZ6rHyqqweWGpp11nNqdwPTHbyXVczvzPM9h7M",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9CADH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgCQAQAAAQAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 9,
+          "address": "2W1ToXSAUDwRQtZdgCjgXmFfiSvPmGDPx3CijKpVKArw",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+CQDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgAgTgAAeAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 10,
+          "address": "5szFcjKA7UU93nhgb3fE1o1cfcurwpFQEzywZyb2qAYF",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1750200",
+          "base64Data": "2vQhaMvLK2//CgDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgDoAwAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 11,
+          "address": "J1SzfvdJ3p4ixWdyhoHmVpnixfjUBcEZiJ3M66JHGTKz",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/8CwDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgDcBQAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 12,
+          "address": "5B9wMiyqe7maHxAKACrTiGYwTeSX3ZmpmxRgALUMTcdZ",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+DADH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgBABgAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 13,
+          "address": "5tbvQTWV2btAgX5NwzCbd8aFwTfDWeCZANRQUcWuKRan",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9DQDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgAIBwAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 14,
+          "address": "G3BrCQzNu93v1acayMA23CmCMH8tf6iAFb3PYUHUHtcg",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DgDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgDQBwAACgAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 15,
+          "address": "2G7HZiydoxtDqQU5SPsyc66nCGRUaP6H85FRKunKpmPs",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705201",
+          "base64Data": "2vQhaMvLK2//DwDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgCgDwAAPAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 16,
+          "address": "A3qKMAUV2JsBUeRssKeLm2xJr9w9PKFNWGxPfSV6E7vu",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//EADH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgBwFwAAPAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 17,
+          "address": "GaWZjVasTQLCNmag5n34eyhhD4T56TN39ckNcuUmu7x4",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//EQDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgBAHwAAPAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 18,
+          "address": "3EKNN4mNKSzBnfB5gC9q4eeL7WMWBrnuaoagMQVCL2vq",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//EgDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgAwdQAAeAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 19,
+          "address": "GeNe8uDSMpCip17DmToci8XNhTgwJJ4QdXP3HNrZbA21",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9EwDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgBAnAAAeAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 20,
+          "address": "4LTiLQbjodjCy8dFWqgUx6fzQ93Pq37c5jWGX9jRsRtC",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//FADH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgC4CwAAPAAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 21,
+          "address": "9rrh2c8w15HExZnLFzcEgkvHg846TBBFEPUuFG7RMGmm",
+          "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "lamports": "1736200",
+          "base64Data": "2vQhaMvLK2/+FQDH+hMYdQ/3T2BJB8ZkmU/QamwkbFmlUXcFva67UEvyRABxAgAgAwAAAQAAAAAAAAAAAJZ6m3P7q4Q4euh5foHc9He77vg3pB3aIQ9AJ/IBMcWMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    },
+    "Byreal.CLMM": {
+      "program": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "configs": [
+        {
+          "index": 1,
+          "address": "96FHuHDcv9FL55qhoBoUGAmxZg9XM47fBM3t2vdefGW2",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//AQA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwBkAAAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 2,
+          "address": "CSjT8cVPp5RoR5TQXxU5Y9h7axUXHQKAgYLFCfXGv84r",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/8AgA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwD0AQAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 3,
+          "address": "FBUzrkoWtzBPRvbHZchp7jJMLB1KqhAF3vchVvBYYyD5",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//AwA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwCgDwAAPAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 4,
+          "address": "DgY6nS29KkPB9wLUf5SBXionq9mNjBnCGHPKEt1UEtSE",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/7BAA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwCIEwAAPAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 5,
+          "address": "4i2uGhDnv1w3ay3LzB6UZtvhzHo6qmv5sFNZR6zQMUfa",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BQA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwBwFwAAPAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 6,
+          "address": "4E6xP73xzTs4aCvY92hbXRwWkYptNwvViPZmLcZEBUk4",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1717200",
+          "base64Data": "2vQhaMvLK2//BgA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwCQAQAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 7,
+          "address": "Cgc2VcAefVLKgfueBUAKYNgyiYs4YCHQMeTLJ4DccrTt",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BwA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwDECQAAPAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 8,
+          "address": "4NtpXEnEofQnzBZZbzo2odgNVxd2E3a77iABQWrrK1ND",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//CAA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwDIAAAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 9,
+          "address": "FaYhDDF7at5cWb1xpC2QUdrRJdVxUd1tNq2G4zZRGVGQ",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+CQA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwAsAQAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 10,
+          "address": "G37RVgCrjfeUttKfPB6ivQVAhwMQNUA1xPojfjomkqPu",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//CgA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwDoAwAACgAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 11,
+          "address": "veWyQnnZP5rJgVkif5zL5hvuxFTZMcJVoVEo3ri8ZKA",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//CwA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwDQBwAACgAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 12,
+          "address": "5exkCGzi4xGYjYRfiw3t2333aQ5Rso6XEsqYiodb4wXz",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1761200",
+          "base64Data": "2vQhaMvLK2/9DAA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwAQJwAAeAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 20,
+          "address": "GdEsyF7FqZbBrkHtgxQLW2n1joBsJckEkx19GSefzyJd",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+FABa1RVOmn5NlWMeqSV16BRu2e9YFsAix0NPBGYOcElY8kANAwAgTgAAeAAAAAAAAAAAAFrVFU6afk2VYx6pJXXoFG7Z71gWwCLHQ08EZg5wSVjyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 21,
+          "address": "8fDiUdg4jzERxngHHaT27ToEfWYuxtLYStRVWxnuavaS",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//FQA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwDIAAAACgAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 22,
+          "address": "2kwEGkAQBswrf1WygBS6FBcRrd8vK9Lrh7Mo4AkYRhYM",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//FgA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwBkAAAAeAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 50,
+          "address": "3mYgrhhxcEWU7YryJMm2GikfhjpckC7DvFTDQmZpqzux",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/8MgA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwC4CwAAPAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 51,
+          "address": "95BEqWwx4xg2jLw6wLeEbw1BaBP4oSMAEV1ifva7swsi",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//MwA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwBAHwAAPAAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 52,
+          "address": "CP4oFU3cNfTSUpkNDL9xotELPGUbv2U8Sgd8HmEyfd1V",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//NAA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwABAAAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 53,
+          "address": "7HYuBGbrA3iR5p3xQQeunsa2mrpKA4uD6rizNeXQbxff",
+          "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//NQA2eyr0QeieDMLWlD4/h3IkDUFVR/dAHkJiZfE20hhLGEANAwAyAAAAAQAAAAAAAAAAADZ7KvRB6J4MwtaUPj+HciQNQVVH90AeQmJl8TbSGEsYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    },
+    "Stabble.CLMM": {
+      "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "configs": [
+        {
+          "index": 0,
+          "address": "5waGmTN1wazZMqTw1FBRabW2DoK6XRkHC1vqAQWJF8wd",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9AAAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqcDUAQAyAAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 1,
+          "address": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+AQAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqQAAAAAyAAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 2,
+          "address": "5uJG2imjdUmbwQEMkZSSZyRMjikWfiQcHY6Y9k7VgMnA",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+AgAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqQAAAAA8AAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 3,
+          "address": "346Nv5n8nRZS6aJBacBZzcwxfGCvfhBzXbBQpzzMi155",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9AwAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgBGAAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 4,
+          "address": "G9V59kBC6hpbyJzfJZafaH4Bs1Zi7HZVV97su31ajXZS",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+BAAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgBQAAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 5,
+          "address": "DQBv2bXRwYRNmXX7eib3kG9uv7DxaRvxLSzDJ3dWPS41",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BQAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgBaAAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 6,
+          "address": "AZ6njnLfg7K85LhELRDUnhswwZkh3ct29twQaW8UaxeR",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BgAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgBkAAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 7,
+          "address": "6JeNQD3y9k9zBtcEv9RaWwuX8TphBbku5krk4tooEso2",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+BwAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgD6AAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 8,
+          "address": "dwfGmkWZkUYncNTonCRtaZ5sf4PCAqGKGWgqF4K1pH7",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//CAAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgD0AQAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 9,
+          "address": "DVQg8E8qHYiaVDSkcdKPj4GeNcCJcnti3YLrvnTDCDL7",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+CQAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgDuAgAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 10,
+          "address": "BCM8wqkRfYHPk7SvpMezK5kFzSBpVEA7FUp7EEtqBVp6",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/4CgAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgDoAwAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 11,
+          "address": "4th9ZwRvFX9yJQp1yFXVkCYQxbCAxPLKKh2RyTLbuVXP",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+CwAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgDECQAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 12,
+          "address": "BpoXx51iZiAwk6AB13ZqYpktnkoFjoZgiQVfV63gRgLF",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DAAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgCIEwAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 13,
+          "address": "Dba99UQ9HLhjUr2bEVHDbC4pGx3y8ATZNZ1TZFLM7cQg",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/8DQAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgBMHQAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 14,
+          "address": "3fZgcBAYjvci6TatVZfk9pdmmTGpgcVKwXV4BiLRV8Er",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DgAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgAQJwAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 15,
+          "address": "8Fv84TDfeSVYxGBCgCDYWhF4nVsUqAnot1TsNE6yCNk8",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DwAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgDUMAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 16,
+          "address": "WWoXAvXxuhSXDGH3BQeDdugxe5t4j4PaSi6QT3L2BUA",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//EAAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgBcRAAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 17,
+          "address": "ARv11pQbR9zHMD56YdH8BQfAxbWEQTjUguhd4aHFYKkY",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+EQAo3jzht2gG+ROSss/2nQHqJcC+ECcQDeZekHxQGwtiqfBJAgAgTgAAAQBAnAAAAAAAACjePOG3aAb5E5Kyz/adAeolwL4QJxAN5l6QfFAbC2KpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    }
+  }
+}

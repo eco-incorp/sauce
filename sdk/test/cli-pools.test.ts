@@ -543,8 +543,8 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
     }
   }, 30_000);
 
-  it("takes --max-price, --per-venue and --slots only with --pay", async () => {
-    for (const extra of [["--per-venue"], ["--slots", "5"], ["--max-price", "1"]]) {
+  it("takes --price-limit, --per-venue and --slots only with --pay", async () => {
+    for (const extra of [["--per-venue"], ["--slots", "5"], ["--price-limit", "1"]]) {
       const run = await sauce(
         ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", "http://127.0.0.1:9"],
         ...extra,

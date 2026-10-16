@@ -22,7 +22,12 @@
  *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
  *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
  *                        pool's own state through `load` (`svm/pool-slot.ts`); a pool that is the
- *                        System Program is an empty slot, whose nine are the System Program
+ *                        System Program is an empty slot, whose nine are the System Program. The
+ *                        pool may be a venue's pool by key, `<Venue>(<token>,<token>,<key>)`
+ *                        (`Orca.Whirlpool(USDC,WSOL,4)`; a fee may take a tick spacing after it,
+ *                        `Raydium.CLMM(USDC,WSOL,100,1)`, `svm/pool-keys.ts`): the pool the venue
+ *                        derives for the pair, an empty slot where none is there, and refused
+ *                        where the key names more than one
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -49,6 +54,7 @@ import {
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
+import { svmPoolCandidates, svmPoolKeyProblem, SVM_KEYED_VENUES } from "./pool-keys.js";
 import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./pool-slot.js";
 import { svmTokenAccount } from "./token-accounts.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
@@ -92,6 +98,16 @@ export interface SvmAccountNameContext {
    * Without it each name reads its slot.
    */
   readonly slots?: Map<string, Promise<SvmSlot>>;
+  /**
+   * The pools by key this resolution found, by their spelling (`Orca.Whirlpool(USDC,WSOL,4)`): the
+   * pool, or `null` where the venue has none at that key. For a message about the cook's pools.
+   */
+  readonly found?: Map<string, Address | null>;
+  /**
+   * The pools by key this resolution has read, by spelling, which the nine names of one slot share.
+   * Give one map per cook, as `slots`. Without it each name reads them.
+   */
+  readonly keyedPools?: Map<string, Promise<Address>>;
 }
 
 /** One name, resolved. */
@@ -124,6 +140,18 @@ type Token =
   | { readonly kind: "address"; readonly key: string }
   | { readonly kind: "arg"; readonly param: string };
 
+/** A venue's pool by key: `Orca.Whirlpool(USDC,WSOL,4)`, `Raydium.CLMM(USDC,WSOL,100,1)`. */
+interface KeyedPool {
+  readonly kind: "keyed";
+  readonly venue: string;
+  readonly tokens: readonly [Token, Token];
+  readonly key: bigint;
+  /** A Raydium-code pool's tick spacing, beside its fee. */
+  readonly spacing?: bigint;
+  /** As written, for a message. */
+  readonly text: string;
+}
+
 /** One seed of a program-derived address. */
 type Seed =
   | { readonly kind: "text"; readonly text: string }
@@ -138,7 +166,7 @@ type Parsed =
   | { readonly kind: "mint" | "program"; readonly token: Token }
   | {
       readonly kind: "slot";
-      readonly pool: Holder;
+      readonly pool: Holder | KeyedPool;
       readonly token: Token;
       readonly part: SvmSlotPart;
     }
@@ -188,15 +216,36 @@ function parseToken(text: string): Token | undefined {
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
 
+/** `<Venue>(<token>,<token>,<key>[,<tick spacing>])`, a venue's pool by key. */
+function parseKeyedPool(text: string): KeyedPool | undefined {
+  const parts = /^([A-Za-z]+\.[A-Za-z]+)\(([^,()]+),([^,()]+),(\d+)(?:,(\d+))?\)$/.exec(text);
+  if (parts === null || SVM_KEYED_VENUES[parts[1]!] === undefined) return undefined;
+  const tokenA = parseToken(parts[2]!);
+  const tokenB = parseToken(parts[3]!);
+  if (tokenA === undefined || tokenB === undefined) return undefined;
+
+  return {
+    kind: "keyed",
+    venue: parts[1]!,
+    tokens: [tokenA, tokenB],
+    key: BigInt(parts[4]!),
+    ...(parts[5] === undefined ? {} : { spacing: BigInt(parts[5]) }),
+    text,
+  };
+}
+
 /** `slot:<pool>:<token>.<part>`. */
 function parseSlot(value: string): Parsed | undefined {
   const parts = /^slot:([^:]+):([^:.]+)\.([A-Za-z0-9]+)$/.exec(value);
   if (parts === null) return undefined;
-  const pool = parseHolder(parts[1]!);
+  const holder = parseHolder(parts[1]!);
+  const pool =
+    holder !== undefined && (holder.kind === "arg" || holder.kind === "address")
+      ? holder
+      : parseKeyedPool(parts[1]!);
   const token = parseToken(parts[2]!);
   const part = SVM_SLOT_PARTS.find((one) => one === parts[3]);
-  if (pool === undefined || (pool.kind !== "arg" && pool.kind !== "address")) return undefined;
-  if (token === undefined || part === undefined) return undefined;
+  if (pool === undefined || token === undefined || part === undefined) return undefined;
 
   return { kind: "slot", pool, token, part };
 }
@@ -589,16 +638,31 @@ async function resolveSlot(
   ctx: SvmAccountNameContext,
   rows: readonly SvmTokenRow[],
 ): Promise<ResolvedSvmAccountName> {
-  const pool =
-    parsed.pool.kind === "arg"
-      ? argument(parsed.pool.param, ctx)
-      : address((parsed.pool as { key: string }).key);
+  const keyed = parsed.pool.kind === "keyed" ? parsed.pool : undefined;
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
-  // An empty slot, which `@sauce/router`'s `swap` skips: nothing to read.
-  if (pool === SYSTEM_PROGRAM) {
-    return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
-  }
   const load = ctx.load;
+  let pending = keyed === undefined ? undefined : ctx.keyedPools?.get(keyed.text);
+  if (keyed !== undefined && pending === undefined) {
+    pending = keyedPool(keyed, ctx, rows);
+    ctx.keyedPools?.set(keyed.text, pending);
+  }
+  const pool =
+    pending !== undefined
+      ? await pending
+      : parsed.pool.kind === "arg"
+        ? argument(parsed.pool.param, ctx)
+        : address((parsed.pool as { key: string }).key);
+  // An empty slot, which `@sauce/router`'s swaps skip: nothing to read. A key with no pool is one.
+  if (pool === SYSTEM_PROGRAM) {
+    return {
+      value: address(SYSTEM_PROGRAM),
+      label:
+        keyed === undefined
+          ? `an empty slot (${parsed.part})`
+          : `an empty slot: no pool at ${keyed.text} (${parsed.part})`,
+      kind: "address",
+    };
+  }
   if (load === undefined) {
     throw new SvmAccountNameError(
       `pool ${pool}'s slot is read from the cluster, which this resolution has no way to do`,
@@ -630,6 +694,58 @@ async function resolveSlot(
   ][index]!;
 
   return { value, label: `pool ${pool}'s ${parsed.part}, paying ${what}`, kind: "address" };
+}
+
+/**
+ * The pool a key names, read from the cluster: of the pools the venue may keep at the key (one, or
+ * for a fee one under each config charging it), the one there, or the System program where none is
+ * — no account, or one the venue does not own (lamports anyone may send to the address a pool
+ * would have). More than one there is refused, naming each with its tick spacing.
+ */
+async function keyedPool(
+  keyed: KeyedPool,
+  ctx: SvmAccountNameContext,
+  rows: readonly SvmTokenRow[],
+): Promise<Address> {
+  const problem = svmPoolKeyProblem(keyed.venue, keyed.key, keyed.spacing);
+  if (problem !== undefined) throw new SvmAccountNameError(problem);
+  const [a, b] = keyed.tokens.map((token) => mintOf(token, "slot", ctx, rows).mint) as [
+    Address,
+    Address,
+  ];
+  if (a === b) throw new SvmAccountNameError(`${keyed.text} names one mint twice`);
+  const load = ctx.load;
+  if (load === undefined) {
+    throw new SvmAccountNameError(
+      `${keyed.text} is read from the cluster, which this resolution has no way to do`,
+    );
+  }
+  const program = SVM_KEYED_VENUES[keyed.venue]!.program;
+  const candidates = svmPoolCandidates(keyed.venue, a, b, keyed.key, keyed.spacing);
+  const accounts = await Promise.all(candidates.map((one) => load(one.pool)));
+  const there = candidates.filter((_, i) => accounts[i]?.owner === program);
+  if (there.length > 1) {
+    const [tokenA, tokenB] = keyed.text.slice(keyed.text.indexOf("(") + 1, -1).split(",");
+    const spacings = new Set(there.map((one) => one.config!.tickSpacing));
+    if (spacings.size < there.length) {
+      throw new SvmAccountNameError(
+        `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}) finds ${there.length} pools, ` +
+          `under configs alike in fee and tick spacing: ${there.map((one) => one.pool).join(", ")}. ` +
+          "Name the pool by its address.",
+      );
+    }
+    throw new SvmAccountNameError(
+      `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}) finds ${there.length} pools, one ` +
+        `under each config charging that fee: ${there
+          .map((one) => `${one.pool} at tick spacing ${one.config!.tickSpacing}`)
+          .join(", ")}. Name the tick spacing after the fee: ` +
+        `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}, ${there[0]!.config!.tickSpacing})`,
+    );
+  }
+  const pool = there[0]?.pool ?? null;
+  ctx.found?.set(keyed.text, pool);
+
+  return pool ?? address(SYSTEM_PROGRAM);
 }
 
 /** main's integer argument `param`. */

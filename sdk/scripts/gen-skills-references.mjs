@@ -1175,17 +1175,23 @@ function renderChain(chain, supported, site) {
       "## Venues",
       "",
       "Each venue, by the namespace a program swaps at one of its pools with, its protocol then its",
-      "program: at a price, `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`,",
-      "which returns 0 having moved nothing where the pool cannot trade and reverts below `minOut`;",
-      "`Solana.swap(…)` takes a pool of any venue swapping at a price. The pool's accounts, and the",
+      "program: at a price, `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, priceLimit,",
+      "minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts below",
+      "`minOut`. Its pool is found by key, `Orca.Whirlpool.pool(USDC, WSOL, 4)`, where the venue finds",
+      "pools by one: a key with no pool there is skipped. The pool's accounts, and the",
       "Pot's, are derived when the cook is built (`sauce-swaps`).",
       "",
-      "| Namespace | Venue | Program |",
-      "| --- | --- | --- |",
-      ...chain.venues.map((v) => `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` |`),
+      "| Namespace | Venue | Program | Pool by key |",
+      "| --- | --- | --- | --- |",
+      ...chain.venues.map((v) => {
+        const pool = v.methods.find((method) => method.startsWith("pool("));
+        const key =
+          pool === undefined ? "by its address" : /, fee: /.test(pool) ? "fee" : "tick spacing";
+        return `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` | ${key} |`;
+      }),
       "",
       ...chain.venues
-        .filter((v) => !v.methods.some((method) => method.includes("maxPrice")))
+        .filter((v) => !v.methods.some((method) => method.includes("priceLimit")))
         .flatMap((v) => [
           `\`${v.namespace}\`'s swap is an exact input, its venue's own with no price limit:`,
           `\`${v.namespace}.swap(pool, tokenIn, tokenOut, amountIn, minOut)\` pays all of \`amountIn\` or`,
@@ -2052,7 +2058,6 @@ export function renderDocsReference(data, skillFiles) {
         skillFiles.solanaDistributedSwapExample,
         {
           "examples/solana-distributed-swap.sauce.ts": ["`solana-distributed-swap.sauce.ts`"],
-          "examples/solana-distributed-swap-5.sauce.ts": ["`solana-distributed-swap-5.sauce.ts`"],
           "examples/solana-distributed-swap.mts": ["`solana-distributed-swap.mts`"],
           "references/venues.md": [
             "the venues, their pools and their slots",

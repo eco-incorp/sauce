@@ -1308,9 +1308,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "writing a program, to call tokens and protocols by name instead of by address: token " +
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
         "address (with `protocol`, also its methods), on Solana the venue namespaces " +
-        "(`venues`: Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut) and " +
-        "eight more, and Solana.swap(…) at a pool of any of them, each pool's accounts derived " +
-        "as the cook is built) and the accounts a " +
+        "(`venues`: Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut) " +
+        "and eight more, the pool found by key where the venue finds pools by key " +
+        "(Orca.Whirlpool.pool(USDC, WSOL, 4)), each pool's accounts derived as the cook is " +
+        "built) and the accounts a " +
         "program writes where it uses them (`accounts`: Solana.pda(program, [seeds]), " +
         "USDC.accountOf(holder), Solana.systemProgram, …), the chain names that open intents, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
@@ -1589,7 +1590,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "sauce_simulate's block to simulate on the prices a priceLimit was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
         "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
-        "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts a swap " +
+        "liquidity, sides as above but for depth1Pct, `byKey` (how a program finds the pool by key: " +
+        "Orca.Whirlpool.pool(USDC, WSOL, 4)), and `slots`: by the token paid, the nine accounts a swap " +
         "at the pool takes (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
         "System program, which a program given the pool as an Address argument derives itself; " +
         "`skipped` lists the pools the distributed swap skips, with why. With pay, `chosen` and " +
@@ -1641,11 +1643,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
               "`accounts` (their slots' accounts, program0 … ticks32, for a program that takes " +
               "its slots as accounts).",
           ),
-        maxPrice: z
+        priceLimit: z
           .string()
           .regex(/^\d+$/)
           .optional()
-          .describe("With pay: only pools whose price with the fee is within this maxPrice."),
+          .describe("With pay: only pools whose price with the fee is within this priceLimit."),
         perVenue: z.boolean().optional().describe("With pay: the deepest pool of each venue only."),
         slots: z
           .number()
@@ -1677,6 +1679,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             contract: z.string().optional(),
             program: z.string().optional(),
             pool: z.string().optional(),
+            byKey: z.string().optional(),
             fee: z.number(),
             tickSpacing: z.number().optional(),
             liquidity: z.string().optional(),
@@ -1687,8 +1690,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 buy: z.string(),
                 mid: z.string(),
                 taker: z.string(),
-                maxPrice: z.string().optional(),
-                priceLimit: z.string().optional(),
+                priceLimit: z.string(),
               }),
             ),
             slots: z.record(z.string(), z.looseObject({})).optional(),
@@ -1713,9 +1715,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const url = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
         if (
           args.pay === undefined &&
-          (args.maxPrice !== undefined || args.perVenue !== undefined || args.slots !== undefined)
+          (args.priceLimit !== undefined || args.perVenue !== undefined || args.slots !== undefined)
         )
-          throw new UsageError("maxPrice, perVenue and slots choose pools for pay");
+          throw new UsageError("priceLimit, perVenue and slots choose pools for pay");
 
         return fromCommand(
           limited(
@@ -1728,7 +1730,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 : {
                     choose: {
                       pay: args.pay,
-                      ...(args.maxPrice === undefined ? {} : { maxPrice: BigInt(args.maxPrice) }),
+                      ...(args.priceLimit === undefined
+                        ? {}
+                        : { priceLimit: BigInt(args.priceLimit) }),
                       perVenue: args.perVenue === true,
                       ...(args.slots === undefined ? {} : { slots: args.slots }),
                     },

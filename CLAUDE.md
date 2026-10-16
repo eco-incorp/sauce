@@ -679,11 +679,11 @@ limit-order swap at each Solana venue whose swap stops at a price limit, in four
 EVM arm there is no `try`/plain pair: each slot function is ONE function with the `try` behaviour,
 returning `0` having moved nothing where the pool cannot trade (below) and reverting below `minOut`.
 AT A PRICE: one function per venue of the distributed swap (`raydiumClmm`, `pancakeswapClmm`,
-`byreal`, `stabbleClmm`, `orcaWhirlpool`, `cropper`, `defituna`, `crema`, `phoenix`), plus `swap`,
-which reads the venue from `pool.owner`, all `(slot: Account[], trader: Account[], amountIn,
-maxPrice, minOut, recipient: Account)` — arrays because a non-`main` function keeps ~16 values —
-`maxPrice` fee-inclusive in the skill's units, each function working out the pool's own sqrt limit
-(or Phoenix ticks). AT THE POOL'S OWN LIMIT: `<venue>AtLimit` for those nine and Invariant and
+`byreal`, `stabbleClmm`, `orcaWhirlpool`, `cropper`, `defituna`, `crema`, `phoenix`), all
+`(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account)` — arrays
+because a non-`main` function keeps ~16 values — `priceLimit` fee-inclusive in the skill's units,
+each function working out the pool's own sqrt limit (or Phoenix ticks). There is no all-venue
+`swap`: a program names each pool's venue. AT THE POOL'S OWN LIMIT: `<venue>AtLimit` for those nine and Invariant and
 OpenBook v2 (`(…, priceLots, orders, minOut, recipient)`), and Manifest's `manifest` (no limit: its
 swap has none; Invariant's program does NOT stop at its limit — a swap reaching it with input left
 fails `0x1778` and aborts the transaction, measured at 1,000 USDC on the fixture's window — so there
@@ -696,8 +696,8 @@ paysBase])` takes the CPI's accounts in the venue's own order, checks the progra
 `<venue>Data(amountIn, …)` (Orca: `orcaWhirlpoolData` for the classic `swap`, `orcaWhirlpoolV2Data`;
 Phoenix/OpenBook take the market's lot sizes) returns the instruction's bytes, checking only that a
 field can carry its value (`minOut past 64 bits`, a sqrt price limit's `limit past 128 bits` — cut to its 16 bytes 2^128 would be 0, which the CL venues read as NO limit, reproduced on the real Raydium program by review — Phoenix's `limit past 64 bits`, OpenBook's `limit
-past its field`); the at-limit forms build their data with it. The at-price forms (`swap<Venue>`,
-all `swap` reaches) write it INLINE and UNCHECKED from `clmmOrder`'s 32 order bytes: their floor
+past its field`); the at-limit forms build their data with it. The at-price forms (`swap<Venue>`)
+write it INLINE and UNCHECKED from `clmmOrder`'s 32 order bytes: their floor
 is 0 and their limit is under 2^128 by construction, and the range checks, Raydium's 17-account
 bitmap list and Orca's classic `swap` cost the distributed swap ~1.7 KB when they rode on that path
 (8,006 bytes where #102's was 6,319; `compile.test.ts` holds `swap` to carrying none of the
@@ -740,15 +740,15 @@ nothing (told by the paying account's balance, `settled`), and at a price a fee 
 and a Phoenix limit past 64 bits; a swap that paid returns at least 1, held to `minOut`. A wrong
 pair, a slot whose program is not the pool's owner, a pool of another venue or of none, and a limit
 an order cannot carry revert (caller mistakes, never 0); only the System program itself as the pool
-is a missing slot. Each EXPORTED venue function checks its own program id, so a direct call never
-signs a CPI into a program the caller names; only `swap`'s internal path relies on its one owner
-read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions
+is a missing slot. Each EXPORTED venue function checks its own program id, so a call never signs a
+CPI into a program the caller names. Unlike the EVM arm, Solana is SIZE-bound, so its code is
+shared through internal functions
 (each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmOrder` — which reads
 the pool at its venue's offsets, ~250 bytes smaller and ~5k CU a pool dearer than reading at
-each call site — `clmmCan`, `settled`): a program carries only the venues it calls (`swap` ~4.4
-KB, one venue's function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the
-distributed swap, its pools `Address` arguments each swapped by `Solana.swap`, 6,283 bytes with
-four and 6,432 with five, cooks four trading pools in about 951,000 CU). `compile.test.ts` pins its exports, each family's argument order, each venue's
+each call site — `clmmCan`, `settled`): a program carries only the venues it calls (one venue's
+function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the distributed swap, its
+pools found by key in loops over Orca's spacings and Raydium's fees, 3,955 bytes and 46 accounts
+named, cooks two trading pools and two keys with none in about 535,000 CU). `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from
@@ -869,23 +869,34 @@ writes are SafeERC20 — that is the documented way to get the checks.
 
 **On Solana the token methods and the venue namespaces add their accounts to `main`.**
 `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)`,
-`<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)` (the nine
+`<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)` (the nine
 price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`,
 `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
-`Crema.CLMM`, `Phoenix.Market`; ONE method, `swap`, and a `try` spelling is refused; and
-`Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)`, the venue's own exact input with no
-`maxPrice`, lowered to the router's `meteoraDlmm`, a slot form laying out seventeen accounts in place
-— its first two bin arrays for `swap`, the first for a Token-2022 mint's `swap2` — which
-`svm-dlmm.e2e.test.ts` holds to the venue's own swap of the same amount) and
-`Solana.swap(…)` (a pool of any of the nine, the venue read from its owner at run time; the System
-program as the pool is an empty slot, returning 0) are lowered by `routes/svm-lowering.ts`, one
+`Crema.CLMM`, `Phoenix.Market`; ONE swap, and a `try` spelling is refused; there is no chain-level
+`Solana.swap`; and `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)`, the venue's own
+exact input with no `priceLimit`, lowered to the router's `meteoraDlmm`, a slot form laying out
+seventeen accounts in place — its first two bin arrays for `swap`, the first for a Token-2022 mint's
+`swap2` — which `svm-dlmm.e2e.test.ts` holds to the venue's own swap of the same amount) with its
+pool found by key, `<Protocol>.<Program>.pool(tokenA, tokenB, key)`, as an
+EVM factory's `getPool` (`svm/pool-keys.ts`: the PDA of the pair, lower key first, and a tick
+spacing for Orca/Cropper/DefiTuna/Crema or a fee for the Raydium-code four, each fee its `AmmConfig`s
+from a table of every config the four programs keep, pinned to
+`test/fixtures/svm-pool-keys/amm-configs.json`, which `scripts/dump-amm-configs.mjs --redump|--check
+--rpc-config <file>` reads from mainnet; a fee two configs charge (Raydium's and PancakeSwap's 0.01%
+and 0.05%) names a pool under each, the cook taking the one there and refusing two, naming each, for
+the tick spacing to follow the fee, `pool(USDC, WSOL, 100, 1)`; Phoenix has no `pool`), written as the
+swap's pool with its key a literal or a `for…of` variable over literal keys, which
+`unrollPoolKeyLoops` writes out once per key (`if (true) { const k = 4; … }`; a loop that `continue`s
+stays a one-key loop; `break` and a label are refused), are lowered by `routes/svm-lowering.ts`, one
 engine with a collector per syntax (`svm-token-rewrite.ts`, `svm-venue-methods.ts`): each call
 becomes its library function (`@sauce/token`'s SVM arm; for a namespace the venue's OWN
-`@sauce/router` function, `orcaWhirlpool`, never `swap`; for `Solana.swap` the router's `swap`,
-every venue's code, ~4.4 KB) and every account it takes is appended to `main` as an `Account`
-parameter, with how it is derived written as an `--account` value in
+`@sauce/router` function, `orcaWhirlpool`) and every account it takes is appended to `main` as an
+`Account` parameter, with how it is derived written as an `--account` value in
 `CompiledSauceProgram.derivedAccounts` (`self:USDC`, `@to:USDC`, `mint:USDC`, a program id,
-`slot:@pool:USDC.vaultA`). ONE resolver,
+`slot:@pool:USDC.vaultA`, `slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`, where a key with no pool,
+or an account at its address the venue does not own, resolves to an empty slot of nine System
+programs). The CLI's `prepare` refuses a cook naming more than the 64 accounts a transaction locks,
+naming the pool each key found. ONE resolver,
 `svm/account-names.ts#resolveSvmAccountName`, turns a value into an address from the cook (owner,
 Pot, `via`, main's arguments, a mint program reader that FAILS CLOSED, an account loader for a
 pool's slot, `svm/pool-slot.ts`, shared with `sauce pools`); the CLI's `prepare` fills every derived

@@ -865,6 +865,8 @@ export async function resolveTokenAccounts(
   } = {},
   derived: ReadonlySet<string> = new Set(),
   load?: OwnedAccountLoader,
+  /** Filled with the pools by key the names found (`Orca.Whirlpool(USDC,WSOL,4)`), or none. */
+  found?: Map<string, Address | null>,
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
@@ -873,6 +875,7 @@ export async function resolveTokenAccounts(
   const named = new Map<string, TokenAccountNamed>();
   // This cook's pool slots, each read once for its nine names and never kept for another cook.
   const slots = new Map<string, Promise<SvmSlot>>();
+  const keyedPools = new Map<string, Promise<Address>>();
   for (const [name, value] of Object.entries(given)) {
     let resolved: ResolvedSvmAccountName;
     try {
@@ -884,7 +887,8 @@ export async function resolveTokenAccounts(
         args: args.keys ?? {},
         integers: args.integers ?? {},
         ...(programOf === undefined ? {} : { programOf }),
-        ...(load === undefined ? {} : { load, slots }),
+        ...(load === undefined ? {} : { load, slots, keyedPools }),
+        ...(found === undefined ? {} : { found }),
       });
     } catch (error) {
       if (error instanceof SvmAccountNameError) {
@@ -1523,6 +1527,7 @@ async function prepare(
       (name) => !Object.hasOwn(input.accounts, name),
     ),
   );
+  const found = new Map<string, Address | null>();
   const given = await resolveTokenAccounts(
     svmAccountsWanted(program, input.accounts),
     input.owner,
@@ -1534,6 +1539,14 @@ async function prepare(
     derived,
     // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster.
     coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc)),
+    found,
+  );
+  refuseTooManyAccounts(
+    given.accounts,
+    input.owner,
+    pot,
+    (await deriveExecutionFeeConfigPda(kitchen())).address,
+    found,
   );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
@@ -1569,6 +1582,61 @@ async function prepare(
     derived,
     lookupTables,
   };
+}
+
+/** The most accounts a Solana transaction may lock. */
+export const ACCOUNT_LOCK_LIMIT = 64;
+
+/**
+ * Refuses a cook naming more accounts than a transaction may lock, before anything is signed: the
+ * accounts it attaches, and the cook's own around them — the owner, the Kitchen, the engine, the
+ * Pot, the fee's config and the System program, the compute-budget program, and a staged program's
+ * code buffer and code (staged or not, counted: a cook this wide is staged). Each by its address,
+ * so one the program also attaches counts once; the two buffers have none before the program is
+ * staged, and are its own. An address lookup table the cook goes through is not locked, nor are the
+ * accounts it holds beyond these. Where the program finds pools by key, it says which keys found a
+ * pool: each pool there brings up to eight accounts of its own, so naming fewer keys is how the cook
+ * fits.
+ */
+export function refuseTooManyAccounts(
+  accounts: Readonly<Record<string, string>>,
+  owner: Address,
+  pot: Address,
+  feeConfig: Address,
+  found: ReadonlyMap<string, Address | null>,
+): void {
+  const locked = new Set<string>([
+    owner,
+    pot,
+    kitchen(),
+    engine(),
+    feeConfig,
+    "11111111111111111111111111111111",
+    "ComputeBudget111111111111111111111111111111",
+    // A staged program's code buffer and code: new accounts, distinct from every other.
+    "the code buffer",
+    "its code",
+  ]);
+  for (const value of Object.values(accounts)) {
+    locked.add(value === "pot" ? pot : value === "owner" ? owner : value);
+  }
+  if (locked.size <= ACCOUNT_LOCK_LIMIT) return;
+  // Each as the program spells it: `Orca.Whirlpool(USDC,WSOL,4)` is `Orca.Whirlpool.pool(USDC, WSOL, 4)`.
+  const pools = [...found].map(([key, pool]) => {
+    const spelled = key.replace(
+      /^([^(]+)\((.*)\)$/,
+      (_, venue: string, args: string) => `${venue}.pool(${args.split(",").join(", ")})`,
+    );
+    return pool === null ? `${spelled} finds none` : `${spelled} is ${pool}`;
+  });
+  throw new CliError(
+    `the cook names ${locked.size} accounts, and a Solana transaction locks at most ` +
+      `${ACCOUNT_LOCK_LIMIT}` +
+      (pools.length === 0
+        ? ": attach fewer"
+        : `. The program's pools by key: ${pools.join("; ")}. Each pool there brings up to ` +
+          "eight accounts of its own: name fewer keys, keeping the pools you want."),
+  );
 }
 
 /** What a direct cook is called in what a command prints. */
