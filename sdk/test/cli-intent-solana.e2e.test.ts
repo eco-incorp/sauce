@@ -359,7 +359,13 @@ describeEvm("sauce intent: Base to Solana, filled and proven on Solana, claimed;
       state: "refunded",
       source: { rewardStatus: "Refunded", vaultHolds: [{ holds: "0" }] },
       destination: { chain: "solana", cancelled: true },
-      can: { fill: { ok: false }, claim: { ok: false }, refund: { ok: false } },
+      can: {
+        fill: { ok: false },
+        prove: { ok: false },
+        claim: { ok: false },
+        refund: { ok: false },
+        cancel: { ok: false },
+      },
     });
 
     const events = jsonOf(await run(store, "show", hash, "--json")).events as Array<{

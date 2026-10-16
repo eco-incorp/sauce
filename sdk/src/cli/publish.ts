@@ -63,6 +63,7 @@ import { linkLines, txLinks } from "./links.js";
 import {
   castSend,
   compileProgram,
+  lowerProgram,
   priceLimitNotes,
   refusePastDeadline,
   type CliFiles,
@@ -139,14 +140,11 @@ function otherStatement(file: string, text: string): string | undefined {
 }
 
 /** The intents `input`'s file opens, refusing a file that is not only fixed intents. */
-function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `sauce intent publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
-        "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
-    );
-  }
-  const program = compileProgram(input, files);
+export function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
+  // From Solana only the intents are built: no program there opens one, a wallet publishes it
+  // (`publish-svm.ts`).
+  const program =
+    input.chain.kind === "svm" ? lowerProgram(input, files) : compileProgram(input, files);
   if (program.intents.length === 0) {
     throw new UsageError(
       `${input.file} opens no intent — there is nothing to publish. Run it on a Pot with ` +

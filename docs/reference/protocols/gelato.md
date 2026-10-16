@@ -2,6 +2,12 @@
 
 # Gelato Network (`gelato`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Gelato Network is a building block that other protocols are built on. This page lists the chains
+> it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Web3 automation network for scheduling and executing smart contract functions and off-chain computations.
 
 | Fact | Value |

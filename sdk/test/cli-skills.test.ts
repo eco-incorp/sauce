@@ -632,8 +632,8 @@ describe("sauce init", () => {
     expect((await sauce("init", programs, "--tsconfig", "--agent", "claude")).code).toBe(2);
   });
 
-  it("is the tsconfig.json the CLI guide shows, field for field", () => {
-    const guide = readFileSync(join(SDK, "..", "docs", "guides", "cli.md"), "utf8");
+  it("is the tsconfig.json the CLI's programs guide shows, field for field", () => {
+    const guide = readFileSync(join(SDK, "..", "docs", "guides", "cli-programs.md"), "utf8");
     const shown = /The file it writes is this[^]*?```json\n([^]*?)```/.exec(guide)?.[1];
     expect(shown).toBeDefined();
     expect(JSON.parse(shown!)).toEqual(sauceScriptTsconfig(MANIFEST.name));

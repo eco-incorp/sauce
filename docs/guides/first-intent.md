@@ -171,4 +171,4 @@ same intent from TypeScript.
 
 - Every option of an intent, and how to fund, publish and follow it: [create an intent](intents.md).
 - An intent that posts the next one: [nested intents](nested-intents.md).
-- Every intent command: [the sauce command](cli.md#intents-sauce-run-or-sauce-intent).
+- Every intent command: [the sauce command](cli-intents.md).

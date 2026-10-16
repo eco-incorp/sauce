@@ -56,11 +56,11 @@ function main(recipient: Address, amount: Uint256) {
 
 ## On which chain each name resolves
 
-| Part of the intent                                     | Resolves on       | Notes                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.reward(...)`                                         | the source chain  | it funds and escrows the reward. A reward token must be known when the file is compiled: a symbol, a literal address on the source, a top-level `const` of a literal, or, published from a wallet, one of `main`'s arguments. Its amount may be a measured value |
-| The body (inside the braces) and the delivery argument | the destination   | every name a chain supplies: in an `Ethereum(...)` body `USDC`, `AaveV3.Pool`, `chainId` and a `Namespace_Contract` name are Ethereum's                                                                                                                          |
-| An intent opened inside a body                         | that body's chain | the rule repeats at every depth: its reward resolves there, its own body on its own destination                                                                                                                                                                  |
+| Part of the intent                                     | Resolves on       | Notes                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.reward(...)`                                         | the source chain  | it funds and escrows the reward. A reward token must be known when the file is compiled: a symbol, a literal address on the source, a top-level `const` of a literal, or, published from a wallet, one of `main`'s arguments. Its amount may be a measured value. From Solana `USDC` is Solana's mint, and `--intent-creator` a Solana key |
+| The body (inside the braces) and the delivery argument | the destination   | every name a chain supplies: in an `Ethereum(...)` body `USDC`, `AaveV3.Pool`, `chainId` and a `Namespace_Contract` name are Ethereum's                                                                                                                                                                                                    |
+| An intent opened inside a body                         | that body's chain | the rule repeats at every depth: its reward resolves there, its own body on its own destination                                                                                                                                                                                                                                            |
 
 - **Name a token by a symbol, a literal or a top-level `const` of a literal.** Any other top-level
   `const` holding a token's address (`const TOKEN = USDC;`), used in the reward or the delivery,
@@ -376,8 +376,9 @@ sauce intent cancel <intent-hash> --keypair <keypair>
 - Any other body is a Solana program, cooked through the Kitchen on the Pot the Portal's executor
   owns; the route creates that Pot when it is missing, and the delivery (the intent's second
   argument) is moved into it first. Its bytecode rides in the solver's one fill transaction
-  (1,232 bytes), and the command refuses an intent whose fill would not fit, which today is most
-  programs.
+  (1,232 bytes); a fill too large as it is takes its accounts through an address lookup table the
+  solver creates first (`sauce intent fill` does, with `--send`), and the command refuses an
+  intent whose fill would not fit even then: keep such a program small.
 - The command reads Solana before building (which token accounts and Pot exist; with
   `--intent-execution-fee auto`, the Kitchen's fee in lamports), so it needs Solana's endpoint for
   a program body. Two program intents published before the Pot exists race: only the first filled
@@ -392,7 +393,36 @@ sauce intent cancel <intent-hash> --keypair <keypair>
   the same transaction. Each spend is approved.
 - `prove` and `cancel` sign with `--keypair`, which pays their fee. A cancellation's proof waits
   until the slot that cancelled it is finalized.
-- `sauce intent publish` does not work from Solana: open an intent from Ethereum or Base.
+
+### An intent from Solana
+
+The same intent file publishes from Solana with `--chain solana`: Solana's Portal escrows the
+reward in the intent's vault, a key it derives from the intent's hash, and pays it out on Solana
+once the destination's proof arrives.
+
+```sh
+sauce intent publish <file> --chain solana --keypair <keypair> \
+  --intent-deadline <unix seconds> --intent-creator <solana-key> --args <recipient>
+sauce intent fill <intent-hash> --claimant <solana-key> --send --keystore <keystore>
+sauce intent claim <intent-hash> --keypair <keypair>
+sauce intent refund <intent-hash> --keypair <keypair>
+sauce intent import <signature> --chain solana
+```
+
+- `publish` sends two transactions per intent from the signer: `fund` (the reward into the vault;
+  it fails unless the whole reward arrives), then `publish` (the announcement). A `publish` that
+  fails after its `fund` leaves the reward in the vault, refundable after the reward's deadline.
+  `--format json` prints them unsigned for `--from <solana-key>`.
+- The route travels whole in one Solana transaction: a body of token transfers fits, a program body
+  does not.
+- The fill, proof and cancellation are the EVM destination's, as for any intent; `--claimant` is
+  required there, the Solana key the reward pays (an EVM address is refused). The proof travels to
+  Solana's HyperProver, which takes it from the EVM HyperProver.
+- `claim` and `refund` are Solana transactions any key may pay for (`--keypair`): the claimant, or
+  the creator, is paid, its token account opened first where it has none.
+- Over MCP, `sauce_intent_publish` with `chain` `solana` takes `from` (the key that funds the
+  reward and pays the fees); `sauce_intent_claim` and `sauce_intent_refund` take `from` (any fee
+  payer).
 
 ## Cascades
 
@@ -523,6 +553,8 @@ sauce simulate one-pool-body.sauce.ts --chain base --owner <address> \
 - **A changed deadline or fee after printing a transaction.** It is a different intent: rebuild.
 - **A cascade level on a preview chain.** Later levels are not checked; keep them on supported
   chains.
+- **A program running on Solana opening an intent.** Its compile refuses one, naming
+  `sauce intent publish`: from Solana a wallet publishes it.
 
 ## Files
 

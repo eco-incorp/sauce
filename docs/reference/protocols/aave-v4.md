@@ -2,6 +2,12 @@
 
 # Aave V4 (`aave-v4`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Aave V4 is a lending market: deposit tokens to earn interest, or borrow against them. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Hub-and-spoke lending. Liquidity sits in a Hub; users supply, borrow and repay through Spokes, and each Spoke addresses its assets by reserve id rather than by token address.
 
 | Fact | Value |

@@ -2,6 +2,12 @@
 
 # LayerZero (`layerzero`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> LayerZero is a messenger between chains: it carries messages and tokens from one to another. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT tokens and arbitrary message passing across 50+ chains.
 
 | Fact | Value |

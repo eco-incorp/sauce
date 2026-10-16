@@ -2,6 +2,12 @@
 
 # Thales (`thales`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Thales is an options protocol: the right to buy or sell at a set price later. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Positional markets protocol built on Synthetix offering binary options, speed markets, and sports markets on Optimism.
 
 | Fact | Value |

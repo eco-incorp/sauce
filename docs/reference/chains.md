@@ -2,6 +2,12 @@
 
 # Chains
 
+**Reference** · [Documentation](../README.md)
+
+> Sauce knows 41 chains. On Ethereum, Base and Solana, the `sauce` command builds and sends
+> transactions. Every other chain is a preview chain: programs compile and simulate there, and
+> nothing is sent. Each chain has a page with its tokens and the protocols a program can call on it.
+
 Every chain the SDK knows, with a page each: whether the initial release supports it, ids, native
 coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
@@ -19,7 +25,7 @@ On a preview chain the `sauce` command and the MCP server still simulate and rea
 `sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and
 every read. What they refuse there, before any endpoint is reached or any key is read, is
 building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)
-and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent
+and [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. An intent
 publishes only when its source and every destination it opens are supported; the later levels
 of a cascade (an intent opened inside another's body) are not checked, so keep every level on a
 supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a

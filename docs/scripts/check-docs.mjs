@@ -185,13 +185,12 @@ console.log(`Manual links: ${manual.length} files checked`);
     if (times !== 1)
       shape.push(`docs/README.md: lists ${path} ${times} times; the index lists each page once`);
   }
-  // Every page written by hand opens with a plain-words intro, a blockquote after its title and its
-  // breadcrumb line, before anything else: the manual is for people (CLAUDE.md).
+  // Every page opens with a plain-words intro, a blockquote after its title and its breadcrumb
+  // line, before anything else: the manual is for people (CLAUDE.md). A generated page gets its
+  // intro from its generator, under the note that opens it.
   for (const file of markdownFiles(docs)) {
-    const text = readFileSync(file, "utf8");
-    if (text.startsWith("<!-- Generated")) continue;
-    const lines = text.split("\n");
-    let at = 1;
+    const lines = readFileSync(file, "utf8").split("\n");
+    let at = lines.findIndex((line) => line.startsWith("# ")) + 1;
     const skipBlank = () => {
       while (lines[at] === "") at++;
     };
@@ -202,12 +201,20 @@ console.log(`Manual links: ${manual.length} files checked`);
     }
     if (!(lines[at] ?? "").startsWith("> "))
       shape.push(
-        `${page(file)}: opens with no plain-words intro; begin with a short blockquote after its title and breadcrumb`,
+        `${page(file)}: opens with no plain-words intro; begin with a short blockquote after its title and breadcrumb` +
+          (lines[0].startsWith("<!-- Generated") ? " (in its generator)" : ""),
       );
   }
   // The manual is in four parts, Diátaxis's: the index places every page under one of its four
   // sections, and the page says which on its breadcrumb line, `**How-to guide** · [Documentation]…`,
   // so a reader knows what kind of page it is and a page stays in that mode (CLAUDE.md).
+  const generatedPage = (file) => readFileSync(file, "utf8").startsWith("<!-- Generated");
+  /** The first line after a page's title: its breadcrumb. */
+  const crumbOf = (file) => {
+    const lines = readFileSync(file, "utf8").split("\n");
+    const title = lines.findIndex((one) => one.startsWith("# "));
+    return lines.slice(title + 1).find((one) => one !== "") ?? "";
+  };
   const KINDS = {
     Tutorials: "Tutorial",
     "How-to guides": "How-to guide",
@@ -235,14 +242,18 @@ console.log(`Manual links: ${manual.length} files checked`);
       continue;
     }
     if (!existsSync(file)) continue;
-    const text = readFileSync(file, "utf8");
-    if (text.startsWith("<!-- Generated")) continue;
-    const lines = text.split("\n");
-    const title = lines.findIndex((one) => one.startsWith("# "));
-    const crumb = lines.slice(title + 1).find((one) => one !== "") ?? "";
-    if (!crumb.startsWith(`**${kind}** · `))
+    if (!crumbOf(file).startsWith(`**${kind}** · `))
       shape.push(
-        `${path}: is listed under ${part}, so its breadcrumb line starts \`**${kind}** · \``,
+        `${path}: is listed under ${part}, so its breadcrumb line starts \`**${kind}** · \`` +
+          (generatedPage(file) ? " (in its generator)" : ""),
+      );
+  }
+  // A page the index does not list, a chain's or a protocol's, says its part as well.
+  for (const file of markdownFiles(docs)) {
+    if (file === index) continue;
+    if (!Object.values(KINDS).some((kind) => crumbOf(file).startsWith(`**${kind}** · `)))
+      shape.push(
+        `${page(file)}: its breadcrumb line names no part of the manual: ${Object.values(KINDS).join(", ")}`,
       );
   }
   // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.

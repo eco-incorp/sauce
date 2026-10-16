@@ -331,7 +331,7 @@ swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: 
 
 - **`slot`** is the pool's accounts, the System program for any the venue does not take:
   `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`.
-  [`sauce pools`](../guides/cli.md#sauce-pools) prints each pool's slot for the direction paid. Some
+  [`sauce pools`](../guides/cli-lookup.md#a-pairs-pools-sauce-pools) prints each pool's slot for the direction paid. Some
   venues take accounts past the nine: at its own limit, a Raydium-layout pool (Raydium CLMM,
   PancakeSwap CLMM, Byreal, Stabble CLMM) its tick-array bitmap extension tenth, which its swap reads
   past the pool's default range (a slot of nine sends none, and so does every form at a price);

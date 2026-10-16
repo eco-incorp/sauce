@@ -31,7 +31,7 @@ what the route's calls spend, and resolves registered token and protocol address
 deadlines and the creator, read the Kitchen fee, fund the reward and submit. A solver then decides
 whether to fulfill it; the SDK does not price the reward or promise a fill.
 
-The SDK builds an intent between any two registry chains. For the initial release, Sauce supports
+The SDK builds an intent between any two registry chains. Sauce sends
 transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
 [MCP server](mcp.md) publish an intent only when its source and every destination it opens, nested
 ones included, are among them; each step after publishing is refused on a preview chain by the
@@ -171,7 +171,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 }
 ```
 
-The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana; a program builds that route for you, as [Sending to Solana](#sending-to-solana) shows.
+The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana; a program builds that route for you, as [Sending to Solana](#sending-to-solana) shows. An intent can also start on Solana, published from a Solana wallet: see [An intent from Solana](cli-intents.md#an-intent-from-solana).
 
 The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above, and the route's `nativeAmount`, which the solver sends, is that fee. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
@@ -506,8 +506,10 @@ Two intents built before either is filled would both try to create it, and the s
 be filled; its reward would come back to you after its deadline, and the command warns you.
 
 A program's bytecode travels inside the solver's one fill transaction, which Solana caps at 1,232
-bytes. The command refuses an intent whose fill would not fit, so you never publish one nobody can
-fill. Today that rules out most programs: pay with token transfers instead.
+bytes. When the fill's accounts make it too large, the solver first puts them in an address lookup
+table, where each costs one byte instead of 32; `sauce intent fill` does that for you. Even so, only
+a small program fits, such as one that checks a value and pays it on. The command refuses an intent
+whose fill would not fit, so you never publish one nobody can fill.
 
 ## Callbacks are compiled source
 
@@ -544,7 +546,7 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 **Pass the vault you read.** `vault` is checked against `predictVault()`, the SDK's own derivation, and a mismatch throws `IntentVaultMismatchError` before anything is built: a transfer is final, so an address two sources disagree on is not paid. Without `vault`, the derivation alone is used. It is held to the `intentVaultAddress` of every eco-routes Portal the SDK records.
 
-**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) does all of this for you.
+**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce intent publish`](cli-intents.md) does all of this for you.
 
 `sourceTxs({ fundVia: "publishAndFund" })`, or `IntentOptions.fundVia: "publishAndFund"`, returns `[...approvals(), publishAndFundCalldata(allowPartial)]` instead. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the vault, records the intent `Funded` and emits `IntentFunded`. Native rewards are included as transaction `value`. Wait for successful approvals before funding. `allowPartial` defaults to `false`; use partial funding only when the application deliberately supports it. Choose this mode when something you rely on reads the `IntentFunded` event or the `Funded` status rather than the vault's balance.
 
@@ -577,12 +579,12 @@ export function solverTransactions(built: routes.BuiltIntent, claimant: routes.H
 Simulate them before publishing. A route that cooks needs the shared Pot deployed first, so a
 simulation on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
 of the fill, in the same simulated block. From the command line,
-[`sauce intent fill`](cli.md#simulating-the-fill-sauce-intent-fill) does all of it with no key: it
+[`sauce intent fill`](cli-intents.md#simulating-a-fill-in-detail) does all of it with no key: it
 builds the file's intents as `sauce intent publish` does, gives a solver the route's tokens by
 state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
 the destination, and prints what moved, what the shared Pot and the Executor were left holding, and
 the decoded reason when it reverts. With `--send` and a signer it then sends them, the signer being
-the solver ([`fill --send`](cli.md#filling-it-for-real-sauce-intent-fill---send)), on a supported
+the solver ([`fill --send`](cli-intents.md#filling-for-real-in-detail)), on a supported
 destination only.
 
 ## After the fill: prove, claim, refund, cancel
@@ -649,9 +651,9 @@ export function afterTheFill(intent: routes.Intent, fee: bigint) {
 
 `routes.fulfillAndProveTx(intent, { claimant, ...proof })` is the fill and its proof in one, and
 `routes.cancelAndProveTx(intent, proof)` the cancellation and its. From the command line,
-[`sauce intent prove, claim, refund and cancel`](cli.md#after-the-fill-prove-claim-refund-cancel)
+[`sauce intent prove, claim, refund and cancel`](cli-intents.md#after-the-fill)
 send them on a supported chain, reading the state first and saying why not, and
-[`sauce intent status`](cli.md#after-the-fill-prove-claim-refund-cancel) reads where an intent
+[`sauce intent status`](cli-intents.md#after-the-fill) reads where an intent
 stands on both chains. `routes.intentFromPublished(log, sourceChainId)` rebuilds an intent from its
 `IntentPublished` log, which `sauce intent import` stores.
 
