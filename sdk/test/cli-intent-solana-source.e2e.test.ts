@@ -114,7 +114,7 @@ describeEvm("sauce intent: Solana to Base, claimed on Solana; cancelled and refu
   let relayer: KeyPairSigner;
   let usdc: Address;
   let mailbox: Address;
-  let relayedFrom = 0n;
+  const relayed = new Set<Hex>();
   /** The harness helpers take an engine harness; they need only its bank. */
   const bank = (): EngineHarness => ({ svm }) as unknown as EngineHarness;
   const now = async (): Promise<bigint> => (await base.publicClient.getBlock()).timestamp;
@@ -137,16 +137,18 @@ describeEvm("sauce intent: Solana to Base, claimed on Solana; cancelled and refu
     return json.intents[0]!.intentHash;
   }
 
-  /** Hyperlane's delivery from Base to Solana: every message Base's Mailbox dispatched since the
-   *  last relay, read from its `Dispatch` logs and processed by Solana's Mailbox. */
+  /** Hyperlane's delivery from Base to Solana: every message Base's Mailbox dispatched that has not
+   *  been delivered yet, read from its `Dispatch` logs and processed by Solana's Mailbox. Kept by
+   *  message, not by block: viem caches the block number, so a block bound could read one twice,
+   *  which the Mailbox refuses (MessageAlreadyProcessed). */
   async function relay(): Promise<number> {
-    const logs = await base.publicClient.getLogs({ address: mailbox, fromBlock: relayedFrom });
-    relayedFrom = (await base.publicClient.getBlockNumber()) + 1n;
+    const logs = await base.publicClient.getLogs({ address: mailbox, fromBlock: 0n });
     let delivered = 0;
     for (const log of logs) {
       const decoded = decodeEventLog({ abi: MAILBOX, data: log.data, topics: log.topics });
-      if (decoded.eventName !== "Dispatch") continue;
+      if (decoded.eventName !== "Dispatch" || relayed.has(decoded.args.message)) continue;
       await deliverToSolana(svm, relayer, decoded.args.message);
+      relayed.add(decoded.args.message);
       delivered++;
     }
 
