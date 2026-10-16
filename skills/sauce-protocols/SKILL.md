@@ -1,46 +1,62 @@
 ---
 name: sauce-protocols
-description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with an address), available(...) for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
+description: Choosing and calling a DeFi protocol from a Sauce program, from the SDK's registry. An index of every protocol by category with how to choose between them (a lending market against another, a concentrated-liquidity pool against a V2 pair or a stable pool, an aggregator, a bridge), a generated registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls for a program, a compiled example, its templates). Covers reaching a protocol through its namespace or an ABI import, a chain that may lack it, factories and pool lookups, address-only factories, Solidity idioms in SauceScript, and checking a recorded address has code. Use when a program must call a protocol (Aave, Morpho, Lido, Curve, Balancer, PancakeSwap V3, Aerodrome Slipstream, Camelot, CCTP, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
 ---
 
 # Protocols
 
-Every protocol the SDK registers is in [references/index.md](references/index.md), grouped by
-category, each with **how to choose between them**. Each protocol then has:
-
-- `references/registry/<slug>.md`, generated from the registry: its deployments on every chain, how
-  a program names each contract there, and its ABI functions (for example
-  [references/registry/uniswap-v3.md](references/registry/uniswap-v3.md));
-- `references/<slug>.md`, its document: what it is for, its pitfalls for a program, a compiled
-  example, its templates and notes (for example [references/aave-v3.md](references/aave-v3.md)).
+Every protocol the SDK registers, and how a program reaches it. This skill owns choosing a
+protocol and the per-protocol facts: the index by category, a registry file and a document per
+protocol. How a call is written is `sauce-script`'s; what a namespace member is, `sauce-globals`'s;
+a swap, `sauce-swaps`'s.
 
 ## When to use
 
-- A program must call a protocol: find how it is named on the program's chain.
-- Choosing between protocols that do the same job: the category's "Choosing between them".
-- You need a factory, router or pool address on a chain, or want a protocol's pitfalls first.
+| Task                                                       | Here | Elsewhere                                                             |
+| ---------------------------------------------------------- | ---- | --------------------------------------------------------------------- |
+| Pick a protocol for a job (lend, stake, bridge, a pool)    | yes  |                                                                       |
+| A protocol's deployments, contract names and ABI functions | yes  | one chain's every protocol: `sauce-chains`                            |
+| A protocol's pitfalls before calling it                    | yes  |                                                                       |
+| A swap                                                     |      | `sauce-swaps` (a program never swaps through a protocol's own router) |
+| Work on another chain                                      |      | `sauce-intents` (not a bridge call alone)                             |
 
-## Quick reference
+## Core model
 
-A program reaches a catalogued protocol through its **registry namespace**, with no import: the
-address and the ABI come from the registry for the chain the program is compiled for. A namespace
-member is one of three kinds:
+Each protocol has three files under [references/](references/index.md):
 
-| Member              | Example                                                  | In a program                         |
-| ------------------- | -------------------------------------------------------- | ------------------------------------ |
-| A deployed contract | `PancakeswapV3.Factory`, `AerodromeSlipstream.CLFactory` | its address; `.method(...)` calls it |
-| An address only     | `Camelot.V3Factory` (no ABI the registry has verified)   | its address                          |
-| An interface        | `Erc4626.Vault` (a vault has no one fixed address)       | `(address).method(...)`              |
+| File                                                                                  | Generated | Gives                                                                                      |
+| ------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------ |
+| [references/index.md](references/index.md)                                            | yes       | every protocol by category, each category with "Choosing between them"                     |
+| `references/registry/<slug>.md`, e.g. [uniswap-v3](references/registry/uniswap-v3.md) | yes       | its deployments on every chain, how a program names each contract there, its ABI functions |
+| `references/<slug>.md`, e.g. [aave-v3](references/aave-v3.md)                         | no        | what it is for, its pitfalls for a program, a compiled example, its templates and notes    |
 
-An interface is called with the address of a deployment, `Erc4626.Vault(vault).totalAssets()`
-(`.at(vault)` is the same). `.at(address)` also reaches another deployment of a deployed contract's
-ABI; a deployed contract's name is never called with an address. A contract the
-registry does not record at all is called through its ABI, imported from
-`./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
-`main` input.
+A program reaches a protocol through its **registry namespace**, with no import: address and ABI
+come from the registry for the chain it is compiled for (`AaveV3.Pool.supply(...)`). Where the
+chain has no namespace for it, through the protocol's **ABI import**,
+`./protocols/<slug>/<Export>.json`, bound with `.at(address)` to an address passed as a `main`
+input. Namespace members (deployed contract, address only, interface) are `sauce-globals`'s.
 
-A program that should also compile for a chain without the protocol asks `available(...)`, which is
-decided when it is compiled; the branch it rules out is left out, names and all:
+## Choosing
+
+| Question                     | Answer                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Which protocol for a job     | the category's "Choosing between them" in [references/index.md](references/index.md)                     |
+| How to name a contract       | the registry file's "In a program" column for your chain                                                 |
+| A chain may lack it          | `if (available(Namespace.Contract)) { … }` (`sauce-globals`)                                             |
+| A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
+| An address-only factory      | discover the pool off chain and pass its address as a `main` input                                       |
+| A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`)                                                 |
+| Code on another chain        | an intent (`sauce-intents`)                                                                              |
+
+## Calling a protocol
+
+1. **Find it**: its category in [references/index.md](references/index.md), then its registry file:
+   is it deployed on the program's chain, and how does a program name the contract there?
+2. **Read its document's pitfalls** (`references/<slug>.md`) before writing the call: approvals,
+   who receives the output, caps and pauses, rebasing receipts.
+3. **Write the call** through the namespace, deciding who receives the output (`sauce-script`).
+   A program meant also for a chain without the protocol asks `available(...)`, decided when it is
+   compiled; the branch it rules out is left out, names and all:
 
 ```sauce chain=base,arbitrum,optimism
 function main(fee: Uint256) {
@@ -53,72 +69,49 @@ function main(fee: Uint256) {
 }
 ```
 
-With that program in `pools.sauce.ts`, a run on Base passes nothing but the fee (in millionths:
-`500` is the 0.05% tier):
+4. **Compile, simulate and run it** (`sauce-cli`). With that program in `pools.sauce.ts`, a run on
+   Base passes nothing but the fee, in millionths (`500` is the 0.05% tier):
 
 ```sh
 sauce run pools.sauce.ts --chain base --keystore <keystore> \
   --args 500
 ```
 
-Written without `available(...)`, a member is required: the program does not compile for a chain
-that lacks it.
+## Reading a protocol document
 
-## Decision guidance
+- **Its templates are typed programs for the raw compiler**: their
+  `import { PoolABI as IPool } from "./abis"` is served by the template's caller. In a program for
+  a chain, use the namespace instead.
+- **Its Solidity idioms have SauceScript spellings**:
 
-| Question                     | Answer                                                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Which protocol for a job     | the category's "Choosing between them" in [references/index.md](references/index.md)                     |
-| How to name a contract       | the registry file's "In a program" column for your chain                                                 |
-| A chain may lack it          | `if (available(Namespace.Contract)) { … }`                                                               |
-| A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
-| A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`), not the protocol's own router                  |
-| Code on another chain        | a Sauce intent (`sauce-intents`), not a bridge call alone                                                |
+| Solidity            | SauceScript       |
+| ------------------- | ----------------- |
+| `msg.sender`        | `ctx.msgSender()` |
+| `address(this)`     | `ctx.self()`      |
+| `type(uint256).max` | `~0`              |
 
-## Workflow
+- **"The caller" or "self" is the Pot** in a Sauce program: what lands there stays in the Pot, not
+  in the user's wallet, until another cook moves it.
 
-1. Find the protocol in [references/index.md](references/index.md) and open its registry file:
-   check it is deployed on your chain and how a program names the contract there.
-2. Read its document's pitfalls before writing the call.
-3. Write the program, compile it for the chain (`sauce compile <file> --chain <slug>`), and hand the
-   cook to any signer as `sauce tx`'s unsigned JSON, `{ chainId, to, data, value }`, or send it with
-   `sauce run` (`sauce-cli`). For the initial release that is on Ethereum, Base or Solana: every
-   protocol on every chain compiles and simulates, but on a preview chain `sauce tx` and `sauce run`
-   are refused with the chain-support request for that chain (`sauce-chains`).
+## Pitfalls
 
-## Common gotchas
+- **Recorded is not live.** A registry address is not proof of code: confirm `eth_getCode` returns
+  code before relying on it.
+- **Swapping through a protocol's own router.** Use `@sauce/router` (`sauce-swaps`).
+- **An address-only factory called for a pool** (Algebra forks such as Camelot V3 and QuickSwap
+  V3): the registry has no verified ABI with its pool lookup; pass the pool as a `main` input.
+- **A standing allowance.** Approve exactly what the call spends: the Pot keeps any allowance it
+  grants.
+- **An output left in the Pot by default.** A call naming no beneficiary credits its caller, the
+  Pot; pass the user's wallet where they chose it.
+- **A receipt measured by the amount supplied.** Rebasing receipts (aTokens) grow: measure deltas.
 
-- **Recorded is not live.** A registry address is what the registry records, not proof of code on
-  the chain: confirm `eth_getCode` returns code before relying on it.
-- **A document's templates are typed programs for the raw compiler**: their
-  `import { PoolABI as IPool } from "./abis"` is served by the template's caller. In a program for a
-  chain, use the namespace instead.
-- **Some factories are addresses only** (Algebra forks such as Camelot V3 and QuickSwap V3): the
-  registry has no verified ABI with their pool lookup, so discover the pool off chain and pass its
-  address as a `main` input.
-- **Solidity idioms in a document have SauceScript spellings**: `msg.sender` is `ctx.msgSender()`,
-  `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0`
-  ([../sauce-script/references/builtins.md](../sauce-script/references/builtins.md)).
-- **Approve exactly what the call spends**: the Pot keeps any allowance it grants.
-- **Who receives the output is the program's choice.** A call that names a beneficiary
-  (`onBehalfOf`, `receiver`, `recipient`, `to`) credits it; one that names none credits its
-  caller, the Pot. A document's "the caller" or "self" is the Pot in a Sauce program, and what
-  lands there stays in the Pot, not in the user's wallet, until another cook moves it. Ask the
-  user which they want, and pass their wallet as a `main` parameter to deliver it.
+## Files
 
-## Verification checklist
-
-- [ ] The protocol is deployed on the program's chain, and the address has code.
-- [ ] Each contract is named as its registry file says for that chain, or behind `available(...)`.
-- [ ] The document's pitfalls are handled: approvals, balance deltas, minimums.
-- [ ] Every output ends where the user asked: their wallet, or the Pot when they chose it.
-- [ ] The program compiles with `--chain`.
-- [ ] Its transaction goes to a supported chain (Ethereum, Base or Solana); a protocol on a preview
-      chain is compiled and simulated, and the chain requested.
-
-## Example
-
-[examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,
-PancakeSwap V3 through their namespaces; [examples/protocols.mts](examples/protocols.mts) compiles it
-for Base, Arbitrum and Optimism (the last two preview chains, compiled only), loads a protocol
-document, and compiles a protocol template.
+- [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has
+  it, PancakeSwap V3 through their namespaces.
+- [examples/protocols.mts](examples/protocols.mts) compiles it for Base, Arbitrum and Optimism (the
+  last two preview chains, compiled only), loads a protocol document, and compiles a protocol
+  template.
+- [references/index.md](references/index.md), `references/registry/<slug>.md` (generated) and
+  `references/<slug>.md` (one document per protocol).

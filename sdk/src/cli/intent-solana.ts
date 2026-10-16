@@ -85,18 +85,18 @@ export async function solanaIntentState(
   ];
   let found: ReadonlyArray<unknown>;
   try {
-    // One read for every account, a hundred at most per request as the method allows.
-    const pages: unknown[] = [];
-    for (let at = 0; at < keys.length; at += 100) {
-      const { value } = await rpc
-        .getMultipleAccounts(
-          keys.slice(at, at + 100).map((key) => address(key)),
-          { encoding: "base64", commitment: "confirmed" },
-        )
-        .send();
-      pages.push(...value);
-    }
-    found = pages;
+    // Every account read at once, a hundred at most per request as the method allows.
+    const pages = await Promise.all(
+      Array.from({ length: Math.ceil(keys.length / 100) }, (_, page) =>
+        rpc
+          .getMultipleAccounts(
+            keys.slice(page * 100, page * 100 + 100).map((key) => address(key)),
+            { encoding: "base64", commitment: "confirmed" },
+          )
+          .send(),
+      ),
+    );
+    found = pages.flatMap(({ value }) => value);
   } catch (error) {
     throw new CliError(
       `reading the accounts of the intent's route from ${chain.slug} failed: ` +

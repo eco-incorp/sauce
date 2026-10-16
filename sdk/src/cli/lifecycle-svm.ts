@@ -21,6 +21,7 @@ import {
   createSolanaRpc,
   createTransactionMessage,
   generateKeyPairSigner,
+  getAddressDecoder,
   getBase64Decoder,
   getBase64Encoder,
   getBase64EncodedWireTransaction,
@@ -560,6 +561,10 @@ function fillInstructions(intent: Intent, fulfill: Instruction): Instruction[] {
     : [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill];
 }
 
+/** Any key stands for the solver, and for a lookup table, in a size: 32 bytes like every other. */
+const PLACEHOLDER_SOLVER = getAddressDecoder().decode(new Uint8Array(32).fill(7));
+const PLACEHOLDER_TABLE = getAddressDecoder().decode(new Uint8Array(32).fill(8));
+
 /**
  * The size of `intent`'s fill on the wire, as {@link planSvmFill} builds it for any solver, and
  * whether it takes its accounts through a lookup table to get there: whether a solver can send it
@@ -569,7 +574,7 @@ function fillInstructions(intent: Intent, fulfill: Instruction): Instruction[] {
 export async function svmFillBytes(
   intent: Intent,
 ): Promise<{ readonly bytes: number; readonly table: boolean }> {
-  const solver = (await generateKeyPairSigner()).address;
+  const solver = PLACEHOLDER_SOLVER;
   const fulfill = await buildPortalFulfillInstruction({
     intent,
     portal: svmKeyOf(intent.route.portal),
@@ -583,10 +588,10 @@ export async function svmFillBytes(
   const plain = wireBytes(solver, instructions);
   if (plain <= SVM_PACKET_BYTES) return { bytes: plain, table: false };
   // Through a lookup table: its address is any key, its addresses the fill's.
-  const table = (await generateKeyPairSigner()).address;
-
   return {
-    bytes: wireBytes(solver, instructions, { [table]: tableAddresses(instructions) }),
+    bytes: wireBytes(solver, instructions, {
+      [PLACEHOLDER_TABLE]: tableAddresses(instructions),
+    }),
     table: true,
   };
 }

@@ -172,6 +172,9 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
   }
 
   /** `text` published from the owner's Ethereum wallet with `args`; the hash of its one intent. */
+  /** What the last `publish` said beside its result. */
+  let said = "";
+
   async function publish(store: string, text: string, ...args: string[]): Promise<Hex> {
     const file = join(work, `intent-${Math.random().toString(16).slice(2)}.sauce.ts`);
     writeFileSync(file, text);
@@ -184,6 +187,7 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
       ...["--args", ...args],
     );
     if (published.code !== 0) throw new Error(published.stderr);
+    said = published.stderr;
     const [only] = jsonOf(published).intents as Array<{ intentHash: Hex }>;
 
     return only!.intentHash;
@@ -292,6 +296,10 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
       const store = mkdtempSync(join(work, "store-"));
       const recipient = await wallet();
       const hash = await publish(store, PROGRAM, recipient.key, String(AMOUNT), String(REWARD));
+      // The first route creates the Pot, and says another published before it is filled races it;
+      // the second, read once the Pot exists, does not. Both fills need a lookup table.
+      expect(said.includes("does not exist yet: this intent's route creates it")).toBe(round === 1);
+      expect(said).toContain("only through an address lookup table");
       // Too large for one transaction as it is: a simulation says the table comes first.
       const planned = await intent(
         store,

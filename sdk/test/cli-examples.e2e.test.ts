@@ -16,6 +16,10 @@
  * back by `sauce inspect --source`. `payout.sauce.ts`: a JSON array of records as its argument, the
  * Pot's measured USDC split by weight with the remainder to the last payee, and the weights' guard.
  *
+ * The manual's quick start, `docs/examples/pay.sauce.ts`, runs here too: its header's `sauce
+ * simulate` and `sauce run` lines for Base, as written, from the wallet `me` the page makes, the
+ * Pot deployed when the run asks and paying from what the page has its reader send it.
+ *
  * The output the skill quotes is the output of these runs: each ```text block of its SKILL.md that
  * quotes one is held, line by line, to what the command printed here, with the addresses written as
  * the roles the skill names them by. Each quoted rehearsal runs on the chain as `beforeAll` leaves
@@ -534,6 +538,67 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(await base.balanceOf(usdc, PAYEE_B)).toBe(75_000_001n);
       expect(await base.balanceOf(usdc, pot)).toBe(0n);
       expect(await base.balanceOf(usdc, wallet)).toBe(2_000_000_000n - 250_000_001n);
+    }, 120_000);
+  });
+
+  describe("the manual's quick start, docs/examples/pay.sauce.ts", () => {
+    const PAY = relative(process.cwd(), join(HERE, "../../docs/examples/pay.sauce.ts"));
+    /** The `sauce <command> pay.sauce.ts --chain base` line of the example's header, as words, its
+     *  `<recipient>` filled in and the file given by its path. */
+    const usage = (command: string): string[] => {
+      const line = readFileSync(PAY, "utf8")
+        .split("\n")
+        .map((one) => one.replace(/^\/\/\s*/, ""))
+        .find((one) => one.startsWith(`sauce ${command} pay.sauce.ts --chain base `));
+      if (line === undefined) throw new Error(`pay.sauce.ts has no \`sauce ${command}\` line`);
+
+      return line
+        .split(/\s+/)
+        .slice(1)
+        .map((word) => ({ "pay.sauce.ts": PAY, "<recipient>": RECIPIENT })[word] ?? word);
+    };
+    /** The quick start's wallet, `me`, made as the page makes it: its password from a variable here,
+     *  where the page's reader types it at the prompt. */
+    const PASSWORD = ["--password-env", "SAUCE_WALLET_PASSWORD"];
+    let me: Address;
+
+    beforeAll(async () => {
+      await fresh();
+      me = getAddress(
+        jsonOf(await sauce("wallet", "new", "me", ...PASSWORD, "--json")).address as string,
+      );
+      await base.send(base.deployer, me, "0x", parseEther("1"));
+      snapshot = await base.testClient.snapshot();
+    }, 120_000);
+
+    it("simulates as the page says: the wallet names the owner, no password, nothing sent", async () => {
+      await fresh();
+      const run = await sauce(...usage("simulate"), ...rpc(), "--json");
+      expect(jsonOf(run)).toMatchObject({ ok: true });
+      expect(jsonOf(run).transfers).toContainEqual(
+        expect.objectContaining({ token: usdc, to: RECIPIENT, amount: "1000000" }),
+      );
+      expect(await base.balanceOf(usdc, RECIPIENT)).toBe(0n);
+      // Past what the Pot holds, its own check stops it.
+      const short = await sauce(
+        ...usage("simulate").map((word) => (word === "USDC:5" ? "USDC:0.5" : word)),
+        ...rpc(),
+      );
+      expect(short.code).toBe(1);
+      expect(short.stdout).toContain('The cook reverts: the program threw "not enough USDC"');
+    }, 120_000);
+
+    it("runs as the page says: the Pot deployed when asked, then 1 USDC paid from it", async () => {
+      await fresh();
+      // The page's step before the run: 1 USDC sent to the Pot's address.
+      const pot = getAddress(v12PredictPot(me) as Address);
+      await base.mint(usdc, pot, 1_000_000n);
+      const run = await sauce(...usage("run"), ...PASSWORD, ...rpc());
+      expect(run.code).toBe(0);
+      expect(run.stdout).toMatch(/^deployed Pot 0x[0-9a-fA-F]{40} in 0x[0-9a-f]{64}: success/m);
+      expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
+      expect(await base.balanceOf(usdc, RECIPIENT)).toBe(1_000_000n);
+      expect(await base.balanceOf(usdc, pot)).toBe(0n);
     }, 120_000);
   });
 });
