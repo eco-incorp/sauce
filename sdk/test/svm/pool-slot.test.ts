@@ -60,8 +60,8 @@ describe("svmPoolSlot", () => {
     await expect(svmPoolSlot(load, usdcUsdt.pool, WSOL)).rejects.toThrow(
       `Stabble CLMM pool ${usdcUsdt.pool} trades`,
     );
-    const dlmm = pool("meteora-dlmm-sol-usdc");
-    await expect(svmPoolSlot(load, dlmm.pool, USDC)).rejects.toThrow(
+    const book = pool("manifest-sol-usdc");
+    await expect(svmPoolSlot(load, book.pool, USDC)).rejects.toThrow(
       "which is not a venue whose swap stops at a price limit",
     );
     const nowhere = address("11111111111111111111111111111112") as Address;
@@ -75,6 +75,7 @@ describe("svmPoolSlot", () => {
     ["defituna-sol-usdc", "DefiTuna pool"],
     ["crema-sol-usdc", "Crema pool"],
     ["phoenix-sol-usdc", "Phoenix market"],
+    ["meteora-dlmm-sol-usdc", "Meteora DLMM pool"],
   ])(
     "%s: an account of the venue's program that is not a pool is refused before anything else is read",
     async (name, what) => {
@@ -92,6 +93,74 @@ describe("svmPoolSlot", () => {
       expect(read).toEqual([p.pool]);
     },
   );
+
+  // The SOL/USDC pool's bin arrays, by index: its active bin, -6260, is in -90, and -88 to -92 all
+  // hold liquidity. Paying SOL, its token X, the walk goes down; paying USDC, its token Y, up.
+  const BIN_ARRAYS: Record<number, Address> = {
+    [-88]: address("88CrJuawxX8QQETR5U8gMrjP6fftzUYwSYJyeXBXmU2g"),
+    [-89]: address("8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF"),
+    [-90]: address("EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC"),
+    [-91]: address("BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv"),
+  };
+  const SYSTEM = address("11111111111111111111111111111111");
+
+  it("meteora-dlmm-sol-usdc: the slot paying either token, two bin arrays its bitmap marks", async () => {
+    const p = pool("meteora-dlmm-sol-usdc");
+    const head = [
+      p.program,
+      p.pool,
+      address("D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6"),
+      address("EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o"),
+      address("CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz"),
+      address("59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li"),
+    ];
+    expect(svmSlotAccounts(await svmPoolSlot(load, p.pool, WSOL))).toEqual([
+      ...head,
+      BIN_ARRAYS[-90],
+      BIN_ARRAYS[-91],
+      SYSTEM,
+    ]);
+    expect(svmSlotAccounts(await svmPoolSlot(load, p.pool, USDC))).toEqual([
+      ...head,
+      BIN_ARRAYS[-90],
+      BIN_ARRAYS[-89],
+      SYSTEM,
+    ]);
+  });
+
+  it("meteora-dlmm-sol-usdc: past an unmarked array to the next marked, and no slot without one", async () => {
+    const p = pool("meteora-dlmm-sol-usdc");
+    const bitmap = (edit: (bits: Uint8Array) => void): OwnedAccountLoader => {
+      const data = new Uint8Array(BYTES.get(p.pool)!);
+      edit(data.subarray(584, 584 + 128));
+      return async (at) => (at === p.pool ? { data, owner: p.program } : load(at));
+    };
+    const clear = (bits: Uint8Array, index: number) =>
+      (bits[(index + 512) >> 3]! &= ~(1 << ((index + 512) & 7)));
+    // -90 (the active bin's) unmarked: paying USDC, the arrays above it.
+    const above = await svmPoolSlot(
+      bitmap((bits) => clear(bits, -90)),
+      p.pool,
+      USDC,
+    );
+    expect(above.ticks).toEqual([BIN_ARRAYS[-89], BIN_ARRAYS[-88], SYSTEM]);
+    // Nothing marked below -90: paying SOL, its one array.
+    const alone = await svmPoolSlot(
+      bitmap((bits) => {
+        for (let index = -512; index < -90; index++) clear(bits, index);
+      }),
+      p.pool,
+      WSOL,
+    );
+    expect(alone.ticks).toEqual([BIN_ARRAYS[-90], SYSTEM, SYSTEM]);
+    await expect(
+      svmPoolSlot(
+        bitmap((bits) => bits.fill(0)),
+        p.pool,
+        WSOL,
+      ),
+    ).rejects.toThrow("no bin array holds liquidity below its active bin");
+  });
 
   it("reads a Raydium-layout pool's tick arrays that hold nothing together, not one by one", async () => {
     const p = pool("raydium-clmm-sol-usdc");

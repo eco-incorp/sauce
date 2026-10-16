@@ -470,6 +470,93 @@ describe("a pool given by its address (sauce price --pool)", () => {
   });
 });
 
+describe("sauce pools on Solana, a Meteora DLMM pool", () => {
+  // The SOL/USDC pool as mainnet held it (`test/svm/fixtures/meteora-dlmm/`): its active bin -6260,
+  // in bin array -90, its bin step 4 and base fee 0.04%, its volatility long decayed.
+  const FIXTURE = new URL("./svm/fixtures/meteora-dlmm/", import.meta.url);
+  const account = (address: string): Uint8Array =>
+    new Uint8Array(
+      Buffer.from(
+        (
+          JSON.parse(readFileSync(new URL(`${address}.json`, FIXTURE), "utf8")) as {
+            base64Data: string;
+          }
+        ).base64Data,
+        "base64",
+      ),
+    );
+  const DLMM = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
+  const POOL = "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6";
+  const ARRAYS = {
+    [-89]: "8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF",
+    [-90]: "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+    [-91]: "BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv",
+  };
+  const SYSTEM = "11111111111111111111111111111111";
+  const list = async (edit: (pair: Uint8Array) => void = () => {}) => {
+    const pair = account(POOL);
+    edit(pair);
+    const stub = await solanaRpcStub({
+      scans: { [DLMM]: [{ pubkey: POOL, data: pair }] },
+      accounts: { [ARRAYS[-90]]: { owner: DLMM, data: account(ARRAYS[-90]) } },
+    });
+    try {
+      const run = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "SOL", "--rpc-url", stub.url, "--json"],
+      );
+      expect(run.code).toBe(0);
+      return JSON.parse(run.stdout) as {
+        pools: {
+          venue: string;
+          pool: string;
+          fee: number;
+          liquidity: string;
+          sides: { pay: string; maxPrice: string }[];
+          slots: Record<string, { config: string; ticks: string[] }>;
+        }[];
+        skipped: { venue: string; pool: string; why: string }[];
+      };
+    } finally {
+      await stub.close();
+    }
+  };
+
+  it("lists it at its active bin's price and fee, its slots two bin arrays either way", async () => {
+    const out = await list();
+    expect(out.pools).toHaveLength(1);
+    const [listed] = out.pools;
+    expect(listed).toMatchObject({ venue: "Meteora DLMM", pool: POOL, fee: 400 });
+    expect(BigInt(listed!.liquidity)).toBeGreaterThan(0n);
+    // The bin's price, USDC base units per SOL base unit in Q64.64, its fee on the input.
+    const price = new DataView(account(ARRAYS[-90]).buffer).getBigUint64(56 + 40 * 144 + 16, true);
+    const high = new DataView(account(ARRAYS[-90]).buffer).getBigUint64(56 + 40 * 144 + 24, true);
+    const q64 = (high << 64n) | price;
+    const kept = 1_000_000_000n - 400_000n;
+    expect(listed!.sides).toEqual([
+      expect.objectContaining({
+        pay: "USDC",
+        maxPrice: String((q64 * 10n ** 18n * 1_000_000_000n) / ((1n << 64n) * kept)),
+      }),
+      expect.objectContaining({
+        pay: "WSOL",
+        maxPrice: String(((1n << 64n) * 10n ** 18n * 1_000_000_000n) / (q64 * kept)),
+      }),
+    ]);
+    expect(listed!.slots.USDC!.ticks).toEqual([ARRAYS[-90], ARRAYS[-89], SYSTEM]);
+    expect(listed!.slots.WSOL!.ticks).toEqual([ARRAYS[-90], ARRAYS[-91], SYSTEM]);
+    expect(listed!.slots.USDC!.config).toBe("D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6");
+  });
+
+  it.each([
+    [82, "swaps are switched off"],
+    [36, "it takes its fee from the token bought"],
+  ])("skips it when byte %i says %s", async (at, why) => {
+    const out = await list((pair) => void (pair[at] = 1));
+    expect(out.pools).toEqual([]);
+    expect(out.skipped).toEqual([{ venue: "Meteora DLMM", pool: POOL, why }]);
+  });
+});
+
 describe("sauce pools on Solana, through an endpoint with no pools", () => {
   const SYSTEM = "11111111111111111111111111111111";
 
@@ -514,9 +601,10 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
       );
       expect(run.code).toBe(0);
       const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
-      expect(out.checked).toHaveLength(9);
+      expect(out.checked).toHaveLength(10);
       expect(out.checked.filter((one) => one.error !== undefined)).toEqual([]);
-      expect(stub.methods.get("getProgramAccounts")).toBe(12); // 10 scans, 2 of them twice
+      // 12 scans (Phoenix's and Meteora DLMM's both ways), 2 of them twice.
+      expect(stub.methods.get("getProgramAccounts")).toBe(14);
     } finally {
       await stub.close();
     }
@@ -531,9 +619,9 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
         ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", stub.url, "--json"],
       );
       expect(run.code).toBe(1);
-      expect(run.stderr).toMatch(/1 of 9 venues could not be read \(Orca Whirlpools\)/);
+      expect(run.stderr).toMatch(/1 of 10 venues could not be read \(Orca Whirlpools\)/);
       expect(run.stderr).toMatch(/with --rpc-url <url> or --config <file>/);
-      expect(stub.methods.get("getProgramAccounts")).toBe(13); // Orca's, asked 4 times
+      expect(stub.methods.get("getProgramAccounts")).toBe(15); // Orca's, asked 4 times
       const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
       expect(out.checked.filter((one) => one.error !== undefined).map((one) => one.venue)).toEqual([
         "Orca Whirlpools",

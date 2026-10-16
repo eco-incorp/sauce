@@ -5,16 +5,16 @@
  *   Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
  *
  * and the same on `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`,
- * `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. `swap` returns what
- * arrived; where the pool cannot trade — past `maxPrice`, empty, paused, a slot with no pool — it
- * returns 0 having moved nothing, and below `minOut` it reverts. Each lowers to that venue's own
+ * `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and `Meteora.DLMM`. `swap`
+ * returns what arrived; where the pool cannot trade — past `maxPrice`, empty, paused, a slot with no
+ * pool — it returns 0 having moved nothing, and below `minOut` it reverts. Each lowers to that venue's own
  * `@sauce/router` function (`orcaWhirlpool`), never `swap`, which carries every venue's code: one
  * venue's function is about a third of its size. That function keeps its every check — its program
  * id, the pool's owner, the pair.
  *
  *   Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
  *
- * is the same at a pool of ANY of the nine, the venue read from the pool's owner as the program runs:
+ * is the same at a pool of ANY of the ten, the venue read from the pool's owner as the program runs:
  * it lowers to `@sauce/router`'s own `swap`, which carries every venue's code, for a program that
  * takes its pools as arguments and so cannot know their venues — the distributed swap. A pool given
  * as the System Program (`11111111111111111111111111111111`, the zero key) is an empty slot: its
@@ -69,6 +69,7 @@ export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> =
   "Defituna.Fusion": venue("DefiTuna", "defituna"),
   "Crema.CLMM": venue("Crema", "crema"),
   "Phoenix.Market": venue("Phoenix", "phoenix"),
+  "Meteora.DLMM": venue("Meteora DLMM", "meteoraDlmm"),
 };
 
 /** How a program calls a venue's swap: its one method's signature. */

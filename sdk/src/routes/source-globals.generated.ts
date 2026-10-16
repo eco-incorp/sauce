@@ -2450,6 +2450,10 @@ export interface PhoenixSvmVenuesSource {
   readonly Market: SauceSvmVenueSource;
 }
 
+export interface MeteoraSvmVenuesSource {
+  readonly DLMM: SauceSvmVenueSource;
+}
+
 declare global {
   const AaveV2: AaveV2Source;
   const AaveV3: AaveV3Source;
@@ -4484,6 +4488,7 @@ declare global {
   const Defituna: DefitunaSvmVenuesSource;
   const Crema: CremaSvmVenuesSource;
   const Phoenix: PhoenixSvmVenuesSource;
+  const Meteora: MeteoraSvmVenuesSource;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

@@ -3,9 +3,10 @@
  * paying one of its two tokens — program, pool, config, its two vaults, one more account and three
  * tick arrays, in that order (`router.svm.js`'s header) — read from the pool's own state.
  *
- * The venues are the nine whose swap a price limit stops: Raydium CLMM, PancakeSwap CLMM, Byreal and
- * Stabble CLMM (one pool layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema and
- * Phoenix's order book. What each slot holds, and why:
+ * The venues are the ten whose swap a price limit stops: Raydium CLMM, PancakeSwap CLMM, Byreal and
+ * Stabble CLMM (one pool layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema,
+ * Phoenix's order book, and Meteora DLMM, whose bins the library walks to the limit. What each slot
+ * holds, and why:
  *
  *   - A Raydium-layout pool's swap loads every account given as a tick array, so each must exist,
  *     and starts at the first holding liquidity in its direction: the arrays its bitmap (1,024 bits
@@ -15,6 +16,10 @@
  *     direction; a whirlpool's `extra` is its oracle, Crema's its tick-array map.
  *   - A Phoenix market's slot is the same paying either token: its log authority as `config`, its
  *     base and quote vaults, and the System program in the four places it takes nothing.
+ *   - A Meteora DLMM pool's slot has its program's event authority as `config`, its reserves of
+ *     token X and token Y, its oracle as `extra`, and the two bin arrays its bitmap (1,024 bits at
+ *     584, bit 512 the array at 0) marks nearest its active bin's, that one included, in walk order:
+ *     down paying token X, up paying token Y. The third tick place is the System program.
  *
  * Shared by `sauce pools`, which lists each pool's slot both ways, and the venue namespaces, whose
  * slot accounts `svm/account-names.ts` derives as the cook is built (`slot:<pool>:<token>.<part>`).
@@ -29,6 +34,8 @@ import {
   CROPPER_PROGRAM_ID,
   DEFITUNA_PROGRAM_ID,
   FUSION_POOL_DISCRIMINATOR,
+  LB_PAIR_DISCRIMINATOR,
+  METEORA_DLMM_PROGRAM_ID,
   fetchCremaPoolConfig,
   fetchCropperConfig,
   fetchDefiTunaPoolConfig,
@@ -48,7 +55,7 @@ import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
 
 const SYSTEM = address("11111111111111111111111111111111");
 
-export type SvmPoolLayout = "raydium" | "whirlpool" | "defituna" | "crema" | "phoenix";
+export type SvmPoolLayout = "raydium" | "whirlpool" | "defituna" | "crema" | "phoenix" | "dlmm";
 
 /** A venue whose swap a price limit stops: its name, program and pool layout. */
 export interface SvmPriceLimitVenue {
@@ -68,6 +75,7 @@ export const SVM_PRICE_LIMIT_VENUES: readonly SvmPriceLimitVenue[] = [
   { name: "DefiTuna", program: DEFITUNA_PROGRAM_ID, layout: "defituna" },
   { name: "Crema", program: CREMA_PROGRAM_ID, layout: "crema" },
   { name: "Phoenix", program: PHOENIX_PROGRAM_ID, layout: "phoenix" },
+  { name: "Meteora DLMM", program: METEORA_DLMM_PROGRAM_ID, layout: "dlmm" },
 ];
 
 /**
@@ -77,7 +85,7 @@ export const SVM_PRICE_LIMIT_VENUES: readonly SvmPriceLimitVenue[] = [
  */
 export const SVM_CLMM_LAYOUT: Readonly<
   Record<
-    Exclude<SvmPoolLayout, "phoenix">,
+    Exclude<SvmPoolLayout, "phoenix" | "dlmm">,
     {
       readonly size: number;
       readonly discriminator: readonly number[];
@@ -135,6 +143,21 @@ export const SVM_CLMM_LAYOUT: Readonly<
 export const PHOENIX_BASE_MINT_AT = 48;
 export const PHOENIX_QUOTE_MINT_AT = 128;
 const PHOENIX_HEADER_SIZE = 576;
+
+/**
+ * A Meteora DLMM pool's `LbPair`: its size, and where it keeps its token X and Y mints, its reserves
+ * of them, its oracle, its active bin (an i32) and its bin-array bitmap.
+ */
+export const SVM_DLMM_LAYOUT = {
+  size: 904,
+  mintX: 88,
+  mintY: 120,
+  reserveX: 152,
+  reserveY: 184,
+  oracle: 552,
+  active: 76,
+  bitmap: 584,
+} as const;
 
 /** A slot's nine accounts, in the program's order. */
 export interface SvmSlot {
@@ -333,10 +356,70 @@ export async function svmPhoenixSlot(market: Address, load: AccountLoader): Prom
 }
 
 /**
+ * A Meteora DLMM pool's slot, paying its token X (the walk goes down) or its token Y (up). `data` is
+ * the pool's own account. Throws when its active bin is past its own bitmap (in its bitmap
+ * extension, which a swap here does not read) and when no bin array holds liquidity that way.
+ */
+export async function svmDlmmSlot(
+  pool: Address,
+  data: Uint8Array,
+  paysX: boolean,
+): Promise<SvmSlot> {
+  const L = SVM_DLMM_LAYOUT;
+  const active = i32(data, L.active);
+  const from = Math.floor(active / 70);
+  if (from < -512 || from > 511) {
+    throw new Error(
+      `its active bin, ${active}, is past its bitmap, in its bitmap extension, which a swap here ` +
+        "does not read",
+    );
+  }
+  const marked = (index: number) => {
+    const bit = index + 512;
+    return ((data[L.bitmap + (bit >> 3)]! >> (bit & 7)) & 1) === 1;
+  };
+  const indexes: number[] = [];
+  for (
+    let index = from;
+    indexes.length < 2 && index >= -512 && index <= 511;
+    index += paysX ? -1 : 1
+  )
+    if (marked(index)) indexes.push(index);
+  if (indexes.length === 0) {
+    throw new Error(`no bin array holds liquidity ${paysX ? "below" : "above"} its active bin`);
+  }
+  const pair = new Uint8Array(getAddressEncoder().encode(pool));
+  const arrays = await Promise.all(
+    indexes.map((index) => {
+      const seed = new Uint8Array(8);
+      new DataView(seed.buffer).setBigInt64(0, BigInt(index), true);
+      return memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+        new TextEncoder().encode("bin_array"),
+        pair,
+        seed,
+      ]);
+    }),
+  );
+  const events = await memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+    new TextEncoder().encode("__event_authority"),
+  ]);
+
+  return {
+    program: METEORA_DLMM_PROGRAM_ID,
+    pool,
+    config: events,
+    vaultA: keyAt(data, L.reserveX),
+    vaultB: keyAt(data, L.reserveY),
+    extra: keyAt(data, L.oracle),
+    ticks: [arrays[0]!, arrays[1] ?? SYSTEM, SYSTEM],
+  };
+}
+
+/**
  * The slot of `pool` paying `pay`, read through `load`: its venue from the pool's owner, its pair
  * from its own bytes, which must hold `pay`. Throws for a pool no price-limit venue owns, one whose
  * pair does not hold `pay`, and one whose slot cannot be read (a Raydium-layout pool with fewer
- * than three tick arrays near its price).
+ * than three tick arrays near its price, a Meteora DLMM pool with no liquidity that way).
  */
 export async function svmPoolSlot(
   load: OwnedAccountLoader,
@@ -368,6 +451,20 @@ export async function svmPoolSlot(
       throw new Error(`${venue.name} market ${pool} trades ${base} for ${quote}, not ${pay}`);
     }
     return svmPhoenixSlot(pool, loadData);
+  }
+  if (venue.layout === "dlmm") {
+    if (data.length !== SVM_DLMM_LAYOUT.size) {
+      throw new Error(
+        `${pool} is ${data.length} bytes, not a ${venue.name} pool's ${SVM_DLMM_LAYOUT.size}`,
+      );
+    }
+    if (!LB_PAIR_DISCRIMINATOR.every((byte, i) => data[i] === byte)) throw notAPool("pool");
+    const x = keyAt(data, SVM_DLMM_LAYOUT.mintX);
+    const y = keyAt(data, SVM_DLMM_LAYOUT.mintY);
+    if (pay !== x && pay !== y) {
+      throw new Error(`${venue.name} pool ${pool} trades ${x} and ${y}, not ${pay}`);
+    }
+    return svmDlmmSlot(pool, data, pay === x);
   }
   const layout = SVM_CLMM_LAYOUT[venue.layout];
   if (data.length !== layout.size) {
