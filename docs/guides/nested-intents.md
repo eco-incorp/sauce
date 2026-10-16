@@ -1,6 +1,10 @@
 # Nested intents
 
-[Documentation](../README.md) · [Create an intent](intents.md) · [Routes API](../api/routes.md)
+**How-to guide** · [Documentation](../README.md) · [Create an intent](intents.md) · [Routes API](../api/routes.md)
+
+> A nested intent is a job that posts the next job when it is done, like a relay race. The first
+> runner finishes on Base and hands over the baton, the amount it ended up with, to the next runner on
+> Ethereum. Each leg is paid on its own, so a later leg failing does not undo an earlier one.
 
 A nested intent is an intent opened inside another intent's body. You write it in SauceScript, in
 the braces of the outer one: `Base(() => { …; Ethereum(() => { … }).reward({ … }); })`. When a

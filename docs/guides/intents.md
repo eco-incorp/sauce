@@ -1,6 +1,11 @@
 # Create and fund an Eco intent
 
-[Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
+**How-to guide** · [Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
+
+> An intent is a job posting with a bounty: "do this on that chain, and the reward waiting here is
+> yours". Solvers watch for jobs, do the work with their own money, and collect the reward once they
+> prove it. This page builds, funds and follows one from TypeScript, with every option. For a gentler
+> start, read [your first cross-chain intent](first-intent.md).
 
 An Eco intent is an offer: _run this program on that chain, and the reward escrowed on this one is
 yours_. `Base(body, options).reward(reward)` builds one. The chain you call names the **destination**

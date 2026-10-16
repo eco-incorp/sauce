@@ -1,48 +1,46 @@
 ---
 name: sauce-examples
-description: A cookbook of complete Sauce programs, each run against real contracts before it ships — buying a tokenized stock under a price cap, a dollar-cost-averaging tick, a stop-loss and take-profit on Chainlink's price, an Aave V3 health-factor guard, lending idle USDC above a reserve, a weighted USDC payroll, a two-token rebalance, a read-only price survey run with sauce simulate, a cross-chain cascade that repays a loan on Base from Ethereum and sends the change back, and a Token-2022 stock payment on Solana — on Ethereum, Base and Solana; and an index of every example in the other skills, with the chains it is checked on and the sauce command that runs it. Use when the user says "show me an example", "sample Sauce program", "how do I write X in Sauce", or wants a complete program for a task such as buying a stock, DCA, a limit or stop order, a lending position, payroll, rebalancing, reading prices, a cross-chain intent or a Solana token payment.
+description: The cookbook of complete Sauce programs, each run against real contracts before it ships, and the index of every example in every skill. Buying a tokenized stock under a price cap, a dollar-cost-averaging tick, a stop-loss and take-profit on Chainlink's price, an Aave V3 health-factor guard, lending idle USDC above a reserve, a weighted USDC payroll, a two-token rebalance, a read-only price survey run with sauce simulate, a cross-chain cascade that repays a loan on Base from Ethereum and sends the change back, and a Token-2022 stock payment on Solana, on Ethereum, Base and Solana; and every program, actions document and runner in the other skills, with the chains it is checked on and the skill that explains it. Use when the user says "show me an example", "sample Sauce program", "how do I write X in Sauce", or wants a complete program for a task such as buying a stock, DCA, a limit or stop order, a lending position, payroll, rebalancing, reading prices, a cross-chain intent or a Solana token payment.
 ---
 
 # Sauce examples
 
-The cookbook below is this skill's own: complete programs for tasks people run, each reading what
-it acts on (balances, pool prices, an oracle, a lending position), guarding it, measuring what
-moved and returning what it did, which `sauce simulate` prints decoded as the type `main` declares.
-Read one for its idioms, with the skill that explains them, then write the program the task needs
-(`sauce-overview`): an example shows how a correct program does a thing, and is not a template to
-fill in. The examples in the other skills follow, each beside the skill that teaches it.
+This skill owns the cookbook, complete programs for tasks people run, and the index of every
+example in every skill. Each cookbook program reads what it acts on (balances, pool prices, an
+oracle, a lending position), guards it, measures what moved and returns what it did, which
+`sauce simulate` prints decoded as the type `main` declares. Read one for its idioms, with the skill
+that explains them, then write the program the task needs (`sauce-overview`): an example shows how a
+correct program does a thing, and is not a template to fill in.
 
-A program names no chain: `--chain` picks one, and the chains listed are the ones it is checked on.
-Each program's first comment lines say what it does, give the `sauce` command that runs it with
-every `main` parameter named, say what each parameter is and its units, and show one run on a
-supported chain with real values. Inputs are `main(...)` parameters passed with `--args`, an
-intent file's included (`sauce-script`). Tokens and contracts are named, never
-written as addresses: `USDC`, `SPCXon`, `UniswapV3.Factory`, `AaveV3.Pool`, `Chainlink.EthUsdFeed`.
+## When to use
 
-For the initial release, Sauce supports transactions on Ethereum, Base and Solana. A chain marked
-(preview) is a preview chain: the program is compiled for it, and its cook is checked to be
-refused there, as the `sauce` command and the MCP server refuse every transaction on a preview
-chain. Run an example's transaction on a supported chain; on a preview chain compile and simulate
-it, and to run it there,
-[request the chain](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml)
-(or add the use case to its
-[existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)).
+| Task                                                               | Here | Elsewhere                       |
+| ------------------------------------------------------------------ | ---- | ------------------------------- |
+| See a complete program for a task or an idiom                      | yes  | then the skill that explains it |
+| Find which skill holds an example, and the chains it is checked on | yes  |                                 |
+| Learn the language, the names or a pattern                         |      | the skill each row names        |
 
-Before writing a program, look its names up: the chain's file in `sauce-chains`
-([../sauce-chains/references/index.md](../sauce-chains/references/index.md)) lists its tokens and
-every protocol there with how a program names it, and the generated indexes of globals list the
-names alone ([../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md),
-[../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md),
-[../sauce-globals/references/chains.md](../sauce-globals/references/chains.md)); or run
-`sauce globals --chain <chain>`.
+## Core model
+
+- **A program names no chain**: `--chain` picks one, and the chains a row lists are the ones it is
+  checked on. A chain marked (preview) compiles and simulates there, and its cook is checked to be
+  refused (`sauce-overview`); run its transaction on a supported chain.
+- **Each program's header** says what it does, gives the `sauce` command that runs it with every
+  `main` parameter named, what each is and its units, and one run on a supported chain with real
+  values (`sauce-script` owns the format).
+- **Inputs are `main` parameters** passed with `--args`, an intent file's included.
+- **Tokens and contracts are named, never written as addresses**: `USDC`, `SPCXon`,
+  `UniswapV3.Factory`, `AaveV3.Pool`, `Chainlink.EthUsdFeed` (`sauce-globals`; a chain's names with
+  their addresses in `sauce-chains`).
+- **Checked before the package ships**: every program here is compiled through the `sauce` command
+  on each chain listed, its command line run offline (its cook built on each supported chain and
+  refused on each preview chain), and every runner executed. The cookbook's programs are also run,
+  not only compiled: each EVM program through `sauce simulate` and `sauce run` on Ethereum's or
+  Base's state, against the real pools, oracle, lending pool and intent contracts there, its results
+  held to those contracts' own quotes and accounts; the Solana program through `sauce run` against
+  the released engine, with `TSLAx`'s mint as Solana holds it.
 
 ## Cookbook
-
-Every program here is run, not only compiled, before the package ships: each EVM program through
-`sauce simulate` and `sauce run` on Ethereum's or Base's state, against the real pools, oracle,
-lending pool and intent contracts there, with its results held to those contracts' own quotes and
-accounts; the Solana program through `sauce run` against the released engine, with `TSLAx`'s mint
-as Solana holds it.
 
 | Program                                                                                | Chains             | Task                                                                      | What it shows                                                                                                                                                                                                                                                         |
 | -------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -56,10 +54,6 @@ as Solana holds it.
 | [`../sauce-examples/examples/eth-prices.sauce.ts`](examples/eth-prices.sauce.ts)       | `ethereum`         | Survey ETH's price across venues, changing nothing                        | Run with `sauce simulate`: Chainlink's feed, two Uniswap V3 pools and the V2 pair's price for a trade, the spread and the gap to the oracle, as one named record                                                                                                      |
 | [`../sauce-examples/examples/repay-on-base.sauce.ts`](examples/repay-on-base.sauce.ts) | `ethereum`         | Repay a loan on Base with USDC held on Ethereum, and send the change back | An intent file whose body opens the next intent: the Pot's USDC measured; on Base, `BORROWER`'s Aave V3 USDC debt repaid (anyone may repay a debt for its borrower) and the change measured; a second intent paying it to `BORROWER` on Ethereum                      |
 | [`../sauce-examples/examples/pay-stock.sauce.ts`](examples/pay-stock.sauce.ts)         | `solana`           | Pay a tokenized stock on Solana                                           | Token-2022 `transferChecked` for `TSLAx`, the source bound to the Pot and the destination to the payee, a floor the Pot keeps, what arrived measured, staged by `sauce run`                                                                                           |
-
-Choosing a pool and a price limit, and the guard every swap needs, are `sauce-swaps`; several pools
-under one limit is `sauce-distributed-swap`, on Solana `sauce-solana-distributed-swap`; how an intent and its cascade are published, filled
-and paid is `sauce-intents`; Token-2022 and Solana's accounts are `sauce-solana`.
 
 ## Examples in other skills
 
@@ -112,11 +106,11 @@ and paid is `sauce-intents`; Token-2022 and Solana's accounts are `sauce-solana`
 | [`../sauce-typescript/examples/actions.mts`](../sauce-typescript/examples/actions.mts)                                                           | JSON action programs: validation, runtime amounts, a quote                                                                                                                                                                                           | `sauce-typescript`              |
 | [`../sauce-typescript/examples/verify.mts`](../sauce-typescript/examples/verify.mts)                                                             | settlement verification: a payload, a cook, a tampered program, pins, reproduction                                                                                                                                                                   | `sauce-typescript`              |
 
-## Run them
+## Running them
 
 A program runs with the command in its first comment lines, from a project with
-`@eco-incorp/sauce` installed. Simulate it first: `sauce simulate` runs the cook from the Pot's
-owner and prints what `main` returns, or why it reverts, and sends nothing.
+`@eco-incorp/sauce` installed. Simulate it first: `sauce simulate` runs the cook from the Pot's owner
+and prints what `main` returns, or why it reverts, and sends nothing.
 
 ```sh
 sauce simulate examples/eth-prices.sauce.ts --chain ethereum --owner <address> \
@@ -134,6 +128,17 @@ node ../sauce-distributed-swap/examples/distributed-swap.mts --owner <address> -
 node ../sauce-typescript/examples/cook.mts --owner <address> --recipient <address>
 ```
 
-Every program in this index is compiled through the `sauce` command on each chain listed, its
-command line run offline (its cook built on each supported chain, and refused on each preview
-chain), and every runner executed, by the package's own checks before it ships.
+## Pitfalls
+
+- **Filling an example in as a template.** Write the program the task needs; the example shows the
+  idiom.
+- **Sending on a chain the row marks (preview).** Compile and simulate there; send on a supported
+  chain.
+- **Reading an example without its skill.** The skill each row names says why the program is written
+  that way.
+
+## Files
+
+Every file under `examples/` is a row of the Cookbook table; `AaveV3Reads.json` is the ABI
+`aave-health.sauce.ts` imports for the reads the registry's Aave V3 ABI lacks. The other skills'
+examples are in the tables under Examples in other skills.
