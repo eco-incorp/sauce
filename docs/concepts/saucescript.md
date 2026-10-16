@@ -110,17 +110,17 @@ limits. What most often surprises a TypeScript author:
 The compiler shares a frontend across targets and rejects unavailable operations
 for the target selected at compile time.
 
-| Capability                                           | EVM                                      | SVM                                               |
-| ---------------------------------------------------- | ---------------------------------------- | ------------------------------------------------- |
-| Arithmetic, functions, arrays, records, control flow | Supported                                | Supported                                         |
-| ABI-bound `Contract.at(address).method(...)`         | Supported                                | Use CPI/account APIs                              |
-| `evm.call`, `evm.static`, `evm.delegate`             | Supported                                | Unavailable                                       |
-| `svm.call` with attached account slots               | Unavailable                              | Supported                                         |
-| `abi.encode` / `abi.decode` builtins                 | Supported                                | Unavailable                                       |
-| Persistent storage                                   | `evm.sload` / `evm.sstore`               | `svm.sload` / `svm.sstore` byte ranges            |
-| Transient storage and external-call catch handlers   | EVM-specific                             | Unavailable                                       |
-| SDK `USDC.approve(...)` and protocol-member rewrites | Supported for registered EVM deployments | Use SVM account-aware builders                    |
-| Runtime entry arguments                              | ABI-v1 or compact-v1                     | ABI-v1 or compact-v1, plus separate Account slots |
+| Capability                                           | EVM                                      | SVM                                    |
+| ---------------------------------------------------- | ---------------------------------------- | -------------------------------------- |
+| Arithmetic, functions, arrays, records, control flow | Supported                                | Supported                              |
+| ABI-bound `Contract.at(address).method(...)`         | Supported                                | Use CPI/account APIs                   |
+| `evm.call`, `evm.static`, `evm.delegate`             | Supported                                | Unavailable                            |
+| `svm.call` with attached account slots               | Unavailable                              | Supported                              |
+| `abi.encode` / `abi.decode` builtins                 | Supported                                | Unavailable                            |
+| Persistent storage                                   | `evm.sload` / `evm.sstore`               | `svm.sload` / `svm.sstore` byte ranges |
+| Transient storage and external-call catch handlers   | EVM-specific                             | Unavailable                            |
+| SDK `USDC.approve(...)` and protocol-member rewrites | Supported for registered EVM deployments | Use SVM account-aware builders         |
+| Runtime entry arguments                              | ABI-v1                                   | ABI-v1, plus separate Account slots    |
 
 Losing `abi.encode`/`abi.decode` on Solana does not cost you runtime entry
 parameters — those are decoded by a separate mechanism and work on both targets.

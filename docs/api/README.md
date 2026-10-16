@@ -11,7 +11,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | Import                         | Contents                                                                                                                                                                            |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.`                            | Chain accessors (`Base`, `Solana`, …); `routes`, `token`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries; `sqrtPriceX96FromPrice`/`priceFromSqrtPriceX96`; `ready` |
-| `/compiler`                    | `compile`, `ready`, compiler types, the compact codec, and `resolveSdkModule`/`resolveSdkPackage`                                                                                   |
+| `/compiler`                    | `compile`, `ready`, compiler types, and `resolveSdkModule`/`resolveSdkPackage`                                                                                                      |
 | `/actions`                     | JSON action programs by names and pool keys: validation, compilation for a chain, and intents; the JSON Schema is `/actions/action-program.schema.json`                             |
 | `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                                                                          |
 | `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                                                                   |
@@ -50,7 +50,7 @@ are on the chain export in TypeScript (`Base.USDC`, `Base.Uniswap`). See
 
 - [SauceScript reference](../reference/saucescript.md): every type, operator, statement, builtin
   and limit, per target, checked against the compiler.
-- [Compiler](compiler.md): direct compilation, result metadata, compact argument encoding.
+- [Compiler](compiler.md): direct compilation, result metadata, engine pairing.
 - [`@sauce/router`](router.md): the SauceScript swap library a program imports — one function per
   venue.
 - [Routes](routes.md): compile options, intent construction, nested execution, and submission helpers.

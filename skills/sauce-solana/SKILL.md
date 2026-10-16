@@ -234,9 +234,9 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - **Scalar parameters are runtime arguments** (`--args`); `Account` parameters are not encoded. A
   32-byte key the program is given, such as a mint, is an `Address` argument passed as a base58
   public key (or its 0x hex), or as a registered token, `USDC` or `mint:USDC`, meaning its mint; it
-  is encoded as one ABI word (not with `--compact-args`). It is an `Account` parameter when the
-  program reads or writes that account. A registered symbol (`USDC`) is mainnet's mint; for
-  devnet's, pass the key `sauce globals --chain solana` lists.
+  is encoded as one ABI word. It is an `Account` parameter when the program reads or writes that
+  account. A registered symbol (`USDC`) is mainnet's mint; for devnet's, pass the key
+  `sauce globals --chain solana` lists.
 - **`ctx` on Solana**: `ctx.msgSender()` is the first signer among the accounts the engine receives
   (the Pot, when a `pot` slot is attached as the Pot), not proof of who sent the transaction;
   `ctx.balance(acct.address)` is an attached account's lamports; `ctx.msgValue`, `ctx.gasLeft`,
@@ -429,7 +429,7 @@ carries no Kitchen, Pot or salt and adds about 100 bytes less. What costs bytes:
 | a first read (`balanceOf`)                         | 260, a read of another kind 40 more (the reads share their checks)                        |
 | a token method (the function and its holder check) | `USDC.transfer(to, amount)` 360 bytes and four accounts; a Token-2022 mint's 585 and five |
 | each account                                       | 33                                                                                        |
-| arguments                                          | 32 a `Uint256`; `--compact-args` encodes it in 7                                          |
+| arguments                                          | 32 a `Uint256`                                                                            |
 
 A program that does not fit is **staged**: written into a code buffer first, then cooked from it.
 Only `sauce run` stages, and a program that moves a Token-2022 token and measures what arrived is

@@ -139,11 +139,10 @@ and annotations included.
 
 ### Arguments in detail
 
-`sauce compile --json` reports `main`'s parameters (`entryParams`, `entryEncoding`, and
-`entrySchema` under `--compact-args`). Each value is checked against its declared type before
-anything is sent: `Address`, `Uint256` (also `number`, `bigint`), `bool`, `bytes`, `string`, `T[]`
-and `{ field: T }`. They are encoded ABI-v1 by default, compact-v1 under `--compact-args`, and
-appended to the program: the SDK's `routes.encodeEntryArguments`, whose inverse
+`sauce compile --json` reports `main`'s parameters (`entryParams`). Each value is checked against
+its declared type before anything is sent: `Address`, `Uint256` (also `number`, `bigint`), `bool`,
+`bytes`, `string`, `T[]` and `{ field: T }`. They are ABI-encoded and appended to the program: the
+SDK's `routes.encodeEntryArguments`, whose inverse
 `routes.decodeEntryArguments` is what `sauce inspect` reads them back with.
 
 An intent file takes its inputs the same way, and `sauce intent publish` fixes them into the
@@ -267,9 +266,8 @@ parameters and the bytecode. `--chain` defaults to the document's `chainId`; a d
 needs it, and one with a `chainId` compiles for that chain only. A swap may name its pool by its
 factory's key. `--json` prints what `sauce compile --json` does, with the parsed `document`, the
 `source`, the ABI bindings it calls through (`bindings`) and the argument names (`parameters`);
-`contracts` is still the protocol contracts it calls, as `compile` reports them. `--compact-args`
-compiles the arguments compact-v1. A name the chain lacks is refused with its path, the chain and
-the name:
+`contracts` is still the protocol contracts it calls, as `compile` reports them. A name the chain
+lacks is refused with its path, the chain and the name:
 
 ```text
 sauce actions: swap.json does not compile for avalanche:

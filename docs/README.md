@@ -111,6 +111,6 @@ From your application, in TypeScript:
 - [Routes](api/routes.md): the TypeScript intent builder, its options and what it returns.
 - [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in
   TypeScript.
-- [Compiler](api/compiler.md): `compile()`'s options and result, and the compact argument format.
+- [Compiler](api/compiler.md): `compile()`'s options and result, and which engine runs a program.
 - [`@sauce/router`](api/router.md): the swap library, one function per kind of pool.
 - [Coverage](api/coverage.md): how the registries differ, and what each answers.

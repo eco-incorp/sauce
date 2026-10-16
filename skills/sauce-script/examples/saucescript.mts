@@ -54,7 +54,7 @@ function main(amounts: Uint256[], deadline: Uint256): Uint256 {
 `;
 
 const a: CompileResult = build(guarded);
-check(a.entryEncoding === "abi-v1", "entry arguments default to ABI-v1");
+check(a.entryEncoding === "abi-v1", "entry arguments are ABI-v1");
 
 // Outside the subset. Each one is a compile error, never a silently different program.
 check(

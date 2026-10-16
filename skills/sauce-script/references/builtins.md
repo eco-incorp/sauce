@@ -184,8 +184,7 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only â€
 **`main`'s arguments**
 
 - `main`'s parameters are the program's runtime inputs. One compiled program serves every argument value.
-- By default the arguments are ABI-encoded. With the compile option `compactArgs: true` they use the smaller
-  compact encoding; encode them with `encodeCompactArguments` and the schema the compile returns.
+- The arguments are ABI-encoded and appended to the program, one 32-byte head word per parameter.
 - Parameters may be any combination of scalars, bytes, arrays and records, with at most 4 levels of nested
   arrays.
 - On **SVM**, `Account` parameters are not encoded arguments: they are the accounts attached to the transaction,

@@ -52,7 +52,7 @@ read a chain do so only when your application calls them.
 
 | Example                                          | Shows                                                                                                                                                                                       |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [compile-program.ts](compile-program.ts)         | Direct compilation, a compact entry schema, and argument encoding and decoding                                                                                                              |
+| [compile-program.ts](compile-program.ts)         | Direct compilation, and `main`'s arguments encoded and decoded                                                                                                                              |
 | [evm-execution.ts](evm-execution.ts)             | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                                                                                      |
 | [pot-router.ts](pot-router.ts)                   | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                                                                                          |
 | [mcp-external-signer.ts](mcp-external-signer.ts) | The MCP server with a signer it never sees: `sauce_tx` builds, your signer (a KMS, a hardware wallet) signs, `sauce_send` broadcasts and reports, a Solana plan's every step, by its cursor |

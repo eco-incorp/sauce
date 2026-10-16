@@ -85,13 +85,13 @@ const artifact = compile({
   resolve: (path) => (path === "main.ts" ? entry : undefined),
 });
 
-console.log(artifact.entryEncoding); // "abi-v1"
+console.log(artifact.bytecode.length);
 ```
 
-### Pass arguments with ABI-v1
+### Pass arguments
 
-Encode `main`'s arguments in declaration order and append them to the program. There is no function
-selector: entry arguments are not a contract call.
+Encode `main`'s arguments with the ABI, in declaration order, and append them to the program. There
+is no function selector: entry arguments are not a contract call.
 
 ```ts
 import { encodeAbiParameters, hexToBytes, bytesToHex } from "viem";
@@ -122,46 +122,12 @@ field of another tuple, a fixed-size tuple is inline, as `abi.encode` writes it.
 `routes.encodeEntryArguments` encodes arguments in the layout `main` reads, from the parameters
 `main` declares, and `routes.decodeEntryArguments` reads them back.
 
-### Pass arguments with compact-v1
-
-Compile with `compactArgs: true` and use the schema that comes back with it. The schema and the
-bytecode belong to the same artifact; do not pair one with another.
-
-```ts
-import {
-  compile,
-  encodeCompactArguments,
-  decodeCompactArguments,
-} from "@eco-incorp/sauce/compiler";
-
-const compact = compile({
-  target: "evm",
-  entry: "main.ts",
-  resolve: (path) => (path === "main.ts" ? entry : undefined),
-  compactArgs: true,
-});
-
-if (compact.entryEncoding !== "compact-v1" || !compact.entrySchema) {
-  throw new Error("Expected a compact argument schema");
-}
-
-const compactArgs = encodeCompactArguments(compact.entrySchema, [[25n, 75n], 100n]);
-const inspected = decodeCompactArguments(compact.entrySchema, compactArgs);
-// inspected: [[25n, 75n], 100n]
-
-const compactPayload = new Uint8Array(compact.bytecode.length + compactArgs.length);
-compactPayload.set(compact.bytecode);
-compactPayload.set(compactArgs, compact.bytecode.length);
-```
-
-Compact encoding is usually smaller for scalars and collections. The two formats are not
-interchangeable: a compact program does not accept an ABI-v1 tail, and the reverse is equally true.
-Either way, contract calls the program _makes_ still use their own contract ABIs — this is about
-getting values into `main`, nothing else.
+Contract calls the program _makes_ use their own contract ABIs — this is about getting values into
+`main`, nothing else.
 
 ### Return values an ABI decoder can read
 
-`entryEncoding` describes inputs. Outputs are yours to encode:
+Arguments are how values get in. Outputs are yours to encode:
 
 ```ts
 function main(): bytes {
@@ -252,14 +218,13 @@ const source = new TextEncoder().encode(`
 const artifact = compile({
   target: "svm",
   resolve: (path) => (path === "main.js" ? source : undefined),
-  compactArgs: true,
 });
 
 console.log(artifact.manifest?.accounts);
 // [{ kind: "slot", index: 0, name: "vault", requires: "readonly" }]
 ```
 
-`amount` is the one compact field; `vault` is attached at account slot 0. Resolve and attach accounts
+`amount` is the one argument; `vault` is attached at account slot 0. Resolve and attach accounts
 in manifest order with the SVM helpers. The manifest records what the _author_ declared — it does not
 discover an account's address, balance, owner or existence.
 

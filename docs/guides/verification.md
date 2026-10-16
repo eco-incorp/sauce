@@ -77,9 +77,7 @@ recipient, clean address words, and no trailing data. Some alternate encodings
 execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
-This surface verifies the pinned **ABI-v1** settlement artifact. Recompiling the
-recipe with `compactArgs: true` changes that contract and is not accepted by the
-existing settlement decoder.
+This surface verifies the pinned **ABI-v1** settlement artifact.
 
 ### Inspection levels
 

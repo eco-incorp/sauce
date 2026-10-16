@@ -15,12 +15,11 @@ const source = new TextEncoder().encode(
 
 // A raw compile names the SDK's own modules: resolveSdkPackage maps `@sauce/router` (and the
 // `@sauce/token` it imports) to the copies the SDK carries, and resolveSdkModule serves their files.
-const { bytecode, entryEncoding } = compile({
+const { bytecode } = compile({
   target: "evm",
   resolve: (path) => (path === "main.js" ? source : resolveSdkModule(path)),
   resolvePackage: (specifier) => resolveSdkPackage(specifier),
 });
-if (entryEncoding !== "abi-v1") throw new Error("Expected ABI-encoded arguments");
 
 /** One leg, field for field the program's `Leg`. */
 export interface Leg {

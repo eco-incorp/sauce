@@ -414,14 +414,16 @@ compile(options: CompileOptions): CompileResult
 
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
-`true`), `cache` (default `true`), and `compactArgs` (default `false`) are optional. All four manifests pin the
-compiler exactly to **2.5.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
-`isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
-`entrySchema: Uint8Array`, and optional `manifest: AccountManifest`. `manifest` is the SVM account
-contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
-and appended separately. With `compactArgs: true`, pass the returned schema and positional values
-to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
-`decodeCompactArguments`. Pair the artifact with an engine by exact version (`releases.json`,
+`true`) and `cache` (default `true`) are optional. All four manifests pin the compiler exactly to
+**2.5.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
+`isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1"` and optional
+`manifest: AccountManifest`. `manifest` is the SVM account contract, absent on EVM. Compile-time
+values affect bytecode; runtime entry arguments are encoded and appended separately, and they are
+ABI-v1 only (`routes/entry.ts#encodeEntryArguments`, inverse `decodeEntryArguments`). There are no
+compact-v1 arguments in the SDK: nothing passes `compactArgs` and no codec for them ships (the
+engine drops UNPACK, the opcode that read them, and the compiler then refuses `compactArgs: true`). An intent body's
+captured values reach its program as ABI-v1 words at fixed offsets, which the enclosing program
+splices (`sauce-route.ts#compileIntentChild`). Pair the artifact with an engine by exact version (`releases.json`,
 above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged`/`args` compile option; the SDK owns
 its SVM layout types (`sdk/src/svm/layout.ts`).
 
@@ -435,8 +437,8 @@ locations; resolver and target-capability errors need not contain a source span.
 
 The route adapter is a separate contract: `compileSauceRoute` returns one program in
 `compiled.bytecode: Uint8Array[]`, an empty `warnings` array, rewritten source, and encoded calls.
-It does not expose `compactArgs` or retain the raw compiler's metadata/schema/manifest. Use the raw
-`/compiler` export for those. Both `/compiler` and route compilation run in Node and in a browser
+It does not expose `cache` or `optimize`, nor retain the raw compiler's metadata or manifest. Use the
+raw `/compiler` export for those. Both `/compiler` and route compilation run in Node and in a browser
 through one code path, `sdk/src/wasm-compiler.ts`: in a browser `await ready()` (from the root or
 `/compiler`, forwarding to the compiler's `/ready`) before compiling; in Node nothing needs it.
 Nothing browser-facing reads the filesystem. The std sources, recipe programs, protocol ABI twins
@@ -982,7 +984,7 @@ bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeE
 amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
 return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` opens intents
 (`programIntent`, on the program's own chain) and compiles standalone programs with runtime
-arguments (ABI-v1, or compact-v1 with fixed-width offsets). `to-quote.ts` builds the `eth_call`
+arguments (ABI-v1, each word at a fixed offset, `argumentOffset`). `to-quote.ts` builds the `eth_call`
 quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.
 `AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
 been checked.

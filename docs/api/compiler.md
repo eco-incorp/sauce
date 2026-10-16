@@ -6,9 +6,9 @@
 > chain runs. This page is its exact interface for TypeScript: every option you can pass, and
 > everything it gives back.
 
-`@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
-argument format. Both ship with the SDK; there is nothing extra to install. It runs in
-Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
+`@eco-incorp/sauce/compiler` is the SauceScript compiler. It ships with the SDK; there
+is nothing extra to install. It runs in Node and in a browser; in a browser,
+[`await ready()`](#in-a-browser) first.
 
 This SDK pins compiler **2.5.0**, EVM engine/Kitchen **1.2.0**, SVM engine **1.3.0**, and SVM Kitchen
 **1.0.0**. Deploy the matching stack before using the release defaults on-chain. A Pot keeps the
@@ -19,8 +19,6 @@ engine and SDK.
 import {
   compile,
   ready,
-  encodeCompactArguments,
-  decodeCompactArguments,
   resolveSdkModule,
   resolveSdkPackage,
   type CompileOptions,
@@ -54,7 +52,7 @@ const artifact = compile({
   resolve: (path) => (path === "main.ts" ? source : undefined),
 });
 
-console.log(artifact.bytecode.length, artifact.entryEncoding);
+console.log(artifact.bytecode.length);
 ```
 
 ### Options
@@ -70,7 +68,6 @@ console.log(artifact.bytecode.length, artifact.entryEncoding);
 | `ambient`         | `string[]`                                             | Resolve libraries and broadcast their exports into every module        |
 | `defines`         | `[name, value][]`                                      | Program-wide scalar compile-time constants; values are integer strings |
 | `optimize`        | `boolean`                                              | Enable compiler optimizations; default `true`                          |
-| `compactArgs`     | `boolean`                                              | Use compact-v1 entry arguments; default `false`                        |
 | `cache`           | `boolean`                                              | Enable the per-function lowering cache; default `true`                 |
 
 `optimize: false` turns the optimizer off. Every check the compiler performs still
@@ -135,8 +132,7 @@ const artifact = compile({
 interface CompileResult {
   bytecode: Uint8Array;
   isaRevision: "stack-compact-v2";
-  entryEncoding: "abi-v1" | "compact-v1";
-  entrySchema?: Uint8Array;
+  entryEncoding: "abi-v1";
   manifest?: AccountManifest;
 }
 ```
@@ -148,13 +144,10 @@ interface CompileResult {
   revision while only one of them runs a given compiler's output. Pair a program
   with an engine by exact package version — see
   [Which engine runs a program](#which-engine-runs-a-program).
-- `entryEncoding` selects the argument encoder: ABI arguments by default, with
+- `entryEncoding` is always `"abi-v1"`: `main`'s arguments are ABI-encoded, with
   every tuple parameter behind an offset
-  ([Pass arguments with ABI-v1](../guides/compiling.md#pass-arguments-with-abi-v1)),
-  compact arguments when `compactArgs: true`. It does not describe
+  ([Pass arguments](../guides/compiling.md#pass-arguments)). It does not describe
   [program return encoding](../guides/compiling.md#return-values-an-abi-decoder-can-read).
-- `entrySchema` describes compact argument structure. Pass this exact schema to
-  the compact codec; do not infer or rebuild it from example bytes.
 - `manifest` is present for SVM and describes attached accounts. It is absent
   for EVM.
 
@@ -181,7 +174,8 @@ type AccountEntry =
 Slots correspond to `main`'s `Account` parameters. Their roles are declarations
 made by the author, not permissions inferred by examining a CPI callee. A
 `remaining` entry marks the start of the variable account tail when the source
-uses it. SVM `Account` parameters do not occupy compact argument fields.
+uses it. SVM `Account` parameters are attached, and take no place among `main`'s
+encoded arguments.
 
 The subpath also exports `AccountEntry`, `AccountManifest`, `AccountRole`,
 `CompileOptions`, `CompileResult`, `ResolveModule`, `ResolvePackage`, and
@@ -221,55 +215,6 @@ compiler no row pairs with. When you run programs from a different compiler
 version than the SDK's, pass that version as the third argument:
 `assertEngineRunsCompiler("evm", engine, compiler)`.
 
-## Compact argument codec
-
-```ts
-encodeCompactArguments(
-  schema: Uint8Array,
-  value: CompactValue,
-  options?: { scalarWidth?: number },
-): Uint8Array;
-
-decodeCompactArguments(
-  schema: Uint8Array,
-  data: Uint8Array,
-  options?: { maxValues?: number; scalarWidth?: number },
-): CompactValue;
-```
-
-`CompactValue` accepts `bigint`, safe integer `number`, `boolean`, integer or hex
-`string`, `Uint8Array`, and recursively nested positional arrays.
-
-For a compiled entry, the root value is an array containing its arguments in
-declaration order. Omit `Account` parameters only on SVM, where accounts are
-attached separately; EVM `Account` parameters are encoded as scalars. For
-`main(account: Account, amount: Uint256)`, pass `[account, amount]` on EVM and
-`[amount]` on SVM. Nested records are positional arrays too.
-`bytes` values accept a `Uint8Array` or an even-length `0x` hex string. Scalar
-addresses/public keys are integers or hexadecimal integers; base58 public-key
-text is not a scalar encoding.
-
-A negative integer keeps its 256-bit two's-complement pattern, and the decoder
-returns every scalar as an unsigned `bigint` — it has no way to know you meant a
-signed type, so convert at your own boundary.
-
-Encoding is canonical: one value, one byte string. The decoder enforces that, and
-rejects a padded scalar, a non-canonical boolean, a malformed length or trailing
-data. `maxValues` bounds the decoded object graph and defaults to `1_000_000`.
-A schema may be at most 65,535 bytes and 32 levels deep.
-
-`scalarWidth` fixes every scalar at a declared width of 1–32 bytes instead of the
-smallest that fits. The payload stays canonical — still exactly one encoding per
-value — but its **length stops depending on the values**, which is what lets a
-caller write a number into an already-built payload at a known offset. Pass the
-same width to both functions; a decode without it rejects the padded form, and a
-decode with it rejects the minimal one. A value too wide for the declared width is
-rejected rather than truncated.
-
-Encoding successfully says nothing about whether the payload fits a transaction or
-the engine's own execution limits. And compact-v1 is about **entry arguments only**:
-contract calls the program makes still use their contract ABIs.
-
 ## Raw compiler versus route compilation
 
 `routes.compileSauceRoute()` is a separate SDK API with a source string,
@@ -288,9 +233,9 @@ There is one compiled segment and one route call. `source` is the SDK-rewritten
 program; the internal compiler adapter can additionally annotate a falling-through
 `main` as `void`. `warnings` is always empty — a compilation failure throws.
 
-The route adapter keeps neither the entry schema nor the SVM manifest, and its
-options do not expose `compactArgs`, `cache` or `optimize`. Use raw `compile()`
-when you need any of those, runtime entry parameters, or full resolver control.
+The route adapter does not keep the SVM manifest, and its options do not expose
+`cache` or `optimize`. Use raw `compile()` when you need any of those, runtime
+entry parameters, or full resolver control.
 Route `target: "v1"` and `"v12"` both select the EVM backend.
 
 See [routes](routes.md) for the route-specific API.

@@ -190,7 +190,7 @@ requires.
 
 A `main` argument of type `Address` is a 32-byte public key: pass it in base58 (or as 32 bytes of
 hex), or a token as `USDC` or `mint:USDC` for its mint, and the command encodes the whole key as the
-word the engine reads (ABI-v1 only, not under `--compact-args`).
+word the engine reads.
 
 ### The Pot on Solana
 
@@ -347,8 +347,7 @@ read from the Kitchen's config and paid into it either way. `compile --json` siz
 `--via`.
 
 The flag is `--via` rather than `--entry` because "entry" is already the compiler's word for a
-program's entry module and the arguments `main` takes (`--compact-args`, `entryEncoding`); `--via`
-names what the transaction calls.
+program's entry module and the arguments `main` takes; `--via` names what the transaction calls.
 
 ### Verifying a settle on Solana
 
