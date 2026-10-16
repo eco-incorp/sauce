@@ -17,19 +17,24 @@
  *
  * Nothing here reaches a live chain: every endpoint is the test's own.
  */
+import assert from "node:assert/strict";
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  address,
   createSolanaRpc,
   generateKeyPairSigner,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   getCompiledTransactionMessageEncoder,
+  getPublicKeyFromAddress,
   getTransactionDecoder,
   partiallySignTransaction,
+  verifySignature,
   type KeyPairSigner,
   type Transaction,
 } from "@solana/kit";
@@ -241,4 +246,41 @@ export async function phantomMock(options: PhantomOptions): Promise<PhantomMock>
       await server.close();
     },
   };
+}
+
+/**
+ * Holds `transaction` to what Phantom's `solana_send` signs: standard base64 its schema
+ * takes, a message whose first account, the fee payer, is `feePayer` and is the one signature
+ * missing (all zero: the KMS adds it), and every other signer's signature there and valid over the
+ * message — the fresh keys a transaction creates accounts with sign before it is handed out.
+ * Returns the message's version and how many signed already.
+ */
+export async function signableBy(
+  transaction: string,
+  feePayer: string,
+): Promise<{ readonly version: number | "legacy"; readonly presigned: number }> {
+  SendSolanaTransactionSchema.parse({ transaction });
+  const decoded = getTransactionDecoder().decode(getBase64Encoder().encode(transaction));
+  const message = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes);
+  assert.equal(message.staticAccounts[0], feePayer, "the fee payer is the first account");
+  const signatures = Object.entries(decoded.signatures);
+  assert.equal(signatures.length, message.header.numSignerAccounts);
+  assert.equal(signatures[0]![0], feePayer);
+  assert.ok(
+    signatures[0]![1] === null || signatures[0]![1].every((byte) => byte === 0),
+    "the fee payer's signature is left empty",
+  );
+  for (const [signer, signature] of signatures.slice(1)) {
+    assert.ok(signature !== null && signature.some((byte) => byte !== 0), `${signer} signed`);
+    assert.ok(
+      await verifySignature(
+        await getPublicKeyFromAddress(address(signer)),
+        signature,
+        decoded.messageBytes,
+      ),
+      `${signer}'s signature is over this message`,
+    );
+  }
+
+  return { version: message.version, presigned: signatures.length - 1 };
 }
