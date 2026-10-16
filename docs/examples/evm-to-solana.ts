@@ -1,6 +1,7 @@
-// Compiles evm-to-solana.sauce.ts for Base, with a Solana wallet as `main`'s first argument, and
-// builds what a Base wallet sends to publish it: the reward paid into the intent's vault, then
-// Portal.publish. What `sauce intent publish evm-to-solana.sauce.ts --chain base --args …` sends.
+// Compiles evm-to-solana.sauce.ts for Ethereum, with a Solana wallet as `main`'s first argument,
+// and builds what an Ethereum wallet sends to publish it: the reward paid into the intent's vault,
+// then Portal.publish. What `sauce intent publish evm-to-solana.sauce.ts --chain ethereum --args …`
+// sends.
 //
 // Offline: the wallet, the creator and the deadline are fixtures, and nothing is read or sent. The
 // `sauce` command reads Solana first (`intents.svm`): which token accounts exist, so the route
@@ -23,8 +24,8 @@ const source = readFileSync(
 const wallet = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 const creator = "0x4444444444444444444444444444444444444444";
 
-// main(recipient, amount, reward): 1 USDC to the wallet, for 1.05 USDC on Base.
-const [opened] = routes.compileSauceProgram("base", source, {
+// main(recipient, amount, reward): 1 USDC to the wallet, for 1.05 USDC on Ethereum.
+const [opened] = routes.compileSauceProgram("ethereum", source, {
   args: [wallet, 1_000_000n, 1_050_000n],
   intents: { deadline: 2_000_000_000n, creator },
 }).intents;
@@ -49,8 +50,8 @@ if (route.calls.length !== 2 || route.nativeAmount === 0n) {
   throw new Error("expected the wallet's account created, then paid");
 }
 
-// Published from a Base wallet: the reward into its vault, then publish.
+// Published from an Ethereum wallet: the reward into its vault, then publish.
 const transactions = routes.intentSourceTxs(opened.intent, {
-  portal: ecoRoutesPortal("base"),
+  portal: ecoRoutesPortal("ethereum"),
 });
-console.log(`Published by ${transactions.length} transactions on Base`);
+console.log(`Published by ${transactions.length} transactions on Ethereum`);

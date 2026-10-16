@@ -477,7 +477,7 @@ Inside the braces, `USDC` means Solana's USDC mint, and `recipient` is a Solana 
 recipient in base58, the way Solana writes addresses:
 
 ```sh
-sauce intent publish evm-to-solana.sauce.ts --chain base --keystore <path> \
+sauce intent publish evm-to-solana.sauce.ts --chain ethereum --keystore <path> \
   --intent-deadline <unix seconds> --intent-creator <your address> \
   --args <solana wallet> 1000000 1050000
 ```

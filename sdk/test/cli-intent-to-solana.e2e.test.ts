@@ -1,14 +1,14 @@
 /**
  * Intents to Solana written as Sauce and published with `sauce intent publish`, both chains local:
- * Base an anvil (eco-routes' 2.12.0 Portal and HyperProver at the registry's addresses,
+ * Ethereum an anvil (eco-routes' 2.12.0 Portal and HyperProver at the registry's addresses,
  * `eco-routes-anvil.ts`), Solana a LiteSVM bank running the released engine and Kitchen at their
  * release ids and eco-routes' programs as mainnet runs them (the pinned dump,
  * `svm/eco-routes-svm.ts`), reached through a JSON-RPC shim (`svm/rpc-shim.ts`).
  *
  *  1. A file paying a wallet USDC on Solana (`Solana(() => { USDC.transfer(recipient, amount) })`,
- *     the manual's `docs/examples/evm-to-solana.sauce.ts`): published from a Base wallet, filled on
+ *     the manual's `docs/examples/evm-to-solana.sauce.ts`): published from an Ethereum wallet, filled on
  *     Solana (the route creating the recipient's token account), proven back through Hyperlane and
- *     claimed on Base.
+ *     claimed on Ethereum.
  *  2. The same intent made step by step (`sauce intent publish` with no file), its recipient and
  *     token given as Solana addresses.
  *  3. A file whose body is a program: the first intent's route creates the Pot the Portal's
@@ -81,7 +81,7 @@ const SOLANA_URL = "http://127.0.0.1:65533/";
 const USDC_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const PORTAL = programId("portal");
 const HYPER = programId("hyper_prover");
-/** Anvil's fourth dev account: the solver's account on Base, which the reward pays. */
+/** Anvil's fourth dev account: the solver's account on Ethereum, which the reward pays. */
 const SOLVER_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
 const SOLVER = privateKeyToAccount(SOLVER_KEY);
 const AMOUNT = 1_000_000n;
@@ -107,8 +107,8 @@ const PROGRAM = `function main(recipient: Address, amount: Uint256, reward: Uint
 
 const describeBoth = svmArtifactsPresent ? describeEvm : describe.skip;
 
-describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet", () => {
-  let base: LocalChain;
+describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wallet", () => {
+  let ethereum: LocalChain;
   let harness: EngineHarness;
   let shim: SolanaShim;
   let work: string;
@@ -117,12 +117,12 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
   let solver: KeyPairSigner;
   let usdc: Address;
   let mailbox: Address;
-  const now = async (): Promise<bigint> => (await base.publicClient.getBlock()).timestamp;
+  const now = async (): Promise<bigint> => (await ethereum.publicClient.getBlock()).timestamp;
   const intent = (store: string, ...argv: string[]) =>
     sauce("intent", ...argv, "--config", config, "--store", store);
 
   /** Hyperlane's delivery, mocked: every message Solana's Mailbox wrote in the shim's last
-   *  transaction, processed by Base's Mailbox. */
+   *  transaction, processed by Ethereum's Mailbox. */
   async function relayLast(): Promise<number> {
     const last = shim.sent.at(-1)!;
     const keys = getCompiledTransactionMessageDecoder().decode(last.messageBytes).staticAccounts;
@@ -132,8 +132,8 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
       if (!found.exists || found.programAddress !== SOLANA_HYPERLANE.mailbox) continue;
       if (new TextDecoder().decode(found.data.subarray(1, 9)) !== "DISPATCH") continue;
       const message = bytesToHex(found.data.subarray(1 + 8 + 4 + 8 + 32));
-      await base.send(
-        base.deployer,
+      await ethereum.send(
+        ethereum.deployer,
         mailbox,
         encodeFunctionData({ abi: MAILBOX, functionName: "process", args: ["0x", message] }),
       );
@@ -152,20 +152,20 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
     );
     expect(filled.code).toBe(0);
     expect(await relayLast()).toBe(1);
-    const before = await base.balanceOf(usdc, SOLVER.address);
+    const before = await ethereum.balanceOf(usdc, SOLVER.address);
     const claimed = await intent(store, "claim", hash, "--private-key", SOLVER_KEY, "--json");
     expect(claimed.code).toBe(0);
-    expect(await base.balanceOf(usdc, SOLVER.address)).toBe(before + REWARD);
+    expect(await ethereum.balanceOf(usdc, SOLVER.address)).toBe(before + REWARD);
   }
 
-  /** `text` published from the owner's Base wallet with `args`; the hash of its one intent. */
+  /** `text` published from the owner's Ethereum wallet with `args`; the hash of its one intent. */
   async function publish(store: string, text: string, ...args: string[]): Promise<Hex> {
     const file = join(work, `intent-${Math.random().toString(16).slice(2)}.sauce.ts`);
     writeFileSync(file, text);
     const start = await now();
     const published = await intent(
       store,
-      ...["publish", file, "--chain", "base", "--private-key", OWNER_KEY, "--yes", "--json"],
+      ...["publish", file, "--chain", "ethereum", "--private-key", OWNER_KEY, "--yes", "--json"],
       ...["--intent-deadline", String(start + 3600n), "--intent-creator", OWNER.address],
       ...["--intent-reward-deadline", String(start + 7200n), "--intent-execution-fee", "auto"],
       ...["--args", ...args],
@@ -178,12 +178,14 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-intent-to-solana-e2e-"));
-    base = await startChain("base");
-    usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-    await plantPortal(base, PORTAL_FIXTURES.v2_12);
-    mailbox = await deployMailbox(base, HYPERLANE_FEE);
-    await plantHyperProver(base, mailbox, [universalOfSvmKey(await svmHyperDispatcherPda(HYPER))]);
-    await base.mint(usdc, OWNER.address, 10n * REWARD);
+    ethereum = await startChain("ethereum");
+    usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
+    await plantPortal(ethereum, PORTAL_FIXTURES.v2_12);
+    mailbox = await deployMailbox(ethereum, HYPERLANE_FEE);
+    await plantHyperProver(ethereum, mailbox, [
+      universalOfSvmKey(await svmHyperDispatcherPda(HYPER)),
+    ]);
+    await ethereum.mint(usdc, OWNER.address, 10n * REWARD);
 
     harness = await startEngine(await now(), ENGINE_SO as string, address(v12SvmEngineProgramId()));
     loadEcoRoutes(harness.svm);
@@ -222,14 +224,14 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
     config = join(work, "sauce.config.json");
     writeFileSync(
       config,
-      JSON.stringify({ rpcUrls: { "8453": base.rpcUrl, "1399811149": SOLANA_URL } }),
+      JSON.stringify({ rpcUrls: { "1": ethereum.rpcUrl, "1399811149": SOLANA_URL } }),
     );
   }, 180_000);
 
   afterAll(async () => {
     shim?.restore();
     rmSync(work, { recursive: true, force: true });
-    await base?.stop();
+    await ethereum?.stop();
   });
 
   /** A wallet with no token account for USDC yet: the route creates it. */
@@ -256,7 +258,7 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
     const out = join(work, "made.sauce.ts");
     const published = await intent(
       store,
-      ...["publish", "--source", "base", "--destination", "solana", "--token", USDC_MINT],
+      ...["publish", "--source", "ethereum", "--destination", "solana", "--token", USDC_MINT],
       ...["--amount", "1", "--recipient", recipient.key, "--reward-token", "USDC"],
       ...["--reward", "1.05", "--fill-deadline", "+1h", "--reward-deadline", "+2h"],
       ...["--prover", "HyperProver", "--out", out, "--private-key", OWNER_KEY, "--yes", "--json"],
@@ -275,7 +277,7 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from a Base wallet"
     const recipient = await wallet();
     const refused = await intent(
       mkdtempSync(join(work, "store-")),
-      ...["publish", file, "--chain", "base", "--private-key", OWNER_KEY, "--yes"],
+      ...["publish", file, "--chain", "ethereum", "--private-key", OWNER_KEY, "--yes"],
       ...["--intent-deadline", String(start + 3600n), "--intent-creator", OWNER.address],
       ...["--intent-execution-fee", "auto", "--args", recipient.key, String(AMOUNT), "1"],
     );
