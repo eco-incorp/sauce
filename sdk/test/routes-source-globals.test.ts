@@ -116,16 +116,23 @@ test("declarations cover every registry token and every protocol namespace, in b
       .map((row) => row.symbol),
   ))
     expect(generated).toContain(`const ${symbol}: bigint & SauceTokenSource;`);
-  // Compiled source: one global per namespace the rewrite resolves, and one per Solana venue,
-  // no more and no fewer.
-  const names = [...generated.matchAll(/^ {2}const (\w+): \w+Source;/gm)]
-    .map((match) => match[1])
-    .filter((name) => !generated.includes(`const ${name}: SauceSvmVenueSource;`));
+  // Compiled source: one global per namespace the rewrite resolves, and one per Solana venue
+  // protocol that is no namespace, no more and no fewer.
+  const names = [...generated.matchAll(/^ {2}const (\w+): (\w+)Source;/gm)]
+    .filter((match) => !match[2]!.endsWith("SvmVenues"))
+    .map((match) => match[1]);
   expect(new Set(names)).toEqual(new Set(NAMESPACE_KEYS));
-  const venues = [...generated.matchAll(/^ {2}const (\w+): SauceSvmVenueSource;/gm)].map(
-    (match) => match[1],
-  );
-  expect(new Set(venues)).toEqual(new Set(Object.keys(SVM_VENUE_NAMESPACES)));
+  // Each Solana venue, its protocol then its program: a field of its protocol's own global, or of
+  // the namespace or family of that name (`Pancakeswap.CLMM`).
+  for (const venue of Object.keys(SVM_VENUE_NAMESPACES)) {
+    const [protocol, program] = venue.split(".") as [string, string];
+    const global = new RegExp(`^ {2}const ${protocol}: (\\w+)Source;`, "m").exec(generated);
+    expect(global).not.toBeNull();
+    const fields = new RegExp(`export interface ${global![1]}Source[^{]*\\{([^}]*)\\}`).exec(
+      generated,
+    )![1];
+    expect(fields).toContain(`readonly ${program}: SauceSvmVenueSource;`);
+  }
   for (const link of CONTRACT_LINKS) {
     const namespace = link.protocol
       .split("-")

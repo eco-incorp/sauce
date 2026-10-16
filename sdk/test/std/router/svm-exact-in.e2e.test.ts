@@ -4,16 +4,16 @@
  * venue's own mainnet program (`test/fixtures/svm-exact-in-programs/`) and the pool's mainnet
  * accounts (`test/svm/fixtures/<venue>/`). It proves what the library's EXACT INPUT header says:
  *
- *   - every form swaps the pool's way, both directions: `<venue>`, `try<Venue>` and `<venue>Cpi`
+ *   - every form swaps the pool's way, both directions: `<venue>`, `<venue>Cpi` and `<venue>Data`
  *     deliver the same amount from the same state, and where sauce-recipes' real-program suite pins
  *     a trade at that state, exactly its pin, and debit; `<venue>Cpi` returns what it paid;
  *   - the venue's instruction is the one sauce-recipes builds for the same pool and direction
  *     (`fixtures/exact-in-vectors.json`): the same data, the same accounts in the same order, the
  *     same accounts writable;
- *   - a `try` form returns 0 having moved nothing for a missing slot, no input, and each refusal its
- *     comment names, and its plain form reverts there;
- *   - a swap below its floor reverts, every form, and a slot or list naming another program reverts
- *     before the authority signs into it;
+ *   - `<venue>` returns 0 having moved nothing for a missing slot, no input, and each refusal its
+ *     comment names;
+ *   - a swap below its floor reverts, and a slot or list naming another program reverts before the
+ *     authority signs into it;
  *   - Scale AMM, PumpSwap, Bonkswap, Guacswap, Meteora DLMM and Saros DLMM, whose swaps take more
  *     accounts than a function can list, the same through their `Cpi` forms.
  *
@@ -162,7 +162,7 @@ interface Venue {
   cases: (harness: EngineHarness) => Case[];
   /** Accounts the swap writes that the fixture does not carry, placed before the state is frozen. */
   fabricate?: (harness: EngineHarness) => Address[];
-  /** States its `try` form skips: one write to an account each, and why. */
+  /** States `<venue>` skips: one write to an account each, and why. */
   skips?: { why: string; at: (slot: SlotAccount[]) => Address; offset: number; bytes: number[] }[];
 }
 
@@ -2018,7 +2018,6 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
       let harness: EngineHarness;
       let slot: SlotAccount[];
       const base = venue.name.charAt(0).toLowerCase() + venue.name.slice(1);
-      const forms = [base, `try${venue.name}`];
 
       beforeAll(async () => {
         harness = await boot(
@@ -2047,23 +2046,18 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
               pay: vector.pay,
               buy: vector.buy,
             });
-          const outcomes = [];
-          for (const name of forms)
-            outcomes.push({
-              name,
-              outcome: succeeded(
-                await cook(harness, compiled(name, slot.length), { ...trade, slot }, program),
-              ),
-            });
-          const plain = outcomes[0]!.outcome;
-          const received = trade.received ?? plain.received;
+          const fromSlot = succeeded(
+            await cook(harness, compiled(base, slot.length), { ...trade, slot }, program),
+          );
+          const outcomes = [{ name: base, outcome: fromSlot }];
+          const received = trade.received ?? fromSlot.received;
           // The Cpi form on the instruction the slot form sent, or the recipes' own.
           const list =
             vector !== undefined
               ? cpiFromVector(vector)
               : cpiFromCall(
-                  plain.call!,
-                  { pot: harness.pot, source: plain.source, recipient: plain.recipient },
+                  fromSlot.call!,
+                  { pot: harness.pot, source: fromSlot.source, recipient: fromSlot.recipient },
                   writable,
                 );
           // The instruction forms on that list: `Cpi`, `Data`, and the recipes' template by hand.
@@ -2106,7 +2100,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
               name,
               received: String(received),
               paid,
-              returned: forms.includes(name) ? String(received) : paid,
+              returned: name === base ? String(received) : paid,
             });
             expect(outcome.received > 0n).toBe(true);
             const user = { owner: harness.pot, in: outcome.source, out: outcome.recipient };
@@ -2118,11 +2112,11 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             else
               expect(outcome.call).toEqual({
                 program,
-                data: plain.call!.data,
-                accounts: plain.call!.accounts.map((at) =>
-                  at === plain.source
+                data: fromSlot.call!.data,
+                accounts: fromSlot.call!.accounts.map((at) =>
+                  at === fromSlot.source
                     ? outcome.source
-                    : at === plain.recipient
+                    : at === fromSlot.recipient
                       ? outcome.recipient
                       : at,
                 ),
@@ -2132,9 +2126,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
               form: name,
               pay: trade.pay,
               library:
-                outcome.engineCu -
-                outcome.venueCu -
-                (forms.includes(name) ? baseline : none).engineCu,
+                outcome.engineCu - outcome.venueCu - (name === base ? baseline : none).engineCu,
               venueCu: outcome.venueCu,
             });
           }
@@ -2152,22 +2144,20 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         }
       }, 300_000);
 
-      it("a swap below its floor reverts, every form", async () => {
+      it("a swap below its floor reverts", async () => {
         const trade = venue.cases(harness)[0]!;
         const program = slot[0]!.address;
         const { received } = succeeded(
           await cook(harness, compiled(base, slot.length), { ...trade, slot }, program),
         );
-        for (const name of forms) {
-          const at = { ...trade, slot, minOut: received + 1n };
-          expect((await cook(harness, compiled(name, slot.length), at, program)).ok).toBe(false);
-          succeeded(
-            await cook(harness, compiled(name, slot.length), { ...at, minOut: received }, program),
-          );
-        }
+        const at = { ...trade, slot, minOut: received + 1n };
+        expect((await cook(harness, compiled(base, slot.length), at, program)).ok).toBe(false);
+        succeeded(
+          await cook(harness, compiled(base, slot.length), { ...at, minOut: received }, program),
+        );
       }, 300_000);
 
-      it("a try form skips, having moved nothing; its plain form reverts", async () => {
+      it("skips, having moved nothing", async () => {
         const trade = venue.cases(harness)[0]!;
         const program = slot[0]!.address;
         const cases: {
@@ -2195,25 +2185,20 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
               ? undefined
               : editFrozen(harness, skip.edit.at, skip.edit.offset, skip.edit.bytes);
           try {
-            const run = (name: string) =>
-              cook(
+            const outcome = succeeded(
+              await cook(
                 harness,
-                compiled(name, slot.length),
+                compiled(base, slot.length),
                 { ...trade, slot: skip.slot, amountIn: skip.amountIn },
                 program,
-              );
-            const outcome = succeeded(await run(`try${venue.name}`));
+              ),
+            );
             expect({ why: skip.why, ...named(outcome) }).toEqual({
               why: skip.why,
               received: "0",
               paid: "0",
               returned: "0",
             });
-            if (skip.why !== "no input")
-              expect({ why: skip.why, ok: (await run(base)).ok }).toEqual({
-                why: skip.why,
-                ok: false,
-              });
           } finally {
             undo?.();
           }
@@ -2227,12 +2212,11 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             ? TOKEN_2022
             : ("SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ" as Address);
         const misnamed = [r(other), ...slot.slice(1)];
-        for (const name of forms)
-          expect(
-            refused(
-              await cook(harness, compiled(name, slot.length), { ...trade, slot: misnamed }, other),
-            ),
-          ).toMatch(/^not an? /);
+        expect(
+          refused(
+            await cook(harness, compiled(base, slot.length), { ...trade, slot: misnamed }, other),
+          ),
+        ).toMatch(/^not an? /);
         const list = [{ address: "source" as const, writable: true }];
         const baked = bakedFor(base, trade, VECTORS[trade.vector ?? ""]);
         expect(

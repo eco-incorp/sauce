@@ -160,6 +160,11 @@ address in `deployments` is recorded, not proof of live code.
     with no default endpoint (`via: "engine"` for a direct cook; `executionFee()` quotes the fee to
     set `maxExecutionFee` from). The SVM route helpers (`Solana(...)` routes, `buildSauceSvmCall`)
     do not produce an instruction the engine accepts: build execution with the Kitchen client.
+    A cook too wide for one transaction needs no code of your own: `execute` and `executeStaged`
+    create a lookup table over exactly the accounts a table may hold and send through it (the
+    result's `lookupTableAddress`; `lookupTable: <address>` reuses one, `false` opts out), and
+    `cookLookupTable`/`stagedCookLookupTable` make it ready for `simulate` or `cookTransaction`,
+    which take its `lookupTables`.
   - `resolveSvmToken(load, mint)` reads a mint through an owned-account loader: its token program
     (by the mint's owner), decimals, extensions, and why a checked transfer of it would be refused;
     `svmTokenAccount(token, owner)` derives a holder's account under that program;

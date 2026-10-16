@@ -1738,13 +1738,14 @@ On Solana: every pool of the pair at each venue whose swap takes a price limit t
 it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,
 DefiTuna, Crema, and Phoenix's markets), found with getProgramAccounts on each venue's
 program. For each: its fee, liquidity and price both ways with the fee and as maxPrice, and
-its slot paying each token: the nine accounts the distributed swap takes for it (program,
-pool, config, the two vaults, one more account its swap takes, three tick arrays), each
-unused one the System program. A pool the distributed swap skips is listed as skipped with
-why. A token is a symbol the chain registers (SOL for WSOL), or a base58 mint. --pay chooses
-the slots a swap paying that token takes (within --max-price, one a venue with --per-venue,
---slots of them) and prints them as accounts. A venue it could not read leaves the listing
-partial: a note says which, and the command exits 1.
+its slot paying each token: the nine accounts a swap at it takes (program, pool, config, the
+two vaults, one more account its swap takes, three tick arrays), each unused one the System
+program. A pool the distributed swap skips is listed as skipped with why. A token is a symbol
+the chain registers (SOL for WSOL), or a mint. --pay chooses the pools a swap paying that
+token takes (within --max-price, one a venue with --per-venue, --slots of them) and prints
+them in slot order for main's --args (the System program for a slot with none), and their
+slots as accounts. A venue it could not read leaves the listing partial: a note says which,
+and the command exits 1.
 
 Examples:
   sauce pools --chain base USDC WETH

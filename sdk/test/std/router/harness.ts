@@ -155,23 +155,19 @@ export const SVM_LIMIT_VENUES = ["Invariant", "OpenbookV2"] as const;
 
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
 
-/** Every function of the SVM arm: `trySwap`/`swap`; each of the nine venues at a price, `try` and
- *  plain; each venue at its own limit, `try`, plain, its instruction alone and its instruction's data
- *  (Orca's two: `swap`'s and `swap_v2`'s; OpenBook's two: from an amount and from lots); and
- *  Manifest's. */
+/** Every function of the SVM arm: `swap`; each of the nine venues at a price; each venue at its own
+ *  limit, its instruction alone and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s;
+ *  OpenBook's two: from an amount and from lots); and Manifest's. */
 export const SVM_FUNCTIONS = [
-  "trySwap",
   "swap",
-  ...SVM_VENUES.flatMap((venue) => [`try${venue}`, lower(venue)]),
+  ...SVM_VENUES.map(lower),
   ...[...SVM_VENUES, ...SVM_LIMIT_VENUES].flatMap((venue) => [
-    `try${venue}AtLimit`,
     `${lower(venue)}AtLimit`,
     `${lower(venue)}Cpi`,
     `${lower(venue)}Data`,
   ]),
   "orcaWhirlpoolV2Data",
   "openbookV2LotsData",
-  "tryManifest",
   "manifest",
   "manifestCpi",
   "manifestData",
@@ -182,7 +178,7 @@ export const svmInstructionForm = (name: string): boolean => /(Cpi|Data)$/.test(
 
 /** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
 export const svmArguments = (name: string): string[] =>
-  /^(tryManifest|manifest)$/.test(name)
+  name === "manifest"
     ? ["amountIn", "minOut"]
     : /openbookV2/i.test(name)
       ? ["amountIn", "priceLots", "orders", "minOut"]
@@ -282,7 +278,7 @@ export const svmProgramCalling = (
 
 /**
  * The SVM arm's exact-input venues with a slot, by the base name of their three functions
- * (`<venue>`, `try<Venue>`, `<venue>Cpi`), with the number of accounts each one's slot takes.
+ * (`<venue>`, `<venue>Cpi`, `<venue>Data`), with the number of accounts each one's slot takes.
  */
 export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   raydiumCpSwap: 7,
@@ -353,15 +349,8 @@ export const SVM_CPI_ONLY = [
   "archer",
 ] as const;
 
-const capitalized = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
-
 /** Every exact-input function taking a slot, with the number of accounts its slot takes. */
-export const SVM_EXACT_IN_FUNCTIONS: readonly [string, number][] = Object.entries(
-  SVM_EXACT_IN,
-).flatMap(([base, slot]) => [
-  [base, slot],
-  [`try${capitalized(base)}`, slot],
-]);
+export const SVM_EXACT_IN_FUNCTIONS: readonly [string, number][] = Object.entries(SVM_EXACT_IN);
 
 /** Every exact-input `Cpi` form. */
 export const SVM_CPI_FUNCTIONS: readonly string[] = [

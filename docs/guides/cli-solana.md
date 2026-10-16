@@ -171,7 +171,7 @@ The value language `--account` takes, and `derive` in the manifest uses:
   the accounts `transferChecked` takes;
 - `slot:<pool>:<token>.<part>`: one of the nine accounts a venue's swap takes for a pool paying the
   token (`program`, `pool`, `config`, `vaultA`, `vaultB`, `extra`, `ticks0` to `ticks2`), read from
-  the pool on the cluster: what a venue's namespace (`OrcaWhirlpool.swap(pool, …)`) adds;
+  the pool on the cluster: what a venue's namespace (`Orca.Whirlpool.swap(pool, …)`) adds;
 - `pda:<program>:<seeds>`: the address a program derives for its seeds, comma-separated. A seed is
   `"text"` or a bare word, a key (`pot`, `owner`, `self`, `@to`, base58), `mint:USDC`, an integer
   (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.

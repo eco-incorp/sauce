@@ -141,9 +141,10 @@ check(
 check(errors.includes("InputExceedsAuthorized"), "a callback takes at most the exact input");
 console.log(`@sauce/router: ${Object.keys(LIBRARY).join(", ")}`);
 
-// On Solana: the SVM arm exports, for each venue the skill names, a `try` form and a plain form at a
-// price and at its own limit, its instruction alone and its instruction's data (Orca's two); and
-// `trySwap`/`swap`. Each family takes the arguments the skill gives.
+// On Solana: the SVM arm exports, for each venue the skill names, one function at a price and one at
+// its own limit, its instruction alone and its instruction's data (Orca's two); and `swap`, at any of
+// them. No `try` form: each returns 0 where the pool cannot trade. Each family takes the arguments
+// the skill gives.
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
 const section = (heading: string): string => {
   const start = skill.indexOf(`## ${heading}`);
@@ -155,42 +156,43 @@ const svmArm = resolveSdkModule(entry.replace(/\.js$/, ".svm.js"));
 if (svmArm === undefined) throw new Error("@sauce/router has an SVM arm");
 const svmText = new TextDecoder().decode(svmArm);
 const svmExports = [...svmText.matchAll(/^export function (\w+)\(([^)]*)\)/gm)];
-const named = [...new Set([...solana.matchAll(/`(try[A-Z]\w+)`/g)].map((m) => m[1]!))];
-const priced = named.filter((name) => !name.endsWith("AtLimit") && name !== "tryManifest");
-check(priced.length === 10, "the skill names nine venues' try forms and trySwap");
+const functions = solana.slice(solana.indexOf("### The functions"));
+const priced = [
+  ...functions.slice(0, functions.indexOf("Every one takes")).matchAll(/`([a-z]\w+)`/g),
+].map((m) => m[1]!);
+check(
+  priced.length === 10 && priced.includes("swap"),
+  "the skill names nine venues' functions and swap",
+);
 const atLimit = [
-  ...priced.filter((name) => name !== "trySwap").map((name) => `${name}AtLimit`),
-  "tryInvariantAtLimit",
-  "tryOpenbookV2AtLimit",
-  "tryManifest",
+  ...priced.filter((name) => name !== "swap").map((name) => `${name}AtLimit`),
+  "invariantAtLimit",
+  "openbookV2AtLimit",
+  "manifest",
 ];
-for (const name of ["tryInvariantAtLimit", "tryOpenbookV2AtLimit", "tryManifest"])
-  check(named.includes(name), `the skill names ${name}`);
-const plainOf = (name: string) => name.charAt(3).toLowerCase() + name.slice(4);
-const cpi = atLimit.map((name) => `${plainOf(name).replace(/AtLimit$/, "")}Cpi`);
+for (const name of ["invariantAtLimit", "openbookV2AtLimit", "manifest"])
+  check(solana.includes(`\`${name}\``), `the skill names ${name}`);
+check(
+  svmExports.every((m) => !/^try[A-Z]/.test(m[1]!)),
+  "the SVM arm has no try form: each function returns 0 where the pool cannot trade",
+);
+const cpi = atLimit.map((name) => `${name.replace(/AtLimit$/, "")}Cpi`);
 const data = [
   ...cpi.map((name) => name.replace(/Cpi$/, "Data")),
   "orcaWhirlpoolV2Data",
   "openbookV2LotsData",
 ];
-const limit = new Set([
-  ...priced,
-  ...priced.map(plainOf),
-  ...atLimit,
-  ...atLimit.map(plainOf),
-  ...cpi,
-  ...data,
-]);
+const limit = new Set([...priced, ...atLimit, ...cpi, ...data]);
 check(
   svmExports
     .map((m) => m[1]!)
     .filter((name) => limit.has(name))
     .sort()
     .join() === [...limit].sort().join(),
-  "the SVM arm exports those, their plain forms and each venue's instruction alone and its data",
+  "the SVM arm exports those and each venue's instruction alone and its data",
 );
 const signature = "slot, trader, amountIn, maxPrice, minOut, recipient";
-check(solana.includes(`trySwap(${signature}): Uint256`), "the skill gives trySwap's arguments");
+check(solana.includes(`swap(${signature}): Uint256`), "the skill gives swap's arguments");
 check(
   solana.replace(/\s+/g, " ").includes("(slot, trader, amountIn, limit, minOut, recipient)") &&
     solana.includes("`<venue>Cpi(program, accounts, source, amountIn, …)`") &&
@@ -208,13 +210,13 @@ for (const [, name, args] of svmExports.filter((m) => limit.has(m[1]!))) {
     ? /^(amountIn|baseLots, quoteLots)\b/
     : name!.endsWith("Cpi")
       ? /^program, accounts, source, amountIn\b/
-      : name!.endsWith("AtLimit") || name === "tryManifest" || name === "manifest"
+      : name!.endsWith("AtLimit") || name === "manifest"
         ? /^slot, trader, amountIn, (limit|ticks|priceLots, orders), minOut, recipient$|^slot, trader, amountIn, minOut, recipient$/
         : new RegExp(`^${signature}$`);
   check(want.test(argsOf(args!)), `${name}(${argsOf(args!)})`);
 }
-// The exact-input venues: each one the skill names exported plain, as `try`, as `Cpi` and as `Data`,
-// the ones it names with `Cpi` and `Data` forms alone as those, and nothing else.
+// The exact-input venues: each one the skill names exported plain, as `Cpi` and as `Data`, the ones it
+// names with `Cpi` and `Data` forms alone as those, and nothing else.
 const listed = exact.slice(
   exact.indexOf("The venues:"),
   exact.indexOf("\n\n", exact.indexOf("The venues:")),
@@ -223,17 +225,14 @@ const venues = [...listed.matchAll(/`([a-z]\w+)`/g)].map((m) => m[1]!);
 const instructionOnly = [...exact.matchAll(/`(\w+(?:Cpi|Data))`/g)]
   .map((m) => m[1]!)
   .filter((name) => !name.startsWith("raydiumCpSwap"));
-const capital = (name: string) => name.charAt(0).toUpperCase() + name.slice(1);
 check(
   svmExports
     .map((m) => m[1]!)
     .filter((name) => !limit.has(name))
     .sort()
     .join() ===
-    [...venues.flatMap((v) => [v, `try${capital(v)}`, `${v}Cpi`, `${v}Data`]), ...instructionOnly]
-      .sort()
-      .join(),
-  "the SVM arm exports the exact-input venues' four forms, and the Cpi-only venues' two",
+    [...venues.flatMap((v) => [v, `${v}Cpi`, `${v}Data`]), ...instructionOnly].sort().join(),
+  "the SVM arm exports the exact-input venues' three forms, and the Cpi-only venues' two",
 );
 const exactSignature = "slot, trader, amountIn, minOut, recipient";
 check(
@@ -251,23 +250,23 @@ for (const [, name, args] of svmExports.filter((m) => !limit.has(m[1]!)))
         : argsOf(args!) === exactSignature,
     `${name}'s arguments`,
   );
-// What a program carries: one venue's function, or all nine through trySwap.
+// What a program carries: one venue's function, or all nine through swap.
 const block = [...solana.matchAll(/```sauce chain=solana\n([\s\S]*?)```/g)]
   .map((match) => match[1]!)
   .find((code) => code.includes('from "@sauce/router"'))!;
 const one = routes.compileSauceProgram("solana", block).bytecode.length;
-const all = routes.compileSauceProgram("solana", block.replaceAll("orcaWhirlpool", "trySwap"))
-  .bytecode.length;
+const all = routes.compileSauceProgram("solana", block.replaceAll("orcaWhirlpool", "swap")).bytecode
+  .length;
 const kb = (bytes: number) => (bytes / 1000).toFixed(1);
 check(
   solana.includes(`about ${kb(one)} KB of program`) &&
     solana.replace(/\s+/g, " ").includes(`all nine, about ${kb(all)} KB`),
-  `one venue's function is ${one} bytes of program, trySwap ${all}`,
+  `one venue's function is ${one} bytes of program, swap ${all}`,
 );
-console.log(`@sauce/router on Solana: ${named.join(", ")}; ${one} and ${all} bytes`);
+console.log(`@sauce/router on Solana: ${priced.join(", ")}; ${one} and ${all} bytes`);
 
 // A venue by its namespace: the skill names every venue `sauce globals --chain solana` lists, and
-// the example compiles to that venue's own function, never trySwap, its pool's nine accounts and the
+// the example compiles to that venue's own function, never swap, its pool's nine accounts and the
 // Pot's added to main with how each is derived.
 const namespaces = routes.sourceGlobals("solana").venues.map((venue) => venue.namespace);
 for (const namespace of namespaces)
@@ -277,8 +276,8 @@ const example = routes.compileSauceProgram(
   readFileSync(new URL("./solana-swap.sauce.ts", import.meta.url), "utf8"),
 );
 check(
-  example.source.includes("__sauce_tryOrcaWhirlpool(") && !example.source.includes("trySwap("),
-  "OrcaWhirlpool.trySwap compiles to tryOrcaWhirlpool",
+  example.source.includes("__sauce_orcaWhirlpool(") && !example.source.includes("{ swap as"),
+  "Orca.Whirlpool.swap compiles to orcaWhirlpool",
 );
 const derived = example.derivedAccounts ?? {};
 for (const part of ["program", "pool", "vaultA", "ticks2"])

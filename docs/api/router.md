@@ -274,55 +274,57 @@ export function compileWithRouter(source: string) {
 The package also ships the library's files under `sdk/dist/std/router/`, beside `@sauce/token`'s,
 for a toolchain that resolves packages off disk: `router.evm.js` and `router.svm.js`, which the
 compiler picks by target. No function is in both, so one the target's arm lacks fails at its
-import, naming it: "`woofi` is not exported by module …" on Solana, "`trySwap` …" on an EVM chain.
+import, naming it: "`woofi` is not exported by module …" on Solana, "`raydiumClmm` …" on an EVM
+chain.
 
 ## On Solana
 
 A program that knows its pool needs none of these functions directly: the venue's namespace,
-`OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)` (or `trySwap`), compiles to that
-venue's `orcaWhirlpool`/`tryOrcaWhirlpool` below, with the slot and the trader added to `main` and
-derived when the cook is built ([Solana: venues by namespace](../guides/solana.md#venues-by-namespace)).
+`Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)`, compiles to that venue's
+`orcaWhirlpool` below, and `Solana.swap(pool, …)`, at a pool of any of the nine, compiles to `swap`.
+Either way the slot and the trader are added to `main` and derived when the cook is built
+([Solana: venues by namespace](../guides/solana.md#venues-by-namespace)).
 
 On Solana `@sauce/router` swaps at the venues whose swap takes a price limit that stops it and
 leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md),
 and at Manifest's book. Each venue's swap comes in four forms:
 
-| Form                                         | Takes                                                   | Returns                      |
-| -------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
-| at a price: `try<Venue>`                     | `(slot, trader, amountIn, maxPrice, minOut, recipient)` | what the recipient received  |
-| at the pool's own limit: `try<Venue>AtLimit` | `(slot, trader, amountIn, limit, minOut, recipient)`    | what the recipient received  |
-| the instruction alone: `<venue>Cpi`          | `(program, accounts, source, amountIn, limit, …)`       | what the paying account paid |
-| the instruction's data: `<venue>Data`        | `(amountIn, limit, …)`                                  | the data, to send yourself   |
+| Form                                      | Takes                                                   | Returns                      |
+| ----------------------------------------- | ------------------------------------------------------- | ---------------------------- |
+| at a price: `<venue>`                     | `(slot, trader, amountIn, maxPrice, minOut, recipient)` | what the recipient received  |
+| at the pool's own limit: `<venue>AtLimit` | `(slot, trader, amountIn, limit, minOut, recipient)`    | what the recipient received  |
+| the instruction alone: `<venue>Cpi`       | `(program, accounts, source, amountIn, limit, …)`       | what the paying account paid |
+| the instruction's data: `<venue>Data`     | `(amountIn, limit, …)`                                  | the data, to send yourself   |
 
-with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
-it returns `0`. Every form sends the same instruction for the same amount, limit and floor, Orca's
-excepted: at a price every pool's swap is `swap_v2`, and at its own limit a pool of two SPL Token
-mints takes the classic `swap`. The `try…AtLimit` forms build it with the venue's `…Data`. The forms
-at a price write it themselves and check none of its fields: their floor is 0 and their limit fits
-its field, so no check of `…Data`'s could fail there, and every program calling `trySwap` would carry
-them. `…Cpi` writes the same bytes itself too, because a call into `…Data` would cost it about 2k
-compute units (Phoenix's excepted, which is cheaper through `phoenixData`).
+The first two return `0`, having moved nothing, where the pool cannot trade (below). Every form
+sends the same instruction for the same amount, limit and floor, Orca's excepted: at a price every
+pool's swap is `swap_v2`, and at its own limit a pool of two SPL Token mints takes the classic
+`swap`. The `…AtLimit` forms build it with the venue's `…Data`. The forms at a price write it
+themselves and check none of its fields: their floor is 0 and their limit fits its field, so no
+check of `…Data`'s could fail there, and every program calling `swap` would carry them. `…Cpi`
+writes the same bytes itself too, because a call into `…Data` would cost it about 2k compute units
+(Phoenix's excepted, which is cheaper through `phoenixData`).
 
-| Venue            | Program                                        | At a price           | At its own limit            | Its instruction      | Its data                                   |
-| ---------------- | ---------------------------------------------- | -------------------- | --------------------------- | -------------------- | ------------------------------------------ |
-| Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` | `tryRaydiumClmm`     | `tryRaydiumClmmAtLimit`     | `raydiumClmmCpi`     | `raydiumClmmData`                          |
-| PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` | `tryPancakeswapClmm` | `tryPancakeswapClmmAtLimit` | `pancakeswapClmmCpi` | `pancakeswapClmmData`                      |
-| Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  | `tryByreal`          | `tryByrealAtLimit`          | `byrealCpi`          | `byrealData`                               |
-| Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | `tryStabbleClmm`     | `tryStabbleClmmAtLimit`     | `stabbleClmmCpi`     | `stabbleClmmData`                          |
-| Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  | `tryOrcaWhirlpool`   | `tryOrcaWhirlpoolAtLimit`   | `orcaWhirlpoolCpi`   | `orcaWhirlpoolData`, `orcaWhirlpoolV2Data` |
-| Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` | `tryCropper`         | `tryCropperAtLimit`         | `cropperCpi`         | `cropperData`                              |
-| DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `tryDefituna`        | `tryDefitunaAtLimit`        | `defitunaCpi`        | `defitunaData`                             |
-| Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `tryCrema`           | `tryCremaAtLimit`           | `cremaCpi`           | `cremaData`                                |
-| Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | `tryPhoenix`         | `tryPhoenixAtLimit`         | `phoenixCpi`         | `phoenixData`                              |
-| Invariant        | `HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt` |                      | `tryInvariantAtLimit`       | `invariantCpi`       | `invariantData`                            |
-| OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                      | `tryOpenbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
-| Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                      | `tryManifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
+| Venue            | Program                                        | At a price        | At its own limit         | Its instruction      | Its data                                   |
+| ---------------- | ---------------------------------------------- | ----------------- | ------------------------ | -------------------- | ------------------------------------------ |
+| Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` | `raydiumClmm`     | `raydiumClmmAtLimit`     | `raydiumClmmCpi`     | `raydiumClmmData`                          |
+| PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` | `pancakeswapClmm` | `pancakeswapClmmAtLimit` | `pancakeswapClmmCpi` | `pancakeswapClmmData`                      |
+| Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  | `byreal`          | `byrealAtLimit`          | `byrealCpi`          | `byrealData`                               |
+| Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | `stabbleClmm`     | `stabbleClmmAtLimit`     | `stabbleClmmCpi`     | `stabbleClmmData`                          |
+| Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  | `orcaWhirlpool`   | `orcaWhirlpoolAtLimit`   | `orcaWhirlpoolCpi`   | `orcaWhirlpoolData`, `orcaWhirlpoolV2Data` |
+| Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` | `cropper`         | `cropperAtLimit`         | `cropperCpi`         | `cropperData`                              |
+| DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `defituna`        | `defitunaAtLimit`        | `defitunaCpi`        | `defitunaData`                             |
+| Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `crema`           | `cremaAtLimit`           | `cremaCpi`           | `cremaData`                                |
+| Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | `phoenix`         | `phoenixAtLimit`         | `phoenixCpi`         | `phoenixData`                              |
+| Invariant        | `HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt` |                   | `invariantAtLimit`       | `invariantCpi`       | `invariantData`                            |
+| OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                   | `openbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
+| Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                   | `manifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
 
-and `trySwap`/`swap`, which take a pool at any of the nine venues priced the first way and read its
-venue from the program that owns it.
+and `swap`, which takes a pool at any of the nine venues priced the first way and reads its venue
+from the program that owns it.
 
 ```text
-trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: Account): Uint256
+swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: Account): Uint256
 ```
 
 - **`slot`** is the pool's accounts, the System program for any the venue does not take:
@@ -367,30 +369,30 @@ trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipien
   authority's own.
 
 Each venue's function requires the slot's program to be its venue's and the pool's owner before it
-reads the pool, because the authority signs the swap; `trySwap` requires the slot's program to own
+reads the pool, because the authority signs the swap; `swap` requires the slot's program to own
 the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
 rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
 or of none (`not a supported venue's pool`), a pool that is not the pair, and a limit an order cannot
 carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
-itself as the pool is a missing slot, which a `try` form skips.
+itself as the pool is a missing slot, which is skipped.
 
 A failed call into another program fails the whole Solana transaction and cannot be caught, so a
-`try` form checks before anything moves and returns `0`, having moved nothing, for a missing slot
-(the System program as its pool), no input, a pool whose swaps are off, a paused pool or a market
-not open for taking, a pool with no liquidity at its price, a pool already at or past its limit, an
-input too small to buy one unit at the pool's price after its fee (judged at a limit by the pool's
-base fee), an input smaller than one of a market's lots, and, at a price, a fee that is more than one
-rate (a dynamic or adaptive fee, or a Byreal pool's own) and a market limit too large for an order's
-64-bit price. The price only worsens as a pool sells, so the estimate is the most the input could
-buy: dust an earlier pool left (an atom, which the fee takes whole) is skipped, never handed to a
-venue that would keep it or refuse it. A Phoenix or OpenBook order whose book has no offer within
-its price is placed and fills nothing, so it returns `0` too, nothing having moved. A swap that ran
-returns at least 1, held to `minOut` and at least 1, and reverts below it. A failure the checks do
-not foresee, such as a tick array missing from the slot or an Invariant input past its limit, fails
-the transaction.
+function that takes a slot checks before anything moves and returns `0`, having moved nothing, for a
+missing slot (the System program as its pool), no input, a pool whose swaps are off, a paused pool
+or a market not open for taking, a pool with no liquidity at its price, a pool already at or past
+its limit, an input too small to buy one unit at the pool's price after its fee (judged at a limit
+by the pool's base fee), an input smaller than one of a market's lots, and, at a price, a fee that
+is more than one rate (a dynamic or adaptive fee, or a Byreal pool's own) and a market limit too
+large for an order's 64-bit price. The price only worsens as a pool sells, so the estimate is the
+most the input could buy: dust an earlier pool left (an atom, which the fee takes whole) is skipped,
+never handed to a venue that would keep it or refuse it. A Phoenix or OpenBook order whose book has
+no offer within its price is placed and fills nothing, so it returns `0` too, nothing having moved.
+A swap that ran returns at least 1, held to `minOut` and at least 1, and reverts below it. A failure
+the checks do not foresee, such as a tick array missing from the slot or an Invariant input past its
+limit, fails the transaction.
 
 ```js
-import { trySwap } from "@sauce/router";
+import { swap } from "@sauce/router";
 
 // One pool, any of the nine venues: up to amountIn of payMint for buyMint, never more than maxPrice
 // a unit with the fee, and at least minOut, else the whole transaction reverts.
@@ -418,7 +420,7 @@ function main(
 ): Uint256 {
   const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
   const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
-  return trySwap(slot, trader, amountIn, maxPrice, minOut, output);
+  return swap(slot, trader, amountIn, maxPrice, minOut, output);
 }
 ```
 
@@ -459,8 +461,8 @@ compiles: the side paid bounds the order, so give the other side its most, `0x7f
 its lot size. An input under one lot is no order: `phoenixCpi` returns `0` for it, and a caller of
 `phoenixData` skips it.
 
-The two `try` forms return what the recipient received, and `…Cpi` what the paying account paid,
-each one number. A program that wants both reads the other itself:
+`<venue>` and `<venue>AtLimit` return what the recipient received, and `…Cpi` what the paying
+account paid, each one number. A program that wants both reads the other itself:
 
 ```js
 import { defitunaCpi } from "@sauce/router";
@@ -604,10 +606,10 @@ const { prefix, suffix, divisor } = routerSvmDataTemplate("defituna", {
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
 is about 0.9 to 1.7 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
-0.2 to 0.4 KB, `trySwap` all nine about 4.4 KB. A program that knows its venue calls that venue's
-function, and keeps `trySwap` for slots whose venue it learns as it runs. Past one transaction a
+0.2 to 0.4 KB, `swap` all nine about 4.4 KB. A program that knows its venue calls that venue's
+function, and keeps `swap` for slots whose venue it learns as it runs. Past one transaction a
 program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
-is one `trySwap` call per pool.
+is one `Solana.swap` call per pool, each compiled to `swap`.
 
 Reading an account out of an array is among the dearest steps in a program, so a form that takes a
 slot pays for every account it lays out; `…Cpi` and `…Data` read none, and `…Data` does not even
@@ -619,20 +621,20 @@ in, and the paying account read around it), and what each form adds to that cook
 literal. A whole cook moves by a few thousand units with its accounts' addresses; what a form adds,
 measured on the same accounts, does not.
 
-| Venue (pool, way)                     | Venue CU | Hand-built CPI | `…Data` |  `…Cpi` | `try…AtLimit` | `try…` at a price |
-| ------------------------------------- | -------: | -------------: | ------: | ------: | ------------: | ----------------: |
-| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        114,662 |  +3,185 |  +6,781 |       +97,269 |          +111,032 |
-| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        136,486 |  +3,185 |  +6,781 |       +97,270 |          +112,194 |
-| Byreal (USDC pool, 0→1)               |   72,927 |        139,281 |  +3,185 |  +6,781 |       +96,308 |          +112,687 |
-| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         87,749 |  +3,793 |  +9,579 |       +83,951 |          +109,498 |
-| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |        100,130 |  +3,953 |  +9,931 |       +85,649 |           skipped |
-| Cropper (SOL/USDC, B→A)               |   51,207 |        108,790 |  +3,953 |  +7,433 |       +82,154 |           +94,050 |
-| DefiTuna (SOL/USDC, A→B)              |   50,589 |        112,128 |  +3,776 |  +7,256 |       +80,714 |           +91,805 |
-| Crema (SOL/USDC, B→A)                 |   75,506 |        137,178 |  +3,575 |  +7,055 |       +83,957 |          +109,789 |
-| Phoenix (SOL/USDC, selling base)      |   22,729 |         91,297 |  +6,437 | +14,318 |       +61,360 |                   |
-| Invariant (USDC/USDT, X→Y)            |   62,133 |        122,300 |  +3,498 |  +6,978 |       +76,219 |                   |
-| Manifest (SOL/USDC, selling base)     |   13,122 |         68,694 |  +2,967 |  +6,563 |       +55,410 |                   |
-| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +12,068 | +17,830 |       +82,208 |                   |
+| Venue (pool, way)                     | Venue CU | Hand-built CPI | `…Data` |  `…Cpi` | `…AtLimit` | `<venue>` at a price |
+| ------------------------------------- | -------: | -------------: | ------: | ------: | ---------: | -------------------: |
+| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        114,662 |  +3,185 |  +6,781 |    +97,269 |             +111,032 |
+| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        136,486 |  +3,185 |  +6,781 |    +97,270 |             +112,194 |
+| Byreal (USDC pool, 0→1)               |   72,927 |        139,281 |  +3,185 |  +6,781 |    +96,308 |             +112,687 |
+| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         87,749 |  +3,793 |  +9,579 |    +83,951 |             +109,498 |
+| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |        100,130 |  +3,953 |  +9,931 |    +85,649 |              skipped |
+| Cropper (SOL/USDC, B→A)               |   51,207 |        108,790 |  +3,953 |  +7,433 |    +82,154 |              +94,050 |
+| DefiTuna (SOL/USDC, A→B)              |   50,589 |        112,128 |  +3,776 |  +7,256 |    +80,714 |              +91,805 |
+| Crema (SOL/USDC, B→A)                 |   75,506 |        137,178 |  +3,575 |  +7,055 |    +83,957 |             +109,789 |
+| Phoenix (SOL/USDC, selling base)      |   22,729 |         91,297 |  +6,437 | +14,318 |    +61,360 |                      |
+| Invariant (USDC/USDT, X→Y)            |   62,133 |        122,300 |  +3,498 |  +6,978 |    +76,219 |                      |
+| Manifest (SOL/USDC, selling base)     |   13,122 |         68,694 |  +2,967 |  +6,563 |    +55,410 |                      |
+| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +12,068 | +17,830 |    +82,208 |                      |
 
 `…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check and the
 limit's 128-bit one (about 600 units each), the direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an
@@ -640,8 +642,8 @@ array, and the call. A book's data carries more: Phoenix's divides the input by 
 OpenBook's word has six fields, two of them chosen by the price. `openbookV2LotsData`, its lots
 divided when the program is compiled, adds +8,173 where `openbookV2Data`, dividing, adds +12,068.
 `routerSvmDataTemplate`'s bytes add nothing: they are the hand-built CPI's.
-The `try` forms pay for reading the slot: the pool's owner, its state for the skips, and every
-account they lay out.
+`<venue>` and `…AtLimit` pay for reading the slot: the pool's owner, its state for the skips, and
+every account they lay out.
 
 Stabble CLMM runs Raydium's code and its forms cost what Raydium's do. The forms' cost does not grow
 with the ticks a swap crosses; the venue's does. To the window's edge, with more input than the
@@ -652,11 +654,10 @@ that.
 ## Exact input on Solana
 
 The Solana arm's other functions swap exactly `amountIn` at one pool, with no price limit: the venue
-takes the whole input, or the transaction fails. Each venue has four functions:
+takes the whole input, or the transaction fails. Each venue has three functions:
 
 ```text
 raydiumCpSwap(slot: Account[], trader: Account[], amountIn, minOut, recipient: Account): Uint256
-tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
 raydiumCpSwapCpi(program: Account, accounts: Account[], source: Account, amountIn, minOut): Uint256
 raydiumCpSwapData(amountIn, minOut): bytes
 ```
@@ -667,10 +668,9 @@ raydiumCpSwapData(amountIn, minOut): bytes
 - **`<venue>Cpi`** sends that data on `accounts`, the instruction's own accounts in the venue's
   order. It checks only the program, reads only `source`, and returns what `source` paid.
 - **`<venue>`** swaps on a slot and returns what the recipient received, held to `minOut` and at
-  least 1. It reverts below that.
-- **`try<Venue>`** first checks what it can see before the swap. It returns `0`, having moved
-  nothing, for a missing slot (the System program as its pool), no input, and each refusal of the
-  venue's listed below. Otherwise it is `<venue>`.
+  least 1. It reverts below that. It first checks what it can see before the swap: it returns `0`,
+  having moved nothing, for a missing slot (the System program as its pool), no input, and each
+  refusal of the venue's listed below.
 
 `minOut` in `…Data` and `…Cpi` is the venue's own least out, written as given; a venue whose swap
 carries none takes no `minOut` there (Bonkswap, Guacswap, the Saber decimal wrapper, M0's swap, and
@@ -755,8 +755,7 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `heaven`               | Heaven                | `HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o` | `vaultA, vaultB, protocolConfig, instructionsSysvar, chainlink, solUsdFeed, associatedTokenProgram, systemProgram`                   |
 | `virtuals`             | Virtuals (selling)    | `5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki` | `poolTokenAccount, platform, platformVirtualsAccount, poolVirtualsAccount`                                                           |
 
-Each row names four functions: the one listed, its `try` form, its `Cpi` form and its `Data`
-form. Raydium CP-Swap
+Each row names three functions: the one listed, its `Cpi` form and its `Data` form. Raydium CP-Swap
 and Gamma require token 0 to be the lower-key mint. A Stabble pool's `vaultTokenA` and `vaultTokenB`
 are the vault's accounts for the two tokens traded, in either order. Each beneficiary account is the
 vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direction from the paying
@@ -765,15 +764,15 @@ writes both mints, so they are attached writable.
 
 SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse, GoonFi v2 and SolFi
 v1 are proprietary market makers: each prices off its own oracle, quote or book, which a keeper
-keeps fresh, and refuses a swap on a quote gone stale. A `try` form can't see that, so a stale quote
-fails the transaction. `instructionsSysvar` is the Instructions sysvar and `clock` the Clock sysvar.
-Riptide's `dontFront` is `jitodontfront111111111111111111111111111111`, and GoonFi v2's `validator`
+keeps fresh, and refuses a swap on a quote gone stale. `<venue>` can't see that before the swap, so
+a stale quote fails the transaction. `instructionsSysvar` is the Instructions sysvar and `clock` the
+Clock sysvar. Riptide's `dontFront` is `jitodontfront111111111111111111111111111111`, and GoonFi v2's `validator`
 is the vote account `J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv`. A Hadron fee vault is the fee
 treasury's token account for that token. A Flint market and its vault are one per token. Tessera V
 sells only its token A. SolFi v2, TaurusFi, Deriverse and GoonFi v2 write the authority, so it is
 attached writable, and Deriverse requires the authority's associated token accounts. Hadron and
 TaurusFi pay wrapped SOL into, and take it out of, native wrapped-SOL accounts. SolFi v1's liquidity
-has moved to SolFi v2: every pool it lists holds an empty vault, which its `try` form skips.
+has moved to SolFi v2: every pool it lists holds an empty vault, which `solfiV1` skips.
 
 Meteora DBC, Trends, Heaven, Virtuals, Raydium LaunchLab, Runner Rodeo and Scale vMM are bonding
 curves: each sells a launched token against its quote token until the token graduates, and a
@@ -891,13 +890,13 @@ Dexlab mint with a transfer fee keeps the fee out of what the pool receives. Arc
 token, spends the whole lots' cost and leaves the rest of `amountIn`.
 
 **`minOut`** goes into the venue's own floor where its swap takes one, so the venue refuses less
-itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>` (Denali's and
-Hadron's as given there too, 0 included), which also hold what the recipient received to `minOut`
+itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` (Denali's and Hadron's as
+given there too, 0 included), which also holds what the recipient received to `minOut`
 and to at least 1. The Saber decimal wrapper, Bonkswap, Guacswap, TaurusFi, Riptide, Flint, M0's
 swap and the staking and vault venues but Helium's treasury have no floor of their own; for these, a
 `Data` or `Cpi` caller enforces the floor itself.
 
-**What each `try` form skips** before the swap:
+**What each `<venue>` skips** before the swap:
 
 - the Raydium CP-Swap and Gamma forms skip swaps switched off, a pool not open yet, an empty side,
   and dust;
@@ -935,67 +934,67 @@ excluded. "By hand" is the recipes' template: the venue's data written around th
 (`prefix.concat(amount.toBytesLe(8), suffix)`) and sent with `svm.call` on `main`'s own accounts.
 `…Data` costs about 3,300 units more, the call into it and its packed word; `…Cpi` about 7,500 more,
 because an account list passed to a function is built as an array first, where one written into
-`svm.call` is not. A `<venue>` or `try<Venue>` function reads its accounts out of `slot` and
-`trader`, and each account it hands the venue costs about 1,400 units more than one of `main`'s own:
+`svm.call` is not. A `<venue>` function reads its accounts out of `slot` and `trader`, and each
+account it hands the venue costs about 1,400 units more than one of `main`'s own:
 
-| Venue                             | By hand | `<venue>Data` | `<venue>Cpi` | `<venue>` | `try<Venue>` |   Venue's own |
-| --------------------------------- | ------: | ------------: | -----------: | --------: | -----------: | ------------: |
-| Raydium CP-Swap                   |  14,745 |        18,025 |       22,173 |    50,980 |       71,691 |        24,285 |
-| Gamma                             |  14,745 |        18,025 |       22,173 |    50,980 |       71,289 |        67,050 |
-| Raydium AMM v4                    |  12,528 |        15,808 |       19,812 |    33,601 |       55,433 |        15,538 |
-| Orca legacy (constant product)    |  13,382 |        16,662 |       20,810 |    42,588 |       58,501 |        44,359 |
-| SPL Token Swap and its forks      |  13,382 |        16,662 |       20,816 |    42,588 |       58,501 | 22,461–49,511 |
-| Fluxbeam                          |  15,196 |        18,476 |       22,630 |    59,492 |       75,408 |        68,950 |
-| Dexlab                            |  15,180 |        18,460 |       22,614 |    59,665 |       75,581 |        57,377 |
-| Meteora DAMM v2                   |  14,916 |        18,196 |       22,344 |    55,402 |       62,969 |        13,782 |
-| Meteora DAMM v1 (stable)          |  15,728 |        19,008 |       23,156 |    54,110 |       59,153 |       104,290 |
-| Aldrin                            |  13,382 |        18,051 |       22,089 |    44,469 |       56,902 |        48,184 |
-| Omnipair                          |  13,056 |        16,336 |       20,484 |    49,120 |       61,550 |        39,456 |
-| Saber                             |  12,953 |        16,233 |       20,381 |    39,447 |       50,463 |        40,129 |
-| Saber decimal wrapper             |  11,713 |        14,361 |       18,625 |    29,414 |       34,838 |        14,209 |
-| Stabble stable and weighted swaps |  14,277 |        17,557 |       21,705 |    48,232 |       59,967 | 29,883–83,821 |
-| Mercurial                         |  12,526 |        15,806 |       19,810 |    33,831 |       41,470 |        73,205 |
-| Perena                            |  13,956 |        19,759 |       23,675 |    55,146 |       66,668 |       159,473 |
-| MetaDAO futarchy                  |   9,250 |        14,262 |       18,294 |    36,975 |       48,172 |        43,808 |
-| Scale AMM                         |  15,660 |        20,427 |       25,387 |           |              |        43,890 |
-| PumpSwap                          |  17,945 |        22,800 |       28,688 |           |              |        73,361 |
-| Bonkswap                          |  16,985 |        20,173 |       24,813 |           |              | 56,094–68,094 |
-| Guacswap                          |  16,985 |        19,981 |       24,621 |           |              | 64,613–70,631 |
-| Meteora DLMM                      |  15,518 |        18,798 |       22,946 |           |              |        40,225 |
-| Saros DLMM                        |   9,529 |        14,187 |       18,241 |           |              |        53,053 |
-| SolFi v2                          |  18,924 |        23,593 |       27,625 |    61,769 |       69,408 |        81,206 |
-| Hadron                            |  16,108 |        21,692 |       25,608 |    58,889 |       66,528 |        31,027 |
-| TaurusFi                          |  15,204 |        16,572 |       20,284 |    51,688 |       59,327 |       117,086 |
-| Riptide                           |  15,039 |        17,791 |       21,387 |    57,312 |       64,951 |       531,428 |
-| Denali                            |  14,276 |        19,163 |       23,195 |    54,367 |       62,006 |        23,501 |
-| Gavel                             |  12,633 |        16,809 |       20,841 |    37,577 |       45,216 |        19,084 |
-| Tessera V                         |  15,257 |        19,381 |       23,529 |    54,512 |       59,616 |        51,729 |
-| Flint                             |  13,666 |        14,507 |       18,247 |    47,604 |       55,243 |         8,241 |
-| Deriverse                         |  18,264 |        23,510 |       27,426 |    64,142 |       71,407 |        39,027 |
-| GoonFi v2                         |  18,097 |        22,772 |       26,804 |    64,586 |       72,225 |        65,485 |
-| SolFi v1                          |  12,539 |        17,208 |       21,096 |    38,114 |       45,753 |        76,015 |
-| Meteora DBC                       |  14,172 |        17,452 |       21,600 |    58,423 |       68,215 |        31,171 |
-| Trends                            |  13,358 |        16,638 |       20,786 |    57,428 |       67,220 |        42,988 |
-| Heaven                            |  16,713 |        21,629 |       26,589 |    70,052 |       79,844 |        48,893 |
-| Virtuals (selling)                |  13,375 |        16,655 |       20,803 |    39,790 |       46,866 |        27,853 |
-| Raydium LaunchLab                 |  16,392 |        21,282 |       26,242 |           |              |        46,034 |
-| Runner Rodeo                      |  14,874 |        18,154 |       22,302 |           |              |        51,904 |
-| Scale vMM                         |  17,623 |        22,390 |       27,350 |           |              |        46,619 |
-| xORCA                             |  12,136 |        13,413 |       17,009 |    33,226 |       38,266 |         6,042 |
-| Solayer                           |  12,135 |        14,695 |       19,191 |    35,048 |       42,492 |        18,969 |
-| Voltr                             |  14,339 |        16,987 |       22,555 |    48,286 |       55,720 |        36,677 |
-| Liquid-unstake vault              |  14,720 |        15,580 |       19,320 |    44,510 |       49,550 |        55,605 |
-| Hylo stability pool               |  12,721 |        14,864 |       19,504 |    42,224 |       47,264 |        34,084 |
-| Huma                              |  14,875 |        16,152 |       19,892 |    48,987 |       54,027 |        39,425 |
-| Helium treasury                   |  13,387 |        16,667 |       20,815 |    38,794 |       45,870 |       120,225 |
-| Jupiter Lend Earn                 |  16,776 |        19,336 |       23,976 |           |              |        47,871 |
-| Hylo                              |  10,573 |        12,716 |       17,356 |           |              |        65,961 |
-| Carrot                            |  16,187 |        18,747 |       23,387 |           |              |       232,557 |
-| M0 swap                           |  20,246 |        21,106 |       24,846 |           |              |       126,171 |
-| Jupiter Perpetuals                |  11,388 |        14,668 |       18,816 |           |              |       113,112 |
-| Jupiter Perpetuals' JLP mint      |  16,018 |        19,286 |       23,434 |           |              |       126,354 |
-| Sanctum Infinity                  |  21,789 |        32,843 |       36,527 |           |              |        61,642 |
-| Archer                            |  14,644 |        20,236 |       24,835 |           |              |        22,314 |
+| Venue                             | By hand | `<venue>Data` | `<venue>Cpi` | `<venue>` |   Venue's own |
+| --------------------------------- | ------: | ------------: | -----------: | --------: | ------------: |
+| Raydium CP-Swap                   |  14,745 |        18,025 |       22,173 |    71,691 |        24,285 |
+| Gamma                             |  14,745 |        18,025 |       22,173 |    71,289 |        67,050 |
+| Raydium AMM v4                    |  12,528 |        15,808 |       19,812 |    55,433 |        15,538 |
+| Orca legacy (constant product)    |  13,382 |        16,662 |       20,810 |    58,501 |        44,359 |
+| SPL Token Swap and its forks      |  13,382 |        16,662 |       20,816 |    58,501 | 22,461–49,511 |
+| Fluxbeam                          |  15,196 |        18,476 |       22,630 |    75,408 |        68,950 |
+| Dexlab                            |  15,180 |        18,460 |       22,614 |    75,581 |        57,377 |
+| Meteora DAMM v2                   |  14,916 |        18,196 |       22,344 |    62,969 |        13,782 |
+| Meteora DAMM v1 (stable)          |  15,728 |        19,008 |       23,156 |    59,153 |       104,290 |
+| Aldrin                            |  13,382 |        18,051 |       22,089 |    56,902 |        48,184 |
+| Omnipair                          |  13,056 |        16,336 |       20,484 |    61,550 |        39,456 |
+| Saber                             |  12,953 |        16,233 |       20,381 |    50,463 |        40,129 |
+| Saber decimal wrapper             |  11,713 |        14,361 |       18,625 |    34,838 |        14,209 |
+| Stabble stable and weighted swaps |  14,277 |        17,557 |       21,705 |    59,967 | 29,883–83,821 |
+| Mercurial                         |  12,526 |        15,806 |       19,810 |    41,470 |        73,205 |
+| Perena                            |  13,956 |        19,759 |       23,675 |    66,668 |       159,473 |
+| MetaDAO futarchy                  |   9,250 |        14,262 |       18,294 |    48,172 |        43,808 |
+| Scale AMM                         |  15,660 |        20,427 |       25,387 |           |        43,890 |
+| PumpSwap                          |  17,945 |        22,800 |       28,688 |           |        73,361 |
+| Bonkswap                          |  16,985 |        20,173 |       24,813 |           | 56,094–68,094 |
+| Guacswap                          |  16,985 |        19,981 |       24,621 |           | 64,613–70,631 |
+| Meteora DLMM                      |  15,518 |        18,798 |       22,946 |           |        40,225 |
+| Saros DLMM                        |   9,529 |        14,187 |       18,241 |           |        53,053 |
+| SolFi v2                          |  18,924 |        23,593 |       27,625 |    69,408 |        81,206 |
+| Hadron                            |  16,108 |        21,692 |       25,608 |    66,528 |        31,027 |
+| TaurusFi                          |  15,204 |        16,572 |       20,284 |    59,327 |       117,086 |
+| Riptide                           |  15,039 |        17,791 |       21,387 |    64,951 |       531,428 |
+| Denali                            |  14,276 |        19,163 |       23,195 |    62,006 |        23,501 |
+| Gavel                             |  12,633 |        16,809 |       20,841 |    45,216 |        19,084 |
+| Tessera V                         |  15,257 |        19,381 |       23,529 |    59,616 |        51,729 |
+| Flint                             |  13,666 |        14,507 |       18,247 |    55,243 |         8,241 |
+| Deriverse                         |  18,264 |        23,510 |       27,426 |    71,407 |        39,027 |
+| GoonFi v2                         |  18,097 |        22,772 |       26,804 |    72,225 |        65,485 |
+| SolFi v1                          |  12,539 |        17,208 |       21,096 |    45,753 |        76,015 |
+| Meteora DBC                       |  14,172 |        17,452 |       21,600 |    68,215 |        31,171 |
+| Trends                            |  13,358 |        16,638 |       20,786 |    67,220 |        42,988 |
+| Heaven                            |  16,713 |        21,629 |       26,589 |    79,844 |        48,893 |
+| Virtuals (selling)                |  13,375 |        16,655 |       20,803 |    46,866 |        27,853 |
+| Raydium LaunchLab                 |  16,392 |        21,282 |       26,242 |           |        46,034 |
+| Runner Rodeo                      |  14,874 |        18,154 |       22,302 |           |        51,904 |
+| Scale vMM                         |  17,623 |        22,390 |       27,350 |           |        46,619 |
+| xORCA                             |  12,136 |        13,413 |       17,009 |    38,266 |         6,042 |
+| Solayer                           |  12,135 |        14,695 |       19,191 |    42,492 |        18,969 |
+| Voltr                             |  14,339 |        16,987 |       22,555 |    55,720 |        36,677 |
+| Liquid-unstake vault              |  14,720 |        15,580 |       19,320 |    49,550 |        55,605 |
+| Hylo stability pool               |  12,721 |        14,864 |       19,504 |    47,264 |        34,084 |
+| Huma                              |  14,875 |        16,152 |       19,892 |    54,027 |        39,425 |
+| Helium treasury                   |  13,387 |        16,667 |       20,815 |    45,870 |       120,225 |
+| Jupiter Lend Earn                 |  16,776 |        19,336 |       23,976 |           |        47,871 |
+| Hylo                              |  10,573 |        12,716 |       17,356 |           |        65,961 |
+| Carrot                            |  16,187 |        18,747 |       23,387 |           |       232,557 |
+| M0 swap                           |  20,246 |        21,106 |       24,846 |           |       126,171 |
+| Jupiter Perpetuals                |  11,388 |        14,668 |       18,816 |           |       113,112 |
+| Jupiter Perpetuals' JLP mint      |  16,018 |        19,286 |       23,434 |           |       126,354 |
+| Sanctum Infinity                  |  21,789 |        32,843 |       36,527 |           |        61,642 |
+| Archer                            |  14,644 |        20,236 |       24,835 |           |        22,314 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own

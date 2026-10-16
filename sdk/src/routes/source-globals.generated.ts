@@ -55,11 +55,11 @@ export interface SauceSolanaAccounts {
 /**
  * A Solana venue's swap at one pool, in a program compiled for Solana: the pool and both tokens are
  * known when the cook is built, which reads the pool's accounts from it; what arrives lands in the
- * Pot's own account for the token bought. `swap` reverts where `trySwap` returns 0.
+ * Pot's own account for the token bought. It returns 0, having moved nothing, where the pool cannot
+ * trade (past `maxPrice`, empty, paused, no pool), and reverts below `minOut`.
  */
 export interface SauceSvmVenueSource {
   swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
-  trySwap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
 }
 
 /** A collection returned by Sauce, whose length is a Sauce scalar. */
@@ -2370,6 +2370,7 @@ export interface PancakeswapFamilySource {
   readonly NonfungiblePositionManager: PancakeswapV3Source["NonfungiblePositionManager"];
   readonly SmartRouter: PancakeswapV3Source["SmartRouter"];
   readonly Pool: PancakeswapV3Source["Pool"];
+  readonly CLMM: SauceSvmVenueSource;
 }
 
 export interface SushiswapFamilySource {
@@ -2415,6 +2416,38 @@ export interface UnitflowFamilySource {
 export interface YearnFamilySource {
   readonly Vault: YearnV3Source["Vault"];
   readonly VaultFactory: YearnV3Source["VaultFactory"];
+}
+
+export interface RaydiumSvmVenuesSource {
+  readonly CLMM: SauceSvmVenueSource;
+}
+
+export interface ByrealSvmVenuesSource {
+  readonly CLMM: SauceSvmVenueSource;
+}
+
+export interface StabbleSvmVenuesSource {
+  readonly CLMM: SauceSvmVenueSource;
+}
+
+export interface OrcaSvmVenuesSource {
+  readonly Whirlpool: SauceSvmVenueSource;
+}
+
+export interface CropperSvmVenuesSource {
+  readonly Whirlpool: SauceSvmVenueSource;
+}
+
+export interface DefitunaSvmVenuesSource {
+  readonly Fusion: SauceSvmVenueSource;
+}
+
+export interface CremaSvmVenuesSource {
+  readonly CLMM: SauceSvmVenueSource;
+}
+
+export interface PhoenixSvmVenuesSource {
+  readonly Market: SauceSvmVenueSource;
 }
 
 declare global {
@@ -4443,15 +4476,14 @@ declare global {
   const WSOL: bigint & SauceTokenSource;
   const WULF_US: bigint & SauceTokenSource;
   const XAI: bigint & SauceTokenSource;
-  const RaydiumClmm: SauceSvmVenueSource;
-  const PancakeswapClmm: SauceSvmVenueSource;
-  const Byreal: SauceSvmVenueSource;
-  const StabbleClmm: SauceSvmVenueSource;
-  const OrcaWhirlpool: SauceSvmVenueSource;
-  const Cropper: SauceSvmVenueSource;
-  const Defituna: SauceSvmVenueSource;
-  const Crema: SauceSvmVenueSource;
-  const Phoenix: SauceSvmVenueSource;
+  const Raydium: RaydiumSvmVenuesSource;
+  const Byreal: ByrealSvmVenuesSource;
+  const Stabble: StabbleSvmVenuesSource;
+  const Orca: OrcaSvmVenuesSource;
+  const Cropper: CropperSvmVenuesSource;
+  const Defituna: DefitunaSvmVenuesSource;
+  const Crema: CremaSvmVenuesSource;
+  const Phoenix: PhoenixSvmVenuesSource;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

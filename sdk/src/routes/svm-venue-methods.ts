@@ -1,25 +1,24 @@
 /**
- * Solana's price-limit venues as namespaces in a program compiled for Solana, the way a program
- * calls a protocol by its namespace on an EVM chain:
+ * Solana's price-limit venues as namespaces in a program compiled for Solana, written as a protocol's
+ * contracts are on an EVM chain, the protocol then its program:
  *
- *   OrcaWhirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)      what arrived
- *   OrcaWhirlpool.trySwap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)   0 when skipped
+ *   Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
  *
- * and the same on `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `Cropper`, `Defituna`,
- * `Crema` and `Phoenix`. Each lowers to that venue's own `@sauce/router` function (`orcaWhirlpool`,
- * `tryOrcaWhirlpool`), never `trySwap`, which carries every venue's code: one venue's function is
- * about a third of its size. That function keeps its every check — its program id, the pool's owner,
- * the pair — and its contract: the try form returns 0 having moved nothing, the plain one reverts
- * there, and a swap that ran is held to `minOut` and returns at least 1.
+ * and the same on `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`,
+ * `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. `swap` returns what
+ * arrived; where the pool cannot trade — past `maxPrice`, empty, paused, a slot with no pool — it
+ * returns 0 having moved nothing, and below `minOut` it reverts. Each lowers to that venue's own
+ * `@sauce/router` function (`orcaWhirlpool`), never `swap`, which carries every venue's code: one
+ * venue's function is about a third of its size. That function keeps its every check — its program
+ * id, the pool's owner, the pair.
  *
  *   Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
- *   Solana.trySwap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
  *
- * are the same at a pool of ANY of the nine, the venue read from the pool's owner as the program
- * runs: they lower to `@sauce/router`'s own `swap` and `trySwap`, which carry every venue's code, for
- * a program that takes its pools as arguments and so cannot know their venues — the distributed
- * swap. A pool given as the System Program (`11111111111111111111111111111111`, the zero key) is an
- * empty slot: its nine accounts are the System Program, and `trySwap` returns 0 for it.
+ * is the same at a pool of ANY of the nine, the venue read from the pool's owner as the program runs:
+ * it lowers to `@sauce/router`'s own `swap`, which carries every venue's code, for a program that
+ * takes its pools as arguments and so cannot know their venues — the distributed swap. A pool given
+ * as the System Program (`11111111111111111111111111111111`, the zero key) is an empty slot: its
+ * nine accounts are the System Program, and `swap` returns 0 for it.
  *
  * The function takes the pool's slot of nine accounts and the trader's seven as arrays; both are
  * ADDED to `main`, as the token methods' accounts are (`svm-lowering.ts`), each with how it is
@@ -46,72 +45,101 @@ import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js
 const ROUTER = "@sauce/router";
 const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
-/** A venue's namespace: its name for a person, its program, and its `@sauce/router` functions. */
+/** A venue's namespace: its name for a person, its program, and its `@sauce/router` function. */
 export interface SvmVenueNamespace {
   readonly name: string;
   readonly program: string;
   readonly swap: string;
-  readonly trySwap: string;
 }
 
-const venue = (name: string, swap: string, trySwap: string): SvmVenueNamespace => ({
+const venue = (name: string, swap: string): SvmVenueNamespace => ({
   name,
   program: SVM_PRICE_LIMIT_VENUES.find((one) => one.name === name)!.program,
   swap,
-  trySwap,
 });
 
-/** Each venue's namespace, as a program writes it. */
+/** Each venue's namespace, its protocol then its program, as a program writes it. */
 export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> = {
-  RaydiumClmm: venue("Raydium CLMM", "raydiumClmm", "tryRaydiumClmm"),
-  PancakeswapClmm: venue("PancakeSwap CLMM", "pancakeswapClmm", "tryPancakeswapClmm"),
-  Byreal: venue("Byreal", "byreal", "tryByreal"),
-  StabbleClmm: venue("Stabble CLMM", "stabbleClmm", "tryStabbleClmm"),
-  OrcaWhirlpool: venue("Orca Whirlpools", "orcaWhirlpool", "tryOrcaWhirlpool"),
-  Cropper: venue("Cropper", "cropper", "tryCropper"),
-  Defituna: venue("DefiTuna", "defituna", "tryDefituna"),
-  Crema: venue("Crema", "crema", "tryCrema"),
-  Phoenix: venue("Phoenix", "phoenix", "tryPhoenix"),
+  "Raydium.CLMM": venue("Raydium CLMM", "raydiumClmm"),
+  "Pancakeswap.CLMM": venue("PancakeSwap CLMM", "pancakeswapClmm"),
+  "Byreal.CLMM": venue("Byreal", "byreal"),
+  "Stabble.CLMM": venue("Stabble CLMM", "stabbleClmm"),
+  "Orca.Whirlpool": venue("Orca Whirlpools", "orcaWhirlpool"),
+  "Cropper.Whirlpool": venue("Cropper", "cropper"),
+  "Defituna.Fusion": venue("DefiTuna", "defituna"),
+  "Crema.CLMM": venue("Crema", "crema"),
+  "Phoenix.Market": venue("Phoenix", "phoenix"),
 };
 
-/** How a program calls a venue's swap, each method's signature. */
+/** How a program calls a venue's swap: its one method's signature. */
 export const SVM_VENUE_METHODS: readonly string[] = [
   "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, maxPrice: Uint256, minOut: Uint256): Uint256",
-  "trySwap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, maxPrice: Uint256, minOut: Uint256): Uint256",
 ];
-
-/** The methods each namespace offers, and the arguments they take. */
-const METHODS = ["swap", "trySwap"] as const;
 
 /** The namespace whose swap takes a pool of any of the venues: the chain's own. */
 export const SVM_ANY_VENUE = "Solana";
 const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "maxPrice", "minOut"] as const;
 
-export const isVenueNamespace = (name: string): boolean =>
-  Object.hasOwn(SVM_VENUE_NAMESPACES, name);
+/** Each venue protocol, by the name a program writes first (`Orca`), and its programs' names. */
+const PROTOCOLS: ReadonlyMap<string, readonly string[]> = Object.keys(SVM_VENUE_NAMESPACES).reduce(
+  (protocols, key) => {
+    const [protocol, program] = key.split(".") as [string, string];
+    return protocols.set(protocol, [...(protocols.get(protocol) ?? []), program]);
+  },
+  new Map<string, string[]>(),
+);
 
-/** The venue namespaces' sites: `<Venue>.swap(…)` and `<Venue>.trySwap(…)`. */
+/** Whether `name` is a venue protocol's, the first name of a venue's namespace (`Orca`). */
+export const isVenueProtocol = (name: string): boolean => PROTOCOLS.has(name);
+
+/** The venue namespaces' sites, `<Protocol>.<Program>.swap(…)`, and `Solana.swap(…)`. */
 export function collectVenueMethods(l: SvmLowering): void {
   let literalPools = 0;
   walk(l.program, (n) => {
     const site = methodCall(n);
-    if (site === undefined || site.object.type !== "Identifier") return;
-    const namespace = nameOf(site.object);
-    if (l.declared.has(namespace)) return;
-    // `Solana.pda(…)` and the chain's other members are not swaps: only its two are taken here.
-    const any = namespace === SVM_ANY_VENUE && (METHODS as readonly string[]).includes(site.method);
-    if (!any && !isVenueNamespace(namespace)) return;
+    if (site === undefined) return;
+    // `Solana.pda(…)` and the chain's other members are not swaps: only its swap is taken here.
+    if (site.object.type === "Identifier") {
+      const name = nameOf(site.object);
+      if (name !== SVM_ANY_VENUE || l.declared.has(name)) return;
+      if (site.method === "trySwap") {
+        throw new Error(
+          "`Solana.trySwap(…)` on Solana: Solana.swap is the one swap, returning 0 having moved " +
+            "nothing where the pool cannot trade, and reverting below minOut",
+        );
+      }
+      if (site.method === "swap") l.site(n, () => lowerSwap(site, undefined, "`Solana.swap(…)`"));
+      return;
+    }
+    const object = site.object as { type: string; object?: AstNode; property?: AstNode };
+    if (
+      object.type !== "MemberExpression" ||
+      (object as { computed?: boolean }).computed ||
+      object.object?.type !== "Identifier" ||
+      object.property?.type !== "Identifier"
+    ) {
+      return;
+    }
+    const protocol = nameOf(object.object);
+    const programs = PROTOCOLS.get(protocol);
+    if (programs === undefined || l.declared.has(protocol)) return;
+    const namespace = `${protocol}.${nameOf(object.property)}`;
     const spelled = `\`${namespace}.${site.method}(…)\``;
-    if (!(METHODS as readonly string[]).includes(site.method)) {
+    if (!programs.includes(nameOf(object.property))) {
       throw new Error(
-        `${spelled} on Solana: ${namespace} offers swap and trySwap, each taking ` +
-          `(${PARAMS.join(", ")})`,
+        `${spelled} on Solana: ${protocol}'s swap is ${programs.map((one) => `${protocol}.${one}`).join(", ")}`,
+      );
+    }
+    if (site.method !== "swap") {
+      throw new Error(
+        `${spelled} on Solana: ${namespace} offers swap, taking (${PARAMS.join(", ")}): it returns ` +
+          "0 having moved nothing where the pool cannot trade, and reverts below minOut",
       );
     }
     l.site(n, () => lowerSwap(site, namespace, spelled));
   });
 
-  function lowerSwap(site: MethodCall, namespace: string, spelled: string): void {
+  function lowerSwap(site: MethodCall, namespace: string | undefined, spelled: string): void {
     l.requireInMain(site.call, spelled, "a venue's swap");
     const args = (site.call as { arguments?: AstNode[] }).arguments ?? [];
     if (args.length !== PARAMS.length || args.some((arg) => arg.type === "SpreadElement")) {
@@ -154,10 +182,8 @@ export function collectVenueMethods(l: SvmLowering): void {
       l.account(MEMO_PROGRAM, "memoProgram", {}),
     ];
     const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
-    const venue = SVM_VENUE_NAMESPACES[namespace];
-    // At any venue, the router's own: it reads the venue from the pool's owner as it runs.
-    const fn =
-      venue === undefined ? site.method : site.method === "swap" ? venue.swap : venue.trySwap;
+    // At any venue, the router's own `swap`: it reads the venue from the pool's owner as it runs.
+    const fn = namespace === undefined ? "swap" : SVM_VENUE_NAMESPACES[namespace]!.swap;
     l.spliceCall(
       site,
       amountIn,

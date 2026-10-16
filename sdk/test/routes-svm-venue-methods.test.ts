@@ -1,5 +1,5 @@
 /**
- * Solana's venue namespaces (`svm-venue-methods.ts`): `<Venue>.swap(…)` and `<Venue>.trySwap(…)`
+ * Solana's venue namespaces (`svm-venue-methods.ts`): `<Protocol>.<Program>.swap(…)` (`Orca.Whirlpool`)
  * lowered to that venue's own `@sauce/router` function, the pool's slot and the trader's accounts
  * added to `main` with how each is derived. Compiled through `compileSauceProgram` and the real
  * compiler; executed in `cli-solana-venues.e2e.test.ts`.
@@ -12,10 +12,10 @@ import { SVM_VENUE_NAMESPACES } from "../src/routes/svm-venue-methods.js";
 const compile = (source: string) => compileSauceProgram("solana", source);
 const SWAP =
   "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-  "  return OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n";
+  "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n";
 
 describe("Solana's venue namespaces", () => {
-  it("lowers to the venue's own function, never trySwap, its slot and trader added to main", () => {
+  it("lowers to the venue's own function, never swap, its slot and trader added to main", () => {
     const program = compile(SWAP);
     expect(program.source).toContain(
       'import { orcaWhirlpool as __sauce_orcaWhirlpool } from "@sauce/router";',
@@ -48,27 +48,39 @@ describe("Solana's venue namespaces", () => {
       potUSDC: "writable",
       potWSOL: "writable",
     });
-    // One venue's function is a fraction of trySwap's every venue.
+    // One venue's function is a fraction of swap's every venue.
     expect(program.bytecode.length).toBeLessThan(2_200);
-    expect(program.source).not.toContain("trySwap");
+    expect(program.source).not.toContain("{ swap as");
   });
 
-  it("names every venue a price limit stops, each to its own pair of functions", () => {
+  it("names every venue a price limit stops, its protocol then its program, each to its function", () => {
+    expect(Object.keys(SVM_VENUE_NAMESPACES).sort()).toEqual(
+      [
+        "Byreal.CLMM",
+        "Crema.CLMM",
+        "Cropper.Whirlpool",
+        "Defituna.Fusion",
+        "Orca.Whirlpool",
+        "Pancakeswap.CLMM",
+        "Phoenix.Market",
+        "Raydium.CLMM",
+        "Stabble.CLMM",
+      ].sort(),
+    );
     for (const [namespace, venue] of Object.entries(SVM_VENUE_NAMESPACES)) {
-      for (const method of ["swap", "trySwap"] as const) {
-        const program = compile(
-          `function main(pool: Address): Uint256 {\n  return ${namespace}.${method}(pool, USDC, WSOL, 5, 10, 1);\n}\n`,
-        );
-        const fn = method === "swap" ? venue.swap : venue.trySwap;
-        expect(program.source).toContain(`import { ${fn} as __sauce_${fn} } from "@sauce/router";`);
-      }
+      const program = compile(
+        `function main(pool: Address): Uint256 {\n  return ${namespace}.swap(pool, USDC, WSOL, 5, 10, 1);\n}\n`,
+      );
+      expect(program.source).toContain(
+        `import { ${venue.swap} as __sauce_${venue.swap} } from "@sauce/router";`,
+      );
     }
   });
 
   it("forwards what arrived with the token methods, the accounts shared between them", () => {
     const program = compile(
       "function main(pool: Address, to: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  const got = RaydiumClmm.trySwap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n" +
+        "  const got = Raydium.CLMM.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n" +
         "  if (got > 0) WSOL.transfer(to, got);\n" +
         "  return got;\n}\n",
     );
@@ -85,7 +97,7 @@ describe("Solana's venue namespaces", () => {
     const key = `0x${"77".repeat(32)}`;
     const base58 = getAddressCodec().decode(new Uint8Array(32).fill(0x77));
     const program = compile(
-      `function main(mint: Address): Uint256 {\n  return Phoenix.trySwap(${key}, USDC, mint, 5, 10, 1);\n}\n`,
+      `function main(mint: Address): Uint256 {\n  return Phoenix.Market.swap(${key}, USDC, mint, 5, 10, 1);\n}\n`,
     );
     expect(program.derivedAccounts).toMatchObject({
       pool1Program: `slot:${base58}:USDC.program`,
@@ -98,25 +110,39 @@ describe("Solana's venue namespaces", () => {
     it("a pool computed as the program runs", () => {
       expect(() =>
         compile(
-          "function main(): Uint256 {\n  const pool = 5;\n  return OrcaWhirlpool.swap(pool, USDC, WSOL, 1, 1, 1);\n}\n",
+          "function main(): Uint256 {\n  const pool = 5;\n  return Orca.Whirlpool.swap(pool, USDC, WSOL, 1, 1, 1);\n}\n",
         ),
       ).toThrow("the pool `pool` on Solana must be known when the transaction is built");
     });
 
-    it("a method the namespace does not have, a wrong count of arguments, one token both ways", () => {
+    it("a method or a program the namespace does not have, a wrong count of arguments, one token both ways", () => {
       expect(() =>
-        compile("function main(pool: Address) {\n  OrcaWhirlpool.quote(pool);\n}\n"),
-      ).toThrow("`OrcaWhirlpool.quote(…)` on Solana: OrcaWhirlpool offers swap and trySwap");
-      expect(() =>
-        compile(
-          "function main(pool: Address): Uint256 {\n  return Crema.swap(pool, USDC, WSOL);\n}\n",
-        ),
+        compile("function main(pool: Address) {\n  Orca.Whirlpool.trySwap(pool);\n}\n"),
       ).toThrow(
-        "`Crema.swap(…)` takes 6 arguments (pool, tokenIn, tokenOut, amountIn, maxPrice, minOut), got 3.",
+        "`Orca.Whirlpool.trySwap(…)` on Solana: Orca.Whirlpool offers swap, taking (pool, tokenIn, " +
+          "tokenOut, amountIn, maxPrice, minOut): it returns 0 having moved nothing where the pool " +
+          "cannot trade, and reverts below minOut",
       );
       expect(() =>
         compile(
-          "function main(pool: Address): Uint256 {\n  return Crema.swap(pool, USDC, USDC, 1, 1, 1);\n}\n",
+          "function main(pool: Address) {\n  Orca.Splash.swap(pool, USDC, WSOL, 1, 1, 1);\n}\n",
+        ),
+      ).toThrow("`Orca.Splash.swap(…)` on Solana: Orca's swap is Orca.Whirlpool");
+      expect(() =>
+        compile(
+          "function main(pool: Address) {\n  Solana.trySwap(pool, USDC, WSOL, 1, 1, 1);\n}\n",
+        ),
+      ).toThrow("`Solana.trySwap(…)` on Solana: Solana.swap is the one swap");
+      expect(() =>
+        compile(
+          "function main(pool: Address): Uint256 {\n  return Crema.CLMM.swap(pool, USDC, WSOL);\n}\n",
+        ),
+      ).toThrow(
+        "`Crema.CLMM.swap(…)` takes 6 arguments (pool, tokenIn, tokenOut, amountIn, maxPrice, minOut), got 3.",
+      );
+      expect(() =>
+        compile(
+          "function main(pool: Address): Uint256 {\n  return Crema.CLMM.swap(pool, USDC, USDC, 1, 1, 1);\n}\n",
         ),
       ).toThrow("pays and buys the same token, USDC");
     });
@@ -124,33 +150,29 @@ describe("Solana's venue namespaces", () => {
     it("a swap in a helper: its accounts are main's", () => {
       expect(() =>
         compile(
-          "function buy(pool: Address): Uint256 {\n  return Byreal.swap(pool, USDC, WSOL, 1, 1, 1);\n}\n" +
+          "function buy(pool: Address): Uint256 {\n  return Byreal.CLMM.swap(pool, USDC, WSOL, 1, 1, 1);\n}\n" +
             "function main(pool: Address): Uint256 {\n  return buy(pool);\n}\n",
         ),
       ).toThrow(
-        "`Byreal.swap(…)` on Solana stands in `buy`: the accounts a venue's swap moves through",
+        "`Byreal.CLMM.swap(…)` on Solana stands in `buy`: the accounts a venue's swap moves through",
       );
     });
   });
 
-  it("Solana.swap and Solana.trySwap take a pool of any venue: the router's own, reading it", () => {
-    for (const method of ["swap", "trySwap"] as const) {
-      const program = compile(
-        `function main(pool: Address): Uint256 {\n  return Solana.${method}(pool, USDC, WSOL, 5, 10, 1);\n}\n`,
-      );
-      expect(program.source).toContain(
-        `import { ${method} as __sauce_${method} } from "@sauce/router";`,
-      );
-      expect(program.derivedAccounts).toMatchObject({
-        poolProgram: "slot:@pool:USDC.program",
-        poolAccount: "slot:@pool:USDC.pool",
-        potWSOL: "self:WSOL",
-      });
-    }
+  it("Solana.swap takes a pool of any venue: the router's own swap, reading it", () => {
+    const program = compile(
+      "function main(pool: Address): Uint256 {\n  return Solana.swap(pool, USDC, WSOL, 5, 10, 1);\n}\n",
+    );
+    expect(program.source).toContain('import { swap as __sauce_swap } from "@sauce/router";');
+    expect(program.derivedAccounts).toMatchObject({
+      poolProgram: "slot:@pool:USDC.program",
+      poolAccount: "slot:@pool:USDC.pool",
+      potWSOL: "self:WSOL",
+    });
     // Two pools, one trader: each pool its own nine, the Pot's accounts shared.
     const two = compile(
       "function main(a: Address, b: Address): Uint256 {\n" +
-        "  return Solana.trySwap(a, USDC, WSOL, 5, 10, 0) + Solana.trySwap(b, USDC, WSOL, 5, 10, 0);\n}\n",
+        "  return Solana.swap(a, USDC, WSOL, 5, 10, 0) + Solana.swap(b, USDC, WSOL, 5, 10, 0);\n}\n",
     );
     const names = two.manifest!.accounts.map((slot) => (slot as { name: string }).name);
     expect(names.filter((name) => name.startsWith("a") || name.startsWith("b"))).toHaveLength(18);
@@ -164,7 +186,7 @@ describe("Solana's venue namespaces", () => {
 
   it("leaves a program that declares the namespace itself as it is", () => {
     const own =
-      "function OrcaWhirlpool(x: Uint256): Uint256 {\n  return x;\n}\nfunction main(): Uint256 {\n  return OrcaWhirlpool(1);\n}\n";
+      "function Orca(x: Uint256): Uint256 {\n  return x;\n}\nfunction main(): Uint256 {\n  return Orca(1);\n}\n";
     expect(compile(own).derivedAccounts).toBeUndefined();
   });
 });

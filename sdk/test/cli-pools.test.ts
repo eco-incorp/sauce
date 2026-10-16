@@ -481,11 +481,26 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
         ...["--pay", "SOL", "--slots", "5", "--json"],
       );
       expect(run.code).toBe(0);
-      const out = JSON.parse(run.stdout) as { chosen: unknown[]; accounts: Record<string, string> };
+      const out = JSON.parse(run.stdout) as {
+        chosen: unknown[];
+        poolArgs: string[];
+        accounts: Record<string, string>;
+      };
       expect(out.chosen).toEqual([]);
+      // The pools for main's arguments, in slot order: five empty slots.
+      expect(out.poolArgs).toEqual(Array(5).fill(SYSTEM));
+      // And the slots' accounts, for a program that takes them as accounts.
       expect(Object.keys(out.accounts)).toHaveLength(45);
       expect(out.accounts.program4).toBe(SYSTEM);
       expect(new Set(Object.values(out.accounts))).toEqual(new Set([SYSTEM]));
+      // The text gives the pools ready for --args.
+      const text = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "SOL", "--rpc-url", stub.url],
+        ...["--pay", "SOL", "--slots", "5"],
+      );
+      expect(text.stdout).toContain(
+        `The pools for main's --args, in slot order: ${Array(5).fill(SYSTEM).join(" ")}`,
+      );
     } finally {
       await stub.close();
     }

@@ -2,9 +2,12 @@
  * `sauce pools --chain solana <pay> <buy>`: a pair's pools at every Solana venue whose swap takes a
  * price limit that stops it — Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM (one pool
  * layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema and Phoenix's order book — read now
- * through an endpoint, each with its price both ways, its fee and the nine accounts a distributed
- * swap's slot takes for it in each direction (program, pool, config, two vaults, one more account,
- * three tick arrays), so the program's accounts come from the cluster rather than by hand.
+ * through an endpoint, each with its price both ways, its fee and the nine accounts a swap at it
+ * takes in each direction (program, pool, config, two vaults, one more account, three tick arrays),
+ * its slot. `--pay` chooses the pools a distributed swap paying one of the pair takes and gives them
+ * in slot order, padded with the System Program (an empty slot), for the program's `--args`: a
+ * program that takes a pool as an `Address` argument has its slot derived from the pool as the cook
+ * is built. It gives their slots' accounts too, for a program that takes its slots as accounts.
  *
  * A pool is found by `getProgramAccounts` on its venue's program, filtered by its size and the
  * pair at its mints' offsets (the concentrated-liquidity venues keep the pair in key order, the
@@ -62,8 +65,9 @@ export interface SvmPoolsInput {
   /**
    * Chooses the pools for a distributed swap paying `pay` (one of the pair): those whose price with
    * the fee is within `maxPrice` (its units), the deepest first, one a venue with `perVenue`, the
-   * first `slots` (4) of them; and returns the accounts the program's slots take for them, every
-   * slot past the last chosen the System program.
+   * first `slots` (4) of them; and returns them in slot order as the program's pool arguments, and
+   * the accounts a program that takes its slots as accounts takes for them, every slot past the
+   * last chosen the System program.
    */
   readonly choose?: {
     readonly pay: string;
@@ -242,7 +246,9 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
     chain: chain.slug,
     tokens: mints.map((m) => ({ symbol: m.symbol, mint: m.mint, decimals: m.decimals })),
     sortedBy: "liquidity at the pool's price, the order books after",
-    ...(chosen === undefined ? {} : { chosen: chosen.pools, accounts: chosen.accounts }),
+    ...(chosen === undefined
+      ? {}
+      : { chosen: chosen.pools, poolArgs: chosen.poolArgs, accounts: chosen.accounts }),
     pools: listed,
     skipped,
     checked,
@@ -250,8 +256,8 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
   const lines = [
     `${first.symbol}/${second.symbol} on ${chain.slug}: ${listed.length} pools to trade, ` +
       `${skipped.length} skipped. Prices are ${first.symbol} per ${second.symbol} paying ` +
-      `${first.symbol}, then the reverse; a slot is the nine accounts the distributed swap takes for ` +
-      "the pool, paying the token named.",
+      `${first.symbol}, then the reverse; a slot is the nine accounts a swap at the pool takes, ` +
+      "paying the token named.",
   ];
   for (const pool of listed) {
     lines.push(
@@ -286,7 +292,9 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
         (chosen.pools.length === 0
           ? "no pool"
           : chosen.pools.map((pool, k) => `slot ${k} ${pool.venue} ${pool.pool}`).join(", ")),
-      "Their accounts, as --accounts takes them (add the shared ones):",
+      `The pools for main's --args, in slot order: ${chosen.poolArgs.join(" ")}`,
+      "Their slots' accounts, for a program that takes its slots as accounts (--accounts, beside " +
+        "the shared ones):",
       JSON.stringify(chosen.accounts, null, 2),
     );
   }
@@ -310,7 +318,10 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
   };
 }
 
-/** The pools a distributed swap paying `want` takes, and the accounts of the program's slots. */
+/**
+ * The pools a distributed swap paying `want` takes: in slot order as its pool arguments, every slot
+ * past the last chosen the System program, an empty slot; and as the accounts of a program's slots.
+ */
 function choose(
   want: NonNullable<SvmPoolsInput["choose"]>,
   listed: readonly Listed[],
@@ -318,6 +329,7 @@ function choose(
 ): {
   pay: string;
   pools: { venue: string; pool: Address; taker: string }[];
+  poolArgs: Address[];
   accounts: Record<string, string>;
 } {
   const symbol = want.pay.toUpperCase() === "SOL" ? "WSOL" : want.pay.toUpperCase();
@@ -363,7 +375,9 @@ function choose(
     [0, 1, 2].forEach((i) => (accounts[`ticks${k}${i}`] = each[6 + i]!));
   }
 
-  return { pay: pay.symbol, pools, accounts };
+  const poolArgs = Array.from({ length: slots }, (_, k) => pools[k]?.pool ?? SYSTEM);
+
+  return { pay: pay.symbol, pools, poolArgs, accounts };
 }
 
 /** A registry symbol or a base58 mint, with its decimals. */

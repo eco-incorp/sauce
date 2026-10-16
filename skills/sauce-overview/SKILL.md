@@ -215,8 +215,9 @@ the owner rather than repeat it.
 
 ### `sauce-solana-distributed-swap`
 
-- **Owns**: the same order on Solana: pools as slots of accounts found with `sauce pools`, the
-  venues whose swap stops at a limit, the program used whole, what fits in one cook, running it.
+- **Owns**: the same order on Solana: pools as `main`'s `Address` arguments found with
+  `sauce pools`, each swapped with `Solana.swap` at whichever venue owns it, the program used whole,
+  what fits in one cook, running it.
 - **Load**: for a split or limit order on Solana, with `sauce-solana`.
 
 ### `sauce-intents`

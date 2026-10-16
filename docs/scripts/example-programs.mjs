@@ -154,7 +154,8 @@ export function registryNames(sdk, protocols, builtins) {
       ...sourceGlobals.interfaces,
       ...(sourceGlobals.venues ?? []),
     ]) {
-      globals.add(namespace.namespace);
+      // A Solana venue is its protocol's program (`Orca.Whirlpool`): the program reads `Orca`.
+      globals.add(namespace.namespace.split(".")[0]);
     }
     for (const other of sourceGlobals.chains) globals.add(other.key);
     for (const name of Object.keys(sourceGlobals.defines)) globals.add(name);

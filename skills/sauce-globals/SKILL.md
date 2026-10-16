@@ -169,9 +169,10 @@ its address and ABI from the registry. A member is one of three kinds:
   chain: `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`; `Uniswap.Factory` is ambiguous.
 - **A chain-qualified contract** (`Ethereum.UniswapV4.UniversalRouter`) is that chain's address
   only, never a call there (`sauce-chains`).
-- **On Solana** there are no protocol namespaces; each price-limit venue is a namespace instead
-  (`OrcaWhirlpool.swap(pool, …)`, `sauce-swaps`), listed by `sauce globals --chain solana` under
-  Venues, with the accounts a program writes where it uses them under Accounts (`sauce-solana`).
+- **On Solana** there are no protocol namespaces; each price-limit venue is one instead, its
+  protocol then its program (`Orca.Whirlpool.swap(pool, …)`, `sauce-swaps`), listed by
+  `sauce globals --chain solana` under Venues, with the accounts a program writes where it uses them
+  under Accounts (`sauce-solana`).
 
 [references/protocols.md](references/protocols.md) lists every member and alias; how a program
 calls one is `sauce-script`'s (Calling a contract).

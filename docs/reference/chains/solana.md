@@ -60,21 +60,22 @@ of `main`, given to `--args` as the mint's base58 address:
 ## Venues
 
 Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools
-with: `<Venue>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`, or `trySwap(…)`,
-which returns 0 where `swap` reverts. The pool's accounts, and the Pot's, are derived when the
-cook is built ([the `@sauce/router` reference](../../api/router.md)).
+with, its protocol then its program: `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn,
+maxPrice, minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts
+below `minOut`; `Solana.swap(…)` takes a pool of any of them. The pool's accounts, and the
+Pot's, are derived when the cook is built ([the `@sauce/router` reference](../../api/router.md)).
 
 | Namespace | Venue | Program |
 | --- | --- | --- |
-| `RaydiumClmm` | Raydium CLMM | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
-| `PancakeswapClmm` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` |
-| `Byreal` | Byreal | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2` |
-| `StabbleClmm` | Stabble CLMM | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` |
-| `OrcaWhirlpool` | Orca Whirlpools | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` |
-| `Cropper` | Cropper | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` |
-| `Defituna` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` |
-| `Crema` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
-| `Phoenix` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` |
+| `Raydium.CLMM` | Raydium CLMM | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
+| `Pancakeswap.CLMM` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` |
+| `Byreal.CLMM` | Byreal | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2` |
+| `Stabble.CLMM` | Stabble CLMM | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` |
+| `Orca.Whirlpool` | Orca Whirlpools | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` |
+| `Cropper.Whirlpool` | Cropper | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` |
+| `Defituna.Fusion` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` |
+| `Crema.CLMM` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
+| `Phoenix.Market` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` |
 
 ## Accounts
 
