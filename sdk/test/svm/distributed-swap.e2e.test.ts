@@ -38,7 +38,7 @@ import {
 } from "../../src/svm/index.js";
 import type { SvmSlot } from "../../src/svm/pool-slot.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
-import { svmStopsOf, type SvmStops } from "../../src/cli/svm-stops.js";
+import { svmProgramStops, type SvmProgramStops as SvmStops } from "../../src/svm/compute-stops.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import {
   describeSvm,
@@ -260,7 +260,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       })),
     };
     // Each swap's stop, as the command works it out from the pools it read, after main's own.
-    const stops = await svmStopsOf(
+    const stops = await svmProgramStops(
       cooked,
       requireChain("solana"),
       named,

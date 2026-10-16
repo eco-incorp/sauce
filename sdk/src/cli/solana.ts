@@ -66,6 +66,7 @@ import {
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
+import { svmProgramStops, type SvmProgramStops } from "../svm/compute-stops.js";
 import type { SvmSlot } from "../svm/pool-slot.js";
 import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
@@ -129,14 +130,7 @@ import { svmPotsCreated, type InnerInstructions } from "./pots.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
-import {
-  svmCookFixedUnits,
-  svmRanOutOfUnits,
-  svmStopLines,
-  svmStopsJson,
-  svmStopsOf,
-  type SvmStops,
-} from "./svm-stops.js";
+import { svmCookFixedUnits, svmRanOutOfUnits, svmStopLines, svmStopsJson } from "./svm-stops.js";
 import {
   accountsNow,
   messageAccounts,
@@ -1518,7 +1512,7 @@ interface Prepared {
   /** `--lookup-table`'s tables, each with the addresses it holds now. */
   readonly lookupTables: AddressesByLookupTableAddress;
   /** Each swap at a price's stop, in the payload's arguments: none for a program with none. */
-  readonly stops?: SvmStops;
+  readonly stops?: SvmProgramStops;
   /** Works the stops out again, for the cook's own units measured, or given less (`scale`). */
   readonly restop: (fixed?: number, scale?: number) => Promise<Prepared>;
 }
@@ -1593,9 +1587,17 @@ async function prepare(
     load,
     found,
   );
-  const stopsFor = (fixed?: number, scale?: number): Promise<SvmStops | undefined> =>
+  const stopsFor = (fixed?: number, scale?: number): Promise<SvmProgramStops | undefined> =>
     ask(input.rpcUrl, "the pools the swaps stop in", () =>
-      svmStopsOf(program, input.chain, given.accounts, keyArguments.integers, load, fixed, scale),
+      svmProgramStops(
+        program,
+        input.chain,
+        given.accounts,
+        keyArguments.integers,
+        load,
+        fixed,
+        scale,
+      ),
     );
   const stops = await stopsFor(settled?.fixed, settled?.scale);
   const bytecode = svmPayload(program, input.args, stops?.values ?? []);
@@ -1923,7 +1925,7 @@ async function withStops(
     Array.isArray(out.json.logs) ? (out.json.logs as string[]) : [];
   const ranOut = (out: CommandOutput): boolean =>
     out.json.ok === false && svmRanOutOfUnits(logsOf(out));
-  const holds = (stops: SvmStops | undefined): boolean =>
+  const holds = (stops: SvmProgramStops | undefined): boolean =>
     stops !== undefined &&
     stops.stops.some((stop) => stop.stop === 1n || stop.stopTick !== undefined);
   // A cook that succeeds with a pool held: the cook's own units, measured, are what the venues are

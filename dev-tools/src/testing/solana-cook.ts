@@ -51,6 +51,7 @@ import {
   resolveTokenProgramByOwner,
   SvmAccountNameError,
   svmKitchenIdlPath,
+  svmProgramStops,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   TRANSACTION_SIZE_LIMIT,
@@ -319,8 +320,26 @@ function tableAddresses(transaction: Transaction): Address[] {
  */
 export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> {
   const manifest = input.program.manifest ?? { accounts: [] };
-  const payload = hexToBytes(input.program.payload(input.args));
   const { resolution, labels, tokenAccounts } = await resolveNames(chain, input, manifest);
+  // Each swap at a price's stop, worked out from the pools the cook names, as `sauce` works it out.
+  const named = Object.fromEntries(
+    Object.entries(resolution).map(([name, at]) => [
+      name,
+      typeof at === "string" ? at : (at as { address: Address }).address,
+    ]),
+  );
+  const stops = await svmProgramStops(
+    input.program,
+    chain.chain,
+    named,
+    argumentsByName(input.program, input.args).integers,
+    async (key) => {
+      await chain.bank.ensure([key]);
+      const account = chain.bank.account(key);
+      return account === null ? null : { data: account.data, owner: account.owner };
+    },
+  );
+  const payload = hexToBytes(input.program.payload(input.args, stops?.values ?? []));
   const tail = resolveAccounts(manifest, resolution, input.owner.address);
   const { bank, kitchen, engine, feeConfig } = chain;
   const owner = input.owner;

@@ -48,8 +48,16 @@ export interface CompiledProgram {
    * argument `to`). A cook fills each itself.
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
-  /** The program with `args` encoded after it: the `program` of `Pot.cook(engine, program)`. */
-  payload(args?: readonly EntryValue[]): Hex;
+  /**
+   * On Solana, the values the SDK added to `main` after its accounts, one for each swap at a price:
+   * its stop, which a cook works out from the pool (`svmProgramStops`).
+   */
+  readonly derivedValues?: CompiledSauceProgram["derivedValues"];
+  /**
+   * The program with `args` encoded after it, and after them each of `derivedValues`' (`stops`, 0
+   * for each by default): the `program` of `Pot.cook(engine, program)`.
+   */
+  payload(args?: readonly EntryValue[], stops?: readonly bigint[]): Hex;
   /** `data`, a cook's return data, read as `main`'s return type. */
   decode(data: Hex): Value | undefined;
 }
@@ -130,24 +138,37 @@ function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
   }
 }
 
-/** `main`'s arguments encoded after the program, each `Address` on Solana as a whole key. */
-function encodeArguments(compiled: CompiledSauceProgram, args: readonly EntryValue[]): Uint8Array {
+/**
+ * `main`'s arguments encoded after the program, each `Address` on Solana as a whole key, and after
+ * them the values the SDK added to it, `stops`.
+ */
+function encodeArguments(
+  compiled: CompiledSauceProgram,
+  args: readonly EntryValue[],
+  stops: readonly bigint[],
+): Uint8Array {
   if (compiled.chain.kind !== "svm") return encodeEntryArguments(compiled, args);
   const params = compiled.entryParams;
+  const added = compiled.derivedValues ?? [];
+  if (args.length !== params.length) return encodeEntryArguments(compiled, args);
 
   return encodeEntryArguments(
     {
       ...compiled,
-      entryParams: params.map((param) => ({
-        ...param,
-        type: param.type.replace(/\bAddress\b/g, "Uint256"),
-      })),
+      entryParams: [
+        ...params.map((param) => ({
+          ...param,
+          type: param.type.replace(/\bAddress\b/g, "Uint256"),
+        })),
+        ...added.map(({ name, type }) => ({ name, type })),
+      ],
     },
-    args.map((value, index) =>
-      index < params.length
-        ? keyWords(parseEntryType(params[index]!.type), value, params[index]!.name)
-        : value,
-    ),
+    [
+      ...args.map((value, index) =>
+        keyWords(parseEntryType(params[index]!.type), value, params[index]!.name),
+      ),
+      ...added.map((_, index) => stops[index] ?? 0n),
+    ],
   );
 }
 
@@ -184,10 +205,16 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
     ...(compiled.derivedAccounts === undefined
       ? {}
       : { derivedAccounts: compiled.derivedAccounts }),
-    payload(args = []) {
-      if (args.length === 0 && compiled.entryParams.length === 0) return bytecode;
+    ...(compiled.derivedValues === undefined ? {} : { derivedValues: compiled.derivedValues }),
+    payload(args = [], stops = []) {
+      if (
+        args.length === 0 &&
+        compiled.entryParams.length === 0 &&
+        (compiled.derivedValues ?? []).length === 0
+      )
+        return bytecode;
 
-      return concat([bytecode, bytesToHex(encodeArguments(compiled, args))]);
+      return concat([bytecode, bytesToHex(encodeArguments(compiled, args, stops))]);
     },
     decode(data) {
       if (returnType === undefined) return undefined;
