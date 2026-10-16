@@ -10,6 +10,7 @@
  * rehearsal here runs on the accounts as they are: a solver that does not hold the route's tokens
  * yet sees the fill fail, saying so.
  */
+import { fetchAddressLookupTable } from "@solana-program/address-lookup-table";
 import { getSetComputeUnitLimitInstruction } from "@solana-program/compute-budget";
 import {
   AccountRole,
@@ -55,7 +56,7 @@ import {
   svmKeyOf,
 } from "../svm/portal.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
-import { fetchAlt, lookupTableBatches } from "../svm/alt.js";
+import { lookupTableBatches } from "../svm/alt.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import { buildHeapFramePrepend } from "../svm/prepends.js";
 import { CliError } from "./args.js";
@@ -513,8 +514,16 @@ async function fillTable(
   if (given === undefined && wireBytes(solver, instructions) <= SVM_PACKET_BYTES) return undefined;
   const addresses = tableAddresses(instructions);
   if (given !== undefined) {
-    const held = await ask(`the lookup table ${given}`, () => fetchAlt(rpc, given));
-    const holds = new Set<string>(held[given] ?? []);
+    const table = await ask(`the lookup table ${given}`, () => fetchAddressLookupTable(rpc, given));
+    // A deactivated table resolves no address once its cooldown ends, and is closable from then:
+    // a fill through it would fail, or worse, land only while the table lasts.
+    if (table.data.deactivationSlot !== ACTIVE_TABLE) {
+      throw new CliError(
+        `the lookup table ${given} was deactivated in slot ${table.data.deactivationSlot}: a fill ` +
+          "through it fails once its cooldown ends. Fill without it, which makes a new one",
+      );
+    }
+    const holds = new Set<string>(table.data.addresses);
     const missing = addresses.filter((key) => !holds.has(key));
     if (missing.length > 0) {
       throw new CliError(
@@ -523,7 +532,7 @@ async function fillTable(
       );
     }
 
-    return { address: given, addresses: held[given] as SvmAddress[], setup: [] };
+    return { address: given, addresses: [...table.data.addresses], setup: [] };
   }
   const recentSlot = await ask("a recent slot", () =>
     rpc.getSlot({ commitment: "finalized" }).send(),
@@ -563,6 +572,9 @@ function fillInstructions(intent: Intent, fulfill: Instruction): Instruction[] {
     ? [buildHeapFramePrepend(), getSetComputeUnitLimitInstruction({ units: 1_400_000 }), fulfill]
     : [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill];
 }
+
+/** A lookup table's deactivation slot while it is active: u64's largest. */
+const ACTIVE_TABLE = 2n ** 64n - 1n;
 
 /** Any key stands for the solver, and for a lookup table, in a size: 32 bytes like every other. */
 const PLACEHOLDER_SOLVER = getAddressDecoder().decode(new Uint8Array(32).fill(7));
