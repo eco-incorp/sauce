@@ -5,9 +5,10 @@
  * release ids and eco-routes' programs as mainnet runs them (the pinned dump,
  * `svm/eco-routes-svm.ts`), reached through a JSON-RPC shim (`svm/rpc-shim.ts`).
  *
- *  1. A file paying a wallet USDC on Solana (`Solana(() => { USDC.transfer(recipient, amount) })`):
- *     published from a Base wallet, filled on Solana (the route creating the recipient's token
- *     account), proven back through Hyperlane and claimed on Base.
+ *  1. A file paying a wallet USDC on Solana (`Solana(() => { USDC.transfer(recipient, amount) })`,
+ *     the manual's `docs/examples/evm-to-solana.sauce.ts`): published from a Base wallet, filled on
+ *     Solana (the route creating the recipient's token account), proven back through Hyperlane and
+ *     claimed on Base.
  *  2. The same intent made step by step (`sauce intent publish` with no file), its recipient and
  *     token given as Solana addresses.
  *  3. A file whose body is a program: the first intent's route creates the Pot the Portal's
@@ -19,9 +20,10 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX and the Solana engine artifacts.
  */
 import { generateKeyPairSync } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   address,
   createKeyPairSignerFromBytes,
@@ -88,12 +90,11 @@ const KITCHEN_FEE = 5_000n;
 const HYPERLANE_FEE = 7_777n;
 const MAILBOX = parseAbi(["function process(bytes, bytes)"]);
 
-const TRANSFER = `function main(recipient: Address, amount: Uint256, reward: Uint256) {
-  Solana(() => {
-    USDC.transfer(recipient, amount);
-  }).reward({ tokens: [{ token: USDC, amount: reward }] });
-}
-`;
+/** The manual's example (docs/examples/evm-to-solana.sauce.ts): pays a Solana wallet USDC. */
+const TRANSFER = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../../docs/examples/evm-to-solana.sauce.ts"),
+  "utf8",
+);
 
 /** Pays the recipient only what the Pot holds of what was delivered, and refuses less. */
 const PROGRAM = `function main(recipient: Address, amount: Uint256, reward: Uint256) {

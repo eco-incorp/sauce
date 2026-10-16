@@ -464,6 +464,7 @@ the reward waits. A solver then does the work on Solana and collects the reward 
 The simplest one pays a Solana wallet. Write it like any other intent:
 
 ```js
+// Pays a Solana wallet USDC, for a USDC reward on the chain that publishes it.
 function main(recipient: Address, amount: Uint256, reward: Uint256) {
   Solana(() => {
     USDC.transfer(recipient, amount);
@@ -471,11 +472,12 @@ function main(recipient: Address, amount: Uint256, reward: Uint256) {
 }
 ```
 
-Inside the braces, `USDC` means Solana's USDC mint, and `recipient` is a Solana wallet. When you
-publish from a wallet, pass the recipient in base58, the way Solana writes addresses:
+Inside the braces, `USDC` means Solana's USDC mint, and `recipient` is a Solana wallet
+([the complete example](../examples/evm-to-solana.ts)). When you publish from a wallet, pass the
+recipient in base58, the way Solana writes addresses:
 
 ```sh
-sauce intent publish pay-on-solana.sauce.ts --chain base --keystore <path> \
+sauce intent publish evm-to-solana.sauce.ts --chain base --keystore <path> \
   --intent-deadline <unix seconds> --intent-creator <your address> \
   --args <solana wallet> 1000000 1050000
 ```
