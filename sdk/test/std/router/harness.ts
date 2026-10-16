@@ -176,6 +176,10 @@ export const SVM_FUNCTIONS = [
 export const svmInstructionForm = (name: string): boolean => /(Cpi|Data)$/.test(name);
 
 /** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
+/** The eight concentrated-liquidity swaps at a price, which take a `stop` after the recipient. */
+export const SVM_STOPPED =
+  /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm|orcaWhirlpool|cropper|defituna|crema)$/;
+
 export const svmArguments = (name: string): string[] =>
   name === "manifest"
     ? ["amountIn", "minOut"]
@@ -268,10 +272,11 @@ export const svmProgramCalling = (
     .map((account) => `  ${account}: ${svmRole(account)},`)
     .join("\n");
   const args = svmArguments(name);
+  const stop = SVM_STOPPED.test(name);
   return (
     `import { ${name} } from "@sauce/router";\n` +
-    `function main(\n${accounts}\n${args.map((arg) => `  ${arg}: Uint256,`).join("\n")}\n): Uint256 {\n` +
-    `  return ${name}([${slot.join(", ")}], [${SVM_TRADER.join(", ")}], ${args.join(", ")}, recipient);\n}\n`
+    `function main(\n${accounts}\n${[...args, ...(stop ? ["stop"] : [])].map((arg) => `  ${arg}: Uint256,`).join("\n")}\n): Uint256 {\n` +
+    `  return ${name}([${slot.join(", ")}], [${SVM_TRADER.join(", ")}], ${args.join(", ")}, recipient${stop ? ", stop" : ""});\n}\n`
   );
 };
 
