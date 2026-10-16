@@ -152,8 +152,8 @@ describeEvm("sauce, sent to a chain", () => {
       const predicted = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
       expect(plan.pot).toBe(predicted);
       expect(plan.transactions.map((tx) => [tx.deploysPot ?? null, tx.value])).toEqual([
-        [predicted, "0"],
-        [null, FEE.toString()],
+        [predicted, "0x0"],
+        [null, `0x${FEE.toString(16)}`],
       ]);
       expect(run.stderr).toContain(
         `Your Pot ${predicted} on ethereum isn't deployed yet: the first transaction deploys it`,
@@ -188,8 +188,7 @@ describeEvm("sauce, sent to a chain", () => {
         chainId: 1,
         to: pot,
         data: expect.stringMatching(/^0x[0-9a-f]+$/),
-        value: FEE.toString(),
-        sendTransaction: { chainId: "0x1", to: pot, data: out.data, value: fee },
+        value: fee,
         sendCalls: { chain: "ethereum", calls: [{ to: pot, value: fee, data: out.data }] },
       });
       expect(run.stderr).toContain("It is deployed.");
@@ -758,7 +757,11 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
           String(alsoUsdc),
         ),
       );
-      expect(out).toMatchObject({ chainId: local.chain.id, to: pot, value: FEE.toString() });
+      expect(out).toMatchObject({
+        chainId: local.chain.id,
+        to: pot,
+        value: `0x${FEE.toString(16)}`,
+      });
       const hash = await local.send(local.owner, pot, out.data as Hex, FEE);
 
       for (const recipient of RECIPIENTS) {

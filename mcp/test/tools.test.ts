@@ -1030,7 +1030,7 @@ describe("sauce_actions", () => {
       }),
     ) as Report & { transaction: { to: string; data: string; value: string } };
     assert.equal(out.transaction.to, v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
-    assert.equal(out.transaction.value, "0");
+    assert.equal(out.transaction.value, "0x0");
     const cook = decodeFunctionData({ abi: v12PotAbi, data: out.transaction.data as Hex });
     assert.ok((cook.args[1] as string).startsWith(out.bytecode));
     assert.ok((cook.args[1] as string).endsWith((1000).toString(16).padStart(64, "0")));
@@ -1081,7 +1081,7 @@ describe("sauce_tx", () => {
     );
     assert.equal(out.chainId, 8453);
     assert.equal(out.to, v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
-    assert.equal(out.value, "0");
+    assert.equal(out.value, "0x0");
     const cook = decodeFunctionData({ abi: v12PotAbi, data: out.data as Hex });
     assert.equal(cook.functionName, "cook");
     assert.equal(getAddress(cook.args[0] as string), getAddress(v12EngineAddress()));
@@ -1228,7 +1228,7 @@ describe("sauce_pot", () => {
     const out = ok(await mcp.call("sauce_pot", { chain: "base", owner: OWNER, salt: "vault" }));
     assert.equal(out.pot, v12PredictPot(OWNER, potSalt("vault")));
     assert.equal(out.to, getAddress(v12KitchenAddress()));
-    assert.equal(out.value, "0");
+    assert.equal(out.value, "0x0");
     assert.equal(out.deployed, null);
     assert.ok((out.notes as string[]).some((note) => /was not checked/.test(note)));
   });

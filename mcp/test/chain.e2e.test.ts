@@ -136,9 +136,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     const [deploy, cook] = tx.transactions as Array<Record<string, string>>;
     assert.equal(deploy!.deploysPot, pot);
     assert.equal(getAddress(deploy!.to!), getAddress(v12KitchenAddress()));
-    assert.equal(deploy!.value, "0");
+    assert.equal(deploy!.value, "0x0");
     assert.equal(cook!.to, pot);
-    assert.equal(cook!.value, FEE.toString());
+    assert.equal(cook!.value, `0x${FEE.toString(16)}`);
     assert.equal(tx.from, NOBODY, "who signs it");
     assert.deepEqual(tx.kitchenFee, {
       wei: FEE.toString(),
@@ -529,7 +529,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         );
         // NOBODY's Pot has no code, so the cook is the plan's second transaction.
         const [, cook] = tx.transactions as Array<{ value: string }>;
-        assert.equal(cook!.value, FEE.toString(), "the fee read through the call's endpoint");
+        assert.equal(BigInt(cook!.value), FEE, "the fee read through the call's endpoint");
         assert.ok(!caller.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
       } finally {
         await caller.close();

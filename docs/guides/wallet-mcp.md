@@ -55,14 +55,12 @@ send it what it will spend.
 ## What Sauce hands over
 
 Every Sauce tool that builds a transaction (`sauce_tx`, `sauce_pot`, `sauce_actions`,
-`sauce_intent_publish` and the intent steps) adds two fields to what it returns, and `sauce tx`
-prints them too:
+`sauce_intent_publish` and the intent steps), and `sauce tx` on the command line, returns its
+transactions the way these wallets take them:
 
-- `sendCalls`: everything to send, in order, exactly as Coinbase's `send_calls` takes it.
-- `sendTransaction`, on each transaction: that one, exactly as Phantom's `evm_send` takes it.
-
-The fields Sauce always returned stay as they were. The new ones write each amount in hex, as
-wallets read them, and name the chain the way the wallet does:
+- Each transaction is exactly what Phantom's `evm_send` takes. Amounts are written in hex, as
+  wallets read them, and the labels Sauce adds, such as `what`, are left out by the wallet.
+- `sendCalls` is everything to send, in order, exactly as Coinbase's `send_calls` takes it.
 
 ```json
 {
@@ -71,22 +69,19 @@ wallets read them, and name the chain the way the wallet does:
   "transactions": [
     {
       "what": "Kitchen.deployPot(…)",
+      "chainId": 8453,
       "to": "0x1984…506b",
       "data": "0x…",
-      "value": "0",
-      "sendTransaction": { "chainId": "0x2105", "to": "0x1984…506b", "data": "0x…", "value": "0x0" }
+      "value": "0x0",
+      "gas": "0x3d090"
     },
     {
       "what": "cook on Pot 0xDAbd…0417",
+      "chainId": 8453,
       "to": "0xDAbd…0417",
       "data": "0x…",
-      "value": "1234",
-      "sendTransaction": {
-        "chainId": "0x2105",
-        "to": "0xDAbd…0417",
-        "data": "0x…",
-        "value": "0x4d2"
-      }
+      "value": "0x4d2",
+      "gas": "0x16378"
     }
   ],
   "sendCalls": {
@@ -99,7 +94,7 @@ wallets read them, and name the chain the way the wallet does:
 }
 ```
 
-On Solana nothing is added: each `transaction` is already what Phantom's `solana_send` takes.
+On Solana each `transaction` is already what Phantom's `solana_send` takes.
 
 ## On Base or Ethereum, with Coinbase
 
@@ -132,13 +127,12 @@ ask your agent to build it again: `sauce_send` with the cursor alone, or the sam
 
 ## On Base or Ethereum, with Phantom
 
-Your agent calls `evm_send` with each transaction's `sendTransaction`, in order, waiting for each to
-land before the next. As on Solana, the first call previews, and `confirmed` set to `true` sends.
+Your agent calls `evm_send` with each transaction as it is, in order, waiting for each to land
+before the next. As on Solana, the first call previews, and `confirmed` set to `true` sends.
 
 ## From the command line
 
-`sauce tx` prints the same fields, so a script, or an agent with a shell, passes them on the same
-way:
+`sauce tx` prints the same, so a script, or an agent with a shell, passes it on the same way:
 
 ```sh
 sauce tx pay.sauce.ts --chain base --owner <your wallet's address> --args <recipient> 1000000

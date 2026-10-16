@@ -104,7 +104,7 @@ describeEvm("a command deploys the Pot it needs", () => {
     expect(plan).not.toHaveProperty("to");
     const [deploy, cook] = plan.transactions;
     expect(plan.transactions).toHaveLength(2);
-    expect(deploy).toMatchObject({ deploysPot: fresh.pot, value: "0" });
+    expect(deploy).toMatchObject({ deploysPot: fresh.pot, chainId: 1, value: "0x0" });
     expect(getAddress(deploy!.to)).toBe(kitchen);
     expect(decodeFunctionData({ abi: v12KitchenAbi, data: deploy!.data })).toMatchObject({
       functionName: "deployPot",
@@ -241,7 +241,7 @@ describeEvm("a command deploys the Pot it needs", () => {
               chainId: other.chain.id,
               to: tx.to,
               data: tx.data,
-              value: "1",
+              value: "0x1",
             },
             send: () => there.send!(tx),
           } satisfies SetupStep,
@@ -319,9 +319,9 @@ describeEvm("a command deploys the Pot it needs", () => {
           tx.chainId ?? null,
         ]),
       ).toEqual([
-        [expect.stringMatching(/^Kitchen\.deployPot\(/), null],
+        [expect.stringMatching(/^Kitchen\.deployPot\(/), local.chain.id],
         ["the setup on base", other.chain.id],
-        [expect.stringMatching(/^cook on Pot /), null],
+        [expect.stringMatching(/^cook on Pot /), local.chain.id],
       ]);
     } finally {
       await other.stop();

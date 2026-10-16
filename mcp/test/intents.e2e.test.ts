@@ -209,7 +209,7 @@ describe(
         built!.transactions.map((each) => each.what.split(" ")[0]),
         ["approve", "Portal.fulfillAndProve(" + record.intentHash + ","],
       );
-      assert.equal(built!.transactions[1]!.value, String(HYPERLANE_FEE));
+      assert.equal(built!.transactions[1]!.value, `0x${HYPERLANE_FEE.toString(16)}`);
       const sent = await sendAll(base, solverOn(base), built!.transactions);
       assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), AMOUNT);
       const filled = (await call("sauce_intent_status", { intent: record })) as { state: string };

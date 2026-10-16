@@ -1061,10 +1061,10 @@ export function refusable<Shape extends z.ZodRawShape>(
  * passed whole, with nothing to convert.
  */
 export const HANDOFF =
-  "Each EVM transaction carries `sendTransaction`, the input of a wallet's send-transaction " +
-  "tool (Phantom's evm_send: value and gas hex), and the result `sendCalls`, the input of " +
-  "Coinbase Wallet's send_calls (every transaction in order, as one atomic batch); a Solana " +
-  "`transaction` is what Phantom's solana_send takes as its `transaction`.";
+  "Each EVM transaction is itself the input of a wallet's send-transaction tool, such as " +
+  "Phantom's evm_send ({ chainId, to, data, value, gas }, value and gas hex quantities), and the " +
+  "result's `sendCalls` is the input of Coinbase Wallet's send_calls (every transaction in " +
+  "order, as one atomic batch); a Solana `transaction` is what Phantom's solana_send takes.";
 
 /** The sentence every tool that builds a transaction ends on. */
 export const UNSIGNED =
@@ -1972,7 +1972,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Builds the transaction that runs a program on its Pot, unsigned, for the Pot's owner to " +
         "sign — the last step, once sauce_compile succeeds (and, ideally, sauce_simulate). On " +
         "an EVM chain it returns { chainId, to: the Pot, data: Pot.cook(engine, program ++ " +
-        "arguments), value }; only the owner may send it, and value (wei) is the Kitchen's fee " +
+        "arguments), value }; only the owner may send it, and value (wei, hex) is the Kitchen's fee " +
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
         "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
         "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +

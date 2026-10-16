@@ -100,8 +100,9 @@ Build for the wallet's address (`--owner`, or `--from`), simulate, show the user
 result over. Every command and tool that prints unsigned transactions writes what these servers
 take, beside its own fields, so nothing is converted:
 
-- **`sendTransaction`** on each EVM transaction: `{ chainId, to, data, value, gas }`, every amount
-  a hex quantity (`gas` only where the plan gives one): the eth_sendTransaction object.
+- **Each EVM transaction**, as it is: `{ chainId, to, data, value, gas }`, `value` and `gas` hex
+  quantities (`gas` only where the plan gives one), beside labels such as `what` that a wallet's
+  tool drops: the input of its send-transaction tool.
 - **`sendCalls`** on the result: `{ chain, calls: [{ to, value, data }] }`, every transaction in
   order, `value` hex, `chain` the wallet's name for it (`base`, `ethereum`).
 - **`transaction`** on each Solana transaction, as it always is: base64, the fee payer first and its
@@ -120,8 +121,8 @@ take, beside its own fields, so nothing is converted:
   the Pot's owner, so one batch deploys the Pot and cooks on it, and a cook that reverts leaves no
   Pot behind. Tokens sent to the Pot's address before it exists are there when it is deployed.
 - **Phantom MCP**: the agent gets a wallet of its own, held by Phantom; fund its address
-  (`wallet_addresses`) first. On an EVM chain, `evm_send` with each transaction's `sendTransaction`
-  as its input, in order, each landed before the next (`sauce inspect <hash>`). On Solana,
+  (`wallet_addresses`) first. On an EVM chain, `evm_send` with each transaction as its input, in
+  order, each landed before the next (`sauce inspect <hash>`). On Solana,
   `solana_send` with `{ transaction }`. Without `confirmed` it returns a preview to show the user;
   `confirmed: true` signs and sends, returning the hash or signature.
 - **A Solana plan** (a `cursor` beside the transactions): send each transaction, then
@@ -403,8 +404,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 ## For another signer: `sauce tx` and `sauce send`
 
 - **`sauce tx`** with the same arguments prints the unsigned transaction as JSON,
-  `{ chainId, to, data, value }` with `sendTransaction` and `sendCalls` for a wallet's MCP server
-  (above), for any wallet to sign from the owner:
+  `{ chainId, to, data, value }` (`value` in wei, a hex quantity) with `sendCalls` beside it, as a
+  wallet's MCP server takes them (above), for any wallet to sign from the owner:
   `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`. While the
   Pot has no code its deployment comes first (`transactions`), each with `gas`: have each signed with
   that limit (the cook's is estimated as if the deployment had landed; a signer's own estimate, taken
@@ -511,7 +512,7 @@ tool's own description gives its inputs. `sauce_simulate` returns `leftInPot` fi
 a note when the cook leaves anything in the Pot: tell the user.
 
 - **The tools sign nothing**, so `sauce run` has none: the user signs what they return, through a
-  wallet's MCP server (`sendCalls`, `sendTransaction` or `transaction`, above) or with any other
+  wallet's MCP server (`sendCalls`, each transaction, or a Solana `transaction`, above) or with any other
   signer, and `sauce_send` broadcasts what a signer signed but did not send (`sauce send`).
 - **The server over stdio serves the `sauce wallet` directory's wallets as tools**, for experiments
   and development.
@@ -546,8 +547,8 @@ a note when the cook leaves anything in the Pot: tell the user.
   `sauce intent fill` for an intent's body) first.
 - **A `sauce tx` cook signed with the wallet's own gas estimate while the Pot has no code.** Use the
   `gas` the plan gives, or send `sendCalls` as one batch.
-- **Converting a result by hand for a wallet's tool.** Pass `sendCalls` or each `sendTransaction`
-  whole: `value` there is hex, and a decimal one is refused or misread.
+- **Converting a result by hand for a wallet's tool.** Pass `sendCalls`, or each transaction, whole:
+  `value` and `gas` are hex already, and a decimal value is refused or misread.
 - **A Solana transaction handed to a wallet the user approves slowly.** Past about a minute it can
   no longer land: build it again and hand over the new one.
 - **Fetching the explorer or trace link.** Give both to the user.

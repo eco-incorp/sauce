@@ -645,7 +645,7 @@ export function registerWalletTools(
           .describe(
             "What to send: another tool's whole result, one transaction, or a list of them, as " +
               "JSON or its text. Each EVM transaction is { chainId, to, data, value } (value in " +
-              "wei, a decimal string); a Solana one is { transaction } in base64, built for the " +
+              "wei, a hex quantity or a decimal string); a Solana one is { transaction } in base64, built for the " +
               "wallet as its fee payer.",
           ),
         chain: chainRef

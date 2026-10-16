@@ -777,7 +777,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       messages: unknown[];
     };
     expect(proof.transactions).toHaveLength(1);
-    expect(proof.transactions[0]!.value).toBe(String(HYPERLANE_FEE));
+    expect(BigInt(proof.transactions[0]!.value)).toBe(HYPERLANE_FEE);
     expect(proof.messages).toHaveLength(1);
     expect(
       await relay(base, baseMailbox, proof.transactions[0]!.hash, ethereum, ethereumMailbox),
@@ -822,7 +822,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         }>;
       }
     ).intents;
-    expect(entry!.transactions[0]!.value).toBe(String(HYPERLANE_FEE));
+    expect(BigInt(entry!.transactions[0]!.value)).toBe(HYPERLANE_FEE);
     expect(entry!.messages).toHaveLength(1);
     expect(
       await relay(base, baseMailbox, entry!.transactions[0]!.hash, ethereum, ethereumMailbox),

@@ -7,8 +7,8 @@
  *   (`sdk/test/evm/fixtures/BatchWallet.sol`, Coinbase Smart Wallet's `executeBatch` shape): the
  *   wallet owns the Pot, and one batch deploys it and cooks on it — or, when the cook reverts,
  *   leaves nothing behind;
- * - `sendTransaction`, Phantom MCP's `evm_send` input, sent one by one as the
- *   eth_sendTransaction object it is, from the account the Pot belongs to.
+ * - each transaction itself, Phantom MCP's `evm_send` input (its labels dropped by that schema),
+ *   sent one by one as eth_sendTransaction, from the account the Pot belongs to.
  *
  * Nothing here signs with a key the server sees: anvil's own accounts send. GATED on
  * SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite.
@@ -68,17 +68,10 @@ const WALLET_ABI = parseAbi([
   "function executeBatch((address target, uint256 value, bytes data)[] calls) payable",
 ]);
 
+/** An unsigned EVM transaction as a tool returns it: what a wallet's send tool takes, labelled. */
 interface Tx {
   readonly what?: string;
-  readonly to: Address;
-  readonly data: Hex;
-  readonly value: string;
-  readonly gas?: string;
-  readonly sendTransaction: SendTransaction;
-}
-/** `sendTransaction`, as eth_sendTransaction's object takes it. */
-interface SendTransaction {
-  readonly chainId: Hex;
+  readonly chainId: number;
   readonly to: Address;
   readonly data: Hex;
   readonly value: Hex;
@@ -89,16 +82,20 @@ interface Batch {
   readonly calls: ReadonlyArray<{ to: Address; value: Hex; data: Hex }>;
 }
 
-/** Each transaction's hand-off says what the transaction says, in hex. */
-function sameTransaction(tx: Tx, chainId: number): void {
-  const parsed = phantomSendEvmTransaction.parse({ ...tx.sendTransaction, confirmed: true });
-  assert.equal(BigInt(parsed.chainId), BigInt(chainId));
-  assert.equal(parsed.to, getAddress(tx.to));
-  assert.equal(parsed.data, tx.data);
-  assert.equal(BigInt(parsed.value), BigInt(tx.value));
-  assert.equal(
-    parsed.gas === undefined ? undefined : BigInt(parsed.gas),
-    tx.gas === undefined ? undefined : BigInt(tx.gas),
+/** Each transaction, as it is, is `evm_send`'s input: its fields kept, its labels dropped. */
+function walletTakes(tx: Tx, chainId: number): void {
+  const parsed = phantomSendEvmTransaction.parse({ ...tx, confirmed: true });
+  assert.deepEqual(
+    parsed,
+    {
+      chainId,
+      to: getAddress(tx.to),
+      data: tx.data,
+      value: tx.value,
+      ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+      confirmed: true,
+    },
+    "nothing but what the wallet takes, and nothing of it changed",
   );
 }
 
@@ -182,7 +179,7 @@ describe(
       ) as { pot: Address; transactions: Tx[]; sendCalls: Batch };
       assert.equal(tx.pot, pot);
       assert.equal(tx.transactions.length, 2, "the Pot's deployment, then the cook");
-      tx.transactions.forEach((each) => sameTransaction(each, base.chain.id));
+      tx.transactions.forEach((each) => walletTakes(each, base.chain.id));
       sameBatch(tx.sendCalls, tx.transactions, "base");
       assert.equal(BigInt(tx.sendCalls.calls[1]!.value), FEE, "the cook pays the Kitchen's fee");
 
@@ -200,7 +197,7 @@ describe(
         await mcp.call("sauce_tx", { source: PAY, chain: "base", owner, args: [RECIPIENT, "0"] }),
       ) as unknown as Tx & { sendCalls: Batch };
       assert.equal(again.to, pot);
-      sameTransaction(again, base.chain.id);
+      walletTakes(again, base.chain.id);
       sameBatch(again.sendCalls, [again], "base");
       assert.equal(await runBatch(owner, again.sendCalls), "success");
     });
@@ -236,11 +233,19 @@ describe(
       ) as { transactions: Tx[] };
       const before = await base.balanceOf(usdc, RECIPIENT);
       for (const each of tx.transactions) {
-        sameTransaction(each, base.chain.id);
+        walletTakes(each, base.chain.id);
         // Anvil's account sends the object as a wallet's tool takes it, with the gas it names.
         const hash = await base.owner.request({
           method: "eth_sendTransaction",
-          params: [{ from: other, ...each.sendTransaction }],
+          params: [
+            {
+              from: other,
+              to: each.to,
+              data: each.data,
+              value: each.value,
+              ...(each.gas === undefined ? {} : { gas: each.gas }),
+            },
+          ],
         });
         const receipt = await base.publicClient.waitForTransactionReceipt({ hash });
         assert.equal(receipt.status, "success", each.what);
@@ -258,13 +263,12 @@ describe(
         sendCalls: Batch;
       };
       assert.equal(unsigned.deployed, false);
-      sameTransaction(unsigned, base.chain.id);
+      walletTakes(unsigned, base.chain.id);
       sameBatch(unsigned.sendCalls, [unsigned], "base");
       await base.send(base.deployer, unsigned.to, unsigned.data);
       const there = ok(await mcp.call("sauce_pot", { chain: "base", owner }));
       assert.equal(there.deployed, true);
       assert.equal(there.sendCalls, undefined);
-      assert.equal(there.sendTransaction, undefined);
     });
 
     it("an intent's publish: every intent's transactions as one batch, and none for a dry run", async () => {
@@ -285,7 +289,7 @@ describe(
         transactions.map((tx) => tx.what?.split(" ")[0]),
         ["transfer", "publish"],
       );
-      transactions.forEach((each) => sameTransaction(each, base.chain.id));
+      transactions.forEach((each) => walletTakes(each, base.chain.id));
       sameBatch(out.sendCalls, transactions, "base");
       // A rehearsal reports what ran: nothing in it is to be sent.
       const dry = ok(
@@ -297,9 +301,8 @@ describe(
       );
       assert.equal(dry.sendCalls, undefined);
       assert.ok(
-        (dry.transactions as Array<Record<string, unknown>>).every(
-          (tx) => !("sendTransaction" in tx),
-        ),
+        (dry.transactions as Array<Record<string, unknown>>).every((tx) => "status" in tx),
+        "each is what ran, with its status",
       );
     });
   },

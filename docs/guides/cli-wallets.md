@@ -111,11 +111,12 @@ sauce send 0x02f8…signed
 `sauce tx` prints the transaction for the owner to sign:
 
 ```json
-{ "chainId": 8453, "to": "0x8a…", "data": "0x…", "value": "1000" }
+{ "chainId": 8453, "to": "0x8a…", "data": "0x…", "value": "0x3e8", "sendCalls": { … } }
 ```
 
-It also prints the same transaction the way a wallet's MCP server takes it, `sendTransaction` and
-`sendCalls`, with each amount in hex ([Sign with your wallet's MCP server](wallet-mcp.md)).
+The value is in wei, written in hex as wallets read it: `0x3e8` is 1000. The transaction is exactly
+what a wallet's MCP server takes, and `sendCalls` is the same as one batch
+([Sign with your wallet's MCP server](wallet-mcp.md)).
 
 When the Pot does not exist yet, it prints a plan of two instead, the Pot's creation then the cook,
 each with the `gas` to sign it with. Sign and send them in that order.
@@ -210,13 +211,22 @@ none, as a signer's own estimate of it is right (the Kitchen it calls has code).
     {
       "what": "Kitchen.deployPot(0xYou, 0x00…00): deploys the Pot, which has no code yet",
       "deploysPot": "0x8a…",
+      "chainId": 8453,
       "to": "0x…",
       "data": "0x…",
-      "value": "0",
-      "gas": "208539"
+      "value": "0x0",
+      "gas": "0x32e9b"
     },
-    { "what": "cook on Pot 0x8a…", "to": "0x8a…", "data": "0x…", "value": "1000", "gas": "167698" }
-  ]
+    {
+      "what": "cook on Pot 0x8a…",
+      "chainId": 8453,
+      "to": "0x8a…",
+      "data": "0x…",
+      "value": "0x3e8",
+      "gas": "0x28f12"
+    }
+  ],
+  "sendCalls": { "chain": "base", "calls": [ … ] }
 }
 ```
 

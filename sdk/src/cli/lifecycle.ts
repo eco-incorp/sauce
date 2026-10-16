@@ -72,6 +72,7 @@ import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
+import { hexQuantity } from "./handoff.js";
 import { txLinks } from "./links.js";
 import { kitchenAddress } from "./commands.js";
 import { formatAmount, tokenInfo, type TokenInfo } from "../evm/effects.js";
@@ -288,13 +289,14 @@ export function intentOf(record: IntentRecord): Intent {
   return intent;
 }
 
-/** A transaction to sign and send, as JSON. */
+/** A transaction to sign and send, as JSON: itself what a wallet's send tool takes (`handoff.ts`). */
 export interface TxJson {
   readonly chainId: number;
   readonly chain: string;
   readonly to: Address;
   readonly data: Hex;
-  readonly value: string;
+  /** Wei, a hex quantity. */
+  readonly value: Hex;
   /** What it does, for a person. */
   readonly what: string;
 }
@@ -304,7 +306,7 @@ const txJson = (chain: CanonicalChain, tx: TxRequest, what: string): TxJson => (
   chain: chain.slug,
   to: getAddress(tx.to),
   data: tx.data,
-  value: tx.value.toString(),
+  value: hexQuantity(tx.value),
   what,
 });
 

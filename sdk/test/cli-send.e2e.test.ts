@@ -181,7 +181,7 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     const [deploy, cook] = plan.transactions as [Unsigned, Unsigned];
     expect(BigInt(deploy.gas!)).toBeGreaterThan(0n);
     expect(funded.notes).toMatch(
-      new RegExp(`the cook's, ${cook.gas}, is estimated as if the deployment had landed`),
+      new RegExp(`the cook's, ${BigInt(cook.gas!)}, is estimated as if the deployment had landed`),
     );
     // The signer's own estimate of the cook, while the Pot has no code, is far below it.
     const ownEstimate = await ethereum.publicClient.estimateGas({

@@ -124,8 +124,9 @@ sauce run payout.sauce.ts --chain base --keystore <keystore> --args <recipient> 
 ```
 
 - `sauce tx` prints the cook unsigned, `{ chainId, to, data, value }`, for any wallet or signer,
-  with the Pot's deployment first while it has no code, and what a wallet's MCP server takes as it
-  is (`sendCalls`, `sendTransaction`); `sauce send` broadcasts what a signer signed. A wallet's MCP
+  with the Pot's deployment first while it has no code, each transaction and the batch beside them
+  (`sendCalls`) what a wallet's MCP server takes as they are; `sauce send` broadcasts what a signer
+  signed. A wallet's MCP
   server (Coinbase Wallet MCP on Base and Ethereum, Phantom MCP on Solana) is the safer signer; the
   command's own wallets are for experiments and development.
 - `sauce run` signs and sends it itself, deploying the Pot first when it is missing (it asks, or

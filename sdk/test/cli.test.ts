@@ -1165,13 +1165,12 @@ describe("sauce tx", () => {
     expect(cook.functionName).toBe("cook");
     expect(cook.args).toEqual([getAddress(v12EngineAddress()), program]);
     const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex);
+    // What a wallet's own tool takes as it is: the value a hex quantity, and a batch of one.
     expect(out).toEqual({
       chainId: 1,
       to: pot,
       data,
-      value: "1234",
-      // What a wallet's own tool takes: the eth_sendTransaction object, and a batch of one.
-      sendTransaction: { chainId: "0x1", to: pot, data, value: "0x4d2" },
+      value: "0x4d2",
       sendCalls: { chain: "ethereum", calls: [{ to: pot, value: "0x4d2", data }] },
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${SAUCE_INTENT_POT_SALT}).`);
@@ -1416,7 +1415,7 @@ describe("sauce tx", () => {
       "--value",
       "0",
     );
-    expect(JSON.parse(run.stdout)).toMatchObject({ to: pot, value: "0" });
+    expect(JSON.parse(run.stdout)).toMatchObject({ to: pot, value: "0x0" });
     expect(run.stderr).toContain("Send from the Pot's owner: cook() is onlyOwner.");
   });
 
@@ -1591,23 +1590,12 @@ describe("sauce intent publish, offline", () => {
         transactions: [
           {
             what: expect.stringMatching(/^transfer 0x[0-9a-fA-F]{40} to the vault$/),
+            chainId: 1,
             to: getAddress(transfer.to),
             data: transfer.data,
-            value: "0",
-            sendTransaction: {
-              chainId: "0x1",
-              to: getAddress(transfer.to),
-              data: transfer.data,
-              value: "0x0",
-            },
+            value: "0x0",
           },
-          {
-            what: "publish",
-            to: portal,
-            data: publish.data,
-            value: "0",
-            sendTransaction: { chainId: "0x1", to: portal, data: publish.data, value: "0x0" },
-          },
+          { what: "publish", chainId: 1, to: portal, data: publish.data, value: "0x0" },
         ],
       },
     ]);
@@ -1634,7 +1622,7 @@ describe("sauce intent publish, offline", () => {
         .transactions,
     ).toEqual([
       expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
-      expect.objectContaining({ what: "publishAndFund", value: "0" }),
+      expect.objectContaining({ what: "publishAndFund", value: "0x0" }),
     ]);
     expect(optedOut.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
     const cast = await sauce(
@@ -1894,8 +1882,7 @@ describe("sauce pot", () => {
       salt,
       kitchen: v12KitchenAddress(),
       ...deploy,
-      value: "0",
-      sendTransaction: { chainId: "0x2105", ...deploy, value: "0x0" },
+      value: "0x0",
       sendCalls: { chain: "base", calls: [{ ...deploy, value: "0x0" }] },
     });
     expect(run.stderr).toMatch(/Any account may send it/);
@@ -2161,7 +2148,7 @@ describe("flags in any order", () => {
       ),
     );
     expect(after).toEqual(before);
-    expect(before.value).toBe("7");
+    expect(before.value).toBe("0x7");
     // After `--`, a word that looks like a flag is an argument.
     const escaped = await sauce(
       "tx",

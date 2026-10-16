@@ -66,6 +66,7 @@ import {
   type SetupReach,
   type SetupStep,
 } from "./approvals.js";
+import { hexQuantity } from "./handoff.js";
 import { linkLines, txLinks } from "./links.js";
 import {
   checkIntentPots,
@@ -100,7 +101,8 @@ export interface CliFiles {
 export interface CommandOutput {
   /** For a person. */
   readonly text: string;
-  /** For a program. Amounts are decimal strings. */
+  /** For a program. Amounts are decimal strings, but an unsigned EVM transaction's `value` and
+   *  `gas`: hex quantities, so a wallet's own tool takes the transaction as it is (`handoff.ts`). */
   readonly json: Record<string, unknown>;
   /** The same transaction as a `cast send` line, for a command that prints one. */
   readonly cast?: string;
@@ -725,9 +727,10 @@ export async function potDeployStep(input: {
     planned: {
       what: `Kitchen.deployPot(${target.owner}, ${target.salt}): deploys the Pot, which has no code yet`,
       deploysPot: pot,
+      chainId: chain.id,
       to: tx.to,
       data: tx.data,
-      value: "0",
+      value: hexQuantity(0n),
     },
     send: async () => {
       if (input.client === undefined || input.rpcUrl === undefined || input.account === undefined) {
@@ -954,7 +957,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         : undefined;
     const steps = setup.map((step, index) =>
       index === 0 && gas?.deploy !== undefined
-        ? { ...step.planned, gas: gas.deploy.toString() }
+        ? { ...step.planned, gas: hexQuantity(gas.deploy) }
         : step.planned,
     );
     const json = {
@@ -964,10 +967,11 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...steps,
         {
           what: `cook on Pot ${cook.pot}`,
+          chainId: input.chain.id,
           to: cook.pot,
           data: cook.data,
-          value: value.toString(),
-          ...(gas?.cook === undefined ? {} : { gas: gas.cook.toString() }),
+          value: hexQuantity(value),
+          ...(gas?.cook === undefined ? {} : { gas: hexQuantity(gas.cook) }),
         },
       ],
     };
@@ -977,7 +981,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       json,
       cast: [
         ...steps.map((step) =>
-          castSend(step.to, step.data, step.value === "0" ? undefined : BigInt(step.value)),
+          castSend(step.to, step.data, BigInt(step.value) === 0n ? undefined : BigInt(step.value)),
         ),
         castSend(cook.pot, cook.data, value),
       ].join("\n"),
@@ -1009,7 +1013,12 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
   ];
-  const json = { chainId: input.chain.id, to: cook.pot, data: cook.data, value: value.toString() };
+  const json = {
+    chainId: input.chain.id,
+    to: cook.pot,
+    data: cook.data,
+    value: hexQuantity(value),
+  };
 
   return {
     text: JSON.stringify(json, null, 2),
@@ -1229,7 +1238,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
     return { text: JSON.stringify(json, null, 2), json, notes: [refused.message] };
   }
   const call = sauceEvmDeployPotCall({ kitchen, owner: input.owner, salt: input.salt });
-  const json = { ...predicted, to: kitchen, data: call.data, value: "0" };
+  const json = { ...predicted, to: kitchen, data: call.data, value: hexQuantity(0n) };
 
   return {
     text: JSON.stringify(json, null, 2),

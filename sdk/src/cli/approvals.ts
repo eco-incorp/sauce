@@ -74,9 +74,11 @@ export interface SetupStep extends PendingApproval {
   /** The transaction, unsigned, as a plan lists it ahead of the cook: `sauce tx`, an MCP tool. */
   readonly planned: {
     readonly what: string;
+    readonly chainId: number;
     readonly to: Address;
     readonly data: Hex;
-    readonly value: string;
+    /** Wei, a hex quantity: the entry is what a wallet's send tool takes (`handoff.ts`). */
+    readonly value: Hex;
     readonly [mark: string]: unknown;
   };
   /** Signs and sends it, and waits until what it makes is there; what was sent. Throws if it
