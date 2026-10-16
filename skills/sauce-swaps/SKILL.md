@@ -244,18 +244,20 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
 
 - **The namespaces** are each venue's protocol then its program: `Raydium.CLMM`,
   `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`,
-  `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and `Meteora.DLMM`, each with one
+  `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`, each with one
   `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived; where the
   pool cannot trade (below) it returns `0` having moved nothing, and below `minOut` the cook
   reverts. `sauce globals --chain solana` lists them.
+- **`Meteora.DLMM`**'s `swap(pool, tokenIn, tokenOut, amountIn, minOut)` is Meteora DLMM's own swap, an
+  exact input with no price limit: it pays all of `amountIn` or the cook fails, and reverts below
+  `minOut`. Its pool's accounts are derived the same way, its bin arrays the first two its bitmap
+  marks in the trade's direction (the first alone for a pool with a Token-2022 mint): an input past
+  them fails the cook.
 - **Each call compiles to that venue's function below** (`orcaWhirlpool`), never the all-venue one,
   keeping every check: the venue's program, the pool's owner, the pair, `minOut`. A pool of another
   venue reverts on chain (`not an Orca whirlpool`).
-- **`Meteora.DLMM.swap`** walks the pool's bins in the cook, since its swap takes no limit: each
-  at its own fee, the swap offered exactly what drains the bins within `maxPrice`, at most eight
-  from the active one, each about 26,000 compute units.
 - **`Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`** is the same at a pool of
-  any of the ten, its venue read from the pool's owner as the program runs: for a program that
+  any of the nine, its venue read from the pool's owner as the program runs: for a program that
   takes its pools as `main`'s arguments without knowing their venues
   (`sauce-solana-distributed-swap`). It carries every venue's code. A pool given as the System
   program, `11111111111111111111111111111111`, is an empty slot: its accounts are the System
@@ -276,9 +278,8 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
 
 One function per venue whose swap stops at a price limit and leaves the rest of the input:
 `raydiumClmm`, `pancakeswapClmm`, `byreal`, `stabbleClmm`, `orcaWhirlpool`, `cropper`, `defituna`,
-`crema`, `phoenix` (an immediate-or-cancel order on its book) and `meteoraDlmm` (its bins walked to
-the limit), and `swap`, which takes a pool at any of them and reads its venue from the pool's owner.
-Every one takes the same arguments:
+`crema` and `phoenix` (an immediate-or-cancel order on its book), and `swap`, which takes a pool at
+any of them and reads its venue from the pool's owner. Every one takes the same arguments:
 
 ```text
 swap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
@@ -294,8 +295,7 @@ swap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
 Each returns `0` having moved nothing for a missing slot (the System program as its pool), no
 input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than one
 rate, an empty pool, a pool already past its limit, an input too small to buy one unit at the pool's
-price after its fee (dust), a book with no offer within it, and a Meteora DLMM pool that takes its
-fee from the token bought or is not yet active. A swap that ran returns at least 1,
+price after its fee (dust), and a book with no offer within it. A swap that ran returns at least 1,
 and below `minOut` the cook reverts. A failed call into another program fails the whole Solana
 transaction and cannot be caught, so these are checks made before the swap. The accounts are the
 caller's, so a pool that is not the pair, a slot whose program is not the pool's owner, and a pool
@@ -303,7 +303,7 @@ of another venue or of none revert; only the System program itself as the pool i
 
 Three more forms, for a program that wants less:
 
-- **At a limit in the pool's own terms**, `<venue>AtLimit`, for the first nine and `invariantAtLimit`
+- **At a limit in the pool's own terms**, `<venue>AtLimit`, for those nine and `invariantAtLimit`
   and `openbookV2AtLimit`, and Manifest's book, `manifest`, which has no limit:
   `(slot, trader, amountIn, limit, minOut, recipient)`, `limit` the sqrt price the pool's swap takes
   (Phoenix's order price in ticks, OpenBook's `priceLots, orders`; `0` none, where the venue takes
@@ -350,9 +350,8 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.6 KB of program
-(`meteoraDlmm`, which walks its bins, about 3.1 KB), and `swap` all ten, about 6.9 KB, so a
-program that knows its venue calls that venue's function and
+A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
+`swap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
 keeps `swap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`).
 
@@ -372,8 +371,8 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
 `aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
 `mercurial`, `perena`, `metadaoFutarchy`, `solfiV1`, `solfiV2`, `hadron`, `taurusfi`, `riptide`,
 `denali`, `gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven`,
-`virtuals`, `xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma` and
-`heliumTreasury`.
+`virtuals`, `xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma`,
+`heliumTreasury` and `meteoraDlmm`.
 
 | Venues                           | What to know                                                                                                                                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -401,15 +400,15 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
   data written by hand, a `Cpi` form about 7,500 more, and the slot forms about 1,400 more for each
   account they read out of `slot` or `trader`.
 
-A function cannot list more than sixteen accounts, nor a number that varies. `scaleAmm`, `pumpswap`,
+A function cannot list more than sixteen accounts, nor a number that varies (`meteoraDlmm` fills
+seventeen in place, so its slot carries two bin arrays). `scaleAmm`, `pumpswap`,
 `bonkswap`, `guacswap`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`,
-`jupiterLendEarn`, `hylo`, `carrot`, `mswap`, `perpsJlp`, `sanctumInfinity` and `archer`,
-Jupiter Perpetuals' JLP mint, and Meteora DLMM's exact input (its swap at a price is `meteoraDlmm`,
-above), swap with more, so they have only their `Cpi` and `Data` forms:
-`scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`,
+`jupiterLendEarn`, `hylo`, `carrot`, `mswap`, `perpsJlp`, `sanctumInfinity` and `archer`, and
+Jupiter Perpetuals' JLP mint, swap with more, so they have only their `Cpi` and `Data` forms:
+`scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `sarosDlmmCpi`,
 `raydiumLaunchlabCpi`, `runnerRodeoCpi`, `scaleVmmCpi`, `jupiterLendEarnCpi`, `hyloCpi`,
 `carrotCpi`, `mswapCpi`, `perpsJlpCpi`, `perpsJlpMintCpi`, `sanctumInfinityCpi`, `archerCpi`,
-`scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `meteoraDlmmData`, `sarosDlmmData`,
+`scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `sarosDlmmData`,
 `raydiumLaunchlabData`, `runnerRodeoData`, `scaleVmmData`, `jupiterLendEarnData`, `hyloData`,
 `carrotData`, `mswapData`, `perpsJlpData`, `perpsJlpMintData`, `sanctumInfinityData` and
 `archerData`.

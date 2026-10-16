@@ -124,7 +124,9 @@ function main(
 }
 ```
 
-Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and `Meteora.DLMM`. Each has one method, `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived. Where the pool cannot trade (it is empty, paused, or already past `maxPrice`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `maxPrice` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
+Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. Each has one method, `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived. Where the pool cannot trade (it is empty, paused, or already past `maxPrice`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `maxPrice` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
+
+Meteora DLMM's own swap has no price limit, so `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)` takes no `maxPrice`: it pays all of `amountIn`, or the whole transaction fails, and reverts below `minOut`.
 
 - **One venue's function.** Each call compiles to that venue's own `@sauce/router` function (`orcaWhirlpool`), never the router's all-venue `swap`, and keeps that function's checks: the venue's program, the pool's owner, the pair, `minOut`.
 - **The accounts are added to `main`.**
@@ -133,9 +135,7 @@ Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.C
   - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
 - **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
 
-A Meteora DLMM pool is priced in bins, and its own swap has no price limit, so `Meteora.DLMM.swap` works through the bins itself as the program runs: each bin at its own fee, it hands the pool exactly what the bins within `maxPrice` take, and the pool stops there. It goes at most eight bins, since each costs about 26,000 compute units.
-
-`Solana.swap` takes the same arguments at a pool of any of the ten: the venue is read from the pool's owner as the program runs, so a program can take its pools as `main`'s arguments without knowing their venues, and still name no account. Each such call carries every venue's code, about 6.9 KB, a larger program than one venue's. A pool given as the System Program, `11111111111111111111111111111111`, is an empty slot, for which `swap` returns 0.
+`Solana.swap` takes the same arguments at a pool of any of the nine: the venue is read from the pool's owner as the program runs, so a program can take its pools as `main`'s arguments without knowing their venues, and still name no account. Each such call carries every venue's code, about 4.4 KB, a larger program than one venue's. A pool given as the System Program, `11111111111111111111111111111111`, is an empty slot, for which `swap` returns 0.
 
 `sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools, `main`'s arguments, with one `Solana.swap` call each.
 

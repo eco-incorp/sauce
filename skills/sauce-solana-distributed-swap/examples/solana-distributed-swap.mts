@@ -22,7 +22,6 @@ import {
   CROPPER_PROGRAM_ID,
   DEFITUNA_PROGRAM_ID,
   getAddressEncoder,
-  METEORA_DLMM_PROGRAM_ID,
   OFF_FEE_RATE,
   OFF_FEE_TIER_INDEX,
   OFF_LIQUIDITY,
@@ -104,15 +103,18 @@ const VENUES: [string, string, string, string][] = [
   ["Defituna.Fusion", "defituna", DEFITUNA_PROGRAM_ID, "DefiTuna"],
   ["Crema.CLMM", "crema", CREMA_PROGRAM_ID, "Crema"],
   ["Phoenix.Market", "phoenix", PHOENIX_PROGRAM_ID, "Phoenix"],
-  ["Meteora.DLMM", "meteoraDlmm", METEORA_DLMM_PROGRAM_ID, "Meteora DLMM"],
 ];
 const ARGS = "slot, trader, amountIn, maxPrice, minOut, recipient";
 check(params("swap") === ARGS, `swap takes (${ARGS})`);
-const named = routes.sourceGlobals("solana").venues;
+// The venues swapping at a price: Meteora DLMM's namespace is an exact input, which this program
+// cannot stop at a price.
+const named = routes
+  .sourceGlobals("solana")
+  .venues.filter((one) => one.methods.some((method) => method.includes("maxPrice")));
 check(
   named.map((one) => `${one.namespace} ${one.program}`).join() ===
     VENUES.map(([namespace, , id]) => `${namespace} ${id}`).join(),
-  "the SDK names the ten venues as the skill does, each for its program",
+  "the SDK names the nine venues as the skill does, each for its program",
 );
 const dispatch = body("swap");
 for (const [namespace, fn, id, venue] of VENUES) {
@@ -143,7 +145,7 @@ check(
   "swap takes those venues and no other",
 );
 check(!library.includes("export function trySwap("), "swap is the one swap at any venue");
-for (const left of ["Invariant", "Bonkswap", "Saros DLMM", "Manifest"])
+for (const left of ["Invariant", "Meteora DLMM", "Bonkswap", "Saros DLMM", "Manifest"])
   check(
     prose.includes(`**${left}**`) || prose.includes(left),
     `the skill says why ${left} is left out`,

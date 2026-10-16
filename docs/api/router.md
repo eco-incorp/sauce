@@ -281,7 +281,7 @@ chain.
 
 A program that knows its pool needs none of these functions directly: the venue's namespace,
 `Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)`, compiles to that venue's
-`orcaWhirlpool` below, and `Solana.swap(pool, …)`, at a pool of any of the ten, compiles to `swap`.
+`orcaWhirlpool` below, and `Solana.swap(pool, …)`, at a pool of any of the nine, compiles to `swap`.
 Either way the slot and the trader are added to `main` and derived when the cook is built
 ([Solana: venues by namespace](../guides/solana.md#venues-by-namespace)).
 
@@ -316,14 +316,12 @@ writes the same bytes itself too, because a call into `…Data` would cost it ab
 | DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `defituna`        | `defitunaAtLimit`        | `defitunaCpi`        | `defitunaData`                             |
 | Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `crema`           | `cremaAtLimit`           | `cremaCpi`           | `cremaData`                                |
 | Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | `phoenix`         | `phoenixAtLimit`         | `phoenixCpi`         | `phoenixData`                              |
-| Meteora DLMM     | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  | `meteoraDlmm`     |                          | (exact input, below) | (exact input, below)                       |
 | Invariant        | `HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt` |                   | `invariantAtLimit`       | `invariantCpi`       | `invariantData`                            |
 | OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                   | `openbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
 | Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                   | `manifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
 
-and `swap`, which takes a pool at any of the ten venues priced the first way and reads its venue
-from the program that owns it. Meteora DLMM's swap has no limit of its own, so it has no form at
-one; its instruction alone and its data are its exact input's (below).
+and `swap`, which takes a pool at any of the nine venues priced the first way and reads its venue
+from the program that owns it.
 
 ```text
 swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: Account): Uint256
@@ -341,10 +339,7 @@ swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: 
   market's authority, `extra` its event heap, its ticks its bids, asks and the System program);
   Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable at a price, where its swap is `swap_v2`, which declares it writable whatever the fee, and at its own limit for an adaptive fee and for a pool with a Token-2022 mint. Crema refuses a tick array its
   map does not mark and Invariant takes only the ticks it crosses, so each is passed the slot's first
-  tick array and each after it until a System program. A Meteora DLMM pool's `config` is its
-  program's event authority, `vaultA` and `vaultB` its reserves of token X and token Y (the pool's
-  own order, not the keys'), `extra` its oracle, and `ticks0` and `ticks1` the two bin arrays its
-  bitmap marks nearest the active bin's, in the walk's direction; `ticks2` is the System program.
+  tick array and each after it until a System program.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
   authority that signs (the Pot, through the Kitchen), the token account paid from, the two mints,
   the SPL Token and Token-2022 programs and the memo program. Both are arrays because a function
@@ -354,11 +349,7 @@ swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: 
 - **`maxPrice`** is the most one unit bought may cost, fee included: payToken base units per
   buyToken base unit, times 1e18. The function reads the pool's fee and gives the pool its own
   limit, so its last unit, fee paid, costs `maxPrice`: a concentrated-liquidity pool's sqrt price
-  limit moved by `√(1 − fee)`, a Phoenix order's price `maxPrice ÷ (1 + fee)` in ticks. A Meteora
-  DLMM pool takes no limit, so `meteoraDlmm` walks its bins in the cook, each at its own fee, and
-  offers the swap exactly what drains those within `maxPrice`: the swap stops with the last of them
-  drained. It walks at most eight bins, each about 26,000 compute units, on the slot's first two bin
-  arrays (its first, for a pool with a Token-2022 mint).
+  limit moved by `√(1 − fee)`, a Phoenix order's price `maxPrice ÷ (1 + fee)` in ticks.
 - **`limit`** is the pool's own: the sqrt price its swap takes as the pool keeps it (a Q64.64 root;
   on Invariant a root times 10^24), Phoenix's order price in its market's ticks, OpenBook's in its
   lots (`priceLots`, then `orders`, the most resting orders it may match). No fee is read for it, so
@@ -379,7 +370,7 @@ swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: 
 
 Each venue's function requires the slot's program to be its venue's and the pool's owner before it
 reads the pool, because the authority signs the swap; `swap` requires the slot's program to own
-the pool and that owner to be one of the ten. These are the caller's accounts, so each reverts
+the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
 rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
 or of none (`not a supported venue's pool`), a pool that is not the pair, and a limit an order cannot
 carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
@@ -392,9 +383,7 @@ or a market not open for taking, a pool with no liquidity at its price, a pool a
 its limit, an input too small to buy one unit at the pool's price after its fee (judged at a limit
 by the pool's base fee), an input smaller than one of a market's lots, and, at a price, a fee that
 is more than one rate (a dynamic or adaptive fee, or a Byreal pool's own) and a market limit too
-large for an order's 64-bit price; and a Meteora DLMM pool not active yet, one that takes its fee
-from the token bought, and one whose active bin is past its own bitmap. A DLMM walk stops before a
-bin array its swap would need that the slot does not give, rather than fail. The price only worsens as a pool sells, so the estimate is the
+large for an order's 64-bit price. The price only worsens as a pool sells, so the estimate is the
 most the input could buy: dust an earlier pool left (an atom, which the fee takes whole) is skipped,
 never handed to a venue that would keep it or refuse it. A Phoenix or OpenBook order whose book has
 no offer within its price is placed and fills nothing, so it returns `0` too, nothing having moved.
@@ -405,7 +394,7 @@ limit, fails the transaction.
 ```js
 import { swap } from "@sauce/router";
 
-// One pool, any of the ten venues: up to amountIn of payMint for buyMint, never more than maxPrice
+// One pool, any of the nine venues: up to amountIn of payMint for buyMint, never more than maxPrice
 // a unit with the fee, and at least minOut, else the whole transaction reverts.
 function main(
   program: Account,
@@ -616,9 +605,8 @@ const { prefix, suffix, divisor } = routerSvmDataTemplate("defituna", {
 ### Size and compute
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
-is about 0.9 to 1.7 KB of program (Meteora DLMM's, which walks its bins, about 3.1 KB), its
-instruction alone about 0.4 to 0.5 KB, its data alone about 0.2 to 0.4 KB, `swap` all ten about
-6.9 KB. A program that knows its venue calls that venue's
+is about 0.9 to 1.7 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
+0.2 to 0.4 KB, `swap` all nine about 4.4 KB. A program that knows its venue calls that venue's
 function, and keeps `swap` for slots whose venue it learns as it runs. Past one transaction a
 program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
 is one `Solana.swap` call per pool, each compiled to `swap`.
@@ -766,9 +754,15 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `trends`               | Trends                | `CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz` | `config, poolAuthority, baseVault, quoteVault, eventAuthority`                                                                       |
 | `heaven`               | Heaven                | `HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o` | `vaultA, vaultB, protocolConfig, instructionsSysvar, chainlink, solUsdFeed, associatedTokenProgram, systemProgram`                   |
 | `virtuals`             | Virtuals (selling)    | `5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki` | `poolTokenAccount, platform, platformVirtualsAccount, poolVirtualsAccount`                                                           |
+| `meteoraDlmm`          | Meteora DLMM          | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  | `eventAuthority, reserveX, reserveY, oracle, binArray0, binArray1, systemProgram`                                                    |
 
 Each row names three functions: the one listed, its `Cpi` form and its `Data` form. Raydium CP-Swap
-and Gamma require token 0 to be the lower-key mint. A Stabble pool's `vaultTokenA` and `vaultTokenB`
+and Gamma require token 0 to be the lower-key mint. A Meteora DLMM pool's reserves are its token X's
+and token Y's, the pool's own order, and its bin arrays the two its bitmap marks from the active
+bin's in the trade's direction: `meteoraDlmm` lays out seventeen accounts in place, so it sends
+`swap` on both (two SPL Token mints) or `swap2` on the first (a Token-2022 mint), and an input past
+what they hold fails the swap. It returns `0`, having moved nothing, for a pool whose swaps are off
+or not active yet; a program writes it `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)`. A Stabble pool's `vaultTokenA` and `vaultTokenB`
 are the vault's accounts for the two tokens traded, in either order. Each beneficiary account is the
 vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direction from the paying
 and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
@@ -807,7 +801,7 @@ config. The liquid-unstake vault pays wrapped SOL into a native wrapped-SOL acco
 pool's deposit takes native SOL from its signer, which a Pot cannot pay: the stake pools are among
 the instruction-only venues below.
 
-Seventeen venues take more accounts in their swap than a function can list, or a number of them
+Sixteen venues take more accounts in their swap than a function can list, or a number of them
 that varies. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
@@ -818,7 +812,6 @@ forms, on the list the caller's `main` builds:
 | `pumpswap`         | PumpSwap                     | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
 | `bonkswap`         | Bonkswap                     | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
 | `guacswap`         | Guacswap                     | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
-| `meteoraDlmm`      | Meteora DLMM                 | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
 | `sarosDlmm`        | Saros DLMM                   | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
 | `raydiumLaunchlab` | Raydium LaunchLab            | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj`  |
 | `runnerRodeo`      | Runner Rodeo                 | `runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA`  |
@@ -837,8 +830,9 @@ pay to create it, because the System program won't move lamports out of an accou
 PumpSwap's `init_user_volume_accumulator` takes any payer. Bonkswap and Guacswap require the paying
 and receiving accounts to be the authority's associated token accounts. PumpSwap, Bonkswap, Guacswap
 and Scale AMM write the authority, so it is attached writable. Scale AMM takes one account per fee
-beneficiary. A Meteora DLMM swap crosses bins only as far as the bin arrays its list ends with, from
-the active bin onwards in the trade's direction, and a Saros DLMM swap only within the two bin
+beneficiary. A Meteora DLMM swap (`meteoraDlmmCpi`, on a list of any length) crosses bins only as far
+as the bin arrays its list ends with, from the active bin onwards in the trade's direction, and a
+Saros DLMM swap only within the two bin
 arrays around its active bin; a trade too large for them fails. Jupiter Lend Earn deposits an asset
 for its fToken and redeems it back, through the Jupiter Lend liquidity program, and writes the
 authority. Hylo mints hyUSD for USDC and redeems it back, at its Pyth price. Carrot issues CRT for
