@@ -14,7 +14,8 @@
  *   - what a swap stopped at maxPrice receives is what the venue's own swap of the amount it paid
  *     receives, from the same state (`meteoraDlmmCpi`, its exact input);
  *   - a smaller input is swapped whole; the walk stops after eight bins;
- *   - a pool with a Token-2022 mint is swapped through `swap2`, on its first bin array;
+ *   - a pool of two SPL Token mints is swapped through `swap`, and one with a Token-2022 mint
+ *     through `swap2`, on its first bin array;
  *   - it returns 0 having moved nothing for every skip its comment names, and stops before a bin
  *     array the slot skips;
  *   - a swap that ran below its floor reverts, and a slot that is not the pair or whose program is
@@ -278,6 +279,8 @@ describeSvm("@sauce/router's Meteora DLMM swap at a price, on the venue's own pr
           expect(outcome.paid * 10n ** 18n).toBeLessThanOrEqual(maxPrice * outcome.received);
           expect(activeId()).toBe(bins[k]!.id);
           expect(held(bins[k + 1]!.id, !paysX)).toBe(bins[k + 1]!.amount);
+          // Two SPL Token mints: the classic `swap`.
+          expect(outcome.call?.data.slice(0, 16)).toBe("f8c69e91e17587c8");
         }
       },
       120_000,
@@ -447,6 +450,10 @@ describeSvm("@sauce/router's Meteora DLMM swap at a price, on the venue's own pr
         [86, [1]],
         [816, [...point]],
       ]));
+    // Its active bin in array -515, past the bitmap's -512 to 511: its swap would read the bitmap
+    // extension, which the slot does not give.
+    it("for a pool whose active bin is past its own bitmap", () =>
+      nothing(trade(true, 10n ** 12n, NO_LIMIT), [[76, i32Bytes(-515 * 70)]]));
   });
 
   it("reverts below minOut", async () => {

@@ -555,6 +555,27 @@ describe("sauce pools on Solana, a Meteora DLMM pool", () => {
     expect(out.pools).toEqual([]);
     expect(out.skipped).toEqual([{ venue: "Meteora DLMM", pool: POOL, why }]);
   });
+
+  it("skips it when it is not active yet, and when its price is past its bitmap", async () => {
+    const view = (pair: Uint8Array) => new DataView(pair.buffer, pair.byteOffset);
+    // Active from a time an hour away.
+    const later = await list((pair) => {
+      pair[86] = 1;
+      view(pair).setBigUint64(816, BigInt(Math.floor(Date.now() / 1000) + 3600), true);
+    });
+    expect(later.pools).toEqual([]);
+    expect(later.skipped).toEqual([{ venue: "Meteora DLMM", pool: POOL, why: "not active yet" }]);
+    // Its active bin in array -515, past the bitmap's -512 to 511.
+    const far = await list((pair) => view(pair).setInt32(76, -515 * 70, true));
+    expect(far.pools).toEqual([]);
+    expect(far.skipped).toEqual([
+      {
+        venue: "Meteora DLMM",
+        pool: POOL,
+        why: "its price is past its bitmap, which a swap here does not read past",
+      },
+    ]);
+  });
 });
 
 describe("sauce pools on Solana, through an endpoint with no pools", () => {
