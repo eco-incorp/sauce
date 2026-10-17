@@ -65,8 +65,8 @@ function main(
         refundTo != 0, "give sqrtPriceLimitX96, recipient and refundTo");
       const self = ctx.self();
       const sellsToken0 = WETH < USDC;
-      const wethBefore = WETH.balanceOf(self);
-      const usdcBefore = USDC.balanceOf(self);
+      const wethBefore = self.WETH;
+      const usdcBefore = self.USDC;
 
       // One pass over the pools: each is offered all the WETH still unsold, up to its own limit, and
       // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
@@ -78,7 +78,7 @@ function main(
           if (UniswapV3.Pool(pool).liquidity() > 0) {
             const limit = ownLimit(sqrtPriceLimitX96, UniswapV3.Pool(pool).fee(), sellsToken0);
             const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
-            const unsold = WETH.balanceOf(self);
+            const unsold = self.WETH;
             if (unsold > 0 && (sellsToken0 ? price > limit : price < limit)) {
               uniswapV3(pool, WETH, USDC, unsold, limit, 0, self);
             }
@@ -104,7 +104,7 @@ function main(
           }
           const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000;
           const limit = ownLimit(sqrtPriceLimitX96, fee, sellsToken0);
-          const unsold = WETH.balanceOf(self);
+          const unsold = self.WETH;
           if (
             unsold > 0 &&
             (sellsToken0 ? slot0.sqrtPriceX96 > limit : slot0.sqrtPriceX96 < limit)
@@ -127,9 +127,9 @@ function main(
 
       // Settle on Base: the checks, the USDC out, and the WETH back. This body runs on the shared
       // intent Pot, which holds nothing of anyone's between intents, so it returns all the WETH there.
-      const unsold = WETH.balanceOf(self);
+      const unsold = self.WETH;
       const spent = wethBefore - unsold;
-      const out = USDC.balanceOf(self) - usdcBefore;
+      const out = self.USDC - usdcBefore;
       require(out >= minOut, "output below minOut");
       require(out * 10 ** 18 >= minAvgPrice * spent, "average price below minAvgPrice");
       USDC.transfer(recipient, out);

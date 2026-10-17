@@ -39,7 +39,13 @@ import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.
 import { formatBigint } from "../deposit/format.js";
 import { walk, collectDeclaredNames, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
-import { chainSlugForKey, isChainKey, resolveNamespace, type Namespace } from "./accessor-index.js";
+import {
+  chainSlugForKey,
+  isChainKey,
+  namedContractKind,
+  resolveNamespace,
+  type Namespace,
+} from "./accessor-index.js";
 import { parseSauce } from "./parse.js";
 
 export interface ProtocolRewriteOptions {
@@ -111,27 +117,6 @@ export function decomposeMemberChain(
     head: inner.head,
     path: [...inner.path, (property as unknown as { name: string }).name],
   };
-}
-
-/**
- * The kind of contract `<head>.<path>` names, when it names one directly: `<Ns>.<Contract>` or
- * `<Chain>.<Ns>.<Contract>`, a family alias resolving to its one owner. Undefined for anything
- * else (a method, an unknown name, an ambiguous alias), which the other shapes own.
- */
-function namedContractKind(
-  head: string,
-  path: readonly string[],
-): ContractDescriptor["kind"] | undefined {
-  const segments = isChainKey(head) ? path : [head, ...path];
-  if (segments.length !== 2) return undefined;
-  const [namespace, contract] = segments as [string, string];
-  const ns = resolveNamespace(namespace);
-  if (ns === undefined) return undefined;
-  if (ns.kind === "protocol") return ns.contracts.get(contract)?.kind;
-  const owners = ns.contractOwners.get(contract);
-  if (owners?.length !== 1) return undefined;
-  const member = resolveNamespace(pascalOfSlug(owners[0]!));
-  return member?.kind === "protocol" ? member.contracts.get(contract)?.kind : undefined;
 }
 
 interface AccessorCandidate {

@@ -23,10 +23,10 @@
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
   Base(
     () => {
-      const amount = USDC.balanceOf(ctx.self());
+      const amount = self.USDC;
       Ethereum(
         () => {
-          const arrived = USDC.balanceOf(ctx.self());
+          const arrived = self.USDC;
           Base(() => {
             USDC.transfer(recipient, arrived);
           }).reward({ tokens: [{ token: USDC, amount: arrived }] });

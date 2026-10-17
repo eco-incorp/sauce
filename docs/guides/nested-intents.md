@@ -101,7 +101,7 @@ lowering adds the transfer into the Pot itself:
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
   Base(
     () => {
-      const amount = USDC.balanceOf(ctx.self());
+      const amount = self.USDC;
       const payout = amount - amount / 1000;
       Ethereum(() => {
         USDC.transfer(recipient, payout);
@@ -197,7 +197,7 @@ import { uniswapV3 } from "@sauce/router";
 function main(recipient: Address, delivered: Uint256, reward: Uint256, minOut: Uint256) {
   Base(
     () => {
-      const amount = USDC.balanceOf(ctx.self());
+      const amount = self.USDC;
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
       const bought = uniswapV3(pool, USDC, WETH, amount, 0, minOut, ctx.self());
       const payout = bought - bought / 1000;
@@ -273,10 +273,10 @@ fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) comp
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
   Base(
     () => {
-      const amount = USDC.balanceOf(ctx.self());
+      const amount = self.USDC;
       Ethereum(
         () => {
-          const arrived = USDC.balanceOf(ctx.self());
+          const arrived = self.USDC;
           Base(() => {
             USDC.transfer(recipient, arrived);
           }).reward({ tokens: [{ token: USDC, amount: arrived }] });

@@ -54,7 +54,7 @@ function main(
   if (repay > owed) {
     repay = owed;
   }
-  const held = USDC.balanceOf(self);
+  const held = self.USDC;
   if (repay > held) {
     repay = held;
   }

@@ -28,7 +28,7 @@ function main(
   const self = ctx.self();
   const aToken = AaveV3Reads.at(AaveV3.Pool).getReserveAToken(USDC);
   require(aToken != 0, "USDC is not listed on this Aave V3 pool");
-  const liquid = USDC.balanceOf(self);
+  const liquid = self.USDC;
   const deposited = Token(aToken).balanceOf(self); // the Pot's supplied USDC, interest included
 
   let supplied: Uint256 = 0;
@@ -47,7 +47,7 @@ function main(
   return {
     supplied,
     withdrawn,
-    liquid: USDC.balanceOf(self),
+    liquid: self.USDC,
     deposited: Token(aToken).balanceOf(self),
   };
 }

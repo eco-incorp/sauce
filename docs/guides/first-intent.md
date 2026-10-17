@@ -38,7 +38,7 @@ Save this as `cross-chain-intent.sauce.ts`:
 //   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
 //                        below it the whole transaction reverts and nothing is published
 function main(recipient: Address, minAmount: Uint256) {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   require(amount >= minAmount, "nothing to forward");
 
   Ethereum(() => {
@@ -49,7 +49,7 @@ function main(recipient: Address, minAmount: Uint256) {
 
 Line by line:
 
-- `const amount = USDC.balanceOf(ctx.self())` reads how much USDC your Pot holds on Base right now.
+- `const amount = self.USDC` reads how much USDC your Pot holds on Base right now.
 - `require(...)` stops everything when there is too little to bother.
 - `Ethereum(() => { ... })` is the job: what happens on Ethereum. Inside the braces, `USDC` means
   Ethereum's USDC.

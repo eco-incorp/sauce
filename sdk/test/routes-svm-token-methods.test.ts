@@ -322,8 +322,8 @@ describe("the token methods on Solana", () => {
         ),
       ).toThrow(
         "`USDC.transfer(…)` on Solana: the recipient must be known when the transaction is built, " +
-          "to attach its token account — `self`, a parameter of main declared `Address`, or a " +
-          "32-byte key — and `r` is not. For an account known only as the program runs, take the " +
+          "to attach its token account — `self`, a parameter of main declared `Address`, a " +
+          "token's mint, or a 32-byte key — and `r` is not. For an account known only as the program runs, take the " +
           "token account as a parameter of main (`dest: Account<Writable>`) and pass that.",
       );
     });
@@ -372,5 +372,96 @@ describe("the token methods on Solana", () => {
         ),
       ).toThrow("`__sauce_svm_balance` is reserved");
     });
+  });
+});
+
+describe("the balance shorthand on Solana: namespace holders and SOL", () => {
+  const hex = (source: string) => Buffer.from(compile(source).bytecode).toString("hex");
+
+  it("self.SOL is the Pot's lamports: ctx.balance of the Pot the cook attaches", () => {
+    const program = compile("function main(): Uint256 {\n  return self.SOL;\n}\n");
+    expect(program.source).toBe(
+      "function main(pot: Account<Signer>): Uint256 {\n  return ctx.balance(pot.address);\n}\n",
+    );
+    expect(program.derivedAccounts).toEqual({ pot: "self" });
+    expect(hex("function main(): Uint256 {\n  return self.SOL;\n}\n")).toBe(
+      hex(
+        "function main(pot: Account<Signer>): Uint256 {\n  return ctx.balance(pot.address);\n}\n",
+      ),
+    );
+    expect(hex("function main(): Uint256 {\n  return ctx.self().SOL + Solana.self.SOL;\n}\n")).toBe(
+      hex(
+        "function main(pot: Account<Signer>): Uint256 {\n  return ctx.balance(pot.address) + ctx.balance(pot.address);\n}\n",
+      ),
+    );
+  });
+
+  it("to.SOL reads main's argument's lamports, its account attached as the cook is built", () => {
+    const program = compile("function main(to: Address): Uint256 {\n  return to.SOL;\n}\n");
+    expect(program.source).toBe(
+      "function main(to: Address, toAccount: Account): Uint256 {\n  return ctx.balance(to);\n}\n",
+    );
+    expect(program.derivedAccounts).toEqual({ toAccount: "@to" });
+  });
+
+  it("Solana.owner and Solana.self hold tokens as self does, each account checked to its holder", () => {
+    const program = compile(
+      "function main(): Uint256 {\n  return Solana.owner.USDC + Solana.self.USDC + Solana.owner.SOL;\n}\n",
+    );
+    expect(program.source).toContain(
+      "return __sauce_svm_balance(USDC, ownerUSDC, owner.address) + __sauce_svm_balance(USDC, potUSDC, pot.address) + ctx.balance(owner.address);",
+    );
+    expect(program.derivedAccounts).toEqual({
+      owner: "owner",
+      ownerUSDC: "owner:USDC",
+      potUSDC: "self:USDC",
+      pot: "self",
+    });
+    expect(hex("function main(): Uint256 {\n  return Solana.self.USDC;\n}\n")).toBe(
+      hex("function main(): Uint256 {\n  return self.USDC;\n}\n"),
+    );
+  });
+
+  it("a mint is a holder: its lamports, and its own associated token account off the mint key", () => {
+    const program = compile("function main(): Uint256 {\n  return USDC.SOL + USDC.WSOL;\n}\n");
+    expect(program.source).toContain(
+      "function main(mintUSDC: Account, USDCWSOL: Account): Uint256 {\n  return ctx.balance(USDC) + __sauce_svm_balance(WSOL, USDCWSOL, USDC);",
+    );
+    expect(program.derivedAccounts).toEqual({
+      mintUSDC: "mint:USDC",
+      USDCWSOL: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v:WSOL",
+    });
+    expect(hex("function main(): Uint256 {\n  return USDC.SOL;\n}\n")).toBe(
+      hex("function main(mintUSDC: Account): Uint256 {\n  return ctx.balance(USDC);\n}\n"),
+    );
+    expect(hex("function main(): Uint256 {\n  return USDC.WSOL;\n}\n")).toBe(
+      hex("function main(): Uint256 {\n  return WSOL.balanceOf(USDC);\n}\n"),
+    );
+  });
+
+  it("says what is wrong with a balance it cannot read", () => {
+    const refusal = (source: string) => {
+      try {
+        compile(source);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`compiled: ${source}`);
+    };
+    expect(refusal("function main(): Uint256 {\n  return self.USDCC;\n}\n")).toBe(
+      "`self.USDCC` on Solana: `USDCC` is not a token solana registers, nor its native coin, SOL. Did you mean `USDC`? `<holder>.<TOKEN>` reads the holder's balance of one; the Pot has no other member.",
+    );
+    expect(refusal("function main(): Uint256 {\n  return self.foo;\n}\n")).toMatch(
+      /^`self\.foo` on Solana: `foo` is not a token solana registers, nor its native coin, SOL\. `<holder>/,
+    );
+    expect(
+      refusal("function main(to: Address): Uint256 {\n  const x = to;\n  return x.USDC;\n}\n"),
+    ).toMatch(/^`x\.USDC` on Solana: the holder must be known when the transaction is built/);
+    expect(refusal("function main(p: { to: Address }): Uint256 {\n  return p.SOL;\n}\n")).toMatch(
+      /^`p\.SOL`: `p` is a record, not an address, and `SOL` names the native coin/,
+    );
+    expect(refusal("function main(to: Address): Uint256 {\n  return to.USDCC;\n}\n")).toMatch(
+      /^compileSauceRoute: `USDCC` is not a token on solana, nor its native coin, SOL\. Did you mean `USDC`\?/,
+    );
   });
 });

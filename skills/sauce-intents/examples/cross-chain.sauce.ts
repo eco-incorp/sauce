@@ -24,7 +24,7 @@
 //     --intent-execution-fee auto --args <beneficiary>
 function main(beneficiary: Address) {
   require(beneficiary != 0, "give the beneficiary");
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   require(amount > 0, "nothing to forward");
   const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 

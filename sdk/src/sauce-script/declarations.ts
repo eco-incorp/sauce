@@ -5,6 +5,7 @@
  * - every chain as the function that opens an intent there, with its namespaces
  *   (`Base(() => { … })`, `Base.UniswapV3.Factory`), and Solana with the accounts a program for it
  *   writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every token symbol and native coin as a holder's balance (`self.USDC`, `pot.ETH`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
@@ -23,6 +24,7 @@
 import IERC20 from "../artifacts/IERC20.json" with { type: "json" };
 import ISauceRouter from "../artifacts/ISauceRouter.json" with { type: "json" };
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
+import { nativeCoinSymbol } from "../chains/index.js";
 import { PROTOCOL_ABIS, STD_SOURCES } from "../embedded/sources.generated.js";
 import type { AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
@@ -181,6 +183,7 @@ export function sauceScriptDeclarations(): string {
   const namespaces = new Set<string>();
   const defines = new Set<string>();
   const tokens = new Set<string>();
+  const coins = new Set<string>();
   let chains: ReadonlyArray<{ readonly key: string; readonly kind: string }> = [];
   for (const chain of CANONICAL_CHAINS) {
     const globals = sourceGlobals(chain);
@@ -188,6 +191,8 @@ export function sauceScriptDeclarations(): string {
     for (const ns of globals.protocols) namespaces.add(ns.namespace);
     for (const name of Object.keys(globals.defines)) defines.add(name);
     for (const token of globals.tokens) tokens.add(token.symbol);
+    const native = nativeCoinSymbol(chain);
+    if (native !== undefined) coins.add(native);
   }
   const sources = 'import("../routes/source-globals.generated.js")';
   const served: Array<[string, unknown]> = [
@@ -230,6 +235,16 @@ export function sauceScriptDeclarations(): string {
         ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts;`
         : `declare const ${chain.key}: SauceChain;`,
     ),
+    "",
+    "/** A holder's balance of a token or of the native coin, by its symbol: `self.USDC`,",
+    " *  `recipient.TSLAx`, `self.ETH`, the same read as `USDC.balanceOf(self)` or",
+    " *  `ctx.selfBalance()`. The holder is any address: `self`, a variable, a contract. */",
+    "interface BigInt {",
+    ...[...new Set([...tokens, ...coins])]
+      .filter((symbol) => IDENTIFIER.test(symbol))
+      .sort()
+      .map((symbol) => `  readonly ${symbol}: bigint;`),
+    "}",
     "",
     "/** A protocol contract's address on the chain a program is compiled for: a define. */",
     ...[...defines]

@@ -33,8 +33,8 @@ and each [chain](../reference/chains.md)'s tokens and contracts.
 
 ## Tokenized stocks
 
-Ethereum, Base and Solana also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)`
-reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. On Solana each is a
+Ethereum, Base and Solana also register tokenized stocks, named the same way: `self.SPCXc` is how
+many of Coinbase's SpaceX tokens the Pot holds on Base, and `Base.SPCXc.address` is its address. On Solana each is a
 Token-2022 mint that a program passes to `@sauce/token`'s functions (`balanceOf(TSLAx, account)`),
 and `Solana.TSLAx.mint` is the mint. [Tokenized stocks](../reference/tokens.md#tokenized-stocks) has
 the issuers, how a symbol is spelled and what differs from a plain ERC-20, and each chain's page in
@@ -184,7 +184,7 @@ These are SauceScript route-body fragments:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000);
-let balance = USDC.balanceOf(self);
+let balance = self.USDC;
 ```
 
 For a token absent from the registry, use `Token(address)`:
@@ -193,7 +193,38 @@ For a token absent from the registry, use `Token(address)`:
 Token(0x1111111111111111111111111111111111111111).approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
-Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods. The shorthand `self.USDC` reads the executing contract's balance; `USDC.balanceOf(self)` makes the same intent explicit. `self` refers to the executing contract, which is the Pot in the EVM route path.
+Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods.
+
+### Balances
+
+A balance is the holder, a dot, and the token. Any address or contract can be the holder:
+`self.USDC` is the USDC your Pot holds, `recipient.TSLAx` is the TSLAx `recipient` holds, and
+`UniswapV4.PoolManager.WETH` is the WETH sitting in Uniswap's PoolManager. It is a shorter way to
+write `USDC.balanceOf(recipient)`, and compiles to exactly the same program.
+
+The chain's own coin works the same way: `self.ETH` is the ETH your Pot holds (`ctx.selfBalance()`),
+`recipient.ETH` is `ctx.balance(recipient)`, and on Solana `self.SOL` is your Pot's SOL.
+
+The holder can be:
+
+- **On an EVM chain**: any address. That is `self` (the Pot), a variable or parameter of the
+  program, an address written out, a protocol contract (`Aave.Pool`), a contract given an address
+  (`UniswapV3.Pool(pool).USDC` reads `pool`'s balance), or a call that returns an address
+  (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named
+  `self` reads that variable's balance.
+- **A token's own contract too**: `WETH.ETH` is the ETH locked in the WETH contract, and `USDC.WETH`
+  is the WETH held by the USDC contract. On Solana, `USDC.SOL` is the SOL in the USDC mint's
+  account.
+- **On Solana**: `self` (the Pot), `Solana.owner`, an `Address` parameter of `main`, a token's
+  mint, or a 32-byte key written out. The holder has to be known when the transaction is built, because Sauce adds the
+  holder's account to it ([Solana](solana.md)).
+
+Because `<anything>.USDC` reads a balance, a record or a list cannot have a field named like a
+token or the chain's coin: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to
+name the field otherwise (`usdc` is fine). On a chain whose coin shares its symbol with a token,
+as Arc's USDC does, it refuses the shorthand for that symbol and asks which you mean.
+
+A token named with `Token(address)` has no short form: write `Token(address).balanceOf(holder)`.
 
 ### Writes follow SafeERC20
 

@@ -51,14 +51,14 @@ function main(
     }
   }
   require(pool != 0, "no pool of USDC and this token has liquidity short of the limit");
-  const before = USDC.balanceOf(self);
+  const before = self.USDC;
   require(before >= budget, "the budget is not in the Pot");
 
   const bought = uniswapV3(pool, USDC, token, budget, sqrtPriceLimitX96, 0, recipient);
   require(bought >= minOut, "bought less than minOut");
 
   // What the pool took, measured; the rest of the budget goes to the recipient too.
-  const spent = before - USDC.balanceOf(self);
+  const spent = before - self.USDC;
   if (spent < budget) {
     USDC.transfer(recipient, budget - spent);
   }

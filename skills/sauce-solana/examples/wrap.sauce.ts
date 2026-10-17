@@ -25,5 +25,5 @@ function main(lamports: Uint256): Uint256 {
   );
   // SPL Token's SyncNative: instruction 17.
   svm.call(Solana.tokenProgram, [potWsol], hex`11`);
-  return WSOL.balanceOf(ctx.self());
+  return self.WSOL;
 }

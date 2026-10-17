@@ -74,6 +74,8 @@ import {
 import { collectVenueMethods, isVenueProtocol, unrollPoolKeyLoops } from "./svm-venue-methods.js";
 import { ACCOUNT_EXPRESSION_ROOT, collectAccountExpressions } from "./svm-account-expressions.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
+import { holderShapes, notAnAddress, reservedNameError } from "./balance-holder.js";
+import { nearMatches } from "./unknown-global.js";
 
 const TOKEN_LIBRARY = "@sauce/token";
 
@@ -116,6 +118,8 @@ export function rewriteSvmTokenSyntax(
   rows: readonly SvmTokenRow[],
   /** Compile-time values a holder may name, as a key (`SvmLowering`'s `keys`). */
   keys?: ReadonlyMap<string, bigint>,
+  /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads. */
+  native?: string,
 ): SvmTokenRewriteResult {
   // Before parsing: a program that names neither `Token`, a symbol nor a venue has nothing to lower.
   // The scan stops at the first it meets; a mention in a comment only costs the parse.
@@ -123,12 +127,17 @@ export function rewriteSvmTokenSyntax(
     !source.includes(TOKEN_FACTORY_NAME) &&
     !namesAny(
       source,
-      (name) => tokens.has(name) || isVenueProtocol(name) || name === ACCOUNT_EXPRESSION_ROOT,
+      (name) =>
+        tokens.has(name) ||
+        isVenueProtocol(name) ||
+        name === ACCOUNT_EXPRESSION_ROOT ||
+        name === native ||
+        name === "self",
     )
   ) {
     return { source, rewrote: false, derived: {} };
   }
-  const lowering = new SvmLowering(unrollPoolKeyLoops(source), tokens, rows, keys);
+  const lowering = new SvmLowering(unrollPoolKeyLoops(source), tokens, rows, keys, native);
   collectTokenMethods(lowering);
   collectVenueMethods(lowering);
   collectAccountExpressions(lowering);
@@ -327,32 +336,101 @@ function collectTokenMethods(l: SvmLowering): void {
     l.site(n, () => lowerMethod(site, l.symbolToken(symbol), symbol));
   });
 
-  // `<holder>.<Sym>`, a balance, in value position.
+  /** `Solana.<name>`, a member read, while the program declares no `Solana` of its own. */
+  const solanaMember = (node: AstNode): string | undefined =>
+    node.type === "MemberExpression" &&
+    (node as { computed?: boolean }).computed !== true &&
+    (node.object as AstNode).type === "Identifier" &&
+    nameOf(node.object as AstNode) === "Solana" &&
+    !l.declared.has("Solana") &&
+    (node.property as AstNode).type === "Identifier"
+      ? nameOf(node.property as AstNode)
+      : undefined;
+  /** The Pot as the program names it: `self`, `ctx.self()` or `Solana.self`. */
+  const isPot = (node: AstNode): boolean =>
+    (node.type === "Identifier" && nameOf(node) === "self" && !l.declared.has("self")) ||
+    solanaMember(node) === "self" ||
+    (methodCall(node)?.method === "self" &&
+      methodCall(node)!.object.type === "Identifier" &&
+      nameOf(methodCall(node)!.object) === "ctx" &&
+      !l.declared.has("ctx"));
+  /** A balance's holder: what the token methods take, or `Solana.self` and `Solana.owner`. */
+  const balanceHolder = (node: AstNode, spelled: string): Holder => {
+    if (isPot(node)) return { kind: "self" };
+    if (solanaMember(node) === "owner") {
+      const owner = `${l.account("owner", "owner", { signer: true })}.address`;
+      return { kind: "key", name: "owner", stem: "owner", value: owner };
+    }
+    return l.holderOf(node, "holder", spelled);
+  };
+  /** The native coin's balance: the lamports of the holder's own account, which the cook attaches. */
+  const nativeText = (holder: Holder): string => {
+    if (holder.kind === "self") return `ctx.balance(${l.authority()}.address)`;
+    if (holder.kind === "key" && l.isSymbol(holder.value)) {
+      l.mintAccount(l.symbolToken(holder.value));
+      return `ctx.balance(${holder.value})`;
+    }
+    if (holder.kind === "account") return `ctx.balance(${holder.param}.address)`;
+    l.account(holder.name, holder.stem === "account" ? "account" : `${holder.stem}Account`, {});
+    return `ctx.balance(${holder.value})`;
+  };
+  const shapes = holderShapes(program);
+
+  // `<holder>.<Sym>` and `<holder>.SOL`, a balance, in value position.
   walk(program, (n) => {
     if (n.type !== "MemberExpression" || (n as { computed?: boolean }).computed) return;
     if (exclusions.has(n)) return;
     const property = (n as { property?: AstNode }).property;
-    if (property?.type !== "Identifier" || !l.isSymbol(nameOf(property))) return;
+    if (property?.type !== "Identifier") return;
     const object = (n as { object?: AstNode }).object!;
-    const symbol = nameOf(property);
-    // `USDC.WETH` is neither a holder's balance nor anything else, and `Base.USDC` is another
-    // chain's token: both are left as they are, as on the EVM.
+    const name = nameOf(property);
+    const spelled = `\`${source.slice(n.start, n.end)}\``;
+    if (!l.isBalanceName(name)) {
+      // On Solana a Pot has no member but its balances: say so, rather than leave `self` to a pass
+      // that cannot take it. `Solana.self.address` and its like are an account's own fields.
+      const near = nearMatches(name, [
+        ...l.tokens.keys(),
+        ...(l.native === undefined ? [] : [l.native]),
+      ]);
+      if (isPot(n.object as AstNode) && (solanaMember(object) === undefined || near.length > 0)) {
+        throw new Error(
+          `${spelled} on Solana: \`${name}\` is not a token solana registers` +
+            (l.native === undefined ? "" : `, nor its native coin, ${l.native}`) +
+            "." +
+            (near.length === 0
+              ? ""
+              : ` Did you mean ${near.map((one) => `\`${one}\``).join(" or ")}?`) +
+            " `<holder>.<TOKEN>` reads the holder's balance of one; the Pot has no other member.",
+        );
+      }
+      return;
+    }
+    // `Base.USDC` is another chain's token, left as it is, as on the EVM. A mint is a holder:
+    // `USDC.WSOL` is the WSOL in the USDC mint's own token account, `USDC.SOL` the mint's lamports.
     if (object.type === "Identifier") {
       const holder = nameOf(object);
-      if (l.tokens.has(holder) || isChainKey(holder) || resolveNamespace(holder) !== undefined)
-        return;
+      if (isChainKey(holder) || resolveNamespace(holder) !== undefined) return;
+    }
+    const isNative = !l.isSymbol(name);
+    const what = notAnAddress(object, shapes);
+    if (what !== undefined) {
+      throw reservedNameError(
+        spelled,
+        source.slice(object.start, object.end),
+        what,
+        name,
+        isNative ? "native coin" : "token",
+      );
     }
     l.site(n, () => {
-      const spelled = `\`${source.slice(n.start, n.end)}\``;
-      l.requireInMain(n, spelled);
+      l.requireInMain(n, spelled, isNative ? "a balance of the native coin" : "a token method");
+      const holder = balanceHolder(object, spelled);
       l.splices.push({
         start: n.start,
         end: n.end,
-        replacement: balanceText(
-          l.symbolToken(symbol),
-          l.holderOf(object, "holder", spelled),
-          spelled,
-        ),
+        replacement: isNative
+          ? nativeText(holder)
+          : balanceText(l.symbolToken(name), holder, spelled),
       });
     });
   });

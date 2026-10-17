@@ -21,6 +21,7 @@ import { bytesToHex, hexToBytes } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
+import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
 import {
@@ -35,7 +36,7 @@ import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
-import { unknownGlobalError } from "./unknown-global.js";
+import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import {
@@ -782,6 +783,8 @@ function compileForChain(
   // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
   // On svm they are values only: the token syntax below still throws there, by name.
   const tokenMap = resolveTokenMap(chain, options.tokens);
+  // The chain's native coin, which `<holder>.<symbol>` reads the balance of as a token's is.
+  const native = nativeCoinSymbol(chain);
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. The compiler tells the two apart; nothing here has to.
@@ -870,13 +873,20 @@ function compileForChain(
           (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
         ),
       ),
+      native,
     );
     if (lowered.rewrote) {
       source = lowered.source;
       derivedAccounts = lowered.derived;
     }
   } else {
-    if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
+    absorb(
+      rewriteTokenMembers(
+        source,
+        tokenMap,
+        native === undefined ? undefined : { symbol: native, chain: chain.slug },
+      ),
+    );
     absorb(rewriteTokenFactory(source));
     if (tokenRewrote) source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
@@ -917,6 +927,7 @@ function compileForChain(
     // A token or protocol name the chain does not have, reported as one rather than as the call
     // the compiler could not lower. Asked only of a program the compiler refused.
     throw (
+      unknownBalanceError(source, chain, { tokens: tokenMap.keys(), native }, error) ??
       unknownGlobalError(
         source,
         chain,
@@ -926,7 +937,8 @@ function compileForChain(
           tokens: tokenMap.keys(),
         },
         error,
-      ) ?? error
+      ) ??
+      error
     );
   }
   const { manifest, entryEncoding, ...compiled } = rs;
