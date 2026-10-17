@@ -31,6 +31,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `LTokenABI`
 
 `import LTokenABI from "./protocols/layerbank/LTokenABI.json";`
@@ -39,7 +44,7 @@ function main() {
 - `underlyingBalanceOf(address account) view returns (uint256)`
 - `borrowBalanceOf(address account) view returns (uint256)`
 - `exchangeRate() view returns (uint256)`
-- `underlying() view returns (address)`
+- `underlying() view returns (address)`: the address is a token
 
 ### `LayerBankCoreABI`
 

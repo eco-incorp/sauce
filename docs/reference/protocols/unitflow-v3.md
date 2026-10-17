@@ -88,11 +88,16 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `UnitFlowV3FactoryABI`
 
 `import UnitFlowV3FactoryABI from "./protocols/unitflow-v3/UnitFlowV3FactoryABI.json";` Speaks for: factory.
 
-- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`
+- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`: the address is a `UnitflowV3.Pool`
 - `feeAmountTickSpacing(uint24 fee) view returns (int24)`
 
 ### `UnitFlowV3PoolABI`
@@ -103,8 +108,8 @@ function main() {
 - `liquidity() view returns (uint128)`
 - `fee() view returns (uint24)`
 - `tickSpacing() view returns (int24)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 
 ### `UnitFlowV3QuoterABI`
 
@@ -117,4 +122,4 @@ function main() {
 `import UnitFlowV3RouterABI from "./protocols/unitflow-v3/UnitFlowV3RouterABI.json";` Speaks for: router.
 
 - `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`
-- `factory() view returns (address)`
+- `factory() view returns (address)`: the address is a `UnitflowV3.Factory`

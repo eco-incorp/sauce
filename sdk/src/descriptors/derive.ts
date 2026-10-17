@@ -13,6 +13,7 @@ import type {
   ContractCoverage,
   ContractDescriptor,
   DescriptorMethod,
+  MethodReturn,
   StateMutability,
 } from "./types.js";
 
@@ -72,6 +73,26 @@ export function buildMethods(abi: Abi): DescriptorMethod[] {
   }
   methodsByAbi.set(abi, methods);
   return methods;
+}
+
+/** One ABI's methods with the contracts they return, computed once as `buildMethods`'s are. */
+const returningByAbi = new WeakMap<Abi, DescriptorMethod[]>();
+
+/** `methods`, each annotated with the contracts its address outputs are (`returns`, by signature). */
+function withReturns(
+  abi: Abi,
+  returns: ReadonlyMap<string, readonly MethodReturn[]> | undefined,
+): readonly DescriptorMethod[] {
+  const methods = buildMethods(abi);
+  if (returns === undefined || returns.size === 0) return methods;
+  const cached = returningByAbi.get(abi);
+  if (cached !== undefined) return cached;
+  const annotated = methods.map((method) => {
+    const returned = returns.get(method.signature);
+    return returned === undefined ? method : { ...method, returns: returned };
+  });
+  returningByAbi.set(abi, annotated);
+  return annotated;
 }
 
 /**
@@ -136,14 +157,16 @@ function lazy<T>(target: object, key: string, compute: () => T): void {
 
 /**
  * Assembles one full ContractDescriptor from a link entry plus the protocol's already-resolved data.
- * `deployments` defaults to the protocol's catalog deployments. Methods, addresses and coverage are
- * computed when first read: the registry holds about 300 contracts, and a program names a few.
+ * `deployments` defaults to the protocol's catalog deployments; `returns` is the contracts the ABI's
+ * methods return, by signature (`RETURNED_CONTRACTS`). Methods, addresses and coverage are computed
+ * when first read: the registry holds about 300 contracts, and a program names a few.
  */
 export function buildDescriptor(
   link: ContractLink,
   protocolInfo: ProtocolInfo,
   abi: Abi | undefined,
   deployments: readonly ChainDeployment[] = protocolInfo.chains,
+  returns?: ReadonlyMap<string, readonly MethodReturn[]>,
 ): ContractDescriptor {
   const resolvedAbi: Abi = abi ?? [];
   const descriptor = {
@@ -155,7 +178,7 @@ export function buildDescriptor(
     abiExport: link.abiExport,
     abi: resolvedAbi,
   };
-  lazy(descriptor, "methods", () => buildMethods(resolvedAbi));
+  lazy(descriptor, "methods", () => withReturns(resolvedAbi, returns));
   lazy(descriptor, "perChainAddress", () =>
     buildPerChainAddress(deployments, link.roleKey, link.chains),
   );

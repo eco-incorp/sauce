@@ -18,6 +18,12 @@
  * cannot tell an indexed parameter from one in the data, and a wrong flag decodes no log at all. A real
  * log of each event, where the capture found one, must decode with the registry's declaration.
  *
+ * Where a target annotates a function's address output with the registry contract it returns
+ * (`returns`: a factory's pool, a pool's token), a real call must have returned a contract that
+ * dispatches every function of that contract's ABI, and where a verified ABI types the output as a
+ * contract (`contract ILBPair`), the annotation records it as `declared`. An annotation written
+ * before its capture says so (`uncaptured`), and fails once the capture has it.
+ *
  * `fixtures/registry-abi/targets.json` says which deployments evidence which export, and records
  * every exception with its reason: `exempt` (a deployment that legitimately differs, e.g. a bridged
  * token without the L1 token's functions), `unverified` (no verified source on Sourcify, Blockscout or
@@ -38,6 +44,8 @@ const FIXTURES = join(SDK, "test", "fixtures", "registry-abi");
 interface Param {
   readonly name?: string;
   readonly type: string;
+  /** A verified output's source type, kept where it names a contract: `contract ILBPair`. */
+  readonly internalType?: string;
   readonly components?: readonly Param[];
 }
 interface AbiFunction {
@@ -95,10 +103,42 @@ interface Instance {
   /** Ids into `fragments`. */
   readonly verified?: readonly string[];
 }
+/** A sample call of an annotated function, and the contract it returned. */
+interface CapturedReturn {
+  readonly protocol: string;
+  readonly abi: string;
+  /** The annotation's key: `getPool(address,address,uint24)`, or with a field path. */
+  readonly returns: string;
+  /** The ABI the annotation names, `<slug>/<Export>`. */
+  readonly target: string;
+  readonly chainId: number;
+  readonly address: string;
+  readonly args: readonly unknown[];
+  readonly returned?: string;
+  readonly error?: string;
+  /** The target ABI's selectors, as `Instance.selectors`, at the returned address. */
+  readonly selectors?: Readonly<Record<string, number | string | null>>;
+}
 interface Evidence {
   readonly fragments: Readonly<Record<string, Fragment>>;
   readonly instances: readonly Instance[];
   readonly logs?: readonly CapturedLog[];
+  readonly returns?: readonly CapturedReturn[];
+}
+/** One output annotated with the registry contract it returns. */
+interface Returned {
+  /** `<slug>/<Export>`: the ABI the returned contract speaks. */
+  readonly abi: string;
+  /** The call the capture makes: a deployment or instance this export is evidenced by. */
+  readonly sample: {
+    readonly chainId: number;
+    readonly address: string;
+    readonly args?: readonly unknown[];
+  };
+  /** The contract type a verified ABI declares for the output, `contract ILBPair`. */
+  readonly declared?: string;
+  /** Why the annotation has no captured evidence yet; stale once it has. */
+  readonly uncaptured?: string;
 }
 interface Target {
   readonly roles?: readonly string[];
@@ -111,6 +151,8 @@ interface Target {
   readonly unverifiable?: string;
   /** Signature -> the consumer that binds it. Removing one from `abis.ts` fails the suite. */
   readonly required?: Readonly<Record<string, string>>;
+  /** `<signature>[.<field>…]` -> the registry contract that address output is. */
+  readonly returns?: Readonly<Record<string, Returned>>;
 }
 
 const targets = JSON.parse(readFileSync(join(FIXTURES, "targets.json"), "utf-8"))
@@ -356,6 +398,123 @@ function markProblemsOf(slug: string, exportName: string, item: AbiMark): string
   return problems;
 }
 
+/** `getPool(address,address,uint24)` and the field path after it, as `returns` keys them. */
+function returnKey(key: string): { signature: string; path: string[] } {
+  let depth = 0;
+  for (let at = 0; at < key.length; at++) {
+    if (key[at] === "(") depth++;
+    if (key[at] === ")" && --depth === 0) {
+      const rest = key.slice(at + 1);
+      return { signature: key.slice(0, at + 1), path: rest === "" ? [] : rest.slice(1).split(".") };
+    }
+  }
+  return { signature: key, path: [] };
+}
+
+/** The parameter `path` leads to in `outputs`: the one output, or a field of the record returned. */
+function outputAt(outputs: readonly Param[], path: readonly string[]): Param | undefined {
+  if (path.length === 0) return outputs.length === 1 ? outputs[0] : undefined;
+  let fields: readonly Param[] | undefined =
+    outputs.length === 1 && outputs[0]!.type === "tuple" ? outputs[0]!.components : outputs;
+  let found: Param | undefined;
+  for (const name of path) {
+    found = fields?.find((field) => field.name === name);
+    if (found === undefined) return undefined;
+    fields = found.components;
+  }
+  return found;
+}
+
+/** Everything wrong with one `returns` annotation, against its sample call's evidence. */
+function returnProblems(
+  slug: string,
+  exportName: string,
+  key: string,
+  returned: Returned,
+): string[] {
+  const problems: string[] = [];
+  const { signature: sig, path } = returnKey(key);
+  const fn = registry[slug]![exportName]!.find((f) => signature(f) === sig);
+  if (fn === undefined) return [`${exportName} declares no ${sig}`];
+  if (outputAt(fn.outputs ?? [], path)?.type !== "address") {
+    return [`${key} is not an address ${sig} returns`];
+  }
+  const [targetSlug, targetExport] = returned.abi.split("/") as [string, string];
+  const targetFns = registry[targetSlug]?.[targetExport];
+  if (targetFns === undefined) return [`${returned.abi} is no registry ABI export`];
+
+  // The sample calls a contract this export is evidenced by: a deployment of its roles, or an
+  // instance it names.
+  const target = targets[slug]![exportName]!;
+  const { chainId, address } = returned.sample;
+  const evidenced = [
+    ...(target.roles ?? []).flatMap((role) =>
+      deployments[slug]!.filter((d) => d.chainId === chainId).map((d) => d.addresses[role]),
+    ),
+    ...(target.instances ?? []).filter((i) => i.chainId === chainId).map((i) => i.address),
+  ].map((a) => a?.toLowerCase());
+  if (!evidenced.includes(address.toLowerCase())) {
+    problems.push(
+      `the sample calls ${chainId}:${address}, which ${exportName} is not evidenced by`,
+    );
+  }
+
+  // What verified ABIs declare the output to be.
+  const declared = new Set<string>();
+  for (const instance of evidence.instances) {
+    if (instance.protocol !== slug || instance.abi !== exportName) continue;
+    for (const id of instance.verified ?? []) {
+      const verified = evidence.fragments[id]!;
+      if (verified.type !== undefined || verified.signature !== sig) continue;
+      const internal = outputAt(verified.outputs ?? [], path)?.internalType;
+      if (internal !== undefined) declared.add(internal);
+    }
+  }
+  if (declared.size > 0 && !declared.has(returned.declared ?? "")) {
+    problems.push(
+      `a verified ABI declares it as ${[...declared].join(" or ")}: record that as \`declared\``,
+    );
+  }
+
+  const captured = (evidence.returns ?? []).find(
+    (r) => r.protocol === slug && r.abi === exportName && r.returns === key,
+  );
+  if (captured === undefined) {
+    if (returned.uncaptured === undefined) problems.push(`not captured — recapture ${slug}`);
+    return problems;
+  }
+  if (returned.uncaptured !== undefined) {
+    problems.push(`stale \`uncaptured\`, the capture now has it: ${returned.uncaptured}`);
+  }
+  if (returned.declared !== undefined && !declared.has(returned.declared)) {
+    problems.push(`\`declared\` ${returned.declared}, which no captured verified ABI declares`);
+  }
+  if (
+    captured.target !== returned.abi ||
+    captured.chainId !== chainId ||
+    captured.address !== address.toLowerCase() ||
+    JSON.stringify(captured.args) !== JSON.stringify(returned.sample.args ?? [])
+  ) {
+    problems.push(`the capture is of another sample or ABI — recapture ${slug}`);
+    return problems;
+  }
+  if (captured.error !== undefined) return [...problems, `the sample call: ${captured.error}`];
+  for (const targetFn of targetFns) {
+    const selector = toFunctionSelector(signature(targetFn));
+    const at = captured.selectors?.[selector];
+    if (at === undefined) {
+      problems.push(
+        `${signature(targetFn)} was not captured at the returned contract — recapture ${slug}`,
+      );
+    } else if (at === null) {
+      problems.push(
+        `the returned contract ${chainId}:${captured.returned} does not dispatch ${signature(targetFn)}`,
+      );
+    }
+  }
+  return problems;
+}
+
 describe("registry ABI evidence: coverage", () => {
   it("every abis.ts export has a target, and every target names a real export", () => {
     const missing = slugs.flatMap((slug) =>
@@ -478,9 +637,23 @@ for (const slug of slugs) {
           expect(markProblemsOf(slug, exportName, item)).toEqual([]);
         });
       }
+      for (const [key, returned] of Object.entries(targets[slug]![exportName]!.returns ?? {})) {
+        it(`${exportName}.${key} -> ${returned.abi}`, () => {
+          expect(returnProblems(slug, exportName, key, returned)).toEqual([]);
+        });
+      }
     }
   });
 }
+
+describe("registry ABI evidence: returned contracts", () => {
+  it("every captured return is of an annotation the targets still make", () => {
+    const orphans = (evidence.returns ?? [])
+      .filter((r) => targets[r.protocol]?.[r.abi]?.returns?.[r.returns] === undefined)
+      .map((r) => `${r.protocol}.${r.abi} ${r.returns} — recapture ${r.protocol}`);
+    expect(orphans).toEqual([]);
+  });
+});
 
 describe("registry ABI evidence: real logs decode with the registry's events", () => {
   const logs = evidence.logs ?? [];

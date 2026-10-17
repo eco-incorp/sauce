@@ -88,6 +88,33 @@ test("ABI-derived protocol methods, address values, and ambient chain identity t
   ).toEqual([]);
 });
 
+test("an output the registry knows the contract of is typed as that contract", () => {
+  expect(
+    diagnostics(`
+    const routeBody = () => {
+      const liquidity: bigint = UniswapV3.Factory.getPool(USDC, WETH, 500n).liquidity();
+      const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+      const decimals: bigint = pool.token0().decimals();
+      pool.token1().transfer(0x1234n, 1n);
+      const active: bigint = TraderJoe.LBFactory.getLBPairInformation(USDC, WETH, 10n).LBPair.getActiveId();
+      const earned: bigint = Convex.Booster.poolInfo(9n).crvRewards.earned(pool);
+      const fee: bigint = AerodromeSlipstream.NonfungiblePositionManager.factory().tickSpacingToFee(100n);
+      return liquidity + decimals + active + earned + fee + pool;
+    };
+    export {};
+  `),
+  ).toEqual([]);
+  // A method the contract lacks, a token write's result (SafeERC20 returns nothing), and a method on
+  // an address the registry does not know the contract of.
+  const errors = diagnostics(`
+    UniswapV3.Factory.getPool(USDC, WETH, 500n).liquidty();
+    const sent: boolean = UniswapV3.Pool(0x1234n).token0().transfer(0x1234n, 1n);
+    Curve.AddressProvider.get_registry().pool_count();
+    export {};
+  `);
+  expect(errors).toHaveLength(3);
+});
+
 test("unsupported names and ABI argument shapes remain TypeScript errors", () => {
   const errors = diagnostics(`
     USDC.aproove(0x1234n, 1n);

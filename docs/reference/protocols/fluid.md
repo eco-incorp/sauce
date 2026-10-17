@@ -127,6 +127,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `FluidLendingABI`
 
 `import FluidLendingABI from "./protocols/fluid/FluidLendingABI.json";`
@@ -134,7 +139,7 @@ function main() {
 - `deposit(uint256 assets, address receiver) returns (uint256 shares)`
 - `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
 - `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
-- `asset() view returns (address)`
+- `asset() view returns (address)`: the address is a token
 
 ### `FluidVaultABI`
 

@@ -91,6 +91,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `MaverickV2FactoryABI`
 
 `import MaverickV2FactoryABI from "./protocols/maverick/MaverickV2FactoryABI.json";` Speaks for: v2Factory.
@@ -104,8 +109,8 @@ function main() {
 - `getState() view returns ((uint128 reserveA, uint128 reserveB, int64 lastTwaD8, int64 lastLogPriceD8, uint40 lastTimestamp, int32 activeTick, bool isLocked, uint32 binCounter, uint8 protocolFeeRatioD3))`
 - `fee(bool tokenAIn) view returns (uint256)`
 - `tickSpacing() view returns (uint256)`
-- `tokenA() view returns (address)`
-- `tokenB() view returns (address)`
+- `tokenA() view returns (address)`: the address is a token
+- `tokenB() view returns (address)`: the address is a token
 
 ### `MaverickV2RouterABI`
 

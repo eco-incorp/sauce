@@ -32,6 +32,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `BaseRewardPoolABI`
 
 `import BaseRewardPoolABI from "./protocols/convex/BaseRewardPoolABI.json";`
@@ -48,4 +53,4 @@ function main() {
 - `deposit(uint256 _pid, uint256 _amount, bool _stake) returns (bool)`
 - `withdraw(uint256 _pid, uint256 _amount) returns (bool)`
 - `poolLength() view returns (uint256)`
-- `poolInfo(uint256) view returns (address lptoken, address token, address gauge, address crvRewards, address stash, bool shutdown)`
+- `poolInfo(uint256) view returns (address lptoken, address token, address gauge, address crvRewards, address stash, bool shutdown)`: `lptoken` is a token, `token` is a token, `crvRewards` is a `Convex.BaseRewardPool`
