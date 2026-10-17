@@ -177,11 +177,12 @@ export const SVM_FUNCTIONS = [
 /** An instruction's own: `…Cpi`, which sends it, or `…Data`, which builds its data. */
 export const svmInstructionForm = (name: string): boolean => /(Cpi|Data)$/.test(name);
 
-/** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
 /** The eight concentrated-liquidity swaps at a price held to a stop, which take it after the
  *  recipient. */
 export const SVM_STOPPED =
   /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm|orcaWhirlpool|cropper|defituna|crema)Stopped$/;
+
+/** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
 
 export const svmArguments = (name: string): string[] =>
   name === "manifest"

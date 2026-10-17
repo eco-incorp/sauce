@@ -600,7 +600,48 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         const estimate = cost.base + cost.tick * walk.crossed.length;
         expect(estimate).toBeGreaterThanOrEqual(outcome.venueUnits!);
         expect(estimate * 10).toBeLessThanOrEqual(outcome.venueUnits! * 11);
+        // What it buys, as the walk's liquidity at each stretch says, within a thousandth, and a
+        // hundredth on Raydium's code, whose ticks may also hold limit orders the walk fills: the
+        // order the pools are given in reads it.
+        const gap = walk.output - outcome.received;
+        const within = p.venue === "orca-whirlpool" || p.venue === "crema" ? 1000n : 100n;
+        expect((gap < 0n ? -gap : gap) * within).toBeLessThanOrEqual(walk.output);
       }
+    },
+    300_000,
+  );
+
+  // The Stopped form's own checks: a stop of 1 skips the pool, moving nothing; and a pool whose
+  // price has moved further from its stop than the start bound the stop carries (from bit 192) is
+  // skipped too, so a held swap crosses no more than its stop allowed for. Where it has not, it
+  // trades as the plain swap would to the same limit.
+  it.each(["RaydiumClmm", "PancakeswapClmm", "OrcaWhirlpool", "Cropper", "Defituna", "Crema"])(
+    "%s: the Stopped form skips for a stop of 1, and for a price past its start bound",
+    async (venue) => {
+      const entry = VENUES.find((one) => one.venue === venue)!;
+      const order = await orderFor(entry);
+      const p = order.pool;
+      const paysA = key(USDC) < key(order.buy);
+      const program = compiled(`${lower(venue)}Stopped`);
+      const skip = succeeded(await cook(program, { ...order, stop: 1n }));
+      expect([skip.received, skip.paid, skip.returned]).toEqual([0n, 0n, 0n]);
+      const tickAt =
+        { "orca-whirlpool": 81, cropper: 81, defituna: 183, crema: 206 }[p.venue as "crema"] ?? 269;
+      const tick = BigInt(i32(BYTES.get(p.pool)!, tickAt)) + (1n << 31n);
+      // The price as it lies: inside the bound, and one tick past it, the way the walk goes.
+      const bound = (from: bigint) => order.priceLimit | (from << 192n);
+      const passed = succeeded(
+        await cook(program, { ...order, stop: bound(paysA ? tick + 1n : tick - 1n) }),
+      );
+      expect(passed.received).toBeGreaterThan(0n);
+      const moved = succeeded(
+        await cook(program, { ...order, stop: bound(paysA ? tick - 1n : tick + 1n) }),
+      );
+      expect([moved.received, moved.paid]).toEqual([0n, 0n]);
+      // The bound unset (0 in its bits): the limit alone, as the plain swap trades to it.
+      const plain = succeeded(await cook(compiled(lower(venue)), order));
+      const unbounded = succeeded(await cook(program, { ...order, stop: order.priceLimit }));
+      expect(unbounded.received).toBe(plain.received);
     },
     300_000,
   );
