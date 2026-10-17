@@ -180,6 +180,15 @@ address in `deployments` is recorded, not proof of live code.
     the address the cook's `AccountResolution` takes, as `sauce run` does; a venue namespace's
     `slot:@pool:USDC.<part>` needs `load`, from which `svmPoolSlot(load, pool, payMint)` reads the
     pool's nine accounts.
+  - A venue namespace's swap at a price is listed in `stoppable`, by its stop's derivation
+    (`stop:<pool>:<token>:<limit>`). `svmProgramStops(program, chain, accounts, integers, load)`
+    from `@eco-incorp/sauce/svm` works each stop out as `sauce` does (`accounts`: each derived name
+    resolved; `integers`: main's `Uint256` arguments by name), the pool buying the most per unit first within one
+    cook's compute units, and names in `binding` the swaps to hold. Compile again with
+    `{ stops: binding }`: those swaps call the Stopped form, each stop a `Uint256` added to `main`
+    after the accounts (`derivedValues`, never one of `entryParams`), encoded after main's own
+    arguments as `svmStopValues(stops, program)` gives them. With nothing binding, the plain
+    program is the one to cook. `SVM_SWAP_COSTS` is the cost table.
   - Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build pool configs,
     quote source and swap CPIs over an account loader you supply; a venue swap they build uses a
     minimum output of one, so enforce the real minimum with a balance delta in the program.

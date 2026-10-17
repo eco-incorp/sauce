@@ -7,9 +7,12 @@
 // Invariant's is the exception: its program refuses a swap that reaches its limit with input left
 // (custom error 0x1778), which aborts the whole transaction, so there the input must fit inside the
 // limit. Every swap is EXACT INPUT up to the limit: nothing here can express an exact-output swap.
-// Every function takes RUN-TIME arguments. There are four forms of each venue's swap:
+// Every function takes RUN-TIME arguments. There are four forms of each venue's swap, and on the eight
+// concentrated-liquidity venues a fifth, held to a stop (below, "Held to a stop"):
 //
 //   <venue>(slot, trader, amountIn, priceLimit, minOut, recipient)        at a price
+//   <venue>Stopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop)
+//                                                                         at a price, held to stop
 //   <venue>AtLimit(slot, trader, amountIn, limit, minOut, recipient)      at the pool's own limit
 //   <venue>Cpi(program, accounts, source, amountIn, limit, …)             its instruction alone
 //   <venue>Data(amountIn, limit, …)                                       its instruction's data
@@ -1652,6 +1655,319 @@ export function phoenix(
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapPhoenix(slot, trader, amountIn, priceLimit, recipient);
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Held to a stop
+// ---------------------------------------------------------------------------------------------
+
+// The eight concentrated-liquidity swaps at a price, each held to `stop` as well, which the cook's
+// builder works out from the pool's tick arrays so that the pool's swap stays within its share of
+// the cook's compute units (a swap crossing many initialized ticks runs the transaction out of them,
+// failing it whole). Its low 192 bits are a tighter `priceLimit`, in its units, and the swap takes
+// the lower of the two; 0 is no stop. From bit 192 it carries the tick the pool's price may lie no
+// further from the stop than, as the window reads ticks: the price the walk was priced from, with the
+// builder's headroom. A price that has moved further since skips the pool, so a held swap crosses no
+// more initialized ticks than were allowed for, while those in its way stay as they were read. A
+// bound past every tick the walk's way (1 paying the lower-key token, 2^32 - 1 the other) skips the
+// pool whatever its price. A program written with the venue namespaces calls one of these only for a
+// pool whose stop binds, and the plain swap otherwise, so a cook no stop binds runs exactly the
+// plain swaps.
+
+export function raydiumClmmStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
+  require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 269);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapRaydium(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function pancakeswapClmmStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
+  require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 269);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapRaydium(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function byrealStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
+  require(owned && slot[0].address == pool.owner, "not a Byreal pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 269);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapRaydium(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function stabbleClmmStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
+  require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 269);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapRaydium(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function orcaWhirlpoolStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
+  require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 81);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapWhirlpool(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function cropperStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
+  require(owned && slot[0].address == pool.owner, "not a Cropper pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 81);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapCropper(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function defitunaStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
+  require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 183);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapDefituna(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+export function cremaStopped(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+  stop: Uint256,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
+  require(owned && slot[0].address == pool.owner, "not a Crema pool");
+  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
+  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
+  const from = stop >> 192;
+  if (from != 0) {
+    const live = tickAt(pool, 206);
+    if (trader[2].address < trader[3].address ? live > from : live < from) {
+      return 0;
+    }
+  }
+  const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapCrema(
+    slot,
+    trader,
+    amountIn,
+    limit != 0 && limit < priceLimit ? limit : priceLimit,
+    recipient,
+  );
   return settled(trader[1], recipient, held, before, minOut);
 }
 

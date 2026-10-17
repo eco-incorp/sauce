@@ -368,6 +368,21 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
 - **`recipient`** is the token account the output lands in; Crema and Phoenix pay only into the
   authority's own.
 
+Each of the eight concentrated-liquidity functions also has a Stopped form, the same swap with its
+limit held to a `stop` as well. The stop's low 192 bits are a tighter `priceLimit`, and the swap
+takes the lower of the two (`0` none). From bit 192 it carries a start bound, a tick: the swap skips
+the pool if its price has moved further than that from the stop. A bound past every tick the walk's
+way skips the pool whatever its price: `1` paying the pool's lower-key token, `2^32 - 1` paying the
+other.
+
+```text
+orcaWhirlpoolStopped(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account, stop): Uint256
+```
+
+A program written with the venue namespaces (`Orca.Whirlpool.swap(…)`) is compiled to it only for a
+pool whose stop binds, as the `sauce` command works the stops out (see [Stops](#stops)); every other
+swap is the plain function, so a program no stop binds is the same program, byte for byte.
+
 Each venue's function requires the slot's program to be its venue's and the pool's owner before it
 reads the pool, because the authority signs the swap. These are the caller's accounts, so each
 reverts rather than skips: a slot naming another program, a pool of another venue or of none
@@ -425,6 +440,68 @@ function main(
   return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output);
 }
 ```
+
+### Stops
+
+A swap at a price on a concentrated-liquidity pool walks from one initialized tick to the next until
+its price reaches its limit or its input runs out, and the pool's program charges compute units for
+each tick it crosses (about 7,000 on Orca, 9,000 on Raydium, 13,000 to 16,000 on the others). A deep
+pool with a generous limit can cross a hundred or more, and the transaction, which has 1,400,000,
+then runs out and fails, every other pool's trade with it. The router cannot read how many units are
+left, so the `sauce` command decides each pool's walk ahead of time:
+
+1. It reads each pool's tick arrays, the ones its slot passes, and counts the initialized ticks
+   between the pool's price and its limit, and what the walk buys.
+2. It prices that walk from a table of each venue's cost, measured on the venues' own programs: a
+   fixed amount for the swap, an amount for each tick crossed (at least the steepest step measured),
+   and three more crossings kept back.
+3. It gives the transaction's units first to the pool whose walk buys the most per unit, then the
+   next. Each walks its whole way while the units last. The pool that the rest no longer covers is
+   held a tick short of the first initialized tick it cannot pay to cross; a pool left too little for
+   its swap at all is skipped.
+
+A swap in a loop runs as many times as the loop does. Where the loop writes its count out
+(`for (let i = 0; i < 3; i++)`, `for (const x of [a, b])`), the command charges the swap's own units
+for each run, and its walk once: every run walks the same way to the same limit, starting where the
+last one left the price. Where the count is a value or a negative number, or is more runs than one
+cook pays for (so the program must leave the loop sooner, at a `break`), how many units the swap
+leaves the others is known only as the cook runs, so no pool is held: every swap is the plain one,
+and the command says so (`noComputeStops`).
+
+A held or skipped pool's swap is compiled to its Stopped form, its `stop` a tighter `priceLimit` the
+command finds with the router's own arithmetic, and the start bound three tick-spacing positions
+past the pool's price then; every other pool's swap stays the plain one.
+
+The stops lower the risk that a wide limit runs the cook out of compute units; they do not remove
+it. Each stop is fixed when the cook is built, from the pools' prices then.
+
+- A held pool whose price has moved more than three positions further from its stop by the time the
+  cook runs is skipped, so it crosses at most three more initialized ticks than were priced, and
+  those three are charged. That holds while the ticks in its way stay as they were read: a
+  liquidity position opened inside its walk before the cook lands adds a crossing nobody priced.
+- A pool that walks its whole way runs the plain swap, unchecked. A price that moves further than
+  three positions can still cost it more than was priced.
+- How far prices move in that time has not been measured yet; three positions is a first allowance.
+
+`sauce simulate` and `sauce run` check the stops in a simulation first: a cook that succeeds with a
+pool held is worked out again against the units the simulation measured, and kept only if three
+more crossings at every pool still fit; one that still runs out is worked out again with less,
+twice, then refused. `sauce tx` does no simulation: there the table is all there is, and the cook
+it builds can differ from the one `sauce simulate` reports.
+
+Each prints a line for a pool a stop held or skipped, and gives every pool's stop in
+`computeStops`. Here the SpaceX order of the distributed swap is simulated at 1.1 times the dearest
+pool's price: Raydium's pool, which buys the most per unit, walks its whole way, and the other two
+share what is left.
+
+```text
+Byreal.CLMM.pool(USDC, SPCX_US, 1000) stops at 153.799 USDC per SPCX_US, short of its limit: reaching it would cross 22 initialized ticks, about 457,500 compute units, past its share of 314,400
+Pancakeswap.CLMM.pool(USDC, SPCX_US, 800) is skipped: the pools ahead of it leave too few compute units for its swap (about 135,000 to its limit, 2 initialized ticks)
+```
+
+From TypeScript, `SVM_SWAP_COSTS` in `@eco-incorp/sauce/svm` is the cost table, by each venue's
+program id: each venue program's own units under the engine's call, the invoke itself not counted.
+`svmPoolWalk` counts a pool's walk with it.
 
 ### The instruction alone
 

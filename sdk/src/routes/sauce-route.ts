@@ -574,6 +574,25 @@ export interface CompiledSauceProgram {
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**
+   * The `Uint256` values the SDK added to `main` after its accounts, in order, which no caller
+   * gives: each with how the cook's builder works it out — on Solana, a venue's swap at a price
+   * takes its pool's `stop` (`stop:<pool>:<token>:<limit>`, `svm/compute-stops.ts`). They are
+   * encoded after the caller's arguments; `entryParams` leaves them out. Absent when it added none.
+   */
+  readonly derivedValues?: readonly DerivedValue[];
+  /**
+   * On Solana, each venue's swap at a price that a stop could hold, by its stop's derivation
+   * (`stop:<pool>:<token>:<limit>`), in source order: what the cook's builder works stops out for,
+   * and names in `stops` to compile the ones that bind. Absent when the program has none.
+   */
+  readonly stoppable?: readonly string[];
+  /**
+   * How many times each swap in `stoppable` that stands in a loop runs, by its derivation: the
+   * loop's count where the loop writes it out (`for (let i = 0; i < 3; i++)`, `for (const x of
+   * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
+   */
+  readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
    * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
    * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
    * Portal transactions that publish it, can be built without running the program. One that
@@ -585,6 +604,14 @@ export interface CompiledSauceProgram {
   readonly source: string;
 }
 
+/** A `Uint256` the SDK added to `main`, which the cook's builder works out. */
+export interface DerivedValue {
+  readonly name: string;
+  readonly type: "Uint256";
+  /** How it is worked out: `stop:<pool>:<token>:<limit>`. */
+  readonly derive: string;
+}
+
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
@@ -594,6 +621,13 @@ export interface SauceProgramOptions extends SauceCompileOptions {
    * out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
+  /**
+   * On Solana, the venues' swaps at a price to hold to a stop, each by its stop's derivation (one of
+   * `stoppable`): each is compiled to the Stopped form, its stop a value added to `main`
+   * (`derivedValues`). Every other swap is the plain one. The `sauce` command names the swaps whose
+   * stop binds (`svm/compute-stops.ts`); leave it out for none.
+   */
+  readonly stops?: readonly string[];
 }
 
 /**
@@ -616,7 +650,7 @@ export function compileSauceProgram(
   options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
-  const { args, ...given } = options;
+  const { args, stops, ...given } = options;
   const bound = args === undefined ? undefined : bindEntryArguments(source, args);
   const taken = Object.keys(bound?.constants ?? {}).find((name) =>
     Object.hasOwn(given.defines ?? {}, name),
@@ -639,10 +673,19 @@ export function compileSauceProgram(
     bound?.source ?? source,
     { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
+    stops,
   );
+  const values = program.derivedValues ?? {};
   const entryParams = mainParams(program.source).filter(
-    (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
+    (param) =>
+      (resolved.kind !== "svm" || !/^Account\b/.test(param.type)) &&
+      !Object.hasOwn(values, param.name),
   );
+  const derivedValues = Object.entries(values).map(([name, derive]): DerivedValue => ({
+    name,
+    type: "Uint256",
+    derive,
+  }));
 
   return {
     chain: resolved,
@@ -654,6 +697,9 @@ export function compileSauceProgram(
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     ...(program.derivedAccounts === undefined ? {} : { derivedAccounts: program.derivedAccounts }),
+    ...(derivedValues.length === 0 ? {} : { derivedValues }),
+    ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
+    ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
     intents: program.intents,
     source: program.source,
   };
@@ -755,6 +801,8 @@ function compileForChain(
   sauce: string,
   options: SauceCompileOptions,
   scope: RouteScope,
+  /** On Solana, the swaps at a price to hold to a stop (`SauceProgramOptions.stops`). */
+  stops: readonly string[] = [],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
@@ -762,6 +810,9 @@ function compileForChain(
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
   readonly derivedAccounts?: Readonly<Record<string, string>>;
+  readonly derivedValues?: Readonly<Record<string, string>>;
+  readonly stoppable?: readonly string[];
+  readonly stoppableRuns?: Readonly<Record<string, number | null>>;
   readonly intents: readonly LoweredIntent[];
 } {
   const chain = requireChain(destination);
@@ -861,6 +912,9 @@ function compileForChain(
   // On svm the same syntax lowers to @sauce/token's SVM arm instead, with the accounts each call
   // moves through added to `main`, and how each is derived reported beside the manifest.
   let derivedAccounts: Readonly<Record<string, string>> | undefined;
+  let derivedValues: Readonly<Record<string, string>> | undefined;
+  let stoppable: readonly string[] | undefined;
+  let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
   if (chain.kind === "svm") {
     const lowered = rewriteSvmTokenSyntax(
       source,
@@ -874,10 +928,14 @@ function compileForChain(
         ),
       ),
       native,
+      new Set(stops),
     );
     if (lowered.rewrote) {
       source = lowered.source;
       derivedAccounts = lowered.derived;
+      derivedValues = lowered.values;
+      stoppable = lowered.stoppable;
+      stoppableRuns = lowered.stoppableRuns;
     }
   } else {
     absorb(
@@ -955,6 +1013,9 @@ function compileForChain(
     entryEncoding,
     ...(manifest === undefined ? {} : { manifest }),
     ...(derivedAccounts === undefined ? {} : { derivedAccounts }),
+    ...(derivedValues === undefined ? {} : { derivedValues }),
+    ...(stoppable === undefined ? {} : { stoppable }),
+    ...(stoppableRuns === undefined ? {} : { stoppableRuns }),
     intents,
   };
 }
