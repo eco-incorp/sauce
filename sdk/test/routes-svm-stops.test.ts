@@ -111,3 +111,35 @@ describe("Solana swaps at a price no stop binds", () => {
     expect(Buffer.from(held.bytecode).equals(Buffer.from(plain.bytecode))).toBe(false);
   });
 });
+
+describe("each Solana swap at a price's stop, as the cook's builder names it", () => {
+  const twice =
+    "function main(amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+    "  let got = Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0);\n" +
+    "  got += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0);\n" +
+    "  return got;\n}\n";
+
+  it("names a second swap of the same pool, token and limit apart, so each is charged", () => {
+    expect(compileSauceProgram("solana", twice).stoppable).toEqual([
+      "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:@priceLimit",
+      "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:@priceLimit#2",
+    ]);
+  });
+
+  it("takes main's priceLimit only as main gave it: not one reassigned or declared again", () => {
+    const reassigned = swapAt("Orca.Whirlpool", 4).replace(
+      "  return",
+      "  priceLimit = priceLimit * 2;\n  return",
+    );
+    expect(compileSauceProgram("solana", reassigned).stoppable).toEqual([
+      "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:",
+    ]);
+    const literal = swapAt("Orca.Whirlpool", 4).replace(
+      "amountIn, priceLimit, 0",
+      "amountIn, 150, 0",
+    );
+    expect(compileSauceProgram("solana", literal).stoppable).toEqual([
+      "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:150",
+    ]);
+  });
+});

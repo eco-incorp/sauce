@@ -346,6 +346,17 @@ export function unrollPoolKeyLoops(source: string): string {
 /** The venue namespaces' sites, `<Protocol>.<Program>.swap(…)` and the `pool(…)` each names. */
 export function collectVenueMethods(l: SvmLowering): void {
   let literalPools = 0;
+  /** Every name the program assigns to (`x = …`, `x += …`, `x++`). */
+  const assigned = new Set<string>();
+  walk(l.program, (n) => {
+    const target =
+      n.type === "AssignmentExpression"
+        ? (n as { left?: AstNode }).left
+        : n.type === "UpdateExpression"
+          ? (n as { argument?: AstNode }).argument
+          : undefined;
+    if (target?.type === "Identifier") assigned.add(nameOf(target));
+  });
   /** The `pool(…)` calls a swap names as its pool: lowered with it. */
   const named = new Set<AstNode>();
   walk(l.program, (n) => {
@@ -426,8 +437,11 @@ export function collectVenueMethods(l: SvmLowering): void {
     let fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
     let stop = "";
     if (SVM_STOPPED_VENUES.has(namespace)) {
-      const derivation = `stop:${pool.name}:${tokenIn.name}:${limitOf(args[4]!)}`;
-      if (!l.stoppable.includes(derivation)) l.stoppable.push(derivation);
+      // A second swap of the same pool, token and limit is a stop of its own, charged apart.
+      const first = `stop:${pool.name}:${tokenIn.name}:${limitOf(args[4]!)}`;
+      let derivation = first;
+      for (let n = 2; l.stoppable.includes(derivation); n++) derivation = `${first}#${n}`;
+      l.stoppable.push(derivation);
       if (l.stopped.has(derivation)) {
         fn = `${fn}Stopped`;
         stop = `, ${l.value(derivation, `${pool.stem}Stop`)}`;
@@ -449,8 +463,13 @@ export function collectVenueMethods(l: SvmLowering): void {
    */
   function limitOf(node: AstNode): string {
     if (node.type === "Identifier") {
-      const param = l.param(nameOf(node));
-      return param?.type === "Uint256" ? `@${nameOf(node)}` : "";
+      // main's parameter as it was given: never declared again nor assigned to.
+      const name = nameOf(node);
+      const given =
+        l.param(name)?.type === "Uint256" &&
+        (l.declarations.get(name) ?? 0) === 1 &&
+        !assigned.has(name);
+      return given ? `@${name}` : "";
     }
     const value = integerLiteral(node, l.source);
 
