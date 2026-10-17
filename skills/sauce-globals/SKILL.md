@@ -59,14 +59,16 @@ bytes. The native coin takes it too: `self.ETH` is `ctx.selfBalance()`, `recipie
   (`UniswapV3.Pool(pool)` or `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that
   returns an address (`UniswapV4.StateView.poolManager()`); a program that declares its own `self`
   reads that variable;
+- a token's own contract too: `WETH.ETH` is the ETH locked in WETH, `USDC.WETH` the WETH the USDC
+  contract holds (on Solana, `USDC.SOL` is the mint's lamports, `USDC.WSOL` its own WSOL account's
+  balance);
 - on Solana, one known when the transaction is built, whose account is added to `main`: `self` (the
-  Pot), `Solana.owner`, an `Address` parameter of `main`, or a 32-byte key written out
-  (`sauce-solana`).
+  Pot), `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a 32-byte key written
+  out (`sauce-solana`).
 
 A record or a list is not a holder: on one, a property named like a token or the native coin is
-refused, since the name is reserved for the shorthand (`usdc:` is a fine field name). Neither is a
-token (`USDC.WETH` is refused: write `WETH.balanceOf(USDC)`), nor an interface with no address
-(`UniswapV3.Pool.WETH`). Where the native coin and a token share a symbol (Arc's USDC), the
+refused, since the name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an
+interface with no address (`UniswapV3.Pool.WETH`). Where the native coin and a token share a symbol (Arc's USDC), the
 shorthand is refused for it. `Token(address)` has no short form: its balance is
 `Token(address).balanceOf(holder)`.
 

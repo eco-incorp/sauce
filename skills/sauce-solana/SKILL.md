@@ -90,7 +90,8 @@ comes from.
   Pot and `main`'s arguments, so the program runs with `--args` alone. `sauce compile --json` lists
   each slot with its `derive`; `--account NAME=<value>` replaces one.
 - **A holder** is `self` (or `ctx.self()`), the Pot; `Solana.owner`; a parameter of `main` declared
-  `Address`; or a 32-byte key written out. Its balance is `<holder>.<TOKEN>` (`self.USDC`,
+  `Address`; a token's mint (`USDC.WSOL`, the USDC mint's own WSOL account); or a 32-byte key
+  written out. Its balance is `<holder>.<TOKEN>` (`self.USDC`,
   `to.USDC`), the same read as `USDC.balanceOf(to)`, and its lamports `<holder>.SOL` (`self.SOL`),
   read with `ctx.balance` from its account, which is added to `main`. For a holder computed as the
   program runs, take

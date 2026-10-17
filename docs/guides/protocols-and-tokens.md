@@ -185,16 +185,17 @@ The holder can be:
   (`UniswapV3.Pool(pool).USDC` reads `pool`'s balance), or a call that returns an address
   (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named
   `self` reads that variable's balance.
-- **On Solana**: `self` (the Pot), `Solana.owner`, an `Address` parameter of `main`, or a 32-byte
-  key written out. The holder has to be known when the transaction is built, because Sauce adds the
+- **A token's own contract too**: `WETH.ETH` is the ETH locked in the WETH contract, and `USDC.WETH`
+  is the WETH held by the USDC contract. On Solana, `USDC.SOL` is the SOL in the USDC mint's
+  account.
+- **On Solana**: `self` (the Pot), `Solana.owner`, an `Address` parameter of `main`, a token's
+  mint, or a 32-byte key written out. The holder has to be known when the transaction is built, because Sauce adds the
   holder's account to it ([Solana](solana.md)).
 
 Because `<anything>.USDC` reads a balance, a record or a list cannot have a field named like a
 token or the chain's coin: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to
-name the field otherwise (`usdc` is fine). It also refuses `USDC.WETH`, since a token as the holder
-reads like a member of the token (write `WETH.balanceOf(USDC)`), and on a chain whose coin shares
-its symbol with a token, as Arc's USDC does, it refuses the shorthand for that symbol and asks
-which you mean.
+name the field otherwise (`usdc` is fine). On a chain whose coin shares its symbol with a token,
+as Arc's USDC does, it refuses the shorthand for that symbol and asks which you mean.
 
 A token named with `Token(address)` has no short form: write `Token(address).balanceOf(holder)`.
 
