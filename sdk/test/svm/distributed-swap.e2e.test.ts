@@ -40,6 +40,7 @@ import type { SvmSlot } from "../../src/svm/pool-slot.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
 import {
   svmProgramStops,
+  svmSkipStop,
   svmStopValues,
   type SvmProgramStops as SvmStops,
 } from "../../src/svm/compute-stops.js";
@@ -511,7 +512,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(of(RAYDIUM).stopTick).toBeUndefined();
     expect(of(BYREAL).stopTick).toBeDefined();
     expect(of(BYREAL).share).toBeLessThan(of(BYREAL).estimatedUnits);
-    expect(of(PANCAKE).stop).toBe(1n);
+    expect([of(PANCAKE).skipped, of(PANCAKE).stop]).toEqual([true, svmSkipStop(false)]);
     expect(priceOf(RAYDIUM)).toBe(ownLimit(RAYDIUM, wide, false));
     expect(priceOf(BYREAL)).toBeLessThan(ownLimit(BYREAL, wide, false));
     expect(priceOf(PANCAKE)).toBe(snapshotPrice(PANCAKE));

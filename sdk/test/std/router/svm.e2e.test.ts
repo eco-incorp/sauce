@@ -41,6 +41,7 @@ import {
   SVM_SWAP_FIXED,
   svmComputeStops,
   svmPoolWalk,
+  svmSkipStop,
   type SvmComputeStop,
   type SvmStopPool,
 } from "../../../src/svm/compute-stops.js";
@@ -645,20 +646,34 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     expect([far!.estimatedUnits, far!.rank, near!.rank]).toEqual([near!.estimatedUnits, 0, 1]);
   }, 120_000);
 
-  // The Stopped form's own checks: a stop of 1 skips the pool, moving nothing; and a pool whose
-  // price has moved further from its stop than the start bound the stop carries (from bit 192) is
-  // skipped too, so a held swap crosses no more than its stop allowed for. Where it has not, it
-  // trades as the plain swap would to the same limit.
+  // The Stopped form's own checks: a pool whose price has moved further from its stop than the
+  // start bound the stop carries (from bit 192) is skipped, moving nothing, so a held swap crosses no
+  // more than its stop allowed for, and a bound past every tick the walk's way (`svmSkipStop`) skips
+  // it whatever its price, paying either token. Where the price has not moved past, it trades as the
+  // plain swap would to the same limit.
   it.each(["RaydiumClmm", "PancakeswapClmm", "OrcaWhirlpool", "Cropper", "Defituna", "Crema"])(
-    "%s: the Stopped form skips for a stop of 1, and for a price past its start bound",
+    "%s: the Stopped form skips for a skip stop either way, and for a price past its start bound",
     async (venue) => {
       const entry = VENUES.find((one) => one.venue === venue)!;
       const order = await orderFor(entry);
       const p = order.pool;
       const paysA = key(USDC) < key(order.buy);
       const program = compiled(`${lower(venue)}Stopped`);
-      const skip = succeeded(await cook(program, { ...order, stop: 1n }));
-      expect([skip.received, skip.paid, skip.returned]).toEqual([0n, 0n, 0n]);
+      const back: Order = {
+        ...order,
+        pay: order.buy,
+        buy: order.pay,
+        amountIn: 10n * 10n ** 9n,
+        priceLimit: (allIn(p, !paysA) * 10003n) / 10000n,
+      };
+      for (const [one, lowerKey] of [
+        [order, paysA],
+        [back, !paysA],
+      ] as const) {
+        expect(succeeded(await cook(program, { ...one, stop: 0n })).received).toBeGreaterThan(0n);
+        const skip = succeeded(await cook(program, { ...one, stop: svmSkipStop(lowerKey) }));
+        expect([skip.received, skip.paid, skip.returned]).toEqual([0n, 0n, 0n]);
+      }
       const tickAt =
         { "orca-whirlpool": 81, cropper: 81, defituna: 183, crema: 206 }[p.venue as "crema"] ?? 269;
       const tick = BigInt(i32(BYTES.get(p.pool)!, tickAt)) + (1n << 31n);

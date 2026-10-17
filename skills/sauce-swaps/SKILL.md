@@ -321,8 +321,8 @@ pool out of the cook's compute before then: keep it tight.
 
 Each of the eight concentrated-liquidity functions has a Stopped form, the same swap with its limit
 held to a `stop` as well: its low 192 bits a tighter `priceLimit` (the swap takes the lower of the
-two; `1` skips the pool), and from bit 192 a start bound, a tick past which the swap skips the
-pool:
+two; `0` none), and from bit 192 a start bound, a tick past which the swap skips the pool (`1`
+paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price):
 
 ```text
 orcaWhirlpoolStopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint256
@@ -339,8 +339,9 @@ bound three tick-spacing positions past its price then; one it cannot pay for at
 Where no stop binds, the program is the plain one. A swap in a loop whose count is written out
 (`for (let i = 0; i < 3; i++)`) is charged its own units for each run, and its walk once; in a loop
 whose count is a value, no pool is held, and the command says so. This lowers the risk of running out, and does not
-remove it: a held pool crosses at most three more initialized ticks than were priced, but a pool
-that walks its whole way is not checked, and a price that moves further before the cook lands can
+remove it: a held pool crosses at most three more initialized ticks than were priced while the
+ticks in its way stay as they were read (a position opened inside its walk meanwhile adds one), but
+a pool that walks its whole way is not checked, and a price that moves further before the cook lands can
 cost it more. `sauce simulate` and `sauce run` check the stops in a simulation and tighten them if
 the cook would still run out, and print a line for each pool a stop held or skipped; `sauce tx`
 takes them from the table alone, so its cook can differ from the one `sauce simulate` reports.

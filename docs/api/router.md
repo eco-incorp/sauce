@@ -370,8 +370,10 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
 
 Each of the eight concentrated-liquidity functions also has a Stopped form, the same swap with its
 limit held to a `stop` as well. The stop's low 192 bits are a tighter `priceLimit`, and the swap
-takes the lower of the two (`0` none, `1` skips the pool). From bit 192 it carries a start bound, a
-tick: the swap skips the pool if its price has moved further than that from the stop.
+takes the lower of the two (`0` none). From bit 192 it carries a start bound, a tick: the swap skips
+the pool if its price has moved further than that from the stop. A bound past every tick the walk's
+way skips the pool whatever its price: `1` paying the pool's lower-key token, `2^32 - 1` paying the
+other.
 
 ```text
 orcaWhirlpoolStopped(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account, stop): Uint256
@@ -474,7 +476,8 @@ it. Each stop is fixed when the cook is built, from the pools' prices then.
 
 - A held pool whose price has moved more than three positions further from its stop by the time the
   cook runs is skipped, so it crosses at most three more initialized ticks than were priced, and
-  those three are charged.
+  those three are charged. That holds while the ticks in its way stay as they were read: a
+  liquidity position opened inside its walk before the cook lands adds a crossing nobody priced.
 - A pool that walks its whole way runs the plain swap, unchecked. A price that moves further than
   three positions can still cost it more than was priced.
 - How far prices move in that time has not been measured yet; three positions is a first allowance.

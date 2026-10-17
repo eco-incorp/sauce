@@ -39,7 +39,7 @@ const unboundedLine = (label: string): string =>
 export function svmStopLines(stops: SvmStops): string[] {
   if (stops.unbounded !== undefined) return [unboundedLine(stops.unbounded)];
   return stops.stops.flatMap((stop) => {
-    if (stop.stop === 1n) {
+    if (stop.skipped === true) {
       return [
         `${stop.label} is skipped: the pools ahead of it leave too few compute units for its swap ` +
           `(about ${grouped(stop.estimatedUnits)} to its limit, ${stop.ticksToLimit} initialized ` +
@@ -67,7 +67,7 @@ export function svmStopsJson(stops: SvmStops): Record<string, unknown> {
       venue: stop.venue,
       stop: stop.stop.toString(),
       held: stop.stopTick !== undefined,
-      skipped: stop.stop === 1n,
+      skipped: stop.skipped === true,
       ...(stop.stopTick === undefined ? {} : { stopTick: stop.stopTick }),
       ...(stop.stopPrice === undefined ? {} : { stopPrice: stop.stopPrice }),
       ticksToLimit: stop.ticksToLimit,

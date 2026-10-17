@@ -1666,12 +1666,14 @@ export function phoenix(
 // builder works out from the pool's tick arrays so that the pool's swap stays within its share of
 // the cook's compute units (a swap crossing many initialized ticks runs the transaction out of them,
 // failing it whole). Its low 192 bits are a tighter `priceLimit`, in its units, and the swap takes
-// the lower of the two; 0 is no stop, and 1, which no pool's price is below, skips the pool. From bit
-// 192 it carries the tick the pool's price may lie no further from the stop than, as the window reads
-// ticks: the price the walk was priced from, with the builder's headroom. A price that has moved
-// further since skips the pool, so a held swap crosses no more initialized ticks than were allowed
-// for. A program written with the venue namespaces calls one of these only for a pool whose stop
-// binds, and the plain swap otherwise, so a cook no stop binds runs exactly the plain swaps.
+// the lower of the two; 0 is no stop. From bit 192 it carries the tick the pool's price may lie no
+// further from the stop than, as the window reads ticks: the price the walk was priced from, with the
+// builder's headroom. A price that has moved further since skips the pool, so a held swap crosses no
+// more initialized ticks than were allowed for, while those in its way stay as they were read. A
+// bound past every tick the walk's way (1 paying the lower-key token, 2^32 - 1 the other) skips the
+// pool whatever its price. A program written with the venue namespaces calls one of these only for a
+// pool whose stop binds, and the plain swap otherwise, so a cook no stop binds runs exactly the
+// plain swaps.
 
 export function raydiumClmmStopped(
   slot: Account[],

@@ -103,7 +103,9 @@ export const SVM_SWAP_SKIPPED = 20_000;
  * The initialized ticks each pool that trades is charged past its walk, for a price that moves
  * between the cook's building and its landing: tick-spacing positions, each holding at most one
  * initialized tick. A held pool's Stopped form skips the pool where its price has moved further than
- * that from where its walk was priced, so a held pool never crosses more than this many more.
+ * that from where its walk was priced, so a held pool crosses at most this many more initialized
+ * ticks than were priced, while the ticks in its way stay as they were read: a position opened inside
+ * the walk in the meantime adds a crossing nothing charged.
  */
 export const SVM_HEADROOM_TICKS = 3;
 
@@ -155,12 +157,14 @@ export interface SvmWalk {
 export interface SvmComputeStop {
   readonly name: string;
   /**
-   * The swap's `stop`, as the Stopped form takes it: 0 none (the plain swap), 1 skip; else a tighter
-   * `priceLimit` (`limit`) in its low 192 bits, and from bit 192 the start bound (`from`): the tick,
-   * as the router reads ticks, its price may lie no further from the stop than when it was priced,
-   * give or take `SVM_HEADROOM_TICKS` positions.
+   * The swap's `stop`, as the Stopped form takes it: 0 none (the plain swap); `svmSkipStop`'s where
+   * it is `skipped`; else a tighter `priceLimit` (`limit`) in its low 192 bits, and from bit 192 the
+   * start bound (`from`): the tick, as the router reads ticks, its price may lie no further from the
+   * stop than when it was priced, give or take `SVM_HEADROOM_TICKS` positions.
    */
   readonly stop: bigint;
+  /** Where the units leave the pool too few for its swap at all: its stop skips it. */
+  readonly skipped?: boolean;
   /** The tighter `priceLimit`, holding the swap a tick inside `stopTick`. */
   readonly limit?: bigint;
   /** The start bound, a tick. */
@@ -485,8 +489,9 @@ function charged(pool: SvmStopPool, n: number): number {
  * The `priceLimit` that holds `pool`'s swap a tick inside `tick`, the first initialized tick it is
  * not to cross: the loosest whose own limit, by the router's arithmetic (`svmOwnLimit`), keeps the
  * price short of it, found by halving, since the own limit moves with `priceLimit` one way only.
+ * Undefined where none does, a tick past what the router's arithmetic reaches.
  */
-export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint {
+export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint | undefined {
   // Paying the lower-key token the price falls: it is to stay at or above the sqrt price a tick
   // above `tick`. Paying the other it rises, and is to stay at or below the one a tick below.
   const bound = raydiumSqrtPriceAtTick(paysA ? tick + 1 : tick - 1);
@@ -498,7 +503,7 @@ export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint 
   // the loosest priceLimit that keeps is the greatest one.
   let low = 2n;
   let high = 1n << 190n;
-  if (!keeps(low)) return 1n;
+  if (!keeps(low)) return undefined;
   while (high - low > 1n) {
     const mid = (low + high) / 2n;
     if (keeps(mid)) low = mid;
@@ -509,6 +514,15 @@ export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint 
 
 /** A tick as the router reads it: its i32 with the sign bit flipped. */
 const biased = (tick: number): bigint => BigInt(tick) + (1n << 31n);
+
+/**
+ * The stop that skips a pool, whatever its price: a start bound past every tick the walk's way (the
+ * least an i32 tick reads as paying the lower-key token, as the price falls, the greatest the other
+ * way), which every pool's price has moved past, and no limit.
+ */
+export function svmSkipStop(paysA: boolean): bigint {
+  return (paysA ? 1n : (1n << 32n) - 1n) << 192n;
+}
 
 /**
  * Each pool's stop for a cook whose venues' programs may spend `budget` units between them. The pool
@@ -547,14 +561,14 @@ export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): 
     // The most crossings what is left pays for: held a tick inside the next.
     let n = walk.crossed.length - 1;
     while (n >= 0 && charged(pool, n) > left) n--;
-    if (n < 0) {
-      stops.set(pool.name, { ...of, stop: 1n, share: 0 });
+    const stopTick = n < 0 ? undefined : walk.crossed[n]!;
+    const limit = stopTick === undefined ? undefined : svmStopLimit(stopTick, pool.fee, pool.paysA);
+    if (stopTick === undefined || limit === undefined) {
+      stops.set(pool.name, { ...of, stop: svmSkipStop(pool.paysA), skipped: true, share: 0 });
       return;
     }
     const share = charged(pool, n);
     left -= share;
-    const stopTick = walk.crossed[n]!;
-    const limit = svmStopLimit(stopTick, pool.fee, pool.paysA);
     // Where its price may lie when it runs: no further from the stop than now, give or take the
     // headroom's positions.
     const room = SVM_HEADROOM_TICKS * walk.spacing;
