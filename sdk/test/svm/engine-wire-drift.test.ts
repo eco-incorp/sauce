@@ -108,6 +108,7 @@ const FEE_ADMIN = {
   feeConfig: FEE_CONFIG,
 } as const;
 const SALT = new Uint8Array(32).fill(7);
+const POT_BUMP = 253;
 const SHA = new Uint8Array(32).fill(9);
 const BUFFER_ACCOUNTS = { kitchen: KITCHEN, owner: OWNER, codeBuffer: CODE_BUFFER, code: CODE };
 
@@ -266,6 +267,7 @@ describeIdl("kitchen IDL drift guard", () => {
       engineProgram: ENGINE,
       potSalt: SALT,
       pot: POT,
+      potBump: POT_BUMP,
       feeConfig: FEE_CONFIG,
       bytecode: new Uint8Array([1, 2, 3]),
       maxExecutionFee: 0n,
@@ -278,6 +280,7 @@ describeIdl("kitchen IDL drift guard", () => {
       code: CODE,
       potSalt: SALT,
       pot: POT,
+      potBump: POT_BUMP,
       feeConfig: FEE_CONFIG,
       maxExecutionFee: 0n,
     }),
@@ -376,6 +379,7 @@ describeIdl("kitchen IDL drift guard", () => {
       engineProgram: ENGINE,
       potSalt: SALT,
       pot: POT,
+      potBump: POT_BUMP,
       feeConfig: FEE_CONFIG,
       bytecode: new Uint8Array([1]),
       maxExecutionFee: 0n,

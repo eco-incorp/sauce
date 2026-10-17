@@ -14,8 +14,9 @@
  * the interpreter is the caller's business, exactly as it is on the EVM side.
  *
  * **A Pot is named AND attached, and it is attached UNSIGNED.** Both cooks take a readonly `pot`
- * account whose `seeds` constraint validates the address; the kitchen then signs for it with
- * `invoke_signed` from `["pot", owner, salt]`. A program that writes Pot storage attaches the Pot a
+ * account and its canonical bump, the one `derivePotPda` returns beside the address; the kitchen
+ * checks the address against `["pot", owner, salt]` at that bump, with no search for it, then signs
+ * for it with `invoke_signed`. A Pot named with any other bump is refused (`ConstraintSeeds`). A program that writes Pot storage attaches the Pot a
  * SECOND time in the caller's tail, writable — the named slot proves which Pot, the tail slot is
  * where the program addresses it. A program's manifest marks that tail slot `writable_signer` (what
  * the PROGRAM needs) while the transaction attaches it unsigned (what the TRANSACTION provides);
@@ -90,6 +91,13 @@ export const BPF_LOADER_UPGRADEABLE = "BPFLoaderUpgradeab1e111111111111111111111
 export interface KitchenPda {
   address: Address;
   bump: number;
+}
+
+/** A PDA bump is one byte. */
+function assertBump(value: number, what: string): void {
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new Error(`${what} must be an integer from 0 to 255, got ${value}`);
+  }
 }
 
 function assertLength(value: Uint8Array, bytes: number, what: string): void {
@@ -373,9 +381,12 @@ export interface CookInput {
   /** Identifies the Pot to sign for. A program that writes Pot storage attaches it again in `tail`,
    *  writable and unsigned. */
   potSalt: Uint8Array;
-  /** `derivePotPda(kitchen, owner, potSalt)`. Passed rather than derived so this stays synchronous,
-   *  as `cook_from_account` already does for its buffer accounts. */
+  /** `derivePotPda(kitchen, owner, potSalt)`'s address. Passed rather than derived so this stays
+   *  synchronous, as `cook_from_account` already does for its buffer accounts. */
   pot: Address;
+  /** `derivePotPda(kitchen, owner, potSalt)`'s bump: the kitchen checks `pot` with it rather than
+   *  searching for it, so every cook costs the same compute whatever the bump. */
+  potBump: number;
   /** `deriveExecutionFeeConfigPda(kitchen)`. */
   feeConfig: Address;
   bytecode: Uint8Array;
@@ -397,8 +408,8 @@ export interface CookInput {
  * opaque `ProgramFailedToComplete`. Use `buildHeapFramePrepend()` (`./prepends.js`). Pot and
  * code-buffer lifecycle instructions need no such thing; only the two cooks execute.
  *
- * Note there is no `pot` account here. The kitchen derives it from `pot_salt` and `owner` and signs
- * for it, so a Pot the program touches belongs in `tail` **unsigned**.
+ * The named `pot` is not the program's: the kitchen checks it against `owner`, `potSalt` and
+ * `potBump` and signs for it, so a Pot the program touches belongs in `tail` too, **unsigned**.
  */
 export function buildCookInstruction({
   kitchen,
@@ -406,6 +417,7 @@ export function buildCookInstruction({
   engineProgram,
   potSalt,
   pot,
+  potBump,
   feeConfig,
   bytecode,
   maxExecutionFee,
@@ -413,6 +425,7 @@ export function buildCookInstruction({
   tail = [],
 }: CookInput): Instruction {
   assertLength(potSalt, SALT_BYTES, "a pot salt");
+  assertBump(potBump, "a pot bump");
   assertEngineRunsCompiler("svm", engineProgram);
 
   return {
@@ -424,7 +437,13 @@ export function buildCookInstruction({
       ...executionFeeAccounts(feeConfig, feePayer),
       ...tail,
     ],
-    data: data(DISCRIMINATOR.cook, potSalt, borshBytes(bytecode), u64(maxExecutionFee)),
+    data: data(
+      DISCRIMINATOR.cook,
+      potSalt,
+      Uint8Array.of(potBump),
+      borshBytes(bytecode),
+      u64(maxExecutionFee),
+    ),
   };
 }
 
@@ -436,6 +455,8 @@ export interface CookFromAccountInput {
   engineProgram: Address;
   potSalt: Uint8Array;
   pot: Address;
+  /** As in {@link CookInput}. */
+  potBump: number;
   feeConfig: Address;
   /** When given, the kitchen refuses unless the staged bytes hash to it. */
   pin?: Uint8Array;
@@ -457,6 +478,7 @@ export function buildCookFromAccountInstruction({
   engineProgram,
   potSalt,
   pot,
+  potBump,
   feeConfig,
   pin,
   maxExecutionFee,
@@ -464,6 +486,7 @@ export function buildCookFromAccountInstruction({
   tail = [],
 }: CookFromAccountInput): Instruction {
   assertLength(potSalt, SALT_BYTES, "a pot salt");
+  assertBump(potBump, "a pot bump");
   assertEngineRunsCompiler("svm", engineProgram);
 
   return {
@@ -477,7 +500,13 @@ export function buildCookFromAccountInstruction({
       ...executionFeeAccounts(feeConfig, feePayer),
       ...tail,
     ],
-    data: data(DISCRIMINATOR.cookFromAccount, potSalt, borshOption32(pin), u64(maxExecutionFee)),
+    data: data(
+      DISCRIMINATOR.cookFromAccount,
+      potSalt,
+      Uint8Array.of(potBump),
+      borshOption32(pin),
+      u64(maxExecutionFee),
+    ),
   };
 }
 

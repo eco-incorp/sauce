@@ -422,8 +422,8 @@ sauce run token-2022.sauce.ts --chain solana --keypair <keypair> \
 ## Transaction size
 
 A Solana transaction is at most **1,232 bytes**, and the cook carries the program and its
-arguments. The cook adds about 404 bytes and 33 more per account (538 with four accounts), so with
-four accounts a program and its arguments have about 694 bytes; a direct cook (`--via engine`)
+arguments. The cook adds about 405 bytes and 33 more per account (539 with four accounts), so with
+four accounts a program and its arguments have about 693 bytes; a direct cook (`--via engine`)
 carries no Kitchen, Pot or salt and adds about 100 bytes less. What costs bytes:
 
 | What                                               | About                                                                                     |

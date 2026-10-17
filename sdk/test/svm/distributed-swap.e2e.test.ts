@@ -310,6 +310,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         engineProgram: harness.programId,
         potSalt: HARNESS_POT_SALT,
         pot: harness.pot,
+        potBump: harness.potBump,
         feeConfig: harness.feeConfig,
         maxExecutionFee: 0n,
         tail,

@@ -34,7 +34,13 @@
  * asynchronous builders derive the same accounts, which `svm-intent-route.test.ts` holds them to.
  */
 import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
-import { AccountRole, getAddressEncoder, type Address, type Instruction } from "@solana/kit";
+import {
+  AccountRole,
+  getAddressEncoder,
+  type Address,
+  type Instruction,
+  type ProgramDerivedAddress,
+} from "@solana/kit";
 import type { AccountManifest } from "sauce-compiler";
 import { bytesToHex, type Hex } from "viem";
 
@@ -86,11 +92,20 @@ export function svmIntentPotOf(input: {
   readonly kitchen: Address;
   readonly salt?: Uint8Array;
 }): Address {
+  return svmIntentPotPda(input)[0];
+}
+
+/** {@link svmIntentPotOf}, with the bump a cook on it passes. */
+function svmIntentPotPda(input: {
+  readonly portal: Address;
+  readonly kitchen: Address;
+  readonly salt?: Uint8Array;
+}): ProgramDerivedAddress {
   return memoizedFindProgramAddressSync(input.kitchen, [
     text(POT_SEED),
     keyBytes(svmIntentExecutor(input.portal)),
     input.salt ?? SVM_INTENT_POT_SALT,
-  ])[0];
+  ]);
 }
 
 /** A mint, as a route moves it. */
@@ -356,7 +371,7 @@ export function svmCookRoute(input: {
   readonly existing?: ReadonlySet<string>;
 }): SvmIntentRoute {
   const executor = svmIntentExecutor(input.portal);
-  const pot = svmIntentPotOf(input);
+  const [pot, potBump] = svmIntentPotPda(input);
   const creations = new Creations(executor, input.existing ?? new Set());
   const potRent = svmRentExempt(MAX_POT_LEN);
   const potCreation = { address: pot, what: "the Portal executor's Pot", lamports: potRent };
@@ -418,6 +433,7 @@ export function svmCookRoute(input: {
     engineProgram: input.engine,
     potSalt: SVM_INTENT_POT_SALT,
     pot,
+    potBump,
     feeConfig,
     bytecode: input.bytecode,
     maxExecutionFee: input.executionFee,

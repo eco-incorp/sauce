@@ -657,13 +657,15 @@ export async function svmIntentCookInstruction(input: {
 }): Promise<Instruction> {
   const executor = await svmExecutorPda(input.portal);
   const salt = input.salt ?? new Uint8Array(32);
+  const pot = await derivePotPda(input.kitchen, executor, salt);
 
   return buildCookInstruction({
     kitchen: input.kitchen,
     owner: executor,
     engineProgram: input.engineProgram,
     potSalt: salt,
-    pot: await svmIntentPot({ ...input, salt }),
+    pot: pot.address,
+    potBump: pot.bump,
     feeConfig: (await deriveExecutionFeeConfigPda(input.kitchen)).address,
     bytecode: input.bytecode,
     maxExecutionFee: input.maxExecutionFee,

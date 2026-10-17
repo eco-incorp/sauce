@@ -1087,6 +1087,10 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
+/** The bump `target`'s Pot is minted at, which a cook through the Kitchen passes beside it. */
+const potBumpOf = async (target: SvmTarget): Promise<number> =>
+  (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).bump;
+
 /** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
 export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
   return exists(createSolanaRpc(rpcUrl), rpcUrl, await potOf(target), "the Pot");
@@ -1837,6 +1841,7 @@ export async function svmCookSize(
           engineProgram: engine(),
           potSalt: saltBytes(target.salt),
           pot,
+          potBump: await potBumpOf(target),
           feeConfig,
           bytecode,
           maxExecutionFee: 0n,
@@ -2207,6 +2212,7 @@ async function stagedRehearsal(
         engineProgram: engine(),
         potSalt: saltBytes(input.salt),
         pot: prepared.pot,
+        potBump: await potBumpOf(input),
         feeConfig,
         maxExecutionFee: prepared.fee,
         tail,

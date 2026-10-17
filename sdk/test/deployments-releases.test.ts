@@ -274,6 +274,7 @@ describe("every builder that names an engine refuses another compiler's", () => 
         engineProgram: address(engineProgram),
         potSalt: new Uint8Array(32),
         pot: owner,
+        potBump: 255,
         feeConfig: owner,
         bytecode: new Uint8Array([0]),
         maxExecutionFee: 0n,

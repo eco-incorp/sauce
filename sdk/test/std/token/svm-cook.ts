@@ -83,6 +83,7 @@ const instructionsFor = (
       engineProgram: harness.programId,
       potSalt: HARNESS_POT_SALT,
       pot: harness.pot,
+      potBump: harness.potBump,
       feeConfig: harness.feeConfig,
       bytecode,
       maxExecutionFee: 0n,

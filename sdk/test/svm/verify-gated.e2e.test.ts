@@ -161,6 +161,7 @@ describeRustSvm("settlement verifier against actual released Kitchen CPIs", () =
         engineProgram: harness.programId,
         potSalt: HARNESS_POT_SALT,
         pot: harness.pot,
+        potBump: harness.potBump,
         feeConfig: harness.feeConfig,
         maxExecutionFee: quotedFee,
         pin,

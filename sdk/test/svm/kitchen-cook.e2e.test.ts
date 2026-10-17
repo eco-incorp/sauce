@@ -30,7 +30,6 @@ import {
   start,
   traceTests,
 } from "./kitchen-bench.js";
-
 import { compileSvm } from "./rs-compile.js";
 
 /**
@@ -55,9 +54,14 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
   // does — is the shape the intermittent teardown abort followed.
   const PROGRAM = compileSvm("function main(): Uint256 { return 42n; }").bytecode;
 
-  /** Creates the Pot `cook` will sign for, and hands back the tail entry it rides in — UNSIGNED. */
+  /** Creates the Pot `cook` will sign for, and hands back its bump and the tail entry it rides
+   *  in — UNSIGNED. */
   const potFor = async (salt: Uint8Array) => {
-    const { address: pot } = await derivePotPda(bench.kitchen, bench.owner.address, salt);
+    const { address: pot, bump: potBump } = await derivePotPda(
+      bench.kitchen,
+      bench.owner.address,
+      salt,
+    );
 
     expectOk(
       await send(bench, [
@@ -73,12 +77,12 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
       "create_pot",
     );
 
-    return { pot, tail: [{ address: pot, role: AccountRole.WRITABLE }] as const };
+    return { pot, potBump, tail: [{ address: pot, role: AccountRole.WRITABLE }] as const };
   };
 
   it("cook executes inline bytecode, with the Pot riding the tail unsigned", async () => {
     const salt = new Uint8Array(32).fill(21);
-    const { pot, tail } = await potFor(salt);
+    const { pot, potBump, tail } = await potFor(salt);
 
     expectOk(
       await sendCook(bench, [
@@ -88,6 +92,7 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
           engineProgram: bench.engine,
           potSalt: salt,
           pot,
+          potBump,
           feeConfig: bench.feeConfig,
           bytecode: PROGRAM,
           maxExecutionFee: 0n,
@@ -101,7 +106,7 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
   it("cook_from_account executes a finalized code account", async () => {
     const salt = new Uint8Array(32).fill(22);
     const nonce = 21n;
-    const { pot, tail } = await potFor(salt);
+    const { pot, potBump, tail } = await potFor(salt);
     const { address: codeBuffer } = await deriveCodeBufferPda(
       bench.kitchen,
       bench.owner.address,
@@ -144,6 +149,7 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
           engineProgram: bench.engine,
           potSalt: salt,
           pot,
+          potBump,
           feeConfig: bench.feeConfig,
           maxExecutionFee: 0n,
           tail: [...tail],
@@ -158,7 +164,7 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
   it("cook_from_account refuses a pin that is not the staged bytes", async () => {
     const salt = new Uint8Array(32).fill(23);
     const nonce = 22n;
-    const { pot, tail } = await potFor(salt);
+    const { pot, potBump, tail } = await potFor(salt);
     const { address: codeBuffer } = await deriveCodeBufferPda(
       bench.kitchen,
       bench.owner.address,
@@ -199,6 +205,7 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
         engineProgram: bench.engine,
         potSalt: salt,
         pot,
+        potBump,
         feeConfig: bench.feeConfig,
         pin: new Uint8Array(32).fill(0xff),
         maxExecutionFee: 0n,

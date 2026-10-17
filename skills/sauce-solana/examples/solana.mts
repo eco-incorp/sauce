@@ -132,6 +132,7 @@ async function cookSize(accounts: number): Promise<number> {
         engineProgram: address(v12SvmEngineProgramId()),
         potSalt: salt,
         pot: pot.address,
+        potBump: pot.bump,
         feeConfig,
         bytecode: new Uint8Array([...program.bytecode, ...args]),
         maxExecutionFee: 1_000_000n,
@@ -148,7 +149,7 @@ async function cookSize(accounts: number): Promise<number> {
 check(TRANSACTION_SIZE_LIMIT === 1232, "a Solana transaction is at most 1,232 bytes");
 const four = await cookSize(4);
 const five = await cookSize(5);
-check(four === 538, `with four accounts the cook adds 538 bytes, not ${four}`);
+check(four === 539, `with four accounts the cook adds 539 bytes, not ${four}`);
 check(five - four === 33, `an account costs 33 bytes, not ${five - four}`);
 
 // The Token-2022 example: PYUSD is a registered symbol, its row names Token-2022, and the program

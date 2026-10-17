@@ -415,6 +415,7 @@ export const cook = async (
       engineProgram: harness.programId,
       potSalt: HARNESS_POT_SALT,
       pot: harness.pot,
+      potBump: harness.potBump,
       feeConfig: harness.feeConfig,
       maxExecutionFee: 0n,
       tail,
