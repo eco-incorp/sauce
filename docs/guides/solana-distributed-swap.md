@@ -48,12 +48,12 @@ every account a pool takes is read from it as the cook is built, and what fits i
 - **A swap is held within its share of the cook's compute.** Every initialized tick a pool's swap
   crosses costs compute units, and a cook that runs out fails whole. So the command works out each
   swap's walk as it builds the cook, from the pool's tick arrays and a cost table of each venue's
-  program: the deepest pool walks its whole way first, the next from what is left, a pool what is
-  left does not cover is held short of `priceLimit`, and one it cannot pay for is skipped.
-  `sauce simulate` and `sauce run` check that in a simulation and print a line for each pool held
-  or skipped. It lowers the risk of a wide limit failing the cook, and does not remove it: the
-  stops are fixed when the cook is built, and prices that move before it lands can leave a pool
-  more ticks to cross than were priced.
+  program: the pool whose walk buys the most per unit walks its whole way first, the next from what
+  is left, a pool what is left does not cover is held short of `priceLimit`, and one it cannot pay
+  for is skipped. `sauce simulate` and `sauce run` check that in a simulation and print a line for
+  each pool held or skipped. It lowers the risk of a wide limit failing the cook, and does not
+  remove it: a held pool crosses at most three more initialized ticks than were priced, and is
+  skipped if its price moves further, but a pool that walks its whole way is not checked.
 - **About five pools fit one cook's accounts, and about four that all trade fit its compute**, the
   program staged and its accounts in a lookup table. Keys that find more are refused before
   anything is signed, naming each key's pool.
@@ -431,7 +431,7 @@ Token balance changes:
 - **Keys that find more pools than fit.** About five; the command refuses more, naming each key's
   pool.
 - **A `priceLimit` far past every price, with a large budget.** Each swap stops inside its window,
-  and the deepest pool walks first: a later pool is held short or skipped to keep the cook within
+  and the pool buying the most per unit walks first: another is held short or skipped to keep the cook within
   its compute, which the simulation's `… stops at …` and `… is skipped` lines name. A price that
   moves before the cook lands can still run it out. Keep the limit tight, and simulate.
 - **A program's account as `--owner`** (a pool, a mint). The owner signs and pays: a wallet, or an

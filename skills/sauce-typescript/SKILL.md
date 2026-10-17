@@ -183,7 +183,7 @@ address in `deployments` is recorded, not proof of live code.
   - A venue namespace's swap at a price is listed in `stoppable`, by its stop's derivation
     (`stop:<pool>:<token>:<limit>`). `svmProgramStops(program, chain, accounts, integers, load)`
     from `@eco-incorp/sauce/svm` works each stop out as `sauce` does (`accounts`: each derived name
-    resolved; `integers`: main's `Uint256` arguments by name), the deepest pool first within one
+    resolved; `integers`: main's `Uint256` arguments by name), the pool buying the most per unit first within one
     cook's compute units, and names in `binding` the swaps to hold. Compile again with
     `{ stops: binding }`: those swaps call the Stopped form, each stop a `Uint256` added to `main`
     after the accounts (`derivedValues`, never one of `entryParams`), encoded after main's own

@@ -320,7 +320,9 @@ the window buys up to it. A limit far past every price, with a large input, can 
 pool out of the cook's compute before then: keep it tight.
 
 Each of the eight concentrated-liquidity functions has a Stopped form, the same swap with its limit
-held to a `stop` as well (the lower of the two; `1` skips the pool):
+held to a `stop` as well: its low 192 bits a tighter `priceLimit` (the swap takes the lower of the
+two; `1` skips the pool), and from bit 192 a start bound, a tick past which the swap skips the
+pool:
 
 ```text
 orcaWhirlpoolStopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint256
@@ -330,14 +332,16 @@ A pool's swap costs compute units for every initialized tick it crosses, and a w
 enough runs the whole cook out of them (one Solana transaction has 1,400,000). For a program written
 with the venue namespaces the `sauce` command works each swap's stop out as it builds the cook: it
 reads the pool's tick arrays, counts the initialized ticks its walk to its limit crosses, prices
-them from a table measured on each venue's program, and gives the deepest pool its whole walk first,
-then the next from what is left. A pool the rest does not cover is compiled to the Stopped form,
-held short of its limit; one it cannot pay for at all is skipped. Where no stop binds, the program is
-the plain one. This lowers the risk of running out, and does not remove it: each stop is fixed when
-the cook is built, and a price that moves before it lands can leave a pool more ticks to cross than
-were priced. `sauce simulate` and `sauce run` check the stops in a simulation and tighten them if
+them from a table measured on each venue's program with three more crossings kept back, and gives
+the pool whose walk buys the most per unit its whole walk first, then the next from what is left. A
+pool the rest does not cover is compiled to the Stopped form, held short of its limit, its start
+bound three tick-spacing positions past its price then; one it cannot pay for at all is skipped.
+Where no stop binds, the program is the plain one. This lowers the risk of running out, and does not
+remove it: a held pool crosses at most three more initialized ticks than were priced, but a pool
+that walks its whole way is not checked, and a price that moves further before the cook lands can
+cost it more. `sauce simulate` and `sauce run` check the stops in a simulation and tighten them if
 the cook would still run out, and print a line for each pool a stop held or skipped; `sauce tx`
-takes them from the table alone.
+takes them from the table alone, so its cook can differ from the one `sauce simulate` reports.
 
 Three more forms, for a program that wants less:
 
