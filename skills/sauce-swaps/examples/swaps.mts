@@ -179,7 +179,15 @@ const data = [
   "orcaWhirlpoolV2Data",
   "openbookV2LotsData",
 ];
-const limit = new Set([...priced, ...atLimit, ...cpi, ...data]);
+// Each concentrated-liquidity venue's swap at a price held to a stop (Phoenix's book has none).
+const stopped = priced.filter((name) => name !== "phoenix").map((name) => `${name}Stopped`);
+check(
+  solana.includes(
+    "orcaWhirlpoolStopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop)",
+  ),
+  "the skill gives the Stopped form's arguments",
+);
+const limit = new Set([...priced, ...stopped, ...atLimit, ...cpi, ...data]);
 check(
   svmExports
     .map((m) => m[1]!)
@@ -189,10 +197,8 @@ check(
   "the SVM arm exports those and each venue's instruction alone and its data",
 );
 const signature = "slot, trader, amountIn, priceLimit, minOut, recipient";
-// The eight concentrated-liquidity ones take the stop the command works out after them; Phoenix's
-// book takes none.
 check(
-  solana.includes(`orcaWhirlpool(${signature}, stop): Uint256`),
+  solana.includes(`orcaWhirlpool(${signature}): Uint256`),
   "the skill gives the functions' arguments",
 );
 check(
@@ -212,9 +218,11 @@ for (const [, name, args] of svmExports.filter((m) => limit.has(m[1]!))) {
     ? /^(amountIn|baseLots, quoteLots)\b/
     : name!.endsWith("Cpi")
       ? /^program, accounts, source, amountIn\b/
-      : name!.endsWith("AtLimit") || name === "manifest"
-        ? /^slot, trader, amountIn, (limit|ticks|priceLots, orders), minOut, recipient$|^slot, trader, amountIn, minOut, recipient$/
-        : new RegExp(`^${signature}${name === "phoenix" ? "" : ", stop"}$`);
+      : name!.endsWith("Stopped")
+        ? new RegExp(`^${signature}, stop$`)
+        : name!.endsWith("AtLimit") || name === "manifest"
+          ? /^slot, trader, amountIn, (limit|ticks|priceLots, orders), minOut, recipient$|^slot, trader, amountIn, minOut, recipient$/
+          : new RegExp(`^${signature}$`);
   check(want.test(argsOf(args!)), `${name}(${argsOf(args!)})`);
 }
 // The exact-input venues: each one the skill names exported plain, as `Cpi` and as `Data`, the ones it
