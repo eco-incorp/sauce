@@ -6,7 +6,7 @@
  *   `rewriteTokenMembers` — a registry token SYMBOL:
  *     writes (call position):  `<Sym>.transfer/.approve/.transferFrom(...)` -> `@sauce/token`'s function
  *     read (call position):    `<Sym>.balanceOf(...)`                       -> `IERC20.at(<Sym>).balanceOf(...)`
- *     sugar (value position):  `<holder>.<Sym>`                             -> `IERC20.at(<addr>n).balanceOf(<holder>)`
+ *     sugar (value position):  `<holder>.<Sym>`                             -> `IERC20.at(<Sym>).balanceOf(<holder>)`
  *
  *   `rewriteTokenFactory` — the `Token(<addr>)` wrapper, for any address:
  *     `Token(<addr>).<write>(...)`, and `t.<write>(...)` on `const t = Token(<addr>)` -> `@sauce/token`
@@ -42,7 +42,8 @@
  * is bound (`let`/`const`, a parameter, an import, ...), EVERY occurrence of it is left un-rewritten,
  * rather than re-deriving the compiler's own scoping rules. A user who declares `USDC` or `Token`
  * owns the name. The sugar's HOLDER name is deliberately NOT shadow-checked -- a local variable IS
- * the intended holder.
+ * the intended holder -- but for `self`, which is the Pot (`ctx.self()`) only while the program
+ * declares no `self` of its own: `const self = ctx.self(); self.USDC` reads the local.
  *
  * A symbol method outside REWRITABLE_METHODS, or an unresolvable holder, is left untouched and fails
  * closed at compile. A `Token(...)` call in any position this module cannot lower is REFUSED with an
@@ -104,9 +105,9 @@ export function tokenImportLines({ writes, erc20 }: TokenImports): readonly stri
   return lines;
 }
 
-/** Either the full registry-resolved `symbol -> address` map (enables every rewrite), or a bare set
- *  of symbols with no addresses (the call-position rewrites only -- the sugar has no address to
- *  inline, so it yields no sites). */
+/** The token symbols the rewrites recognise: the registry-resolved `symbol -> address` map, or a
+ *  bare set of symbols. Every rewrite emits the symbol itself, which the compile's defines resolve,
+ *  so the two forms rewrite alike. */
 export type TokenSymbols = ReadonlyMap<string, bigint> | ReadonlySet<string>;
 
 export interface TokenRewriteResult extends TokenImports {
@@ -141,10 +142,6 @@ export function applySplices(source: string, splices: readonly Splice[]): string
  *  assignment, ...). */
 function child(node: AstNode, key: string): AstNode {
   return node[key] as AstNode;
-}
-
-function tokenAddressOf(tokens: TokenSymbols, symbol: string): bigint | undefined {
-  return tokens instanceof Map ? tokens.get(symbol) : undefined;
 }
 
 /** A `<object>.<method>(...)` call, taken apart. */
@@ -313,12 +310,15 @@ export function collectValuePositionExclusions(program: AstNode): ReadonlySet<As
 function resolveHolder(
   object: AstNode | undefined,
   tokens: TokenSymbols,
+  shadowed: ReadonlySet<string>,
   source: string,
 ): string | undefined {
   if (!object) return undefined;
   if (object.type === "Identifier") {
     const name = (object as unknown as { name: string }).name;
-    if (name === "self") return "ctx.self()";
+    // `self` is the Pot unless the program declares its own `self`, which is then an ordinary
+    // variable like any other holder (as on Solana, `svm-lowering.ts#holderOf`).
+    if (name === "self" && !shadowed.has("self")) return "ctx.self()";
     if (name === "address") return undefined; // reserved defensively -- no longer a compiler namespace root (address.* was dropped for gated ctx.*), but a bare `address` holder is still excluded rather than re-opened
     if (tokens.has(name)) return undefined; // ambiguous: USDC.WETH belongs to neither feature
     if (isChainKey(name)) return undefined; // owned by a qualified-token spelling, not this sugar
@@ -354,14 +354,14 @@ function collectBalanceSites(
     const symbol = (property as unknown as { name: string }).name;
     if (!tokens.has(symbol)) return;
     if (shadowed.has(symbol)) return;
-    const address = tokenAddressOf(tokens, symbol);
-    if (address === undefined) return; // Set form: no address to inline, sugar declines
-    const holder = resolveHolder((n as { object?: AstNode }).object, tokens, source);
+    const holder = resolveHolder((n as { object?: AstNode }).object, tokens, shadowed, source);
     if (holder === undefined) return;
+    // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
+    // spellings are one program under any value the compile gives the symbol, a define included.
     sites.push({
       start: n.start,
       end: n.end,
-      replacement: `IERC20.at(${formatBigint(address)}).balanceOf(${holder})`,
+      replacement: `IERC20.at(${symbol}).balanceOf(${holder})`,
     });
   });
   return sites;
