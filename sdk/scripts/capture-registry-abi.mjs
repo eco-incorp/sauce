@@ -914,11 +914,17 @@ async function captureReturn(job) {
   const answer = await call(chainId, address, data);
   if (typeof answer !== "string" || answer === "0x")
     return { ...record, error: "the call reverted" };
-  const value = returnedAt(
-    fn,
-    decodeFunctionResult({ abi: [fn], functionName: fn.name, data: answer }),
-    returnKey(key).path,
-  );
+  let value;
+  try {
+    value = returnedAt(
+      fn,
+      decodeFunctionResult({ abi: [fn], functionName: fn.name, data: answer }),
+      returnKey(key).path,
+    );
+  } catch (err) {
+    // One sample that does not decode is that annotation's error, not the run's.
+    return { ...record, error: `its result does not decode: ${err.shortMessage ?? err.message}` };
+  }
   const returned = typeof value === "string" ? value.toLowerCase() : null;
   if (!isAddress(returned)) return { ...record, error: `it returned ${String(value)}` };
   const captured = await captureInstance(target.slug, target.abiExport, target.functions, {

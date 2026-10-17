@@ -37,8 +37,10 @@ export interface ContractLink {
 /**
  * A registry function whose address output the registry knows the contract of: a factory's pool,
  * a pool's tokens, a vault's asset. GENERATED (`RETURNED_CONTRACTS`) from the `returns` of
- * `test/fixtures/registry-abi/targets.json`, where `registry-abi.test.ts` holds each one to a
- * contract a real call returned, which dispatches every function of the ABI it names.
+ * `test/fixtures/registry-abi/targets.json`. Each names a sample call, and once the capture has
+ * made it, `registry-abi.test.ts` holds the annotation to the contract that call returned, which
+ * must dispatch every function of the ABI it names. One written before its capture says so
+ * (`uncaptured`) until then.
  */
 export interface ReturnedContractLink {
   readonly protocol: string;

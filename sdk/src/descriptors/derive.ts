@@ -75,8 +75,9 @@ export function buildMethods(abi: Abi): DescriptorMethod[] {
   return methods;
 }
 
-/** One ABI's methods with the contracts they return, computed once as `buildMethods`'s are. */
-const returningByAbi = new WeakMap<Abi, DescriptorMethod[]>();
+/** One ABI's methods with the contracts they return, computed once as `buildMethods`'s are: by
+ *  the export's own `returns` map, which every descriptor of that export shares. */
+const returningByExport = new WeakMap<object, readonly DescriptorMethod[]>();
 
 /** `methods`, each annotated with the contracts its address outputs are (`returns`, by signature). */
 function withReturns(
@@ -85,13 +86,13 @@ function withReturns(
 ): readonly DescriptorMethod[] {
   const methods = buildMethods(abi);
   if (returns === undefined || returns.size === 0) return methods;
-  const cached = returningByAbi.get(abi);
+  const cached = returningByExport.get(returns);
   if (cached !== undefined) return cached;
   const annotated = methods.map((method) => {
     const returned = returns.get(method.signature);
     return returned === undefined ? method : { ...method, returns: returned };
   });
-  returningByAbi.set(abi, annotated);
+  returningByExport.set(returns, annotated);
   return annotated;
 }
 
