@@ -185,7 +185,7 @@ _while_ it is running, which is what you want when the amount is the output of t
 
 ```js
 function main() {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   Arbitrum(() => {
     USDC.transfer(RECIPIENT, amount);
   }).reward({ tokens: [{ token: USDC, amount }] });
@@ -236,7 +236,7 @@ returns:
   intent is still fulfilled, with nothing moved.
 
 For full `SafeERC20` checks, make the body a program by adding any statement that is not a token
-write, such as `const held = USDC.balanceOf(ctx.self());`. A program's token writes are
+write, such as `const held = self.USDC;`. A program's token writes are
 [`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20), and a `false` return reverts the
 fulfilment. A program needs the destination's Kitchen fee and a deployed Pot, as the table says,
 and the solver's delivery named in the second argument, because it is not derived for a program
@@ -244,10 +244,10 @@ and the solver's delivery named in the second argument, because it is not derive
 
 ```js
 function main() {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   Arbitrum(
     () => {
-      const here = USDC.balanceOf(ctx.self());
+      const here = self.USDC;
       if (here > 0) {
         USDC.transfer(RECIPIENT, here);
       }
@@ -295,7 +295,7 @@ function fee(amount: Uint256): Uint256 {
 }
 
 function main() {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   Arbitrum(
     () => {
       const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);

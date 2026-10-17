@@ -16,7 +16,7 @@ import { uniswapV3 } from "@sauce/router";
 function main(recipient: Address, delivered: Uint256, reward: Uint256, minOut: Uint256) {
   Base(
     () => {
-      const amount = USDC.balanceOf(ctx.self());
+      const amount = self.USDC;
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
       const bought = uniswapV3(pool, USDC, WETH, amount, 0, minOut, ctx.self());
       const payout = bought - bought / 1000;

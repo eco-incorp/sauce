@@ -33,8 +33,8 @@ and each [chain](../reference/chains.md)'s tokens and contracts.
 
 ## Tokenized stocks
 
-Ethereum, Base and Solana also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)`
-reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. On Solana each is a
+Ethereum, Base and Solana also register tokenized stocks, named the same way: `self.SPCXc` is how
+many of Coinbase's SpaceX tokens the Pot holds on Base, and `Base.SPCXc.address` is its address. On Solana each is a
 Token-2022 mint that a program passes to `@sauce/token`'s functions (`balanceOf(TSLAx, account)`),
 and `Solana.TSLAx.mint` is the mint. [Tokenized stocks](../reference/tokens.md#tokenized-stocks) has
 the issuers, how a symbol is spelled and what differs from a plain ERC-20, and each chain's page in
@@ -157,7 +157,7 @@ These are SauceScript route-body fragments:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000);
-let balance = USDC.balanceOf(self);
+let balance = self.USDC;
 ```
 
 For a token absent from the registry, use `Token(address)`:
@@ -166,7 +166,23 @@ For a token absent from the registry, use `Token(address)`:
 Token(0x1111111111111111111111111111111111111111).approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
-Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods. The shorthand `self.USDC` reads the executing contract's balance; `USDC.balanceOf(self)` makes the same intent explicit. `self` refers to the executing contract, which is the Pot in the EVM route path.
+Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods.
+
+### Balances
+
+A balance is the holder, a dot, and the token: `self.USDC` is the USDC your Pot holds, and
+`recipient.TSLAx` is the TSLAx `recipient` holds. It is a shorter way to write
+`USDC.balanceOf(recipient)`, and compiles to exactly the same program.
+
+The holder can be:
+
+- **On an EVM chain**: `self` (the Pot), any variable or parameter of the program, or an address
+  written out. A program that declares its own variable named `self` reads that variable's balance.
+- **On Solana**: `self` (the Pot), an `Address` parameter of `main`, or a 32-byte key written out.
+  The holder has to be known when the transaction is built, because Sauce adds the holder's token
+  account to it ([Solana](solana.md)).
+
+A token named with `Token(address)` has no short form: write `Token(address).balanceOf(holder)`.
 
 ### Writes follow SafeERC20
 
