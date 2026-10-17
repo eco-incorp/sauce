@@ -89,9 +89,11 @@ comes from.
 - **Nothing to attach.** `sauce run`, `simulate` and `tx` derive every such slot from the owner, the
   Pot and `main`'s arguments, so the program runs with `--args` alone. `sauce compile --json` lists
   each slot with its `derive`; `--account NAME=<value>` replaces one.
-- **A holder** is `self` (or `ctx.self()`), the Pot; a parameter of `main` declared `Address`; or
-  a 32-byte key written out. Its balance is `<holder>.<TOKEN>` (`self.USDC`, `to.USDC`), the same
-  read as `USDC.balanceOf(to)`. For a holder computed as the program runs, take
+- **A holder** is `self` (or `ctx.self()`), the Pot; `Solana.owner`; a parameter of `main` declared
+  `Address`; or a 32-byte key written out. Its balance is `<holder>.<TOKEN>` (`self.USDC`,
+  `to.USDC`), the same read as `USDC.balanceOf(to)`, and its lamports `<holder>.SOL` (`self.SOL`),
+  read with `ctx.balance` from its account, which is added to `main`. For a holder computed as the
+  program runs, take
   its token account as an `Account` parameter and pass it where the holder goes
   (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). **That account is paid as
   attached**: nothing checks whose it is, so prefer an `Address` recipient, or check it yourself,

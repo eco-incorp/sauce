@@ -25,9 +25,10 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 - A program is a `.sauce.ts` file compiled **for a chain** (`--chain`). Compiling lowers the names
   that chain supplies, the token syntax and the intents the file opens; everything else reaches
   the compiler as written, annotations included.
-- **A balance is `<holder>.<TOKEN>`**: `self.USDC` is the Pot's USDC, `recipient.USDC` a
-  parameter's, the same read as `USDC.balanceOf(recipient)`. Which holders each target takes, and
-  the token methods, are `sauce-globals`'s.
+- **A balance is `<holder>.<TOKEN>`, on any address or contract**: `self.USDC` is the Pot's USDC,
+  `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`; the native coin
+  too, `self.ETH` (`ctx.selfBalance()`) and `self.SOL`. Which holders each target takes, and the
+  token methods, are `sauce-globals`'s.
 - Its inputs are `main`'s parameters, taken in declaration order, ABI-encoded and appended to the
   bytecode: one compiled program serves every value. `--args` passes them (`sauce-cli`).
 - Integers are 256-bit and checked; amounts are in a token's smallest units; nothing scales

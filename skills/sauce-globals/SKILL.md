@@ -48,16 +48,27 @@ A symbol is that chain's token address: a value (`balanceOf(USDC, account)`) or 
 methods. Any other ERC-20 is `Token(address)`, or bound once: `const t = Token(address);` (declared
 once, never reassigned, used only as `t.<method>(...)`).
 
-**A balance is `<holder>.<TOKEN>`**: `self.USDC` is the USDC the Pot holds, `recipient.TSLAx` the
-TSLAx `recipient` holds. It is `USDC.balanceOf(holder)` written short, and compiles to the same
-bytes. The holder is:
+**A balance is `<holder>.<TOKEN>`: any address or contract, then a token's symbol.** `self.USDC` is
+the USDC the Pot holds, `recipient.TSLAx` the TSLAx `recipient` holds, `UniswapV4.PoolManager.WETH`
+the WETH in the PoolManager. It is `USDC.balanceOf(holder)` written short, and compiles to the same
+bytes. The native coin takes it too: `self.ETH` is `ctx.selfBalance()`, `recipient.ETH` is
+`ctx.balance(recipient)`, and on Solana `self.SOL` is the Pot's lamports. The holder is:
 
-- on an EVM chain, `self` (the Pot), any variable or parameter (`pot`, `recipient`), or an address
-  written out; a program that declares its own `self` reads that variable instead;
-- on Solana, `self` (the Pot), an `Address` parameter of `main`, or a 32-byte key written out: one
-  known when the transaction is built, whose token account is added to `main` (`sauce-solana`).
+- on an EVM chain, any address: `self` (the Pot) or `ctx.self()`, a variable or parameter, an
+  address written out, a protocol contract (`Aave.Pool`), a contract at an address
+  (`UniswapV3.Pool(pool)` or `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that
+  returns an address (`UniswapV4.StateView.poolManager()`); a program that declares its own `self`
+  reads that variable;
+- on Solana, one known when the transaction is built, whose account is added to `main`: `self` (the
+  Pot), `Solana.owner`, an `Address` parameter of `main`, or a 32-byte key written out
+  (`sauce-solana`).
 
-`Token(address)` has no short form: its balance is `Token(address).balanceOf(holder)`.
+A record or a list is not a holder: on one, a property named like a token or the native coin is
+refused, since the name is reserved for the shorthand (`usdc:` is a fine field name). Neither is a
+token (`USDC.WETH` is refused: write `WETH.balanceOf(USDC)`), nor an interface with no address
+(`UniswapV3.Pool.WETH`). Where the native coin and a token share a symbol (Arc's USDC), the
+shorthand is refused for it. `Token(address)` has no short form: its balance is
+`Token(address).balanceOf(holder)`.
 
 | Method                            | Behaviour                                                 |
 | --------------------------------- | --------------------------------------------------------- |

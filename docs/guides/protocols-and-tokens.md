@@ -170,17 +170,31 @@ Replace that illustrative address with your ERC-20. The wrapper accepts a litera
 
 ### Balances
 
-A balance is the holder, a dot, and the token: `self.USDC` is the USDC your Pot holds, and
-`recipient.TSLAx` is the TSLAx `recipient` holds. It is a shorter way to write
-`USDC.balanceOf(recipient)`, and compiles to exactly the same program.
+A balance is the holder, a dot, and the token. Any address or contract can be the holder:
+`self.USDC` is the USDC your Pot holds, `recipient.TSLAx` is the TSLAx `recipient` holds, and
+`UniswapV4.PoolManager.WETH` is the WETH sitting in Uniswap's PoolManager. It is a shorter way to
+write `USDC.balanceOf(recipient)`, and compiles to exactly the same program.
+
+The chain's own coin works the same way: `self.ETH` is the ETH your Pot holds (`ctx.selfBalance()`),
+`recipient.ETH` is `ctx.balance(recipient)`, and on Solana `self.SOL` is your Pot's SOL.
 
 The holder can be:
 
-- **On an EVM chain**: `self` (the Pot), any variable or parameter of the program, or an address
-  written out. A program that declares its own variable named `self` reads that variable's balance.
-- **On Solana**: `self` (the Pot), an `Address` parameter of `main`, or a 32-byte key written out.
-  The holder has to be known when the transaction is built, because Sauce adds the holder's token
-  account to it ([Solana](solana.md)).
+- **On an EVM chain**: any address. That is `self` (the Pot), a variable or parameter of the
+  program, an address written out, a protocol contract (`Aave.Pool`), a contract given an address
+  (`UniswapV3.Pool(pool).USDC` reads `pool`'s balance), or a call that returns an address
+  (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named
+  `self` reads that variable's balance.
+- **On Solana**: `self` (the Pot), `Solana.owner`, an `Address` parameter of `main`, or a 32-byte
+  key written out. The holder has to be known when the transaction is built, because Sauce adds the
+  holder's account to it ([Solana](solana.md)).
+
+Because `<anything>.USDC` reads a balance, a record or a list cannot have a field named like a
+token or the chain's coin: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to
+name the field otherwise (`usdc` is fine). It also refuses `USDC.WETH`, since a token as the holder
+reads like a member of the token (write `WETH.balanceOf(USDC)`), and on a chain whose coin shares
+its symbol with a token, as Arc's USDC does, it refuses the shorthand for that symbol and asks
+which you mean.
 
 A token named with `Token(address)` has no short form: write `Token(address).balanceOf(holder)`.
 
