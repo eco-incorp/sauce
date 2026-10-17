@@ -160,9 +160,12 @@ its address and ABI from the registry. A member is one of three kinds:
 - `UniswapV3.Factory.getPool(a, b, 500)` calls the chain's factory; a Uniswap fee is in millionths
   (`500` is the 0.05% tier, `3000` 0.3%).
 - An interface is called with the address of a deployment:
-  `Erc4626.Vault(vault).deposit(...)`, `UniswapV3.Pool(pool).liquidity()` for a pool its factory
-  returned (`.at(pool)` is the same). A deployed contract's name is never called with an address;
+  `Erc4626.Vault(vault).deposit(...)`, `UniswapV3.Pool(pool).liquidity()` for a pool the program is
+  given (`.at(pool)` is the same). A deployed contract's name is never called with an address;
   `.at(address)` reaches another deployment of its ABI.
+- **A contract a call returns** is called on directly where the registry records what it is:
+  `UniswapV3.Factory.getPool(a, b, 500).liquidity()`, `Erc4626.Vault(vault).asset().decimals()`
+  (`sauce-script`, Calling a contract).
 - **A namespace's default contract** is also called by the namespace alone:
   `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
 - **A family alias** (`Uniswap`, `Aave`, …) names a contract only when one member has it on the
