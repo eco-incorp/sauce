@@ -168,6 +168,18 @@ describe("a method called on a registry call's result", () => {
     sameProgram(chained, explicit, ["base"]);
   });
 
+  it("composes with a holder's balance read, which stays the token pass's", () => {
+    const chained = `function main(): Uint256 {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  return pool.liquidity() + pool.USDC + UniswapV3.Factory.getPool(WETH, USDC, 500).token0().WETH;
+}`;
+    const explicit = `function main(): Uint256 {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  return UniswapV3.Pool(pool).liquidity() + USDC.balanceOf(pool) + WETH.balanceOf(UniswapV3.Pool(UniswapV3.Factory.getPool(WETH, USDC, 500)).token0());
+}`;
+    sameProgram(chained, explicit, ["base", "ethereum"]);
+  });
+
   it("leaves the language's value methods, members that are not called, and the rest alone", () => {
     const source = `function main(): Uint256 {
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
