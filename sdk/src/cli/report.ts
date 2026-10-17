@@ -17,6 +17,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
+import { collectValuePositionExclusions } from "../routes/token-rewrite.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
@@ -104,6 +105,25 @@ function intentParts(program: AstNode): IntentPart[] {
 interface ReadName {
   readonly name: string;
   readonly path: readonly CanonicalChain[];
+  /** Read as a holder's balance, `pot.USDC`: a name only a token symbol is read as. */
+  readonly balance?: true;
+}
+
+/**
+ * `<holder>.<name>` as the token syntax reads a balance (`token-rewrite.ts#collectBalanceSites`):
+ * a value, its holder a name that is not a chain's, or an address. Its property names the token.
+ */
+function isBalanceRead(
+  node: AstNode,
+  excluded: ReadonlySet<AstNode>,
+  chains: ReadonlyMap<string, CanonicalChain>,
+): boolean {
+  const object = node.object as AstNode | undefined;
+  if (node.computed === true || excluded.has(node) || object === undefined) return false;
+
+  return object.type === "Identifier"
+    ? !chains.has(object.name as string)
+    : object.type === "Literal" && typeof object.raw === "string" && object.raw.startsWith("0x");
 }
 
 /**
@@ -121,10 +141,16 @@ export function namesRead(text: string): readonly ReadName[] {
     return [];
   }
   const parts = intentParts(program);
+  const chains = chainAccessorNames();
+  const excluded = collectValuePositionExclusions(program);
   const skipped = new Set<AstNode>();
+  const balances = new Set<AstNode>();
   walk(program, (node) => {
     const at = node as AstNode & Record<string, AstNode | undefined>;
-    if (node.type === "MemberExpression" && node.computed !== true) skipped.add(at.property!);
+    if (node.type === "MemberExpression" && node.computed !== true) {
+      if (isBalanceRead(node, excluded, chains)) balances.add(at.property!);
+      else skipped.add(at.property!);
+    }
     if (node.type === "Property" && node.computed !== true && node.shorthand !== true) {
       skipped.add(at.key!);
     }
@@ -142,7 +168,11 @@ export function namesRead(text: string): readonly ReadName[] {
       .filter((part) => part.start <= node.start && node.end <= part.end)
       .sort((a, b) => b.end - b.start - (a.end - a.start))
       .map((part) => part.chain);
-    names.push({ name: node.name as string, path });
+    names.push({
+      name: node.name as string,
+      path,
+      ...(balances.has(node) ? { balance: true as const } : {}),
+    });
   });
 
   return names;
@@ -207,8 +237,9 @@ export function appliedDefines(
   const applied = new Map<string, AppliedDefine>();
   const used = new Set<string>();
   const readOn = new Map<string, Set<string>>();
-  for (const { name, path } of namesRead(text)) {
+  for (const { name, path, balance } of namesRead(text)) {
     const on = path.at(-1) ?? chain;
+    if (balance === true && chainKinds(on).get(name) !== "token") continue;
     const key = `${on.slug} ${name}`;
     readOn.set(name, (readOn.get(name) ?? new Set()).add(on.slug));
     if (applied.has(key)) continue;
