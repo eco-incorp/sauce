@@ -17,6 +17,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
+import { resolveNamespace } from "../routes/accessor-index.js";
 import { collectValuePositionExclusions } from "../routes/token-rewrite.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
@@ -111,7 +112,7 @@ interface ReadName {
 
 /**
  * `<holder>.<name>` as the token syntax reads a balance (`token-rewrite.ts#collectBalanceSites`):
- * a value, its holder a name that is not a chain's, or an address. Its property names the token.
+ * a value, on any holder but a chain's or a protocol's own name. Its property names the token.
  */
 function isBalanceRead(
   node: AstNode,
@@ -120,10 +121,10 @@ function isBalanceRead(
 ): boolean {
   const object = node.object as AstNode | undefined;
   if (node.computed === true || excluded.has(node) || object === undefined) return false;
+  if (object.type !== "Identifier") return true;
+  const name = object.name as string;
 
-  return object.type === "Identifier"
-    ? !chains.has(object.name as string)
-    : object.type === "Literal" && typeof object.raw === "string" && object.raw.startsWith("0x");
+  return !chains.has(name) && resolveNamespace(name) === undefined;
 }
 
 /**

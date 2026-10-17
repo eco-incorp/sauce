@@ -264,6 +264,8 @@ export class SvmLowering {
     /** Compile-time values a holder may name, by name: a key bound before the program compiles —
      *  main's `Address` argument, bound into an intent's body — which the cook attaches by value. */
     private readonly keys: ReadonlyMap<string, bigint> = new Map(),
+    /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads as a token's is read. */
+    readonly native?: string,
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -296,6 +298,11 @@ export class SvmLowering {
   /** Whether `name` is a registered symbol the program does not declare itself. */
   isSymbol(name: string): boolean {
     return this.tokens.has(name) && !this.declared.has(name);
+  }
+
+  /** Whether `<holder>.<name>` is a balance: a registered symbol, or the native coin, undeclared. */
+  isBalanceName(name: string): boolean {
+    return this.isSymbol(name) || (name === this.native && !this.declared.has(name));
   }
 
   /** Registers a site, lowered once every collector has run, in source order. */
