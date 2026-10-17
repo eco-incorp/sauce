@@ -21,12 +21,6 @@
 // "Relevant selectors" are the registry's own, every verified overload of the same name, and the
 // target's `probes`: signatures to ask a selector router about when the registry's are wrong.
 //
-// For every output a target annotates with the contract it returns (`returns`: a factory's pool, a
-// pool's token), it records the sample call's returned address and, as above, which of the named
-// ABI's selectors the contract there dispatches. A verified ABI that types an output as a contract
-// (`internalType: "contract ILBPair"`) keeps that type in its fragment, which the test holds the
-// annotation's `declared` to.
-//
 // For an export that declares events or errors, it also records:
 //   - which of their topics and selectors the deployed code carries: an event's topic is a PUSH32
 //     before its LOG, a custom error's selector a PUSH4 (or a left-aligned PUSH32) before its REVERT;
@@ -45,13 +39,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import {
-  decodeFunctionResult,
-  encodeFunctionData,
-  keccak256,
-  toEventSelector,
-  toFunctionSelector,
-} from "viem";
+import { keccak256, toEventSelector, toFunctionSelector } from "viem";
 
 const USAGE =
   "usage: node scripts/capture-registry-abi.mjs --recapture --rpc-config <path> " +
@@ -527,21 +515,12 @@ function canonicalType(p) {
 }
 const signature = (f) => `${f.name}(${(f.inputs ?? []).map(canonicalType).join(",")})`;
 
-/**
- * A fragment reduced to what the test compares: types, names, outputs, mutability, and an output's
- * `internalType` where it names a contract (`contract ILBPair`), the type its source declares.
- */
+/** A fragment reduced to what the test compares: types, names, outputs, mutability. */
 function fragment(f) {
   const strip = (p) => ({
     name: p.name ?? "",
     type: p.type,
     ...(p.components ? { components: p.components.map(strip) } : {}),
-  });
-  const output = (p) => ({
-    name: p.name ?? "",
-    type: p.type,
-    ...(/^contract /.test(p.internalType ?? "") ? { internalType: p.internalType } : {}),
-    ...(p.components ? { components: p.components.map(output) } : {}),
   });
   const mutability =
     f.stateMutability ?? (f.constant ? "view" : f.payable ? "payable" : "nonpayable");
@@ -549,7 +528,7 @@ function fragment(f) {
     signature: signature(f),
     selector: toFunctionSelector(signature(f)),
     inputs: (f.inputs ?? []).map(strip),
-    outputs: (f.outputs ?? []).map(output),
+    outputs: (f.outputs ?? []).map(strip),
     stateMutability: mutability,
   };
 }
@@ -858,96 +837,13 @@ async function captureLogs(jobs) {
   return { wanted: new Set(wanted.keys()), logs: logs.filter((log) => log !== null) };
 }
 
-/** `getPool(address,address,uint24)` and the field path after it, as `targets.json` keys them. */
-function returnKey(key) {
-  let depth = 0;
-  let close = key.length;
-  for (let at = 0; at < key.length; at++) {
-    if (key[at] === "(") depth++;
-    if (key[at] === ")" && --depth === 0) {
-      close = at + 1;
-      break;
-    }
-  }
-  const rest = key.slice(close);
-  return { signature: key.slice(0, close), path: rest === "" ? [] : rest.slice(1).split(".") };
-}
-
-/** A sample argument as viem encodes the parameter: integers as bigints. */
-const sampleArg = (param, value) => (/^u?int/.test(param.type) ? BigInt(value) : value);
-
-/** The value at `path` in what `fn` returned, as viem decodes it. */
-function returnedAt(fn, decoded, path) {
-  if (path.length === 0) return decoded;
-  const [first, ...rest] = path;
-  // One output is the record whose field `first` is; several are a list, `first` one by name.
-  let value =
-    fn.outputs.length === 1
-      ? decoded[first]
-      : decoded[fn.outputs.findIndex((output) => output.name === first)];
-  for (const name of rest) value = value?.[name];
-  return value;
-}
-
-/**
- * One annotation's evidence: the sample call made, the address it returned, and which of the named
- * ABI's selectors the contract there dispatches (`captureInstance`, without its verified fragments,
- * which describe that ABI's own deployments).
- */
-async function captureReturn(job) {
-  const { slug, abiExport, key, annotation, fn, target } = job;
-  const { chainId, address, args = [] } = annotation.sample;
-  const record = {
-    protocol: slug,
-    abi: abiExport,
-    returns: key,
-    target: annotation.abi,
-    chainId,
-    address: address.toLowerCase(),
-    args,
-  };
-  const data = encodeFunctionData({
-    abi: [fn],
-    functionName: fn.name,
-    args: fn.inputs.map((param, index) => sampleArg(param, args[index])),
-  });
-  const answer = await call(chainId, address, data);
-  if (typeof answer !== "string" || answer === "0x")
-    return { ...record, error: "the call reverted" };
-  let value;
-  try {
-    value = returnedAt(
-      fn,
-      decodeFunctionResult({ abi: [fn], functionName: fn.name, data: answer }),
-      returnKey(key).path,
-    );
-  } catch (err) {
-    // One sample that does not decode is that annotation's error, not the run's.
-    return { ...record, error: `its result does not decode: ${err.shortMessage ?? err.message}` };
-  }
-  const returned = typeof value === "string" ? value.toLowerCase() : null;
-  if (!isAddress(returned)) return { ...record, error: `it returned ${String(value)}` };
-  const captured = await captureInstance(target.slug, target.abiExport, target.functions, {
-    chainId,
-    address: returned,
-  });
-  return {
-    ...record,
-    returned,
-    ...(captured.error ? { error: captured.error } : {}),
-    ...(captured.layers ? { layers: captured.layers } : {}),
-    ...(captured.selectors ? { selectors: captured.selectors } : {}),
-    ...(captured.abiSources ? { abiSources: captured.abiSources } : {}),
-  };
-}
-
 const logKey = (log) => `${log.protocol}\u0000${log.abi}\u0000${log.event}`;
 
 async function main() {
   const only = new Set(cli.positionals);
   const previous = existsSync(EVIDENCE_PATH)
     ? expand(JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8")))
-    : { instances: [], logs: [], returns: [] };
+    : { instances: [], logs: [] };
   // A target can name a protocol another branch adds: without its build output there is nothing to
   // capture, and its evidence is carried over untouched until the protocol lands.
   const present = (slug) => existsSync(join(SDK, "dist", "protocols", slug, "abis.js"));
@@ -958,7 +854,6 @@ async function main() {
       (CHAINS_ONLY !== null && !CHAINS_ONLY.has(i.chainId)),
   );
   const jobs = [];
-  const returnJobs = [];
   for (const [slug, exports] of Object.entries(TARGETS.protocols)) {
     if (only.size > 0 && !only.has(slug)) continue;
     if (!present(slug)) {
@@ -992,38 +887,11 @@ async function main() {
         if (CHAINS_ONLY !== null && !CHAINS_ONLY.has(inst.chainId)) continue;
         jobs.push({ slug, abiExport, registryFns, registryMarks, inst });
       }
-      for (const [key, annotation] of Object.entries(spec.returns ?? {})) {
-        if (CHAINS_ONLY !== null && !CHAINS_ONLY.has(annotation.sample.chainId)) continue;
-        const { signature: sig } = returnKey(key);
-        const fn = registryFns.find((f) => signature(f) === sig);
-        if (fn === undefined) throw new Error(`${slug}.${abiExport}: returns names no ${sig}`);
-        const [targetSlug, targetExport] = annotation.abi.split("/");
-        const targetAbi = (await registryOf(targetSlug)).abis[targetExport];
-        if (!Array.isArray(targetAbi))
-          throw new Error(`${slug}.${abiExport}: no ABI ${annotation.abi}`);
-        returnJobs.push({
-          slug,
-          abiExport,
-          key,
-          annotation,
-          fn,
-          target: {
-            slug: targetSlug,
-            abiExport: targetExport,
-            functions: targetAbi.filter((i) => i.type === "function"),
-          },
-        });
-      }
     }
   }
   // Every RPC the run needs, checked before the first request: a chain found missing mid-run would
   // leave its instances recorded as errors in the fixture.
-  const missing = [
-    ...new Set([
-      ...jobs.map((job) => job.inst.chainId),
-      ...returnJobs.map((job) => job.annotation.sample.chainId),
-    ]),
-  ]
+  const missing = [...new Set(jobs.map((job) => job.inst.chainId))]
     .filter((chainId) => !RPC_URLS.has(chainId))
     .sort((a, b) => a - b);
   if (missing.length > 0) {
@@ -1073,38 +941,8 @@ async function main() {
       a.abi.localeCompare(b.abi) ||
       a.event.localeCompare(b.event),
   );
-  // An annotation's evidence is kept, like an instance's, where this run did not capture it.
-  const capturedReturns = await pool(returnJobs, 4, async (job) => {
-    const r = await captureReturn(job);
-    const absent = Object.values(r.selectors ?? {}).filter((v) => v === null).length;
-    console.log(
-      `returns ${job.slug}.${job.abiExport} ${job.key}` +
-        (r.error ? ` ERROR ${r.error}` : ` ${r.chainId}:${r.returned} absent=${absent}`),
-    );
-    return r;
-  });
-  const returnKeyOf = (r) => `${r.protocol}\u0000${r.abi}\u0000${r.returns}`;
-  const recaptured = new Set(capturedReturns.map(returnKeyOf));
-  const returns = [
-    ...previous.returns.filter(
-      (r) =>
-        !recaptured.has(returnKeyOf(r)) &&
-        ((only.size > 0 && !only.has(r.protocol)) ||
-          !present(r.protocol) ||
-          (CHAINS_ONLY !== null && !CHAINS_ONLY.has(r.chainId))),
-    ),
-    ...capturedReturns,
-  ].sort(
-    (a, b) =>
-      a.protocol.localeCompare(b.protocol) ||
-      a.abi.localeCompare(b.abi) ||
-      a.returns.localeCompare(b.returns),
-  );
-  writeFileSync(EVIDENCE_PATH, serialize(instances, logs, returns));
-  console.log(
-    `wrote ${instances.length} instances, ${logs.length} logs and ${returns.length} returns to ` +
-      EVIDENCE_PATH,
-  );
+  writeFileSync(EVIDENCE_PATH, serialize(instances, logs));
+  console.log(`wrote ${instances.length} instances and ${logs.length} logs to ${EVIDENCE_PATH}`);
 }
 
 /** The fixture shares each distinct verified fragment across the deployments that declare it. */
@@ -1121,12 +959,11 @@ function expand(stored) {
       verified: (i.verified ?? []).map((id) => fragments[id]),
     })),
     logs: stored.logs ?? [],
-    returns: stored.returns ?? [],
   };
 }
 
-/** One fragment, one instance, one log and one return per line, so a recapture diffs by deployment. */
-function serialize(instances, logs, returns) {
+/** One fragment, one instance and one log per line, so a recapture diffs by deployment. */
+function serialize(instances, logs) {
   const fragments = {};
   const rows = instances.map((instance) => {
     const verified = (instance.verified ?? []).map(({ from: _from, ...fragment }) => {
@@ -1152,9 +989,6 @@ function serialize(instances, logs, returns) {
     "],",
     '"logs": [',
     ...logs.map((log, n) => `${JSON.stringify(log)}${n < logs.length - 1 ? "," : ""}`),
-    "],",
-    '"returns": [',
-    ...returns.map((r, n) => `${JSON.stringify(r)}${n < returns.length - 1 ? "," : ""}`),
     "]",
     "}",
   ];

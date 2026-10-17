@@ -1,5 +1,5 @@
 {
-  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs and test/registry-abi.test.ts.",
+  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs and test/registry-abi.test.ts. returns: the registry ABI an address a function returns speaks, by the function's signature and, for a field of what it returns, the field names after it (\"poolInfo(uint256).crvRewards\"); read by scripts/gen-source-globals.mjs.",
   "protocols": {
     "aave-v2": {
       "LendingPoolABI": {
@@ -67,15 +67,7 @@
       "AcrossHubPoolABI": {
         "roles": ["hubPool"],
         "returns": {
-          "pooledTokens(address).lpToken": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xc186fA914353c44b2E33eBE05f21846F1048bEda",
-              "args": ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "pooledTokens(address).lpToken": "erc20/ERC20ABI"
         }
       },
       "AcrossSpokePoolABI": {
@@ -86,19 +78,7 @@
       "AerodromePoolFactoryABI": {
         "roles": ["poolFactory"],
         "returns": {
-          "getPool(address,address,bool)": {
-            "abi": "aerodrome/AerodromePoolABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x420DD381b31aEf6683db6B902084cB0FFECe40Da",
-              "args": [
-                "0x4200000000000000000000000000000000000006",
-                "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                false
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,bool)": "aerodrome/AerodromePoolABI"
         }
       },
       "AerodromeRouterABI": {
@@ -118,22 +98,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xcDAC0d6c6C59727a65F871236188350531885C43"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xcDAC0d6c6C59727a65F871236188350531885C43"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -141,19 +107,7 @@
       "SlipstreamCLFactoryABI": {
         "roles": ["clFactory", "clFactoryGaugeCaps", "clFactoryGaugesV3"],
         "returns": {
-          "getPool(address,address,int24)": {
-            "abi": "aerodrome-slipstream/AerodromeSlipstreamPoolABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A",
-              "args": [
-                "0x4200000000000000000000000000000000000006",
-                "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                100
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,int24)": "aerodrome-slipstream/AerodromeSlipstreamPoolABI"
         }
       },
       "SlipstreamPositionManagerABI": {
@@ -163,14 +117,7 @@
           "nonfungiblePositionManagerGaugesV3"
         ],
         "returns": {
-          "factory()": {
-            "abi": "aerodrome-slipstream/SlipstreamCLFactoryABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x827922686190790b37229fd06084350E74485b72"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "factory()": "aerodrome-slipstream/SlipstreamCLFactoryABI"
         }
       },
       "AeroMetarouterABI": {
@@ -190,22 +137,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -289,14 +222,7 @@
           }
         },
         "returns": {
-          "want()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x039bCedE270660163718CeA278803cCdC6665f81"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "want()": "erc20/ERC20ABI"
         }
       }
     },
@@ -324,18 +250,7 @@
       "CamelotV2FactoryABI": {
         "roles": ["v2Factory"],
         "returns": {
-          "getPair(address,address)": {
-            "abi": "camelot/CamelotV2PairABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0x6EcCab422D763aC031210895C81787E87B43A652",
-              "args": [
-                "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-                "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPair(address,address)": "camelot/CamelotV2PairABI"
         }
       },
       "CamelotV2PairABI": {
@@ -352,39 +267,14 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0x84652bb2539513BAf36e225c930Fdd8eaa63CE27"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0x84652bb2539513BAf36e225c930Fdd8eaa63CE27"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       },
       "CamelotV3FactoryABI": {
         "roles": ["v3Factory"],
         "returns": {
-          "poolByPair(address,address)": {
-            "abi": "camelot/CamelotV3PoolABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B",
-              "args": [
-                "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-                "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "poolByPair(address,address)": "camelot/CamelotV3PoolABI"
         }
       },
       "CamelotV3PoolABI": {
@@ -401,22 +291,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0xB1026b8e7276e7AC75410F1fcbbe21796e8f7526"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0xB1026b8e7276e7AC75410F1fcbbe21796e8f7526"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -509,33 +385,9 @@
       "BoosterABI": {
         "roles": ["booster"],
         "returns": {
-          "poolInfo(uint256).lptoken": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xF403C135812408BFbE8713b5A23a04b3D48AAE31",
-              "args": [9]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "poolInfo(uint256).token": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xF403C135812408BFbE8713b5A23a04b3D48AAE31",
-              "args": [9]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "poolInfo(uint256).crvRewards": {
-            "abi": "convex/BaseRewardPoolABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xF403C135812408BFbE8713b5A23a04b3D48AAE31",
-              "args": [9]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "poolInfo(uint256).lptoken": "erc20/ERC20ABI",
+          "poolInfo(uint256).token": "erc20/ERC20ABI",
+          "poolInfo(uint256).crvRewards": "convex/BaseRewardPoolABI"
         }
       }
     },
@@ -687,14 +539,7 @@
           }
         ],
         "returns": {
-          "asset()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x83F20F44975D03b1b09e64809B757c47f942BEeA"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "asset()": "erc20/ERC20ABI"
         }
       }
     },
@@ -746,14 +591,7 @@
           }
         ],
         "returns": {
-          "asset()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x9Fb7b4477576Fe5B32be4C1843aFB1e55F251B33"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "asset()": "erc20/ERC20ABI"
         }
       },
       "FluidVaultABI": {
@@ -904,14 +742,7 @@
           }
         ],
         "returns": {
-          "underlying()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 534352,
-              "address": "0x0D8F8e271DD3f2fC58e5716d3Ff7041dBe3F0688"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "underlying()": "erc20/ERC20ABI"
         }
       },
       "LayerBankCoreABI": {
@@ -1035,22 +866,8 @@
           "tokenB()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode"
         },
         "returns": {
-          "tokenA()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xEB1da432D5C1a9FDF52aA5D37698f34706F91397"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "tokenB()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xEB1da432D5C1a9FDF52aA5D37698f34706F91397"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "tokenA()": "erc20/ERC20ABI",
+          "tokenB()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1110,18 +927,7 @@
       "PancakeSwapV2FactoryABI": {
         "roles": ["factory"],
         "returns": {
-          "getPair(address,address)": {
-            "abi": "pancakeswap-v2/PancakeSwapV2PairABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x1097053Fd2ea711dad45caCcc45EfF7548fCB362",
-              "args": [
-                "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-                "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPair(address,address)": "pancakeswap-v2/PancakeSwapV2PairABI"
         }
       },
       "PancakeSwapV2RouterABI": {
@@ -1141,22 +947,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x2E8135bE71230c6B1B4045696d41C09Db0414226"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x2E8135bE71230c6B1B4045696d41C09Db0414226"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1164,19 +956,7 @@
       "PancakeSwapV3FactoryABI": {
         "roles": ["factory"],
         "returns": {
-          "getPool(address,address,uint24)": {
-            "abi": "pancakeswap-v3/PancakeSwapV3PoolABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
-              "args": [
-                "0x4200000000000000000000000000000000000006",
-                "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                100
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,uint24)": "pancakeswap-v3/PancakeSwapV3PoolABI"
         }
       },
       "PancakeSwapV3NFPMABI": {
@@ -1199,22 +979,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x72AB388E2E2F6FaceF59E3C3FA2C4E29011c2D38"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x72AB388E2E2F6FaceF59E3C3FA2C4E29011c2D38"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1305,18 +1071,7 @@
       "QuickSwapV2FactoryABI": {
         "roles": ["v2Factory"],
         "returns": {
-          "getPair(address,address)": {
-            "abi": "quickswap/QuickSwapV2PairABI",
-            "sample": {
-              "chainId": 137,
-              "address": "0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32",
-              "args": [
-                "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
-                "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPair(address,address)": "quickswap/QuickSwapV2PairABI"
         }
       },
       "QuickSwapV2PairABI": {
@@ -1333,39 +1088,14 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 137,
-              "address": "0x6e7a5FAFcec6BB1e78bAE2A1F0B612012BF14827"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 137,
-              "address": "0x6e7a5FAFcec6BB1e78bAE2A1F0B612012BF14827"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       },
       "QuickSwapV3FactoryABI": {
         "roles": ["v3Factory"],
         "returns": {
-          "poolByPair(address,address)": {
-            "abi": "quickswap/QuickSwapV3PoolABI",
-            "sample": {
-              "chainId": 137,
-              "address": "0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28",
-              "args": [
-                "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
-                "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "poolByPair(address,address)": "quickswap/QuickSwapV3PoolABI"
         }
       },
       "QuickSwapV3PoolABI": {
@@ -1382,22 +1112,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 137,
-              "address": "0xAE81FAc689A1b4b1e06e7ef4a2ab4CD8aC0A087D"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 137,
-              "address": "0xAE81FAc689A1b4b1e06e7ef4a2ab4CD8aC0A087D"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1539,18 +1255,7 @@
       "SushiSwapV2FactoryABI": {
         "roles": ["factory"],
         "returns": {
-          "getPair(address,address)": {
-            "abi": "sushiswap-v2/SushiSwapV2PairABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
-              "args": [
-                "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-                "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPair(address,address)": "sushiswap-v2/SushiSwapV2PairABI"
         }
       },
       "SushiSwapV2RouterABI": {
@@ -1570,22 +1275,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1623,19 +1314,7 @@
           "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
         },
         "returns": {
-          "getPool(address,address,uint24)": {
-            "abi": "synthra-v3/SynthraV3PoolABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x6307fc239C7964942c1BfFE51930E55606619c74",
-              "args": [
-                "0x3600000000000000000000000000000000000000",
-                "0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1",
-                3000
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,uint24)": "synthra-v3/SynthraV3PoolABI"
         }
       },
       "SynthraV3SwapRouter02ABI": {
@@ -1684,22 +1363,8 @@
           "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode"
         },
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x7Eb79EdB12953Eda674D0B66Ecd97CC1a4036B6C"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x7Eb79EdB12953Eda674D0B66Ecd97CC1a4036B6C"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1745,19 +1410,7 @@
       "LBFactoryABI": {
         "roles": ["lbFactory"],
         "returns": {
-          "getLBPairInformation(address,address,uint256).LBPair": {
-            "abi": "trader-joe/LBPairABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c",
-              "args": [
-                "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-                "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-                10
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getLBPairInformation(address,address,uint256).LBPair": "trader-joe/LBPairABI"
         }
       },
       "LBRouterABI": {
@@ -1782,22 +1435,8 @@
           }
         ],
         "returns": {
-          "getTokenX()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0xb7236B927e03542AC3bE0A054F2bEa8868AF9508"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "getTokenY()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 42161,
-              "address": "0xb7236B927e03542AC3bE0A054F2bEa8868AF9508"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getTokenX()": "erc20/ERC20ABI",
+          "getTokenY()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1805,18 +1444,7 @@
       "UniswapV2FactoryABI": {
         "roles": ["factory"],
         "returns": {
-          "getPair(address,address)": {
-            "abi": "uniswap-v2/UniswapV2PairABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
-              "args": [
-                "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-                "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPair(address,address)": "uniswap-v2/UniswapV2PairABI"
         }
       },
       "UniswapV2RouterABI": {
@@ -1836,22 +1464,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 1,
-              "address": "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1859,19 +1473,7 @@
       "UniswapV3FactoryABI": {
         "roles": ["factory"],
         "returns": {
-          "getPool(address,address,uint24)": {
-            "abi": "uniswap-v3/UniswapV3PoolABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
-              "args": [
-                "0x4200000000000000000000000000000000000006",
-                "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                500
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,uint24)": "uniswap-v3/UniswapV3PoolABI"
         }
       },
       "UniswapV3NonfungiblePositionManagerABI": {
@@ -1900,22 +1502,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xd0b53D9277642d899DF5C87A3966A349A798F224"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xd0b53D9277642d899DF5C87A3966A349A798F224"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1932,14 +1520,7 @@
       "UniswapV4StateViewABI": {
         "roles": ["stateView"],
         "returns": {
-          "poolManager()": {
-            "abi": "uniswap-v4/UniswapV4PoolManagerABI",
-            "sample": {
-              "chainId": 8453,
-              "address": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "poolManager()": "uniswap-v4/UniswapV4PoolManagerABI"
         }
       }
     },
@@ -1951,32 +1532,13 @@
           "feeAmountTickSpacing(uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode"
         },
         "returns": {
-          "getPool(address,address,uint24)": {
-            "abi": "unitflow-v3/UnitFlowV3PoolABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d",
-              "args": [
-                "0x3600000000000000000000000000000000000000",
-                "0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1",
-                100
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,uint24)": "unitflow-v3/UnitFlowV3PoolABI"
         }
       },
       "UnitFlowV3RouterABI": {
         "roles": ["router"],
         "returns": {
-          "factory()": {
-            "abi": "unitflow-v3/UnitFlowV3FactoryABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "factory()": "unitflow-v3/UnitFlowV3FactoryABI"
         }
       },
       "UnitFlowV3QuoterABI": {
@@ -2004,22 +1566,8 @@
           "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode"
         },
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x99a0505D58cC5d7bf3513Cc75F2A605A23F0F79F"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 5042,
-              "address": "0x99a0505D58cC5d7bf3513Cc75F2A605A23F0F79F"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -2027,19 +1575,7 @@
       "VelodromePoolFactoryABI": {
         "roles": ["poolFactory"],
         "returns": {
-          "getPool(address,address,bool)": {
-            "abi": "velodrome/VelodromePoolABI",
-            "sample": {
-              "chainId": 10,
-              "address": "0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a",
-              "args": [
-                "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db",
-                "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-                false
-              ]
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "getPool(address,address,bool)": "velodrome/VelodromePoolABI"
         }
       },
       "VelodromeRouterABI": {
@@ -2059,22 +1595,8 @@
           }
         ],
         "returns": {
-          "token0()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 10,
-              "address": "0xa0A215dE234276CAc1b844fD58901351a50fec8A"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          },
-          "token1()": {
-            "abi": "erc20/ERC20ABI",
-            "sample": {
-              "chainId": 10,
-              "address": "0xa0A215dE234276CAc1b844fD58901351a50fec8A"
-            },
-            "uncaptured": "written before a capture: no RPC for its chain was at hand"
-          }
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },

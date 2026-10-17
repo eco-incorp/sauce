@@ -300,7 +300,7 @@ function outputAt(outputs, path) {
 const RETURNED = [];
 for (const [slug, { abis }] of registry) {
   for (const [exportName, binding] of Object.entries(targets[slug] ?? {})) {
-    for (const [key, annotation] of Object.entries(binding.returns ?? {})) {
+    for (const [key, abi] of Object.entries(binding.returns ?? {})) {
       const { signature, path } = returnKey(key);
       const fn = abis[exportName].find(
         (item) => item.type === "function" && signatureOf(item) === signature,
@@ -309,13 +309,13 @@ for (const [slug, { abis }] of registry) {
       if (outputAt(fn.outputs ?? [], path)?.type !== "address") {
         fail(`${slug}.${exportName} returns: ${key} is not an address ${signature} returns`);
       }
-      const [targetSlug, targetExport] = String(annotation.abi).split("/");
+      const [targetSlug, targetExport] = String(abi).split("/");
       const named = (registry.get(targetSlug)?.contracts ?? []).filter(
         (c) => c.abiExport === targetExport && c.kind !== "address-only",
       );
       const contract = named.find((c) => c.kind === "interface") ?? named[0];
       if (contract === undefined) {
-        fail(`${slug}.${exportName} returns: ${key} is '${annotation.abi}', no registry contract`);
+        fail(`${slug}.${exportName} returns: ${key} is '${abi}', no registry contract`);
       }
       RETURNED.push({
         protocol: slug,
@@ -323,7 +323,7 @@ for (const [slug, { abis }] of registry) {
         signature,
         path,
         returns: { protocol: targetSlug, contract: contract.contract },
-        abi: annotation.abi,
+        abi,
       });
     }
   }
