@@ -30,6 +30,7 @@ import {
   start,
   traceTests,
 } from "./kitchen-bench.js";
+import { ANCHOR_CONSTRAINT_SEEDS } from "./kitchen-errors.js";
 import { compileSvm } from "./rs-compile.js";
 
 /**
@@ -214,6 +215,38 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
     ]);
 
     expectKitchenError(result, "CodeBufferHashMismatch");
+  });
+
+  // The Kitchen checks the Pot's address at the bump the cook passes rather than searching for one,
+  // and `create_pot` mints a Pot only at its canonical bump: a cook naming it at any other is
+  // refused by Anchor's seeds constraint before the engine runs. The higher bump derives no address
+  // or another, the lower one another; both fail the same way.
+  it("a cook naming its Pot at another bump is refused with ConstraintSeeds", async () => {
+    const salt = new Uint8Array(32).fill(24);
+    const { pot, potBump, tail } = await potFor(salt);
+
+    for (const wrong of [(potBump + 1) % 256, potBump - 1]) {
+      const result = await sendCook(bench, [
+        buildCookInstruction({
+          kitchen: bench.kitchen,
+          owner: bench.owner.address,
+          engineProgram: bench.engine,
+          potSalt: salt,
+          pot,
+          potBump: wrong,
+          feeConfig: bench.feeConfig,
+          bytecode: PROGRAM,
+          maxExecutionFee: 0n,
+          tail: [...tail],
+        }),
+      ]);
+      const err = (result as { err?: () => unknown }).err;
+
+      // Anchor's own error, not the Kitchen's, so it is not among the IDL's `errors`.
+      expect(typeof err === "function" ? String(err.call(result)) : String(err)).toContain(
+        `InstructionErrorCustom { code: ${ANCHOR_CONSTRAINT_SEEDS} }`,
+      );
+    }
   });
 
   // A CPI-created account cannot be allocated more than GROWTH_STEP at once, so a larger buffer is

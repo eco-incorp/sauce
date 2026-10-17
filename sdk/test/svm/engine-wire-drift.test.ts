@@ -125,6 +125,70 @@ describe("kitchen constants and bounds (no artifact needed)", () => {
     ).toThrow(/capacity must be an integer/);
   });
 
+  // A cook's arguments byte for byte: the discriminator, the Pot's salt, then its bump, then what
+  // each transport carries, then the signed fee cap.
+  it("a cook carries the Pot's bump right after its salt", () => {
+    const cook = buildCookInstruction({
+      kitchen: KITCHEN,
+      owner: OWNER,
+      engineProgram: ENGINE,
+      potSalt: SALT,
+      pot: POT,
+      potBump: POT_BUMP,
+      feeConfig: FEE_CONFIG,
+      bytecode: new Uint8Array([1, 2, 3]),
+      maxExecutionFee: 25_000n,
+    });
+    const staged = buildCookFromAccountInstruction({
+      kitchen: KITCHEN,
+      owner: OWNER,
+      engineProgram: ENGINE,
+      codeBuffer: CODE_BUFFER,
+      code: CODE,
+      potSalt: SALT,
+      pot: POT,
+      potBump: POT_BUMP,
+      feeConfig: FEE_CONFIG,
+      pin: SHA,
+      maxExecutionFee: 25_000n,
+    });
+
+    expect(hex(Uint8Array.from(cook.data!))).toBe(
+      [
+        "93e9cdefc815be9f", // sha256("global:cook")[..8]
+        "07".repeat(32), // pot_salt
+        "fd", // pot_bump, 253
+        "03000000010203", // bytecode: a u32 length, then the bytes
+        "a861000000000000", // max_execution_fee, 25,000
+      ].join(""),
+    );
+    expect(hex(Uint8Array.from(staged.data!))).toBe(
+      [
+        "f7a6c3f84eb09354", // sha256("global:cook_from_account")[..8]
+        "07".repeat(32), // pot_salt
+        "fd", // pot_bump
+        "01" + "09".repeat(32), // pin: Some, then the hash
+        "a861000000000000", // max_execution_fee
+      ].join(""),
+    );
+  });
+
+  it.each([-1, 256, 1.5])("refuses a pot bump of %s", (potBump) => {
+    expect(() =>
+      buildCookInstruction({
+        kitchen: KITCHEN,
+        owner: OWNER,
+        engineProgram: ENGINE,
+        potSalt: SALT,
+        pot: POT,
+        potBump,
+        feeConfig: FEE_CONFIG,
+        bytecode: new Uint8Array([1]),
+        maxExecutionFee: 0n,
+      }),
+    ).toThrow(/a pot bump must be an integer from 0 to 255/);
+  });
+
   it("accepts the bounds themselves", () => {
     expect(() =>
       buildCreateCodeBufferInstruction({ ...BUFFER_ACCOUNTS, nonce: 0n, capacity: 1 }),
@@ -223,9 +287,15 @@ describeWire("released engine wire drift guard", () => {
   });
 });
 
+type IdlType = string | { array: [string, number] } | { option: IdlType };
+
 describeIdl("kitchen IDL drift guard", () => {
   const idl = reader<{
-    instructions: { name: string; discriminator: number[] }[];
+    instructions: {
+      name: string;
+      discriminator: number[];
+      args: { name: string; type: IdlType }[];
+    }[];
     constants: { name: string; value: string }[];
     errors: { name: string; code: number }[];
   }>(IDL_JSON);
@@ -314,6 +384,58 @@ describeIdl("kitchen IDL drift guard", () => {
 
   it.each(Object.keys(BUILT))("%s emits the discriminator the IDL declares", (name) => {
     expect(emitted(BUILT[name]!)).toBe(discriminatorOf(name));
+  });
+
+  /**
+   * A builder's bytes past the discriminator, read by `name`'s arguments as the IDL declares them:
+   * each argument's own bytes as hex (a `bytes` argument's payload, an `Option`'s value or `null`).
+   * Throws if the bytes run out or any are left over, so an argument the SDK drops, adds or moves
+   * fails here rather than at the Kitchen.
+   */
+  const argumentsOf = (name: string, data: Uint8Array): Record<string, string | null> => {
+    let at = 8;
+    const take = (count: number): Uint8Array => {
+      if (at + count > data.length) throw new Error(`${name}'s arguments run past its data`);
+      at += count;
+
+      return data.slice(at - count, at);
+    };
+    const WIDTH: Record<string, number> = { u8: 1, u32: 4, u64: 8 };
+    const read = (type: IdlType): string | null => {
+      if (typeof type !== "string") {
+        if ("array" in type) return hex(take(type.array[1]));
+
+        return take(1)[0] === 0 ? null : read(type.option);
+      }
+      if (type === "bytes") return hex(take(new DataView(take(4).buffer).getUint32(0, true)));
+      if (WIDTH[type] === undefined) throw new Error(`no reader for the IDL type ${type}`);
+
+      return hex(take(WIDTH[type]));
+    };
+    const found = idl().instructions.find((i) => i.name === name);
+    if (found === undefined) throw new Error(`the kitchen IDL declares no instruction ${name}`);
+    const args = Object.fromEntries(found.args.map((arg) => [arg.name, read(arg.type)]));
+    if (at !== data.length)
+      throw new Error(`${data.length - at} bytes left past ${name}'s arguments`);
+
+    return args;
+  };
+
+  it("each cook carries the IDL's arguments, in its order and widths", () => {
+    expect(argumentsOf("cook", Uint8Array.from(BUILT.cook!.data!))).toEqual({
+      pot_salt: hex(SALT),
+      pot_bump: "fd",
+      bytecode: "010203",
+      max_execution_fee: "0000000000000000",
+    });
+    expect(
+      argumentsOf("cook_from_account", Uint8Array.from(BUILT.cook_from_account!.data!)),
+    ).toEqual({
+      pot_salt: hex(SALT),
+      pot_bump: "fd",
+      pin: null,
+      max_execution_fee: "0000000000000000",
+    });
   });
 
   /**
