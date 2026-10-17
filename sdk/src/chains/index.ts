@@ -1,4 +1,5 @@
 import type { Chain, NativeErc20 } from "../core/types.js";
+import type { CanonicalChain } from "./canonical.js";
 
 export type { NativeErc20 } from "../core/types.js";
 
@@ -268,6 +269,26 @@ export const chains: Record<number, Chain> = {
 
 export function getChain(chainId: number): Chain | undefined {
   return chains[chainId];
+}
+
+/** The native coin of each canonical chain `chains` does not carry, by slug. */
+const NATIVE_SYMBOLS: Readonly<Record<string, string>> = {
+  unichain: "ETH",
+  monad: "MON",
+  sonic: "S",
+  ronin: "RON",
+  plasma: "XPL",
+  ink: "ETH",
+  solana: "SOL",
+};
+
+/**
+ * The symbol of `chain`'s native coin — ETH, SOL, AVAX, … — as `chains` records it, or for a
+ * canonical chain it does not carry, as the table above does. A program reads a holder's balance of
+ * it as `<holder>.<symbol>` (`self.ETH`).
+ */
+export function nativeCoinSymbol(chain: CanonicalChain): string | undefined {
+  return chains[chain.id]?.nativeCurrency.symbol ?? NATIVE_SYMBOLS[chain.slug];
 }
 
 export function getAllChainIds(): number[] {
