@@ -139,7 +139,7 @@ describe("the cook's builder's model of a swap at a price", () => {
         ? null
         : { data: BYTES.get(at)!, owner: account.owner as Address };
     };
-    const stopsOf = async (body: string) => {
+    const stopsOf = async (body: string, limit = priceLimit) => {
       const program = compileSauceProgram(
         "solana",
         "function main(amountIn: Uint256, priceLimit: Uint256, n: Uint256): Uint256 {\n" +
@@ -156,7 +156,13 @@ describe("the cook's builder's model of a swap at a price", () => {
         });
         accounts[name] = value;
       }
-      return svmProgramStops(program, requireChain("solana"), accounts, { priceLimit }, load);
+      return svmProgramStops(
+        program,
+        requireChain("solana"),
+        accounts,
+        { priceLimit: limit },
+        load,
+      );
     };
     const cost = SVM_SWAP_COSTS[ORCA_WHIRLPOOL_PROGRAM_ID]!;
 
@@ -199,6 +205,28 @@ describe("the cook's builder's model of a swap at a price", () => {
       ))!;
       expect([negative.unbounded, negative.binding]).toEqual([{ label, runs: null }, []]);
       expect(await stopsOf("for (let i = 0; i < 0; i++) { got += SWAP; }")).toBeUndefined();
+    });
+
+    // A swap in a loop that never runs is no swap, whatever the loops around it or inside it count:
+    // the swap after it is worked out alone. At 1.3 times the pool's price that one's walk crosses
+    // more initialized ticks than the cook pays for, so it is held.
+    it("leaves out a swap in a loop that never runs, and holds the swap after it", async () => {
+      const wide = (allIn(orca, false) * 13000n) / 10000n;
+      const at = "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:@priceLimit";
+      for (const [outer, inner] of [
+        ["for (let i = 0; i < 0; i++)", "for (let j = -1; j > 0; j--)"],
+        ["for (let j = -1; j > 0; j--)", "for (let i = 0; i < 0; i++)"],
+      ]) {
+        const stops = (await stopsOf(
+          `${outer} {\n    ${inner} {\n      got += SWAP;\n    }\n  }\n  got += SWAP;`,
+          wide,
+        ))!;
+        expect([stops.unbounded, stops.binding]).toEqual([undefined, [`${at}#2`]]);
+        expect(stops.fixed.units).toBe(SVM_COOK_FIXED + SVM_SWAP_FIXED);
+        const [live] = stops.stops;
+        expect([live!.name, live!.skipped]).toEqual([`${at}#2`, undefined]);
+        expect(live!.stopTick).toBeDefined();
+      }
     });
 
     // Four runs of the swap's own work fit one cook; five do not, so a loop written to run it five

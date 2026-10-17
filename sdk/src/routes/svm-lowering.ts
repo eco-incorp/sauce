@@ -530,19 +530,21 @@ export class SvmLowering {
 
   /**
    * How many times `node`, in `main`'s body, runs: once outside any loop, else the product of the
-   * counts of the loops around it, each where the loop writes it out (`loopCount`); null where one
-   * does not.
+   * counts of the loops around it (`loopCount`). A loop that never runs makes it 0, whatever the
+   * other loops' counts, inside or outside it; short of that, null where one does not write its
+   * count out.
    */
   runsOf(node: AstNode): number | null {
-    let runs: bigint | null = 1n;
+    let runs = 1n;
+    let counted = true;
     walk(this.main?.body, (n) => {
-      if (runs === null || n.start > node.start || node.end > n.end) return;
-      if (!LOOPS.has(n.type)) return;
+      if (n.start > node.start || node.end > n.end || !LOOPS.has(n.type)) return;
       const count = loopCount(n);
-      runs = count === null ? null : runs * count;
+      if (count === null) counted = false;
+      else runs *= count;
     });
 
-    return runs === null ? null : Number(runs);
+    return runs === 0n ? 0 : counted ? Number(runs) : null;
   }
 
   /** `main`'s parameter `name`: an `Address`, an `Account` (with whether it is writable), or other. */

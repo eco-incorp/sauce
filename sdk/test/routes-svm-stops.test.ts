@@ -160,6 +160,15 @@ describe("each Solana swap at a price's stop, as the cook's builder names it", (
     ).toEqual({ [at]: null });
     expect(runs("for (let i = 0; i < 4; i++) { BODY }", "i += 1; ")).toEqual({ [at]: null });
     expect(runs("while (got < amountIn) { BODY }")).toEqual({ [at]: null });
+    // A loop that never runs makes the swap in it run never, whatever another loop around it or
+    // inside it counts, a negative one or one bound by a value.
+    for (const [outer, inner] of [
+      ["for (let i = 0; i < 0; i++)", "for (let j = -1; j > 0; j--)"],
+      ["for (let j = -1; j > 0; j--)", "for (let i = 0; i < 0; i++)"],
+      ["for (let i = 0; i < n; i++)", "for (let j = 0; j < 0; j++)"],
+    ]) {
+      expect(runs(`${outer} { ${inner} { BODY } }`)).toEqual({ [at]: 0 });
+    }
     // Outside any loop it runs once, and is not listed.
     expect(compileSauceProgram("solana", twice).stoppableRuns).toBeUndefined();
   });
