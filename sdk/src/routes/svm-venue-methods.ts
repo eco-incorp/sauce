@@ -105,7 +105,7 @@ const venue = (namespace: string, name: string, swap: string, exact?: true): Svm
   };
 };
 
-/** The concentrated-liquidity venues, whose swap at a price takes a `stop` after its recipient. */
+/** The concentrated-liquidity venues, whose swap at a price has a form held to a stop. */
 export const SVM_STOPPED_VENUES: ReadonlySet<string> = new Set([
   "Raydium.CLMM",
   "Pancakeswap.CLMM",
@@ -419,12 +419,20 @@ export function collectVenueMethods(l: SvmLowering): void {
       l.account(MEMO_PROGRAM, "memoProgram", {}),
     ];
     const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
-    const fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
-    // The swap's stop, which the cook's builder works out for this pool paying `tokenIn`, from the
-    // limit it is given: main's parameter or a number written out, read as the cook is built.
-    const stop = SVM_STOPPED_VENUES.has(namespace)
-      ? `, ${l.value(`stop:${pool.name}:${tokenIn.name}:${limitOf(args[4]!)}`, `${pool.stem}Stop`)}`
-      : "";
+    // A swap a stop could hold, by its stop's derivation, for the cook's builder, which works the
+    // stop out from the pool paying `tokenIn` and the limit it is given (main's parameter or a
+    // number written out). Only one compiled to be held (`stopped`) calls the Stopped form, with the
+    // stop added to main; every other swap is the plain one.
+    let fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
+    let stop = "";
+    if (SVM_STOPPED_VENUES.has(namespace)) {
+      const derivation = `stop:${pool.name}:${tokenIn.name}:${limitOf(args[4]!)}`;
+      if (!l.stoppable.includes(derivation)) l.stoppable.push(derivation);
+      if (l.stopped.has(derivation)) {
+        fn = `${fn}Stopped`;
+        stop = `, ${l.value(derivation, `${pool.stem}Stop`)}`;
+      }
+    }
     l.spliceCall(
       site,
       amountIn,

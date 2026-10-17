@@ -66,7 +66,7 @@ import {
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
-import { svmProgramStops, type SvmProgramStops } from "../svm/compute-stops.js";
+import { svmProgramStops, svmStopValues, type SvmProgramStops } from "../svm/compute-stops.js";
 import type { SvmSlot } from "../svm/pool-slot.js";
 import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
@@ -1557,26 +1557,25 @@ async function prepare(
 ): Promise<Prepared> {
   refusePastDeadline(input);
   const via = input.via ?? "kitchen";
-  const program = compileProgram(input, files);
-  // The arguments are checked before anything is read: the stops come after them.
-  svmPayload(program, input.args);
-  const manifest = program.manifest ?? { accounts: [] };
-  requireSvmAccounts(manifest, program.derivedAccounts, input.accounts, via);
+  // Compiled with every swap the plain one; a swap whose stop binds is compiled again, below, to
+  // the Stopped form. The arguments are checked before anything is read.
+  const plain = compileProgram(input, files);
+  svmPayload(plain, input.args);
+  const manifest = plain.manifest ?? { accounts: [] };
+  requireSvmAccounts(manifest, plain.derivedAccounts, input.accounts, via);
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
   // The slots the token methods added that no `--account` gave: the command derives each.
   const derived = new Set(
-    Object.keys(program.derivedAccounts ?? {}).filter(
-      (name) => !Object.hasOwn(input.accounts, name),
-    ),
+    Object.keys(plain.derivedAccounts ?? {}).filter((name) => !Object.hasOwn(input.accounts, name)),
   );
   const found = new Map<string, Address | null>();
   // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster, and so are
   // the pools and tick arrays a swap's stop is worked out from.
   const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
-  const keyArguments = svmKeyArguments(program, input.args);
+  const keyArguments = svmKeyArguments(plain, input.args);
   const given = await resolveTokenAccounts(
-    svmAccountsWanted(program, input.accounts),
+    svmAccountsWanted(plain, input.accounts),
     input.owner,
     pot,
     input.chain,
@@ -1590,7 +1589,7 @@ async function prepare(
   const stopsFor = (fixed?: number, scale?: number): Promise<SvmProgramStops | undefined> =>
     ask(input.rpcUrl, "the pools the swaps stop in", () =>
       svmProgramStops(
-        program,
+        plain,
         input.chain,
         given.accounts,
         keyArguments.integers,
@@ -1599,8 +1598,15 @@ async function prepare(
         scale,
       ),
     );
+  // The program a cook runs: the plain one where no stop binds, byte for byte; else each binding
+  // swap compiled to the Stopped form, its stop after main's arguments. The accounts are the same.
+  const held = (stops: SvmProgramStops | undefined): CompiledSauceProgram =>
+    stops === undefined || stops.binding.length === 0
+      ? plain
+      : compileProgram(input, files, undefined, stops.binding);
   const stops = await stopsFor(settled?.fixed, settled?.scale);
-  const bytecode = svmPayload(program, input.args, stops?.values ?? []);
+  const program = held(stops);
+  const bytecode = svmPayload(program, input.args, svmStopValues(stops, program));
   refuseTooManyAccounts(
     given.accounts,
     input.owner,
@@ -1644,9 +1650,11 @@ async function prepare(
     ...(stops === undefined ? {} : { stops }),
     restop: async (fixed, scale) => {
       const again = await stopsFor(fixed, scale);
+      const recompiled = held(again);
       return {
         ...prepared,
-        bytecode: svmPayload(program, input.args, again?.values ?? []),
+        program: recompiled,
+        bytecode: svmPayload(recompiled, input.args, svmStopValues(again, recompiled)),
         ...(again === undefined ? {} : { stops: again }),
       };
     },
@@ -1926,15 +1934,15 @@ async function withStops(
   const ranOut = (out: CommandOutput): boolean =>
     out.json.ok === false && svmRanOutOfUnits(logsOf(out));
   const holds = (stops: SvmProgramStops | undefined): boolean =>
-    stops !== undefined &&
-    stops.stops.some((stop) => stop.stop === 1n || stop.stopTick !== undefined);
+    stops !== undefined && stops.binding.length > 0;
   // A cook that succeeds with a pool held: the cook's own units, measured, are what the venues are
   // given the rest of, once more, kept where that cook succeeds too.
   if (holds(prepared.stops) && output.json.ok !== false && output.json.computeUnits !== undefined) {
     const fixed = svmCookFixedUnits(BigInt(output.json.computeUnits as string), logsOf(output));
     if (fixed < prepared.stops!.fixed.units) {
       const loosened = await prepared.restop(fixed);
-      if (loosened.stops!.values.some((value, i) => value !== prepared.stops!.values[i])) {
+      const before = prepared.stops!.stops.map((stop) => stop.stop);
+      if (loosened.stops!.stops.some((stop, i) => stop.stop !== before[i])) {
         const again = await simulate(loosened);
         if (again.json.ok !== false) {
           prepared = loosened;
@@ -2568,9 +2576,12 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
         ? []
         : [
             ...svmStopLines(prepared.stops),
-            "Each pool's stop comes from the cost table, with no simulation: `sauce simulate` and " +
-              "`sauce run` check the stops in a simulation, and tighten them where the cook would " +
-              "run out of compute units.",
+            "Each pool's stop comes from the cost table, with no simulation. A stop lowers the " +
+              "risk that a pool runs the cook out of compute units, and does not remove it: it is " +
+              "fixed now, from the pools' prices now, and a price that moves before the cook lands " +
+              "can leave a pool more initialized ticks to cross than were priced; the 15% kept " +
+              "back for that is not yet measured. `sauce simulate` and `sauce run` check the " +
+              "stops in a simulation first, and tighten them where the cook would run out.",
           ]),
       single
         ? `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +

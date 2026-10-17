@@ -2037,9 +2037,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "next slot), and sauce_send with the cursor alone builds it then. A Solana cook its " +
         "simulation says would fail is not built: the result is an error carrying `fails` and " +
         "the simulation's `logs`, and its cursor, which sauce_send simulates again once what " +
-        "the cook needs is there. A Solana swap at a price carries a stop, worked out from its " +
-        "pool's tick arrays and the cost table, the deepest pool first, so that no pool runs " +
-        "the cook out of compute units: `computeStops` names each pool held short of its limit " +
+        "the cook needs is there. A Solana swap at a price may be held to a stop, worked out " +
+        "from its pool's tick arrays and the cost table, the deepest pool first, to lower the " +
+        "risk that a pool runs the cook out of compute units (a price that moves before the " +
+        "cook lands can still): `computeStops` names each pool held short of its limit " +
         "(`held`, its `stopPrice`) or skipped, and sauce_simulate checks them in a simulation. " +
         "Nothing needs a fresh keypair: the owner signs and pays every " +
         "transaction. `notes` say what must be " +
@@ -2345,11 +2346,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "compute units, the fee, each token account's change and `leftInPot` (the Pot's token " +
         "accounts left holding something), or the reason and the program logs; a cook too large for one " +
         "transaction, or given assumeBalance, in a local copy of the accounts it names (`path`), " +
-        "its program staged as sauce run stages it. A Solana swap at a price carries a stop " +
-        "that keeps its pool within its share of the cook's compute units, the deepest pool " +
-        "first (`computeStops`: each pool held short of its limit, `held` with its `stopPrice`, " +
-        "or `skipped`): a cook that runs out of units anyway is simulated again with the stops " +
-        "tightened, twice, then refused. `sourceSha256` is the " +
+        "its program staged as sauce run stages it. A Solana swap at a price may be held to a " +
+        "stop that keeps its pool within its share of the cook's compute units, the deepest " +
+        "pool first (`computeStops`: each pool held short of its limit, `held` with its " +
+        "`stopPrice`, or `skipped`): a cook that runs out of units anyway is simulated again " +
+        "with the stops tightened, twice, then refused. `sourceSha256` is the " +
         "sha256 of the program's text. Nothing is signed or sent.",
       input: {
         ...PROGRAM,

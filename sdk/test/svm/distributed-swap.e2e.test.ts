@@ -38,7 +38,11 @@ import {
 } from "../../src/svm/index.js";
 import type { SvmSlot } from "../../src/svm/pool-slot.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
-import { svmProgramStops, type SvmProgramStops as SvmStops } from "../../src/svm/compute-stops.js";
+import {
+  svmProgramStops,
+  svmStopValues,
+  type SvmProgramStops as SvmStops,
+} from "../../src/svm/compute-stops.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import {
   describeSvm,
@@ -65,7 +69,6 @@ import {
   pool,
   restoreVenues,
   windowBound,
-  windowStop,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -118,9 +121,9 @@ interface Order {
   /** Bytes to change in fixture accounts before the cook: pools emptied. */
   edit?: Edit[];
   /** The program to cook, when not the skill's: one taking the same arguments. */
-  program?: ReturnType<typeof compileSauceProgram>;
-  /** The swaps' stops, as given, in place of the ones the command works out. */
-  stops?: readonly bigint[];
+  source?: string;
+  /** Every swap the plain one, in place of the stops the command works out. */
+  unheld?: boolean;
 }
 
 type Outcome =
@@ -201,7 +204,9 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
 
   const cook = async (order: Order): Promise<Outcome> => {
     restoreVenues(harness.svm, order.edit);
-    const cooked = order.program ?? program;
+    // The program as the command compiles it: plain, then each swap whose stop binds held.
+    const text = order.source ?? source;
+    const plain = text === source ? program : compileSauceProgram("solana", text);
     const kept = order.kept ?? 0n;
     const ata = (holder: Address, mint: Address) =>
       svmTokenAccount({ mint, tokenProgram: TOKEN }, holder);
@@ -224,10 +229,10 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
 
     // Each account the program names, from its derivation, as the command resolves it.
     const slots = new Map<string, Promise<SvmSlot>>();
-    const derived = cooked.derivedAccounts as Readonly<Record<string, string>>;
+    const derived = plain.derivedAccounts as Readonly<Record<string, string>>;
     const named: Record<string, string> = {};
     const tail = await Promise.all(
-      cooked.manifest!.accounts.map(async (entry) => {
+      plain.manifest!.accounts.map(async (entry) => {
         if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
         const derivation = derived[entry.name];
         if (derivation === undefined) throw new Error(`${entry.name} is not derived`);
@@ -249,6 +254,19 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       }),
     );
 
+    // Each swap's stop, as the command works it out from the pools it read: a swap it binds
+    // compiled to the Stopped form, its stop after main's own arguments.
+    const stops = await svmProgramStops(
+      plain,
+      requireChain("solana"),
+      named,
+      { priceLimit: order.priceLimit },
+      load,
+    );
+    const cooked =
+      order.unheld === true || stops === undefined || stops.binding.length === 0
+        ? plain
+        : compileSauceProgram("solana", text, { stops: stops.binding });
     // The cook carries the program and its arguments staged in a code buffer, and its accounts
     // through a lookup table: as `sauce run` stages a program too large for one transaction. An
     // `Address` argument is its key's 32 bytes, one word, as the command encodes it.
@@ -259,14 +277,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         type: param.type.replace(/\bAddress\b/g, "Uint256"),
       })),
     };
-    // Each swap's stop, as the command works it out from the pools it read, after main's own.
-    const stops = await svmProgramStops(
-      cooked,
-      requireChain("solana"),
-      named,
-      { priceLimit: order.priceLimit },
-      load,
-    );
+
     const args = encodeEntryArguments(
       {
         ...keyed,
@@ -278,7 +289,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         order.minTokens ?? 0n,
         order.maxAvgPrice ?? 0n,
         word(to),
-        ...(order.stops ?? stops?.values ?? []),
+        ...svmStopValues(order.unheld === true ? undefined : stops, cooked),
       ],
     );
     const payload = new Uint8Array(cooked.bytecode.length + args.length);
@@ -458,15 +469,13 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(alone.spent * E18).toBeLessThanOrEqual(priceLimit * alone.bought);
   }, 120_000);
 
-  it("walks PancakeSwap's far-priced pool into the furthest array its slot gives, to that array's last initialized tick", async () => {
+  it("stops PancakeSwap's far-priced pool a tick inside the two arrays its slot gives it", async () => {
     // Its slot paying USDC is its bitmap extension and two arrays, which its swap walks and no
     // further: a limit at three times its price, with the budget to reach it, used to fail the cook
-    // (`NotEnoughTickArrayAccount`). The router alone stops where the furthest array begins; the
-    // stop the command works out takes it on to that array's last initialized tick, which the router
-    // checks with one read, and the pool's price ends a tick inside it.
+    // (`NotEnoughTickArrayAccount`); it stops a tick inside the window, the pool's price exactly the
+    // window's bound.
     const wide = allIn(PANCAKE, false) * 3n;
-    const bound = windowBound(PANCAKE, false, undefined, true);
-    expect(bound).toBeGreaterThan(windowBound(PANCAKE, false));
+    const bound = windowBound(PANCAKE, false);
     expect(ownLimit(PANCAKE, wide, false)).toBeGreaterThan(bound);
     const alone = succeeded(
       await cook({
@@ -474,11 +483,6 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         priceLimit: wide,
         edit: emptied(RAYDIUM, BYREAL),
       }),
-    );
-    const stop = alone.stops!.stops.find((one) => one.pool === PANCAKE.pool)!;
-    // The tick, biased, and from bit 40 the slot place of the array it lies in.
-    expect(stop.stop & 0xffffffffn).toBe(
-      BigInt(windowStop(PANCAKE, false, undefined, true)!) + (1n << 31n),
     );
     expect(alone.bought).toBeGreaterThan(0n);
     expect(priceOf(PANCAKE)).toBe(bound);
@@ -495,7 +499,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     const unheld = await cook({
       budget,
       priceLimit: wide,
-      stops: program.derivedValues!.map(() => 0n),
+      unheld: true,
     });
     expect(!unheld.ok && unheld.logs.some((line) => line.includes("exceeded CUs meter"))).toBe(
       true,
@@ -525,10 +529,8 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       "    Orca.Whirlpool.pool(USDC, SPCX_US, 64, 1025),\n" +
       "    USDC,\n    SPCX_US,\n    self.USDC - kept,\n    priceLimit,\n    0,\n  );\n";
     const at = source.indexOf("  bought += Byreal.CLMM.swap(");
-    const withOrca = compileSauceProgram(
-      "solana",
-      `${source.slice(0, at)}${orca}${source.slice(at)}`,
-    );
+    const withOrcaSource = `${source.slice(0, at)}${orca}${source.slice(at)}`;
+    const withOrca = compileSauceProgram("solana", withOrcaSource);
     expect(Object.values(withOrca.derivedAccounts!)).toContain(
       "slot:Orca.Whirlpool(USDC,SPCX_US,64,1025):USDC.pool",
     );
@@ -536,7 +538,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     // nothing, and the order is the program's without it.
     const budget = 1_000_000n * 10n ** 6n;
     const plain = succeeded(await cook({ budget, priceLimit }));
-    const tried = succeeded(await cook({ budget, priceLimit, program: withOrca }));
+    const tried = succeeded(await cook({ budget, priceLimit, source: withOrcaSource }));
     expect(priceOf(ORCA)).toBe(snapshotPrice(ORCA));
     expect([tried.spent, tried.bought, tried.unspent]).toEqual([
       plain.spent,

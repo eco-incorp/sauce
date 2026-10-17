@@ -170,14 +170,11 @@ const closer = (price: bigint, n: bigint, up: boolean): bigint => {
 /**
  * The window a swap at a price walks, as `router.svm.js` reads it from the pool and the slot's tick
  * arrays (`ticks`, the pool's own both ways by default): its last safe tick, undefined for none.
- * `deep`: as the swap's `stop` takes it on Raydium's code and Crema where the command works it out,
- * into the furthest array past the price, to its last initialized tick that way.
  */
 export const windowStop = (
   p: Pool,
   paysA: boolean,
   ticks = paysA ? p.payA : p.payB,
-  deep = false,
 ): number | undefined => {
   const data = BYTES.get(p.pool)!;
   const down = paysA;
@@ -209,14 +206,13 @@ export const windowStop = (
         far = { data: array!, start, dynamic: kind === "6a8b98247599b838" };
     }
     if (far !== undefined) {
-      const past = down ? far.start + span <= tick : far.start > tick;
-      if (past && !deep) {
+      if (down ? far.start + span <= tick : far.start > tick) {
         stop = down ? far.start + span : far.start;
       } else {
         const here = Math.floor((tick - far.start) / spacing);
         for (let n = 0; n < 60 && stop === undefined; n++) {
           const offset = down ? n : 59 - n;
-          if (!past && (down ? offset > here : offset <= here)) break;
+          if (down ? offset > here : offset <= here) break;
           let at = 64 + offset * 168;
           if (far.dynamic) {
             const place = far.data[48 + offset]!;
@@ -224,7 +220,6 @@ export const windowStop = (
           }
           if (at !== 0 && le(far.data, at, 16) !== 0n) stop = far.start + offset * spacing;
         }
-        if (stop === undefined && past) stop = down ? far.start + span : far.start;
       }
     }
   } else if (layout.tick === 206) {
@@ -233,17 +228,15 @@ export const windowStop = (
     const passed = ticks.filter((at) => at !== SYSTEM);
     const array = BYTES.get(passed[passed.length - 1]!)!;
     const start = -443636 + (443636 % spacing) + Number(le(array, 8, 2)) * span;
-    const past = down ? start + span <= tick : start > tick;
-    if (past && !deep) {
+    if (down ? start + span <= tick : start > tick) {
       stop = down ? start + span : start;
     } else {
       const here = Math.floor((tick - start) / spacing);
       for (let n = 0; n < 64 && stop === undefined; n++) {
         const offset = down ? n : 63 - n;
-        if (!past && (down ? offset > here : offset <= here)) break;
+        if (down ? offset > here : offset <= here) break;
         if (array[44 + offset * 133] === 1) stop = start + offset * spacing;
       }
-      if (stop === undefined && past) stop = down ? start + span : start;
     }
   } else {
     const spacing = Number(le(data, layout.tick === 81 ? 41 : 139, 2));
@@ -257,12 +250,7 @@ export const windowStop = (
 
 /** The sqrt price the router holds a swap at a price to: a tick inside the window's last safe tick
  *  (`windowStop`), or the pool's price where it leaves no room. */
-export const windowBound = (
-  p: Pool,
-  paysA: boolean,
-  ticks = paysA ? p.payA : p.payB,
-  deep = false,
-): bigint => {
+export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.payB): bigint => {
   const data = BYTES.get(p.pool)!;
   const at = ["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"].includes(p.venue)
     ? { tick: 269, price: 253 }
@@ -273,7 +261,7 @@ export const windowBound = (
         : { tick: 206, price: 190 };
   const tick = i32(data, at.tick);
   const price = le(data, at.price, 16);
-  const stop = windowStop(p, paysA, ticks, deep);
+  const stop = windowStop(p, paysA, ticks);
   if (stop === undefined) return price;
   if (paysA) return stop + 1 < tick ? closer(price, BigInt(tick - stop - 1), false) : price;
   return stop > tick + 2 ? closer(price, BigInt(stop - tick - 2), true) : price;

@@ -299,9 +299,14 @@ export function compileProgram(
   input: ProgramInput,
   files: CliFiles,
   onContract?: (reference: string, target: AccessorTarget) => void,
+  /** On Solana, the swaps to compile held to a stop (`SauceProgramOptions.stops`). */
+  stops?: readonly string[],
 ): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
+    return compileSauceProgram(input.chain, input.text, {
+      ...compileOptions(input, files, onContract),
+      ...(stops === undefined ? {} : { stops }),
+    });
   } catch (error) {
     const described = describeCompileError(error, input.file, input.text, input.chain);
     // A relative import that did not resolve, from a program with no directory of its own.

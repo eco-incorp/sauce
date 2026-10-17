@@ -35,6 +35,8 @@ export interface SvmLoweringResult {
    * arguments a caller gives.
    */
   readonly values?: Readonly<Record<string, string>>;
+  /** Each venue's swap at a price that a stop could hold, by its stop's derivation, in order. */
+  readonly stoppable?: readonly string[];
 }
 
 /** A mint as a call names it. */
@@ -254,6 +256,8 @@ export class SvmLowering {
   private readonly functions: AstNode[] = [];
   private readonly slots: Slots;
   private readonly values = new Map<string, string>();
+  /** Each swap at a price a stop could hold, by its stop's derivation. */
+  readonly stoppable: string[] = [];
   private readonly sites: { readonly node: AstNode; readonly lower: () => void }[] = [];
   /** Each module's imports, `name as local`, in the order they were first used. */
   private readonly imports = new Map<string, Map<string, string>>();
@@ -273,6 +277,8 @@ export class SvmLowering {
     private readonly keys: ReadonlyMap<string, bigint> = new Map(),
     /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads as a token's is read. */
     readonly native?: string,
+    /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
+    readonly stopped: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -626,6 +632,7 @@ export class SvmLowering {
               [...this.values].map(([derivation, name]) => [name, derivation]),
             ),
           }),
+      ...(this.stoppable.length === 0 ? {} : { stoppable: this.stoppable }),
     };
   }
 }

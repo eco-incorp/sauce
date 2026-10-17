@@ -120,6 +120,8 @@ export function rewriteSvmTokenSyntax(
   keys?: ReadonlyMap<string, bigint>,
   /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads. */
   native?: string,
+  /** The swaps at a price to hold to a stop (`SvmLowering`'s `stopped`). */
+  stopped?: ReadonlySet<string>,
 ): SvmTokenRewriteResult {
   // Before parsing: a program that names neither `Token`, a symbol nor a venue has nothing to lower.
   // The scan stops at the first it meets; a mention in a comment only costs the parse.
@@ -137,7 +139,7 @@ export function rewriteSvmTokenSyntax(
   ) {
     return { source, rewrote: false, derived: {} };
   }
-  const lowering = new SvmLowering(unrollPoolKeyLoops(source), tokens, rows, keys, native);
+  const lowering = new SvmLowering(unrollPoolKeyLoops(source), tokens, rows, keys, native, stopped);
   collectTokenMethods(lowering);
   collectVenueMethods(lowering);
   collectAccountExpressions(lowering);

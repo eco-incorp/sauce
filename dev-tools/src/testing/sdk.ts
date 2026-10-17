@@ -75,7 +75,7 @@ export {
   type AccountResolution,
   type ResolvedSvmAccountName,
 } from "../../../sdk/dist/svm/index.js";
-export { svmProgramStops } from "../../../sdk/dist/svm/compute-stops.js";
+export { svmProgramStops, svmStopValues } from "../../../sdk/dist/svm/compute-stops.js";
 export {
   svmEnginePath,
   svmKitchenIdlPath,
