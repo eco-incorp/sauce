@@ -433,9 +433,9 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   // whirlpools' `TickArraySequenceInvalidIndex`; Crema's `NextTickNotFound`). A swap at a price holds
   // its limit a tick inside its window's last safe tick, so an order with a limit at three times the
   // pool's price and the input to reach it stops there, its pool's price exactly the window's bound.
-  // PancakeSwap's and Byreal's fixture pools run out of compute units walking their own ticks before
-  // they reach their windows with no stop (below, with the one the command works out); Byreal's
-  // stops at its window in the cell for the price's own array below.
+  // Byreal's fixture pool runs out of compute units walking its own ticks before it reaches its
+  // window with no stop (below, with the one the command works out), and stops at its window in the
+  // cell for the price's own array below. PancakeSwap's has its own cell, after this one.
   it.each(["RaydiumClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
     "%s: a limit far past its window stops a tick inside it, where the cook used to fail",
     async (venue) => {
@@ -494,7 +494,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   /** A swap's pool as the command reads it for its stop. */
   const poolOf = (order: Order): SvmStopPool => {
     const p = order.pool;
-    const paysA = key(USDC) < key(order.buy);
+    const paysA = key(order.pay) < key(order.buy);
     const layout = (
       {
         "raydium-clmm": "raydium",
@@ -610,6 +610,40 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     },
     300_000,
   );
+
+  // Paying the lower-key token the price falls to its own limit's sqrt price. An initialized tick
+  // just below that limit is never reached, so never crossed, and the walk's last stretch buys the
+  // token the swap pays out. Orca's SOL/USDC pool sold into at two limits a hair apart, both just
+  // above the initialized tick -21400: the walk buys what each swap does, the farther limit more,
+  // and that one ranks first at the same units.
+  it("OrcaWhirlpool: a falling walk ends at its own limit, short of the tick it lies above", async () => {
+    const p = pool("orca-whirlpool-sol-usdc");
+    const orders = [8501716531025289579n, 8501291477077584537n].map((priceLimit): Order => ({
+      pool: p,
+      pay: WSOL,
+      buy: USDC,
+      amountIn: 100_000n * 10n ** 9n,
+      priceLimit,
+    }));
+    const walks = orders.map((order) => svmPoolWalk(poolOf(order)));
+    const received: bigint[] = [];
+    for (const [i, order] of orders.entries()) {
+      const walk = walks[i]!;
+      expect(walk.crossed).not.toContain(-21400);
+      const outcome = succeeded(await cook(compiled("orcaWhirlpool"), order));
+      expect(i32(poolData(p), 81)).toBe(walk.limitTick);
+      const gap = walk.output - outcome.received;
+      expect((gap < 0n ? -gap : gap) * 1000n).toBeLessThanOrEqual(walk.output);
+      received.push(outcome.received);
+    }
+    expect(received[0]! > received[1]!).toBe(true);
+    expect(walks[0]!.output > walks[1]!.output).toBe(true);
+    const [far, near] = svmComputeStops(
+      orders.map((order, i) => ({ ...poolOf(order), name: `limit ${i}` })),
+      SVM_COOK_UNITS - SVM_COOK_FIXED - 2 * SVM_SWAP_FIXED,
+    );
+    expect([far!.estimatedUnits, far!.rank, near!.rank]).toEqual([near!.estimatedUnits, 0, 1]);
+  }, 120_000);
 
   // The Stopped form's own checks: a stop of 1 skips the pool, moving nothing; and a pool whose
   // price has moved further from its stop than the start bound the stop carries (from bit 192) is

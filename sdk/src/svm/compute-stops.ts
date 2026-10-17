@@ -382,12 +382,13 @@ function skipped(layout: SvmStopLayout, pool: Uint8Array): boolean {
   return false;
 }
 
-/** What `liquidity` buys moving the sqrt price from `from` to `to`: token B falling, A rising. */
-function bought(liquidity: bigint, from: bigint, to: bigint): bigint {
-  if (liquidity <= 0n || from === to) return 0n;
-  return from > to
-    ? (liquidity * (from - to)) / Q64
-    : (liquidity * (to - from) * Q64) / (from * to);
+/**
+ * What `liquidity` buys moving the sqrt price from `from` to `to` the way the swap walks: token B
+ * as it falls (`down`), A as it rises. A stretch the other way buys nothing.
+ */
+function bought(liquidity: bigint, from: bigint, to: bigint, down: boolean): bigint {
+  if (liquidity <= 0n || (down ? to >= from : to <= from)) return 0n;
+  return down ? (liquidity * (from - to)) / Q64 : (liquidity * (to - from) * Q64) / (from * to);
 }
 
 /** How far `pool`'s swap walks, held by nothing but its limit and its window, its cost and output. */
@@ -432,9 +433,14 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
       arrays.flatMap((array) => (array === undefined ? [] : array.ticks.map((t) => [t.tick, t]))),
     ).values(),
   ].sort((a, b) => (down ? b.tick - a.tick : a.tick - b.tick));
-  const crossed = all.filter((t) =>
-    down ? t.tick <= tick && t.tick >= limitTick : t.tick > tick && t.tick <= limitTick,
-  );
+  // The initialized ticks whose sqrt price the walk reaches, which is where a swap crosses one: down,
+  // one at or above where it ends (the tick its own limit lies in, a hair above it, is not), up, one
+  // at or below.
+  const crossed = all.filter((t) => {
+    if (down ? t.tick > tick : t.tick <= tick) return false;
+    const at = raydiumSqrtPriceAtTick(t.tick);
+    return down ? at >= end : at <= end;
+  });
   // What the walk buys: each stretch between initialized ticks at the liquidity then, which each
   // crossing changes by its net (added walking up, taken walking down).
   let output = 0n;
@@ -442,11 +448,11 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   let active = liquidity;
   for (const t of crossed) {
     const next = raydiumSqrtPriceAtTick(t.tick);
-    output += bought(active, at, next);
+    output += bought(active, at, next, down);
     at = next;
     active = down ? active - t.net : active + t.net;
   }
-  output += bought(active, at, end);
+  output += bought(active, at, end, down);
 
   return {
     liquidity,

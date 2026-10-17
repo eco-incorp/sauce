@@ -56,6 +56,22 @@ describe("the cook's builder's model of a swap at a price", () => {
     expect(walk.output).toBeGreaterThan(0n);
   });
 
+  // Paying WSOL the price falls to its own limit's sqrt price. Both limits here lie in the tick just
+  // above the initialized tick -21400, which the walk never reaches: it crosses none, and buys the
+  // USDC the swap paid out on the venue's program (the router suite cooks both).
+  it("ends a falling walk at its own limit, crossing no tick below it", () => {
+    const orca = pool("orca-whirlpool-sol-usdc");
+    const sell = (priceLimit: bigint): SvmStopPool => ({
+      ...fromFixture(orca, priceLimit),
+      arrays: orca.payA.map((at) => BYTES.get(at)),
+      paysA: true,
+    });
+    const far = svmPoolWalk(sell(8501716531025289579n));
+    const near = svmPoolWalk(sell(8501291477077584537n));
+    expect([far.crossed, far.output]).toEqual([[], 43_059_351_872n]);
+    expect([near.crossed, near.output]).toEqual([[], 36_752_743_565n]);
+  });
+
   it("reads Orca's dynamic tick arrays: their start, then each tick tagged, its net first", () => {
     const data = new Uint8Array(8 + 4 + 32 + 16 + 88 + 2 * 112);
     data.set([0x11, 0xd8, 0xf6, 0x8e, 0xe1, 0xc7, 0xda, 0x38]);
