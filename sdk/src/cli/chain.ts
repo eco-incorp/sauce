@@ -537,6 +537,25 @@ export async function simulate(
   try {
     const { data } = await client.call({ account: from, ...tx });
     const gas = await client.estimateGas({ account: from, ...tx });
+    if (process.env.ZZ_GAS_LOG) {
+      (await import("node:fs")).appendFileSync(
+        process.env.ZZ_GAS_LOG,
+        JSON.stringify({
+          kind: "estimate",
+          to: tx.to,
+        calldata: Array.from(Buffer.from(tx.data.slice(2), "hex")).reduce(
+          (sum: number, byte: number) => sum + (byte === 0 ? 4 : 16),
+          0,
+        ),
+        tokens: Array.from(Buffer.from(tx.data.slice(2), "hex")).reduce(
+          (sum: number, byte: number) => sum + (byte === 0 ? 1 : 4),
+          0,
+        ),
+          bytes: (tx.data.length - 2) / 2,
+          gas: gas.toString(),
+        }) + "\n",
+      );
+    }
 
     return { ok: true, returns: data ?? "0x", gas };
   } catch (error) {
@@ -609,6 +628,27 @@ export async function landed(
     client.waitForTransactionReceipt({ hash }),
   );
   seen?.(receipt.status);
+  if (process.env.ZZ_GAS_LOG) {
+    (await import("node:fs")).appendFileSync(
+      process.env.ZZ_GAS_LOG,
+      JSON.stringify({
+        kind: "sent",
+        to: tx.to,
+        calldata: Array.from(Buffer.from(tx.data.slice(2), "hex")).reduce(
+          (sum: number, byte: number) => sum + (byte === 0 ? 4 : 16),
+          0,
+        ),
+        tokens: Array.from(Buffer.from(tx.data.slice(2), "hex")).reduce(
+          (sum: number, byte: number) => sum + (byte === 0 ? 1 : 4),
+          0,
+        ),
+        bytes: (tx.data.length - 2) / 2,
+        gas: receipt.gasUsed.toString(),
+        status: receipt.status,
+        data: tx.data.slice(0, 74),
+      }) + "\n",
+    );
+  }
   const sent = {
     hash,
     status: receipt.status,

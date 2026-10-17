@@ -153,7 +153,23 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
       gas,
     });
 
-    return publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (process.env.ZZ_GAS_LOG) {
+      (await import("node:fs")).appendFileSync(
+        process.env.ZZ_GAS_LOG,
+        JSON.stringify({
+          kind: "cook",
+          calldata: Array.from(Buffer.from(cookData(bytesToHex(program)).slice(2), "hex")).reduce(
+            (sum: number, byte: number) => sum + (byte === 0 ? 4 : 16),
+            0,
+          ),
+          bytes: program.length,
+          gas: receipt.gasUsed.toString(),
+          status: receipt.status,
+        }) + "\n",
+      );
+    }
+    return receipt;
   };
 
   /** Runs `program` as an `eth_call` of the Pot's `cook` from its owner: the bytes `main` returned. */
@@ -164,6 +180,23 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
       data: cookData(bytesToHex(program)),
       gas: 30_000_000n,
     });
+    if (process.env.ZZ_GAS_LOG) {
+      const gas = await publicClient
+        .estimateGas({ account, to: pot, data: cookData(bytesToHex(program)) })
+        .catch(() => -1n);
+      (await import("node:fs")).appendFileSync(
+        process.env.ZZ_GAS_LOG,
+        JSON.stringify({
+          kind: "call",
+          calldata: Array.from(Buffer.from(cookData(bytesToHex(program)).slice(2), "hex")).reduce(
+            (sum: number, byte: number) => sum + (byte === 0 ? 4 : 16),
+            0,
+          ),
+          bytes: program.length,
+          gas: gas.toString(),
+        }) + "\n",
+      );
+    }
 
     return data ?? "0x";
   };

@@ -35,7 +35,7 @@
  */
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -322,9 +322,30 @@ const fulfilment = async (args: Args, source = PROGRAM): Promise<{ data: Hex; va
   };
 };
 
+const zzLog = (kind: string, data: Hex, receipt: { gasUsed: bigint; status: string }): void => {
+  if (!process.env.ZZ_GAS_LOG) return;
+  const bytes = data.slice(2).match(/../g) ?? [];
+  appendFileSync(
+    process.env.ZZ_GAS_LOG,
+    JSON.stringify({
+      kind,
+      test: expect.getState().currentTestName,
+      calldata: bytes.reduce((sum, byte) => sum + (byte === "00" ? 4 : 16), 0),
+      tokens: bytes.reduce((sum, byte) => sum + (byte === "00" ? 1 : 4), 0),
+      length: bytes.length,
+      gas: receipt.gasUsed.toString(),
+      status: receipt.status,
+    }) + "\n",
+  );
+};
+
 /** Sends that fulfilment from the solver; the receipt, reverted or not. */
 const fulfil = async (args: Args, source = PROGRAM): Promise<TransactionReceipt> => {
   const { data, value } = await fulfilment(args, source);
+  if (process.env.ZZ_GAS_LOG) {
+    const { timestamp } = await publicClient.getBlock();
+    await testClient.setNextBlockTimestamp({ timestamp: timestamp + 12n });
+  }
   const hash = await walletClient.sendTransaction({
     account: OWNER,
     chain: null,
@@ -333,7 +354,9 @@ const fulfil = async (args: Args, source = PROGRAM): Promise<TransactionReceipt>
     to: portal,
     value,
   });
-  return publicClient.waitForTransactionReceipt({ hash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  zzLog("fulfil", data, receipt);
+  return receipt;
 };
 
 /** The revert data of that fulfilment, simulated: the Portal's, which carries the body's. */

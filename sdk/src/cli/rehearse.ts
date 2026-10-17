@@ -424,7 +424,26 @@ async function viaEthCall(
 /** Rehearses the cook: through `eth_simulateV1` where the endpoint serves it, else `eth_call`. */
 export async function rehearse(client: PublicClient, input: RehearsalInput): Promise<Rehearsal> {
   try {
-    return await viaSimulateV1(client, input);
+    const rehearsal = await viaSimulateV1(client, input);
+    if (process.env.ZZ_GAS_LOG) {
+      (await import("node:fs")).appendFileSync(
+        process.env.ZZ_GAS_LOG,
+        JSON.stringify({
+          kind: "rehearse",
+          ok: rehearsal.ok,
+          gas: rehearsal.ok ? String(rehearsal.gas) : null,
+          calldata: (input.cook.data.slice(2).match(/../g) ?? []).reduce(
+            (sum, byte) => sum + (byte === "00" ? 4 : 16),
+            0,
+          ),
+          tokens: (input.cook.data.slice(2).match(/../g) ?? []).reduce(
+            (sum, byte) => sum + (byte === "00" ? 1 : 4),
+            0,
+          ),
+        }) + "\n",
+      );
+    }
+    return rehearsal;
   } catch (error) {
     if (error instanceof CliError) throw error;
 

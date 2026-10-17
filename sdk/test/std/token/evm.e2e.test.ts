@@ -52,7 +52,7 @@
  */
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -453,12 +453,28 @@ const SAFE_TS: Spelling = {
   raw: potRaw,
 };
 
+const zzLog = (kind: string, data: Hex, receipt: { gasUsed: bigint; status: string }): void => {
+  if (!process.env.ZZ_GAS_LOG) return;
+  const bytes = data.slice(2).match(/../g) ?? [];
+  appendFileSync(
+    process.env.ZZ_GAS_LOG,
+    JSON.stringify({
+      kind,
+      test: expect.getState().currentTestName,
+      calldata: bytes.reduce((sum, byte) => sum + (byte === "00" ? 4 : 16), 0),
+      tokens: bytes.reduce((sum, byte) => sum + (byte === "00" ? 1 : 4), 0),
+      gas: receipt.gasUsed.toString(),
+      status: receipt.status,
+    }) + "\n",
+  );
+};
+
 /** Send `data` to the Pot, reporting whether it landed. */
 const attemptCall = (data: Hex): Promise<Status> =>
   walletClient
     .sendTransaction({ account: DEPLOYER, chain: null, to: sauce.pot, data, gas: GAS_LIMIT })
     .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
-    .then(({ status }) => status);
+    .then((receipt) => (zzLog("attempt", data, receipt), receipt.status));
 
 /**
  * `body` through `compileSauceRoute`, the path every route-body token spelling takes, returning the
