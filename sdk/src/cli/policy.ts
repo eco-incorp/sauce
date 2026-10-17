@@ -84,12 +84,12 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda, fetchAlt, svmPublicKey } from "../svm/index.js";
+import { fetchAlt, svmPublicKey } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
+import { accountsNow, messageAccounts, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -561,10 +561,10 @@ export async function measureEvm(
   return measured;
 }
 
-/** The Kitchen's two cooks, whose data starts with the Pot's salt. */
+/** The Kitchen's two cooks, by discriminator, and the Pot's index among each one's accounts. */
 const KITCHEN_COOKS = [
-  [147, 233, 205, 239, 200, 21, 190, 159],
-  [247, 166, 195, 248, 78, 176, 147, 84],
+  { head: [147, 233, 205, 239, 200, 21, 190, 159], pot: 2 },
+  { head: [247, 166, 195, 248, 78, 176, 147, 84], pot: 4 },
 ];
 /** The compute-budget program: a transaction's plumbing, not where it goes. */
 const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
@@ -589,21 +589,10 @@ export async function measureSvm(
     addressTableLookups?: readonly unknown[];
   };
   const kitchen = solanaAddress(v12SvmKitchenProgramId());
-  const pots: SvmAddress[] = [];
   const programs = new Set<string>();
   for (const instruction of message.instructions) {
     const program = message.staticAccounts[instruction.programAddressIndex]!;
     if (program !== COMPUTE_BUDGET) programs.add(program);
-    const data = instruction.data ?? new Uint8Array();
-    const owner = message.staticAccounts[instruction.accountIndices?.[0] ?? -1];
-    if (
-      program === kitchen &&
-      owner === wallet &&
-      data.length >= 40 &&
-      KITCHEN_COOKS.some((head) => head.every((byte, at) => data[at] === byte))
-    ) {
-      pots.push((await derivePotPda(kitchen, wallet, data.slice(8, 40))).address);
-    }
   }
   const base = { chain, to: [...programs] };
   const native = (amount: bigint): Outflow => ({
@@ -631,6 +620,23 @@ export async function measureSvm(
         tokens: "a lookup table it loads accounts from could not be read",
       },
     };
+  }
+  // The Pot each of the wallet's cooks runs on: the account the cook names, which the Kitchen checks
+  // against the owner, the salt and the bump the cook carries before it signs for it.
+  const accounts = messageAccounts(transaction, tables);
+  const pots: SvmAddress[] = [];
+  for (const instruction of message.instructions) {
+    const data = instruction.data ?? new Uint8Array();
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+    const pot = accounts[instruction.accountIndices?.[cook?.pot ?? -1] ?? -1];
+    if (
+      cook !== undefined &&
+      pot !== undefined &&
+      message.staticAccounts[instruction.programAddressIndex] === kitchen &&
+      message.staticAccounts[instruction.accountIndices?.[0] ?? -1] === wallet
+    ) {
+      pots.push(pot);
+    }
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
