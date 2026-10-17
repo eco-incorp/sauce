@@ -126,6 +126,34 @@ describe("each Solana swap at a price's stop, as the cook's builder names it", (
     ]);
   });
 
+  it("counts a swap in a loop that writes its count out, and leaves one that does not uncounted", () => {
+    const swap =
+      "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0)";
+    /** The swap's runs in `loop`, written around it, with `also` in the loop's body. */
+    const runs = (loop: string, also = "") =>
+      compileSauceProgram(
+        "solana",
+        "function main(amountIn: Uint256, priceLimit: Uint256, n: Uint256): Uint256 {\n" +
+          `  let got = 0;\n  ${loop.replace("BODY", `${also}got += ${swap};`)}\n  return got;\n}\n`,
+      ).stoppableRuns;
+    const at = "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:@priceLimit";
+    expect(runs("for (let i = 0; i < 2; i++) { BODY }")).toEqual({ [at]: 2 });
+    expect(runs("for (let i = 1; i <= 6; i += 2) { BODY }")).toEqual({ [at]: 3 });
+    expect(runs("for (let i = 3; i > 0; i--) { BODY }")).toEqual({ [at]: 3 });
+    expect(runs("for (const x of [1, 2, 3, 4]) { BODY }")).toEqual({ [at]: 4 });
+    expect(runs("for (let i = 0; i < 2; i++) { for (let j = 0; j < 3; j++) { BODY } }")).toEqual({
+      [at]: 6,
+    });
+    expect(runs("for (let i = 0; i < 0; i++) { BODY }")).toEqual({ [at]: 0 });
+    // A count the loop does not write out: a bound that is a value, a counter its body sets too,
+    // a `while`.
+    expect(runs("for (let i = 0; i < n; i++) { BODY }")).toEqual({ [at]: null });
+    expect(runs("for (let i = 0; i < 4; i++) { BODY }", "i += 1; ")).toEqual({ [at]: null });
+    expect(runs("while (got < amountIn) { BODY }")).toEqual({ [at]: null });
+    // Outside any loop it runs once, and is not listed.
+    expect(compileSauceProgram("solana", twice).stoppableRuns).toBeUndefined();
+  });
+
   it("takes main's priceLimit only as main gave it: not one reassigned or declared again", () => {
     const reassigned = swapAt("Orca.Whirlpool", 4).replace(
       "  return",

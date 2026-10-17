@@ -37,6 +37,8 @@ export interface SvmLoweringResult {
   readonly values?: Readonly<Record<string, string>>;
   /** Each venue's swap at a price that a stop could hold, by its stop's derivation, in order. */
   readonly stoppable?: readonly string[];
+  /** How many times each of those inside a loop runs, by its derivation (`SvmLowering.runsOf`). */
+  readonly stoppableRuns?: Readonly<Record<string, number | null>>;
 }
 
 /** A mint as a call names it. */
@@ -196,6 +198,109 @@ function findMain(program: AstNode): AstNode | undefined {
   return undefined;
 }
 
+/** Every statement that may run its body more than once. */
+const LOOPS = new Set([
+  "ForStatement",
+  "ForOfStatement",
+  "ForInStatement",
+  "WhileStatement",
+  "DoWhileStatement",
+]);
+
+/** An integer written out: `3`, `3n`, `-3`. */
+function integerOf(node: AstNode | null | undefined): bigint | undefined {
+  if (node?.type === "UnaryExpression" && (node as { operator?: string }).operator === "-") {
+    const value = integerOf((node as { argument?: AstNode }).argument);
+    return value === undefined ? undefined : -value;
+  }
+  if (node?.type !== "Literal") return undefined;
+  const { value, bigint } = node as { value?: unknown; bigint?: string };
+  if (bigint !== undefined) return BigInt(bigint);
+  return typeof value === "number" && Number.isSafeInteger(value) ? BigInt(value) : undefined;
+}
+
+/**
+ * How many times a loop's body runs, where the loop writes it out: `for (const x of [a, b])`, or
+ * `for (let i = 0; i < 3; i++)` with a literal start, bound and step (`++`, `--`, `+=`, `-=`) and a
+ * counter its body never sets. Null for any other loop: `while`, a bound that is a value.
+ */
+function loopCount(loop: AstNode): bigint | null {
+  if (loop.type === "ForOfStatement") {
+    const right = (loop as { right?: AstNode }).right;
+    if (right?.type !== "ArrayExpression") return null;
+    const elements = (right as { elements?: (AstNode | null)[] }).elements ?? [];
+    return elements.some((element) => element === null || element.type === "SpreadElement")
+      ? null
+      : BigInt(elements.length);
+  }
+  if (loop.type !== "ForStatement") return null;
+  const { init, test, update, body } = loop as {
+    init?: AstNode | null;
+    test?: AstNode | null;
+    update?: AstNode | null;
+    body?: AstNode;
+  };
+  const declarations = (init as { declarations?: AstNode[] } | null | undefined)?.declarations;
+  if (init?.type !== "VariableDeclaration" || declarations?.length !== 1) return null;
+  const { id, init: first } = declarations[0] as { id?: AstNode; init?: AstNode | null };
+  if (id?.type !== "Identifier") return null;
+  const counter = nameOf(id);
+  const isCounter = (node: AstNode | undefined): boolean =>
+    node?.type === "Identifier" && nameOf(node) === counter;
+  const start = integerOf(first);
+  const { operator, left, right } = (test ?? {}) as {
+    operator?: string;
+    left?: AstNode;
+    right?: AstNode;
+  };
+  const bound = integerOf(right);
+  if (start === undefined || bound === undefined || !isCounter(left)) return null;
+  let step: bigint | undefined;
+  if (update?.type === "UpdateExpression") {
+    const { argument, operator: op } = update as { argument?: AstNode; operator?: string };
+    if (isCounter(argument)) step = op === "++" ? 1n : -1n;
+  } else if (update?.type === "AssignmentExpression") {
+    const {
+      left: target,
+      right: by,
+      operator: op,
+    } = update as {
+      left?: AstNode;
+      right?: AstNode;
+      operator?: string;
+    };
+    const amount = integerOf(by);
+    if (isCounter(target) && amount !== undefined && (op === "+=" || op === "-=")) {
+      step = op === "+=" ? amount : -amount;
+    }
+  }
+  if (step === undefined || step === 0n) return null;
+  let set = false;
+  walk(body, (n) => {
+    if (n.type === "AssignmentExpression" && isCounter((n as { left?: AstNode }).left)) set = true;
+    if (n.type === "UpdateExpression" && isCounter((n as { argument?: AstNode }).argument)) {
+      set = true;
+    }
+  });
+  if (set) return null;
+  // The runs from `start` to `bound` by `step`, none where the test fails at once.
+  const up = step > 0n;
+  const span = up ? bound - start : start - bound;
+  const by = up ? step : -step;
+  switch (operator) {
+    case "<":
+    case ">":
+      if (up !== (operator === "<")) return null;
+      return span <= 0n ? 0n : (span + by - 1n) / by;
+    case "<=":
+    case ">=":
+      if (up !== (operator === "<=")) return null;
+      return span < 0n ? 0n : span / by + 1n;
+    default:
+      return null;
+  }
+}
+
 /** `ctx.self()`, with `ctx` the language's, not a name the program declares. */
 function isCtxSelf(node: AstNode, declared: ReadonlySet<string>): boolean {
   const site = methodCall(node);
@@ -258,6 +363,8 @@ export class SvmLowering {
   private readonly values = new Map<string, string>();
   /** Each swap at a price a stop could hold, by its stop's derivation. */
   readonly stoppable: string[] = [];
+  /** How many times each of those inside a loop runs, by its derivation (`runsOf`). */
+  readonly stoppableRuns = new Map<string, number | null>();
   private readonly sites: { readonly node: AstNode; readonly lower: () => void }[] = [];
   /** Each module's imports, `name as local`, in the order they were first used. */
   private readonly imports = new Map<string, Map<string, string>>();
@@ -411,6 +518,23 @@ export class SvmLowering {
           "itself, or give the helper the accounts and call the library function with them.",
       );
     }
+  }
+
+  /**
+   * How many times `node`, in `main`'s body, runs: once outside any loop, else the product of the
+   * counts of the loops around it, each where the loop writes it out (`loopCount`); null where one
+   * does not.
+   */
+  runsOf(node: AstNode): number | null {
+    let runs: bigint | null = 1n;
+    walk(this.main?.body, (n) => {
+      if (runs === null || n.start > node.start || node.end > n.end) return;
+      if (!LOOPS.has(n.type)) return;
+      const count = loopCount(n);
+      runs = count === null ? null : runs * count;
+    });
+
+    return runs === null ? null : Number(runs);
   }
 
   /** `main`'s parameter `name`: an `Address`, an `Account` (with whether it is writable), or other. */
@@ -633,6 +757,9 @@ export class SvmLowering {
             ),
           }),
       ...(this.stoppable.length === 0 ? {} : { stoppable: this.stoppable }),
+      ...(this.stoppableRuns.size === 0
+        ? {}
+        : { stoppableRuns: Object.fromEntries(this.stoppableRuns) }),
     };
   }
 }

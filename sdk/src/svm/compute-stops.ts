@@ -123,6 +123,12 @@ export interface SvmStopPool {
   readonly paysA: boolean;
   /** The swap's `priceLimit`, where the cook knows it: none is walked to the window's edge. */
   readonly priceLimit?: bigint;
+  /**
+   * How many times the swap runs, in a loop that writes its count out; once when absent. Each run
+   * is charged its swap's own units (`base`), and the walk once: every run walks the same way to the
+   * same limit, from where the one before left the price.
+   */
+  readonly runs?: number;
 }
 
 /** How far a pool's swap would walk, unheld, and what that costs and buys. */
@@ -466,10 +472,13 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   };
 }
 
-/** The units charged for a swap crossing `n` initialized ticks of `pool`'s, with the headroom. */
+/**
+ * The units charged for a swap crossing `n` initialized ticks of `pool`'s, with the headroom: its
+ * own units for each time it runs, and the crossings once.
+ */
 function charged(pool: SvmStopPool, n: number): number {
   const cost = svmSwapCost(pool.program);
-  return cost.base + cost.tick * (n + SVM_HEADROOM_TICKS);
+  return cost.base * (pool.runs ?? 1) + cost.tick * (n + SVM_HEADROOM_TICKS);
 }
 
 /**
@@ -602,6 +611,12 @@ export interface SvmProgramStops {
   readonly fixed: { readonly units: number; readonly measured: boolean };
   /** The units of `SVM_HEADROOM_TICKS` more crossings at every pool that trades. */
   readonly headroom: number;
+  /**
+   * How the program names the pool of a swap in a loop whose count it does not write out, where it
+   * has one: that swap runs a number of times known only as the cook runs, so what it leaves the
+   * others cannot be worked out, and no swap is held. `stops` is then empty.
+   */
+  readonly unbounded?: string;
 }
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
@@ -633,11 +648,12 @@ const feeOf = (layout: SvmStopLayout, pool: Uint8Array, config: Uint8Array | und
  * The stops of `program`'s swaps at a price, read through `load` from the accounts the cook resolved
  * (`accounts`, by `main`'s parameter), with main's `Uint256` arguments by name (`integers`), for a
  * limit a swap takes from one. `fixed` is the cook's own units where a simulation measured them;
- * `scale` shrinks what the venues are given, for a cook that ran out of units anyway. Undefined for
- * a program with no stops.
+ * `scale` shrinks what the venues are given, for a cook that ran out of units anyway. A swap in a
+ * loop is charged for each time the loop runs it (`stoppableRuns`); where a loop does not write its
+ * count out, none is held (`unbounded`). Undefined for a program with no stops.
  */
 export async function svmProgramStops(
-  program: Pick<CompiledSauceProgram, "stoppable" | "derivedAccounts">,
+  program: Pick<CompiledSauceProgram, "stoppable" | "stoppableRuns" | "derivedAccounts">,
   chain: CanonicalChain,
   accounts: Readonly<Record<string, string>>,
   integers: Readonly<Record<string, bigint>>,
@@ -645,9 +661,33 @@ export async function svmProgramStops(
   fixed?: number,
   scale = 1,
 ): Promise<SvmProgramStops | undefined> {
-  const values = (program.stoppable ?? []).map((derive) => ({ name: derive, derive }));
+  // Each swap that runs, with how many times: once outside a loop, never in a loop that never does.
+  const runsOf = (derive: string): number | null =>
+    program.stoppableRuns !== undefined && Object.hasOwn(program.stoppableRuns, derive)
+      ? program.stoppableRuns[derive]!
+      : 1;
+  const values = (program.stoppable ?? [])
+    .map((derive) => ({ name: derive, derive, runs: runsOf(derive) }))
+    .filter((value) => value.runs !== 0);
   if (values.length === 0) return undefined;
   const derived = Object.entries(program.derivedAccounts ?? {});
+  /** The account the cook gives the part `name` of the slot of `pool` paying `token`. */
+  const part = (pool: string, token: string, name: string): string | undefined => {
+    const at = derived.find(([, derive]) => derive === `slot:${pool}:${token}.${name}`)?.[0];
+    return at === undefined ? undefined : accounts[at];
+  };
+  const unbounded = values.find((value) => value.runs === null);
+  if (unbounded !== undefined) {
+    const [, pool, token] = unbounded.derive.split(":") as [string, string, string];
+    return {
+      stops: [],
+      binding: [],
+      budget: 0,
+      fixed: { units: fixed ?? 0, measured: fixed !== undefined },
+      headroom: 0,
+      unbounded: labelOf(pool, (part(pool, token, "pool") ?? "") as Address),
+    };
+  }
   const rows = svmTokenRows(chain);
   const symbolOf = (mint: Address): string => rows.find((row) => row.mint === mint)?.symbol ?? mint;
   const data = async (key: string | undefined): Promise<Uint8Array | undefined> =>
@@ -670,12 +710,8 @@ export async function svmProgramStops(
       string?,
     ];
     const limit = written.replace(/#\d+$/, "");
-    const part = (name: string): string | undefined => {
-      const at = derived.find(([, derive]) => derive === `slot:${pool}:${token}.${name}`)?.[0];
-      return at === undefined ? undefined : accounts[at];
-    };
-    const program = part("program");
-    const address = part("pool") as Address | undefined;
+    const program = part(pool, token, "program");
+    const address = part(pool, token, "pool") as Address | undefined;
     const venue = SVM_PRICE_LIMIT_VENUES.find((one) => one.program === program);
     const account = await data(address);
     if (venue === undefined || address === undefined || account === undefined) continue;
@@ -689,9 +725,9 @@ export async function svmProgramStops(
     const buyMint = getAddressDecoder().decode(
       account.subarray(paysA ? at.mintB : at.mintA, (paysA ? at.mintB : at.mintA) + 32),
     );
-    const fee = feeOf(layout, account, await data(part("config")));
+    const fee = feeOf(layout, account, await data(part(pool, token, "config")));
     const arrays = await Promise.all(
-      ["ticks0", "ticks1", "ticks2"].map((name) => data(part(name))),
+      ["ticks0", "ticks1", "ticks2"].map((name) => data(part(pool, token, name))),
     );
     const priceLimit = limit.startsWith("@")
       ? integers[limit.slice(1)]
@@ -707,6 +743,7 @@ export async function svmProgramStops(
       arrays,
       paysA,
       ...(priceLimit === undefined ? {} : { priceLimit }),
+      ...(value.runs === 1 ? {} : { runs: value.runs! }),
     });
     seen.set(value.name, {
       pool: address,
@@ -722,14 +759,19 @@ export async function svmProgramStops(
   }
   // The cook's own units: as a simulation measured them, else the cost table's, a swap that trades
   // costing more than one whose pool the router reads and leaves, and that more than a key with no
-  // pool.
-  const trading = pools.filter((pool) => svmPoolWalk(pool).none !== true).length;
+  // pool, each as many times as it runs.
   const units =
     fixed ??
-    SVM_COOK_FIXED +
-      SVM_SWAP_FIXED * trading +
-      SVM_SWAP_IDLE * (pools.length - trading) +
-      SVM_SWAP_SKIPPED * (values.length - pools.length);
+    values.reduce((sum, value) => {
+      const pool = pools.find((one) => one.name === value.name);
+      const each =
+        pool === undefined
+          ? SVM_SWAP_SKIPPED
+          : svmPoolWalk(pool).none === true
+            ? SVM_SWAP_IDLE
+            : SVM_SWAP_FIXED;
+      return sum + each * value.runs!;
+    }, SVM_COOK_FIXED);
   const budget = Math.max(0, Math.floor((SVM_COOK_UNITS - units) * scale));
   const computed = new Map(svmComputeStops(pools, budget).map((stop) => [stop.name, stop]));
   const stops: SvmPoolStop[] = [];

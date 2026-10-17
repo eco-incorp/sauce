@@ -466,6 +466,7 @@ const SUMMARY_FIELDS = [
   "computeStops",
   "computeBudget",
   "computeRefused",
+  "noComputeStops",
   "fee",
   "transfers",
   "nativeTransfers",
@@ -1039,7 +1040,8 @@ const notesSchema = z.array(z.string()).optional();
  * A Solana cook's stops: each swap at a price's, worked out from its pool's tick arrays and its
  * share of the cook's compute units (`computeStops`), the units the venues were given between them
  * (`computeBudget`), and, where the cook ran out with the stops worked out three times, why
- * (`computeRefused`).
+ * (`computeRefused`). A swap in a loop whose count is not written out leaves no stop worked out, and
+ * `noComputeStops` says why.
  */
 const COMPUTE_STOPS = {
   computeStops: z
@@ -1064,6 +1066,7 @@ const COMPUTE_STOPS = {
     .looseObject({ venues: z.number(), cook: z.number(), measured: z.boolean() })
     .optional(),
   computeRefused: z.string().optional(),
+  noComputeStops: z.string().optional(),
 };
 
 /** A refusal on a preview chain, as `refused` holds it (`sdk/src/cli/support.ts`). */

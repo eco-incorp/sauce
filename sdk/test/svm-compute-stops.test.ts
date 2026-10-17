@@ -1,21 +1,29 @@
 /**
  * The cook's builder's model of a swap at a price (`svm/compute-stops.ts`), offline: its cost table's
- * fallback, its tick-array reader on each layout, a walk inside the price's own tick, and the order
- * it gives the pools. Its costs and walks are held to the venues' own programs in the router suite.
+ * fallback, its tick-array reader on each layout, a walk inside the price's own tick and one falling
+ * to its own limit, the order it gives the pools, and a swap in a loop. Its costs and walks are held to the venues' own programs in the router suite.
  */
-import { address } from "@solana/kit";
+import { address, type Address } from "@solana/kit";
 
+import { requireChain } from "../src/chains/canonical.js";
+import { svmStopLines, svmStopsJson } from "../src/cli/svm-stops.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { resolveSvmAccountName } from "../src/svm/account-names.js";
 import {
+  SVM_COOK_FIXED,
   SVM_HEADROOM_TICKS,
   SVM_SWAP_COSTS,
+  SVM_SWAP_FIXED,
   svmComputeStops,
   svmPoolWalk,
+  svmProgramStops,
   svmSwapCost,
   svmTickArray,
   type SvmStopPool,
 } from "../src/svm/compute-stops.js";
+import type { OwnedAccountLoader } from "../src/svm/venues/types.js";
 import { ORCA_WHIRLPOOL_PROGRAM_ID } from "../src/svm/venues/index.js";
-import { allIn, BYTES, LAYOUT, pool, type Pool } from "./svm/venue-fixture.js";
+import { allIn, BYTES, LAYOUT, pool, SNAPSHOT, type Pool } from "./svm/venue-fixture.js";
 
 const fromFixture = (p: Pool, priceLimit: bigint): SvmStopPool => ({
   name: p.name,
@@ -105,5 +113,73 @@ describe("the cook's builder's model of a swap at a price", () => {
     expect(stop!.estimatedUnits).toBe(
       cost.base + cost.tick * (walk.crossed.length + SVM_HEADROOM_TICKS),
     );
+  });
+
+  // A swap in a loop runs as many times as the loop does: each run is the router's work and the
+  // swap's own units again, and every run walks the one way to the same limit, so the crossings and
+  // their headroom are charged once. A loop whose count is a value leaves no stop worked out.
+  describe("a swap in a loop, read from Orca's SOL/USDC pool as the cook's builder reads it", () => {
+    const orca = pool("orca-whirlpool-sol-usdc");
+    const swap =
+      "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0)";
+    const priceLimit = (allIn(orca, false) * 10300n) / 10000n;
+    const load: OwnedAccountLoader = async (at) => {
+      const account = SNAPSHOT.get(at);
+      return account === undefined
+        ? null
+        : { data: BYTES.get(at)!, owner: account.owner as Address };
+    };
+    const stopsOf = async (body: string) => {
+      const program = compileSauceProgram(
+        "solana",
+        "function main(amountIn: Uint256, priceLimit: Uint256, n: Uint256): Uint256 {\n" +
+          `  let got = 0;\n  ${body.replaceAll("SWAP", swap)}\n  return got;\n}\n`,
+      );
+      const accounts: Record<string, string> = {};
+      for (const [name, derive] of Object.entries(program.derivedAccounts ?? {})) {
+        if (!derive.startsWith("slot:") && !derive.startsWith("mint:")) continue;
+        const { value } = await resolveSvmAccountName(derive, {
+          chain: requireChain("solana"),
+          owner: orca.config,
+          pot: orca.config,
+          load,
+        });
+        accounts[name] = value;
+      }
+      return svmProgramStops(program, requireChain("solana"), accounts, { priceLimit }, load);
+    };
+    const cost = SVM_SWAP_COSTS[ORCA_WHIRLPOOL_PROGRAM_ID]!;
+
+    it("charges a counted loop's swap for each run, its walk once", async () => {
+      const looped = (await stopsOf("for (let i = 0; i < 2; i++) { got += SWAP; }"))!;
+      const twice = (await stopsOf("got += SWAP;\n  got += SWAP;"))!;
+      const once = (await stopsOf("got += SWAP;"))!;
+      const ticks = once.stops[0]!.ticksToLimit;
+      expect(ticks).toBeGreaterThan(0);
+      // The router's work for each run, as two calls written out are charged.
+      expect(looped.fixed.units).toBe(SVM_COOK_FIXED + 2 * SVM_SWAP_FIXED);
+      expect(twice.fixed.units).toBe(looped.fixed.units);
+      // The swap's own units twice; its crossings and their headroom once, where two calls written
+      // out are each worked out as a walk of their own.
+      expect(looped.stops.map((stop) => stop.estimatedUnits)).toEqual([
+        2 * cost.base + cost.tick * (ticks + SVM_HEADROOM_TICKS),
+      ]);
+      expect([looped.headroom, twice.headroom]).toEqual([
+        cost.tick * SVM_HEADROOM_TICKS,
+        2 * cost.tick * SVM_HEADROOM_TICKS,
+      ]);
+      expect(looped.budget).toBe(once.budget - SVM_SWAP_FIXED);
+    });
+
+    it("works out no stop where a loop's count is a value, and none for a loop that never runs", async () => {
+      const uncounted = (await stopsOf("for (let i = 0; i < n; i++) { got += SWAP; }"))!;
+      expect([uncounted.stops, uncounted.binding]).toEqual([[], []]);
+      expect(uncounted.unbounded).toBe("Orca.Whirlpool.pool(USDC, WSOL, 4)");
+      // The command says so, and gives the plain cook.
+      const [line] = svmStopLines(uncounted);
+      expect(line).toMatch(/^No pool is held to a stop: the swap in Orca\.Whirlpool\.pool/);
+      expect(svmStopsJson(uncounted)).toEqual({ computeStops: [], noComputeStops: line });
+      expect(await stopsOf("for (let i = 0; i < 0; i++) { got += SWAP; }")).toBeUndefined();
+    });
   });
 });

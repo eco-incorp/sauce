@@ -53,6 +53,8 @@ export interface CompiledProgram {
    * cook works the stops out for (`svmProgramStops`).
    */
   readonly stoppable?: readonly string[];
+  /** How many times each of those inside a loop runs, by its derivation; null where uncounted. */
+  readonly stoppableRuns?: CompiledSauceProgram["stoppableRuns"];
   /**
    * On Solana, the values the SDK added to `main` after its accounts, one for each swap compiled
    * held to a stop (`held`): its stop.
@@ -218,6 +220,7 @@ export function compileProgram(
       ? {}
       : { derivedAccounts: compiled.derivedAccounts }),
     ...(compiled.stoppable === undefined ? {} : { stoppable: compiled.stoppable }),
+    ...(compiled.stoppableRuns === undefined ? {} : { stoppableRuns: compiled.stoppableRuns }),
     ...(compiled.derivedValues === undefined ? {} : { derivedValues: compiled.derivedValues }),
     held(binding) {
       return compileProgram(path === undefined ? { source } : { source, path }, chain, binding);

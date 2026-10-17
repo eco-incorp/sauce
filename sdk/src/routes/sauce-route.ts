@@ -586,6 +586,12 @@ export interface CompiledSauceProgram {
    */
   readonly stoppable?: readonly string[];
   /**
+   * How many times each swap in `stoppable` that stands in a loop runs, by its derivation: the
+   * loop's count where the loop writes it out (`for (let i = 0; i < 3; i++)`, `for (const x of
+   * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
+   */
+  readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
    * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
    * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
    * Portal transactions that publish it, can be built without running the program. One that
@@ -692,6 +698,7 @@ export function compileSauceProgram(
     ...(program.derivedAccounts === undefined ? {} : { derivedAccounts: program.derivedAccounts }),
     ...(derivedValues.length === 0 ? {} : { derivedValues }),
     ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
+    ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
     intents: program.intents,
     source: program.source,
   };
@@ -804,6 +811,7 @@ function compileForChain(
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   readonly derivedValues?: Readonly<Record<string, string>>;
   readonly stoppable?: readonly string[];
+  readonly stoppableRuns?: Readonly<Record<string, number | null>>;
   readonly intents: readonly LoweredIntent[];
 } {
   const chain = requireChain(destination);
@@ -893,6 +901,7 @@ function compileForChain(
   let derivedAccounts: Readonly<Record<string, string>> | undefined;
   let derivedValues: Readonly<Record<string, string>> | undefined;
   let stoppable: readonly string[] | undefined;
+  let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
   if (chain.kind === "svm") {
     const lowered = rewriteSvmTokenSyntax(
       source,
@@ -913,6 +922,7 @@ function compileForChain(
       derivedAccounts = lowered.derived;
       derivedValues = lowered.values;
       stoppable = lowered.stoppable;
+      stoppableRuns = lowered.stoppableRuns;
     }
   } else {
     absorb(
@@ -992,6 +1002,7 @@ function compileForChain(
     ...(derivedAccounts === undefined ? {} : { derivedAccounts }),
     ...(derivedValues === undefined ? {} : { derivedValues }),
     ...(stoppable === undefined ? {} : { stoppable }),
+    ...(stoppableRuns === undefined ? {} : { stoppableRuns }),
     intents,
   };
 }

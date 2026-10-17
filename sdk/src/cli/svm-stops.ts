@@ -29,8 +29,15 @@ export const svmRanOutOfUnits = (logs: readonly string[]): boolean =>
 
 const grouped = (units: number): string => units.toLocaleString("en-US");
 
+/** Why no swap is held where one runs in a loop whose count is not written out. */
+const unboundedLine = (label: string): string =>
+  `No pool is held to a stop: the swap in ${label} runs in a loop whose count the program does ` +
+  "not write out, so how many units it leaves the other swaps is known only as the cook runs. " +
+  "Every swap is the plain one; a loop written `for (let i = 0; i < 3; i++)` has its stops worked out";
+
 /** A line for each pool a stop holds or skips: what a person reads. */
 export function svmStopLines(stops: SvmStops): string[] {
+  if (stops.unbounded !== undefined) return [unboundedLine(stops.unbounded)];
   return stops.stops.flatMap((stop) => {
     if (stop.stop === 1n) {
       return [
@@ -50,6 +57,9 @@ export function svmStopLines(stops: SvmStops): string[] {
 
 /** The stops as `--json` and the MCP server give them. */
 export function svmStopsJson(stops: SvmStops): Record<string, unknown> {
+  if (stops.unbounded !== undefined) {
+    return { computeStops: [], noComputeStops: unboundedLine(stops.unbounded) };
+  }
   return {
     computeStops: stops.stops.map((stop) => ({
       pool: stop.pool,

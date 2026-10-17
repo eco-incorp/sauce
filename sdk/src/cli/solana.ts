@@ -1963,13 +1963,16 @@ async function withStops(
     }
   }
   for (const scale of TIGHTENED) {
-    if (prepared.stops === undefined || !ranOut(output)) break;
+    if (prepared.stops === undefined || prepared.stops.unbounded !== undefined || !ranOut(output)) {
+      break;
+    }
     prepared = await prepared.restop(undefined, scale);
     output = await simulate(prepared);
   }
   const stops = prepared.stops;
   if (stops === undefined) return { output, prepared };
-  const refused = ranOut(output);
+  // With no stop to work out again, a cook that runs out is the simulation's own failure.
+  const refused = stops.unbounded === undefined && ranOut(output);
   const refusal = refused
     ? [
         "The cook runs out of compute units with every pool's stop worked out three times, the " +
@@ -2589,16 +2592,18 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       ...step.notes,
       ...(prepared.stops === undefined
         ? []
-        : [
-            ...svmStopLines(prepared.stops),
-            "The cook here is built with each pool's stop from the cost table, with no " +
-              "simulation: an estimate. `sauce simulate` works the stops out again against the " +
-              "units its simulation measures, so the cook it reports can differ from this one " +
-              "(`sauce run` sends the cook it simulated). A stop is fixed now, from the pools' " +
-              "prices now; a held pool whose price moves further than its headroom before the " +
-              "cook lands is skipped, but a pool that walks its whole way is not checked. The " +
-              "cursor sends this cook as built: resumed later, its stops are still these.",
-          ]),
+        : prepared.stops.unbounded !== undefined
+          ? svmStopLines(prepared.stops)
+          : [
+              ...svmStopLines(prepared.stops),
+              "The cook here is built with each pool's stop from the cost table, with no " +
+                "simulation: an estimate. `sauce simulate` works the stops out again against the " +
+                "units its simulation measures, so the cook it reports can differ from this one " +
+                "(`sauce run` sends the cook it simulated). A stop is fixed now, from the pools' " +
+                "prices now; a held pool whose price moves further than its headroom before the " +
+                "cook lands is skipped, but a pool that walks its whole way is not checked. The " +
+                "cursor sends this cook as built: resumed later, its stops are still these.",
+            ]),
       single
         ? `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
           `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
@@ -2827,7 +2832,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
   // would run out of compute units; one it still runs out with is refused here.
   const stopNotes: string[] = [];
-  if (prepared.stops !== undefined) {
+  if (prepared.stops !== undefined && prepared.stops.unbounded === undefined) {
     try {
       const checked = await withStops(prepared, (again) => simulatePrepared(again, input));
       const logs = Array.isArray(checked.output.json.logs)

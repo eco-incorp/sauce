@@ -442,6 +442,9 @@ export function collectVenueMethods(l: SvmLowering): void {
       let derivation = first;
       for (let n = 2; l.stoppable.includes(derivation); n++) derivation = `${first}#${n}`;
       l.stoppable.push(derivation);
+      // In a loop it runs as many times as the loop does, each run its own swap to share units with.
+      const runs = l.runsOf(site.call);
+      if (runs !== 1) l.stoppableRuns.set(derivation, runs);
       if (l.stopped.has(derivation)) {
         fn = `${fn}Stopped`;
         stop = `, ${l.value(derivation, `${pool.stem}Stop`)}`;
