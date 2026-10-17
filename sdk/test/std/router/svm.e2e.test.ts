@@ -402,10 +402,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   // whirlpools' `TickArraySequenceInvalidIndex`; Crema's `NextTickNotFound`). A swap at a price holds
   // its limit a tick inside its window's last safe tick, so an order with a limit at three times the
   // pool's price and the input to reach it stops there, its pool's price exactly the window's bound.
-  // PancakeSwap's pool stops at its window on about 1,360,000 compute units; Byreal's fixture pool
-  // runs out of compute walking its own ticks before it reaches its window (at 1.6 times its price),
-  // and stops at its window in the cell for the price's own array below.
-  it.each(["RaydiumClmm", "PancakeswapClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
+  // Byreal's fixture pool runs out of compute walking its own ticks before it reaches its window (at
+  // 1.6 times its price), and stops at its window in the cell for the price's own array below.
+  // PancakeSwap's has its own cell, after this one.
+  it.each(["RaydiumClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
     "%s: a limit far past its window stops a tick inside it, where the cook used to fail",
     async (venue) => {
       const entry = VENUES.find((one) => one.venue === venue)!;
@@ -425,6 +425,34 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     },
     120_000,
   );
+
+  // PancakeSwap's fixture pool walks its whole window of three arrays in about 1,395,000 compute
+  // units when the Kitchen finds the Pot address's bump on its first try. It searches for that bump
+  // twice in every cook, each further try costing 1,500 units, and the harness draws the Pot's owner
+  // at random: about one run in four takes three tries or more and runs past the cook's 1,400,000.
+  // So its far limit is cooked on a window of two of those arrays (the third place one behind the
+  // price), about 829,000 units at best: the same path, the limit held a tick inside the window's
+  // edge, with room to spare.
+  it("PancakeswapClmm: a limit far past a window of two arrays stops a tick inside it", async () => {
+    const entry = VENUES.find((one) => one.venue === "PancakeswapClmm")!;
+    const base = await orderFor(entry);
+    const p = base.pool;
+    const paysA = key(USDC) < key(base.buy);
+    const [walk, behind] = paysA ? [p.payA, p.payB] : [p.payB, p.payA];
+    const ticks = [walk[0]!, walk[1]!, behind[1]!];
+    const order = {
+      ...base,
+      priceLimit: allIn(p, paysA) * 3n,
+      amountIn: 10_000_000_000n * 10n ** 6n,
+      ticks,
+    };
+    const bound = windowBound(p, paysA, ticks);
+    const own = ownLimit(p, order.priceLimit, paysA);
+    expect(paysA ? own < bound : own > bound).toBe(true);
+    const outcome = succeeded(await cook(compiled(lower("PancakeswapClmm")), order));
+    expect(outcome.received).toBeGreaterThan(0n);
+    expect(outcome.price).toBe(bound);
+  }, 120_000);
 
   // Crema's window is wide: tick spacing 50, arrays of 3,200 ticks, its edge about 6,300 ticks from
   // the price. The limit is held a tick inside that edge, within a millionth of its exact sqrt price
