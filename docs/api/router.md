@@ -463,9 +463,10 @@ left, so the `sauce` command decides each pool's walk ahead of time:
 A swap in a loop runs as many times as the loop does. Where the loop writes its count out
 (`for (let i = 0; i < 3; i++)`, `for (const x of [a, b])`), the command charges the swap's own units
 for each run, and its walk once: every run walks the same way to the same limit, starting where the
-last one left the price. Where the count is a value, how many units the swap leaves the others is
-known only as the cook runs, so no pool is held: every swap is the plain one, and the command says
-so (`noComputeStops`).
+last one left the price. Where the count is a value or a negative number, or is more runs than one
+cook pays for (so the program must leave the loop sooner, at a `break`), how many units the swap
+leaves the others is known only as the cook runs, so no pool is held: every swap is the plain one,
+and the command says so (`noComputeStops`).
 
 A held or skipped pool's swap is compiled to its Stopped form, its `stop` a tighter `priceLimit` the
 command finds with the router's own arithmetic, and the start bound three tick-spacing positions

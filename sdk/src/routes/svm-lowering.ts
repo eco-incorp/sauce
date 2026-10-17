@@ -207,22 +207,30 @@ const LOOPS = new Set([
   "DoWhileStatement",
 ]);
 
-/** An integer written out: `3`, `3n`, `-3`. */
+const UINT256 = 1n << 256n;
+
+/**
+ * A literal's integer as the compiler reads it, from its text: a non-negative decimal (with no
+ * leading zero) or hexadecimal integer, `n` or not, below 2^256. Undefined for anything else, a
+ * negative number included (the compiler's `-1` is 2^256 - 1), whose loop is left uncounted rather
+ * than read some other way.
+ */
 function integerOf(node: AstNode | null | undefined): bigint | undefined {
-  if (node?.type === "UnaryExpression" && (node as { operator?: string }).operator === "-") {
-    const value = integerOf((node as { argument?: AstNode }).argument);
-    return value === undefined ? undefined : -value;
-  }
   if (node?.type !== "Literal") return undefined;
-  const { value, bigint } = node as { value?: unknown; bigint?: string };
-  if (bigint !== undefined) return BigInt(bigint);
-  return typeof value === "number" && Number.isSafeInteger(value) ? BigInt(value) : undefined;
+  const raw = (node as { raw?: string }).raw ?? "";
+  const digits = /^(0|[1-9][0-9]*|0[xX][0-9a-fA-F]+)n?$/.exec(raw)?.[1];
+  if (digits === undefined) return undefined;
+  const value = BigInt(digits);
+  return value < UINT256 ? value : undefined;
 }
 
 /**
  * How many times a loop's body runs, where the loop writes it out: `for (const x of [a, b])`, or
- * `for (let i = 0; i < 3; i++)` with a literal start, bound and step (`++`, `--`, `+=`, `-=`) and a
- * counter its body never sets. Null for any other loop: `while`, a bound that is a value.
+ * `for (let i = 0; i < 3; i++)` with a start, bound and step (`++`, `--`, `+=`, `-=`) written as
+ * integers the compiler reads as such (`integerOf`) and a counter its body never sets. Its arithmetic
+ * is checked, so this is the most the body runs: a `break`, a `return` or a step past 0 or 2^256
+ * only ends the loop sooner. Null for any other loop: `while`, a bound that is a value, a negative
+ * number.
  */
 function loopCount(loop: AstNode): bigint | null {
   if (loop.type === "ForOfStatement") {

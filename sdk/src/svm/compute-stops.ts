@@ -626,11 +626,13 @@ export interface SvmProgramStops {
   /** The units of `SVM_HEADROOM_TICKS` more crossings at every pool that trades. */
   readonly headroom: number;
   /**
-   * How the program names the pool of a swap in a loop whose count it does not write out, where it
-   * has one: that swap runs a number of times known only as the cook runs, so what it leaves the
-   * others cannot be worked out, and no swap is held. `stops` is then empty.
+   * A swap whose runs no stop can be worked out for, where there is one: how the program names its
+   * pool, and its loop's count where the loop writes one out (null where it does not). Either that
+   * count is a value, or it is more than the cook's own units pay for, so the program leaves the loop
+   * sooner; both ways the swap runs a number of times known only as the cook runs, what it leaves
+   * the others cannot be worked out, and no swap is held. `stops` is then empty.
    */
-  readonly unbounded?: string;
+  readonly unbounded?: { readonly label: string; readonly runs: number | null };
 }
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
@@ -664,7 +666,8 @@ const feeOf = (layout: SvmStopLayout, pool: Uint8Array, config: Uint8Array | und
  * limit a swap takes from one. `fixed` is the cook's own units where a simulation measured them;
  * `scale` shrinks what the venues are given, for a cook that ran out of units anyway. A swap in a
  * loop is charged for each time the loop runs it (`stoppableRuns`); where a loop does not write its
- * count out, none is held (`unbounded`). Undefined for a program with no stops.
+ * count out, or writes one that swap's runs alone cannot pay for, none is held (`unbounded`).
+ * Undefined for a program with no stops.
  */
 export async function svmProgramStops(
   program: Pick<CompiledSauceProgram, "stoppable" | "stoppableRuns" | "derivedAccounts">,
@@ -690,18 +693,23 @@ export async function svmProgramStops(
     const at = derived.find(([, derive]) => derive === `slot:${pool}:${token}.${name}`)?.[0];
     return at === undefined ? undefined : accounts[at];
   };
-  const unbounded = values.find((value) => value.runs === null);
-  if (unbounded !== undefined) {
-    const [, pool, token] = unbounded.derive.split(":") as [string, string, string];
+  /** No stop for any swap, for `value`'s runs. */
+  const unbounded = (value: (typeof values)[number]): SvmProgramStops => {
+    const [, pool, token] = value.derive.split(":") as [string, string, string];
     return {
       stops: [],
       binding: [],
       budget: 0,
       fixed: { units: fixed ?? 0, measured: fixed !== undefined },
       headroom: 0,
-      unbounded: labelOf(pool, (part(pool, token, "pool") ?? "") as Address),
+      unbounded: {
+        label: labelOf(pool, (part(pool, token, "pool") ?? "") as Address),
+        runs: value.runs,
+      },
     };
-  }
+  };
+  const uncounted = values.find((value) => value.runs === null);
+  if (uncounted !== undefined) return unbounded(uncounted);
   const rows = svmTokenRows(chain);
   const symbolOf = (mint: Address): string => rows.find((row) => row.mint === mint)?.symbol ?? mint;
   const data = async (key: string | undefined): Promise<Uint8Array | undefined> =>
@@ -771,21 +779,27 @@ export async function svmProgramStops(
       ],
     });
   }
-  // The cook's own units: as a simulation measured them, else the cost table's, a swap that trades
-  // costing more than one whose pool the router reads and leaves, and that more than a key with no
-  // pool, each as many times as it runs.
+  // What the cook spends on a swap each time it runs, besides its venue's program, by the cost table:
+  // one that trades more than one whose pool the router reads and leaves, and that more than a key
+  // with no pool.
+  const each = (value: (typeof values)[number]): number => {
+    const pool = pools.find((one) => one.name === value.name);
+    return pool === undefined
+      ? SVM_SWAP_SKIPPED
+      : svmPoolWalk(pool).none === true
+        ? SVM_SWAP_IDLE
+        : SVM_SWAP_FIXED;
+  };
+  // A loop's count that the cook cannot pay for, that swap's runs alone: the program leaves the loop
+  // sooner (a `break`, a `return`), at a point known only as it runs.
+  const unpaid = values.find(
+    (value) => value.runs! > 1 && SVM_COOK_FIXED + each(value) * value.runs! > SVM_COOK_UNITS,
+  );
+  if (unpaid !== undefined) return unbounded(unpaid);
+  // The cook's own units: as a simulation measured them, else the cost table's, each swap's as many
+  // times as it runs.
   const units =
-    fixed ??
-    values.reduce((sum, value) => {
-      const pool = pools.find((one) => one.name === value.name);
-      const each =
-        pool === undefined
-          ? SVM_SWAP_SKIPPED
-          : svmPoolWalk(pool).none === true
-            ? SVM_SWAP_IDLE
-            : SVM_SWAP_FIXED;
-      return sum + each * value.runs!;
-    }, SVM_COOK_FIXED);
+    fixed ?? values.reduce((sum, value) => sum + each(value) * value.runs!, SVM_COOK_FIXED);
   const budget = Math.max(0, Math.floor((SVM_COOK_UNITS - units) * scale));
   const computed = new Map(svmComputeStops(pools, budget).map((stop) => [stop.name, stop]));
   const stops: SvmPoolStop[] = [];

@@ -129,12 +129,12 @@ describe("each Solana swap at a price's stop, as the cook's builder names it", (
   it("counts a swap in a loop that writes its count out, and leaves one that does not uncounted", () => {
     const swap =
       "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0)";
-    /** The swap's runs in `loop`, written around it, with `also` in the loop's body. */
-    const runs = (loop: string, also = "") =>
+    /** The swap's runs in `loop`, written around it, with `also` in the loop's body, after `before`. */
+    const runs = (loop: string, also = "", before = "") =>
       compileSauceProgram(
         "solana",
         "function main(amountIn: Uint256, priceLimit: Uint256, n: Uint256): Uint256 {\n" +
-          `  let got = 0;\n  ${loop.replace("BODY", `${also}got += ${swap};`)}\n  return got;\n}\n`,
+          `  let got = 0;\n  ${before}${loop.replace("BODY", `${also}got += ${swap};`)}\n  return got;\n}\n`,
       ).stoppableRuns;
     const at = "stop:Orca.Whirlpool(USDC,WSOL,4):USDC:@priceLimit";
     expect(runs("for (let i = 0; i < 2; i++) { BODY }")).toEqual({ [at]: 2 });
@@ -145,9 +145,19 @@ describe("each Solana swap at a price's stop, as the cook's builder names it", (
       [at]: 6,
     });
     expect(runs("for (let i = 0; i < 0; i++) { BODY }")).toEqual({ [at]: 0 });
+    expect(runs("for (let i = 0x0; i < 0x3; i++) { BODY }")).toEqual({ [at]: 3 });
     // A count the loop does not write out: a bound that is a value, a counter its body sets too,
-    // a `while`.
+    // a `while`, and a negative number, which the compiler reads as 2^256 less it: `-1` is the
+    // greatest number, so `i > 0` holds from there down, and only the `break` ends the loop.
     expect(runs("for (let i = 0; i < n; i++) { BODY }")).toEqual({ [at]: null });
+    expect(runs("for (let i = -1; i > 0; i--) { BODY }")).toEqual({ [at]: null });
+    expect(
+      runs(
+        "for (let i = -1; i > -4; i--) { BODY count += 1; if (count == 2) { break; } }",
+        "",
+        "let count = 0;\n  ",
+      ),
+    ).toEqual({ [at]: null });
     expect(runs("for (let i = 0; i < 4; i++) { BODY }", "i += 1; ")).toEqual({ [at]: null });
     expect(runs("while (got < amountIn) { BODY }")).toEqual({ [at]: null });
     // Outside any loop it runs once, and is not listed.

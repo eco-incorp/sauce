@@ -1040,8 +1040,8 @@ const notesSchema = z.array(z.string()).optional();
  * A Solana cook's stops: each swap at a price's, worked out from its pool's tick arrays and its
  * share of the cook's compute units (`computeStops`), the units the venues were given between them
  * (`computeBudget`), and, where the cook ran out with the stops worked out three times, why
- * (`computeRefused`). A swap in a loop whose count is not written out leaves no stop worked out, and
- * `noComputeStops` says why.
+ * (`computeRefused`). A swap in a loop whose count is not written out, or is more runs than the cook
+ * pays for, leaves no stop worked out, and `noComputeStops` says why.
  */
 const COMPUTE_STOPS = {
   computeStops: z

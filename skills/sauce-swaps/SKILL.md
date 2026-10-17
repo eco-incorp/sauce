@@ -338,7 +338,8 @@ pool the rest does not cover is compiled to the Stopped form, held short of its 
 bound three tick-spacing positions past its price then; one it cannot pay for at all is skipped.
 Where no stop binds, the program is the plain one. A swap in a loop whose count is written out
 (`for (let i = 0; i < 3; i++)`) is charged its own units for each run, and its walk once; in a loop
-whose count is a value, no pool is held, and the command says so. This lowers the risk of running out, and does not
+whose count is a value or a negative number, or more runs than one cook pays for, no pool is held,
+and the command says so. This lowers the risk of running out, and does not
 remove it: a held pool crosses at most three more initialized ticks than were priced while the
 ticks in its way stay as they were read (a position opened inside its walk meanwhile adds one), but
 a pool that walks its whole way is not checked, and a price that moves further before the cook lands can

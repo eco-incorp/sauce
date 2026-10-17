@@ -184,12 +184,41 @@ describe("the cook's builder's model of a swap at a price", () => {
     it("works out no stop where a loop's count is a value, and none for a loop that never runs", async () => {
       const uncounted = (await stopsOf("for (let i = 0; i < n; i++) { got += SWAP; }"))!;
       expect([uncounted.stops, uncounted.binding]).toEqual([[], []]);
-      expect(uncounted.unbounded).toBe("Orca.Whirlpool.pool(USDC, WSOL, 4)");
+      const label = "Orca.Whirlpool.pool(USDC, WSOL, 4)";
+      expect(uncounted.unbounded).toEqual({ label, runs: null });
       // The command says so, and gives the plain cook.
       const [line] = svmStopLines(uncounted);
-      expect(line).toMatch(/^No pool is held to a stop: the swap in Orca\.Whirlpool\.pool/);
+      expect(line).toMatch(/^No pool is held to a stop: the swap in Orca\.Whirlpool\.pool\(USDC/);
+      expect(line).toContain("whose count the program does not write out");
       expect(svmStopsJson(uncounted)).toEqual({ computeStops: [], noComputeStops: line });
+      // A negative start is 2^256 less it to the compiler, so `-1` down to `-4` is three runs there,
+      // which only the `break` cuts short: no count is read from it, and no stop worked out.
+      const negative = (await stopsOf(
+        "let count = 0;\n  for (let i = -1; i > -4; i--) {\n" +
+          "    got += SWAP;\n    count += 1;\n    if (count == 2) { break; }\n  }",
+      ))!;
+      expect([negative.unbounded, negative.binding]).toEqual([{ label, runs: null }, []]);
       expect(await stopsOf("for (let i = 0; i < 0; i++) { got += SWAP; }")).toBeUndefined();
+    });
+
+    // Four runs of the swap's own work fit one cook; five do not, so a loop written to run it five
+    // times or more leaves sooner (here at a `break`), at a point the count does not tell.
+    it("works out no stop where a loop's count is more than the cook pays for", async () => {
+      const counted = (await stopsOf("for (let i = 0; i < 4; i++) { got += SWAP; }"))!;
+      expect([counted.unbounded, counted.fixed.units]).toEqual([
+        undefined,
+        SVM_COOK_FIXED + 4 * SVM_SWAP_FIXED,
+      ]);
+      const unpaid = (await stopsOf(
+        "for (let i = 0; i < 1000; i++) { got += SWAP; if (got > 0) { break; } }",
+      ))!;
+      expect([unpaid.unbounded, unpaid.stops]).toEqual([
+        { label: "Orca.Whirlpool.pool(USDC, WSOL, 4)", runs: 1000 },
+        [],
+      ]);
+      expect(svmStopLines(unpaid)[0]).toContain(
+        "runs in a loop written to run it more times than one cook's compute units pay for",
+      );
     });
   });
 });

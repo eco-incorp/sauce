@@ -35,11 +35,15 @@ export const svmRanOutOfUnits = (logs: readonly string[]): boolean =>
 
 const grouped = (units: number): string => units.toLocaleString("en-US");
 
-/** Why no swap is held where one runs in a loop whose count is not written out. */
-const unboundedLine = (label: string): string =>
-  `No pool is held to a stop: the swap in ${label} runs in a loop whose count the program does ` +
-  "not write out, so how many units it leaves the other swaps is known only as the cook runs. " +
-  "Every swap is the plain one; a loop written `for (let i = 0; i < 3; i++)` has its stops worked out";
+/** Why no swap is held where one runs a number of times known only as the cook runs. */
+const unboundedLine = ({ label, runs }: NonNullable<SvmStops["unbounded"]>): string =>
+  runs === null
+    ? `No pool is held to a stop: the swap in ${label} runs in a loop whose count the program does ` +
+      "not write out, so how many units it leaves the other swaps is known only as the cook runs. " +
+      "Every swap is the plain one; a loop written `for (let i = 0; i < 3; i++)` has its stops worked out"
+    : `No pool is held to a stop: the swap in ${label} runs in a loop written to run it more times ` +
+      "than one cook's compute units pay for, so the program leaves the loop sooner, at a point " +
+      "known only as the cook runs. Every swap is the plain one";
 
 /** A line for each pool a stop holds or skips: what a person reads. */
 export function svmStopLines(stops: SvmStops): string[] {
