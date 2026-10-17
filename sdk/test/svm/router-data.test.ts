@@ -135,6 +135,22 @@ describe("routerSvmDataTemplate: fields past their slot, refused when the progra
     );
   });
 
+  it("Phoenix's match limit: Some(orders) after its self-trade behaviour, none at 0 or absent", () => {
+    const rest = (limit: string) => `${"00".repeat(16)}01${limit}${"00".repeat(19)}`;
+    for (const aToB of [true, false]) {
+      const other = aToB ? "00".repeat(8) : "";
+      const limited = routerSvmDataTemplate("phoenix", { aToB, lot: 1n, orders: 11n });
+      expect(hex(limited.suffix)).toBe(`${other}${rest(`010b00000000000000`)}`);
+      for (const orders of [0n, undefined])
+        expect(hex(routerSvmDataTemplate("phoenix", { aToB, lot: 1n, orders }).suffix)).toBe(
+          `${other}${rest("00")}`,
+        );
+    }
+    expect(() =>
+      routerSvmDataTemplate("phoenix", { aToB: true, lot: 1n, orders: 1n << 64n }),
+    ).toThrow("phoenix: orders 18446744073709551616 is past its 64 bits");
+  });
+
   it("Orca's swap_v2 and a Phoenix or OpenBook order at a price", () => {
     expect(
       hex(routerSvmDataTemplate("orca-whirlpool", { aToB: false, v2: true, minOut: 5n }).suffix),

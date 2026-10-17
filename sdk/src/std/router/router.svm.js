@@ -552,19 +552,26 @@ export function manifestData(amountIn: Uint256, minOut: Uint256, paysBase: bool)
 
 // Phoenix's `Swap`: an immediate-or-cancel order for every lot of `amountIn`, in `lot`, the market's
 // lot size of the token paid (base lots selling base, quote lots buying it), at `ticks` (0: none, the
-// book at any price). No minimum fill, a self-trade cancels the resting order, no match limit, client
-// id 0, no deposited funds, no expiry. It carries no least out. An input under one lot is no order:
-// skip it.
+// book at any price), matching at most `orders` resting orders (0: no limit; the count includes the
+// expired orders it removes on the way). No minimum fill, a self-trade cancels the resting order,
+// client id 0, no deposited funds, no expiry. It carries no least out. An input under one lot is no
+// order: skip it.
 export function phoenixData(
   amountIn: Uint256,
   lot: Uint256,
   ticks: Uint256,
+  orders: Uint256,
   paysBase: bool,
 ): bytes {
   require(ticks <= 0xffffffffffffffff, "limit past 64 bits");
+  require(orders <= 0xffffffffffffffff, "orders past 64 bits");
   const lots = (amountIn / lot) & 0xffffffffffffffff;
   const side = paysBase ? hex`000201` : hex`000200`;
-  const rest = hex`00000000000000000000000000000000010000000000000000000000000000000000000000`;
+  const fill = hex`0000000000000000000000000000000001`;
+  const tail = hex`00000000000000000000000000000000000000`;
+  // The match limit's tag (Some) and count, one word.
+  const limit = 1 | (orders << 8);
+  const rest = orders == 0 ? fill.concat(hex`00`, tail) : fill.concat(limit.toBytesLe(9), tail);
   const base = paysBase ? lots : 0;
   const quote = paysBase ? 0 : lots;
   if (ticks == 0) {
@@ -925,7 +932,7 @@ function cpiPhoenix(
       slot[4],
       trader[4],
     ],
-    phoenixData(amountIn, lot, ticks, paysBase),
+    phoenixData(amountIn, lot, ticks, 0, paysBase),
   );
 }
 
@@ -2254,7 +2261,7 @@ export function phoenixCpi(
   if (amountIn < lot) {
     return 0;
   }
-  const data = phoenixData(amountIn, lot, ticks, paysBase);
+  const data = phoenixData(amountIn, lot, ticks, 0, paysBase);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();

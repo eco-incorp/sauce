@@ -311,9 +311,17 @@ const slotOf = (t: Template): Address[] => {
 const carried = (t: Template): { limit: bigint; floor: bigint; orders: bigint } => {
   const s = t.suffix;
   switch (t.venue) {
-    case "phoenix":
+    case "phoenix": {
       expect(t.prefix.slice(6, 8)).toBe("00"); // no price: the book at any price
-      return { limit: 0n, floor: 0n, orders: 0n };
+      // Its match limit follows the minimum fills and the self-trade behaviour (the other size first,
+      // selling base): a tag, then the order count when it has one.
+      const at = (t.direction === "baseIn" ? 8 : 0) + 17;
+      return {
+        limit: 0n,
+        floor: 0n,
+        orders: s.slice(2 * at, 2 * at + 2) === "01" ? leHex(s, at + 1, 8) : 0n,
+      };
+    }
     case "invariant":
       return { limit: leHex(s, 1, 16), floor: 0n, orders: 0n };
     case "manifest":
