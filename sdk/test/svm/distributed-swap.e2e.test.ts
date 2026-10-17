@@ -26,6 +26,7 @@ import {
 import { FailedTransactionMetadata } from "litesvm";
 
 import { requireChain } from "../../src/chains/canonical.js";
+import { svmRanOutOfUnits } from "../../src/cli/svm-stops.js";
 import { encodeEntryArguments } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import { resolveSvmAccountName } from "../../src/svm/account-names.js";
@@ -502,9 +503,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       priceLimit: wide,
       unheld: true,
     });
-    expect(!unheld.ok && unheld.logs.some((line) => line.includes("exceeded CUs meter"))).toBe(
-      true,
-    );
+    expect(!unheld.ok && svmRanOutOfUnits(unheld.logs)).toBe(true);
     const outcome = succeeded(await cook({ budget, priceLimit: wide }));
     const of = (p: Pool) => outcome.stops!.stops.find((stop) => stop.pool === p.pool)!;
     expect([of(RAYDIUM).rank, of(BYREAL).rank, of(PANCAKE).rank]).toEqual([0, 1, 2]);

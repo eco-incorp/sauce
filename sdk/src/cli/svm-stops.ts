@@ -21,10 +21,16 @@ export function svmCookFixedUnits(total: bigint | number, logs: readonly string[
   return Math.max(0, Number(total) - venues);
 }
 
-/** Whether a simulated cook ran out of compute units. */
+/**
+ * Whether a simulated cook ran out of compute units: in a program's own instructions ("exceeded CUs
+ * meter"), or in a call it made into the runtime, which the runtime reports as "Computational budget
+ * exceeded". Which one a cook logs depends on where its last unit goes.
+ */
 export const svmRanOutOfUnits = (logs: readonly string[]): boolean =>
   logs.some((line) =>
-    /exceeded CUs meter|exceeded maximum compute|ComputationalBudgetExceeded/.test(line),
+    /exceeded CUs meter|Computational budget exceeded|exceeded maximum compute|ComputationalBudgetExceeded/.test(
+      line,
+    ),
   );
 
 const grouped = (units: number): string => units.toLocaleString("en-US");

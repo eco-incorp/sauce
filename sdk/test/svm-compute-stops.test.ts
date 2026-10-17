@@ -6,7 +6,7 @@
 import { address, type Address } from "@solana/kit";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { svmStopLines, svmStopsJson } from "../src/cli/svm-stops.js";
+import { svmRanOutOfUnits, svmStopLines, svmStopsJson } from "../src/cli/svm-stops.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { resolveSvmAccountName } from "../src/svm/account-names.js";
 import {
@@ -78,6 +78,16 @@ describe("the cook's builder's model of a swap at a price", () => {
     const near = svmPoolWalk(sell(8501291477077584537n));
     expect([far.crossed, far.output]).toEqual([[], 43_059_351_872n]);
     expect([near.crossed, near.output]).toEqual([[], 36_752_743_565n]);
+  });
+
+  // Where a cook's last unit goes decides what the runtime logs: inside a program's instructions,
+  // or inside a call into the runtime. Both are Byreal's swap at three times its price, cooked under
+  // limits 6,000 units apart.
+  it("tells a cook that ran out of units by either message the runtime logs", () => {
+    const program = "Program REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2 failed: ";
+    expect(svmRanOutOfUnits([`${program}exceeded CUs meter at BPF instruction`])).toBe(true);
+    expect(svmRanOutOfUnits([`${program}Computational budget exceeded`])).toBe(true);
+    expect(svmRanOutOfUnits([`${program}custom program error: 0x1771`])).toBe(false);
   });
 
   it("reads Orca's dynamic tick arrays: their start, then each tick tagged, its net first", () => {

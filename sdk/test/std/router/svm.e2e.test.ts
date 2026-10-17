@@ -24,6 +24,7 @@ import { AccountRole, getAddressCodec } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
 
+import { svmRanOutOfUnits } from "../../../src/cli/svm-stops.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
@@ -523,9 +524,8 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   // cook's compute units, by the cost table, with nothing else to share it with.
   const stopOf = (order: Order): SvmComputeStop =>
     svmComputeStops([poolOf(order)], SVM_COOK_UNITS - SVM_COOK_FIXED - SVM_SWAP_FIXED)[0]!;
-  /** The swap's ran out of compute units: its program, or the engine running it. */
-  const ranOut = (outcome: Outcome): boolean =>
-    !outcome.ok && outcome.logs.some((line) => line.includes("exceeded CUs meter"));
+  /** The swap's ran out of compute units, as the command tells it: its program, or the engine. */
+  const ranOut = (outcome: Outcome): boolean => !outcome.ok && svmRanOutOfUnits(outcome.logs);
 
   // Pools that cross more initialized ticks on the way to their limit than one cook's compute units
   // pay for: with no stop the whole cook fails, out of units; with the one the command works out
