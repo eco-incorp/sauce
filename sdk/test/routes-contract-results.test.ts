@@ -15,6 +15,7 @@ import { rewriteContractResults, VALUE_METHODS } from "../src/routes/contract-re
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const BASE = requireChain("base");
+const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const BUILTINS = JSON.parse(
   readFileSync(resolve(process.cwd(), "../skills/sauce-script/references/builtins.json"), "utf8"),
 ) as { intrinsics: readonly { name: string; group: string }[] };
@@ -113,6 +114,38 @@ describe("a method called on a registry call's result", () => {
     sameProgram(chained, explicit, ["ethereum"]);
   });
 
+  it("an element of a destructured result", () => {
+    const chained = `function main(pid: Uint256, who: Address): Uint256 {
+  const [lptoken, token] = Convex.Booster.poolInfo(pid);
+  return lptoken.balanceOf(who) + token.balanceOf(who);
+}`;
+    const explicit = `function main(pid: Uint256, who: Address): Uint256 {
+  const [lptoken, token] = Convex.Booster.poolInfo(pid);
+  return Erc20.ERC20(lptoken).balanceOf(who) + Erc20.ERC20(token).balanceOf(who);
+}`;
+    expect(rewriteContractResults(chained, BASE).source).toBe(explicit);
+    sameProgram(chained, explicit, ["ethereum"]);
+  });
+
+  it("an intent body calling on the program's own const", () => {
+    const intent = (call: string): string => `function main(recipient: Address) {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  Ethereum(() => {
+    require(${call} > 0, "no liquidity");
+    USDC.transfer(recipient, 1);
+  }).reward({ tokens: [{ token: USDC, amount: 2 }] });
+}`;
+    const options = { intents: { deadline: 2_000_000_000n, creator: CREATOR, executionFee: 0n } };
+    const chained = compileSauceProgram("base", intent("pool.liquidity()"), options);
+    const explicit = compileSauceProgram(
+      "base",
+      intent("UniswapV3.Pool(pool).liquidity()"),
+      options,
+    );
+    expect(Array.from(chained.bytecode)).toEqual(Array.from(explicit.bytecode));
+    expect(chained.intents[0]!.intent).toEqual(explicit.intents[0]!.intent);
+  });
+
   it("a deployed contract's ABI at the address returned: `.at(...)`", () => {
     const chained = `function main(): Uint256 {
   return AerodromeSlipstream.NonfungiblePositionManager.factory().tickSpacingToFee(100);
@@ -196,6 +229,18 @@ describe("what the rewrite refuses", () => {
   return pool.liquidity();
 }`),
     ).toContain("declare it 'const', or name the contract 'UniswapV3.Pool(pool).liquidity(...)'");
+  });
+
+  it("a name the program declares more than once", () => {
+    expect(
+      refusal(`function helper(pool: Address): Uint256 {
+  return pool;
+}
+function main(): Uint256 {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  return helper(pool) + pool.liquidity();
+}`),
+    ).toContain("is declared more than once in the program: rename one");
   });
 
   it("a program that declares the name the contract would be called by", () => {

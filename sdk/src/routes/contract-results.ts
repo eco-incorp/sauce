@@ -82,6 +82,13 @@ interface Result {
   readonly path: readonly string[];
 }
 
+/** A `let`/`const` binding: what it is initialized with, and which element of it, destructured. */
+interface Binding {
+  readonly kind: string;
+  readonly init: AstNode;
+  readonly index?: number;
+}
+
 /** The output parameter `path` leads to: the one output, or a field of the record returned. */
 function outputAt(method: DescriptorMethod, path: readonly string[]) {
   const { outputs } = method;
@@ -140,19 +147,32 @@ export function rewriteContractResults(
   const declarations = countDeclarations(program);
   const declared = (name: string): boolean => declarations.has(name);
 
-  /** `const`/`let` bindings of names declared once, by name: their kind and initializer. */
-  const bindings = new Map<string, { readonly kind: string; readonly init: AstNode }>();
+  /** Every `let`/`const` binding of each name: its initializer, and in `const [a, b] = <call>`
+   *  which element of it the name is. */
+  const bindings = new Map<string, Binding[]>();
   walk(program, (n) => {
     if (n.type !== "VariableDeclaration") return;
     const kind = (n as { kind?: string }).kind ?? "var";
     for (const declarator of (n as { declarations?: AstNode[] }).declarations ?? []) {
       const id = declarator.id as AstNode | undefined;
       const init = declarator.init as AstNode | null | undefined;
-      if (id?.type !== "Identifier" || !init) continue;
-      const name = (id as unknown as { name: string }).name;
-      if (declarations.get(name) === 1) bindings.set(name, { kind, init });
+      if (!init) continue;
+      const bind = (name: AstNode, index?: number): void => {
+        const key = (name as unknown as { name: string }).name;
+        const binding = index === undefined ? { kind, init } : { kind, init, index };
+        bindings.set(key, [...(bindings.get(key) ?? []), binding]);
+      };
+      if (id?.type === "Identifier") bind(id);
+      if (id?.type === "ArrayPattern") {
+        ((id.elements as (AstNode | null)[] | undefined) ?? []).forEach((element, index) => {
+          if (element?.type === "Identifier") bind(element, index);
+        });
+      }
     }
   });
+  /** A name's binding, when the program declares the name once: then every use of it is this one. */
+  const bindingOf = (name: string): Binding | undefined =>
+    declarations.get(name) === 1 ? bindings.get(name)?.[0] : undefined;
 
   /** A name or member chain naming a registry contract: `UniswapV3.Factory`, `Base.UniswapV3.Factory`,
    *  or a protocol whose one contract is its default (`Aave`). */
@@ -221,29 +241,44 @@ export function rewriteContractResults(
         };
       }
     } else if (node.type === "Identifier") {
-      const binding = bindings.get((node as unknown as { name: string }).name);
-      if (binding?.kind === "const") found = result(binding.init);
+      const binding = bindingOf((node as unknown as { name: string }).name);
+      if (binding?.kind === "const") found = held(binding);
     }
     visiting.delete(node);
     resultMemo.set(node, found);
     return found;
   }
 
-  /** The registry contract `node`'s value is, where the registry knows it. */
-  function known(node: AstNode): ContractDescriptor | undefined {
-    if (knownMemo.has(node)) return knownMemo.get(node);
-    const output = result(node);
+  /** The output a binding holds: its initializer's, or the element of it the name is. */
+  function held(binding: Binding): Result | undefined {
+    const whole = result(binding.init);
+    if (whole === undefined || binding.index === undefined) return whole;
+    const { outputs } = whole.method;
+    const fields =
+      whole.path.length === 0 && outputs.length > 1
+        ? outputs
+        : (outputAt(whole.method, whole.path) as { components?: typeof outputs } | undefined)
+            ?.components;
+    const name = fields?.[binding.index]?.name;
+    return name ? { ...whole, path: [...whole.path, name] } : undefined;
+  }
+
+  /** The registry contract an output is, where the registry knows it. */
+  function contractOf(output: Result | undefined): ContractDescriptor | undefined {
     const returned = output?.method.returns?.find(
       (r) => r.path.length === output.path.length && r.path.every((p, i) => p === output.path[i]),
     );
     const ns =
       returned === undefined ? undefined : resolveNamespace(pascalOfSlug(returned.protocol));
-    const contract =
-      returned !== undefined && ns?.kind === "protocol"
-        ? ns.contracts.get(returned.contract)
-        : undefined;
-    knownMemo.set(node, contract);
-    return contract;
+    return returned !== undefined && ns?.kind === "protocol"
+      ? ns.contracts.get(returned.contract)
+      : undefined;
+  }
+
+  /** The registry contract `node`'s value is, where the registry knows it. */
+  function known(node: AstNode): ContractDescriptor | undefined {
+    if (!knownMemo.has(node)) knownMemo.set(node, contractOf(result(node)));
+    return knownMemo.get(node);
   }
 
   /** `node` as the program spells it, its arguments elided: `UniswapV3.Factory.getPool(...)`. */
@@ -301,22 +336,23 @@ export function rewriteContractResults(
   function refuseUnknown(object: AstNode, method: string): void {
     const output = result(object);
     if (output === undefined) {
-      // `let pool = UniswapV3.Factory.getPool(...)`: a contract the registry knows, in a variable
-      // the program may reassign, so its calls cannot be lowered by name.
-      const binding =
-        object.type === "Identifier"
-          ? bindings.get((object as unknown as { name: string }).name)
-          : undefined;
-      if (binding !== undefined && binding.kind !== "const") {
-        const contract = known(binding.init);
-        if (contract !== undefined) {
-          const name = spelled(object);
-          fail(
-            `'${name}.${method}(...)': '${name}' holds a ${isToken(contract) ? "token" : named(contract)} ` +
-              `but is declared with '${binding.kind}': declare it 'const', or name the contract ` +
-              `'${isToken(contract) ? TOKEN_FACTORY_NAME : named(contract)}(${name}).${method}(...)'`,
-          );
-        }
+      // A name holding a contract the registry knows, which is not one `const`: a `let` the program
+      // may reassign, or a name it declares more than once, so which value a call is on is not
+      // the name's alone.
+      if (object.type !== "Identifier") return;
+      const name = (object as unknown as { name: string }).name;
+      for (const binding of bindings.get(name) ?? []) {
+        const contract = contractOf(held(binding));
+        if (contract === undefined) continue;
+        const why =
+          (declarations.get(name) ?? 0) > 1
+            ? "is declared more than once in the program: rename one"
+            : `is declared with '${binding.kind}': declare it 'const'`;
+        fail(
+          `'${name}.${method}(...)': '${name}' holds a ${isToken(contract) ? "token" : named(contract)} ` +
+            `but ${why}, or name the contract ` +
+            `'${isToken(contract) ? TOKEN_FACTORY_NAME : named(contract)}(${name}).${method}(...)'`,
+        );
       }
       return;
     }
