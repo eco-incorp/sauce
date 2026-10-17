@@ -32,6 +32,7 @@ import {
 } from "./token-rewrite.js";
 import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
+import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
 import { unknownGlobalError } from "./unknown-global.js";
@@ -815,6 +816,16 @@ function compileForChain(
       : options.defines === undefined || Object.keys(options.defines).length === 0
         ? chainValues
         : { ...chainValues, ...options.defines };
+
+  // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
+  // a `const` holding one) becomes the spelling that names the contract the result is
+  // (`UniswapV3.Pool(<the call>).liquidity()`, a token's writes `Token(<the call>).transfer(...)`),
+  // which the two passes below then lower as written. So it runs BEFORE both: the token pass lowers
+  // the `Token(...)` it writes, and the accessor pass the bindings. It claims only calls, never
+  // `<result>.<Sym>`, the token pass's balance read. EVM only, as contract bindings are.
+  if (options.accessors !== false && chain.kind === "evm") {
+    source = rewriteContractResults(source, chain).source;
+  }
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
   // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`

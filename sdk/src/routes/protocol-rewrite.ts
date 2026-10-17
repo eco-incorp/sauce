@@ -93,7 +93,7 @@ function fail(message: string): never {
  *  plus the ordered property-name path (the LAST element is always the method name). Returns
  *  `undefined` for anything outside that shape (a computed member, `this`, a call/paren in the
  *  middle, …) -- such a chain is simply not a candidate, not an error. */
-function decomposeMemberChain(
+export function decomposeMemberChain(
   node: AstNode,
 ): { readonly head: string; readonly path: readonly string[] } | undefined {
   if (node.type === "Identifier") {
