@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Everything Solana changes about a Sauce program. The token methods as on an EVM chain (USDC.transfer(to, amount), USDC.balanceOf(ctx.self()), Token(mint)) with every account derived and checked on chain; any other account written where it is used (Solana.pda(program, seeds), USDC.accountOf(holder), .writable()) or taken as an Account parameter with Writable/Signer roles; the account manifest and every --account name; binding a slot to the Pot; token accounts; @sauce/token for SPL Token and Token-2022 and its extensions (fees, pauses, frozen accounts, hooks); svm.call and svm.sload; transaction size; running on the owner's Pot or the engine (--via engine), simulating in a local copy, staging, plans for other signers, lookup tables, rent left open. Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or a Solana cook that does not fit one transaction.
+description: Everything Solana changes about a Sauce program. The token methods as on an EVM chain (USDC.transfer(to, amount), self.USDC, Token(mint)) with every account derived and checked on chain; any other account written where it is used (Solana.pda(program, seeds), USDC.accountOf(holder), .writable()) or taken as an Account parameter with Writable/Signer roles; the account manifest and every --account name; binding a slot to the Pot; token accounts; @sauce/token for SPL Token and Token-2022 and its extensions (fees, pauses, frozen accounts, hooks); svm.call and svm.sload; transaction size; running on the owner's Pot or the engine (--via engine), simulating in a local copy, staging, plans for other signers, lookup tables, rent left open. Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or a Solana cook that does not fit one transaction.
 ---
 
 # Sauce on Solana
@@ -41,7 +41,8 @@ is `sauce-solana-distributed-swap`'s.
   `accounts`. The hex is how `sauce globals --chain solana --json` prints a token's `address`.
 - **The Pot** is the Kitchen's program address for `"pot"`, its owner and a 32-byte salt (zero
   unless `--salt` names another). `ctx.self()` alone is the engine's program id, which owns every
-  Pot account, **not the Pot**; as a token's holder (`USDC.balanceOf(ctx.self())`) it is the Pot.
+  Pot account, **not the Pot**; as a token's holder it is the Pot, as `self` is: `self.USDC` is
+  the Pot's USDC.
 - **Two token programs**: SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) and Token-2022
   (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC, USDT and WSOL are SPL Token mints; PYUSD
   and the tokenized stocks are Token-2022 mints.
@@ -65,7 +66,7 @@ A program pays, approves and reads a token as it does on an EVM chain:
 
 ```sauce chain=solana
 function main(to: Address, amount: Uint256) {
-  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  require(self.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
@@ -88,8 +89,9 @@ comes from.
 - **Nothing to attach.** `sauce run`, `simulate` and `tx` derive every such slot from the owner, the
   Pot and `main`'s arguments, so the program runs with `--args` alone. `sauce compile --json` lists
   each slot with its `derive`; `--account NAME=<value>` replaces one.
-- **A holder** is `ctx.self()` (or `self`; `self.USDC` is its balance), a parameter of `main`
-  declared `Address`, or a 32-byte key written out. For a holder computed as the program runs, take
+- **A holder** is `self` (or `ctx.self()`), the Pot; a parameter of `main` declared `Address`; or
+  a 32-byte key written out. Its balance is `<holder>.<TOKEN>` (`self.USDC`, `to.USDC`), the same
+  read as `USDC.balanceOf(to)`. For a holder computed as the program runs, take
   its token account as an `Account` parameter and pass it where the holder goes
   (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). **That account is paid as
   attached**: nothing checks whose it is, so prefer an `Address` recipient, or check it yourself,
@@ -134,7 +136,7 @@ function main(lamports: Uint256): Uint256 {
     transfer.concat(lamports.toBytesLe(8)),
   );
   svm.call(Solana.tokenProgram, [potWsol], hex`11`);
-  return WSOL.balanceOf(ctx.self());
+  return self.WSOL;
 }
 ```
 

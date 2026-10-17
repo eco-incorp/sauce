@@ -25,6 +25,9 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 - A program is a `.sauce.ts` file compiled **for a chain** (`--chain`). Compiling lowers the names
   that chain supplies, the token syntax and the intents the file opens; everything else reaches
   the compiler as written, annotations included.
+- **A balance is `<holder>.<TOKEN>`**: `self.USDC` is the Pot's USDC, `recipient.USDC` a
+  parameter's, the same read as `USDC.balanceOf(recipient)`. Which holders each target takes, and
+  the token methods, are `sauce-globals`'s.
 - Its inputs are `main`'s parameters, taken in declaration order, ABI-encoded and appended to the
   bytecode: one compiled program serves every value. `--args` passes them (`sauce-cli`).
 - Integers are 256-bit and checked; amounts are in a token's smallest units; nothing scales
@@ -58,7 +61,7 @@ function afterFee(amount: Uint256, bps: Uint256): Uint256 {
 
 // Runtime inputs: main's parameters, passed with the transaction.
 function main(recipient: Address, floor: Uint256) {
-  const held = USDC.balanceOf(ctx.self());
+  const held = self.USDC;
   if (held < floor) {
     throw "below floor";
   }
@@ -93,7 +96,7 @@ function afterFee(amount: Uint256): Uint256 {
 // Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
 // owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
 // `ctx.self()` there would keep them in the Pot.
-const held = USDC.balanceOf(ctx.self());
+const held = self.USDC;
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
 USDC.approve(AaveV3.Pool, supplied);

@@ -150,7 +150,7 @@ Devnet's mints differ: [Solana](chains/solana.md) lists them.
 ## Tokenized stocks
 
 A tokenized stock is a token like any other, named by its symbol with no import:
-`SPCXc.balanceOf(ctx.self())`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
+`self.SPCXc`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
 functions, a token a swap buys or sells.
 
 | Chain    | Issuers (example symbols)                                                                                                                                   |
@@ -183,7 +183,7 @@ functions, a token a swap buys or sells.
 
 ```ts
 function main(recipient: Address, amount: Uint256) {
-  require(SPCXc.balanceOf(ctx.self()) >= amount, "not enough SPCXc");
+  require(self.SPCXc >= amount, "not enough SPCXc");
   SPCXc.transfer(recipient, amount);
 }
 ```
@@ -205,9 +205,9 @@ mint's 32-byte key (`balanceOf(TSLAx, account)`). Token-2022 and the accounts it
 
 ```ts
 function main(recipient: Address, amount: Uint256): Uint256 {
-  const before = SPACEX.balanceOf(recipient);
+  const before = recipient.SPACEX;
   SPACEX.transfer(recipient, amount);
-  return SPACEX.balanceOf(recipient) - before;
+  return recipient.SPACEX - before;
 }
 ```
 

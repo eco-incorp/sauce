@@ -53,8 +53,8 @@ function main(
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   require(pool != 0, "no WETH/USDC pool at 0.05%");
   const price = priceAt(UniswapV3.Pool(pool).slot0().sqrtPriceX96);
-  const weth = WETH.balanceOf(self);
-  const usdc = USDC.balanceOf(self);
+  const weth = self.WETH;
+  const usdc = self.USDC;
   require(weth > 0 || usdc > 0, "the Pot holds neither");
 
   const before = wethShare(weth, usdc, price);
@@ -80,21 +80,17 @@ function main(
       0,
       self,
     );
-    amountIn = weth - WETH.balanceOf(self);
+    amountIn = weth - self.WETH;
     const least = Math.mulDiv(Math.mulDiv(amountIn, floor, 10 ** 18), 1000000 - fee, 1000000);
     require(amountOut >= least, "sold below the floor");
   } else {
     // Buy WETH up to `ceiling`: no unit costs more than that, plus the pool's fee.
     const ceiling = Math.mulDiv(price, 10000 + maxSlippageBps, 10000);
     amountOut = uniswapV3(pool, USDC, WETH, wanted - wethValue, sqrtPriceAt(ceiling), 0, self);
-    amountIn = usdc - USDC.balanceOf(self);
+    amountIn = usdc - self.USDC;
     const most = Math.mulDiv(Math.mulDiv(amountOut, ceiling, 10 ** 18), 1000000, 1000000 - fee);
     require(amountIn <= most + 1, "bought above the ceiling");
   }
-  const after = wethShare(
-    WETH.balanceOf(self),
-    USDC.balanceOf(self),
-    priceAt(UniswapV3.Pool(pool).slot0().sqrtPriceX96),
-  );
+  const after = wethShare(self.WETH, self.USDC, priceAt(UniswapV3.Pool(pool).slot0().sqrtPriceX96));
   return { before, after, soldWeth, amountIn, amountOut };
 }
