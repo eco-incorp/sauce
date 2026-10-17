@@ -393,7 +393,9 @@ function cremaStop(slot: Account[], down: bool): Uint256 {
 // The swap's `stop`, set (not 0), moving a Raydium-code window's last safe tick, `window` (0 for no
 // room): 0 to skip the pool (1); the stop's tick (its low 32 bits) where it is nearer; further, only
 // an initialized tick of the tick array the cook's builder read it in, the slot's place (6 to 8) in
-// the bits from 40, which past the window can only be the furthest array: one read checks it.
+// the bits from 40, which past the window can only be the furthest array. A tick there that is no
+// longer initialized leaves the window as it is; one whose place does not hold it means the venue's
+// layout is not the one read here, and reverts, naming it, rather than walk on a guess.
 function raydiumEdge(slot: Account[], down: bool, window: Uint256, stop: Uint256): Uint256 {
   const tick = stop & 0xffffffff;
   if (stop == 1 || window == 0) {
@@ -402,30 +404,34 @@ function raydiumEdge(slot: Account[], down: bool, window: Uint256, stop: Uint256
   if (down ? tick > window : tick < window) {
     return tick;
   }
-  const at = stop >> 40;
-  if (at < 6 || at > 8) {
-    return window;
-  }
-  const array = slot[at];
+  const array = slot[stop >> 40];
   const kind = svm.sload(array, 0, 8).toBe();
-  if (kind != 0xc09b55cd31f9812a && kind != 0x6a8b98247599b838) {
-    return window;
-  }
+  require(kind == 0xc09b55cd31f9812a ||
+    kind == 0x6a8b98247599b838, "stop: its slot place is not a tick array");
   const spacing = svm.sload(slot[1], 235, 2).toLe();
   const start = tickAt(array, 40);
-  if (tick < start || tick >= start + 60 * spacing || (tick - start) % spacing != 0) {
-    return window;
-  }
+  require(tick >= start &&
+    tick < start + 60 * spacing &&
+    (tick - start) % spacing == 0, "stop: its tick is not in its tick array");
   const offset = (tick - start) / spacing;
-  let gross = 64 + offset * 168;
+  let at = 44 + offset * 168;
   if (kind == 0x6a8b98247599b838) {
     const place = svm.sload(array, 48 + offset, 1).toLe();
-    gross = place == 0 ? 0 : 216 + (place - 1) * 168 + 20;
+    if (place == 0) {
+      return window;
+    }
+    at = 216 + (place - 1) * 168;
   }
-  return gross != 0 && svm.sload(array, gross, 16).toLe() != 0 ? tick : window;
+  // A tick's state: its index, its net liquidity, then its gross, 0 when it is not initialized.
+  if (svm.sload(array, at + 20, 16).toLe() == 0) {
+    return window;
+  }
+  require(tickAt(array, at) == tick, "stop: the tick array's layout is not Raydium's");
+  return tick;
 }
 
-// Crema's (`raydiumEdge`): further, only an initialized tick of the last tick array its slot gives.
+// Crema's (`raydiumEdge`): further, only an initialized tick of the last tick array its slot gives,
+// a tick's state its initialized byte then its index.
 function cremaEdge(slot: Account[], down: bool, window: Uint256, stop: Uint256): Uint256 {
   if (stop == 1 || window == 0) {
     return 0;
@@ -437,12 +443,15 @@ function cremaEdge(slot: Account[], down: bool, window: Uint256, stop: Uint256):
   const span = 64 * spacing;
   const last = slot[7].address == 0 ? slot[6] : slot[8].address == 0 ? slot[7] : slot[8];
   const start = 0x80000000 - 443636 + (443636 % spacing) + svm.sload(last, 8, 2).toLe() * span;
-  const initialized =
-    stop >= start &&
+  require(stop >= start &&
     stop < start + span &&
-    (stop - start) % spacing == 0 &&
-    svm.sload(last, 44 + ((stop - start) / spacing) * 133, 1).toLe() == 1;
-  return initialized ? stop : window;
+    (stop - start) % spacing == 0, "stop: its tick is not in the last tick array");
+  const at = 44 + ((stop - start) / spacing) * 133;
+  if (svm.sload(last, at, 1).toLe() != 1) {
+    return window;
+  }
+  require(tickAt(last, at + 1) == stop, "stop: the tick array's layout is not Crema's");
+  return stop;
 }
 
 // √1.0001^n times 1e18, bounded below by its first four binomial terms in x = √1.0001 − 1 (rounded
