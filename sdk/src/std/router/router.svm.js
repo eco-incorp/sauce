@@ -77,10 +77,11 @@
 // a swap at a price walks"). `stop`, on the eight concentrated-liquidity venues, is a tick the cook's
 // builder read from the pool's tick arrays as it built the cook, the swap holding a tick inside it:
 // 0 is none, 1 skips the pool, and any other value is the tick as the window's are (its i32 with the
-// sign bit flipped). Nearer than the window it holds the swap within the pool's share of the cook's
-// compute units, which a pool crossing many initialized ticks runs out of, failing the transaction;
-// further, it takes the swap on into the furthest tick array the slot gives, to an initialized tick
-// there that the swap reads as it runs. A caller computing none passes 0.
+// sign bit flipped), on Raydium's code with the slot place of the tick array it lies in from bit 40.
+// Nearer than the window it holds the swap within the pool's share of the cook's compute units,
+// which a pool crossing many initialized ticks runs out of, failing the transaction; further, it
+// takes the swap on into the furthest tick array the slot gives, to an initialized tick there that
+// the swap reads as it runs. 0 costs one comparison; a caller computing none passes it.
 //
 // AT THE POOL'S OWN LIMIT. `limit` is the pool's own: the sqrt price its swap takes, as the pool
 // keeps it (a Q64.64 root on the concentrated-liquidity venues, a root times 10^24 on Invariant),
@@ -278,9 +279,9 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 //
 // For Raydium's code and Crema that is where the furthest array the slot gives that way begins,
 // since the swap reaches it by lookup and stops there; and when that array holds the price, the last
-// tick initialized in it that way. The swap's `stop` moves it: nearer, as it is; further, into that
-// furthest array, to an initialized tick of it past where it begins, one read where finding its last
-// would scan the whole array. A tick is an i32 read with its sign bit flipped (biased), so that
+// tick initialized in it that way. The swap's `stop`, read only where it is set (not 0), moves it
+// (`raydiumEdge`, `cremaEdge`): nearer, as it is; further, into that furthest array, to an
+// initialized tick of it past where it begins, one read where finding its last would scan the array. A tick is an i32 read with its sign bit flipped (biased), so that
 // ticks compare in order; 0 is no room at all.
 
 // The biased tick at `at` of `account`, an i32.
@@ -292,12 +293,8 @@ function tickAt(account: Account, at: Uint256): Uint256 {
 // tick arrays (the bitmap extension and the arrays behind the price passed over) hold 60 ticks each:
 // a fixed array 168 bytes each at 44, a Byreal dynamic one the ticks it allocated at 216, each tick's
 // place among them, 1-based, in the 60 bytes at 48. A tick is initialized with liquidity: one holding
-// limit orders alone is taken as not, which stops the window sooner, never later. `stop`, the swap's,
-// as the window reads it above.
-function raydiumStop(slot: Account[], down: bool, stop: Uint256): Uint256 {
-  if (stop == 1) {
-    return 0;
-  }
+// limit orders alone is taken as not, which stops the window sooner, never later.
+function raydiumStop(slot: Account[], down: bool): Uint256 {
   const pool = slot[1];
   const tick = tickAt(pool, 269);
   const spacing = svm.sload(pool, 235, 2).toLe();
@@ -319,27 +316,11 @@ function raydiumStop(slot: Account[], down: bool, stop: Uint256): Uint256 {
   if (far == 0) {
     return 0;
   }
-  const array = slot[far];
   if (down ? start + span <= tick : start > tick) {
-    const edge = down ? start + span : start;
-    if (stop > 1 && (down ? stop > edge : stop < edge)) {
-      return stop;
-    }
-    // Further, into the array: an initialized tick of it.
-    if (stop >= start && stop < start + span && (stop - start) % spacing == 0) {
-      const offset = (stop - start) / spacing;
-      let at = 64 + offset * 168;
-      if (dynamic) {
-        const place = svm.sload(array, 48 + offset, 1).toLe();
-        at = place == 0 ? 0 : 216 + (place - 1) * 168 + 20;
-      }
-      if (at != 0 && svm.sload(array, at, 16).toLe() != 0) {
-        return stop;
-      }
-    }
-    return edge;
+    return down ? start + span : start;
   }
   // The array holding the price: its last initialized tick that way, from its far end.
+  const array = slot[far];
   const here = (tick - start) / spacing;
   for (let n = 0; n < 60; n = n + 1) {
     const offset = down ? n : 59 - n;
@@ -352,8 +333,7 @@ function raydiumStop(slot: Account[], down: bool, stop: Uint256): Uint256 {
       at = place == 0 ? 0 : 216 + (place - 1) * 168 + 20;
     }
     if (at != 0 && svm.sload(array, at, 16).toLe() != 0) {
-      const edge = start + offset * spacing;
-      return stop > 1 && (down ? stop > edge : stop < edge) ? stop : edge;
+      return start + offset * spacing;
     }
   }
   return 0;
@@ -367,7 +347,6 @@ function whirlpoolStop(
   tickOffset: Uint256,
   spacingOffset: Uint256,
   down: bool,
-  stop: Uint256,
 ): Uint256 {
   const tick = tickAt(pool, tickOffset);
   const spacing = svm.sload(pool, spacingOffset, 2).toLe();
@@ -376,22 +355,19 @@ function whirlpoolStop(
   // past 2^31 so that the division is of a positive number.
   const shift = ((0x80000000 + span - 1) / span) * span;
   const base = ((tick + shift - 0x80000000) / span) * span + 0x80000000 - shift;
+  if (down) {
+    return base - 2 * span;
+  }
   // Paying the higher-key token the window starts an array later where the tick is in the last
-  // spacing of its own. The swap's `stop`, where it is nearer.
+  // spacing of its own.
   const first = tick + spacing >= base + span ? base + span : base;
-  const edge = down ? base - 2 * span : first + 2 * span + 87 * spacing;
-  // Skipped (1): the tick itself, which leaves the swap no room.
-  return stop == 1 ? tick : stop > 1 && (down ? stop > edge : stop < edge) ? stop : edge;
+  return first + 2 * span + 87 * spacing;
 }
 
 // Crema's last safe tick: its slot's leading tick arrays are those its map marks, in walk order, of
 // 64 ticks of 133 bytes at 44 each, initialized when its first byte is 1; an array's index at 8
-// counts arrays of 64 × spacing from the pool's least tick, −443636 rounded to the spacing. `stop`,
-// the swap's, as Raydium's code reads it (`raydiumStop`).
-function cremaStop(slot: Account[], down: bool, stop: Uint256): Uint256 {
-  if (stop == 1) {
-    return 0;
-  }
+// counts arrays of 64 × spacing from the pool's least tick, −443636 rounded to the spacing.
+function cremaStop(slot: Account[], down: bool): Uint256 {
   const pool = slot[1];
   const tick = tickAt(pool, 206);
   const spacing = svm.sload(pool, 168, 2).toLe();
@@ -399,19 +375,7 @@ function cremaStop(slot: Account[], down: bool, stop: Uint256): Uint256 {
   const last = slot[7].address == 0 ? slot[6] : slot[8].address == 0 ? slot[7] : slot[8];
   const start = 0x80000000 - 443636 + (443636 % spacing) + svm.sload(last, 8, 2).toLe() * span;
   if (down ? start + span <= tick : start > tick) {
-    const edge = down ? start + span : start;
-    if (stop > 1 && (down ? stop > edge : stop < edge)) {
-      return stop;
-    }
-    if (
-      stop >= start &&
-      stop < start + span &&
-      (stop - start) % spacing == 0 &&
-      svm.sload(last, 44 + ((stop - start) / spacing) * 133, 1).toLe() == 1
-    ) {
-      return stop;
-    }
-    return edge;
+    return down ? start + span : start;
   }
   const here = (tick - start) / spacing;
   for (let n = 0; n < 64; n = n + 1) {
@@ -420,11 +384,65 @@ function cremaStop(slot: Account[], down: bool, stop: Uint256): Uint256 {
       return 0;
     }
     if (svm.sload(last, 44 + offset * 133, 1).toLe() == 1) {
-      const edge = start + offset * spacing;
-      return stop > 1 && (down ? stop > edge : stop < edge) ? stop : edge;
+      return start + offset * spacing;
     }
   }
   return 0;
+}
+
+// The swap's `stop`, set (not 0), moving a Raydium-code window's last safe tick, `window` (0 for no
+// room): 0 to skip the pool (1); the stop's tick (its low 32 bits) where it is nearer; further, only
+// an initialized tick of the tick array the cook's builder read it in, the slot's place (6 to 8) in
+// the bits from 40, which past the window can only be the furthest array: one read checks it.
+function raydiumEdge(slot: Account[], down: bool, window: Uint256, stop: Uint256): Uint256 {
+  const tick = stop & 0xffffffff;
+  if (stop == 1 || window == 0) {
+    return 0;
+  }
+  if (down ? tick > window : tick < window) {
+    return tick;
+  }
+  const at = stop >> 40;
+  if (at < 6 || at > 8) {
+    return window;
+  }
+  const array = slot[at];
+  const kind = svm.sload(array, 0, 8).toBe();
+  if (kind != 0xc09b55cd31f9812a && kind != 0x6a8b98247599b838) {
+    return window;
+  }
+  const spacing = svm.sload(slot[1], 235, 2).toLe();
+  const start = tickAt(array, 40);
+  if (tick < start || tick >= start + 60 * spacing || (tick - start) % spacing != 0) {
+    return window;
+  }
+  const offset = (tick - start) / spacing;
+  let gross = 64 + offset * 168;
+  if (kind == 0x6a8b98247599b838) {
+    const place = svm.sload(array, 48 + offset, 1).toLe();
+    gross = place == 0 ? 0 : 216 + (place - 1) * 168 + 20;
+  }
+  return gross != 0 && svm.sload(array, gross, 16).toLe() != 0 ? tick : window;
+}
+
+// Crema's (`raydiumEdge`): further, only an initialized tick of the last tick array its slot gives.
+function cremaEdge(slot: Account[], down: bool, window: Uint256, stop: Uint256): Uint256 {
+  if (stop == 1 || window == 0) {
+    return 0;
+  }
+  if (down ? stop > window : stop < window) {
+    return stop;
+  }
+  const spacing = svm.sload(slot[1], 168, 2).toLe();
+  const span = 64 * spacing;
+  const last = slot[7].address == 0 ? slot[6] : slot[8].address == 0 ? slot[7] : slot[8];
+  const start = 0x80000000 - 443636 + (443636 % spacing) + svm.sload(last, 8, 2).toLe() * span;
+  const initialized =
+    stop >= start &&
+    stop < start + span &&
+    (stop - start) % spacing == 0 &&
+    svm.sload(last, 44 + ((stop - start) / spacing) * 133, 1).toLe() == 1;
+  return initialized ? stop : window;
 }
 
 // √1.0001^n times 1e18, bounded below by its first four binomial terms in x = √1.0001 − 1 (rounded
@@ -1165,7 +1183,11 @@ function swapRaydium(
     return;
   }
   const paysA = trader[2].address < trader[3].address;
-  const stop = raydiumStop(slot, paysA, given);
+  // The swap's stop, read only where it is set.
+  let stop = raydiumStop(slot, paysA);
+  if (given != 0) {
+    stop = raydiumEdge(slot, paysA, stop, given);
+  }
   if (stop == 0) {
     return;
   }
@@ -1228,7 +1250,16 @@ function swapWhirlpool(
     return;
   }
   const paysA = trader[2].address < trader[3].address;
-  const stop = whirlpoolStop(pool, 81, 41, paysA, given);
+  let stop = whirlpoolStop(pool, 81, 41, paysA);
+  // The swap's stop, where it is set: 1 skips the pool, a tick nearer than the window holds it.
+  if (given != 0) {
+    if (given == 1) {
+      return;
+    }
+    if (paysA ? given > stop : given < stop) {
+      stop = given;
+    }
+  }
   const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn, 81, stop);
   if (order.length == 0) {
     return;
@@ -1274,7 +1305,16 @@ function swapCropper(
     return;
   }
   const paysA = trader[2].address < trader[3].address;
-  const stop = whirlpoolStop(pool, 81, 41, paysA, given);
+  let stop = whirlpoolStop(pool, 81, 41, paysA);
+  // The swap's stop, where it is set: 1 skips the pool, a tick nearer than the window holds it.
+  if (given != 0) {
+    if (given == 1) {
+      return;
+    }
+    if (paysA ? given > stop : given < stop) {
+      stop = given;
+    }
+  }
   const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn, 81, stop);
   if (order.length == 0) {
     return;
@@ -1310,7 +1350,16 @@ function swapDefituna(
 ): void {
   const pool = slot[1];
   const paysA = trader[2].address < trader[3].address;
-  const stop = whirlpoolStop(pool, 183, 139, paysA, given);
+  let stop = whirlpoolStop(pool, 183, 139, paysA);
+  // The swap's stop, where it is set: 1 skips the pool, a tick nearer than the window holds it.
+  if (given != 0) {
+    if (given == 1) {
+      return;
+    }
+    if (paysA ? given > stop : given < stop) {
+      stop = given;
+    }
+  }
   const order = clmmOrder(pool, 11, 43, 151, pool, 143, 2, trader, priceLimit, amountIn, 183, stop);
   if (order.length == 0) {
     return;
@@ -1355,7 +1404,10 @@ function swapCrema(
     return;
   }
   const paysA = trader[2].address < trader[3].address;
-  const stop = cremaStop(slot, paysA, given);
+  let stop = cremaStop(slot, paysA);
+  if (given != 0) {
+    stop = cremaEdge(slot, paysA, stop, given);
+  }
   if (stop == 0) {
     return;
   }

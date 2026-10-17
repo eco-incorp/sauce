@@ -476,7 +476,10 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       }),
     );
     const stop = alone.stops!.stops.find((one) => one.pool === PANCAKE.pool)!;
-    expect(stop.stop).toBe(BigInt(windowStop(PANCAKE, false, undefined, true)!) + (1n << 31n));
+    // The tick, biased, and from bit 40 the slot place of the array it lies in.
+    expect(stop.stop & 0xffffffffn).toBe(
+      BigInt(windowStop(PANCAKE, false, undefined, true)!) + (1n << 31n),
+    );
     expect(alone.bought).toBeGreaterThan(0n);
     expect(priceOf(PANCAKE)).toBe(bound);
   }, 120_000);

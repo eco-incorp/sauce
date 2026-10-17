@@ -112,6 +112,10 @@ export interface SvmWalk {
   readonly spacing: number;
   /** Its window's last safe tick, read as the router reads it with the swap's `stop`. */
   readonly window: number;
+  /** Its slot's tick arrays, read. */
+  readonly arrays: readonly (Array_ | undefined)[];
+  /** Whether it walks past where the router's own window ends, which only the stop takes it. */
+  readonly deep?: true;
   /** The tick its walk ends at: its limit's, or a tick inside its window. */
   readonly limitTick: number;
   /** The initialized ticks it crosses getting there, in walk order. */
@@ -169,6 +173,14 @@ interface Array_ {
   readonly span: number;
   readonly ticks: readonly number[];
 }
+
+/** The slot place (6 to 8) of the array of `arrays` holding `tick`, in walk order from ticks0. */
+const placeOf = (arrays: readonly (Array_ | undefined)[], tick: number): number | undefined => {
+  const at = arrays.findIndex(
+    (array) => array !== undefined && tick >= array.start && tick < array.start + array.span,
+  );
+  return at < 0 ? undefined : 6 + at;
+};
 
 /** One tick array of `layout`, read: its start, span and initialized ticks; undefined for none. */
 function readArray(
@@ -237,13 +249,13 @@ function windowStop(
   spacing: number,
   arrays: readonly (Array_ | undefined)[],
   down: boolean,
-): number | undefined {
+): { readonly deep: number; readonly near: number } | undefined {
   if (layout === "whirlpool" || layout === "defituna") {
     const span = 88 * spacing;
     const base = floorDiv(tick, span) * span;
-    if (down) return base - 2 * span;
     const first = tick + spacing >= base + span ? base + span : base;
-    return first + 2 * span + 87 * spacing;
+    const edge = down ? base - 2 * span : first + 2 * span + 87 * spacing;
+    return { deep: edge, near: edge };
   }
   let far: Array_ | undefined;
   if (layout === "crema") {
@@ -261,9 +273,13 @@ function windowStop(
   }
   if (far === undefined) return undefined;
   const holds = down ? far.start + far.span > tick : far.start <= tick;
+  // The router's own window: where the furthest array begins, or, holding the price, its last
+  // initialized tick that way; taken on into a furthest array past the price by the swap's stop.
+  const edge = down ? far.start + far.span : far.start;
   const past = far.ticks.filter((t) => !holds || (down ? t <= tick : t > tick));
-  if (past.length > 0) return down ? Math.min(...past) : Math.max(...past);
-  return holds ? undefined : down ? far.start + far.span : far.start;
+  const last = past.length === 0 ? undefined : down ? Math.min(...past) : Math.max(...past);
+  if (holds) return last === undefined ? undefined : { deep: last, near: last };
+  return { deep: last ?? edge, near: edge };
 }
 
 /** The tick whose sqrt price is the greatest at or below `sqrt`. */
@@ -324,12 +340,14 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   const cost = SVM_SWAP_COSTS[pool.program] ?? { base: 0, tick: 0 };
   const arrays = pool.arrays.map((data) => readArray(pool.layout, data, spacing));
   const down = pool.paysA;
-  const window = windowStop(pool.layout, tick, spacing, arrays, down);
+  const windows = windowStop(pool.layout, tick, spacing, arrays, down);
+  const window = windows?.deep;
   const none = (): SvmWalk => ({
     liquidity,
     tick,
     spacing,
     window: window ?? tick,
+    arrays,
     limitTick: tick,
     crossed: [],
     units: 0,
@@ -346,6 +364,8 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
     limitTick = down ? Math.max(limitTick, ownTick) : Math.min(limitTick, ownTick);
   }
   if (down ? limitTick > tick : limitTick <= tick) return none();
+  const near = down ? windows!.near + 1 : windows!.near - 2;
+  const deep = down ? limitTick < near : limitTick > near;
   const all = [
     ...new Set(arrays.flatMap((array) => (array === undefined ? [] : array.ticks))),
   ].sort((a, b) => (down ? b - a : a - b));
@@ -358,6 +378,8 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
     tick,
     spacing,
     window,
+    arrays,
+    ...(deep ? { deep } : {}),
     limitTick,
     crossed,
     units: cost.base + cost.tick * crossed.length,
@@ -370,8 +392,14 @@ function charged(pool: SvmStopPool, n: number): number {
   return Math.ceil((cost.base + cost.tick * n) * (1 + SVM_COMPUTE_HEADROOM));
 }
 
-/** A tick as the router reads it: its i32 with the sign bit flipped. */
-const biased = (tick: number): bigint => BigInt(tick) + (1n << 31n);
+/**
+ * A swap's stop at `tick`, as the router reads it: the tick's i32 with the sign bit flipped, and on
+ * Raydium's code the slot place of the array it lies in from bit 40, where the router reads it.
+ */
+const stopAt = (pool: SvmStopPool, walk: SvmWalk, tick: number): bigint => {
+  const place = pool.layout === "raydium" ? placeOf(walk.arrays, tick) : undefined;
+  return BigInt(tick) + (1n << 31n) + (place === undefined ? 0n : BigInt(place) << 40n);
+};
 
 /**
  * Each pool's stop for a cook whose venues' programs may spend `budget` units between them: the
@@ -400,10 +428,13 @@ export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): 
     }
     if (whole <= left) {
       left -= whole;
-      // Its whole way: on Raydium's code and Crema, on into the furthest array, which the router's
-      // own window stops at the start of.
-      const deep = pool.layout === "raydium" || pool.layout === "crema";
-      stops.set(pool.name, { ...of, stop: deep ? biased(walk.window) : 0n, share: whole });
+      // Its whole way: no stop, but where that is past the router's own window (on Raydium's code
+      // and Crema, into the furthest array, which that window stops at the start of).
+      stops.set(pool.name, {
+        ...of,
+        stop: walk.deep === true ? stopAt(pool, walk, walk.window) : 0n,
+        share: whole,
+      });
       return;
     }
     // The most crossings what is left pays for: held a tick inside the next.
@@ -416,7 +447,7 @@ export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): 
     const share = charged(pool, n);
     left -= share;
     const stopTick = walk.crossed[n]!;
-    stops.set(pool.name, { ...of, stop: biased(stopTick), stopTick, share });
+    stops.set(pool.name, { ...of, stop: stopAt(pool, walk, stopTick), stopTick, share });
   });
 
   return pools.map((pool) => stops.get(pool.name)!);
