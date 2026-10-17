@@ -5,6 +5,7 @@
  * - every chain as the function that opens an intent there, with its namespaces
  *   (`Base(() => { … })`, `Base.UniswapV3.Factory`), and Solana with the accounts a program for it
  *   writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every token symbol as a holder's balance (`self.USDC`, `recipient.TSLAx`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
@@ -230,6 +231,15 @@ export function sauceScriptDeclarations(): string {
         ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts;`
         : `declare const ${chain.key}: SauceChain;`,
     ),
+    "",
+    "/** A holder's balance of a token, by its symbol: `self.USDC`, `recipient.TSLAx`, the same",
+    " *  read as `USDC.balanceOf(self)`. The holder is `self`, a variable or an address. */",
+    "interface BigInt {",
+    ...[...tokens]
+      .filter((symbol) => IDENTIFIER.test(symbol))
+      .sort()
+      .map((symbol) => `  readonly ${symbol}: bigint;`),
+    "}",
     "",
     "/** A protocol contract's address on the chain a program is compiled for: a define. */",
     ...[...defines]
