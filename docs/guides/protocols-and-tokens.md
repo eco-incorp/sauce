@@ -75,6 +75,33 @@ address for and no verified ABI. An interface is an ABI the registry has no fixe
 a vault, a pool, a token — so the program or host names the deployment. A program calls it with
 the address, `UniswapV3.Pool(pool).liquidity()`, or binds it with `.at(pool)`, which is the same.
 
+### Contracts a call returns
+
+Some functions hand back another contract's address: a factory gives you a pool, a pool its two
+tokens, a vault the token it holds. When the registry knows which contract that address is, you can
+call that contract's methods on the result straight away, or on a `const` that holds it:
+
+```js
+// Reads the Uniswap V3 USDC/WETH 0.05% pool's liquidity and its first token's decimals.
+function main() {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  require(pool != 0, "no WETH/USDC 0.05% pool");
+  return pool.liquidity() + pool.token0().decimals();
+}
+```
+
+Nothing new runs on chain. Before compiling, the SDK writes each of those calls the long way,
+naming the contract: `UniswapV3.Pool(pool).liquidity()` and
+`Erc20.ERC20(UniswapV3.Pool(pool).token0()).decimals()`. Both spellings compile to the same program.
+A token that comes back this way works like `Token(address)`: its `transfer`, `approve` and
+`transferFrom` revert unless the token accepted them, and its reads are the ERC-20 functions.
+
+Each protocol's page in the [reference](../reference/protocols.md) says, on a function's line, what
+the address it returns is. For any other address, such as one the program is given or one a
+function returns that the registry has no record of, name the contract yourself:
+`UniswapV3.Pool(pool).liquidity()`. Calling a method on such an address without naming it fails to
+compile, and the error names the spellings that work.
+
 ### Names
 
 - **A contract is named by its role** in the protocol's `addresses.ts`, first letter upper-cased:

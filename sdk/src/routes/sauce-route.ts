@@ -33,6 +33,7 @@ import {
 } from "./token-rewrite.js";
 import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
+import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
 import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
@@ -794,11 +795,23 @@ function compileForChain(
   // own chain's compile.
   source = rewriteAvailability(source, chain, tokenMap).source;
 
+  // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
+  // a `const` holding one) becomes the spelling that names the contract the result is
+  // (`UniswapV3.Pool(<the call>).liquidity()`, a token's writes `Token(<the call>).transfer(...)`),
+  // which the token and accessor passes below lower as written. It runs before the intent sugar
+  // too, while the program is whole: an intent body calling a method on the program's own
+  // `const pool` is rewritten here, where `pool` is declared, and the body's own compile then finds
+  // the explicit spelling. It claims only calls, never `<result>.<Sym>`, the token pass's balance
+  // read. EVM only, as contract bindings are.
+  if (options.accessors !== false && chain.kind === "evm") {
+    source = rewriteContractResults(source, chain).source;
+  }
+
   // The intent sugar runs next, on the source as written but for decided `available(...)`
-  // branches. It reads `USDC` and `RECIPIENT` as compile-time values itself, so a token rewrite
-  // that had already turned `USDC.transfer(...)` into `__sauce_transfer(USDC, ...)` would leave it
-  // nothing it recognises. What it leaves behind is ordinary `evm.call` statements, which every
-  // later pass is free to walk over.
+  // branches and the results rewritten above. It reads `USDC` and `RECIPIENT` as compile-time
+  // values itself, so a token rewrite that had already turned `USDC.transfer(...)` into
+  // `__sauce_transfer(USDC, ...)` would leave it nothing it recognises. What it leaves behind is
+  // ordinary `evm.call` statements, which every later pass is free to walk over.
   const sugar = rewriteIntentSugar(source, intentSugarContext(chain, options, scope));
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
