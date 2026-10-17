@@ -530,6 +530,18 @@ describe("the balance shorthand on any address, and the native coin", () => {
           contracts: { Other: { abi: OTHER } },
         }).bytecode,
       ).toString("hex");
+    const MODULES: Readonly<Record<string, string>> = {
+      "./function.ts": "export function helper(who: Address): Address {\n  return who;\n}\n",
+      "./constant.ts": "export const LIMIT = 5;\n",
+    };
+    const modulesHex = (chain: "base" | "ethereum", source: string) =>
+      Buffer.from(
+        compileSauceProgram(chain, source, {
+          contracts: { Different: { abi: OTHER } },
+          resolve: (path: string) =>
+            MODULES[path] === undefined ? undefined : new TextEncoder().encode(MODULES[path]),
+        }).bytecode,
+      ).toString("hex");
     for (const chain of ["base", "ethereum"] as const) {
       for (const method of ["at", "view", "lib"]) {
         it(`on ${chain}, a bound contract's own \`${method}(who)\` is a call whose result holds`, () => {
@@ -545,6 +557,46 @@ describe("the balance shorthand on any address, and the native coin", () => {
       it(`on ${chain}, so is one on a contract bound to a local`, () => {
         expect(hexOf(chain, "const o = Other.at(ctx.self()); return o.at(who).USDC;")).toBe(
           hexOf(chain, "const o = Other.at(ctx.self()); return USDC.balanceOf(o.at(who));"),
+        );
+      });
+      // A name bound to a value is that value, an import of the same name shadowed by it, and an
+      // import is a contract type only from an ABI: a function or a constant is not one.
+      for (const [kind, line] of [
+        ["function", 'import { helper as Holder } from "./function.ts";'],
+        ["constant", 'import { LIMIT as Holder } from "./constant.ts";'],
+      ] as const) {
+        for (const method of ["at", "view", "lib"]) {
+          it(`on ${chain}, a local shadowing an imported ${kind} keeps its own \`${method}(who)\``, () => {
+            const program = (read: string) =>
+              `${line}\nfunction main(who: Address): Uint256 {\n` +
+              `  const Holder = Different.at(ctx.self());\n  return ${read};\n}\n`;
+            const hex = (read: string) => modulesHex(chain, program(read));
+            expect(hex(`Holder.${method}(who).USDC`)).toBe(
+              hex(`USDC.balanceOf(Holder.${method}(who))`),
+            );
+            expect(hex(`Holder.${method}(who).USDC`)).not.toBe(hex("USDC.balanceOf(who)"));
+          });
+        }
+      }
+      it(`on ${chain}, the same local with no import keeps its call too`, () => {
+        const program = (read: string) =>
+          "function main(who: Address): Uint256 {\n" +
+          `  const Holder = Different.at(ctx.self());\n  return ${read};\n}\n`;
+        expect(modulesHex(chain, program("Holder.at(who).USDC"))).toBe(
+          modulesHex(chain, program("USDC.balanceOf(Holder.at(who))")),
+        );
+      });
+      it(`on ${chain}, an imported ABI and a caller's binding still bind to the address`, () => {
+        const imported = (read: string) =>
+          'import { IERC20 as Pool } from "./artifacts/IERC20.json";\n' +
+          `function main(who: Address): Uint256 {\n  return ${read};\n}\n`;
+        expect(modulesHex(chain, imported("Pool.at(who).USDC"))).toBe(
+          modulesHex(chain, imported("USDC.balanceOf(who)")),
+        );
+        const caller = (read: string) =>
+          `function main(who: Address): Uint256 {\n  return ${read};\n}\n`;
+        expect(modulesHex(chain, caller("Different.view(who).USDC"))).toBe(
+          modulesHex(chain, caller("USDC.balanceOf(who)")),
         );
       });
       it(`on ${chain}, a contract type bound to an address still unwraps to it`, () => {

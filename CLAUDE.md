@@ -872,8 +872,9 @@ writes are SafeERC20 — that is the documented way to get the checks.
 its address, so a define reaches both spellings, and takes any address-valued holder: the holder's
 text stays in place for the accessor pass after it (`UniswapV4.PoolManager.WETH`,
 `UniswapV4.StateView.poolManager().USDC`), `X.at(a)` (`.view`, `.lib`) on a contract type — a
-registry contract or interface, an imported ABI, a name the program does not declare as a value —
-and `<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
+registry contract or interface, an ABI imported from a `.json` module, a name the program does not
+declare; never a name it binds to a value, which shadows an import of that name — and
+`<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
 token's own contract is one (`WETH.ETH`; on Solana a mint, its token accounts derived off its key),
 an undeclared `self` or `ctx.self()` is the Pot and a declared `self` an ordinary variable (as on
 Solana, and for the accessor pass's bare `self`). The chain's native coin

@@ -334,8 +334,11 @@ const BINDINGS: ReadonlySet<string> = new Set(["at", "view", "lib"]);
 interface HolderScope {
   readonly tokens: TokenSymbols;
   readonly shadowed: ReadonlySet<string>;
-  /** The names the program's imports bind: a contract type where an ABI is imported. */
-  readonly imports: ReadonlySet<string>;
+  /** The names the program's imports bind, and of them those an ABI (a `.json` module) gives. */
+  readonly imported: ReadonlySet<string>;
+  readonly abis: ReadonlySet<string>;
+  /** The names the program binds to a value: a local, a parameter, a function. */
+  readonly values: ReadonlySet<string>;
   readonly shapes: HolderShapes;
   readonly source: string;
 }
@@ -356,14 +359,19 @@ function isCtxSelf(node: AstNode, shadowed: ReadonlySet<string>): boolean {
 
 /**
  * Whether `node` names a contract type, whose `.at(…)`, `.view(…)` and `.lib(…)` bind it to an
- * address: a registry contract or interface (`UniswapV3.Pool`, `Base.UniswapV3.Factory`), an
- * imported ABI, or a name the program does not declare as a value (a caller's `contracts` binding,
- * a declared `interface`). A value — a bound contract, a call's result — is not one.
+ * address: a registry contract or interface (`UniswapV3.Pool`, `Base.UniswapV3.Factory`), an ABI
+ * imported from a `.json` module, or a name the program does not declare (a caller's `contracts`
+ * binding, a declared `interface`). A value is not one — a bound contract, a call's result, or any
+ * name the program binds to a value, an import of the same name included — and keeping its call
+ * whole is the safe side: a contract type kept whole is refused by the compile, never miscompiled.
  */
 function isContractType(node: AstNode, scope: HolderScope): boolean {
   if (node.type === "Identifier") {
     const name = (node as unknown as { name: string }).name;
-    return scope.imports.has(name) || !scope.shadowed.has(name);
+    // A name the program binds to a value anywhere — a local, a parameter, a function — is that
+    // value, an import of the same name shadowed; an import is a contract type only from an ABI.
+    if (scope.values.has(name)) return false;
+    return scope.imported.has(name) ? scope.abis.has(name) : true;
   }
   const chain = decomposeMemberChain(node);
   return (
@@ -510,17 +518,36 @@ function collectBalanceSites(
   const sites: Splice[] = [];
   let count = 0;
   let tokenReads = 0;
-  const imports = new Set<string>();
+  // Each import's local names, and how many times each name is imported: a name bound more often
+  // than that is bound to a value too.
+  const imported = new Map<string, number>();
+  const abis = new Set<string>();
   walk(program, (n) => {
-    if (
-      n.type === "ImportSpecifier" ||
-      n.type === "ImportDefaultSpecifier" ||
-      n.type === "ImportNamespaceSpecifier"
-    ) {
-      collectPatternNames((n as { local?: unknown }).local, imports);
+    if (n.type !== "ImportDeclaration") return;
+    const from = (n.source as { value?: unknown } | undefined)?.value;
+    for (const specifier of (n as { specifiers?: AstNode[] }).specifiers ?? []) {
+      collectPatternNames(specifier.local, {
+        add: (name: string) => {
+          imported.set(name, (imported.get(name) ?? 0) + 1);
+          if (typeof from === "string" && from.endsWith(".json")) abis.add(name);
+        },
+      });
     }
   });
-  const scope: HolderScope = { tokens, shadowed, imports, shapes: holderShapes(program), source };
+  const values = new Set(
+    [...countDeclarations(program)]
+      .filter(([name, count]) => count > (imported.get(name) ?? 0))
+      .map(([name]) => name),
+  );
+  const scope: HolderScope = {
+    tokens,
+    shadowed,
+    imported: new Set(imported.keys()),
+    abis,
+    values,
+    shapes: holderShapes(program),
+    source,
+  };
   walk(program, (n) => {
     if (n.type !== "MemberExpression") return;
     if ((n as { computed?: boolean }).computed) return;
