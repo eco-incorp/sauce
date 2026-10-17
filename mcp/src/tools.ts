@@ -463,6 +463,9 @@ const SUMMARY_FIELDS = [
   "gasKind",
   "transactions",
   "computeUnits",
+  "computeStops",
+  "computeBudget",
+  "computeRefused",
   "fee",
   "transfers",
   "nativeTransfers",
@@ -1032,11 +1035,11 @@ export const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
 
 const notesSchema = z.array(z.string()).optional();
 
-/** A refusal on a preview chain, as `refused` holds it (`sdk/src/cli/support.ts`). */
 /**
  * A Solana cook's stops: each swap at a price's, worked out from its pool's tick arrays and its
- * share of the cook's compute units (`computeStops`), and the units the venues were given between
- * them (`computeBudget`).
+ * share of the cook's compute units (`computeStops`), the units the venues were given between them
+ * (`computeBudget`), and, where the cook ran out with the stops worked out three times, why
+ * (`computeRefused`).
  */
 const COMPUTE_STOPS = {
   computeStops: z
@@ -1060,8 +1063,10 @@ const COMPUTE_STOPS = {
   computeBudget: z
     .looseObject({ venues: z.number(), cook: z.number(), measured: z.boolean() })
     .optional(),
+  computeRefused: z.string().optional(),
 };
 
+/** A refusal on a preview chain, as `refused` holds it (`sdk/src/cli/support.ts`). */
 const REFUSED = z.looseObject({
   code: z.literal("preview-chain"),
   action: z.string(),
@@ -2037,11 +2042,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "next slot), and sauce_send with the cursor alone builds it then. A Solana cook its " +
         "simulation says would fail is not built: the result is an error carrying `fails` and " +
         "the simulation's `logs`, and its cursor, which sauce_send simulates again once what " +
-        "the cook needs is there. A Solana swap at a price may be held to a stop, worked out " +
-        "from its pool's tick arrays and the cost table, the deepest pool first, to lower the " +
-        "risk that a pool runs the cook out of compute units (a price that moves before the " +
-        "cook lands can still): `computeStops` names each pool held short of its limit " +
-        "(`held`, its `stopPrice`) or skipped, and sauce_simulate checks them in a simulation. " +
+        "the cook needs is there. A Solana swap at a price may be held to a stop, to lower the " +
+        "risk that a pool runs the cook out of compute units: worked out here from its pool's " +
+        "tick arrays and the cost table alone, with no simulation, the pool buying the most " +
+        "per unit first. `computeStops` names each pool held short of its limit (`held`, its " +
+        "`stopPrice`) or skipped. sauce_simulate works the stops out again against the units " +
+        "it measures, so the cook it reports can differ from this one, and the cursor " +
+        "sauce_send resumes sends this cook as built, its stops from the pools now. " +
         "Nothing needs a fresh keypair: the owner signs and pays every " +
         "transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
@@ -2347,10 +2354,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "accounts left holding something), or the reason and the program logs; a cook too large for one " +
         "transaction, or given assumeBalance, in a local copy of the accounts it names (`path`), " +
         "its program staged as sauce run stages it. A Solana swap at a price may be held to a " +
-        "stop that keeps its pool within its share of the cook's compute units, the deepest " +
-        "pool first (`computeStops`: each pool held short of its limit, `held` with its " +
-        "`stopPrice`, or `skipped`): a cook that runs out of units anyway is simulated again " +
-        "with the stops tightened, twice, then refused. `sourceSha256` is the " +
+        "stop that keeps its pool within its share of the cook's compute units, the pool " +
+        "buying the most per unit first (`computeStops`: each pool held short of its limit, " +
+        "`held` with its `stopPrice`, or `skipped`): a cook that runs out of units anyway is " +
+        "simulated again with the stops tightened, twice, then refused (`computeRefused`). " +
+        "The cook simulated can differ from the one sauce_tx builds, which takes the stops " +
+        "from the cost table alone. `sourceSha256` is the " +
         "sha256 of the program's text. Nothing is signed or sent.",
       input: {
         ...PROGRAM,

@@ -416,7 +416,7 @@ describeSvm(
       expect(text.stdout).toContain("Pancakeswap.CLMM.pool(USDC, SPCX_US, 800) is skipped");
       // sauce tx works them out from the cost table alone, and says so.
       const tx = await sauce(...argv("tx"));
-      expect(tx.stderr).toContain("comes from the cost table, with no simulation");
+      expect(tx.stderr).toContain("from the cost table, with no simulation: an estimate");
       expect((ok(tx) as { computeStops: unknown[] }).computeStops).toHaveLength(3);
     }, 300_000);
 

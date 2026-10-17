@@ -34,7 +34,7 @@ export function svmStopLines(stops: SvmStops): string[] {
   return stops.stops.flatMap((stop) => {
     if (stop.stop === 1n) {
       return [
-        `${stop.label} is skipped: the deeper pools leave too few compute units for its swap ` +
+        `${stop.label} is skipped: the pools ahead of it leave too few compute units for its swap ` +
           `(about ${grouped(stop.estimatedUnits)} to its limit, ${stop.ticksToLimit} initialized ` +
           "ticks)",
       ];

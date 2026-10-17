@@ -66,7 +66,12 @@ import {
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
-import { svmProgramStops, svmStopValues, type SvmProgramStops } from "../svm/compute-stops.js";
+import {
+  SVM_COOK_UNITS,
+  svmProgramStops,
+  svmStopValues,
+  type SvmProgramStops,
+} from "../svm/compute-stops.js";
 import type { SvmSlot } from "../svm/pool-slot.js";
 import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
@@ -1545,15 +1550,13 @@ const tablesOption = (
   Object.keys(tables).length === 0 ? {} : { lookupTables: tables };
 
 /**
- * Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. `stops` are
- * the swaps' stops where a simulation settled them already (`sauce run`); else they are worked out
- * from the cost table.
+ * Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`, each swap's
+ * stop worked out from the cost table (`Prepared.restop` works them out again).
  */
 async function prepare(
   input: SvmCookInput,
   files: CliFiles,
   signer: TransactionSigner,
-  settled?: { readonly fixed?: number; readonly scale?: number },
 ): Promise<Prepared> {
   refusePastDeadline(input);
   const via = input.via ?? "kitchen";
@@ -1604,7 +1607,7 @@ async function prepare(
     stops === undefined || stops.binding.length === 0
       ? plain
       : compileProgram(input, files, undefined, stops.binding);
-  const stops = await stopsFor(settled?.fixed, settled?.scale);
+  const stops = await stopsFor();
   const program = held(stops);
   const bytecode = svmPayload(program, input.args, svmStopValues(stops, program));
   refuseTooManyAccounts(
@@ -1944,7 +1947,15 @@ async function withStops(
       const before = prepared.stops!.stops.map((stop) => stop.stop);
       if (loosened.stops!.stops.some((stop, i) => stop.stop !== before[i])) {
         const again = await simulate(loosened);
-        if (again.json.ok !== false) {
+        // Kept only where it succeeds with the headroom still to spare: its units and the headroom's
+        // crossings at every pool that trades within the cook's.
+        const spent =
+          again.json.computeUnits === undefined ? undefined : Number(again.json.computeUnits);
+        if (
+          again.json.ok !== false &&
+          spent !== undefined &&
+          spent + loosened.stops!.headroom <= SVM_COOK_UNITS
+        ) {
           prepared = loosened;
           output = again;
         }
@@ -1972,7 +1983,11 @@ async function withStops(
     output: {
       ...output,
       text: [...refusal, ...svmStopLines(stops), output.text].join("\n"),
-      json: { ...output.json, ...svmStopsJson(stops) },
+      json: {
+        ...output.json,
+        ...svmStopsJson(stops),
+        ...(refused ? { computeRefused: refusal[0] } : {}),
+      },
       ...(refused ? { exitCode: 1 } : {}),
     },
   };
@@ -2576,12 +2591,13 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
         ? []
         : [
             ...svmStopLines(prepared.stops),
-            "Each pool's stop comes from the cost table, with no simulation. A stop lowers the " +
-              "risk that a pool runs the cook out of compute units, and does not remove it: it is " +
-              "fixed now, from the pools' prices now, and a price that moves before the cook lands " +
-              "can leave a pool more initialized ticks to cross than were priced; the 15% kept " +
-              "back for that is not yet measured. `sauce simulate` and `sauce run` check the " +
-              "stops in a simulation first, and tighten them where the cook would run out.",
+            "The cook here is built with each pool's stop from the cost table, with no " +
+              "simulation: an estimate. `sauce simulate` works the stops out again against the " +
+              "units its simulation measures, so the cook it reports can differ from this one " +
+              "(`sauce run` sends the cook it simulated). A stop is fixed now, from the pools' " +
+              "prices now; a held pool whose price moves further than its headroom before the " +
+              "cook lands is skipped, but a pool that walks its whole way is not checked. The " +
+              "cursor sends this cook as built: resumed later, its stops are still these.",
           ]),
       single
         ? `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
