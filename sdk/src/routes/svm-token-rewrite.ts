@@ -366,6 +366,10 @@ function collectTokenMethods(l: SvmLowering): void {
   /** The native coin's balance: the lamports of the holder's own account, which the cook attaches. */
   const nativeText = (holder: Holder): string => {
     if (holder.kind === "self") return `ctx.balance(${l.authority()}.address)`;
+    if (holder.kind === "key" && l.isSymbol(holder.value)) {
+      l.mintAccount(l.symbolToken(holder.value));
+      return `ctx.balance(${holder.value})`;
+    }
     if (holder.kind === "account") return `ctx.balance(${holder.param}.address)`;
     l.account(holder.name, holder.stem === "account" ? "account" : `${holder.stem}Account`, {});
     return `ctx.balance(${holder.value})`;
@@ -401,12 +405,11 @@ function collectTokenMethods(l: SvmLowering): void {
       }
       return;
     }
-    // `USDC.WETH` is neither a holder's balance nor anything else, and `Base.USDC` is another
-    // chain's token: both are left as they are, as on the EVM.
+    // `Base.USDC` is another chain's token, left as it is, as on the EVM. A mint is a holder:
+    // `USDC.WSOL` is the WSOL in the USDC mint's own token account, `USDC.SOL` the mint's lamports.
     if (object.type === "Identifier") {
       const holder = nameOf(object);
-      if (l.tokens.has(holder) || isChainKey(holder) || resolveNamespace(holder) !== undefined)
-        return;
+      if (isChainKey(holder) || resolveNamespace(holder) !== undefined) return;
     }
     const isNative = !l.isSymbol(name);
     const what = notAnAddress(object, shapes);

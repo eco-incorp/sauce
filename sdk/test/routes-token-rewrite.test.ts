@@ -401,7 +401,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     });
   });
 
-  describe("unresolvable / rejected -- left byte-for-byte untouched", () => {
+  describe("unresolvable, rejected or a token's own contract", () => {
     it("self.NOTATOKEN (unknown symbol)", () => {
       const source = `function main() { return self.NOTATOKEN; }`;
       const { source: out, rewrote } = rewriteTokenMembers(source, tokens);
@@ -424,11 +424,12 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       expect(rewrote).toBe(false);
     });
 
-    it("USDC.WETH -- a token-symbol holder is ambiguous, and refused with the spelling to use", () => {
+    it("USDC.WETH -- a token's own contract is a holder: the WETH the USDC contract holds", () => {
       const source = `function main() { return USDC.WETH; }`;
-      expect(() => rewriteTokenMembers(source, tokens)).toThrow(
-        "`USDC.WETH`: a token's symbol is not taken for a holder, since `USDC.WETH` would read as a member of the token. For the WETH the USDC contract holds, write `WETH.balanceOf(USDC)`.",
-      );
+      const { source: out, memberSites, balanceSites } = rewriteTokenMembers(source, tokens);
+      expect(memberSites).toBe(0);
+      expect(balanceSites).toBe(1);
+      expect(out).toBe(`function main() { return IERC20.at(WETH).balanceOf(USDC); }`);
     });
 
     it("Uniswap.USDC and Base.USDC -- a namespace/chain-key holder is untouched", () => {
@@ -502,6 +503,8 @@ describe("the balance shorthand on any address, and the native coin", () => {
       "return ctx.balance(UniswapV4.StateView.poolManager());",
     ],
     ["const self = who; return self.ETH;", "const self = who; return ctx.balance(self);"],
+    ["return USDC.WETH;", "return WETH.balanceOf(USDC);"],
+    ["return WETH.ETH;", "return ctx.balance(WETH);"],
   ];
   for (const chain of ["base", "ethereum"] as const) {
     for (const [short, long] of SAME) {

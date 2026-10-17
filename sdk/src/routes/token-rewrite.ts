@@ -37,7 +37,7 @@
  * object. A token symbol can never satisfy both shapes for the same node, so the site lists never
  * overlap. `USDC.balanceOf(x)` is the read's (and `token-registry.ts`'s module-eval guard -- no
  * registry symbol may equal a REWRITABLE_METHODS name -- keeps that permanent); `x.USDC` is the
- * sugar's; `USDC.WETH` is neither's, and refused (see `resolveHolder`).
+ * sugar's, and so is `USDC.WETH`: the WETH the USDC contract holds.
  *
  * Shadowing-aware, CONSERVATIVELY, on the TOKEN name only: if a name anywhere in the WHOLE program
  * is bound (`let`/`const`, a parameter, an import, ...), EVERY occurrence of it is left un-rewritten,
@@ -356,8 +356,9 @@ function registryRoot(name: string, shadowed: ReadonlySet<string>): boolean {
  * a chain's or a protocol's own member (`Base.USDC`, `Maker.Dai`), which the accessor pass owns.
  * Any address-valued holder takes it — `self`, `ctx.self()`, a variable, an address written out, a
  * protocol contract (`UniswapV4.PoolManager`), a contract bound to an address (`X.at(a)`, whose
- * address is the holder), a call that returns an address. Refused, by name: a token as the holder,
- * an interface that has no address, and a holder the program says is a record or a list.
+ * address is the holder), a call that returns an address, a token's own contract (`WETH.ETH`).
+ * Refused, by name: an interface that has no address, and a holder the program says is a record or
+ * a list.
  */
 function resolveHolder(
   member: AstNode,
@@ -379,15 +380,8 @@ function resolveHolder(
       // gated ctx.*), but a bare `address` holder is still excluded rather than re-opened.
       if (holder === "address" && !scope.shadowed.has("address")) return undefined;
       if (registryRoot(holder, scope.shadowed)) return undefined;
-      if (scope.tokens.has(holder) && !scope.shadowed.has(holder)) {
-        throw refuse(
-          `a token's symbol is not taken for a holder, since \`${holder}.${name}\` would read as a ` +
-            `member of the token. For the ${name} the ${holder} contract holds, write ` +
-            (kind === "token"
-              ? `\`${name}.balanceOf(${holder})\`.`
-              : `\`ctx.balance(${holder})\`.`),
-        );
-      }
+      // A token's own contract is a holder like any other: `WETH.ETH` is the ETH the WETH contract
+      // holds, `USDC.WETH` the WETH the USDC contract does. The symbol is its address's define.
       return { kind: "expression", node: object };
     }
     case "Literal": {

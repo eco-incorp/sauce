@@ -405,6 +405,15 @@ export class SvmLowering {
       if (key !== undefined && param === undefined && !this.declared.has(name)) {
         return { kind: "key", name: base58(keyHex(key)), stem: name, value: name };
       }
+      // A registered mint's own key: its associated token accounts derive off it as off any key.
+      if (this.isSymbol(name)) {
+        return {
+          kind: "key",
+          name: base58(keyHex(this.tokens.get(name)!)),
+          stem: name,
+          value: name,
+        };
+      }
     }
     // As a token's holder, `ctx.self()` is the program's own account, the Pot, as on the EVM, so a
     // program written for an EVM chain (`USDC.balanceOf(ctx.self())`) means the same here. On
@@ -419,7 +428,8 @@ export class SvmLowering {
       role === "recipient" || role === "sender" ? "dest: Account<Writable>" : "account: Account";
     throw new Error(
       `${spelled} on Solana: the ${role} must be known when the transaction is built, to attach ` +
-        "its token account — `self`, a parameter of main declared `Address`, or a 32-byte key — " +
+        "its token account — `self`, a parameter of main declared `Address`, a token's mint, or a " +
+        "32-byte key — " +
         `and \`${text}\` is not. For an account known only as the program runs, take the token ` +
         `account as a parameter of main (\`${account}\`) and pass that.`,
     );

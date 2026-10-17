@@ -322,8 +322,8 @@ describe("the token methods on Solana", () => {
         ),
       ).toThrow(
         "`USDC.transfer(…)` on Solana: the recipient must be known when the transaction is built, " +
-          "to attach its token account — `self`, a parameter of main declared `Address`, or a " +
-          "32-byte key — and `r` is not. For an account known only as the program runs, take the " +
+          "to attach its token account — `self`, a parameter of main declared `Address`, a " +
+          "token's mint, or a 32-byte key — and `r` is not. For an account known only as the program runs, take the " +
           "token account as a parameter of main (`dest: Account<Writable>`) and pass that.",
       );
     });
@@ -419,6 +419,23 @@ describe("the balance shorthand on Solana: namespace holders and SOL", () => {
     });
     expect(hex("function main(): Uint256 {\n  return Solana.self.USDC;\n}\n")).toBe(
       hex("function main(): Uint256 {\n  return self.USDC;\n}\n"),
+    );
+  });
+
+  it("a mint is a holder: its lamports, and its own associated token account off the mint key", () => {
+    const program = compile("function main(): Uint256 {\n  return USDC.SOL + USDC.WSOL;\n}\n");
+    expect(program.source).toContain(
+      "function main(mintUSDC: Account, USDCWSOL: Account): Uint256 {\n  return ctx.balance(USDC) + __sauce_svm_balance(WSOL, USDCWSOL, USDC);",
+    );
+    expect(program.derivedAccounts).toEqual({
+      mintUSDC: "mint:USDC",
+      USDCWSOL: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v:WSOL",
+    });
+    expect(hex("function main(): Uint256 {\n  return USDC.SOL;\n}\n")).toBe(
+      hex("function main(mintUSDC: Account): Uint256 {\n  return ctx.balance(USDC);\n}\n"),
+    );
+    expect(hex("function main(): Uint256 {\n  return USDC.WSOL;\n}\n")).toBe(
+      hex("function main(): Uint256 {\n  return WSOL.balanceOf(USDC);\n}\n"),
     );
   });
 
