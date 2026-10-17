@@ -50,7 +50,13 @@
  * error naming the spellings that work — never passed through as the typed binding, which would
  * quietly be the unchecked write again.
  */
-import { walk, collectDeclaredNames, countDeclarations, type AstNode } from "./ast-walk.js";
+import {
+  walk,
+  collectDeclaredNames,
+  collectPatternNames,
+  countDeclarations,
+  type AstNode,
+} from "./ast-walk.js";
 import { formatBigint } from "../deposit/format.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import { isChainKey, namedContractKind, resolveNamespace } from "./accessor-index.js";
@@ -328,6 +334,8 @@ const BINDINGS: ReadonlySet<string> = new Set(["at", "view", "lib"]);
 interface HolderScope {
   readonly tokens: TokenSymbols;
   readonly shadowed: ReadonlySet<string>;
+  /** The names the program's imports bind: a contract type where an ABI is imported. */
+  readonly imports: ReadonlySet<string>;
   readonly shapes: HolderShapes;
   readonly source: string;
 }
@@ -343,6 +351,25 @@ function isCtxSelf(node: AstNode, shadowed: ReadonlySet<string>): boolean {
     (site.object as unknown as { name: string }).name === "ctx" &&
     !shadowed.has("ctx") &&
     ((node as { arguments?: AstNode[] }).arguments ?? []).length === 0
+  );
+}
+
+/**
+ * Whether `node` names a contract type, whose `.at(…)`, `.view(…)` and `.lib(…)` bind it to an
+ * address: a registry contract or interface (`UniswapV3.Pool`, `Base.UniswapV3.Factory`), an
+ * imported ABI, or a name the program does not declare as a value (a caller's `contracts` binding,
+ * a declared `interface`). A value — a bound contract, a call's result — is not one.
+ */
+function isContractType(node: AstNode, scope: HolderScope): boolean {
+  if (node.type === "Identifier") {
+    const name = (node as unknown as { name: string }).name;
+    return scope.imports.has(name) || !scope.shadowed.has(name);
+  }
+  const chain = decomposeMemberChain(node);
+  return (
+    chain !== undefined &&
+    registryRoot(chain.head, scope.shadowed) &&
+    namedContractKind(chain.head, chain.path) !== undefined
   );
 }
 
@@ -417,9 +444,11 @@ function resolveHolder(
       const args = (object as { arguments?: AstNode[] }).arguments ?? [];
       const callee = object.callee as AstNode;
       const site = methodCall(object);
+      // `X.at(<address>)` binds a contract to an address only where `X` is a contract type; on a
+      // contract already bound, `.at(…)` is one of its own methods, whose result is the holder.
       const bound =
         site !== undefined && BINDINGS.has(site.method)
-          ? true
+          ? isContractType(site.object, scope)
           : (() => {
               // `<Ns>.<Interface>(<address>)`, the same binding as `.at(<address>)`.
               const chain = decomposeMemberChain(callee);
@@ -481,7 +510,17 @@ function collectBalanceSites(
   const sites: Splice[] = [];
   let count = 0;
   let tokenReads = 0;
-  const scope: HolderScope = { tokens, shadowed, shapes: holderShapes(program), source };
+  const imports = new Set<string>();
+  walk(program, (n) => {
+    if (
+      n.type === "ImportSpecifier" ||
+      n.type === "ImportDefaultSpecifier" ||
+      n.type === "ImportNamespaceSpecifier"
+    ) {
+      collectPatternNames((n as { local?: unknown }).local, imports);
+    }
+  });
+  const scope: HolderScope = { tokens, shadowed, imports, shapes: holderShapes(program), source };
   walk(program, (n) => {
     if (n.type !== "MemberExpression") return;
     if ((n as { computed?: boolean }).computed) return;

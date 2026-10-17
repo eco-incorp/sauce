@@ -514,6 +514,50 @@ describe("the balance shorthand on any address, and the native coin", () => {
     }
   }
 
+  describe("`.at`, `.view` and `.lib` unwrap only on a contract type", () => {
+    // A contract whose own methods are named like the binding constructors, each returning an
+    // address: on a contract already bound, `.at(who)` is that method, and its result the holder.
+    const OTHER = ["at", "view", "lib"].map((name) => ({
+      type: "function" as const,
+      name,
+      stateMutability: "view" as const,
+      inputs: [{ name: "who", type: "address" }],
+      outputs: [{ name: "", type: "address" }],
+    }));
+    const hexOf = (chain: "base" | "ethereum", body: string) =>
+      Buffer.from(
+        compileSauceProgram(chain, `function main(who: Address): Uint256 {\n  ${body}\n}\n`, {
+          contracts: { Other: { abi: OTHER } },
+        }).bytecode,
+      ).toString("hex");
+    for (const chain of ["base", "ethereum"] as const) {
+      for (const method of ["at", "view", "lib"]) {
+        it(`on ${chain}, a bound contract's own \`${method}(who)\` is a call whose result holds`, () => {
+          const call = `Other.at(ctx.self()).${method}(who)`;
+          expect(hexOf(chain, `return ${call}.USDC;`)).toBe(
+            hexOf(chain, `return USDC.balanceOf(${call});`),
+          );
+          expect(hexOf(chain, `return ${call}.USDC;`)).not.toBe(
+            hexOf(chain, "return USDC.balanceOf(who);"),
+          );
+        });
+      }
+      it(`on ${chain}, so is one on a contract bound to a local`, () => {
+        expect(hexOf(chain, "const o = Other.at(ctx.self()); return o.at(who).USDC;")).toBe(
+          hexOf(chain, "const o = Other.at(ctx.self()); return USDC.balanceOf(o.at(who));"),
+        );
+      });
+      it(`on ${chain}, a contract type bound to an address still unwraps to it`, () => {
+        expect(hexOf(chain, "return Other.at(who).USDC;")).toBe(
+          hexOf(chain, "return USDC.balanceOf(who);"),
+        );
+        expect(hexOf(chain, "return Other.view(who).ETH;")).toBe(
+          hexOf(chain, "return ctx.balance(who);"),
+        );
+      });
+    }
+  });
+
   it("refuses what is not an address, by name", () => {
     const refusal = (body: string) => {
       try {
