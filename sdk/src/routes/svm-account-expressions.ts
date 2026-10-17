@@ -489,6 +489,16 @@ export function collectAccountExpressions(l: SvmLowering): void {
       if (!Object.hasOwn(KNOWN, member)) return;
       const parent = parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
+      // `Solana.owner.USDC`: the holder of a balance, which the token methods lower.
+      if (
+        parent?.type === "MemberExpression" &&
+        parent.object === n &&
+        (parent as { computed?: boolean }).computed !== true &&
+        (parent.property as AstNode).type === "Identifier" &&
+        l.isBalanceName(nameOf(parent.property as AstNode))
+      ) {
+        return;
+      }
       roots.push({
         node: n,
         describe: () => {

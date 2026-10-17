@@ -73,7 +73,7 @@ function protocolsOn(chain: CanonicalChain): string[] {
 }
 
 /** The `candidates` nearest `name`, if any is close enough to be what was meant — at most three. */
-function nearMatches(name: string, candidates: Iterable<string>): string[] {
+export function nearMatches(name: string, candidates: Iterable<string>): string[] {
   const allowed = name.length <= 4 ? 1 : 2;
   const scored = [...new Set(candidates)]
     .map((candidate) => ({
@@ -141,6 +141,56 @@ export function unknownGlobalError(
       "A token the registry does not carry is `Token(address)`, or a `tokens` entry in the " +
       "compile options; a contract binding needs its ABI imported, or passed as `contracts`." +
       (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
+    { cause },
+  );
+}
+
+/** The ANSI escapes the compiler's message is styled with. */
+const STYLE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
+/**
+ * For a compile that failed reading a member of a value that is no record — `self.USDCC`,
+ * `to.WETHH` — an error saying the name is not a token on `chain`, with the near matches among its
+ * tokens and its native coin: a balance read misspelled, which the balance shorthand left as it was
+ * written. The compiler says where (`field access is only valid on a tuple (bytes a..b)`), so a
+ * real record's field, whose miss the compiler reports another way, is never taken for one.
+ * `undefined` for any other failure, and the compiler's error stands.
+ */
+export function unknownBalanceError(
+  source: string,
+  chain: CanonicalChain,
+  names: { readonly tokens: Iterable<string>; readonly native?: string },
+  cause: unknown,
+): Error | undefined {
+  const message = String((cause as Error | undefined)?.message ?? cause).replace(STYLE, "");
+  const at = /field access is only valid on a tuple \(bytes (\d+)\.\.(\d+)\)/.exec(message);
+  if (at === null) return undefined;
+  // The compiler counts bytes; the parse counts UTF-16 units.
+  const bytes = new TextEncoder().encode(source);
+  const unit = (offset: number): number =>
+    new TextDecoder().decode(bytes.subarray(0, offset)).length;
+  const [start, end] = [unit(Number(at[1])), unit(Number(at[2]))];
+  let member: AstNode | undefined;
+  walk(parseSauce(source), (node) => {
+    if (member !== undefined || node.type !== "MemberExpression") return;
+    if ((node as { computed?: boolean }).computed === true) return;
+    if (node.start === start && node.end === end) member = node;
+  });
+  const property = (member as { property?: AstNode } | undefined)?.property;
+  if (property?.type !== "Identifier") return undefined;
+
+  const name = (property as unknown as { name: string }).name;
+  const native = names.native;
+  const matches = nearMatches(name, [...names.tokens, ...(native === undefined ? [] : [native])]);
+  const suggestion =
+    matches.length === 0
+      ? ""
+      : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
+  return new Error(
+    `compileSauceRoute: \`${name}\` is not a token on ${chain.slug}` +
+      (native === undefined ? "" : `, nor its native coin, ${native}`) +
+      `.${suggestion} \`<holder>.<TOKEN>\` reads the holder's balance of a token the chain ` +
+      "registers, or of its native coin; a value that is not a record has no other member.",
     { cause },
   );
 }

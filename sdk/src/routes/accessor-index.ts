@@ -134,3 +134,24 @@ export function chainSlugForKey(key: string): ChainSlug | undefined {
 /** Exposed for tests pinning the registry-derived coverage invariants (M14-style). */
 export const NAMESPACE_KEYS: ReadonlySet<string> = new Set(NAMESPACES.keys());
 export const CHAIN_KEY_SET: ReadonlySet<string> = new Set(CHAIN_KEYS.keys());
+
+/**
+ * The kind of contract `<head>.<path>` names, when it names one directly: `<Ns>.<Contract>` or
+ * `<Chain>.<Ns>.<Contract>`, a family alias resolving to its one owner. Undefined for anything
+ * else (a method, an unknown name, an ambiguous alias), which the other shapes own.
+ */
+export function namedContractKind(
+  head: string,
+  path: readonly string[],
+): ContractDescriptor["kind"] | undefined {
+  const segments = isChainKey(head) ? path : [head, ...path];
+  if (segments.length !== 2) return undefined;
+  const [namespace, contract] = segments as [string, string];
+  const ns = resolveNamespace(namespace);
+  if (ns === undefined) return undefined;
+  if (ns.kind === "protocol") return ns.contracts.get(contract)?.kind;
+  const owners = ns.contractOwners.get(contract);
+  if (owners?.length !== 1) return undefined;
+  const member = resolveNamespace(pascalOfSlug(owners[0]!));
+  return member?.kind === "protocol" ? member.contracts.get(contract)?.kind : undefined;
+}

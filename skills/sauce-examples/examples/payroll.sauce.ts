@@ -32,7 +32,7 @@ function main(recipients: Address[], weights: Uint256[], budget: Uint256): Uint2
     total += weights[i];
   }
   require(total > 0, "the weights sum to 0");
-  require(USDC.balanceOf(self) >= budget, "budget is not in the Pot");
+  require(self.USDC >= budget, "budget is not in the Pot");
 
   const paid: Uint256[] = new Array(count);
   let left = budget;
@@ -41,9 +41,9 @@ function main(recipients: Address[], weights: Uint256[], budget: Uint256): Uint2
     const share = i == count - 1 ? left : Math.mulDiv(budget, weights[i], total);
     left -= share;
     if (share > 0) {
-      const before = USDC.balanceOf(to);
+      const before = to.USDC;
       USDC.transfer(to, share);
-      paid[i] = USDC.balanceOf(to) - before;
+      paid[i] = to.USDC - before;
     }
   }
   return paid;
