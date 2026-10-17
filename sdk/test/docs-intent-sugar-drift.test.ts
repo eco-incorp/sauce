@@ -191,7 +191,7 @@ describe("the guide's refusal list is the lowering's", () => {
       "A token-only body is not a Sauce program",
       "`approve(spender, 0)` and then `approve(spender, amount)`",
       "A token that returns `false` instead of reverting is not detected",
-      "const held = USDC.balanceOf(ctx.self());",
+      "const held = self.USDC;",
     ]) {
       expect(GUIDE.replace(/\s+/g, " ")).toContain(claim);
     }
