@@ -13,11 +13,12 @@ export type {
   ContractCoverage,
   ContractKind,
   DescriptorMethod,
+  MethodReturn,
   ResolvedContract,
   StateMutability,
 } from "./types.js";
-export type { ContractLink, ContractLinkEntry } from "./links.js";
-export { CONTRACT_LINKS } from "./links.js";
+export type { ContractLink, ContractLinkEntry, ReturnedContractLink } from "./links.js";
+export { CONTRACT_LINKS, RETURNED_CONTRACTS } from "./links.js";
 export { DESCRIPTORS, byChain, byProtocol, byProtocolAndContract } from "./registry.js";
 export {
   addressOn,

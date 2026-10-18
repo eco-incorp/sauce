@@ -111,7 +111,7 @@ closed the code buffer in 64or…18h4: success, 5874 compute units
 
 Very little, for you:
 
-- **The same program.** `USDC.transfer` and `USDC.balanceOf` work as on Base. Sauce adds the accounts
+- **The same program.** `USDC.transfer` and `self.USDC` work as on Base. Sauce adds the accounts
   and checks them.
 - **The Kitchen fee is in SOL**, and the run prints it.
 - **New accounts cost rent**, the deposit Solana charges for storing data. Your Pot's is paid once.

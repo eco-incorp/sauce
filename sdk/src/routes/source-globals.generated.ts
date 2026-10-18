@@ -217,7 +217,7 @@ export interface AbracadabraDegenBoxMethods {
 
 export interface AcrossHubPoolMethods {
   "liquidityUtilizationCurrent"(arg0: bigint): bigint;
-  "pooledTokens"(arg0: bigint): [bigint, boolean, bigint, bigint, bigint, bigint] & { "lpToken": bigint; "isEnabled": boolean; "lastLpFeeUpdate": bigint; "utilizedReserves": bigint; "liquidReserves": bigint; "undistributedLpFees": bigint };
+  "pooledTokens"(arg0: bigint): [bigint & SauceReturnedToken, boolean, bigint, bigint, bigint, bigint] & { "lpToken": bigint & SauceReturnedToken; "isEnabled": boolean; "lastLpFeeUpdate": bigint; "utilizedReserves": bigint; "liquidReserves": bigint; "undistributedLpFees": bigint };
 }
 
 export interface AcrossSpokePoolMethods {
@@ -226,7 +226,7 @@ export interface AcrossSpokePoolMethods {
 }
 
 export interface AerodromePoolFactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint & AerodromePoolMethods;
 }
 
 export interface AerodromeRouterMethods {
@@ -239,19 +239,19 @@ export interface AerodromePoolMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
   "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
   "stable"(): boolean;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface AerodromeSlipstreamSlipstreamCLFactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint & AerodromeSlipstreamPoolMethods;
   "allPoolsLength"(): bigint;
   "tickSpacingToFee"(arg0: bigint): bigint;
 }
 
 export interface AerodromeSlipstreamSlipstreamPositionManagerMethods {
-  "factory"(): bigint;
+  "factory"(): bigint & AerodromeSlipstreamSlipstreamCLFactoryMethods;
   "positions"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & { "nonce": bigint; "operator": bigint; "token0": bigint; "token1": bigint; "tickSpacing": bigint; "tickLower": bigint; "tickUpper": bigint; "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint; "tokensOwed0": bigint; "tokensOwed1": bigint };
 }
 
@@ -264,8 +264,8 @@ export interface AerodromeSlipstreamPoolMethods {
   "liquidity"(): bigint;
   "fee"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface AevoDepositContractMethods {
@@ -349,7 +349,7 @@ export interface BeefyVaultMethods {
   "getPricePerFullShare"(): bigint;
   "balance"(): bigint;
   "balanceOf"(arg0: bigint): bigint;
-  "want"(): bigint;
+  "want"(): bigint & SauceReturnedToken;
 }
 
 export interface BenqiComptrollerMethods {
@@ -376,28 +376,28 @@ export interface CamelotV3SwapRouterMethods {
 }
 
 export interface CamelotV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: bigint, arg1: bigint): bigint & CamelotV2PairMethods;
 }
 
 export interface CamelotV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_token0FeePercent": bigint; "_token1FeePercent": bigint };
   "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
   "stableSwap"(): boolean;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface CamelotV3FactoryMethods {
-  "poolByPair"(arg0: bigint, arg1: bigint): bigint;
+  "poolByPair"(arg0: bigint, arg1: bigint): bigint & CamelotV3PoolMethods;
 }
 
 export interface CamelotV3PoolMethods {
   "globalState"(): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "price": bigint; "tick": bigint; "feeZto": bigint; "feeOtz": bigint; "timepointIndex": bigint; "communityFeeToken0": bigint; "communityFeeToken1": bigint; "unlocked": boolean };
   "liquidity"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface CbethCbETHMethods {
@@ -487,7 +487,7 @@ export interface ConvexBoosterMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: boolean): boolean;
   "withdraw"(arg0: bigint, arg1: bigint): boolean;
   "poolLength"(): bigint;
-  "poolInfo"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint, boolean] & { "lptoken": bigint; "token": bigint; "gauge": bigint; "crvRewards": bigint; "stash": bigint; "shutdown": boolean };
+  "poolInfo"(arg0: bigint): [bigint & SauceReturnedToken, bigint & SauceReturnedToken, bigint, bigint & ConvexBaseRewardPoolMethods, bigint, boolean] & { "lptoken": bigint & SauceReturnedToken; "token": bigint & SauceReturnedToken; "gauge": bigint; "crvRewards": bigint & ConvexBaseRewardPoolMethods; "stash": bigint; "shutdown": boolean };
 }
 
 export interface CowswapGPv2SettlementMethods {
@@ -636,7 +636,7 @@ export interface Erc4626VaultMethods {
   "maxMint"(arg0: bigint): bigint;
   "maxWithdraw"(arg0: bigint): bigint;
   "maxRedeem"(arg0: bigint): bigint;
-  "asset"(): bigint;
+  "asset"(): bigint & SauceReturnedToken;
 }
 
 export interface EthenaStakedUSDeMethods {
@@ -691,7 +691,7 @@ export interface FluidLendingMethods {
   "deposit"(arg0: bigint, arg1: bigint): bigint;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
   "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "asset"(): bigint;
+  "asset"(): bigint & SauceReturnedToken;
 }
 
 export interface FluidVaultMethods {
@@ -837,7 +837,7 @@ export interface LayerbankLTokenMethods {
   "underlyingBalanceOf"(arg0: bigint): bigint;
   "borrowBalanceOf"(arg0: bigint): bigint;
   "exchangeRate"(): bigint;
-  "underlying"(): bigint;
+  "underlying"(): bigint & SauceReturnedToken;
 }
 
 export interface LayerbankCoreMethods {
@@ -941,8 +941,8 @@ export interface MaverickV2PoolMethods {
   "getState"(): { "reserveA": bigint; "reserveB": bigint; "lastTwaD8": bigint; "lastLogPriceD8": bigint; "lastTimestamp": bigint; "activeTick": bigint; "isLocked": boolean; "binCounter": bigint; "protocolFeeRatioD3": bigint };
   "fee"(arg0: boolean): bigint;
   "tickSpacing"(): bigint;
-  "tokenA"(): bigint;
-  "tokenB"(): bigint;
+  "tokenA"(): bigint & SauceReturnedToken;
+  "tokenB"(): bigint & SauceReturnedToken;
 }
 
 export interface MoonwellMTokenMethods {
@@ -1009,7 +1009,7 @@ export interface OpynControllerMethods {
 }
 
 export interface PancakeswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: bigint, arg1: bigint): bigint & PancakeswapV2PairMethods;
   "createPair"(arg0: bigint, arg1: bigint): bigint;
 }
 
@@ -1023,13 +1023,13 @@ export interface PancakeswapV2RouterMethods {
 
 export interface PancakeswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface PancakeswapV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint & PancakeswapV3PoolMethods;
 }
 
 export interface PancakeswapV3NFPMMethods {
@@ -1046,8 +1046,8 @@ export interface PancakeswapV3PoolMethods {
   "liquidity"(): bigint;
   "fee"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface ParaswapAugustusV5Methods {
@@ -1118,26 +1118,26 @@ export interface QuickswapV3SwapRouterMethods {
 }
 
 export interface QuickswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: bigint, arg1: bigint): bigint & QuickswapV2PairMethods;
 }
 
 export interface QuickswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface QuickswapV3FactoryMethods {
-  "poolByPair"(arg0: bigint, arg1: bigint): bigint;
+  "poolByPair"(arg0: bigint, arg1: bigint): bigint & QuickswapV3PoolMethods;
 }
 
 export interface QuickswapV3PoolMethods {
   "globalState"(): [bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "price": bigint; "tick": bigint; "fee": bigint; "timepointIndex": bigint; "communityFeeToken0": bigint; "communityFeeToken1": bigint; "unlocked": boolean };
   "liquidity"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface RamsesRouterMethods {
@@ -1279,7 +1279,7 @@ export interface SuperfluidCFAForwarderMethods {
 }
 
 export interface SushiswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: bigint, arg1: bigint): bigint & SushiswapV2PairMethods;
   "createPair"(arg0: bigint, arg1: bigint): bigint;
 }
 
@@ -1293,8 +1293,8 @@ export interface SushiswapV2RouterMethods {
 
 export interface SushiswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
@@ -1332,7 +1332,7 @@ export interface SynthetixV3PerpsMarketProxyMethods {
 }
 
 export interface SynthraV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint & SynthraV3PoolMethods;
   "createPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
 }
 
@@ -1359,8 +1359,8 @@ export interface SynthraV3PoolMethods {
   "liquidity"(): bigint;
   "fee"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface ThalesSpeedMarketsAMMMethods {
@@ -1394,7 +1394,7 @@ export interface TokemakAutopoolMethods {
 }
 
 export interface TraderJoeLBFactoryMethods {
-  "getLBPairInformation"(arg0: bigint, arg1: bigint, arg2: bigint): { "binStep": bigint; "LBPair": bigint; "createdByOwner": boolean; "ignoredForRouting": boolean };
+  "getLBPairInformation"(arg0: bigint, arg1: bigint, arg2: bigint): { "binStep": bigint; "LBPair": bigint & TraderJoeLBPairMethods; "createdByOwner": boolean; "ignoredForRouting": boolean };
 }
 
 export interface TraderJoeLBRouterMethods {
@@ -1404,8 +1404,8 @@ export interface TraderJoeLBRouterMethods {
 }
 
 export interface TraderJoeLBPairMethods {
-  "getTokenX"(): bigint;
-  "getTokenY"(): bigint;
+  "getTokenX"(): bigint & SauceReturnedToken;
+  "getTokenY"(): bigint & SauceReturnedToken;
   "getBinStep"(): bigint;
   "getActiveId"(): bigint;
   "getReserves"(): [bigint, bigint] & { "reserveX": bigint; "reserveY": bigint };
@@ -1417,7 +1417,7 @@ export interface TraderJoeLBPairMethods {
 }
 
 export interface UniswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: bigint, arg1: bigint): bigint & UniswapV2PairMethods;
   "createPair"(arg0: bigint, arg1: bigint): bigint;
 }
 
@@ -1431,13 +1431,13 @@ export interface UniswapV2RouterMethods {
 
 export interface UniswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface UniswapV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint & UniswapV3PoolMethods;
   "createPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
 }
 
@@ -1471,8 +1471,8 @@ export interface UniswapV3PoolMethods {
   "liquidity"(): bigint;
   "fee"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface UniswapV4PoolManagerMethods {
@@ -1504,17 +1504,17 @@ export interface UniswapV4StateViewMethods {
   "getPositionInfo"(arg0: bigint, arg1: bigint): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
   "getPositionInfo"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
   "getPositionLiquidity"(arg0: bigint, arg1: bigint): bigint;
-  "poolManager"(): bigint;
+  "poolManager"(): bigint & UniswapV4PoolManagerMethods;
 }
 
 export interface UnitflowV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint & UnitflowV3PoolMethods;
   "feeAmountTickSpacing"(arg0: bigint): bigint;
 }
 
 export interface UnitflowV3RouterMethods {
   "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "factory"(): bigint;
+  "factory"(): bigint & UnitflowV3FactoryMethods;
 }
 
 export interface UnitflowV3QuoterMethods {
@@ -1526,12 +1526,12 @@ export interface UnitflowV3PoolMethods {
   "liquidity"(): bigint;
   "fee"(): bigint;
   "tickSpacing"(): bigint;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
 }
 
 export interface VelodromePoolFactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint;
+  "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint & VelodromePoolMethods;
 }
 
 export interface VelodromeRouterMethods {
@@ -1544,8 +1544,8 @@ export interface VelodromePoolMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
   "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
   "stable"(): boolean;
-  "token0"(): bigint;
-  "token1"(): bigint;
+  "token0"(): bigint & SauceReturnedToken;
+  "token1"(): bigint & SauceReturnedToken;
   "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
@@ -1618,6 +1618,17 @@ export interface ZeroxExchangeProxyMethods {
 export interface ZksyncBridgeZkSyncDiamondProxyMethods {
   "requestL2Transaction"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: bigint, arg4: bigint, arg5: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg6: bigint): bigint;
   "l2TransactionBaseCost"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+}
+
+/**
+ * A token a registry call returns (a pool's `token0()`, a vault's `asset()`): the ERC-20 ABI's
+ * reads, and the writes of `Token(address)`, which return nothing and revert the program unless
+ * the token accepted them (SafeERC20).
+ */
+export interface SauceReturnedToken extends Omit<Erc20ERC20Methods, "transfer" | "approve" | "transferFrom"> {
+  transfer(to: bigint, amount: bigint): void;
+  approve(spender: bigint, amount: bigint): void;
+  transferFrom(from: bigint, to: bigint, amount: bigint): void;
 }
 
 export interface AaveV2Source extends AaveV2LendingPoolMethods {

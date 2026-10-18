@@ -39,6 +39,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `AeroMetarouterABI`
 
 `import AeroMetarouterABI from "./protocols/aerodrome-slipstream/AeroMetarouterABI.json";` Speaks for: metarouter.
@@ -53,14 +58,14 @@ function main() {
 - `liquidity() view returns (uint128)`
 - `fee() view returns (uint24)`
 - `tickSpacing() view returns (int24)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 
 ### `SlipstreamCLFactoryABI`
 
 `import SlipstreamCLFactoryABI from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";` Speaks for: clFactory, clFactoryGaugeCaps, clFactoryGaugesV3.
 
-- `getPool(address tokenA, address tokenB, int24 tickSpacing) view returns (address)`
+- `getPool(address tokenA, address tokenB, int24 tickSpacing) view returns (address)`: the address is a `AerodromeSlipstream.Pool`
 - `allPoolsLength() view returns (uint256)`
 - `tickSpacingToFee(int24) view returns (uint24)`
 
@@ -68,5 +73,5 @@ function main() {
 
 `import SlipstreamPositionManagerABI from "./protocols/aerodrome-slipstream/SlipstreamPositionManagerABI.json";` Speaks for: nonfungiblePositionManager, nonfungiblePositionManagerGaugeCaps, nonfungiblePositionManagerGaugesV3.
 
-- `factory() view returns (address)`
+- `factory() view returns (address)`: the address is a `AerodromeSlipstream.CLFactory`
 - `positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, int24 tickSpacing, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)`

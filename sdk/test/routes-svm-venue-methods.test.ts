@@ -26,6 +26,22 @@ describe("Solana's venue namespaces", () => {
         "poolExtra, poolTicks0, poolTicks1, poolTicks2], [pot, potUSDC, mintUSDC, mintWSOL, " +
         "tokenProgram, token2022Program, memoProgram], amountIn, priceLimit, 1, potWSOL);",
     );
+    // A swap a stop could hold, named by its stop's derivation from the pool and main's priceLimit;
+    // compiled plain, it adds nothing to main for it.
+    expect(program.stoppable).toEqual(["stop:@pool:USDC:@priceLimit"]);
+    expect(program.derivedValues).toBeUndefined();
+    // Held to its stop, it calls the Stopped form, its stop a value added to main after the
+    // accounts and never one of main's arguments.
+    const held = compileSauceProgram("solana", SWAP, { stops: program.stoppable! });
+    expect(held.source).toContain(
+      'import { orcaWhirlpoolStopped as __sauce_orcaWhirlpoolStopped } from "@sauce/router";',
+    );
+    expect(held.source).toContain("amountIn, priceLimit, 1, potWSOL, poolStop);");
+    expect(held.derivedValues).toEqual([
+      { name: "poolStop", type: "Uint256", derive: "stop:@pool:USDC:@priceLimit" },
+    ]);
+    expect(held.entryParams.map((param) => param.name)).toEqual(["pool", "amountIn", "priceLimit"]);
+    expect(held.manifest).toEqual(program.manifest);
     expect(program.derivedAccounts).toMatchObject({
       poolProgram: "slot:@pool:USDC.program",
       poolTicks2: "slot:@pool:USDC.ticks2",

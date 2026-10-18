@@ -17,6 +17,12 @@
 //   - an ABI bound to no role (evidenced by representative `instances`) has no fixed address — the
 //     caller binds one by calling it with an address, or with `.at(address)` (`interface`).
 //
+// WHAT A FUNCTION RETURNS. Where an export's binding in `targets.json` has `returns`, an address a
+// function returns is a registry contract: `UniswapV3.Factory`'s `getPool` returns a
+// `UniswapV3.Pool`, a pool's `token0()` a token (the registry's ERC-20 interface). The table
+// (`RETURNED_CONTRACTS`) tells the route rewrite a method called on such a result is that
+// contract's (`routes/contract-results.ts`), and the source declarations type the output as it.
+//
 // NAMES. A contract is named by its role key with the first letter upper-cased; where the role's
 // leading words also appear, as words, in its ABI export's name, they take the ABI's spelling, so
 // `clFactory` bound to `SlipstreamCLFactoryABI` is `CLFactory`. A contract with no role (an
@@ -250,6 +256,79 @@ for (const info of protocols) {
 
 const LINKS = [...registry.values()].flatMap((p) => p.contracts);
 
+// --- what a function returns ---------------------------------------------------------------------
+
+/** The registry's ERC-20 interface: a token a function returns is called as `Token(address)` for
+ *  its writes, which have SafeERC20 semantics, and as this ABI for its reads (`contract-results.ts`). */
+const TOKEN_ABI = "erc20/ERC20ABI";
+
+const canonicalType = (p) =>
+  p.type.startsWith("tuple")
+    ? `(${(p.components ?? []).map(canonicalType).join(",")})${p.type.slice("tuple".length)}`
+    : p.type;
+const signatureOf = (f) => `${f.name}(${f.inputs.map(canonicalType).join(",")})`;
+
+/** `getPool(address,address,uint24)` -> that and `[]`; `poolInfo(uint256).crvRewards` -> `["crvRewards"]`. */
+function returnKey(key) {
+  let depth = 0;
+  for (let at = 0; at < key.length; at++) {
+    if (key[at] === "(") depth++;
+    if (key[at] !== ")" || --depth > 0) continue;
+    const rest = key.slice(at + 1);
+    if (rest !== "" && !/^(\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(rest)) break;
+    return { signature: key.slice(0, at + 1), path: rest === "" ? [] : rest.slice(1).split(".") };
+  }
+  fail(`'${key}' is not a function signature with an optional field path`);
+}
+
+/** The output parameter `path` leads to: the one output, or a field of the record it returns. */
+function outputAt(outputs, path) {
+  if (path.length === 0) return outputs.length === 1 ? outputs[0] : undefined;
+  let fields =
+    outputs.length === 1 && outputs[0].type === "tuple" ? outputs[0].components : outputs;
+  let found;
+  for (const name of path) {
+    found = (fields ?? []).find((field) => field.name === name);
+    if (found === undefined) return undefined;
+    fields = found.type === "tuple" ? found.components : undefined;
+  }
+  return found;
+}
+
+/** Every annotated output, with the contract it is: `{ protocol, abiExport, signature, path,
+ *  returns: { protocol, contract } }`, plus the target's ABI export for the declarations. */
+const RETURNED = [];
+for (const [slug, { abis }] of registry) {
+  for (const [exportName, binding] of Object.entries(targets[slug] ?? {})) {
+    for (const [key, abi] of Object.entries(binding.returns ?? {})) {
+      const { signature, path } = returnKey(key);
+      const fn = abis[exportName].find(
+        (item) => item.type === "function" && signatureOf(item) === signature,
+      );
+      if (fn === undefined) fail(`${slug}.${exportName} returns: no function ${signature}`);
+      if (outputAt(fn.outputs ?? [], path)?.type !== "address") {
+        fail(`${slug}.${exportName} returns: ${key} is not an address ${signature} returns`);
+      }
+      const [targetSlug, targetExport] = String(abi).split("/");
+      const named = (registry.get(targetSlug)?.contracts ?? []).filter(
+        (c) => c.abiExport === targetExport && c.kind !== "address-only",
+      );
+      const contract = named.find((c) => c.kind === "interface") ?? named[0];
+      if (contract === undefined) {
+        fail(`${slug}.${exportName} returns: ${key} is '${abi}', no registry contract`);
+      }
+      RETURNED.push({
+        protocol: slug,
+        abiExport: exportName,
+        signature,
+        path,
+        returns: { protocol: targetSlug, contract: contract.contract },
+        abi,
+      });
+    }
+  }
+}
+
 // --- namespaces, families, collisions ----------------------------------------------------------
 
 /** A protocol's default contract — `<Protocol>.<method>(...)` — when it has exactly one singleton. */
@@ -353,13 +432,20 @@ for (const protocol of venueFields.keys()) {
 
 // --- Sauce source declarations ---------------------------------------------------------------------
 
-function valueType(parameter, input) {
+/**
+ * A parameter's type in compiled source. An output the registry knows the contract of (`returns`,
+ * keyed by its field path) is that contract's methods on the address: `bigint & UniswapV3PoolMethods`.
+ */
+function valueType(parameter, input, returns, path = []) {
   const array = /^(.*)\[\d*\]$/.exec(parameter.type);
   if (array) {
     const element = valueType({ ...parameter, type: array[1] }, input);
     return input ? `(readonly (${element})[] | SauceArray<${element}>)` : `SauceArray<${element}>`;
   }
-  if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) return "bigint";
+  if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) {
+    const contract = returns?.get(path.join("."));
+    return contract === undefined ? "bigint" : `bigint & ${contract}`;
+  }
   if (parameter.type === "bool") return "boolean";
   if (/^(bytes|string)$/.test(parameter.type))
     return input ? "(string | SauceBytes)" : "SauceBytes";
@@ -371,34 +457,38 @@ function valueType(parameter, input) {
       new Set(fields.map((field) => field.name)).size !== fields.length
     )
       return undefined; // a Sauce tuple binds object-literal keys, so it needs named components
-    const typed = fields.map((field) => [field.name, valueType(field, input)]);
+    const typed = fields.map((field) => [
+      field.name,
+      valueType(field, input, returns, [...path, field.name]),
+    ]);
     if (typed.some(([, type]) => type === undefined)) return undefined;
     return `{ ${typed.map(([name, type]) => `${JSON.stringify(name)}: ${type}`).join("; ")} }`;
   }
   return undefined;
 }
 
-function resultType(outputs) {
+function resultType(outputs, returns) {
   if (!outputs.length) return "void";
-  if (outputs.length === 1) return valueType(outputs[0], false);
-  const types = outputs.map((field) => valueType(field, false));
+  if (outputs.length === 1) return valueType(outputs[0], false, returns);
+  const types = outputs.map((field) => valueType(field, false, returns, [field.name ?? ""]));
   if (types.some((type) => type === undefined)) return undefined;
   const tuple = `[${types.join(", ")}]`;
   const named = outputs.filter((field) => field.name);
   if (new Set(named.map((field) => field.name)).size !== named.length) return tuple;
   return named.length
-    ? `${tuple} & { ${named.map((field) => `${JSON.stringify(field.name)}: ${valueType(field, false)}`).join("; ")} }`
+    ? `${tuple} & { ${named.map((field) => `${JSON.stringify(field.name)}: ${valueType(field, false, returns, [field.name])}`).join("; ")} }`
     : tuple;
 }
 
 /** Method declarations of one ABI. A function whose types Sauce has no source spelling for is
- *  declared over `unknown`, so it stays callable from a typed closure and the compiler decides. */
-function sourceMethods(abi) {
+ *  declared over `unknown`, so it stays callable from a typed closure and the compiler decides.
+ *  `returnsOf(signature)` maps an annotated function's field paths to the contract types. */
+function sourceMethods(abi, returnsOf) {
   return abi
     .filter((entry) => entry.type === "function")
     .map((method) => {
       const inputs = method.inputs.map((field) => valueType(field, true));
-      const output = resultType(method.outputs ?? []);
+      const output = resultType(method.outputs ?? [], returnsOf(signatureOf(method)));
       const args = method.inputs
         .map((_, index) => `arg${index}: ${inputs[index] ?? "unknown"}`)
         .join(", ");
@@ -409,17 +499,42 @@ function sourceMethods(abi) {
 const methodsInterface = new Map(); // `${slug}:${abiExport}` -> interface name
 const sourceDefinitions = [];
 const usedInterfaceNames = new Set();
-for (const [slug, { info, abis, contracts }] of registry) {
+for (const [slug, { info, contracts }] of registry) {
   for (const c of contracts) {
     if (c.abiExport === undefined || methodsInterface.has(`${slug}:${c.abiExport}`)) continue;
     const name = `${pascal(slug)}${abiName(info.name, slug, c.abiExport)}Methods`;
     if (usedInterfaceNames.has(name)) fail(`two ABIs declare methods interface '${name}'`);
     usedInterfaceNames.add(name);
     methodsInterface.set(`${slug}:${c.abiExport}`, name);
-    sourceDefinitions.push(
-      `export interface ${name} {\n${sourceMethods(abis[c.abiExport]).join("\n")}\n}`,
-    );
   }
+}
+/** The type an annotated output has: the contract's methods, a token's being `SauceReturnedToken`. */
+const returnedType = (r) =>
+  r.abi === TOKEN_ABI ? "SauceReturnedToken" : methodsInterface.get(r.abi.replace("/", ":"));
+for (const [key, name] of methodsInterface) {
+  const [slug, abiExport] = key.split(":");
+  const returnsOf = (signature) =>
+    new Map(
+      RETURNED.filter(
+        (r) => r.protocol === slug && r.abiExport === abiExport && r.signature === signature,
+      ).map((r) => [r.path.join("."), returnedType(r)]),
+    );
+  sourceDefinitions.push(
+    `export interface ${name} {\n${sourceMethods(registry.get(slug).abis[abiExport], returnsOf).join("\n")}\n}`,
+  );
+}
+if (RETURNED.some((r) => r.abi === TOKEN_ABI)) {
+  const token = methodsInterface.get(TOKEN_ABI.replace("/", ":"));
+  sourceDefinitions.push(`/**
+ * A token a registry call returns (a pool's \`token0()\`, a vault's \`asset()\`): the ERC-20 ABI's
+ * reads, and the writes of \`Token(address)\`, which return nothing and revert the program unless
+ * the token accepted them (SafeERC20).
+ */
+export interface SauceReturnedToken extends Omit<${token}, "transfer" | "approve" | "transferFrom"> {
+  transfer(to: bigint, amount: bigint): void;
+  approve(spender: bigint, amount: bigint): void;
+  transferFrom(from: bigint, to: bigint, amount: bigint): void;
+}`);
 }
 
 function sourceContractType(c) {
@@ -689,16 +804,19 @@ for (const [family, members] of families) {
   hostTree.push(`  readonly ${family}: ${family}FamilyContracts;`);
 }
 
-const renderLink = (c) =>
-  `  { ${Object.entries(c)
-    .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-    .join(", ")} },`;
+const literal = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? `{ ${Object.entries(value)
+        .map(([k, v]) => `${k}: ${literal(v)}`)
+        .join(", ")} }`
+    : JSON.stringify(value);
+const renderLink = (c) => `  ${literal(c)},`;
 
 const contractsGenerated = `// GENERATED by sdk/scripts/gen-source-globals.mjs — do not edit.
 // Every registry contract, as \`descriptors/registry.ts\` builds its descriptors and the host tree
 // (\`Base.UniswapV3.QuoterV2\`) types it. See the generator's header for where each entry comes from
 // and how it is named.
-import type { ContractLink } from "./links.js";
+import type { ContractLink, ReturnedContractLink } from "./links.js";
 import type { AddressOnlyContract, Contract, InterfaceContract } from "./accessors.js";
 ${abiImports.join("\n")}
 
@@ -711,6 +829,11 @@ ${sources.join("\n")}
 export const CONTRACT_LINKS = [
 ${LINKS.map(renderLink).join("\n")}
 ] as const satisfies readonly ContractLink[];
+
+/** ${RETURNED.length} function outputs whose contract the registry knows. */
+export const RETURNED_CONTRACTS = [
+${RETURNED.map(({ abi: _abi, ...r }) => renderLink(r)).join("\n")}
+] as const satisfies readonly ReturnedContractLink[];
 
 ${hostDefinitions.join("\n\n")}
 

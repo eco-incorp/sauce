@@ -25,6 +25,10 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 - A program is a `.sauce.ts` file compiled **for a chain** (`--chain`). Compiling lowers the names
   that chain supplies, the token syntax and the intents the file opens; everything else reaches
   the compiler as written, annotations included.
+- **A balance is `<holder>.<TOKEN>`, on any address or contract**: `self.USDC` is the Pot's USDC,
+  `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`; the native coin
+  too, `self.ETH` (`ctx.selfBalance()`) and `self.SOL`. Which holders each target takes, and the
+  token methods, are `sauce-globals`'s.
 - Its inputs are `main`'s parameters, taken in declaration order, ABI-encoded and appended to the
   bytecode: one compiled program serves every value. `--args` passes them (`sauce-cli`).
 - Integers are 256-bit and checked; amounts are in a token's smallest units; nothing scales
@@ -58,7 +62,7 @@ function afterFee(amount: Uint256, bps: Uint256): Uint256 {
 
 // Runtime inputs: main's parameters, passed with the transaction.
 function main(recipient: Address, floor: Uint256) {
-  const held = USDC.balanceOf(ctx.self());
+  const held = self.USDC;
   if (held < floor) {
     throw "below floor";
   }
@@ -93,7 +97,7 @@ function afterFee(amount: Uint256): Uint256 {
 // Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
 // owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
 // `ctx.self()` there would keep them in the Pot.
-const held = USDC.balanceOf(ctx.self());
+const held = self.USDC;
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
 USDC.approve(AaveV3.Pool, supplied);
@@ -193,11 +197,20 @@ There is no read for the transaction's origin.
 Call a contract by name, in this order of preference:
 
 1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
-   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, at the chain's address. An interface, a
-   registry ABI with no address of its own, is called with the address it is at, in the same
-   expression: `UniswapV3.Pool(pool).slot0()`, `Erc4626.Vault(vault).totalAssets()`.
-   `.at(address)` reaches another deployment of a named contract's ABI: `AaveV3.Pool.at(address)`.
-   Which namespaces, members and aliases exist is `sauce-globals`'s.
+   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, at the chain's address. Which
+   namespaces, members and aliases exist is `sauce-globals`'s.
+   - **A contract a call returns**: where the registry records which contract an address a
+     function returns is (a factory's pool, a pool's tokens, a vault's asset; the function's line
+     in its `sauce-protocols` registry file says so), call that contract's methods on the result,
+     or on a `const` holding it: `UniswapV3.Factory.getPool(WETH, USDC, 500).liquidity()`,
+     `pool.token0().decimals()`. A token returned this way takes the ERC-20 functions, and its
+     `transfer`, `approve` and `transferFrom` are SafeERC20, as `Token(address)`'s are. It is the
+     same program as naming the contract, below. Keep the result in a `const`, not a `let`.
+   - **Any other address**: name the interface that describes it, a registry ABI with no address of
+     its own, called with the address in the same expression: `UniswapV3.Pool(pool).slot0()` for a
+     pool the program is given, `Erc4626.Vault(vault).totalAssets()`. A method called on an address
+     whose contract the registry does not record fails to compile, naming these spellings.
+   - `.at(address)` reaches another deployment of a named contract's ABI: `AaveV3.Pool.at(address)`.
 2. **A registry ABI import**, where the chain has no namespace for it: the protocol's registry file
    in `sauce-protocols` gives the line, such as
    `import VaultABI from "./protocols/erc4626/VaultABI.json"`, then
@@ -211,17 +224,19 @@ Call a contract by name, in this order of preference:
 
 Never call through `evm.static` or `evm.call` with a hex selector where one of these exists: the
 typed call encodes the arguments, decodes the result and names its fields. Take only what you need
-of a result: `const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();` and
-`UniswapV3.Pool(pool).slot0().sqrtPriceX96` both read the first field alone.
+of a result: `const [sqrtPriceX96] = pool.slot0();` and `pool.slot0().sqrtPriceX96` both read the
+first field alone.
 
 ```sauce chain=base,ethereum
 function main(vault: Address, shares: Uint256): Uint256 {
-  // A contract the chain's registry records: its factory, by name.
+  // A contract the chain's registry records: its factory, by name. What getPool returns is a
+  // Uniswap V3 pool, so the pool's methods are called on it.
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   require(pool != 0, "no WETH/USDC 0.05% pool");
-  // Interfaces, called with the address they are at: the pool it returned, and a vault.
-  const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();
+  const [sqrtPriceX96] = pool.slot0();
   require(sqrtPriceX96 > 0, "the pool is not initialized");
+  require(pool.token0().decimals() > 0, "token0 has no decimals");
+  // An address the program is given: named by the interface that describes it.
   return Erc4626.Vault(vault).convertToAssets(shares);
 }
 ```
@@ -426,6 +441,8 @@ add. For any message not here, search [references/builtins.md](references/builti
 | `X is called but never declared`                       | a function not in scope, usually a typo                                              | fix the name                                           |
 | `calling anything other than a plain function name`    | a method called on a literal (``hex`…`.concat(…)``)                                  | bind the literal to a `const` first                    |
 | `must be initialized with a literal`                   | a module-level `let` or `const` given a computed value                               | compute it inside a function                           |
+| `the registry does not record which contract it is`    | a method called on an address a registry function returns, of no recorded contract   | name its interface, as the message spells it           |
+| `does not name a function`                             | a method called on an address in a variable or parameter                             | name its interface: `UniswapV3.Pool(pool).liquidity()` |
 
 ## Pitfalls
 

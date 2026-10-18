@@ -87,7 +87,7 @@ it reads what is there, not what must be brought:
 
 ```sauce chain=base
 function main(beneficiary: Address) {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   const delivered = amount - (amount * 10) / 10000;
   Ethereum(
     () => {
@@ -138,7 +138,7 @@ function main(
       require(pool != 0, "no WETH/USDC pool at 0.05%");
       // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
       uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
-      const unsold = WETH.balanceOf(ctx.self()); // the shared Pot: return all of it
+      const unsold = self.WETH; // the shared Pot: return all of it
       if (unsold > 0) {
         WETH.transfer(refundTo, unsold);
       }
@@ -233,7 +233,7 @@ steps: in the same transaction, the Pot reads the vault from the Portal (`intent
 the very bytes it then publishes), transfers each reward token there, sends a native reward, and
 calls `publish`, so nothing is published unless the whole cook succeeds, and a token whose transfer
 returns `false` reverts it. Values measured while it runs flow into the intent: in
-`const amount = USDC.balanceOf(ctx.self())`, `amount` does not exist until the program runs, and
+`const amount = self.USDC`, `amount` does not exist until the program runs, and
 using it inside the braces, in the delivery or in the reward is enough (the package encodes the
 intent with a slot for it, and the program writes the value in before it publishes). Any one-word
 value can be carried this way.
@@ -431,10 +431,10 @@ execution and carried into the level below; no amount past the first exists when
 
 ```sauce chain=base
 function main(recipient: Address) {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   Ethereum(
     () => {
-      const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC
+      const arrived = self.USDC; // Ethereum's USDC
       Base(() => {
         USDC.transfer(recipient, arrived); // Base's USDC
       }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Ethereum's: it funds this level

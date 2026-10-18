@@ -274,6 +274,33 @@ const typeOf = (param) =>
 function paramText(param) {
   return param.name ? `${typeOf(param)} ${param.name}` : typeOf(param);
 }
+const canonicalOf = (param) =>
+  param.type.startsWith("tuple")
+    ? `(${(param.components ?? []).map(canonicalOf).join(",")})${param.type.slice("tuple".length)}`
+    : param.type;
+
+/**
+ * What `f`'s address outputs are, where the registry knows (`contracts.RETURNED_CONTRACTS`), as a
+ * note after its line: a factory's `getPool` returns "a `UniswapV3.Pool`", whose methods a program
+ * calls on the result straight on. A token is the registry's ERC-20 interface.
+ */
+function returnedNote(sdk, slug, exportName, f) {
+  const signature = `${f.name}(${(f.inputs ?? []).map(canonicalOf).join(",")})`;
+  const returned = sdk.contracts.RETURNED_CONTRACTS.filter(
+    (r) => r.protocol === slug && r.abiExport === exportName && r.signature === signature,
+  );
+  if (returned.length === 0) return "";
+  const what = (r) =>
+    r.returns.protocol === "erc20" && r.returns.contract === "ERC20"
+      ? "a token"
+      : `a \`${sdk.routes.pascalOfSlug(r.returns.protocol)}.${r.returns.contract}\``;
+  return `: ${returned
+    .map((r) =>
+      r.path.length === 0 ? `the address is ${what(r)}` : `\`${r.path.join(".")}\` is ${what(r)}`,
+    )
+    .join(", ")}`;
+}
+
 const functionText = (f) => {
   const mutability =
     f.stateMutability && f.stateMutability !== "nonpayable" ? ` ${f.stateMutability}` : "";
@@ -375,7 +402,10 @@ export async function skillsReferences(api, documented) {
         name: e.name,
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
-        functions: e.functions.map(functionText),
+        functions: e.functions.map((f) => ({
+          text: functionText(f),
+          returned: returnedNote(sdk, info.slug, e.name, f),
+        })),
       })),
       templates: Object.entries(module)
         .filter(([, value]) => typeof value === "string")
@@ -1634,6 +1664,15 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
   }
   if (p.exports.length) {
     lines.push("## ABI", "");
+    if (p.exports.some((e) => e.functions.some((f) => f.returned !== ""))) {
+      lines.push(
+        "Where a line says what an address it returns is, a program that calls the function through",
+        "its namespace calls that contract's methods on the result directly:",
+        "`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20",
+        "functions, and its writes are SafeERC20.",
+        "",
+      );
+    }
     for (const e of p.exports) {
       lines.push(
         `### \`${e.name}\``,
@@ -1643,7 +1682,7 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
           : "Not served for import: a program calls it by selector.") +
           (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : ""),
         "",
-        ...e.functions.map((f) => `- \`${f}\``),
+        ...e.functions.map((f) => `- \`${f.text}\`${f.returned}`),
         "",
       );
     }

@@ -299,9 +299,14 @@ export function compileProgram(
   input: ProgramInput,
   files: CliFiles,
   onContract?: (reference: string, target: AccessorTarget) => void,
+  /** On Solana, the swaps to compile held to a stop (`SauceProgramOptions.stops`). */
+  stops?: readonly string[],
 ): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
+    return compileSauceProgram(input.chain, input.text, {
+      ...compileOptions(input, files, onContract),
+      ...(stops === undefined ? {} : { stops }),
+    });
   } catch (error) {
     const described = describeCompileError(error, input.file, input.text, input.chain);
     // A relative import that did not resolve, from a program with no directory of its own.
@@ -456,6 +461,14 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           `where it is that chain's own: a define of a name each chain sets holds on ` +
           `${input.chain.slug} alone, so this one changes nothing`,
     ),
+    ...(program.derivedValues === undefined
+      ? []
+      : [
+          `main also takes ${program.derivedValues.length} stop${program.derivedValues.length === 1 ? "" : "s"}, one ` +
+            "for each swap at a price, after its own arguments: `sauce tx`, `sauce simulate` and " +
+            "`sauce run` work each out from its pool's tick arrays as they build the cook; the " +
+            "payload here carries 0, no stop, for each",
+        ]),
     ...(cook === undefined || cook.fits
       ? []
       : [
@@ -480,6 +493,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ...(cook === undefined ? {} : { cook }),
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
+      ...(program.derivedValues === undefined ? {} : { derivedValues: program.derivedValues }),
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: mainReturnType(input.text) ?? null,

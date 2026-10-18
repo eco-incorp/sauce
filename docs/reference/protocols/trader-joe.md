@@ -92,18 +92,23 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `LBFactoryABI`
 
 `import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory.
 
-- `getLBPairInformation(address tokenA, address tokenB, uint256 binStep) view returns ((uint16 binStep, address LBPair, bool createdByOwner, bool ignoredForRouting) lbPairInformation)`
+- `getLBPairInformation(address tokenA, address tokenB, uint256 binStep) view returns ((uint16 binStep, address LBPair, bool createdByOwner, bool ignoredForRouting) lbPairInformation)`: `LBPair` is a `TraderJoe.LBPair`
 
 ### `LBPairABI`
 
 `import LBPairABI from "./protocols/trader-joe/LBPairABI.json";`
 
-- `getTokenX() pure returns (address tokenX)`
-- `getTokenY() pure returns (address tokenY)`
+- `getTokenX() pure returns (address tokenX)`: the address is a token
+- `getTokenY() pure returns (address tokenY)`: the address is a token
 - `getBinStep() pure returns (uint16)`
 - `getActiveId() view returns (uint24 activeId)`
 - `getReserves() view returns (uint128 reserveX, uint128 reserveY)`

@@ -2,7 +2,7 @@
 // Every registry contract, as `descriptors/registry.ts` builds its descriptors and the host tree
 // (`Base.UniswapV3.QuoterV2`) types it. See the generator's header for where each entry comes from
 // and how it is named.
-import type { ContractLink } from "./links.js";
+import type { ContractLink, ReturnedContractLink } from "./links.js";
 import type { AddressOnlyContract, Contract, InterfaceContract } from "./accessors.js";
 import * as aaveV2Abis from "../protocols/aave-v2/abis.js";
 import { deployments as aaveV2Deployments } from "../protocols/aave-v2/addresses.js";
@@ -733,6 +733,68 @@ export const CONTRACT_LINKS = [
   { protocol: "zksync-bridge", contract: "DiamondProxy", kind: "singleton", roleKey: "diamondProxy", abiExport: "ZkSyncDiamondProxyABI" },
   { protocol: "zksync-bridge", contract: "L2Bridge", kind: "address-only", roleKey: "l2Bridge", caveats: ["the registry has no ABI for this contract: its address only"] },
 ] as const satisfies readonly ContractLink[];
+
+/** 58 function outputs whose contract the registry knows. */
+export const RETURNED_CONTRACTS = [
+  { protocol: "across", abiExport: "AcrossHubPoolABI", signature: "pooledTokens(address)", path: ["lpToken"], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "aerodrome", abiExport: "AerodromePoolFactoryABI", signature: "getPool(address,address,bool)", path: [], returns: { protocol: "aerodrome", contract: "Pool" } },
+  { protocol: "aerodrome", abiExport: "AerodromePoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "aerodrome", abiExport: "AerodromePoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "aerodrome-slipstream", abiExport: "SlipstreamCLFactoryABI", signature: "getPool(address,address,int24)", path: [], returns: { protocol: "aerodrome-slipstream", contract: "Pool" } },
+  { protocol: "aerodrome-slipstream", abiExport: "SlipstreamPositionManagerABI", signature: "factory()", path: [], returns: { protocol: "aerodrome-slipstream", contract: "CLFactory" } },
+  { protocol: "aerodrome-slipstream", abiExport: "AerodromeSlipstreamPoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "aerodrome-slipstream", abiExport: "AerodromeSlipstreamPoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "beefy", abiExport: "BeefyVaultABI", signature: "want()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "camelot", abiExport: "CamelotV2FactoryABI", signature: "getPair(address,address)", path: [], returns: { protocol: "camelot", contract: "V2Pair" } },
+  { protocol: "camelot", abiExport: "CamelotV2PairABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "camelot", abiExport: "CamelotV2PairABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "camelot", abiExport: "CamelotV3FactoryABI", signature: "poolByPair(address,address)", path: [], returns: { protocol: "camelot", contract: "V3Pool" } },
+  { protocol: "camelot", abiExport: "CamelotV3PoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "camelot", abiExport: "CamelotV3PoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "convex", abiExport: "BoosterABI", signature: "poolInfo(uint256)", path: ["lptoken"], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "convex", abiExport: "BoosterABI", signature: "poolInfo(uint256)", path: ["token"], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "convex", abiExport: "BoosterABI", signature: "poolInfo(uint256)", path: ["crvRewards"], returns: { protocol: "convex", contract: "BaseRewardPool" } },
+  { protocol: "erc4626", abiExport: "VaultABI", signature: "asset()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "fluid", abiExport: "FluidLendingABI", signature: "asset()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "layerbank", abiExport: "LTokenABI", signature: "underlying()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "maverick", abiExport: "MaverickV2PoolABI", signature: "tokenA()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "maverick", abiExport: "MaverickV2PoolABI", signature: "tokenB()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "pancakeswap-v2", abiExport: "PancakeSwapV2FactoryABI", signature: "getPair(address,address)", path: [], returns: { protocol: "pancakeswap-v2", contract: "Pair" } },
+  { protocol: "pancakeswap-v2", abiExport: "PancakeSwapV2PairABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "pancakeswap-v2", abiExport: "PancakeSwapV2PairABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "pancakeswap-v3", abiExport: "PancakeSwapV3FactoryABI", signature: "getPool(address,address,uint24)", path: [], returns: { protocol: "pancakeswap-v3", contract: "Pool" } },
+  { protocol: "pancakeswap-v3", abiExport: "PancakeSwapV3PoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "pancakeswap-v3", abiExport: "PancakeSwapV3PoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "quickswap", abiExport: "QuickSwapV2FactoryABI", signature: "getPair(address,address)", path: [], returns: { protocol: "quickswap", contract: "V2Pair" } },
+  { protocol: "quickswap", abiExport: "QuickSwapV2PairABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "quickswap", abiExport: "QuickSwapV2PairABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "quickswap", abiExport: "QuickSwapV3FactoryABI", signature: "poolByPair(address,address)", path: [], returns: { protocol: "quickswap", contract: "V3Pool" } },
+  { protocol: "quickswap", abiExport: "QuickSwapV3PoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "quickswap", abiExport: "QuickSwapV3PoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "sushiswap-v2", abiExport: "SushiSwapV2FactoryABI", signature: "getPair(address,address)", path: [], returns: { protocol: "sushiswap-v2", contract: "Pair" } },
+  { protocol: "sushiswap-v2", abiExport: "SushiSwapV2PairABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "sushiswap-v2", abiExport: "SushiSwapV2PairABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "synthra-v3", abiExport: "SynthraV3FactoryABI", signature: "getPool(address,address,uint24)", path: [], returns: { protocol: "synthra-v3", contract: "Pool" } },
+  { protocol: "synthra-v3", abiExport: "SynthraV3PoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "synthra-v3", abiExport: "SynthraV3PoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "trader-joe", abiExport: "LBFactoryABI", signature: "getLBPairInformation(address,address,uint256)", path: ["LBPair"], returns: { protocol: "trader-joe", contract: "LBPair" } },
+  { protocol: "trader-joe", abiExport: "LBPairABI", signature: "getTokenX()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "trader-joe", abiExport: "LBPairABI", signature: "getTokenY()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "uniswap-v2", abiExport: "UniswapV2FactoryABI", signature: "getPair(address,address)", path: [], returns: { protocol: "uniswap-v2", contract: "Pair" } },
+  { protocol: "uniswap-v2", abiExport: "UniswapV2PairABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "uniswap-v2", abiExport: "UniswapV2PairABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "uniswap-v3", abiExport: "UniswapV3FactoryABI", signature: "getPool(address,address,uint24)", path: [], returns: { protocol: "uniswap-v3", contract: "Pool" } },
+  { protocol: "uniswap-v3", abiExport: "UniswapV3PoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "uniswap-v3", abiExport: "UniswapV3PoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "uniswap-v4", abiExport: "UniswapV4StateViewABI", signature: "poolManager()", path: [], returns: { protocol: "uniswap-v4", contract: "PoolManager" } },
+  { protocol: "unitflow-v3", abiExport: "UnitFlowV3FactoryABI", signature: "getPool(address,address,uint24)", path: [], returns: { protocol: "unitflow-v3", contract: "Pool" } },
+  { protocol: "unitflow-v3", abiExport: "UnitFlowV3RouterABI", signature: "factory()", path: [], returns: { protocol: "unitflow-v3", contract: "Factory" } },
+  { protocol: "unitflow-v3", abiExport: "UnitFlowV3PoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "unitflow-v3", abiExport: "UnitFlowV3PoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "velodrome", abiExport: "VelodromePoolFactoryABI", signature: "getPool(address,address,bool)", path: [], returns: { protocol: "velodrome", contract: "Pool" } },
+  { protocol: "velodrome", abiExport: "VelodromePoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+  { protocol: "velodrome", abiExport: "VelodromePoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
+] as const satisfies readonly ReturnedContractLink[];
 
 export interface AaveV2Contracts {
   readonly LendingPool: Contract<typeof aaveV2Abis.LendingPoolABI>;

@@ -187,11 +187,16 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `CamelotV2FactoryABI`
 
 `import CamelotV2FactoryABI from "./protocols/camelot/CamelotV2FactoryABI.json";` Speaks for: v2Factory.
 
-- `getPair(address tokenA, address tokenB) view returns (address pair)`
+- `getPair(address tokenA, address tokenB) view returns (address pair)`: the address is a `Camelot.V2Pair`
 
 ### `CamelotV2PairABI`
 
@@ -200,8 +205,8 @@ function main() {
 - `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint16 _token0FeePercent, uint16 _token1FeePercent)`
 - `getAmountOut(uint256 amountIn, address tokenIn) view returns (uint256)`
 - `stableSwap() view returns (bool)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 - `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
 
 ### `CamelotV2RouterABI`
@@ -216,7 +221,7 @@ function main() {
 
 `import CamelotV3FactoryABI from "./protocols/camelot/CamelotV3FactoryABI.json";` Speaks for: v3Factory.
 
-- `poolByPair(address tokenA, address tokenB) view returns (address pool)`
+- `poolByPair(address tokenA, address tokenB) view returns (address pool)`: the address is a `Camelot.V3Pool`
 
 ### `CamelotV3PoolABI`
 
@@ -225,8 +230,8 @@ function main() {
 - `globalState() view returns (uint160 price, int24 tick, uint16 feeZto, uint16 feeOtz, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)`
 - `liquidity() view returns (uint128)`
 - `tickSpacing() view returns (int24)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 
 ### `CamelotV3SwapRouterABI`
 

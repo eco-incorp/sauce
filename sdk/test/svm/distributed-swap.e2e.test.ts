@@ -26,6 +26,7 @@ import {
 import { FailedTransactionMetadata } from "litesvm";
 
 import { requireChain } from "../../src/chains/canonical.js";
+import { svmRanOutOfUnits } from "../../src/cli/svm-stops.js";
 import { encodeEntryArguments } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import { resolveSvmAccountName } from "../../src/svm/account-names.js";
@@ -38,6 +39,12 @@ import {
 } from "../../src/svm/index.js";
 import type { SvmSlot } from "../../src/svm/pool-slot.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
+import {
+  svmProgramStops,
+  svmSkipStop,
+  svmStopValues,
+  type SvmProgramStops as SvmStops,
+} from "../../src/svm/compute-stops.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import {
   describeSvm,
@@ -116,7 +123,9 @@ interface Order {
   /** Bytes to change in fixture accounts before the cook: pools emptied. */
   edit?: Edit[];
   /** The program to cook, when not the skill's: one taking the same arguments. */
-  program?: ReturnType<typeof compileSauceProgram>;
+  source?: string;
+  /** Every swap the plain one, in place of the stops the command works out. */
+  unheld?: boolean;
 }
 
 type Outcome =
@@ -135,8 +144,10 @@ type Outcome =
       units: bigint;
       size: number;
       accounts: number;
+      /** The swaps' stops the command worked out. */
+      stops?: SvmStops;
     }
-  | { ok: false; reason: string; logs: string[] };
+  | { ok: false; reason: string; logs: string[]; stops?: SvmStops };
 
 /** A key as the engine reads an `Address` argument on Solana: its 32 bytes, as one word. */
 const word = (at: Address): bigint => key(at);
@@ -195,7 +206,9 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
 
   const cook = async (order: Order): Promise<Outcome> => {
     restoreVenues(harness.svm, order.edit);
-    const cooked = order.program ?? program;
+    // The program as the command compiles it: plain, then each swap whose stop binds held.
+    const text = order.source ?? source;
+    const plain = text === source ? program : compileSauceProgram("solana", text);
     const kept = order.kept ?? 0n;
     const ata = (holder: Address, mint: Address) =>
       svmTokenAccount({ mint, tokenProgram: TOKEN }, holder);
@@ -218,9 +231,10 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
 
     // Each account the program names, from its derivation, as the command resolves it.
     const slots = new Map<string, Promise<SvmSlot>>();
-    const derived = cooked.derivedAccounts as Readonly<Record<string, string>>;
+    const derived = plain.derivedAccounts as Readonly<Record<string, string>>;
+    const named: Record<string, string> = {};
     const tail = await Promise.all(
-      cooked.manifest!.accounts.map(async (entry) => {
+      plain.manifest!.accounts.map(async (entry) => {
         if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
         const derivation = derived[entry.name];
         if (derivation === undefined) throw new Error(`${entry.name} is not derived`);
@@ -234,6 +248,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         });
         const at =
           value === "pot" ? harness.pot : value === "owner" ? harness.payer.address : value;
+        named[entry.name] = at;
         // The Kitchen signs for the Pot; the System program, which stands in for every account a
         // slot does not use, is never writable.
         const writable = entry.requires === "writable" && at !== SYSTEM;
@@ -241,6 +256,19 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       }),
     );
 
+    // Each swap's stop, as the command works it out from the pools it read: a swap it binds
+    // compiled to the Stopped form, its stop after main's own arguments.
+    const stops = await svmProgramStops(
+      plain,
+      requireChain("solana"),
+      named,
+      { priceLimit: order.priceLimit },
+      load,
+    );
+    const cooked =
+      order.unheld === true || stops === undefined || stops.binding.length === 0
+        ? plain
+        : compileSauceProgram("solana", text, { stops: stops.binding });
     // The cook carries the program and its arguments staged in a code buffer, and its accounts
     // through a lookup table: as `sauce run` stages a program too large for one transaction. An
     // `Address` argument is its key's 32 bytes, one word, as the command encodes it.
@@ -251,13 +279,21 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         type: param.type.replace(/\bAddress\b/g, "Uint256"),
       })),
     };
-    const args = encodeEntryArguments(keyed, [
-      order.budget,
-      order.priceLimit,
-      order.minTokens ?? 0n,
-      order.maxAvgPrice ?? 0n,
-      word(to),
-    ]);
+
+    const args = encodeEntryArguments(
+      {
+        ...keyed,
+        entryParams: [...keyed.entryParams, ...(cooked.derivedValues ?? [])],
+      },
+      [
+        order.budget,
+        order.priceLimit,
+        order.minTokens ?? 0n,
+        order.maxAvgPrice ?? 0n,
+        word(to),
+        ...svmStopValues(order.unheld === true ? undefined : stops, cooked),
+      ],
+    );
     const payload = new Uint8Array(cooked.bytecode.length + args.length);
     payload.set(cooked.bytecode);
     payload.set(args, cooked.bytecode.length);
@@ -307,6 +343,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         ok: false,
         reason: new TextDecoder().decode(result.meta().returnData().data()),
         logs: result.meta().logs(),
+        ...(stops === undefined ? {} : { stops }),
       };
     }
     const returned = result.returnData().data();
@@ -323,6 +360,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       kept: tokenAmount(harness, potBuy),
       left: tokenAmount(harness, potPay),
       units: result.computeUnitsConsumed(),
+      ...(stops === undefined ? {} : { stops }),
       size: getTransactionSize(transaction),
       // The payer, the compute-budget program, the lookup table and every key it holds.
       accounts: keys.length + 3,
@@ -452,6 +490,35 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(priceOf(PANCAKE)).toBe(bound);
   }, 120_000);
 
+  it("gives the deepest pool its whole walk, holds the next within what is left, and skips the shallowest", async () => {
+    // At 1.1 times the dearest pool's price the three pools' walks cost more compute units than the
+    // cook has: with no stops it runs out and fails. The deepest pool, Raydium's, walks its whole
+    // way; Byreal's is held a tick inside the first initialized tick what is left does not pay to
+    // cross; PancakeSwap's, the shallowest, is left too little for its swap and is skipped, its price
+    // where it was.
+    const wide = (dearest * 11000n) / 10000n;
+    const budget = 10_000_000n * 10n ** 6n;
+    const unheld = await cook({
+      budget,
+      priceLimit: wide,
+      unheld: true,
+    });
+    expect(!unheld.ok && svmRanOutOfUnits(unheld.logs)).toBe(true);
+    const outcome = succeeded(await cook({ budget, priceLimit: wide }));
+    const of = (p: Pool) => outcome.stops!.stops.find((stop) => stop.pool === p.pool)!;
+    expect([of(RAYDIUM).rank, of(BYREAL).rank, of(PANCAKE).rank]).toEqual([0, 1, 2]);
+    expect(of(RAYDIUM).share).toBe(of(RAYDIUM).estimatedUnits);
+    expect(of(RAYDIUM).stopTick).toBeUndefined();
+    expect(of(BYREAL).stopTick).toBeDefined();
+    expect(of(BYREAL).share).toBeLessThan(of(BYREAL).estimatedUnits);
+    expect([of(PANCAKE).skipped, of(PANCAKE).stop]).toEqual([true, svmSkipStop(false)]);
+    expect(priceOf(RAYDIUM)).toBe(ownLimit(RAYDIUM, wide, false));
+    expect(priceOf(BYREAL)).toBeLessThan(ownLimit(BYREAL, wide, false));
+    expect(priceOf(PANCAKE)).toBe(snapshotPrice(PANCAKE));
+    expect(outcome.bought).toBeGreaterThan(0n);
+    expect(outcome.units).toBeLessThan(1_400_000n);
+  }, 120_000);
+
   it("finds Orca's pool on its adaptive fee tier by that tier, and skips it at a price", async () => {
     // Fee tier 1025 is an adaptive fee at tick spacing 64: the spacing alone is the static tier's
     // pool, which the pair does not have, and the tier after it is this one.
@@ -462,10 +529,8 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       "    Orca.Whirlpool.pool(USDC, SPCX_US, 64, 1025),\n" +
       "    USDC,\n    SPCX_US,\n    self.USDC - kept,\n    priceLimit,\n    0,\n  );\n";
     const at = source.indexOf("  bought += Byreal.CLMM.swap(");
-    const withOrca = compileSauceProgram(
-      "solana",
-      `${source.slice(0, at)}${orca}${source.slice(at)}`,
-    );
+    const withOrcaSource = `${source.slice(0, at)}${orca}${source.slice(at)}`;
+    const withOrca = compileSauceProgram("solana", withOrcaSource);
     expect(Object.values(withOrca.derivedAccounts!)).toContain(
       "slot:Orca.Whirlpool(USDC,SPCX_US,64,1025):USDC.pool",
     );
@@ -473,7 +538,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     // nothing, and the order is the program's without it.
     const budget = 1_000_000n * 10n ** 6n;
     const plain = succeeded(await cook({ budget, priceLimit }));
-    const tried = succeeded(await cook({ budget, priceLimit, program: withOrca }));
+    const tried = succeeded(await cook({ budget, priceLimit, source: withOrcaSource }));
     expect(priceOf(ORCA)).toBe(snapshotPrice(ORCA));
     expect([tried.spent, tried.bought, tried.unspent]).toEqual([
       plain.spent,

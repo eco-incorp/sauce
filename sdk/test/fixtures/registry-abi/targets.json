@@ -1,5 +1,5 @@
 {
-  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs and test/registry-abi.test.ts.",
+  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs and test/registry-abi.test.ts. returns: the registry ABI an address a function returns speaks, by the function's signature and, for a field of what it returns, the field names after it (\"poolInfo(uint256).crvRewards\"); read by scripts/gen-source-globals.mjs.",
   "protocols": {
     "aave-v2": {
       "LendingPoolABI": {
@@ -65,7 +65,10 @@
     },
     "across": {
       "AcrossHubPoolABI": {
-        "roles": ["hubPool"]
+        "roles": ["hubPool"],
+        "returns": {
+          "pooledTokens(address).lpToken": "erc20/ERC20ABI"
+        }
       },
       "AcrossSpokePoolABI": {
         "roles": ["spokePool"]
@@ -73,7 +76,10 @@
     },
     "aerodrome": {
       "AerodromePoolFactoryABI": {
-        "roles": ["poolFactory"]
+        "roles": ["poolFactory"],
+        "returns": {
+          "getPool(address,address,bool)": "aerodrome/AerodromePoolABI"
+        }
       },
       "AerodromeRouterABI": {
         "roles": ["router"]
@@ -90,19 +96,29 @@
             "address": "0x27a8Afa3Bd49406e48a074350fB7b2020c43B2bD",
             "note": "USDC/USDbC stable, poolFactory.getPool(USDC, USDbC, true) (an EIP-1167 clone)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "aerodrome-slipstream": {
       "SlipstreamCLFactoryABI": {
-        "roles": ["clFactory", "clFactoryGaugeCaps", "clFactoryGaugesV3"]
+        "roles": ["clFactory", "clFactoryGaugeCaps", "clFactoryGaugesV3"],
+        "returns": {
+          "getPool(address,address,int24)": "aerodrome-slipstream/AerodromeSlipstreamPoolABI"
+        }
       },
       "SlipstreamPositionManagerABI": {
         "roles": [
           "nonfungiblePositionManager",
           "nonfungiblePositionManagerGaugeCaps",
           "nonfungiblePositionManagerGaugesV3"
-        ]
+        ],
+        "returns": {
+          "factory()": "aerodrome-slipstream/SlipstreamCLFactoryABI"
+        }
       },
       "AeroMetarouterABI": {
         "roles": ["metarouter"]
@@ -119,7 +135,11 @@
             "address": "0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E",
             "note": "a pool of clFactoryGaugesV3 at tick spacing 10 (its factory())"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "aevo": {
@@ -200,6 +220,9 @@
           "deposit(uint256)": {
             "1:0x4d02ca7d930623d6c6873fdfc81401074db48eca": "this variant returns the minted shares; the published BeefyVaultV7 returns nothing, and a declared output would revert on it, so the interface declares none"
           }
+        },
+        "returns": {
+          "want()": "erc20/ERC20ABI"
         }
       }
     },
@@ -225,7 +248,10 @@
         "roles": ["v3SwapRouter"]
       },
       "CamelotV2FactoryABI": {
-        "roles": ["v2Factory"]
+        "roles": ["v2Factory"],
+        "returns": {
+          "getPair(address,address)": "camelot/CamelotV2PairABI"
+        }
       },
       "CamelotV2PairABI": {
         "instances": [
@@ -239,10 +265,17 @@
             "address": "0xa6c5C7D189fA4eB5Af8ba34E63dCDD3a635D433f",
             "note": "WETH/ARB, v2Factory.getPair(WETH, ARB)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       },
       "CamelotV3FactoryABI": {
-        "roles": ["v3Factory"]
+        "roles": ["v3Factory"],
+        "returns": {
+          "poolByPair(address,address)": "camelot/CamelotV3PoolABI"
+        }
       },
       "CamelotV3PoolABI": {
         "instances": [
@@ -256,7 +289,11 @@
             "address": "0xe51635ae8136aBAc44906A8f230C2D235E9c195F",
             "note": "WETH/ARB, v3Factory.poolByPair(WETH, ARB)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "cbeth": {
@@ -346,7 +383,12 @@
         ]
       },
       "BoosterABI": {
-        "roles": ["booster"]
+        "roles": ["booster"],
+        "returns": {
+          "poolInfo(uint256).lptoken": "erc20/ERC20ABI",
+          "poolInfo(uint256).token": "erc20/ERC20ABI",
+          "poolInfo(uint256).crvRewards": "convex/BaseRewardPoolABI"
+        }
       }
     },
     "cowswap": {
@@ -495,7 +537,10 @@
             "address": "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
             "note": "sDAI, an ERC-4626 vault"
           }
-        ]
+        ],
+        "returns": {
+          "asset()": "erc20/ERC20ABI"
+        }
       }
     },
     "ethena": {
@@ -544,7 +589,10 @@
             "address": "0x9Fb7b4477576Fe5B32be4C1843aFB1e55F251B33",
             "note": "fUSDC (Fluid USD Coin), an fToken"
           }
-        ]
+        ],
+        "returns": {
+          "asset()": "erc20/ERC20ABI"
+        }
       },
       "FluidVaultABI": {
         "instances": [
@@ -692,7 +740,10 @@
             "address": "0x0D8F8e271DD3f2fC58e5716d3Ff7041dBe3F0688",
             "note": "lUSDC (LayerBank USDC), from core.allMarkets()"
           }
-        ]
+        ],
+        "returns": {
+          "underlying()": "erc20/ERC20ABI"
+        }
       },
       "LayerBankCoreABI": {
         "roles": ["core"]
@@ -813,6 +864,10 @@
           "tickSpacing()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
           "tokenA()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
           "tokenB()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode"
+        },
+        "returns": {
+          "tokenA()": "erc20/ERC20ABI",
+          "tokenB()": "erc20/ERC20ABI"
         }
       }
     },
@@ -870,7 +925,10 @@
     },
     "pancakeswap-v2": {
       "PancakeSwapV2FactoryABI": {
-        "roles": ["factory"]
+        "roles": ["factory"],
+        "returns": {
+          "getPair(address,address)": "pancakeswap-v2/PancakeSwapV2PairABI"
+        }
       },
       "PancakeSwapV2RouterABI": {
         "roles": ["router"]
@@ -887,12 +945,19 @@
             "address": "0x79474223AEdD0339780baCcE75aBDa0BE84dcBF9",
             "note": "WETH/USDC, factory.getPair(WETH, USDC)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "pancakeswap-v3": {
       "PancakeSwapV3FactoryABI": {
-        "roles": ["factory"]
+        "roles": ["factory"],
+        "returns": {
+          "getPool(address,address,uint24)": "pancakeswap-v3/PancakeSwapV3PoolABI"
+        }
       },
       "PancakeSwapV3NFPMABI": {
         "roles": ["nonfungiblePositionManager"]
@@ -912,7 +977,11 @@
             "address": "0x72AB388E2E2F6FaceF59E3C3FA2C4E29011c2D38",
             "note": "WETH/USDC 0.01%, factory.getPool(WETH, USDC, 100)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "paraswap": {
@@ -1000,7 +1069,10 @@
         "roles": ["v3SwapRouter"]
       },
       "QuickSwapV2FactoryABI": {
-        "roles": ["v2Factory"]
+        "roles": ["v2Factory"],
+        "returns": {
+          "getPair(address,address)": "quickswap/QuickSwapV2PairABI"
+        }
       },
       "QuickSwapV2PairABI": {
         "instances": [
@@ -1014,10 +1086,17 @@
             "address": "0xadbF1854e5883eB8aa7BAf50705338739e558E5b",
             "note": "WPOL/WETH, v2Factory.getPair(WPOL, WETH)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       },
       "QuickSwapV3FactoryABI": {
-        "roles": ["v3Factory"]
+        "roles": ["v3Factory"],
+        "returns": {
+          "poolByPair(address,address)": "quickswap/QuickSwapV3PoolABI"
+        }
       },
       "QuickSwapV3PoolABI": {
         "instances": [
@@ -1031,7 +1110,11 @@
             "address": "0x479e1B71A702a595e19b6d5932CD5c863ab57ee0",
             "note": "WPOL/WETH, v3Factory.poolByPair(WPOL, WETH)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "radiant": {
@@ -1170,7 +1253,10 @@
     },
     "sushiswap-v2": {
       "SushiSwapV2FactoryABI": {
-        "roles": ["factory"]
+        "roles": ["factory"],
+        "returns": {
+          "getPair(address,address)": "sushiswap-v2/SushiSwapV2PairABI"
+        }
       },
       "SushiSwapV2RouterABI": {
         "roles": ["router"]
@@ -1187,7 +1273,11 @@
             "address": "0x905dfCD5649217c42684f23958568e533C711Aa3",
             "note": "WETH/USDC.e, factory.getPair(WETH, USDC.e)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "swell": {
@@ -1222,6 +1312,9 @@
         "unverified": {
           "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
           "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+        },
+        "returns": {
+          "getPool(address,address,uint24)": "synthra-v3/SynthraV3PoolABI"
         }
       },
       "SynthraV3SwapRouter02ABI": {
@@ -1268,6 +1361,10 @@
           "tickSpacing()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
           "token0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
           "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode"
+        },
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
@@ -1311,7 +1408,10 @@
     },
     "trader-joe": {
       "LBFactoryABI": {
-        "roles": ["lbFactory"]
+        "roles": ["lbFactory"],
+        "returns": {
+          "getLBPairInformation(address,address,uint256).LBPair": "trader-joe/LBPairABI"
+        }
       },
       "LBRouterABI": {
         "roles": ["lbRouter"]
@@ -1333,12 +1433,19 @@
             "address": "0xEe5A90098b270596Ec35D637B30d908C862c86df",
             "note": "the LB v2.1 LBPair every BSC pair clones (the v2.1 clone has no implementation() getter, so the implementation itself is captured)"
           }
-        ]
+        ],
+        "returns": {
+          "getTokenX()": "erc20/ERC20ABI",
+          "getTokenY()": "erc20/ERC20ABI"
+        }
       }
     },
     "uniswap-v2": {
       "UniswapV2FactoryABI": {
-        "roles": ["factory"]
+        "roles": ["factory"],
+        "returns": {
+          "getPair(address,address)": "uniswap-v2/UniswapV2PairABI"
+        }
       },
       "UniswapV2RouterABI": {
         "roles": ["router"]
@@ -1355,12 +1462,19 @@
             "address": "0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C",
             "note": "WETH/USDC, factory.getPair(WETH, USDC)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "uniswap-v3": {
       "UniswapV3FactoryABI": {
-        "roles": ["factory"]
+        "roles": ["factory"],
+        "returns": {
+          "getPool(address,address,uint24)": "uniswap-v3/UniswapV3PoolABI"
+        }
       },
       "UniswapV3NonfungiblePositionManagerABI": {
         "roles": ["nonfungiblePositionManager"]
@@ -1386,7 +1500,11 @@
             "address": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
             "note": "WETH/USDC 0.05%, factory.getPool(WETH, USDC, 500)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "uniswap-v4": {
@@ -1400,7 +1518,10 @@
         "roles": ["universalRouter"]
       },
       "UniswapV4StateViewABI": {
-        "roles": ["stateView"]
+        "roles": ["stateView"],
+        "returns": {
+          "poolManager()": "uniswap-v4/UniswapV4PoolManagerABI"
+        }
       }
     },
     "unitflow-v3": {
@@ -1409,10 +1530,16 @@
         "unverified": {
           "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode",
           "feeAmountTickSpacing(uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode"
+        },
+        "returns": {
+          "getPool(address,address,uint24)": "unitflow-v3/UnitFlowV3PoolABI"
         }
       },
       "UnitFlowV3RouterABI": {
-        "roles": ["router"]
+        "roles": ["router"],
+        "returns": {
+          "factory()": "unitflow-v3/UnitFlowV3FactoryABI"
+        }
       },
       "UnitFlowV3QuoterABI": {
         "roles": ["quoter"]
@@ -1437,12 +1564,19 @@
           "tickSpacing()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
           "token0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
           "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode"
+        },
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
         }
       }
     },
     "velodrome": {
       "VelodromePoolFactoryABI": {
-        "roles": ["poolFactory"]
+        "roles": ["poolFactory"],
+        "returns": {
+          "getPool(address,address,bool)": "velodrome/VelodromePoolABI"
+        }
       },
       "VelodromeRouterABI": {
         "roles": ["routerV2"]
@@ -1459,7 +1593,11 @@
             "address": "0x36E3c209B373b861c185ecdBb8b2EbDD98587BDb",
             "note": "USDC/USDC.e stable, poolFactory.getPool(USDC, USDC.e, true) (an EIP-1167 clone)"
           }
-        ]
+        ],
+        "returns": {
+          "token0()": "erc20/ERC20ABI",
+          "token1()": "erc20/ERC20ABI"
+        }
       }
     },
     "venus": {

@@ -1,6 +1,6 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses with no import, and what each means. Token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, … on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer, .approve, .transferFrom and .balanceOf with SafeERC20 behaviour (USDT works), the @sauce/token functions, the raw IERC20 import, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) with their deployed contracts, address-only contracts, interfaces and family aliases, available(...) for a contract a chain may lack, chain names and chainId, and the imports the package serves; with generated indexes of every token, stock, protocol contract and chain name, the lists sauce globals prints. Use when writing a program that moves tokens, calls a protocol or names a chain, when checking whether a name exists, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses with no import, and what each means. Token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, … on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer, .approve and .transferFrom with SafeERC20 behaviour (USDT works), a balance as self.USDC, the @sauce/token functions, the raw IERC20 import, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) with their deployed contracts, address-only contracts, interfaces and family aliases, available(...) for a contract a chain may lack, chain names and chainId, and the imports the package serves; with generated indexes of every token, stock, protocol contract and chain name, the lists sauce globals prints. Use when writing a program that moves tokens, calls a protocol or names a chain, when checking whether a name exists, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Names a program uses
@@ -48,12 +48,36 @@ A symbol is that chain's token address: a value (`balanceOf(USDC, account)`) or 
 methods. Any other ERC-20 is `Token(address)`, or bound once: `const t = Token(address);` (declared
 once, never reassigned, used only as `t.<method>(...)`).
 
+**A balance is `<holder>.<TOKEN>`: any address or contract, then a token's symbol.** `self.USDC` is
+the USDC the Pot holds, `recipient.TSLAx` the TSLAx `recipient` holds, `UniswapV4.PoolManager.WETH`
+the WETH in the PoolManager. It is `USDC.balanceOf(holder)` written short, and compiles to the same
+bytes. The native coin takes it too: `self.ETH` is `ctx.selfBalance()`, `recipient.ETH` is
+`ctx.balance(recipient)`, and on Solana `self.SOL` is the Pot's lamports. The holder is:
+
+- on an EVM chain, any address: `self` (the Pot) or `ctx.self()`, a variable or parameter, an
+  address written out, a protocol contract (`Aave.Pool`), a contract at an address
+  (`UniswapV3.Pool(pool)` or `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that
+  returns an address (`UniswapV4.StateView.poolManager()`); a program that declares its own `self`
+  reads that variable;
+- a token's own contract too: `WETH.ETH` is the ETH locked in WETH, `USDC.WETH` the WETH the USDC
+  contract holds (on Solana, `USDC.SOL` is the mint's lamports, `USDC.WSOL` its own WSOL account's
+  balance);
+- on Solana, one known when the transaction is built, whose account is added to `main`: `self` (the
+  Pot), `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a 32-byte key written
+  out (`sauce-solana`).
+
+A record or a list is not a holder: on one, a property named like a token or the native coin is
+refused, since the name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an
+interface with no address (`UniswapV3.Pool.WETH`). Where the native coin and a token share a symbol (Arc's USDC), the
+shorthand is refused for it. `Token(address)` has no short form: its balance is
+`Token(address).balanceOf(holder)`.
+
 | Method                            | Behaviour                                                 |
 | --------------------------------- | --------------------------------------------------------- |
 | `.transfer(to, amount)`           | SafeERC20 transfer                                        |
 | `.transferFrom(from, to, amount)` | SafeERC20 transferFrom                                    |
 | `.approve(spender, amount)`       | forceApprove: a non-zero allowance is reset to zero first |
-| `.balanceOf(owner)`               | balance read; `self.USDC` is `USDC.balanceOf(ctx.self())` |
+| `.balanceOf(owner)`               | balance read, the long form of `owner.USDC`               |
 
 - **Writes are SafeERC20**: a token that returns nothing (USDT) works when it has code; a `false`
   return, a malformed return or an address with no code reverts the program. A write returns
@@ -70,7 +94,7 @@ once, never reassigned, used only as `t.<method>(...)`).
 
 ```sauce chain=ethereum,optimism
 function main(payee: Address, amount: Uint256) {
-  require(USDT.balanceOf(ctx.self()) >= amount, "not enough USDT");
+  require(self.USDT >= amount, "not enough USDT");
   USDT.transfer(payee, amount);
   require(allowance(USDT, ctx.self(), payee) == 0, "no allowance left standing");
 }
@@ -85,7 +109,7 @@ of its own, as here, in a file that also uses the token syntax, which binds `IER
 ## Tokenized stocks
 
 A tokenized stock is a token like any other, named by its symbol with no import:
-`SPCXc.balanceOf(ctx.self())`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
+`self.SPCXc`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
 functions, a token a swap buys or sells.
 
 | Chain    | Issuers (example symbols)                                                                                                                                   |
@@ -118,7 +142,7 @@ functions, a token a swap buys or sells.
 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256) {
-  require(SPCXc.balanceOf(ctx.self()) >= amount, "not enough SPCXc");
+  require(self.SPCXc >= amount, "not enough SPCXc");
   SPCXc.transfer(recipient, amount);
 }
 ```
@@ -140,9 +164,9 @@ mint's 32-byte key (`balanceOf(TSLAx, account)`). Token-2022 and the accounts it
 
 ```sauce chain=solana
 function main(recipient: Address, amount: Uint256): Uint256 {
-  const before = SPACEX.balanceOf(recipient);
+  const before = recipient.SPACEX;
   SPACEX.transfer(recipient, amount);
-  return SPACEX.balanceOf(recipient) - before;
+  return recipient.SPACEX - before;
 }
 ```
 
@@ -160,9 +184,12 @@ its address and ABI from the registry. A member is one of three kinds:
 - `UniswapV3.Factory.getPool(a, b, 500)` calls the chain's factory; a Uniswap fee is in millionths
   (`500` is the 0.05% tier, `3000` 0.3%).
 - An interface is called with the address of a deployment:
-  `Erc4626.Vault(vault).deposit(...)`, `UniswapV3.Pool(pool).liquidity()` for a pool its factory
-  returned (`.at(pool)` is the same). A deployed contract's name is never called with an address;
+  `Erc4626.Vault(vault).deposit(...)`, `UniswapV3.Pool(pool).liquidity()` for a pool the program is
+  given (`.at(pool)` is the same). A deployed contract's name is never called with an address;
   `.at(address)` reaches another deployment of its ABI.
+- **A contract a call returns** is called on directly where the registry records what it is:
+  `UniswapV3.Factory.getPool(a, b, 500).liquidity()`, `Erc4626.Vault(vault).asset().decimals()`
+  (`sauce-script`, Calling a contract).
 - **A namespace's default contract** is also called by the namespace alone:
   `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
 - **A family alias** (`Uniswap`, `Aave`, …) names a contract only when one member has it on the

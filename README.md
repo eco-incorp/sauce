@@ -11,7 +11,7 @@ addresses: Sauce already knows the tokens and protocols on every chain it suppor
 ```js
 // Pay `to` some USDC, but only if there is enough.
 function main(to: Address, amount: Uint256) {
-  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  require(self.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
