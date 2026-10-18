@@ -45,11 +45,12 @@ import { methodCall, SAFE_WRITES, TOKEN_FACTORY_NAME } from "./token-rewrite.js"
 
 /**
  * The language's own methods on a value (`skills/sauce-script/references/builtins.json`'s `method`
- * group, and `.catch`), which any result takes: never a contract's.
+ * group, and a call's `.catch` and `.gas`), which any result takes: never a contract's.
  */
 export const VALUE_METHODS: ReadonlySet<string> = new Set([
   "catch",
   "concat",
+  "gas",
   "slice",
   "toBe",
   "toBytesBe",
@@ -219,7 +220,10 @@ export function rewriteContractResults(
     visiting.add(node);
     let found: Result | undefined;
     const site = methodCall(node);
-    if (site !== undefined) {
+    if (site?.method === "gas") {
+      // A capped call is the call: `.gas(n)` changes what the callee is handed, not its output.
+      found = result(site.object);
+    } else if (site !== undefined) {
       const owner = receiver(site.object);
       const args = (node.arguments as AstNode[] | undefined)?.length ?? 0;
       const overloads = owner?.methods.filter((m) => m.name === site.method) ?? [];

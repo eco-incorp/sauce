@@ -191,11 +191,24 @@ describe("a method called on a registry call's result", () => {
     expect(compileSauceProgram("base", source).bytecode.length).toBeGreaterThan(0);
   });
 
+  it("leaves a call's gas cap on the call, wherever it is chained", () => {
+    // The rewrite alone: a capped call compiles only for an engine whose calls take the gas operand.
+    const chained = `function main(): Uint256 {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500).gas(50000);
+  return pool.liquidity().gas(30000) + pool.fee().catch(() => { return 0; }).gas(30000);
+}`;
+    const explicit = `function main(): Uint256 {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500).gas(50000);
+  return UniswapV3.Pool(pool).liquidity().gas(30000) + UniswapV3.Pool(pool).fee().catch(() => { return 0; }).gas(30000);
+}`;
+    expect(rewriteContractResults(chained, BASE).source).toBe(explicit);
+  });
+
   it("knows every value method the language has", () => {
     const methods = BUILTINS.intrinsics
       .filter((builtin) => builtin.group === "method" && builtin.name !== ".length")
       .map((builtin) => builtin.name.slice(1));
-    expect([...VALUE_METHODS].sort()).toEqual([...methods, "catch"].sort());
+    expect([...VALUE_METHODS].sort()).toEqual([...methods, "catch", "gas"].sort());
   });
 });
 
