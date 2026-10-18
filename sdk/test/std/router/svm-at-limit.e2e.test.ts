@@ -17,6 +17,9 @@
  *   - Raydium's bitmap extension is optional, a Crema slot of fewer arrays passes fewer, Phoenix and
  *     OpenBook trade at a price as well as at any, an adaptive-fee Orca pool trades at a limit, and
  *     Invariant's program refuses an input past its limit rather than stopping there;
+ *   - `phoenixData` given a match limit sends the bytes `routerSvmDataTemplate` writes for it, and
+ *     Phoenix matches that many resting orders and stops, the input it did not take left in the
+ *     paying account;
  *   - and what each costs in compute beside the hand-built CPI, small and to the pool's window edge:
  *     printed as tables. `…Data` and `…Cpi` are compiled for the one trade, every argument but the
  *     amount a literal, as the hand-built CPI's own bytes carry them and as a router compiling one
@@ -40,6 +43,13 @@ import {
   buildHeapFramePrepend,
   routerSvmAccounts,
 } from "../../../src/svm/index.js";
+import { routerSvmDataTemplate } from "../../../src/svm/router-data.js";
+import {
+  BIDS_NODES_BASE,
+  fetchPhoenixConfig,
+  referenceCapacities,
+  referenceQuote,
+} from "../../../src/svm/venues/phoenix/index.js";
 import {
   describeSvm,
   fabricateAlt,
@@ -307,13 +317,23 @@ const slotOf = (t: Template): Address[] => {
   }
 };
 
-/** What a template's instruction carries past its amount: its limit, floor and orders. */
-const carried = (t: Template): { limit: bigint; floor: bigint; orders: bigint } => {
+/** What a template's instruction carries past its amount: its limit, floor and orders, and a
+ *  Phoenix order's price in ticks. */
+const carried = (t: Template): { limit: bigint; floor: bigint; orders: bigint; ticks?: bigint } => {
   const s = t.suffix;
   switch (t.venue) {
-    case "phoenix":
-      expect(t.prefix.slice(6, 8)).toBe("00"); // no price: the book at any price
-      return { limit: 0n, floor: 0n, orders: 0n };
+    case "phoenix": {
+      // Its price follows the side: a tag, then the ticks when it has one (none: the book at any
+      // price). Its match limit follows the minimum fills and the self-trade behaviour (the other
+      // size first, selling base): a tag, then the order count when it has one.
+      const at = (t.direction === "baseIn" ? 8 : 0) + 17;
+      return {
+        limit: 0n,
+        floor: 0n,
+        orders: s.slice(2 * at, 2 * at + 2) === "01" ? leHex(s, at + 1, 8) : 0n,
+        ticks: t.prefix.slice(6, 8) === "01" ? leHex(t.prefix, 4, 8) : 0n,
+      };
+    }
     case "invariant":
       return { limit: leHex(s, 1, 16), floor: 0n, orders: 0n };
     case "manifest":
@@ -531,7 +551,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
             : a.address!;
     const roleOf = (a: Template["accounts"][number]): AccountRole =>
       a.writable ? AccountRole.WRITABLE : AccountRole.READONLY;
-    const { limit, floor, orders } = carried(t);
+    const { limit, floor, orders, ticks = 0n } = carried(t);
     const first = FIRST.has(t.direction) ? 1n : 0n;
     const order = { pay, buy, amountIn, venue: t.programId, source, recipient };
     const expected: Cpi = {
@@ -569,7 +589,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       ({
         amountIn,
         limit: lim,
-        ticks: 0n,
+        ticks,
         priceLots: 0n,
         orders,
         minOut,
@@ -675,6 +695,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       p,
       pay,
       buy,
+      source,
+      recipient,
       expected,
       hand,
       viaData,
@@ -963,6 +985,155 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         const priced = succeeded(await w.viaAtLimit({ args: at(any) }));
         expect(market.received).toBeGreaterThan(0n);
         expect([priced.received, priced.paid]).toEqual([market.received, market.paid]);
+      },
+      120_000,
+    );
+  });
+
+  // A Phoenix order's match limit: the most resting orders it may match. The served swaps carry none,
+  // so the cells above never send one; here `phoenixData` is given one, as a program compiled for one
+  // trade writes it. Its bytes exist only once the program runs, so they are read where the others'
+  // are, off the instruction Phoenix received.
+  describe("Phoenix's match limit", () => {
+    const NAME = "phoenix-sol-usdc";
+    const MARKET = pool(NAME).pool;
+    /** The served Phoenix swap one way, its data as `routerSvmDataTemplate` writes it at `ticks` and
+     *  at most `orders` orders. */
+    const limited = (direction: string, ticks: bigint, orders: bigint): Template => {
+      const t = served(NAME, direction);
+      const data = routerSvmDataTemplate("phoenix", {
+        aToB: FIRST.has(direction),
+        lot: BigInt(t.divisor!),
+        ticks,
+        orders,
+      });
+      return {
+        ...t,
+        prefix: hexOf(data.prefix),
+        suffix: hexOf(data.suffix),
+        divisor: String(data.divisor),
+      };
+    };
+
+    // At any price and at one every resting order meets (selling at one tick, buying at the most a
+    // price carries), and at the widest limit the instruction carries.
+    it.each(
+      (
+        [
+          ["baseIn", 0n, 11n],
+          ["quoteIn", 0n, 11n],
+          ["baseIn", 1n, 11n],
+          ["quoteIn", 2n ** 64n - 1n, 11n],
+          ["baseIn", 0n, 2n ** 64n - 1n],
+          ["quoteIn", 0n, 2n ** 64n - 1n],
+        ] as const
+      ).map(
+        ([direction, ticks, orders]) =>
+          [
+            `${direction} at ${ticks === 0n ? "any price" : `${ticks} ticks`}, at most ${orders} orders`,
+            direction,
+            ticks,
+            orders,
+          ] as const,
+      ),
+    )(
+      "%s: …Data sends the TypeScript template's bytes",
+      async (_, direction, ticks, orders) => {
+        const t = limited(direction, ticks, orders);
+        // Where the template wrote them, which is where `…Data` is given them from.
+        expect(carried(t)).toMatchObject({ ticks, orders });
+        const w = ways(t, amountOf(pairOf(pool(t.pool), direction)[0]));
+        const data = succeeded(await w.viaData());
+        const hand = succeeded(await w.hand());
+        expect(data.cpi).toEqual(w.expected);
+        expect(hand.cpi).toEqual(w.expected);
+        expect(data.received).toBeGreaterThan(0n);
+        expect([data.paid, data.received]).toEqual([hand.paid, hand.received]);
+      },
+      120_000,
+    );
+
+    /** The fixture market's book on the side an order matches, best first, as the SDK's Phoenix reader
+     *  walks it from `data`: each resting order's node, sequence number and size in base lots. */
+    const book = async (data: Uint8Array, baseIn: boolean) => {
+      const cfg = await fetchPhoenixConfig(
+        async (at) => (at === MARKET ? data : (BYTES.get(at) ?? null)),
+        MARKET,
+      );
+      const nodes = baseIn ? BIDS_NODES_BASE : cfg.asksNodesBase;
+      return {
+        cfg: { ...cfg, direction: baseIn ? ("baseIn" as const) : ("quoteIn" as const) },
+        orders: (baseIn ? cfg.windows.baseIn : cfg.windows.quoteIn).orders.map((order) => ({
+          node: order.nodeIndex,
+          seq: order.orderSequenceNumber,
+          lots: le(data, nodes + (order.nodeIndex - 1) * 64 + 40, 8),
+        })),
+      };
+    };
+    const marketNow = (): Uint8Array => {
+      const account = harness.svm.getAccount(MARKET);
+      if (!account.exists) throw new Error("the market is gone");
+      return account.data;
+    };
+
+    // An input that reaches past the best two orders, limited to two: two hundred SOL against bids
+    // whose best two hold about 152, a hundred USDC against asks whose best two cost about 94.
+    it.each(
+      (
+        [
+          ["baseIn", "two hundred SOL", 200n * 10n ** 9n, 2n],
+          ["quoteIn", "a hundred USDC", 100n * 10n ** 6n, 2n],
+        ] as const
+      ).map(
+        ([direction, size, amountIn, orders]) =>
+          [
+            `${direction}, ${size} in at most ${orders} orders`,
+            direction,
+            amountIn,
+            orders,
+          ] as const,
+      ),
+    )(
+      "%s: it stops there, and the input it did not take stays put",
+      async (_, direction, amountIn, orders) => {
+        const baseIn = direction === "baseIn";
+        const fixture = BYTES.get(MARKET)!;
+        const before = await book(fixture, baseIn);
+        const k = Number(orders);
+        expect(before.orders.length).toBeGreaterThan(k);
+        const taken = before.orders.slice(0, k);
+        const lots = taken.reduce((sum, order) => sum + order.lots, 0n);
+        // Those orders taken whole: their base lots, and their quote as Phoenix's own walk prices it,
+        // its taker fee included (the SDK's transcription of it, given exactly those orders).
+        const walk = [orders, ...taken.flatMap((order) => [BigInt(order.node), order.seq])];
+        const state = { [MARKET]: fixture };
+        const base = lots * before.cfg.baseLotSize;
+        const expected = baseIn
+          ? { paid: base, received: referenceQuote(before.cfg, state, walk)(amountIn) }
+          : { paid: referenceCapacities(before.cfg, state, walk)([amountIn])[0]!, received: base };
+        expect(expected.paid).toBeGreaterThan(0n);
+        expect(expected.paid).toBeLessThan(amountIn);
+
+        const w = ways(limited(direction, 0n, orders), amountIn);
+        for (const send of [w.viaData, w.hand]) {
+          const outcome = succeeded(await send());
+          expect(outcome.cpi).toEqual(w.expected);
+          expect({ paid: outcome.paid, received: outcome.received }).toEqual(expected);
+          expect(outcome.returned).toBe(expected.paid);
+          // The input it did not take is still the paying account's, beside what it kept.
+          expect(tokenAmount(harness, w.source)).toBe(amountIn + KEPT - expected.paid);
+          expect(tokenAmount(harness, w.recipient)).toBe(expected.received);
+          // The best k orders are gone and the rest of the book untouched: it matched k and stopped.
+          const after = await book(marketNow(), baseIn);
+          expect(after.orders.slice(0, before.orders.length - k)).toEqual(before.orders.slice(k));
+        }
+
+        // The limit is what stopped it: the same order with none takes more, past the k-th order.
+        const all = succeeded(await ways(served(NAME, direction), amountIn).viaData());
+        expect(all.paid).toBeGreaterThan(expected.paid);
+        expect(all.paid).toBeLessThanOrEqual(amountIn);
+        expect(all.received).toBeGreaterThan(expected.received);
+        expect((await book(marketNow(), baseIn)).orders[0]).not.toEqual(before.orders[k]);
       },
       120_000,
     );
