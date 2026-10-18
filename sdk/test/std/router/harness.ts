@@ -211,7 +211,7 @@ export const svmCpiArguments = (name: string): string[] =>
 /** A `…Data` function's arguments, by venue: what its instruction carries, and its direction. */
 export const svmDataArguments = (name: string): string[] =>
   name === "phoenixData"
-    ? ["amountIn", "lot", "ticks", "paysBase"]
+    ? ["amountIn", "lot", "ticks", "orders", "paysBase"]
     : name === "openbookV2Data"
       ? ["amountIn", "baseLot", "quoteLot", "priceLots", "orders", "paysBase"]
       : name === "openbookV2LotsData"
