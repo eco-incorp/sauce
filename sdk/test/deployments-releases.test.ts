@@ -110,6 +110,14 @@ describe("the release table", () => {
     const hashOf = new Map<string, string>();
     for (const row of V12_RELEASE_SETS) {
       const pin = row["kitchen-evm"];
+      // A release not out yet names neither: the sync reports both once it is, and refuses the row
+      // until they are pasted. Only the installed row is sure to be out.
+      if (
+        pin.kitchen === null &&
+        pin.potInitCodeHash === null &&
+        row.compiler !== sdkCompilerVersion()
+      )
+        continue;
       expect([row.compiler, pin.kitchen]).toEqual([
         row.compiler,
         expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),

@@ -115,6 +115,8 @@ describe("which release minted an EVM Pot", () => {
   it("tells every recorded release, and each kind of Pot, from the address alone", () => {
     for (const set of V12_RELEASE_SETS) {
       const { kitchen, potInitCodeHash } = set["kitchen-evm"];
+      // A release not out yet mints no Pot, and names no Kitchen or hash to tell one by.
+      if (kitchen === null || potInitCodeHash === null) continue;
       const cases = [
         { owner: OWNER, fixed: false, kind: "private" },
         { owner: OWNER, fixed: true, kind: "private-fixed-router" },
