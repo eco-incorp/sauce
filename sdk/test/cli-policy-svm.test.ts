@@ -27,7 +27,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { guardWallet, measureSvm, PolicyRefusal, readPolicy } from "../src/cli/policy.js";
 import type { WalletInfo } from "../src/cli/wallets.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
-import { buildCookInstruction } from "../src/svm/index.js";
+import { buildCookFromAccountInstruction, buildCookInstruction } from "../src/svm/index.js";
 
 const WALLET = address("4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi");
 const TABLE = address("8Vaso6eE1pWktDHwy2qQBB1fhjmBgwzhoXQKe1sxtFjn");
@@ -109,6 +109,8 @@ describe("measuring a Solana transaction that loads accounts through a lookup ta
 describe("measuring a Kitchen cook", () => {
   const POT = address("7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2");
   const FEE_CONFIG = address("BPFLoaderUpgradeab1e11111111111111111111111");
+  const CODE_BUFFER = address("23f9dx7W61BfWsQhkc57QriZHRy31iGJwWLjfzSvaGE1");
+  const CODE = address("G4zLWGkPztZgiWCMdYsvfFsokpw3q6C5ptwAy8ZHJ6Td");
   const BEFORE: Readonly<Record<string, bigint>> = { [WALLET]: 5_000_000_000n, [POT]: 1_000_000n };
   const AFTER: Readonly<Record<string, bigint>> = { [WALLET]: 5_000_000_000n, [POT]: 400_000n };
   const account = (lamports: bigint | undefined) =>
@@ -121,22 +123,29 @@ describe("measuring a Kitchen cook", () => {
           executable: false,
         };
 
+  const COOK = {
+    kitchen: address(v12SvmKitchenProgramId()),
+    owner: WALLET,
+    engineProgram: address(v12SvmEngineProgramId()),
+    potSalt: new Uint8Array(32),
+    pot: POT,
+    potBump: 250,
+    feeConfig: FEE_CONFIG,
+    maxExecutionFee: 0n,
+    tail: [{ address: POT, role: AccountRole.WRITABLE }],
+  } as const;
+
   // The Pot the cook names, as the Kitchen checks it at the bump the cook carries and signs for it:
   // not the one the salt derives at its canonical bump, which a cook passing another bump does not
-  // run on.
-  it("counts what leaves the Pot the cook names", async () => {
-    const cook = buildCookInstruction({
-      kitchen: address(v12SvmKitchenProgramId()),
-      owner: WALLET,
-      engineProgram: address(v12SvmEngineProgramId()),
-      potSalt: new Uint8Array(32),
-      pot: POT,
-      potBump: 250,
-      feeConfig: FEE_CONFIG,
-      bytecode: new Uint8Array([0]),
-      maxExecutionFee: 0n,
-      tail: [{ address: POT, role: AccountRole.WRITABLE }],
-    });
+  // run on. Each cook is found by the discriminator its builder writes, so a policy reading the
+  // cooks by other bytes finds no Pot here and counts nothing.
+  it.each([
+    ["cook", buildCookInstruction({ ...COOK, bytecode: new Uint8Array([0]) })],
+    [
+      "cook_from_account",
+      buildCookFromAccountInstruction({ ...COOK, codeBuffer: CODE_BUFFER, code: CODE }),
+    ],
+  ])("counts what leaves the Pot a %s names", async (_, cook) => {
     const transaction = compileTransaction(
       pipe(
         createTransactionMessage({ version: 0 }),
