@@ -49,12 +49,17 @@ import { assertEngineRunsCompiler } from "../deployments/releases.js";
 /** One entry of a program's own account tail, in the shape a kit `Instruction` carries. */
 export type TailAccount = AccountLookupMeta | AccountMeta;
 
-/** Anchor discriminators, verbatim from the release's `kitchen-idl.json`. */
+/**
+ * Anchor discriminators, verbatim from the release's `kitchen-idl.json`: `sha256("global:<name>")`'s
+ * first eight bytes. The two cooks keep their names but take the sighash of `cook_v2` and
+ * `cook_from_account_v2`, so a cook in the layout before the Pot's bump (`sha256("global:cook")`)
+ * matches no instruction and is refused before the Kitchen reads an account or an argument.
+ */
 const DISCRIMINATOR = {
   closeCodeBuffer: new Uint8Array([195, 203, 47, 242, 198, 177, 247, 6]),
   closePot: new Uint8Array([214, 103, 62, 202, 132, 229, 27, 86]),
-  cook: new Uint8Array([147, 233, 205, 239, 200, 21, 190, 159]),
-  cookFromAccount: new Uint8Array([247, 166, 195, 248, 78, 176, 147, 84]),
+  cook: new Uint8Array([51, 57, 168, 9, 240, 151, 154, 1]),
+  cookFromAccount: new Uint8Array([241, 24, 247, 35, 76, 46, 240, 209]),
   createCodeBuffer: new Uint8Array([94, 72, 190, 83, 17, 60, 103, 35]),
   createPot: new Uint8Array([232, 45, 123, 181, 204, 121, 131, 9]),
   finalizeCodeBuffer: new Uint8Array([191, 246, 136, 59, 56, 1, 0, 48]),

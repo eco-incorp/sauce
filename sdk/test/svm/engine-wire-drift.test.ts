@@ -8,13 +8,15 @@
  * seed and bound in it is a hand copy. Here they are compared against the artifact itself.
  *
  * Discriminators are checked THROUGH THE BUILDERS rather than against an exported table: they are
- * the first eight bytes each builder emits, which is the thing that actually has to be right, and
- * it keeps the module's discriminator table private.
+ * the first eight bytes each builder emits, which is the thing that actually has to be right. The
+ * Kitchen's are also held to Anchor's sighash of each instruction's name, which needs no artifact.
+ * `KITCHEN_DISCRIMINATORS`, which reads an instruction back, is the table the builders write from.
  *
  * Both suites skip without their artifact rather than fail, because the artifacts are release
  * downloads and not every checkout has run the sync. The engine-abi drift guard beside this one is
  * NOT skippable for the opposite reason: its artifact is vendored in-repo.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { AccountRole, type Address, type Instruction } from "@solana/kit";
 import {
@@ -112,6 +114,82 @@ const POT_BUMP = 253;
 const SHA = new Uint8Array(32).fill(9);
 const BUFFER_ACCOUNTS = { kitchen: KITCHEN, owner: OWNER, codeBuffer: CODE_BUFFER, code: CODE };
 
+/** Anchor's discriminator for an instruction named `name`: `sha256("global:<name>")`'s first eight bytes. */
+const sighash = (name: string): string =>
+  createHash("sha256").update(`global:${name}`).digest("hex").slice(0, 16);
+
+/** The bytes a builder puts on the wire, minus its arguments. */
+const emitted = (instruction: Instruction): string =>
+  hex(Uint8Array.from(instruction.data!).slice(0, 8));
+
+/** One instruction from each Kitchen builder, by the name the Kitchen's IDL gives it. */
+const BUILT: Record<string, Instruction> = {
+  create_pot: buildCreatePotInstruction({
+    kitchen: KITCHEN,
+    owner: OWNER,
+    engineProgram: ENGINE,
+    pot: POT,
+    salt: SALT,
+    space: 128,
+  }),
+  close_pot: buildClosePotInstruction({
+    kitchen: KITCHEN,
+    owner: OWNER,
+    engineProgram: ENGINE,
+    pot: POT,
+    salt: SALT,
+  }),
+  cook: buildCookInstruction({
+    kitchen: KITCHEN,
+    owner: OWNER,
+    engineProgram: ENGINE,
+    potSalt: SALT,
+    pot: POT,
+    potBump: POT_BUMP,
+    feeConfig: FEE_CONFIG,
+    bytecode: new Uint8Array([1, 2, 3]),
+    maxExecutionFee: 0n,
+  }),
+  cook_from_account: buildCookFromAccountInstruction({
+    kitchen: KITCHEN,
+    owner: OWNER,
+    engineProgram: ENGINE,
+    codeBuffer: CODE_BUFFER,
+    code: CODE,
+    potSalt: SALT,
+    pot: POT,
+    potBump: POT_BUMP,
+    feeConfig: FEE_CONFIG,
+    maxExecutionFee: 0n,
+  }),
+  create_code_buffer: buildCreateCodeBufferInstruction({
+    ...BUFFER_ACCOUNTS,
+    nonce: 0n,
+    capacity: 1024,
+  }),
+  grow_code_buffer: buildGrowCodeBufferInstruction(BUFFER_ACCOUNTS),
+  write_code_buffer: buildWriteCodeBufferInstruction({
+    ...BUFFER_ACCOUNTS,
+    offset: 0,
+    chunk: new Uint8Array([1]),
+  }),
+  finalize_code_buffer: buildFinalizeCodeBufferInstruction({
+    ...BUFFER_ACCOUNTS,
+    len: 3,
+    expectedSha256: SHA,
+  }),
+  close_code_buffer: buildCloseCodeBufferInstruction(BUFFER_ACCOUNTS),
+  initialize_execution_fee: buildInitializeExecutionFeeInstruction({
+    ...FEE_ADMIN,
+    initialFee: 25_000n,
+  }),
+  set_execution_fee: buildSetExecutionFeeInstruction({ ...FEE_ADMIN, fee: 0n }),
+  withdraw_execution_fees: buildWithdrawExecutionFeesInstruction({
+    ...FEE_ADMIN,
+    recipient: OWNER,
+  }),
+};
+
 /**
  * Assertions over the SDK's OWN constants and builders — no release artifact, so not gated. They
  * were inside the IDL-gated block, where a local `pnpm test` ran neither.
@@ -123,6 +201,19 @@ describe("kitchen constants and bounds (no artifact needed)", () => {
     expect(() =>
       buildCreateCodeBufferInstruction({ ...BUFFER_ACCOUNTS, nonce: 0n, capacity }),
     ).toThrow(/capacity must be an integer/);
+  });
+
+  // Every builder's first eight bytes are Anchor's sighash of its instruction's name, so a wrong
+  // digit in the table fails here, with no artifact. The two cooks keep their names but take the
+  // sighash of a `_v2` name: a cook in the layout before the Pot's bump starts with
+  // `sha256("global:cook")`, which no Kitchen instruction matches, so the Kitchen refuses it at
+  // dispatch rather than reading its bytes as the new arguments.
+  const SIGHASH_NAME: Readonly<Record<string, string>> = {
+    cook: "cook_v2",
+    cook_from_account: "cook_from_account_v2",
+  };
+  it.each(Object.keys(BUILT))("%s emits Anchor's sighash of its instruction's name", (name) => {
+    expect(emitted(BUILT[name]!)).toBe(sighash(SIGHASH_NAME[name] ?? name));
   });
 
   // A cook's arguments byte for byte: the discriminator, the Pot's salt, then its bump, then what
@@ -155,7 +246,7 @@ describe("kitchen constants and bounds (no artifact needed)", () => {
 
     expect(hex(Uint8Array.from(cook.data!))).toBe(
       [
-        "93e9cdefc815be9f", // sha256("global:cook")[..8]
+        "3339a809f0979a01", // sha256("global:cook_v2")[..8]
         "07".repeat(32), // pot_salt
         "fd", // pot_bump, 253
         "03000000010203", // bytecode: a u32 length, then the bytes
@@ -164,7 +255,7 @@ describe("kitchen constants and bounds (no artifact needed)", () => {
     );
     expect(hex(Uint8Array.from(staged.data!))).toBe(
       [
-        "f7a6c3f84eb09354", // sha256("global:cook_from_account")[..8]
+        "f118f7234c2ef0d1", // sha256("global:cook_from_account_v2")[..8]
         "07".repeat(32), // pot_salt
         "fd", // pot_bump
         "01" + "09".repeat(32), // pin: Some, then the hash
@@ -311,77 +402,6 @@ describeIdl("kitchen IDL drift guard", () => {
 
     return found.value;
   };
-  /** The bytes a builder puts on the wire, minus its arguments. */
-  const emitted = (instruction: Instruction): string =>
-    hex(Uint8Array.from(instruction.data!).slice(0, 8));
-
-  const BUILT: Record<string, Instruction> = {
-    create_pot: buildCreatePotInstruction({
-      kitchen: KITCHEN,
-      owner: OWNER,
-      engineProgram: ENGINE,
-      pot: POT,
-      salt: SALT,
-      space: 128,
-    }),
-    close_pot: buildClosePotInstruction({
-      kitchen: KITCHEN,
-      owner: OWNER,
-      engineProgram: ENGINE,
-      pot: POT,
-      salt: SALT,
-    }),
-    cook: buildCookInstruction({
-      kitchen: KITCHEN,
-      owner: OWNER,
-      engineProgram: ENGINE,
-      potSalt: SALT,
-      pot: POT,
-      potBump: POT_BUMP,
-      feeConfig: FEE_CONFIG,
-      bytecode: new Uint8Array([1, 2, 3]),
-      maxExecutionFee: 0n,
-    }),
-    cook_from_account: buildCookFromAccountInstruction({
-      kitchen: KITCHEN,
-      owner: OWNER,
-      engineProgram: ENGINE,
-      codeBuffer: CODE_BUFFER,
-      code: CODE,
-      potSalt: SALT,
-      pot: POT,
-      potBump: POT_BUMP,
-      feeConfig: FEE_CONFIG,
-      maxExecutionFee: 0n,
-    }),
-    create_code_buffer: buildCreateCodeBufferInstruction({
-      ...BUFFER_ACCOUNTS,
-      nonce: 0n,
-      capacity: 1024,
-    }),
-    grow_code_buffer: buildGrowCodeBufferInstruction(BUFFER_ACCOUNTS),
-    write_code_buffer: buildWriteCodeBufferInstruction({
-      ...BUFFER_ACCOUNTS,
-      offset: 0,
-      chunk: new Uint8Array([1]),
-    }),
-    finalize_code_buffer: buildFinalizeCodeBufferInstruction({
-      ...BUFFER_ACCOUNTS,
-      len: 3,
-      expectedSha256: SHA,
-    }),
-    close_code_buffer: buildCloseCodeBufferInstruction(BUFFER_ACCOUNTS),
-    initialize_execution_fee: buildInitializeExecutionFeeInstruction({
-      ...FEE_ADMIN,
-      initialFee: 25_000n,
-    }),
-    set_execution_fee: buildSetExecutionFeeInstruction({ ...FEE_ADMIN, fee: 0n }),
-    withdraw_execution_fees: buildWithdrawExecutionFeesInstruction({
-      ...FEE_ADMIN,
-      recipient: OWNER,
-    }),
-  };
-
   it.each(Object.keys(BUILT))("%s emits the discriminator the IDL declares", (name) => {
     expect(emitted(BUILT[name]!)).toBe(discriminatorOf(name));
   });

@@ -182,8 +182,8 @@ interface Landed {
 
 /** The Kitchen instruction a transaction makes, by its Anchor discriminator. */
 const KITCHEN_CALLS = {
-  cook: [147, 233, 205, 239, 200, 21, 190, 159],
-  cookFromAccount: [247, 166, 195, 248, 78, 176, 147, 84],
+  cook: [51, 57, 168, 9, 240, 151, 154, 1],
+  cookFromAccount: [241, 24, 247, 35, 76, 46, 240, 209],
   writeCodeBuffer: [205, 152, 182, 5, 148, 70, 20, 25],
   closeCodeBuffer: [195, 203, 47, 242, 198, 177, 247, 6],
 } as const;
