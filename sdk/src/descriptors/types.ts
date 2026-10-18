@@ -22,6 +22,18 @@ export interface DescriptorMethod {
   readonly inputs: readonly AbiParameter[];
   readonly outputs: readonly AbiParameter[];
   readonly stateMutability: StateMutability;
+  /** The registry contract an address output is, where the registry knows it (see
+   *  `ReturnedContractLink`): `UniswapV3.Factory`'s `getPool` returns a `UniswapV3.Pool`. */
+  readonly returns?: readonly MethodReturn[];
+}
+
+/** One address output of a method, and the registry contract it is. */
+export interface MethodReturn {
+  /** `[]` for the method's one output, else the field names that lead to the address. */
+  readonly path: readonly string[];
+  /** The contract's protocol slug and its name in that protocol's namespace. */
+  readonly protocol: string;
+  readonly contract: string;
 }
 
 export interface ContractCoverage {

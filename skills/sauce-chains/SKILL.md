@@ -45,9 +45,9 @@ function main(fee: Uint256): { pool: Address; usdc: Uint256; weth: Uint256; bcsp
   require(pool != 0, "no USDC/WETH pool at that fee on this chain");
   return {
     pool: pool,
-    usdc: USDC.balanceOf(pot),
-    weth: WETH.balanceOf(pot),
-    bcspx: bCSPX.balanceOf(pot),
+    usdc: pot.USDC,
+    weth: pot.WETH,
+    bcspx: pot.bCSPX,
   };
 }
 ```
@@ -133,11 +133,11 @@ a Token-2022 mint) from the Pot:
 
 ```sauce chain=solana
 function main(recipient: Address, cash: Uint256, shares: Uint256): Uint256 {
-  require(USDC.balanceOf(ctx.self()) >= cash, "not enough USDC");
+  require(self.USDC >= cash, "not enough USDC");
   USDC.transfer(recipient, cash);
-  const before = TSLAx.balanceOf(recipient);
+  const before = recipient.TSLAx;
   TSLAx.transfer(recipient, shares);
-  return TSLAx.balanceOf(recipient) - before;
+  return recipient.TSLAx - before;
 }
 ```
 

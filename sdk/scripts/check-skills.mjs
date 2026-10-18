@@ -1711,6 +1711,11 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     [...contracts, ...aliases, ...interfaces, ...venues].map((n) => n.split(".")[0]),
   );
   const symbols = new Set(GLOBALS.tokens.flatMap((entry) => entry.tokens.map((t) => t.symbol)));
+  // Every chain's native coin, which the balance shorthand reads as it reads a token (`self.ETH`).
+  for (const chain of sdk.CANONICAL_CHAINS) {
+    const coin = sdk.nativeCoinSymbol(chain);
+    if (coin !== undefined) symbols.add(coin);
+  }
   const chainNames = new Set(GLOBALS.chains.map((c) => c.key));
   // A family's member namespaces, from the contracts its aliases name: `Uniswap` -> UniswapV2, …
   const members = new Map();

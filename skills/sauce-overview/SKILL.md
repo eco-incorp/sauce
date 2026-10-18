@@ -105,7 +105,7 @@ complete program:
 
 ```sauce chain=base,ethereum
 function main(recipient: Address, floor: Uint256) {
-  const held = USDC.balanceOf(ctx.self());
+  const held = self.USDC;
   require(held >= floor, "not enough USDC in the Pot");
   USDC.transfer(recipient, held);
 }

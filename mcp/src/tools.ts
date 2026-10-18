@@ -459,6 +459,10 @@ const SUMMARY_FIELDS = [
   "gasKind",
   "transactions",
   "computeUnits",
+  "computeStops",
+  "computeBudget",
+  "computeRefused",
+  "noComputeStops",
   "fee",
   "transfers",
   "nativeTransfers",
@@ -1026,6 +1030,39 @@ const PURE: ToolAnnotations = {
 export const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
 
 const notesSchema = z.array(z.string()).optional();
+
+/**
+ * A Solana cook's stops: each swap at a price's, worked out from its pool's tick arrays and its
+ * share of the cook's compute units (`computeStops`), the units the venues were given between them
+ * (`computeBudget`), and, where the cook ran out with the stops worked out three times, why
+ * (`computeRefused`). A swap in a loop whose count is not written out, or is more runs than the cook
+ * pays for, leaves no stop worked out, and `noComputeStops` says why.
+ */
+const COMPUTE_STOPS = {
+  computeStops: z
+    .array(
+      z.looseObject({
+        pool: z.string(),
+        label: z.string(),
+        venue: z.string(),
+        stop: z.string(),
+        held: z.boolean(),
+        skipped: z.boolean(),
+        stopTick: z.number().optional(),
+        stopPrice: z.string().optional(),
+        ticksToLimit: z.number(),
+        estimatedUnits: z.number(),
+        share: z.number(),
+        rank: z.number(),
+      }),
+    )
+    .optional(),
+  computeBudget: z
+    .looseObject({ venues: z.number(), cook: z.number(), measured: z.boolean() })
+    .optional(),
+  computeRefused: z.string().optional(),
+  noComputeStops: z.string().optional(),
+};
 
 /** A refusal on a preview chain, as `refused` holds it (`sdk/src/cli/support.ts`). */
 const REFUSED = z.looseObject({
@@ -1828,6 +1865,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         size: z.number(),
         sourceSha256: z.string(),
         entryParams: z.array(z.looseObject({ name: z.string(), type: z.string() })),
+        derivedValues: z
+          .array(z.looseObject({ name: z.string(), type: z.string(), derive: z.string() }))
+          .optional(),
         defines: z.unknown(),
         manifest: z.unknown().optional(),
       },
@@ -1995,7 +2035,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "next slot), and sauce_send with the cursor alone builds it then. A Solana cook its " +
         "simulation says would fail is not built: the result is an error carrying `fails` and " +
         "the simulation's `logs`, and its cursor, which sauce_send simulates again once what " +
-        "the cook needs is there. Nothing needs a fresh keypair: the owner signs and pays every " +
+        "the cook needs is there. A Solana swap at a price may be held to a stop, to lower the " +
+        "risk that a pool runs the cook out of compute units: worked out here from its pool's " +
+        "tick arrays and the cost table alone, with no simulation, the pool buying the most " +
+        "per unit first. `computeStops` names each pool held short of its limit (`held`, its " +
+        "`stopPrice`) or skipped. sauce_simulate works the stops out again against the units " +
+        "it measures, so the cook it reports can differ from this one, and the cursor " +
+        "sauce_send resumes sends this cook as built, its stops from the pools now. " +
+        "Nothing needs a fresh keypair: the owner signs and pays every " +
         "transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
@@ -2024,6 +2071,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         plan: z.array(z.looseObject({ step: z.string(), what: z.string(), state: z.string() })),
         cursor: z.string(),
         sourceSha256: z.string(),
+        ...COMPUTE_STOPS,
       }),
       annotations: READS_CHAIN,
     },
@@ -2298,7 +2346,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "compute units, the fee, each token account's change and `leftInPot` (the Pot's token " +
         "accounts left holding something), or the reason and the program logs; a cook too large for one " +
         "transaction, or given assumeBalance, in a local copy of the accounts it names (`path`), " +
-        "its program staged as sauce run stages it. `sourceSha256` is the " +
+        "its program staged as sauce run stages it. A Solana swap at a price may be held to a " +
+        "stop that keeps its pool within its share of the cook's compute units, the pool " +
+        "buying the most per unit first (`computeStops`: each pool held short of its limit, " +
+        "`held` with its `stopPrice`, or `skipped`): a cook that runs out of units anyway is " +
+        "simulated again with the stops tightened, twice, then refused (`computeRefused`). " +
+        "The cook simulated can differ from the one sauce_tx builds, which takes the stops " +
+        "from the cost table alone. `sourceSha256` is the " +
         "sha256 of the program's text. Nothing is signed or sent.",
       input: {
         ...PROGRAM,
@@ -2361,6 +2415,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         sourceSha256: z.string(),
         leftInPot: z.array(z.looseObject({ amount: z.string(), before: z.string() })).optional(),
         scenarios: z.array(z.looseObject({ ok: z.boolean() })).optional(),
+        ...COMPUTE_STOPS,
       },
       annotations: READS_CHAIN,
     },

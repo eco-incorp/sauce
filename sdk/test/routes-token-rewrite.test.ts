@@ -2,7 +2,7 @@
  * ERC20 token member rewrite — a symbol write `USDC.transfer(to, amount)` -> `@sauce/token`'s
  * SafeERC20 `transfer(USDC, to, amount)` (imported as `__sauce_transfer`), the read
  * `USDC.balanceOf(x)` -> `IERC20.at(USDC).balanceOf(x)`, plus the balance sugar `self.USDC` ->
- * `IERC20.at(<addr>n).balanceOf(ctx.self())`.
+ * `IERC20.at(USDC).balanceOf(ctx.self())`, the same read.
  */
 import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
@@ -15,7 +15,7 @@ import {
   SVM_TOKEN_REGISTRY,
 } from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -254,18 +254,21 @@ describe("USDT0: Tether's token on the chains whose USDT is USDT0", () => {
   });
 });
 
-// --- balance sugar: <holder>.<TOKEN> -> IERC20.at(<addr>n).balanceOf(<holder>) -------------------
+// --- balance sugar: <holder>.<TOKEN> -> IERC20.at(<TOKEN>).balanceOf(<holder>) -------------------
 
 describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   const BASE = requireChain("base");
   const tokens = resolveTokenMap(BASE); // { USDC: <addr>n, WETH: <addr>n }
 
-  it("self.USDC rewrites to IERC20.at(<addr>n).balanceOf(ctx.self())", () => {
+  it("self.USDC rewrites to IERC20.at(USDC).balanceOf(ctx.self()), what USDC.balanceOf lowers to", () => {
     const source = `function main() { return self.USDC; }`;
     const { source: out, rewrote, balanceSites } = rewriteTokenMembers(source, tokens);
     expect(rewrote).toBe(true);
     expect(balanceSites).toBe(1);
-    expect(out).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`);
+    expect(out).toBe(`function main() { return IERC20.at(USDC).balanceOf(ctx.self()); }`);
+    expect(out).toBe(
+      rewriteTokenMembers(`function main() { return USDC.balanceOf(ctx.self()); }`, tokens).source,
+    );
   });
 
   it("a hex-address-literal holder emits the EXACT address (catches the float64 round-trip)", () => {
@@ -273,9 +276,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     const source = `function main() { return ${holder}.USDC; }`;
     const { source: out, balanceSites } = rewriteTokenMembers(source, tokens);
     expect(balanceSites).toBe(1);
-    expect(out).toContain(
-      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(${BigInt(holder).toString()}n)`,
-    );
+    expect(out).toContain(`IERC20.at(USDC).balanceOf(${BigInt(holder).toString()}n)`);
   });
 
   it("an n-suffixed hex-address-literal holder is accepted identically", () => {
@@ -284,7 +285,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     const result = rewriteTokenMembers(source, tokens);
     expect(result.balanceSites).toBe(1);
     expect(result.source).toContain(
-      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(${BigInt("0x1111111111111111111111111111111111111122").toString()}n)`,
+      `IERC20.at(USDC).balanceOf(${BigInt("0x1111111111111111111111111111111111111122").toString()}n)`,
     );
   });
 
@@ -292,7 +293,26 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     const source = `function main() { let x = 0x1111111111111111111111111111111111111122n; return x.USDC; }`;
     const { source: out, balanceSites } = rewriteTokenMembers(source, tokens);
     expect(balanceSites).toBe(1);
-    expect(out).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(x)`);
+    expect(out).toContain(`IERC20.at(USDC).balanceOf(x)`);
+  });
+
+  it("a program's own `self` is an ordinary holder: self.USDC reads the local, as on Solana", () => {
+    const source = `function main() { const self = ctx.self(); return self.USDC; }`;
+    const { source: out, balanceSites } = rewriteTokenMembers(source, tokens);
+    expect(balanceSites).toBe(1);
+    expect(out).toContain(`IERC20.at(USDC).balanceOf(self)`);
+    expect(out).not.toContain("balanceOf(ctx.self())");
+  });
+
+  it("with a declared self, self.USDC compiles to exactly USDC.balanceOf(self)", () => {
+    const body = (read: string) =>
+      `function main(to: Address) { const self = ctx.self(); require(to != self); return ${read}; }`;
+    const options = { pot: POT, engine: ENGINE };
+    const sugar = compileSauceRoute("base", body("self.USDC"), options);
+    const method = compileSauceRoute("base", body("USDC.balanceOf(self)"), options);
+    expect(Array.from(sugar.compiled.bytecode[0]!)).toEqual(
+      Array.from(method.compiled.bytecode[0]!),
+    );
   });
 
   it("both spellings compile byte-identically: self.USDC vs USDC.balanceOf(self)", () => {
@@ -310,6 +330,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       `import { IERC20 } from "./artifacts/IERC20.json";\n${sugar.source}`,
       {
         baseDirs: [...SDK_SOURCE_DIRS],
+        defines: { USDC: BigInt(USDC) },
       },
     );
     const u4Compiled = compile(`import { IERC20 } from "./artifacts/IERC20.json";\n${u4.source}`, {
@@ -319,29 +340,40 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     expect(Array.from(sugarCompiled.bytecode[0]!)).toEqual(Array.from(u4Compiled.bytecode[0]!));
   });
 
-  it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(ctx.self()) and compiles", () => {
+  it("THE DECISIVE STEP (a): self.USDC for a real chain reads the real Base USDC", () => {
     const compiled = compileSauceRoute("base", `function main() { return self.USDC; }`, {
       pot: POT,
       engine: ENGINE,
     });
-    expect(compiled.source).toContain(
-      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
+    expect(compiled.source).toContain(`IERC20.at(USDC).balanceOf(ctx.self())`);
+    expect(Buffer.from(compiled.compiled.bytecode[0]!).toString("hex")).toContain(
+      USDC.slice(2).toLowerCase(),
     );
-    expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
-  it("chain-scoped: Base USDC != Ethereum USDC in the emitted literal", () => {
-    const baseCompiled = compileSauceRoute("base", `function main() { return self.USDC; }`, {
-      pot: POT,
-      engine: ENGINE,
-    });
-    const ethCompiled = compileSauceRoute("ethereum", `function main() { return self.USDC; }`, {
-      pot: POT,
-      engine: ENGINE,
-    });
-    expect(baseCompiled.source).not.toBe(ethCompiled.source);
-    expect(baseCompiled.source).toContain(`${BigInt(USDC).toString()}n`);
-    expect(ethCompiled.source).not.toContain(`${BigInt(USDC).toString()}n`);
+  it("chain-scoped: Base USDC != Ethereum USDC in the compiled program", () => {
+    const hex = (chain: "base" | "ethereum") =>
+      Buffer.from(
+        compileSauceRoute(chain, `function main() { return self.USDC; }`, {
+          pot: POT,
+          engine: ENGINE,
+        }).compiled.bytecode[0]!,
+      ).toString("hex");
+    expect(hex("base")).toContain(USDC.slice(2).toLowerCase());
+    expect(hex("ethereum")).not.toContain(USDC.slice(2).toLowerCase());
+  });
+
+  it("a define given for the symbol reaches both spellings alike, as `--define USDC=` does", () => {
+    const other = 0x1111111111111111111111111111111111111122n;
+    const program = (read: string) =>
+      compileSauceProgram("base", `function main() { return ${read}; }`, {
+        defines: { USDC: other },
+      }).bytecode;
+    const sugar = program("self.USDC");
+    expect(Array.from(sugar)).toEqual(Array.from(program("USDC.balanceOf(ctx.self())")));
+    const hex = Buffer.from(sugar).toString("hex");
+    expect(hex).toContain(other.toString(16));
+    expect(hex).not.toContain(USDC.slice(2).toLowerCase());
   });
 
   describe("value-position guard: a call/lvalue shape is NOT rewritten", () => {
@@ -369,7 +401,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     });
   });
 
-  describe("unresolvable / rejected -- left byte-for-byte untouched", () => {
+  describe("unresolvable, rejected or a token's own contract", () => {
     it("self.NOTATOKEN (unknown symbol)", () => {
       const source = `function main() { return self.NOTATOKEN; }`;
       const { source: out, rewrote } = rewriteTokenMembers(source, tokens);
@@ -392,12 +424,12 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       expect(rewrote).toBe(false);
     });
 
-    it("USDC.WETH -- a token-symbol holder is ambiguous, claimed by neither feature", () => {
+    it("USDC.WETH -- a token's own contract is a holder: the WETH the USDC contract holds", () => {
       const source = `function main() { return USDC.WETH; }`;
-      const { rewrote, memberSites, balanceSites } = rewriteTokenMembers(source, tokens);
-      expect(rewrote).toBe(false);
+      const { source: out, memberSites, balanceSites } = rewriteTokenMembers(source, tokens);
       expect(memberSites).toBe(0);
-      expect(balanceSites).toBe(0);
+      expect(balanceSites).toBe(1);
+      expect(out).toBe(`function main() { return IERC20.at(WETH).balanceOf(USDC); }`);
     });
 
     it("Uniswap.USDC and Base.USDC -- a namespace/chain-key holder is untouched", () => {
@@ -407,7 +439,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     });
   });
 
-  describe("Set form (no addresses): U4 still works, sugar declines", () => {
+  describe("Set form (no addresses): both rewrites, the symbol left for the defines", () => {
     it("USDC.transfer(...) still rewrites with a bare Set", () => {
       const source = `function main() { USDC.transfer(${TO}, 5n); }`;
       const { rewrote, memberSites, balanceSites } = rewriteTokenMembers(source, new Set(["USDC"]));
@@ -416,16 +448,230 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       expect(balanceSites).toBe(0);
     });
 
-    it("self.USDC does NOT rewrite with a bare Set (no address to inline)", () => {
+    it("self.USDC rewrites with a bare Set too: it needs the symbol, not its address", () => {
       const source = `function main() { return self.USDC; }`;
-      const { rewrote, balanceSites } = rewriteTokenMembers(source, new Set(["USDC"]));
-      expect(rewrote).toBe(false);
-      expect(balanceSites).toBe(0);
+      const { source: out, balanceSites } = rewriteTokenMembers(source, new Set(["USDC"]));
+      expect(balanceSites).toBe(1);
+      expect(out).toBe(`function main() { return IERC20.at(USDC).balanceOf(ctx.self()); }`);
     });
   });
 });
 
 // --- U4 + protocol-accessor composition: the swapped-order regression lock ----------------------
+
+// --- any address-valued holder, and the native coin ----------------------------------------------
+
+describe("the balance shorthand on any address, and the native coin", () => {
+  const HOLDER = "0x6666666666666666666666666666666666666666";
+  const PROGRAM = (body: string) =>
+    'import { IERC20 as Pool } from "./artifacts/IERC20.json";\n' +
+    "function ownerOf(id: Uint256): Address {\n  return UniswapV4.StateView.poolManager() + id;\n}\n" +
+    "function main(who: Address, id: Uint256, holders: Address[], p: { to: Address; bps: Uint256 }): Uint256 {\n" +
+    `  ${body}\n}\n`;
+  const bytecode = (chain: "base" | "ethereum", body: string) =>
+    Buffer.from(compileSauceProgram(chain, PROGRAM(body)).bytecode).toString("hex");
+
+  // Each shorthand beside what it is short for.
+  const SAME: Array<[short: string, long: string]> = [
+    ["return self.USDC;", "return USDC.balanceOf(ctx.self());"],
+    ["return ctx.self().USDC;", "return USDC.balanceOf(ctx.self());"],
+    ["return who.USDC;", "return USDC.balanceOf(who);"],
+    [`return ${HOLDER}.WETH;`, `return WETH.balanceOf(${HOLDER});`],
+    ["return UniswapV4.PoolManager.WETH;", "return WETH.balanceOf(UniswapV4.PoolManager);"],
+    ["return Aave.Pool.USDC;", "return USDC.balanceOf(Aave.Pool);"],
+    [
+      "return UniswapV4.StateView.poolManager().USDC;",
+      "return USDC.balanceOf(UniswapV4.StateView.poolManager());",
+    ],
+    ["return UniswapV3.Pool(who).USDC;", "return USDC.balanceOf(who);"],
+    ["return UniswapV3.Pool.at(who).USDC;", "return USDC.balanceOf(who);"],
+    ["return Pool.at(who).USDC;", "return USDC.balanceOf(who);"],
+    [
+      "const pool = Pool.at(who); return pool.USDC;",
+      "const pool = Pool.at(who); return USDC.balanceOf(pool);",
+    ],
+    ["return ownerOf(id).USDC;", "return USDC.balanceOf(ownerOf(id));"],
+    ["return holders[0].USDC;", "return USDC.balanceOf(holders[0]);"],
+    ["return p.to.USDC;", "return USDC.balanceOf(p.to);"],
+    ["return ownerOf(who.USDC).WETH;", "return WETH.balanceOf(ownerOf(USDC.balanceOf(who)));"],
+    ["return self.ETH;", "return ctx.selfBalance();"],
+    ["return ctx.self().ETH;", "return ctx.selfBalance();"],
+    ["return who.ETH;", "return ctx.balance(who);"],
+    ["return UniswapV4.PoolManager.ETH;", "return ctx.balance(UniswapV4.PoolManager);"],
+    [
+      "return UniswapV4.StateView.poolManager().ETH;",
+      "return ctx.balance(UniswapV4.StateView.poolManager());",
+    ],
+    ["const self = who; return self.ETH;", "const self = who; return ctx.balance(self);"],
+    ["return USDC.WETH;", "return WETH.balanceOf(USDC);"],
+    ["return WETH.ETH;", "return ctx.balance(WETH);"],
+  ];
+  for (const chain of ["base", "ethereum"] as const) {
+    for (const [short, long] of SAME) {
+      it(`on ${chain}, \`${short}\` compiles to \`${long}\``, () => {
+        expect(bytecode(chain, short)).toBe(bytecode(chain, long));
+      });
+    }
+  }
+
+  describe("`.at`, `.view` and `.lib` unwrap only on a contract type", () => {
+    // A contract whose own methods are named like the binding constructors, each returning an
+    // address: on a contract already bound, `.at(who)` is that method, and its result the holder.
+    const OTHER = ["at", "view", "lib"].map((name) => ({
+      type: "function" as const,
+      name,
+      stateMutability: "view" as const,
+      inputs: [{ name: "who", type: "address" }],
+      outputs: [{ name: "", type: "address" }],
+    }));
+    const hexOf = (chain: "base" | "ethereum", body: string) =>
+      Buffer.from(
+        compileSauceProgram(chain, `function main(who: Address): Uint256 {\n  ${body}\n}\n`, {
+          contracts: { Other: { abi: OTHER } },
+        }).bytecode,
+      ).toString("hex");
+    const MODULES: Readonly<Record<string, string>> = {
+      "./function.ts": "export function helper(who: Address): Address {\n  return who;\n}\n",
+      "./constant.ts": "export const LIMIT = 5;\n",
+    };
+    const modulesHex = (chain: "base" | "ethereum", source: string) =>
+      Buffer.from(
+        compileSauceProgram(chain, source, {
+          contracts: { Different: { abi: OTHER } },
+          resolve: (path: string) =>
+            MODULES[path] === undefined ? undefined : new TextEncoder().encode(MODULES[path]),
+        }).bytecode,
+      ).toString("hex");
+    for (const chain of ["base", "ethereum"] as const) {
+      for (const method of ["at", "view", "lib"]) {
+        it(`on ${chain}, a bound contract's own \`${method}(who)\` is a call whose result holds`, () => {
+          const call = `Other.at(ctx.self()).${method}(who)`;
+          expect(hexOf(chain, `return ${call}.USDC;`)).toBe(
+            hexOf(chain, `return USDC.balanceOf(${call});`),
+          );
+          expect(hexOf(chain, `return ${call}.USDC;`)).not.toBe(
+            hexOf(chain, "return USDC.balanceOf(who);"),
+          );
+        });
+      }
+      it(`on ${chain}, so is one on a contract bound to a local`, () => {
+        expect(hexOf(chain, "const o = Other.at(ctx.self()); return o.at(who).USDC;")).toBe(
+          hexOf(chain, "const o = Other.at(ctx.self()); return USDC.balanceOf(o.at(who));"),
+        );
+      });
+      // A name bound to a value is that value, an import of the same name shadowed by it, and an
+      // import is a contract type only from an ABI: a function or a constant is not one.
+      for (const [kind, line] of [
+        ["function", 'import { helper as Holder } from "./function.ts";'],
+        ["constant", 'import { LIMIT as Holder } from "./constant.ts";'],
+      ] as const) {
+        for (const method of ["at", "view", "lib"]) {
+          it(`on ${chain}, a local shadowing an imported ${kind} keeps its own \`${method}(who)\``, () => {
+            const program = (read: string) =>
+              `${line}\nfunction main(who: Address): Uint256 {\n` +
+              `  const Holder = Different.at(ctx.self());\n  return ${read};\n}\n`;
+            const hex = (read: string) => modulesHex(chain, program(read));
+            expect(hex(`Holder.${method}(who).USDC`)).toBe(
+              hex(`USDC.balanceOf(Holder.${method}(who))`),
+            );
+            expect(hex(`Holder.${method}(who).USDC`)).not.toBe(hex("USDC.balanceOf(who)"));
+          });
+        }
+      }
+      it(`on ${chain}, the same local with no import keeps its call too`, () => {
+        const program = (read: string) =>
+          "function main(who: Address): Uint256 {\n" +
+          `  const Holder = Different.at(ctx.self());\n  return ${read};\n}\n`;
+        expect(modulesHex(chain, program("Holder.at(who).USDC"))).toBe(
+          modulesHex(chain, program("USDC.balanceOf(Holder.at(who))")),
+        );
+      });
+      it(`on ${chain}, an imported ABI and a caller's binding still bind to the address`, () => {
+        const imported = (read: string) =>
+          'import { IERC20 as Pool } from "./artifacts/IERC20.json";\n' +
+          `function main(who: Address): Uint256 {\n  return ${read};\n}\n`;
+        expect(modulesHex(chain, imported("Pool.at(who).USDC"))).toBe(
+          modulesHex(chain, imported("USDC.balanceOf(who)")),
+        );
+        const caller = (read: string) =>
+          `function main(who: Address): Uint256 {\n  return ${read};\n}\n`;
+        expect(modulesHex(chain, caller("Different.view(who).USDC"))).toBe(
+          modulesHex(chain, caller("USDC.balanceOf(who)")),
+        );
+      });
+      it(`on ${chain}, a contract type bound to an address still unwraps to it`, () => {
+        expect(hexOf(chain, "return Other.at(who).USDC;")).toBe(
+          hexOf(chain, "return USDC.balanceOf(who);"),
+        );
+        expect(hexOf(chain, "return Other.view(who).ETH;")).toBe(
+          hexOf(chain, "return ctx.balance(who);"),
+        );
+      });
+    }
+  });
+
+  it("refuses what is not an address, by name", () => {
+    const refusal = (body: string) => {
+      try {
+        compileSauceProgram("base", PROGRAM(body));
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`compiled: ${body}`);
+    };
+    expect(refusal("return UniswapV3.Pool.WETH;")).toBe(
+      "`UniswapV3.Pool.WETH`: `UniswapV3.Pool` is an interface, with no address of its own: give it the address, `UniswapV3.Pool(<address>).WETH`.",
+    );
+    expect(refusal("return p.USDC;")).toBe(
+      "`p.USDC`: `p` is a record, not an address, and `USDC` names a token: `<holder>.USDC` reads a holder's USDC balance, so the name is reserved for that and cannot be a field. Name the field otherwise (`usdc`), or read the balance of an address it holds (`p.<field>.USDC`).",
+    );
+    expect(refusal("return holders.USDC;")).toMatch(
+      /^`holders\.USDC`: `holders` is a list, not an address/,
+    );
+    expect(refusal("return ({ USDC: 1 }).USDC;")).toMatch(/is a record, not an address/);
+    expect(
+      refusal(
+        "let total = 0; for (const leg of [{ to: who }]) { total += leg.ETH; } return total;",
+      ),
+    ).toMatch(/^`leg\.ETH`: `leg` is a record, not an address, and `ETH` names the native coin/);
+    expect(refusal('return abi.decode(hex`00`, ["Address"]).USDC;')).toMatch(/is a record/);
+  });
+
+  it("refuses a symbol that is both the native coin and a token: Arc's USDC", () => {
+    expect(() =>
+      compileSauceProgram("arc", "function main(): Uint256 { return self.USDC; }"),
+    ).toThrow(
+      /^`self\.USDC`: on arc, USDC is both the native coin and the token at .*: write `ctx\.balance\(<holder>\)`/,
+    );
+    // The method form still says which.
+    expect(
+      compileSauceProgram("arc", "function main(): Uint256 { return USDC.balanceOf(ctx.self()); }")
+        .bytecode.length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("names a misspelled balance as the method form does, and leaves a record's field to the compiler", () => {
+    const message = (body: string) => {
+      try {
+        compileSauceProgram(
+          "base",
+          `function main(who: Address, p: { a: Uint256 }): Uint256 { ${body} }`,
+        );
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`compiled: ${body}`);
+    };
+    expect(message("return self.USDCC;")).toMatch(
+      /^compileSauceRoute: `USDCC` is not a token on base, nor its native coin, ETH\. Did you mean `USDC`\?/,
+    );
+    expect(message("return who.WETHH;")).toMatch(
+      /`WETHH` is not a token on base.*Did you mean `WETH`\?/,
+    );
+    expect(message("return self.ETHH;")).toMatch(/Did you mean `ETH`\?/);
+    expect(message("return p.USDCC;")).toMatch(/`USDCC` is not a field of this tuple/);
+  });
+});
 
 describe("composition: token pass + protocol-accessor pass in ONE compile", () => {
   it("a body using BOTH Uniswap.UniversalRouter.execute(...) and self.USDC compiles, both rewritten, ERC20 import exactly once", () => {
@@ -435,9 +681,7 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
       { pot: POT, engine: ENGINE },
     );
     expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
-    expect(compiled.source).toContain(
-      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
-    );
+    expect(compiled.source).toContain(`IERC20.at(USDC).balanceOf(ctx.self())`);
     const count = (
       compiled.source.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
     ).length;

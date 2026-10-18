@@ -28,7 +28,7 @@ or a token as `USDC` (or `mint:USDC`) for its mint.
 
 ## The accounts
 
-For the token methods (`USDC.transfer(to, amount)`, `USDC.balanceOf(ctx.self())`) and every account
+For the token methods (`USDC.transfer(to, amount)`, `self.USDC`) and every account
 a program writes where it uses it (`USDC.accountOf(to)`, `Solana.pda(program, [seeds])`), compiling
 adds each account the program needs to `main`, with how to find it. `sauce compile --json` lists
 them in its `manifest`:
@@ -231,6 +231,16 @@ under the lamport changes with what it pays for, then what the owner pays in all
 `payerPays` in `--json`). An `--owner` that is not a wallet (a program's account, or one holding
 data) is refused, as it cannot pay. LiteSVM is installed the first time it is needed
 ([Runtime packages](cli.md#runtime-packages)).
+
+A program that swaps at a price through the venue namespaces (`Orca.Whirlpool.swap(…)`) has each
+pool's walk worked out before the cook, to lower the risk that one runs the cook out of compute
+units: `simulate`, `run` and `tx` read each pool's tick arrays and work out how far each may walk,
+the pool buying the most per unit first, and a pool held short of its limit or skipped is compiled
+to its swap's Stopped form ([Stops](../api/router.md#stops)). Each prints a line for such a pool,
+and `--json` gives every pool's in `computeStops`. `tx` takes them from a table of each venue's
+costs alone, so the cook it builds can differ from the one `simulate` reports; `simulate` and `run`
+check them in a simulation first, and tighten them if the cook would still run out. A price that
+moves between building the cook and landing it can still run it out.
 
 ### Running on Solana
 

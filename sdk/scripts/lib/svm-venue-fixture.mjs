@@ -134,7 +134,8 @@ export function readAccountFile(sdk, file) {
 /**
  * Adds to the fixture without moving anything it holds (`dump-svm-venues --add`): each new program,
  * each new account (a file already on disk is kept as it is), each new pool, and the accounts past
- * its nine (`more`) that a held pool gains.
+ * its nine (`more`) that a held pool gains. A pool it holds already, and an account not marked
+ * `keep`, are replaced (`--refresh`).
  */
 export function addToVenueFixture(sdk, { before, programs, pools, extended, accounts }) {
   const { programs: programDir } = roots(sdk);
@@ -142,19 +143,25 @@ export function addToVenueFixture(sdk, { before, programs, pools, extended, acco
     writeFileSync(join(programDir, entry.file), gzipSync(elf, { level: 9 }));
   const entries = writeAccounts(sdk, accounts);
   const more = new Map(extended.map((item) => [item.name, item]));
+  const replaced = new Map(pools.map((pool) => [pool.name, pool]));
+  const written = new Set(entries.map((entry) => entry.address));
   const manifest = {
     ...before,
     programs: [...before.programs, ...programs.map(({ entry }) => entry)],
     pools: [
       ...before.pools.map((pool) => {
+        const again = replaced.get(pool.name);
+        if (again !== undefined) return again;
         const gained = more.get(pool.name);
         return gained === undefined
           ? pool
           : { ...pool, more: gained.more, moreSlot: gained.moreSlot };
       }),
-      ...pools,
+      ...pools.filter((pool) => !before.pools.some((held) => held.name === pool.name)),
     ],
-    accounts: [...before.accounts, ...entries].sort((a, b) => (a.address < b.address ? -1 : 1)),
+    accounts: [...before.accounts.filter((held) => !written.has(held.address)), ...entries].sort(
+      (a, b) => (a.address < b.address ? -1 : 1),
+    ),
   };
   writeFileSync(join(programDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 

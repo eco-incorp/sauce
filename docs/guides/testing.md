@@ -48,7 +48,7 @@ A program that sells USDC from the Pot for WETH, `swap.sauce.ts`:
 import { uniswapV3 } from "@sauce/router";
 
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
-  require(USDC.balanceOf(ctx.self()) >= amountIn, "amountIn is not in the Pot");
+  require(self.USDC >= amountIn, "amountIn is not in the Pot");
   const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   return uniswapV3(pool, USDC, WETH, amountIn, 0, minOut, recipient);
 }
@@ -243,7 +243,7 @@ A program that pays USDC from the Pot, `pay.sauce.ts`:
 
 ```js
 function main(to: Address, amount: Uint256) {
-  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  require(self.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```

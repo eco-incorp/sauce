@@ -10,7 +10,7 @@
 
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
-A registered token symbol has the same methods it has on an EVM chain, and the SDK writes the accounts they need for you, as it does for any account a program writes where it uses it (`Solana.pda(program, [seeds])`, below). `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf` and `Token(mint)` lower to the `@sauce/token` functions, and every account those take is added to `main` as an `Account` parameter. Protocol members are EVM-only: on Solana there is no contract address to fold in, and no account slot to put one in. A symbol alone is a value. Compiled for `solana` (`sauce compile --chain solana`, `routes.compileSauceProgram("solana", source)`), `USDC` is the mint's 32-byte key, which the `@sauce/token` functions take first (`balanceOf(USDC, account)`); `routes.SVM_TOKEN_REGISTRY` lists the mints, mainnet's and devnet's. For a program whose accounts you write yourself, use `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
+A registered token symbol has the same methods it has on an EVM chain, and the SDK writes the accounts they need for you, as it does for any account a program writes where it uses it (`Solana.pda(program, [seeds])`, below). `USDC.transfer(to, amount)`, `approve`, `transferFrom`, a balance (`self.USDC`, `to.USDC`) and `Token(mint)` lower to the `@sauce/token` functions, and every account those take is added to `main` as an `Account` parameter. Protocol members are EVM-only: on Solana there is no contract address to fold in, and no account slot to put one in. A symbol alone is a value. Compiled for `solana` (`sauce compile --chain solana`, `routes.compileSauceProgram("solana", source)`), `USDC` is the mint's 32-byte key, which the `@sauce/token` functions take first (`balanceOf(USDC, account)`); `routes.SVM_TOKEN_REGISTRY` lists the mints, mainnet's and devnet's. For a program whose accounts you write yourself, use `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
 
 ## The token methods, every account derived
 
@@ -18,7 +18,7 @@ A program pays, approves and reads a token as it would on Base, and the same sou
 
 ```ts
 function main(to: Address, amount: Uint256) {
-  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  require(self.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
@@ -32,13 +32,13 @@ Compiled for Solana, the accounts the calls move through come after `main`'s own
 | `potUSDC`      | `self:USDC`                                   | the Pot's USDC account                     |
 | `toUSDC`       | `@to:USDC`                                    | the USDC account of `main`'s argument `to` |
 
-`sauce run`, `simulate` and `tx`, and the MCP server's cook tools, fill every derived slot from the owner, the Pot and `main`'s arguments, so the program above runs with `--args <recipient> 400` and no `--account`. A recipient's associated token account that does not exist yet is created before the cook, once the owner agrees (or with `--yes`). From TypeScript, `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` from `@eco-incorp/sauce/svm` resolves one derivation to the address to put in the cook's `AccountResolution`.
+`sauce run`, `simulate` and `tx`, and the MCP server's cook tools, fill every derived slot from the owner, the Pot and `main`'s arguments, so the program above runs with `--args <recipient> 400` and no `--account`. A recipient's associated token account that does not exist yet is created before the cook, once the owner agrees (or with `--yes`). From TypeScript, `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` from `@eco-incorp/sauce/svm` resolves one derivation to the address to put in the cook's `AccountResolution`. A swap at a price through a venue namespace is listed in `stoppable`, by the derivation of its stop ([Stops](../api/router.md#stops)). `svmProgramStops(program, chain, accounts, integers, load)` works each out as `sauce` does, and names in `binding` the swaps to hold; compiled again with `stops: binding`, those call the Stopped form, each stop a value added to `main` after the accounts (`derivedValues`, never one of `entryParams`), and `svmStopValues` gives the values to encode after `main`'s own arguments.
 
 What the lowering guarantees and requires:
 
 - **Each holder's account is checked on chain.** After each write the program requires the token account it paid, or paid from, to belong to the holder the call named: `wrong recipient account`, `wrong sender account`, `wrong spender account`, and `wrong holder account` for a read. A builder that attaches another account cannot redirect the transfer.
 - **Each mint's own write.** An SPL Token mint moves by the plain `transfer`/`approve` (about 360 bytes with the check): for such a mint it does what the checked write does, in about 220 bytes less and one account fewer. A Token-2022 mint moves by `transferChecked`/`approveChecked`, with the registry's decimals and the mint as one more account (about 585 bytes). `Token(mint)` of an `Address` argument takes the checked write, with the decimals read from the mint. Its token program is read from the cluster when the cook is built; a mint whose program cannot be read is refused, never assumed, and every write requires its token program to be SPL Token or Token-2022 before calling it.
-- **Every holder is known when the transaction is built.** A holder can be `ctx.self()` (or `self`): as a token's holder it is the Pot, as on an EVM chain. It can also be an `Address` parameter of `main`, or a 32-byte key. A holder computed as the program runs is refused, because no transaction can attach its account. Pass its token account as an `Account` parameter in the holder's place instead (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). That account is paid as attached: the call names no holder, so nothing checks whose it is, and whoever builds the transaction chooses it. Prefer an `Address` recipient, which the program checks, or check the account in the program (`require(ownerOf(USDC, dest) == expected, ...)`).
+- **Every holder is known when the transaction is built.** A holder can be `self` (or `ctx.self()`): as a token's holder it is the Pot, as on an EVM chain, and `self.USDC` is its balance. It can also be `Solana.owner`, an `Address` parameter of `main` (`to.USDC`), or a 32-byte key. `<holder>.SOL` is a holder's lamports, read from its account, which is added to `main` too: `self.SOL` is the Pot's. A holder computed as the program runs is refused, because no transaction can attach its account. Pass its token account as an `Account` parameter in the holder's place instead (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). That account is paid as attached: the call names no holder, so nothing checks whose it is, and whoever builds the transaction chooses it. Prefer an `Address` recipient, which the program checks, or check the account in the program (`require(ownerOf(USDC, dest) == expected, ...)`).
 - **Only in `main`, in a module.** The methods must stand in `main` itself: a helper has no account parameters, and a script has no `main` to add them to. `compileSauceRoute` refuses the added accounts, because a route's `execution.accounts` are built before the compile.
 
 ## Accounts where they are used
@@ -55,7 +55,7 @@ function main(lamports: Uint256): Uint256 {
     transfer.concat(lamports.toBytesLe(8)),
   );
   svm.call(Solana.tokenProgram, [potWsol], hex`11`);
-  return WSOL.balanceOf(ctx.self());
+  return self.WSOL;
 }
 ```
 

@@ -312,6 +312,41 @@ transaction and cannot be caught, so these are checks made before the swap. The 
 caller's, so a pool that is not the pair, a slot whose program is not the venue's, and a pool of
 another venue or of none revert; only the System program itself as the pool is a missing slot.
 
+A concentrated-liquidity swap walks only the tick arrays its slot gives it, and past them its
+program fails the whole transaction. So each of these holds its limit a tick inside them: Raydium's
+code and Crema's to where the furthest array that way begins (or, for the array holding the price,
+its last initialized tick that way), a whirlpool's to the far end of its three. A `priceLimit` past
+the window buys up to it. A limit far past every price, with a large input, can still run a deep
+pool out of the cook's compute before then: keep it tight.
+
+Each of the eight concentrated-liquidity functions has a Stopped form, the same swap with its limit
+held to a `stop` as well: its low 192 bits a tighter `priceLimit` (the swap takes the lower of the
+two; `0` none), and from bit 192 a start bound, a tick past which the swap skips the pool (`1`
+paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price):
+
+```text
+orcaWhirlpoolStopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint256
+```
+
+A pool's swap costs compute units for every initialized tick it crosses, and a walk that crosses
+enough runs the whole cook out of them (one Solana transaction has 1,400,000). For a program written
+with the venue namespaces the `sauce` command works each swap's stop out as it builds the cook: it
+reads the pool's tick arrays, counts the initialized ticks its walk to its limit crosses, prices
+them from a table measured on each venue's program with three more crossings kept back, and gives
+the pool whose walk buys the most per unit its whole walk first, then the next from what is left. A
+pool the rest does not cover is compiled to the Stopped form, held short of its limit, its start
+bound three tick-spacing positions past its price then; one it cannot pay for at all is skipped.
+Where no stop binds, the program is the plain one. A swap in a loop whose count is written out
+(`for (let i = 0; i < 3; i++)`) is charged its own units for each run, and its walk once; in a loop
+whose count is a value or a negative number, or more runs than one cook pays for, no pool is held,
+and the command says so. This lowers the risk of running out, and does not
+remove it: a held pool crosses at most three more initialized ticks than were priced while the
+ticks in its way stay as they were read (a position opened inside its walk meanwhile adds one), but
+a pool that walks its whole way is not checked, and a price that moves further before the cook lands can
+cost it more. `sauce simulate` and `sauce run` check the stops in a simulation and tighten them if
+the cook would still run out, and print a line for each pool a stop held or skipped; `sauce tx`
+takes them from the table alone, so its cook can differ from the one `sauce simulate` reports.
+
 Three more forms, for a program that wants less:
 
 - **At a limit in the pool's own terms**, `<venue>AtLimit`, for those nine and `invariantAtLimit`
@@ -361,7 +396,7 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.6 KB of program, past
+A program carries only the venues it calls: one venue's function is about 2.1 KB of program, past
 one transaction, so the program is staged (`sauce-solana`).
 
 ## Exact input on Solana

@@ -29,6 +29,16 @@ export interface SvmLoweringResult {
    * `--account` value (`self:USDC`, `@to:USDC`, …). Empty when nothing was lowered.
    */
   readonly derived: Readonly<Record<string, string>>;
+  /**
+   * Each `Uint256` the lowering added to `main` after the accounts, by its parameter name, in their
+   * order: how the cook's builder works it out (a venue's `stop:…`). None of them is one of the
+   * arguments a caller gives.
+   */
+  readonly values?: Readonly<Record<string, string>>;
+  /** Each venue's swap at a price that a stop could hold, by its stop's derivation, in order. */
+  readonly stoppable?: readonly string[];
+  /** How many times each of those inside a loop runs, by its derivation (`SvmLowering.runsOf`). */
+  readonly stoppableRuns?: Readonly<Record<string, number | null>>;
 }
 
 /** A mint as a call names it. */
@@ -79,7 +89,7 @@ interface Slot {
 class Slots {
   private readonly byDerivation = new Map<string, Slot>();
 
-  constructor(private readonly taken: Set<string>) {}
+  constructor(readonly taken: Set<string>) {}
 
   use(derivation: string, base: string, role: { writable?: boolean; signer?: boolean }): string {
     let slot = this.byDerivation.get(derivation);
@@ -188,6 +198,117 @@ function findMain(program: AstNode): AstNode | undefined {
   return undefined;
 }
 
+/** Every statement that may run its body more than once. */
+const LOOPS = new Set([
+  "ForStatement",
+  "ForOfStatement",
+  "ForInStatement",
+  "WhileStatement",
+  "DoWhileStatement",
+]);
+
+const UINT256 = 1n << 256n;
+
+/**
+ * A literal's integer as the compiler reads it, from its text: a non-negative decimal (with no
+ * leading zero) or hexadecimal integer, `n` or not, below 2^256. Undefined for anything else, a
+ * negative number included (the compiler's `-1` is 2^256 - 1), whose loop is left uncounted rather
+ * than read some other way.
+ */
+function integerOf(node: AstNode | null | undefined): bigint | undefined {
+  if (node?.type !== "Literal") return undefined;
+  const raw = (node as { raw?: string }).raw ?? "";
+  const digits = /^(0|[1-9][0-9]*|0[xX][0-9a-fA-F]+)n?$/.exec(raw)?.[1];
+  if (digits === undefined) return undefined;
+  const value = BigInt(digits);
+  return value < UINT256 ? value : undefined;
+}
+
+/**
+ * How many times a loop's body runs, where the loop writes it out: `for (const x of [a, b])`, or
+ * `for (let i = 0; i < 3; i++)` with a start, bound and step (`++`, `--`, `+=`, `-=`) written as
+ * integers the compiler reads as such (`integerOf`) and a counter its body never sets. Its arithmetic
+ * is checked, so this is the most the body runs: a `break`, a `return` or a step past 0 or 2^256
+ * only ends the loop sooner. Null for any other loop: `while`, a bound that is a value, a negative
+ * number.
+ */
+function loopCount(loop: AstNode): bigint | null {
+  if (loop.type === "ForOfStatement") {
+    const right = (loop as { right?: AstNode }).right;
+    if (right?.type !== "ArrayExpression") return null;
+    const elements = (right as { elements?: (AstNode | null)[] }).elements ?? [];
+    return elements.some((element) => element === null || element.type === "SpreadElement")
+      ? null
+      : BigInt(elements.length);
+  }
+  if (loop.type !== "ForStatement") return null;
+  const { init, test, update, body } = loop as {
+    init?: AstNode | null;
+    test?: AstNode | null;
+    update?: AstNode | null;
+    body?: AstNode;
+  };
+  const declarations = (init as { declarations?: AstNode[] } | null | undefined)?.declarations;
+  if (init?.type !== "VariableDeclaration" || declarations?.length !== 1) return null;
+  const { id, init: first } = declarations[0] as { id?: AstNode; init?: AstNode | null };
+  if (id?.type !== "Identifier") return null;
+  const counter = nameOf(id);
+  const isCounter = (node: AstNode | undefined): boolean =>
+    node?.type === "Identifier" && nameOf(node) === counter;
+  const start = integerOf(first);
+  const { operator, left, right } = (test ?? {}) as {
+    operator?: string;
+    left?: AstNode;
+    right?: AstNode;
+  };
+  const bound = integerOf(right);
+  if (start === undefined || bound === undefined || !isCounter(left)) return null;
+  let step: bigint | undefined;
+  if (update?.type === "UpdateExpression") {
+    const { argument, operator: op } = update as { argument?: AstNode; operator?: string };
+    if (isCounter(argument)) step = op === "++" ? 1n : -1n;
+  } else if (update?.type === "AssignmentExpression") {
+    const {
+      left: target,
+      right: by,
+      operator: op,
+    } = update as {
+      left?: AstNode;
+      right?: AstNode;
+      operator?: string;
+    };
+    const amount = integerOf(by);
+    if (isCounter(target) && amount !== undefined && (op === "+=" || op === "-=")) {
+      step = op === "+=" ? amount : -amount;
+    }
+  }
+  if (step === undefined || step === 0n) return null;
+  let set = false;
+  walk(body, (n) => {
+    if (n.type === "AssignmentExpression" && isCounter((n as { left?: AstNode }).left)) set = true;
+    if (n.type === "UpdateExpression" && isCounter((n as { argument?: AstNode }).argument)) {
+      set = true;
+    }
+  });
+  if (set) return null;
+  // The runs from `start` to `bound` by `step`, none where the test fails at once.
+  const up = step > 0n;
+  const span = up ? bound - start : start - bound;
+  const by = up ? step : -step;
+  switch (operator) {
+    case "<":
+    case ">":
+      if (up !== (operator === "<")) return null;
+      return span <= 0n ? 0n : (span + by - 1n) / by;
+    case "<=":
+    case ">=":
+      if (up !== (operator === "<=")) return null;
+      return span < 0n ? 0n : span / by + 1n;
+    default:
+      return null;
+  }
+}
+
 /** `ctx.self()`, with `ctx` the language's, not a name the program declares. */
 function isCtxSelf(node: AstNode, declared: ReadonlySet<string>): boolean {
   const site = methodCall(node);
@@ -247,6 +368,11 @@ export class SvmLowering {
   private readonly params: ReadonlyMap<string, MainParam>;
   private readonly functions: AstNode[] = [];
   private readonly slots: Slots;
+  private readonly values = new Map<string, string>();
+  /** Each swap at a price a stop could hold, by its stop's derivation. */
+  readonly stoppable: string[] = [];
+  /** How many times each of those inside a loop runs, by its derivation (`runsOf`). */
+  readonly stoppableRuns = new Map<string, number | null>();
   private readonly sites: { readonly node: AstNode; readonly lower: () => void }[] = [];
   /** Each module's imports, `name as local`, in the order they were first used. */
   private readonly imports = new Map<string, Map<string, string>>();
@@ -264,6 +390,10 @@ export class SvmLowering {
     /** Compile-time values a holder may name, by name: a key bound before the program compiles —
      *  main's `Address` argument, bound into an intent's body — which the cook attaches by value. */
     private readonly keys: ReadonlyMap<string, bigint> = new Map(),
+    /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads as a token's is read. */
+    readonly native?: string,
+    /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
+    readonly stopped: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -296,6 +426,11 @@ export class SvmLowering {
   /** Whether `name` is a registered symbol the program does not declare itself. */
   isSymbol(name: string): boolean {
     return this.tokens.has(name) && !this.declared.has(name);
+  }
+
+  /** Whether `<holder>.<name>` is a balance: a registered symbol, or the native coin, undeclared. */
+  isBalanceName(name: string): boolean {
+    return this.isSymbol(name) || (name === this.native && !this.declared.has(name));
   }
 
   /** Registers a site, lowered once every collector has run, in source order. */
@@ -344,6 +479,22 @@ export class SvmLowering {
     }
   }
 
+  /**
+   * A `Uint256` added to `main` after the accounts, one per derivation, which the cook's builder
+   * works out as it builds the cook (a venue's `stop`).
+   */
+  value(derivation: string, base: string): string {
+    let name = this.values.get(derivation);
+    if (name === undefined) {
+      name = base;
+      for (let n = 2; this.slots.taken.has(name); n++) name = `${base}${n}`;
+      this.slots.taken.add(name);
+      this.values.set(derivation, name);
+    }
+
+    return name;
+  }
+
   /** An account added to `main`: one per derivation, its role the union of its uses. */
   account(
     derivation: string,
@@ -377,6 +528,25 @@ export class SvmLowering {
     }
   }
 
+  /**
+   * How many times `node`, in `main`'s body, runs: once outside any loop, else the product of the
+   * counts of the loops around it (`loopCount`). A loop that never runs makes it 0, whatever the
+   * other loops' counts, inside or outside it; short of that, null where one does not write its
+   * count out.
+   */
+  runsOf(node: AstNode): number | null {
+    let runs = 1n;
+    let counted = true;
+    walk(this.main?.body, (n) => {
+      if (n.start > node.start || node.end > n.end || !LOOPS.has(n.type)) return;
+      const count = loopCount(n);
+      if (count === null) counted = false;
+      else runs *= count;
+    });
+
+    return runs === 0n ? 0 : counted ? Number(runs) : null;
+  }
+
   /** `main`'s parameter `name`: an `Address`, an `Account` (with whether it is writable), or other. */
   param(name: string): MainParam | undefined {
     return this.params.get(name);
@@ -398,6 +568,15 @@ export class SvmLowering {
       if (key !== undefined && param === undefined && !this.declared.has(name)) {
         return { kind: "key", name: base58(keyHex(key)), stem: name, value: name };
       }
+      // A registered mint's own key: its associated token accounts derive off it as off any key.
+      if (this.isSymbol(name)) {
+        return {
+          kind: "key",
+          name: base58(keyHex(this.tokens.get(name)!)),
+          stem: name,
+          value: name,
+        };
+      }
     }
     // As a token's holder, `ctx.self()` is the program's own account, the Pot, as on the EVM, so a
     // program written for an EVM chain (`USDC.balanceOf(ctx.self())`) means the same here. On
@@ -412,7 +591,8 @@ export class SvmLowering {
       role === "recipient" || role === "sender" ? "dest: Account<Writable>" : "account: Account";
     throw new Error(
       `${spelled} on Solana: the ${role} must be known when the transaction is built, to attach ` +
-        "its token account — `self`, a parameter of main declared `Address`, or a 32-byte key — " +
+        "its token account — `self`, a parameter of main declared `Address`, a token's mint, or a " +
+        "32-byte key — " +
         `and \`${text}\` is not. For an account known only as the program runs, take the token ` +
         `account as a parameter of main (\`${account}\`) and pass that.`,
     );
@@ -559,10 +739,16 @@ export class SvmLowering {
     const declaredParams = (main as { params?: AstNode[] }).params ?? [];
     const last = declaredParams[declaredParams.length - 1];
     const open = this.source.indexOf("(", (main.id as AstNode).end);
+    const added = [
+      this.slots.params(),
+      ...[...this.values.values()].map((name) => `${name}: Uint256`),
+    ]
+      .filter((params) => params !== "")
+      .join(", ");
     this.splices.push(
       last === undefined
-        ? { start: open + 1, end: open + 1, replacement: this.slots.params() }
-        : { start: last.end, end: last.end, replacement: `, ${this.slots.params()}` },
+        ? { start: open + 1, end: open + 1, replacement: added }
+        : { start: last.end, end: last.end, replacement: `, ${added}` },
     );
     const imports = [...this.imports].map(
       ([module, names]) =>
@@ -573,6 +759,17 @@ export class SvmLowering {
       source: `${imports.join("")}${applySplices(this.source, this.splices)}${[...this.helpers.values()].join("")}`,
       rewrote: true,
       derived: this.slots.derived(),
+      ...(this.values.size === 0
+        ? {}
+        : {
+            values: Object.fromEntries(
+              [...this.values].map(([derivation, name]) => [name, derivation]),
+            ),
+          }),
+      ...(this.stoppable.length === 0 ? {} : { stoppable: this.stoppable }),
+      ...(this.stoppableRuns.size === 0
+        ? {}
+        : { stoppableRuns: Object.fromEntries(this.stoppableRuns) }),
     };
   }
 }

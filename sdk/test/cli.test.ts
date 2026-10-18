@@ -528,6 +528,37 @@ describe("sauce compile", () => {
     }
   });
 
+  it("reports the token a holder's balance reads, and no other member", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const base = routes.chainDefines(requireChain("base"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const report = appliedDefines(
+      "function main(to: Address, payee: { bps: Uint256 }): Uint256 {\n" +
+        "  return self.WETH + to.USDC + payee.bps + Base.USDC;\n}\n",
+      requireChain("ethereum"),
+      { bps: 1n },
+    );
+    expect(report.defines).toEqual([
+      {
+        name: "USDC",
+        value: address(routes.chainDefines(requireChain("ethereum")).USDC),
+        source: "chain",
+        kind: "token",
+        chain: "ethereum",
+      },
+      {
+        name: "WETH",
+        value: address(routes.chainDefines(requireChain("ethereum")).WETH),
+        source: "chain",
+        kind: "token",
+        chain: "ethereum",
+      },
+    ]);
+    expect(report.defines.map((one) => one.value)).not.toContain(address(base.USDC));
+    expect(report.unread).toEqual([{ name: "bps", readOn: [] }]);
+  });
+
   it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
     // RECIPIENT is the user's alone, so the intent body reads it too. USDC is a name each chain
     // sets: the user's holds on Base, where the reward reads it, and the body on Arbitrum reads

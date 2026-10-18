@@ -49,8 +49,21 @@ every account a pool takes is read from it as the cook is built, and what fits i
   argument), offered everything still unspent. What it buys
   lands in the Pot's own account for the token bought, and it returns what arrived, `0` for a pool
   it skipped.
-- **About five pools fit one cook**, the program staged and its accounts in a lookup table. Keys
-  that find more are refused before anything is signed, naming each key's pool.
+- **Each swap stops inside its window.** A venue's swap walks only the tick arrays the cook gives
+  it, and past them its program fails the whole cook. So each swap at a price holds its limit a tick
+  inside them: a `priceLimit` far past a pool's price buys up to its window and stops there.
+- **A swap is held within its share of the cook's compute.** Every initialized tick a pool's swap
+  crosses costs compute units, and a cook that runs out fails whole. So the command works out each
+  swap's walk as it builds the cook, from the pool's tick arrays and a cost table of each venue's
+  program: the pool whose walk buys the most per unit walks its whole way first, the next from what
+  is left, a pool what is left does not cover is held short of `priceLimit`, and one it cannot pay
+  for is skipped. `sauce simulate` and `sauce run` check that in a simulation and print a line for
+  each pool held or skipped. It lowers the risk of a wide limit failing the cook, and does not
+  remove it: a held pool crosses at most three more initialized ticks than were priced, and is
+  skipped if its price moves further, but a pool that walks its whole way is not checked.
+- **About five pools fit one cook's accounts, and about four that all trade fit its compute**, the
+  program staged and its accounts in a lookup table. Keys that find more are refused before
+  anything is signed, naming each key's pool.
 
 ## The rules
 
@@ -124,8 +137,9 @@ its pool takes and how to list a pair's pools are in [references/venues.md](refe
 
 [examples/solana-distributed-swap.sauce.ts](examples/solana-distributed-swap.sauce.ts) is one
 complete implementation of those rules, buying SpaceX's tokenized share, `SPCX_US` (a Token-2022
-mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%, then
-Byreal's at 0.1%; its header gives every input with its units and how to run it. Each venue's byte layout,
+mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%,
+Byreal's at 0.1% and PancakeSwap's at 0.08%; its header gives every input with its units and how to
+run it. Each venue's byte layout,
 instruction format and account order is `@sauce/router`'s, which every compile the package makes
 resolves with no option. Its code:
 
@@ -159,6 +173,14 @@ function main(
   }
   bought += Byreal.CLMM.swap(
     Byreal.CLMM.pool(USDC, SPCX_US, 1000),
+    USDC,
+    SPCX_US,
+    self.USDC - kept,
+    priceLimit,
+    0,
+  );
+  bought += Pancakeswap.CLMM.swap(
+    Pancakeswap.CLMM.pool(USDC, SPCX_US, 800),
     USDC,
     SPCX_US,
     self.USDC - kept,
@@ -252,7 +274,9 @@ SPCX_US with `priceLimit` 150 gives 149.75, **149750000000000000000**.
 
 **The reference price** is the best a buyer pays, fee included, among pools deep enough for the
 order: a pool's price divided by `1 − fee` paying the higher-key token, the same upside down paying
-the other. `priceLimit` is that plus the slippage you accept, kept tight. Solana's pool prices
+the other. `priceLimit` is that plus the slippage you accept, kept tight: a limit far past every
+pool's price, with a budget to reach it, can walk a deep pool across so many initialized ticks that
+the cook runs out of compute and fails, every pool's trade with it. Solana's pool prices
 differ between venues more than an EVM chain's: a thin pool can sit a percent or two from the deep
 ones, and an order book's offers further still. A `priceLimit` at or below the best price trades
 nothing and sends the whole budget to the recipient, without reverting.
@@ -261,9 +285,9 @@ nothing and sends the whole budget to the recipient, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 3.7 KB, past one transaction, so it runs from a code
+- **The program is staged.** It is about 5.4 KB, past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that (`sauce-solana`).
-- **The accounts go through a lookup table.** The program names 37 accounts, every one derived: nine
+- **The accounts go through a lookup table.** The program names 46 accounts, every one derived: nine
   for each key, the Pot's, the mints', the programs' and the recipient's two. A key with no pool
   names the System program nine times, one account; each pool found brings eight of its own. The
   cook names each account once; listed in the transaction they would be past its size, and through
@@ -272,8 +296,7 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
   the cook's own come to about 60 accounts of 64. Keys that find more are refused before anything is
   signed: the command names the pool each key found
   (`Raydium.CLMM.pool(USDC, SPCX_US, 2500) is <pool>`, `… finds none`), so drop the keys you want
-  least. Measured on the venues' own programs, buying SPCX_US: two pools that trade and a key with
-  none take about 640,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
+  least. Measured on the venues' own programs, buying SPCX_US: three pools that trade and a key with none take about 1,085,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
   more than one under SPL Token. Pools that share a program or a config cost fewer accounts.
 
 ## Running it
@@ -352,10 +375,10 @@ never a result. Buying SPCX_US with 2,000 USDC, Raydium's 0.25% pool deep enough
 addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 421555 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 519966 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
-Simulated in a local copy (LiteSVM) of the 25 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 3907-byte program staged into a code buffer in 7 transactions, as `sauce run` stages it
+Simulated in a local copy (LiteSVM) of the 34 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
+  the 5528-byte program staged into a code buffer in 9 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potUSDC, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC
@@ -389,6 +412,10 @@ Token balance changes:
   `10^(18 + payDecimals − buyDecimals) ÷ floor`, rounded down.
 - **Keys that find more pools than fit.** About five; the command refuses more, naming each key's
   pool.
+- **A `priceLimit` far past every price, with a large budget.** Each swap stops inside its window,
+  and the pool buying the most per unit walks first: another is held short or skipped to keep the cook within
+  its compute, which the simulation's `… stops at …` and `… is skipped` lines name. A price that
+  moves before the cook lands can still run it out. Keep the limit tight, and simulate.
 - **A program's account as `--owner`** (a pool, a mint). The owner signs and pays: a wallet, or an
   address with no account.
 

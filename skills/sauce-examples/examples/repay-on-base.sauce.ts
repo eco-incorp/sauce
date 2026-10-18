@@ -39,14 +39,14 @@ import AaveV3Reads from "./AaveV3Reads.json";
 function main(borrower: Address, solverBps: Uint256) {
   require(borrower != 0, "borrower is the zero address");
   require(solverBps < 10000, "solverBps is 100% or more");
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = self.USDC;
   require(amount > 0, "no USDC in the Pot");
   const delivered = amount - (amount * solverBps) / 10000;
 
   Base(
     () => {
       // The shared intent Pot holds nothing of anyone's between intents: all of it is this one's.
-      const arrived = USDC.balanceOf(ctx.self());
+      const arrived = self.USDC;
       const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
       const owed = Token(debtToken).balanceOf(borrower);
       const repay = arrived < owed ? arrived : owed;
@@ -54,7 +54,7 @@ function main(borrower: Address, solverBps: Uint256) {
         USDC.approve(AaveV3.Pool, repay);
         AaveV3.Pool.repay(USDC, repay, 2, borrower);
       }
-      const change = USDC.balanceOf(ctx.self());
+      const change = self.USDC;
       if (change > 0) {
         const paid = change - (change * solverBps) / 10000;
         Ethereum(() => {

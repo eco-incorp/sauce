@@ -9,6 +9,7 @@ import {
   chains,
   getChain,
   getAllChainIds,
+  nativeCoinSymbol,
   nativeErc20,
   nativeToErc20Amount,
 } from "../src/chains/index.js";
@@ -249,5 +250,20 @@ describe("Arc: the native coin is USDC, which is also an ERC-20", () => {
     expect(nativeToErc20Amount(5042, 10n ** 12n)).toBe(1n);
     expect(() => nativeToErc20Amount(1, 1n)).toThrow(/not an ERC-20/);
     expect(() => nativeToErc20Amount(5042, -1n)).toThrow(/negative/);
+  });
+});
+
+describe("canonical chain registry: every chain's native coin", () => {
+  it("names one for every chain, and `chains`' own where it records the chain", () => {
+    for (const chain of canonicalChains) {
+      const symbol = nativeCoinSymbol(chain);
+      expect([chain.slug, symbol]).toEqual([chain.slug, expect.stringMatching(/^[A-Za-z]+$/)]);
+      if (chains[chain.id] !== undefined) {
+        expect(symbol).toBe(chains[chain.id]!.nativeCurrency.symbol);
+      }
+    }
+    expect(nativeCoinSymbol(requireChain("solana"))).toBe("SOL");
+    expect(nativeCoinSymbol(requireChain("monad"))).toBe("MON");
+    expect(nativeCoinSymbol(requireChain("base"))).toBe("ETH");
   });
 });

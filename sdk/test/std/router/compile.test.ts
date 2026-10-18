@@ -107,6 +107,7 @@ import {
   TESSERAV_PROGRAM_ID,
 } from "../../../src/svm/index.js";
 import {
+  SVM_STOPPED,
   compileStdRouter,
   FUNCTIONS,
   programCalling,
@@ -427,7 +428,13 @@ describe("@sauce/router (SVM): the exports are the documented API", () => {
           ? `${arg === "limit" ? "ticks" : arg}: Uint256`
           : `${arg}: Uint256`,
       );
-      return ["slot: Account[]", "trader: Account[]", ...middle, "recipient: Account"];
+      return [
+        "slot: Account[]",
+        "trader: Account[]",
+        ...middle,
+        "recipient: Account",
+        ...(SVM_STOPPED.test(name) ? ["stop: Uint256"] : []),
+      ];
     };
     const limit = new Set<string>(SVM_FUNCTIONS);
     for (const [, name, params] of routerSource("svm").matchAll(

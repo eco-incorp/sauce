@@ -188,11 +188,16 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `PancakeSwapV2FactoryABI`
 
 `import PancakeSwapV2FactoryABI from "./protocols/pancakeswap-v2/PancakeSwapV2FactoryABI.json";` Speaks for: factory.
 
-- `getPair(address tokenA, address tokenB) view returns (address pair)`
+- `getPair(address tokenA, address tokenB) view returns (address pair)`: the address is a `PancakeswapV2.Pair`
 - `createPair(address tokenA, address tokenB) returns (address pair)`
 
 ### `PancakeSwapV2PairABI`
@@ -200,8 +205,8 @@ function main() {
 `import PancakeSwapV2PairABI from "./protocols/pancakeswap-v2/PancakeSwapV2PairABI.json";`
 
 - `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 - `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
 
 ### `PancakeSwapV2RouterABI`

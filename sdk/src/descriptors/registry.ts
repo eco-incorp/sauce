@@ -1,10 +1,10 @@
 import type { Abi } from "viem";
 import { getProtocol } from "../protocols/index.js";
 import type { ChainDeployment } from "../core/types.js";
-import { CONTRACT_LINKS, PROTOCOL_SOURCES } from "./contracts.generated.js";
-import type { ContractLink } from "./links.js";
+import { CONTRACT_LINKS, PROTOCOL_SOURCES, RETURNED_CONTRACTS } from "./contracts.generated.js";
+import type { ContractLink, ReturnedContractLink } from "./links.js";
 import { buildDescriptor } from "./derive.js";
-import type { ContractDescriptor } from "./types.js";
+import type { ContractDescriptor, MethodReturn } from "./types.js";
 import type { ChainSlug } from "../chains/canonical.js";
 
 /**
@@ -36,6 +36,19 @@ function resolveAbi(protocol: string, abiExport: string | undefined): Abi | unde
   return abi;
 }
 
+/** `<protocol>/<abiExport>` -> method signature -> the contracts its address outputs are. */
+const RETURNS: ReadonlyMap<string, ReadonlyMap<string, readonly MethodReturn[]>> = (() => {
+  const map = new Map<string, Map<string, MethodReturn[]>>();
+  for (const link of RETURNED_CONTRACTS as readonly ReturnedContractLink[]) {
+    const key = `${link.protocol}/${link.abiExport}`;
+    const bySignature = map.get(key) ?? new Map<string, MethodReturn[]>();
+    map.set(key, bySignature);
+    const returned = { path: link.path, ...link.returns };
+    bySignature.set(link.signature, [...(bySignature.get(link.signature) ?? []), returned]);
+  }
+  return map;
+})();
+
 function buildAllDescriptors(): ContractDescriptor[] {
   const out: ContractDescriptor[] = [];
   for (const link of CONTRACT_LINKS as readonly ContractLink[]) {
@@ -49,7 +62,13 @@ function buildAllDescriptors(): ContractDescriptor[] {
       PROTOCOL_SOURCES as Readonly<Record<string, { deployments: readonly ChainDeployment[] }>>
     )[link.protocol]!.deployments;
     out.push(
-      buildDescriptor(link, protocolInfo, resolveAbi(link.protocol, link.abiExport), deployments),
+      buildDescriptor(
+        link,
+        protocolInfo,
+        resolveAbi(link.protocol, link.abiExport),
+        deployments,
+        RETURNS.get(`${link.protocol}/${link.abiExport}`),
+      ),
     );
   }
   return out;

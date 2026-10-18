@@ -16,6 +16,7 @@ program and in TypeScript. This page lists both surfaces; the
 | Its method                 | `UniswapV3.QuoterV2.quoteExactInputSingle(...)` | `Base.UniswapV3.QuoterV2.quoteExactInputSingle(...)` |
 | The ABI at another address | `UniswapV3.Factory.at(address).getPool(...)`    | `Base.UniswapV3.Factory.at(address).getPool(...)`    |
 | An interface               | `Erc4626.Vault(vault).deposit(...)`             | `Base.Erc4626.Vault.at(vault).deposit(...)`          |
+| A contract a call returns  | `UniswapV3.Factory.getPool(a, b, 500).fee()`    | the method's `returns`                               |
 | A family alias             | `Uniswap.UniversalRouter`                       | `Base.Uniswap.UniversalRouter`                       |
 | Another chain's address    | `Arbitrum.UniswapV3.Factory`                    | `Arbitrum.UniswapV3.Factory`                         |
 | Whether the chain has it   | `available(UniswapV3.Factory)`                  | `Base.UniswapV3.Factory.available`                   |
@@ -57,6 +58,11 @@ chain chosen at run time, and `contracts.on(ref)` the same namespace tree.
 | `at(address)`       | the same contract, bound to `address` | Required before an interface's methods                                             |
 | `<method>(...args)` | `ContractCall`                        | One per ABI function, arguments typed by viem from the ABI                         |
 
+A method's `returns` lists, where the registry knows them, the registry contracts its address
+outputs are: `{ path, protocol, contract }` each, `path` empty for the one output and the field
+names for a field of what it returns. `UniswapV3.Factory`'s `getPool` has
+`{ path: [], protocol: "uniswap-v3", contract: "Pool" }`.
+
 An address-only contract (`contracts.AddressOnlyContract`) has no methods, and an interface
 (`contracts.InterfaceContract`) has them only after `.at(address)`. Calling a method of a contract
 with no deployment on the chain throws, naming the chains that have one.
@@ -89,7 +95,11 @@ In a program, a namespace member is a Sauce scalar: a deployed or address-only c
 address on the chain the program is compiled for, a method call is an ABI call there, and
 `.at(address).method(...)` calls the same ABI at `address`. An interface, which has no address of its
 own, is called with one: `Erc4626.Vault(vault).deposit(...)` (`.at(vault)` too). A deployed
-contract's name is never called with an address. `<Chain>.<Namespace>.<Contract>` reads
+contract's name is never called with an address. Where a method's `returns` names the contract an
+address it returns is, that contract's methods are called on the result, or on a `const` holding
+it: `UniswapV3.Factory.getPool(a, b, 500).fee()` compiles as `UniswapV3.Pool(<the call>).fee()`, a
+deployed contract's ABI is bound with `.at(...)` the same way, and a token's writes are
+`Token(address)`'s. `<Chain>.<Namespace>.<Contract>` reads
 another chain's address, without moving execution there. A protocol with a single deployed
 contract also takes its methods directly (`Cctp.depositForBurn(...)`).
 

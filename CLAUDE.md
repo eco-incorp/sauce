@@ -869,6 +869,24 @@ approve fulfils with nothing moved. `routes-nest-dynamic.e2e.test.ts` runs all o
 real Portal and Executor and PINS the gap. Any non-token statement makes the body a program, whose
 writes are SafeERC20 — that is the documented way to get the checks.
 
+**The balance shorthand `<holder>.<TOKEN>` is `<TOKEN>.balanceOf(<holder>)`, to the byte**
+(`token-rewrite.ts#collectBalanceSites`; on Solana `svm-token-rewrite.ts`). It emits the symbol, not
+its address, so a define reaches both spellings, and takes any address-valued holder: the holder's
+text stays in place for the accessor pass after it (`UniswapV4.PoolManager.WETH`,
+`UniswapV4.StateView.poolManager().USDC`), `X.at(a)` (`.view`, `.lib`) on a contract type — a
+registry contract or interface, an ABI imported from a `.json` module, a name the program does not
+declare; never a name it binds to a value, which shadows an import of that name — and
+`<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
+token's own contract is one (`WETH.ETH`; on Solana a mint, its token accounts derived off its key),
+an undeclared `self` or `ctx.self()` is the Pot and a declared `self` an ordinary variable (as on
+Solana, and for the accessor pass's bare `self`). The chain's native coin
+(`chains/index.ts#nativeCoinSymbol`) takes it too: `ctx.selfBalance()`/`ctx.balance(h)` on an EVM
+chain, `ctx.balance(<account>.address)` on Solana, refused where a token shares the symbol (Arc's
+USDC). Being textual it sees no types, so it refuses by name what the program's text says is not an
+address — a record or a list (`balance-holder.ts`), an interface with no address — and a misspelled symbol is named once the compile fails, from the compiler's byte span
+(`unknown-global.ts#unknownBalanceError`). A struct a contract call returns is not seen: a field of
+one named like a token would be read as a balance.
+
 **On Solana the token methods and the venue namespaces add their accounts to `main`.**
 `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)`,
 `<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)` (the nine

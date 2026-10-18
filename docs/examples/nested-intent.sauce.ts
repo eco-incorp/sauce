@@ -18,7 +18,7 @@
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
   Base(
     () => {
-      const amount = USDC.balanceOf(ctx.self());
+      const amount = self.USDC;
       const payout = amount - amount / 1000;
       Ethereum(() => {
         USDC.transfer(recipient, payout);

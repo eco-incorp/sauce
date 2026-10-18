@@ -244,11 +244,16 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `UniswapV3FactoryABI`
 
 `import UniswapV3FactoryABI from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";` Speaks for: factory.
 
-- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`
+- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`: the address is a `UniswapV3.Pool`
 - `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
 
 ### `UniswapV3NonfungiblePositionManagerABI`
@@ -268,8 +273,8 @@ function main() {
 - `liquidity() view returns (uint128)`
 - `fee() view returns (uint24)`
 - `tickSpacing() view returns (int24)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 
 ### `UniswapV3QuoterV2ABI`
 

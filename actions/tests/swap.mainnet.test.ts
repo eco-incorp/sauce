@@ -994,6 +994,30 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
   });
 
   describe("Through the Pot's Router: Maverick V2", () => {
+    it("the tokens a pool names are tokens, called on as the registry records them", async () => {
+      // `tokenA()` and `tokenB()` return the registry's ERC-20: each one's balance of the pool, read
+      // through the call, is the explicit `Erc20.ERC20(...)` read's and the token's own.
+      const pool = `${BigInt(MAVERICK_USDC_USDT)}`;
+      const read = async (expression: string): Promise<bigint> =>
+        BigInt(
+          await env.returned(
+            compileSource(env, CHAIN, `function main(): Uint256 { return ${expression}; }`),
+          ),
+        );
+      for (const [method, token] of [
+        ["tokenA", USDC],
+        ["tokenB", USDT],
+      ] as const) {
+        const chained = await read(`Maverick.V2Pool(${pool}).${method}().balanceOf(${pool})`);
+        const explicit = await read(
+          `Erc20.ERC20(Maverick.V2Pool(${pool}).${method}()).balanceOf(${pool})`,
+        );
+        assert.equal(chained, explicit);
+        assert.equal(chained, await balanceOf(env, token, MAVERICK_USDC_USDT));
+        assert.ok(chained > 0n, `the pool holds no ${method}`);
+      }
+    });
+
     it("USDC -> USDT: every spelling delivers the same, and tryMaverickV2 returns it", async () => {
       await tryMatches(
         "MaverickV2 USDC->USDT, 10 USDC",

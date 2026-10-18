@@ -20,8 +20,8 @@ function main(fee: Uint256): { pool: Address; usdc: Uint256; weth: Uint256; bcsp
   require(pool != 0, "no USDC/WETH pool at that fee on this chain");
   return {
     pool: pool,
-    usdc: USDC.balanceOf(pot),
-    weth: WETH.balanceOf(pot),
-    bcspx: bCSPX.balanceOf(pot),
+    usdc: pot.USDC,
+    weth: pot.WETH,
+    bcspx: pot.bCSPX,
   };
 }

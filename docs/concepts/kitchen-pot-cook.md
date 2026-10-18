@@ -60,7 +60,7 @@ The `sauce` command builds it, and signs and sends it or hands it to another wal
 
 Running as the Pot is what makes a program useful:
 
-- `ctx.self()` is the Pot, so `USDC.balanceOf(ctx.self())` is what the Pot holds.
+- `ctx.self()` is the Pot, and so is `self`: `self.USDC` is what the Pot holds.
 - Every call the program makes comes from the Pot. A protocol sees the Pot as its caller, an
   approval is the Pot's, and a swap's output lands in the Pot unless the program names another
   recipient.
@@ -71,7 +71,7 @@ Running as the Pot is what makes a program useful:
 
 ```js
 function main(recipient: Address, floor: Uint256) {
-  const held = USDC.balanceOf(ctx.self()); // what the Pot holds
+  const held = self.USDC; // what the Pot holds
   require(held >= floor, "not enough USDC in the Pot"); // below it, nothing moves
   USDC.transfer(recipient, held); // the Pot pays
 }

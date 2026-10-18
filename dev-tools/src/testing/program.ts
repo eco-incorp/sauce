@@ -48,8 +48,25 @@ export interface CompiledProgram {
    * argument `to`). A cook fills each itself.
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
-  /** The program with `args` encoded after it: the `program` of `Pot.cook(engine, program)`. */
-  payload(args?: readonly EntryValue[]): Hex;
+  /**
+   * On Solana, each venue's swap at a price a stop could hold, by its stop's derivation: what a
+   * cook works the stops out for (`svmProgramStops`).
+   */
+  readonly stoppable?: readonly string[];
+  /** How many times each of those inside a loop runs, by its derivation; null where uncounted. */
+  readonly stoppableRuns?: CompiledSauceProgram["stoppableRuns"];
+  /**
+   * On Solana, the values the SDK added to `main` after its accounts, one for each swap compiled
+   * held to a stop (`held`): its stop.
+   */
+  readonly derivedValues?: CompiledSauceProgram["derivedValues"];
+  /** The program compiled again with the swaps `stops` names held to a stop, the Stopped form. */
+  held(stops: readonly string[]): CompiledProgram;
+  /**
+   * The program with `args` encoded after it, and after them each of `derivedValues`' (`stops`, 0
+   * for each by default): the `program` of `Pot.cook(engine, program)`.
+   */
+  payload(args?: readonly EntryValue[], stops?: readonly bigint[]): Hex;
   /** `data`, a cook's return data, read as `main`'s return type. */
   decode(data: Hex): Value | undefined;
 }
@@ -130,28 +147,45 @@ function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
   }
 }
 
-/** `main`'s arguments encoded after the program, each `Address` on Solana as a whole key. */
-function encodeArguments(compiled: CompiledSauceProgram, args: readonly EntryValue[]): Uint8Array {
+/**
+ * `main`'s arguments encoded after the program, each `Address` on Solana as a whole key, and after
+ * them the values the SDK added to it, `stops`.
+ */
+function encodeArguments(
+  compiled: CompiledSauceProgram,
+  args: readonly EntryValue[],
+  stops: readonly bigint[],
+): Uint8Array {
   if (compiled.chain.kind !== "svm") return encodeEntryArguments(compiled, args);
   const params = compiled.entryParams;
+  const added = compiled.derivedValues ?? [];
+  if (args.length !== params.length) return encodeEntryArguments(compiled, args);
 
   return encodeEntryArguments(
     {
       ...compiled,
-      entryParams: params.map((param) => ({
-        ...param,
-        type: param.type.replace(/\bAddress\b/g, "Uint256"),
-      })),
+      entryParams: [
+        ...params.map((param) => ({
+          ...param,
+          type: param.type.replace(/\bAddress\b/g, "Uint256"),
+        })),
+        ...added.map(({ name, type }) => ({ name, type })),
+      ],
     },
-    args.map((value, index) =>
-      index < params.length
-        ? keyWords(parseEntryType(params[index]!.type), value, params[index]!.name)
-        : value,
-    ),
+    [
+      ...args.map((value, index) =>
+        keyWords(parseEntryType(params[index]!.type), value, params[index]!.name),
+      ),
+      ...added.map((_, index) => stops[index] ?? 0n),
+    ],
   );
 }
 
-export function compileProgram(input: ProgramInput, chain: CanonicalChain): CompiledProgram {
+export function compileProgram(
+  input: ProgramInput,
+  chain: CanonicalChain,
+  stops?: readonly string[],
+): CompiledProgram {
   const { source, path } = load(input);
   // Relative imports resolve beside the file, or the working directory for source text.
   const dir = path === undefined ? process.cwd() : dirname(path);
@@ -162,6 +196,7 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
         const file = resolve(dir, spec);
         return existsSync(file) ? new Uint8Array(readFileSync(file)) : undefined;
       },
+      ...(stops === undefined ? {} : { stops }),
     });
   } catch (error) {
     const name = path ?? "the program";
@@ -184,10 +219,21 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
     ...(compiled.derivedAccounts === undefined
       ? {}
       : { derivedAccounts: compiled.derivedAccounts }),
-    payload(args = []) {
-      if (args.length === 0 && compiled.entryParams.length === 0) return bytecode;
+    ...(compiled.stoppable === undefined ? {} : { stoppable: compiled.stoppable }),
+    ...(compiled.stoppableRuns === undefined ? {} : { stoppableRuns: compiled.stoppableRuns }),
+    ...(compiled.derivedValues === undefined ? {} : { derivedValues: compiled.derivedValues }),
+    held(binding) {
+      return compileProgram(path === undefined ? { source } : { source, path }, chain, binding);
+    },
+    payload(args = [], stops = []) {
+      if (
+        args.length === 0 &&
+        compiled.entryParams.length === 0 &&
+        (compiled.derivedValues ?? []).length === 0
+      )
+        return bytecode;
 
-      return concat([bytecode, bytesToHex(encodeArguments(compiled, args))]);
+      return concat([bytecode, bytesToHex(encodeArguments(compiled, args, stops))]);
     },
     decode(data) {
       if (returnType === undefined) return undefined;

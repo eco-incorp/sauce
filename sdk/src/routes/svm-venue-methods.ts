@@ -105,6 +105,18 @@ const venue = (namespace: string, name: string, swap: string, exact?: true): Svm
   };
 };
 
+/** The concentrated-liquidity venues, whose swap at a price has a form held to a stop. */
+export const SVM_STOPPED_VENUES: ReadonlySet<string> = new Set([
+  "Raydium.CLMM",
+  "Pancakeswap.CLMM",
+  "Byreal.CLMM",
+  "Stabble.CLMM",
+  "Orca.Whirlpool",
+  "Cropper.Whirlpool",
+  "Defituna.Fusion",
+  "Crema.CLMM",
+]);
+
 /** Each venue's namespace, its protocol then its program, as a program writes it. */
 export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> = {
   "Raydium.CLMM": venue("Raydium.CLMM", "Raydium CLMM", "raydiumClmm"),
@@ -334,6 +346,17 @@ export function unrollPoolKeyLoops(source: string): string {
 /** The venue namespaces' sites, `<Protocol>.<Program>.swap(…)` and the `pool(…)` each names. */
 export function collectVenueMethods(l: SvmLowering): void {
   let literalPools = 0;
+  /** Every name the program assigns to (`x = …`, `x += …`, `x++`). */
+  const assigned = new Set<string>();
+  walk(l.program, (n) => {
+    const target =
+      n.type === "AssignmentExpression"
+        ? (n as { left?: AstNode }).left
+        : n.type === "UpdateExpression"
+          ? (n as { argument?: AstNode }).argument
+          : undefined;
+    if (target?.type === "Identifier") assigned.add(nameOf(target));
+  });
   /** The `pool(…)` calls a swap names as its pool: lowered with it. */
   const named = new Set<AstNode>();
   walk(l.program, (n) => {
@@ -407,14 +430,53 @@ export function collectVenueMethods(l: SvmLowering): void {
       l.account(MEMO_PROGRAM, "memoProgram", {}),
     ];
     const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
-    const fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
+    // A swap a stop could hold, by its stop's derivation, for the cook's builder, which works the
+    // stop out from the pool paying `tokenIn` and the limit it is given (main's parameter or a
+    // number written out). Only one compiled to be held (`stopped`) calls the Stopped form, with the
+    // stop added to main; every other swap is the plain one.
+    let fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
+    let stop = "";
+    if (SVM_STOPPED_VENUES.has(namespace)) {
+      // A second swap of the same pool, token and limit is a stop of its own, charged apart.
+      const first = `stop:${pool.name}:${tokenIn.name}:${limitOf(args[4]!)}`;
+      let derivation = first;
+      for (let n = 2; l.stoppable.includes(derivation); n++) derivation = `${first}#${n}`;
+      l.stoppable.push(derivation);
+      // In a loop it runs as many times as the loop does, each run its own swap to share units with.
+      const runs = l.runsOf(site.call);
+      if (runs !== 1) l.stoppableRuns.set(derivation, runs);
+      if (l.stopped.has(derivation)) {
+        fn = `${fn}Stopped`;
+        stop = `, ${l.value(derivation, `${pool.stem}Stop`)}`;
+      }
+    }
     l.spliceCall(
       site,
       amountIn,
       minOut,
       `${l.use(ROUTER, fn, `__sauce_${fn}`)}([${slot.join(", ")}], [${trader.join(", ")}], `,
-      `, ${recipient})`,
+      `, ${recipient}${stop})`,
     );
+  }
+
+  /**
+   * Where a swap's `priceLimit` comes from, for its stop: `@<name>`, main's `Uint256` parameter, or
+   * a number written out; empty for any other expression, whose limit is not known as the cook is
+   * built.
+   */
+  function limitOf(node: AstNode): string {
+    if (node.type === "Identifier") {
+      // main's parameter as it was given: never declared again nor assigned to.
+      const name = nameOf(node);
+      const given =
+        l.param(name)?.type === "Uint256" &&
+        (l.declarations.get(name) ?? 0) === 1 &&
+        !assigned.has(name);
+      return given ? `@${name}` : "";
+    }
+    const value = integerLiteral(node, l.source);
+
+    return value === undefined ? "" : String(value);
   }
 
   /**
