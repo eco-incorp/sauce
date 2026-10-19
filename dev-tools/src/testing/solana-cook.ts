@@ -151,10 +151,13 @@ function argumentsByName(
         keys[param.name] = getAddressDecoder().decode(hexToBytes(value as Hex));
       }
     } else if (
-      param.type === "Uint256" &&
+      (param.type === "Uint256" || param.type === "Int256") &&
       (typeof value === "bigint" ||
         typeof value === "number" ||
-        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)))
+        (typeof value === "string" &&
+          (param.type === "Int256" ? /^(0x[0-9a-fA-F]+|-?\d+)$/ : /^(0x[0-9a-fA-F]+|\d+)$/).test(
+            value,
+          )))
     ) {
       integers[param.name] = BigInt(value);
     }

@@ -217,6 +217,10 @@ describe("svm account names", () => {
     await expect(resolveSvmAccountName(`pda:${TO}:u64:@n`, ctx())).rejects.toThrow(
       "main's argument `n`, which was not given",
     );
+    // An Int256 argument is an integer here too, and a negative one is no seed.
+    await expect(
+      resolveSvmAccountName(`pda:${TO}:u64:@n`, ctx({ integers: { n: -5n } })),
+    ).rejects.toThrow("seed u64:-5 does not fit 8 bytes");
     await expect(resolveSvmAccountName(`pda:${TO}:${"a".repeat(33)}`, ctx())).rejects.toThrow(
       "is 33 bytes; a seed is at most 32",
     );

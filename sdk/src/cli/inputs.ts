@@ -152,7 +152,7 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
         : `${args.from}: ${message}`,
     );
   }
-  for (const name of Object.keys(bound.constants)) {
+  for (const name of [...Object.keys(bound.constants), ...bound.declared]) {
     if (Object.hasOwn(input.defines, name)) {
       throw new UsageError(
         `${name} is main's parameter, given by ${args.from}; it cannot also be a --define`,

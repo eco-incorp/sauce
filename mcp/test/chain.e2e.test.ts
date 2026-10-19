@@ -13,7 +13,14 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 
-import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
+import {
+  formatUnits,
+  getAddress,
+  numberToHex,
+  toFunctionSelector,
+  type Address,
+  type Hex,
+} from "viem";
 
 import {
   FEE,
@@ -472,6 +479,61 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.deepEqual(
       defined.scenarios.map((each) => each.returned),
       ["7", "9"],
+    );
+  });
+
+  it("takes a negative Int256 argument, returns an Int256 as a signed number, and sends the signed word", async () => {
+    const source = "function main(x: Int256): Int256 {\n  return x - 1;\n}\n";
+    const minimum = -(1n << 255n);
+    const returnedOf = async (args: unknown[]): Promise<unknown> =>
+      ok(
+        await mcp.call("sauce_simulate", {
+          source,
+          chain: "ethereum",
+          owner: NOBODY,
+          args,
+          summary: true,
+        }),
+      ).returned;
+    // A JSON number and a decimal string, as an agent writes them; the program reads -5, so it
+    // returns -6, which comes back as -6 and never as 2^256 - 6.
+    assert.equal(await returnedOf([-5]), "-6");
+    assert.equal(await returnedOf(["-5"]), "-6");
+    assert.equal(await returnedOf(["7"]), "6");
+    assert.equal(await returnedOf([(minimum + 1n).toString()]), minimum.toString());
+    const several = ok(
+      await mcp.call("sauce_simulate", {
+        source,
+        chain: "ethereum",
+        owner: NOBODY,
+        summary: true,
+        scenarios: [{ args: [-1] }, { args: ["-2"] }, { args: [3] }],
+      }),
+    ) as { scenarios: Array<{ returned: string }> };
+    assert.deepEqual(
+      several.scenarios.map((each) => each.returned),
+      ["-2", "-3", "2"],
+    );
+    // The unsigned transaction carries the argument as its two's-complement word.
+    const tx = ok(
+      await mcp.call("sauce_tx", { source, chain: "ethereum", owner: NOBODY, args: [-5] }),
+    );
+    const cook = (tx.transactions as Array<{ data?: string }>).at(-1)!;
+    assert.ok(
+      cook.data!.includes(numberToHex(BigInt.asUintN(256, -5n), { size: 32 }).slice(2)),
+      "the cook holds -5 as a 256-bit two's-complement word",
+    );
+    // A value outside the type is refused by name, before anything is read.
+    assert.match(
+      failed(
+        await mcp.call("sauce_simulate", {
+          source,
+          chain: "ethereum",
+          owner: NOBODY,
+          args: [(1n << 255n).toString()],
+        }),
+      ),
+      /argument 1 \(x: Int256\): .* is not a signed integer from -2\^255 to 2\^255 - 1/,
     );
   });
 

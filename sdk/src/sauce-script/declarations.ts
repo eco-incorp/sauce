@@ -114,9 +114,9 @@ function bindingType(abi: unknown): string {
   return `{\n${methods.join("\n")}\n    }`;
 }
 
-/** A SauceScript annotation (`Address`, `Uint256[]`, `Account<Writable>`) as the declared type of a
- *  library function's parameter (`input`) or result. An unannotated parameter is a number. */
-function annotatedType(annotation: string | undefined, input: boolean): string {
+/** A SauceScript annotation (`Address`, `Uint256[]`, `Int256`, `Account<Writable>`) as the declared
+ *  type of a library function's parameter (`input`) or result. An unannotated parameter is a number. */
+export function annotatedType(annotation: string | undefined, input: boolean): string {
   if (annotation === undefined) return input ? "SauceInt" : "any";
   const type = annotation.trim();
   const array = /^(.*)\[\]$/.exec(type);
@@ -127,7 +127,9 @@ function annotatedType(annotation: string | undefined, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
-  if (/^(Address|Uint256|u?int\d*|number|bigint)$/.test(type)) return input ? "SauceInt" : "bigint";
+  if (/^(Address|Uint256|Int256|u?int\d*|number|bigint)$/.test(type)) {
+    return input ? "SauceInt" : "bigint";
+  }
   if (/^(bool|boolean)$/.test(type)) return "boolean";
   if (/^(bytes|string)$/.test(type)) return input ? "SauceData" : "SauceBytes";
   if (/^Account\b/.test(type) || type === "void") return type;

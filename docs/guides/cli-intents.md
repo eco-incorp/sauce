@@ -213,8 +213,8 @@ reward token a `transfer` to the intent's vault (and, for a native reward, a pla
 `main` arguments go after `--args`, as for `sauce run`: the command fixes each into the intents,
 which is what lets a wallet publish them. A file whose intent uses a value measured or computed on
 chain is refused, naming the value and pointing at `sauce run`, and so is one that does anything
-else. An argument must be one word to be fixed (an address, an unsigned integer or a `bool`); an
-array, a record, bytes or a string is refused.
+else. An argument must be one word to be fixed (an address, an integer, negative for an `Int256`,
+or a `bool`); an array, a record, bytes or a string is refused.
 
 `--dry-run` simulates the transactions together (`eth_simulateV1`) and sends nothing, from the
 signer's wallet or `--from <address>`'s, printing each one's gas or revert (`gasUsed` and `reason` in

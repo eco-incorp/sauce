@@ -798,7 +798,7 @@ function pdaSeeds(
         const value =
           typeof seed.value === "bigint" ? seed.value : integerArgument(seed.value, ctx);
         const width = seed.bits / 8;
-        if (value >= 1n << BigInt(seed.bits)) {
+        if (value < 0n || value >= 1n << BigInt(seed.bits)) {
           throw new SvmAccountNameError(
             `seed u${seed.bits}:${value} does not fit ${width} byte${width === 1 ? "" : "s"}`,
           );

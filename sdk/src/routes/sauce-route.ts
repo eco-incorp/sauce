@@ -652,7 +652,7 @@ export function compileSauceProgram(
   const resolved = requireChain(chain);
   const { args, stops, ...given } = options;
   const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const taken = Object.keys(bound?.constants ?? {}).find((name) =>
+  const taken = [...Object.keys(bound?.constants ?? {}), ...(bound?.declared ?? [])].find((name) =>
     Object.hasOwn(given.defines ?? {}, name),
   );
   if (taken !== undefined) {
