@@ -139,6 +139,14 @@ and the eco-routes selection are inherited from the enclosing intent.
 the lowering encoded it (`LoweredIntent`): one with no `captures` is fixed when it is built, so
 `intentSourceTxs(intent, { portal })` publishes it from a wallet, as `sauce intent publish` does.
 
+Pass `options.args` to fix `main`'s scalar arguments before lowering an intent. A positive or
+negative `Int256` keeps its declared signed type instead of becoming an untyped compile-time
+define. A bound parameter cannot also name a caller define or a chain-supplied value on any chain
+the program compiles for, including an intent's destination. The SDK refuses the collision by
+name. A parameter assigned by `main` cannot be bound this way: leave `args` out and pass its value
+at run time instead. The command's `sauce intent publish --args` and its MCP counterpart use the
+same binding rules.
+
 ## Nesting in TypeScript
 
 `.nest(childOrThunk, options?)`, called before `.reward(...)`, attaches an intent built in

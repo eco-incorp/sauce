@@ -181,6 +181,10 @@ export interface RouteScope {
    * differ per chain, and a program names more than one chain as soon as it opens an intent.
    */
   readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
+  /** Bound entry parameters, carried through every destination level so no define replaces one. */
+  readonly boundParameters?: readonly string[];
+  /** Non-signed arguments, injected only after collision checks against the level's defines. */
+  readonly boundConstants?: Readonly<Record<string, bigint | boolean>>;
 }
 
 /** What a nested level resolves its chain-scoped names with: its own chain's registry values and
@@ -224,7 +228,14 @@ function levelOn(
       : Object.fromEntries(
           Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
         );
-  return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
+  return {
+    options: { ...options, defines, tokens: undefined },
+    scope: {
+      ...NESTED_SCOPE,
+      boundParameters: scope.boundParameters,
+      boundConstants: scope.boundConstants,
+    },
+  };
 }
 
 /** A chain's defines with `tokens` over its registry's: the chain's own, built once, with none. */
@@ -258,6 +269,41 @@ function baseDefines(
   return merged;
 }
 
+/** The compiler and intent lowering share one final define set and one bound-name guard. */
+function effectiveDefines(
+  chain: ChainRefResolved,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+): {
+  readonly defines: Readonly<Record<string, DefineValue>> | undefined;
+  readonly base: Readonly<Record<string, DefineValue>> | undefined;
+} {
+  const tokens = resolveTokenMap(chain, options.tokens);
+  const scoped = scope.chainDefines?.(chain);
+  const base = tokens.size > 0 || scoped !== undefined ? baseDefines(tokens, scoped) : undefined;
+  const defines =
+    base === undefined
+      ? options.defines
+      : options.defines === undefined || Object.keys(options.defines).length === 0
+        ? base
+        : { ...base, ...options.defines };
+  for (const name of scope.boundParameters ?? []) {
+    if (Object.hasOwn(defines ?? {}, name)) {
+      throw new RangeError(
+        `${name} is main's parameter, given in args; it is not also a define ` +
+          `(${name} on ${chain.slug})`,
+      );
+    }
+  }
+  return {
+    defines:
+      scope.boundConstants === undefined || Object.keys(scope.boundConstants).length === 0
+        ? defines
+        : { ...defines, ...scope.boundConstants },
+    base,
+  };
+}
+
 /** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
  *  then its chain-scoped values when a scope supplies them, then the caller's own defines, with
  *  the caller winning — the same precedence the compiler applies. */
@@ -267,13 +313,9 @@ function compileTimeValues(
   scope: RouteScope,
 ): ReadonlyMap<string, bigint> {
   const values = new Map<string, bigint>();
-  for (const [symbol, address] of resolveTokenMap(chain, options.tokens)) {
-    values.set(symbol, address);
-  }
-  for (const [name, value] of Object.entries({
-    ...scope.chainDefines?.(chain),
-    ...options.defines,
-  })) {
+  for (const [name, value] of Object.entries(
+    effectiveDefines(chain, options, scope).defines ?? {},
+  )) {
     if (typeof value === "bigint") values.set(name, value);
     else if (typeof value === "number") values.set(name, BigInt(Math.trunc(value)));
     else values.set(name, value ? 1n : 0n);
@@ -616,7 +658,7 @@ export interface DerivedValue {
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
    * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. How a
+   * integer, an address or a `bool`), and the program then takes none at run time. How a
    * wallet publishes the intents a program opens from values known before anything runs. Leave it
    * out to compile `main` taking its arguments as it runs.
    */
@@ -652,14 +694,7 @@ export function compileSauceProgram(
   const resolved = requireChain(chain);
   const { args, stops, ...given } = options;
   const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const taken = [...Object.keys(bound?.constants ?? {}), ...(bound?.declared ?? [])].find((name) =>
-    Object.hasOwn(given.defines ?? {}, name),
-  );
-  if (taken !== undefined) {
-    throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
-  }
-  const compile: SauceCompileOptions =
-    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
+  const compile: SauceCompileOptions = given;
   // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
   // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
   // `defines`, so an intent the program opens on another chain gets that chain's own (`levelOn`),
@@ -667,6 +702,9 @@ export function compileSauceProgram(
   const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
   const scope: RouteScope = {
     chainDefines: (on) => definesOf(on, compile.tokens),
+    boundParameters:
+      bound === undefined ? undefined : [...Object.keys(bound.constants), ...bound.declared],
+    boundConstants: bound?.constants,
   };
   const program = compileForChain(
     resolved,
@@ -771,9 +809,14 @@ export function lowerProgramIntents(
   const resolved = requireChain(chain);
   const { args, ...given } = options;
   const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const compile: SauceCompileOptions =
-    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
-  const scope: RouteScope = { chainDefines: (on) => definesOf(on, compile.tokens) };
+  const compile: SauceCompileOptions = given;
+  const scope: RouteScope = {
+    chainDefines: (on) => definesOf(on, compile.tokens),
+    boundParameters:
+      bound === undefined ? undefined : [...Object.keys(bound.constants), ...bound.declared],
+    boundConstants: bound?.constants,
+  };
+  effectiveDefines(resolved, compile, scope);
   const text = bound?.source ?? source;
   const available = rewriteAvailability(text, resolved, resolveTokenMap(resolved, compile.tokens));
   const sugar = rewriteIntentSugar(
@@ -834,6 +877,7 @@ function compileForChain(
   // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
   // On svm they are values only: the token syntax below still throws there, by name.
   const tokenMap = resolveTokenMap(chain, options.tokens);
+  const { defines, base: chainValues } = effectiveDefines(chain, options, scope);
   // The chain's native coin, which `<holder>.<symbol>` reads the balance of as a token's is.
   const native = nativeCoinSymbol(chain);
 
@@ -866,22 +910,6 @@ function compileForChain(
   const sugar = rewriteIntentSugar(source, intentSugarContext(chain, options, scope));
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
-  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
-  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
-  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
-  // scoped values, when `openRoute` supplied a scope (ambient.ts#chainDefines resolves the SAME
-  // registry, so the token symbols agree), and the caller's own defines over both.
-  const scoped = scope.chainDefines?.(chain);
-  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
-  // over as they are when the caller adds none, so the compile adapter converts them once.
-  const chainValues =
-    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
-  const defines: Readonly<Record<string, DefineValue>> | undefined =
-    chainValues === undefined
-      ? options.defines
-      : options.defines === undefined || Object.keys(options.defines).length === 0
-        ? chainValues
-        : { ...chainValues, ...options.defines };
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
   // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
@@ -916,14 +944,18 @@ function compileForChain(
   let stoppable: readonly string[] | undefined;
   let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
   if (chain.kind === "svm") {
+    const givenDefines =
+      scope.boundConstants === undefined
+        ? options.defines
+        : { ...options.defines, ...scope.boundConstants };
     const lowered = rewriteSvmTokenSyntax(
       source,
-      svmTokenValues(tokenMap, options.defines),
+      svmTokenValues(tokenMap, givenDefines),
       svmTokenRows(chain),
       // The caller's values, which a holder may name as a key: main's arguments bound into the
       // program (`args`), an intent's body reading the enclosing program's.
       new Map(
-        Object.entries(options.defines ?? {}).filter(
+        Object.entries(givenDefines ?? {}).filter(
           (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
         ),
       ),

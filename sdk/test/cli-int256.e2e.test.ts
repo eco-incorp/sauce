@@ -9,17 +9,34 @@
  *
  * On a local anvil running the released gated stack (`cli-anvil.ts`), Ethereum.
  *
- * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md).
+ * Execution cases are GATED on SAUCE_V12_RUNTIME_CREATION_HEX. Offline publication cases below
+ * exercise argument binding without an engine or endpoint.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { numberToHex, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  concatHex,
+  decodeAbiParameters,
+  decodeFunctionData,
+  numberToHex,
+  type Address,
+  type Hex,
+} from "viem";
 
+import { v12EngineAddress } from "../src/deployments/index.js";
 import { v12PredictPot } from "../src/deployments/pot.js";
+import { v12PotAbi } from "../src/evm/engine.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { decodeRouteEvm } from "../src/routes/encode.js";
+import { encodeEntryArguments } from "../src/routes/entry.js";
+import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import {
   deployPot,
   describeEvm,
+  FEE,
   fixture,
   jsonOf,
   OWNER,
@@ -126,6 +143,46 @@ describeEvm("sauce, a program that takes and returns an Int256", () => {
       ethereum.rpcUrl,
       ...rest,
     );
+
+  it("a let inferred from Int256 crosses zero with runtime and bound positive arguments", async () => {
+    const source = [
+      "function main(x: Int256): Int256 {",
+      "  let y = x;",
+      "  y = y - 10;",
+      "  return y;",
+      "}",
+    ].join("\n");
+    const runtime = compileSauceProgram("ethereum", source);
+    const bound = compileSauceProgram("ethereum", source, { args: [5n] });
+    expect(bound.entryParams).toEqual([]);
+
+    const cook = async (program: Hex): Promise<bigint> => {
+      const call = buildSauceEvmCall({
+        pot,
+        engine: v12EngineAddress() as Address,
+        program,
+        value: FEE,
+      });
+      const { data } = await ethereum.publicClient.call({
+        account: OWNER,
+        to: call.to,
+        data: call.data,
+        value: call.value,
+      });
+      expect(data).toBeDefined();
+      expect(data).toBe(word(-5n));
+
+      return decodeAbiParameters([{ type: "int256" }], data!)[0];
+    };
+
+    expect(
+      await cook(
+        concatHex([bytesToHex(runtime.bytecode), bytesToHex(encodeEntryArguments(runtime, [5n]))]),
+      ),
+    ).toBe(-5n);
+    // Execute the bound compiler result itself, with no appended arguments, on the same real Pot.
+    expect(await cook(bytesToHex(bound.bytecode))).toBe(-5n);
+  }, 120_000);
 
   it("`sauce simulate --args -5` returns -6, printed as -6 and not as 2^256 - 6", async () => {
     const run = await simulate(delta, "--args", "-5");
@@ -276,4 +333,140 @@ describeEvm("sauce, a program that takes and returns an Int256", () => {
     expect(refused.stderr + refused.stdout).toContain("owed is not negative");
     expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(before + 1_000_000n);
   }, 120_000);
+});
+
+describe("sauce intent publish binds signed arguments offline", () => {
+  const body = 'require(delta < 0, "delta is not negative");';
+  const intent = `Base(() => { ${body} }).reward({ nativeAmount: 1 });`;
+  const source = `function main(delta /* debt */: Int256) { ${intent} }\n`;
+  let work: string;
+
+  beforeAll(() => {
+    work = mkdtempSync(join(tmpdir(), "sauce-int256-publish-"));
+  });
+
+  afterAll(() => {
+    rmSync(work, { recursive: true, force: true });
+  });
+
+  const programFile = (name: string, text: string): string => {
+    const file = join(work, `${name}.sauce.ts`);
+    writeFileSync(file, text);
+
+    return file;
+  };
+
+  // Printing unsigned publication is the offline path. A true --dry-run needs an endpoint to
+  // simulate the funding and publish; --format json builds their actual calldata without one.
+  const publish = (file: string, ...args: string[]) =>
+    sauce(
+      "intent",
+      "publish",
+      file,
+      "--chain",
+      "ethereum",
+      "--offline",
+      "--format",
+      "json",
+      "--from",
+      OWNER.address,
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      OWNER.address,
+      "--intent-execution-fee",
+      FEE.toString(),
+      ...args,
+    );
+
+  it("publishes a negative commented parameter as the same program as a typed module constant", async () => {
+    const file = programFile("debt", source);
+    const literal = programFile(
+      "literal",
+      `const delta: Int256 = -5;\nfunction main() { ${intent} }\n`,
+    );
+    const out = jsonOf(await publish(file, "--args", "-5")) as {
+      intents: Array<{
+        intentHash: Hex;
+        destination: string;
+        transactions: Array<{ what: string; data: Hex }>;
+      }>;
+    };
+    expect(out.intents).toHaveLength(1);
+    expect(out.intents[0]!.destination).toBe("base");
+    expect(out.intents).toEqual(jsonOf(await publish(literal)).intents);
+
+    const compiled = compileSauceProgram("ethereum", source, {
+      args: [-5n],
+      intents: { deadline: 2_000_000_000n, creator: OWNER.address, executionFee: FEE },
+    });
+    expect(compiled.entryParams).toEqual([]);
+    expect(compiled.intents).toHaveLength(1);
+    expect(compiled.intents[0]!.captures).toEqual([]);
+
+    // Decode what the wallet would publish, then what the destination Pot would cook. Equality
+    // with the complete standalone program proves there is no runtime-argument suffix to fill.
+    const tx = out.intents[0]!.transactions.find((step) => step.what === "publish")!;
+    const published = decodeFunctionData({ abi: PortalABI, data: tx.data });
+    expect(published.functionName).toBe("publish");
+    if (published.functionName !== "publish") throw new Error("expected Portal.publish");
+    const [destination, routeBytes] = published.args;
+    expect(destination).toBe(8453n);
+    const route = decodeRouteEvm(routeBytes);
+    expect(route.calls).toHaveLength(1);
+    const call = decodeFunctionData({ abi: v12PotAbi, data: route.calls[0]!.data });
+    expect(call.functionName).toBe("cook");
+    if (call.functionName !== "cook") throw new Error("expected Pot.cook");
+    const expected = compileSauceProgram(
+      "base",
+      `const delta: Int256 = -5;\nfunction main() { ${body} }\n`,
+    );
+    expect(call.args[1]).toBe(bytesToHex(expected.bytecode));
+  });
+
+  it.each([
+    ["chainId", "Int256", "5"],
+    ["chainId", "Int256", "-5"],
+    ["USDC", "Int256", "5"],
+    ["USDC", "Int256", "-5"],
+    ["USDC", "Address", RECIPIENT],
+  ])(
+    "refuses bound %s: %s = %s instead of a chain define replacing it",
+    async (name, type, value) => {
+      const file = programFile(
+        `${name}-${type}-${value}`,
+        `function main(${name}: ${type}) {
+  Base(() => { require(${name} != 0, "zero input"); }, { tokens: [] })
+    .reward({ nativeAmount: 1 });
+}`,
+      );
+      const run = await publish(file, "--args", value);
+      expect(run.code).toBe(1);
+      expect(run.stderr + run.stdout).toContain(
+        `${name} is main's parameter, given in args; it is not also a define (${name} on ethereum)`,
+      );
+    },
+  );
+
+  it.each([
+    ["delta", "delta /* debt */", "Int256", "-5", "7"],
+    ["delta", "delta /* debt */", "Int256", "5", "7"],
+    ["recipient", "recipient /* payee */", "Address", RECIPIENT, OWNER.address],
+  ])(
+    "refuses an explicit --define of bound %s: %s: %s = %s",
+    async (name, parameter, type, value, define) => {
+      const file = programFile(
+        `${name}-${value}`,
+        `function main(${parameter}: ${type}) {
+  Base(() => { require(${name} != 0, "zero input"); }, { tokens: [] })
+    .reward({ nativeAmount: 1 });
+}`,
+      );
+      const run = await publish(file, "--define", `${name}=${define}`, "--args", value);
+      expect(run.code).toBe(2);
+      expect(run.stderr + run.stdout).toContain(
+        `${name} is main's parameter, given by --args; it cannot also be a --define`,
+      );
+    },
+  );
 });

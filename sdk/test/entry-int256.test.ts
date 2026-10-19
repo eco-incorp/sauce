@@ -8,11 +8,19 @@
  * `-5`, not as 2^256 - 5. Executing these against the engine is `entry-arguments.e2e.test.ts`,
  * `cli-int256.e2e.test.ts` and the MCP chain suite.
  */
-import { bytesToHex, encodeAbiParameters, hexToBytes, numberToHex, type Hex } from "viem";
+import {
+  bytesToHex,
+  decodeFunctionData,
+  encodeAbiParameters,
+  hexToBytes,
+  numberToHex,
+  type Hex,
+} from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { argumentValues, priceLimitNotes } from "../src/cli/commands.js";
 import { svmKeyArguments } from "../src/cli/solana.js";
+import { v12Pot } from "../src/evm/engine.js";
 import { annotatedType } from "../src/sauce-script/declarations.js";
 import {
   bindEntryArguments,
@@ -23,7 +31,8 @@ import {
   type EntryValue,
 } from "../src/routes/entry.js";
 import { decodeReturned, returnedLine, returnedText } from "../src/routes/returned.js";
-import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, lowerProgramIntents } from "../src/routes/sauce-route.js";
+import { sourceGlobals } from "../src/routes/source-globals.js";
 
 const MIN = -(1n << 255n);
 const MAX = (1n << 255n) - 1n;
@@ -177,17 +186,24 @@ describe("Int256 entry parameters", () => {
 
 describe("Int256 arguments bound into a program", () => {
   const SOURCE = "function main(x: Int256): Int256 {\n  return x - 1;\n}\n";
+  const INTENTS = { deadline: 2_000_000_000n, creator: TO, executionFee: 0n } as const;
+  const INTENT = `Ethereum(() => {
+    USDC.transfer(${TO}, 1);
+  }).reward({ tokens: [{ token: USDC, amount: 1 }] });`;
 
-  it("binds a non-negative value as a define, as a Uint256 is", () => {
-    const bound = bindEntryArguments(SOURCE, [5n]);
-    expect(bound.constants).toEqual({ x: 5n });
-    expect(bound.declared).toEqual([]);
-    expect(bound.source).not.toContain("const x");
-  });
+  it.each([0n, 5n, MAX])(
+    "declares non-negative %s as an Int256, not an unsigned define",
+    (value) => {
+      const bound = bindEntryArguments(SOURCE, [value]);
+      expect(Object.keys(bound.constants)).toEqual([]);
+      expect(bound.declared).toEqual(["x"]);
+      expect(bound.source.endsWith(`\nconst x: Int256 = ${value};\n`)).toBe(true);
+    },
+  );
 
-  it("declares a negative value in the source, after its last line, since no define spells it", () => {
+  it("declares a negative value after the source's last line, preserving earlier positions", () => {
     const bound = bindEntryArguments(SOURCE, ["-5"]);
-    expect(bound.constants).toEqual({});
+    expect(Object.keys(bound.constants)).toEqual([]);
     expect(bound.declared).toEqual(["x"]);
     // The parameter list is blanked in place, so every line before the end is the source's own.
     expect(
@@ -200,14 +216,20 @@ describe("Int256 arguments bound into a program", () => {
     expect(bindEntryArguments(SOURCE, [MIN]).source).toContain(`const x: Int256 = ${MIN};`);
   });
 
-  it("binds every kind of word together, a negative one among them", () => {
+  it("declares signed values while preserving other scalar bindings as defines", () => {
     const bound = bindEntryArguments(
       "function main(a: Uint256, d: Int256, who: Address, ok: bool, e: Int256) {}",
-      [1n, -2n, TO, true, 3n],
+      ["0x1", "-0x2", TO, true, "3"],
     );
-    expect(bound.constants).toEqual({ a: 1n, who: BigInt(TO), ok: true, e: 3n });
-    expect(bound.declared).toEqual(["d"]);
+    expect(bound.declared).toEqual(["d", "e"]);
+    expect(bound.constants).toEqual({ a: 1n, who: BigInt(TO), ok: true });
     expect(bound.addresses).toEqual(["who"]);
+    expect(bound.source).toContain("const d: Int256 = -2;");
+    expect(bound.source).toContain("const e: Int256 = 3;");
+    expect(bound.source).not.toMatch(/const (?:a|who|ok)\b/);
+    expect(bindEntryArguments("function main(ok: bool) {}", [false]).constants).toEqual({
+      ok: false,
+    });
   });
 
   it("refuses an Int256 outside its range, and an array of them (no one word holds it)", () => {
@@ -236,10 +258,251 @@ describe("Int256 arguments bound into a program", () => {
     );
   });
 
-  it("refuses a define that would replace the declared value", () => {
-    expect(() =>
-      compileSauceProgram("ethereum", SOURCE, { args: [-5n], defines: { x: 1n } }),
-    ).toThrow(/x is main's parameter, given in args; it is not also a define/);
+  describe.each(["base", "solana"])("typed bindings on %s", (chain) => {
+    it.each([
+      ["an annotated return", "Int256", "return x - 10;"],
+      ["an inferred const", "Int256", "const y = x - 10; return y;"],
+      ["a comparison", "bool", "return x - 10 < 0;"],
+      ["Math.sDiv", "Int256", "return Math.sDiv(x - 10, 2);"],
+      ["a mutable local", "Int256", "let y = x; y = y - 10; return y;"],
+    ])("keeps a positive Int256 signed through %s", (_, returns, body) => {
+      const bound = compileSauceProgram(chain, `function main(x: Int256): ${returns} { ${body} }`, {
+        args: [5n],
+      });
+      const written = compileSauceProgram(
+        chain,
+        `const x: Int256 = 5;\nfunction main(): ${returns} { ${body} }`,
+      );
+      expect(bound.entryParams).toEqual([]);
+      expect(bound.bytecode).toEqual(written.bytecode);
+    });
+
+    it.each<[string, EntryValue, string]>([
+      ["Uint256", 5n, "5"],
+      ["Address", TO, TO],
+    ])("keeps a bound %s's return type and value (%s)", (type, value, literal) => {
+      const bound = compileSauceProgram(
+        chain,
+        `function main(value: ${type}): ${type} { return value; }`,
+        { args: [value] },
+      );
+      const written = compileSauceProgram(
+        chain,
+        `const value: ${type} = ${literal}; function main(): ${type} { return value; }`,
+      );
+      expect(bound.entryParams).toEqual([]);
+      expect(bound.bytecode).toEqual(written.bytecode);
+    });
+
+    it.each([-5n, 5n])("keeps a commented parameter's identity when binding %s", (value) => {
+      const source =
+        "function main(/* input */ delta /* signed */: Int256): Int256 { return delta; }";
+      expect(bindEntryArguments(source, [value]).declared).toEqual(["delta"]);
+      const bound = compileSauceProgram(chain, source, { args: [value] });
+      const written = compileSauceProgram(
+        chain,
+        `const delta: Int256 = ${value};\nfunction main(): Int256 { return delta; }`,
+      );
+      expect(bound.entryParams).toEqual([]);
+      expect(bound.bytecode).toEqual(written.bytecode);
+    });
+
+    it.each<[string, EntryValue]>([
+      ["Int256", -5n],
+      ["Int256", 5n],
+      ["Uint256", 5n],
+    ])("clearly refuses assigning a bound %s (%s)", (type, value) => {
+      for (const assignment of ["x = 1;", "x += 1;", "x++;"]) {
+        expect(() =>
+          compileSauceProgram(
+            chain,
+            `function main(x: ${type}): ${type} { ${assignment} return x; }`,
+            { args: [value] },
+          ),
+        ).toThrow("x is bound by args and main assigns it");
+      }
+    });
+  });
+
+  describe.each([
+    ["compileSauceProgram", compileSauceProgram],
+    ["lowerProgramIntents", lowerProgramIntents],
+  ] as const)("%s binding guards and intents", (_, build) => {
+    it.each([-5n, 5n])(
+      "refuses automatic chainId and USDC defines for Int256 %s on Base",
+      (value) => {
+        for (const name of ["chainId", "USDC"]) {
+          expect(() =>
+            build("base", `function main(${name}: Int256) { ${INTENT} }`, {
+              args: [value],
+              intents: INTENTS,
+            }),
+          ).toThrow(
+            `${name} is main's parameter, given in args; it is not also a define (${name} on base)`,
+          );
+        }
+      },
+    );
+
+    it.each<[string, EntryValue]>([
+      ["Uint256", 5n],
+      ["Address", TO],
+      ["bool", true],
+    ])("refuses automatic defines for a bound %s too", (type, value) => {
+      for (const name of ["chainId", "USDC"]) {
+        expect(() =>
+          build("base", `function main(${name}: ${type}) { ${INTENT} }`, {
+            args: [value],
+            intents: INTENTS,
+          }),
+        ).toThrow(`${name} is main's parameter, given in args; it is not also a define`);
+      }
+    });
+
+    it("refuses protocol-address and caller token defines through the same final-name guard", () => {
+      const globals = sourceGlobals("base");
+      const tokens = new Set(globals.tokens.map(({ symbol }) => symbol));
+      const protocol = Object.keys(globals.defines).find(
+        (name) => name !== "chainId" && !tokens.has(name),
+      );
+      expect(protocol).toBeDefined();
+      expect(() =>
+        build("base", `function main(${protocol}: Address) { ${INTENT} }`, {
+          args: [TO],
+          intents: INTENTS,
+        }),
+      ).toThrow(`${protocol} is main's parameter, given in args; it is not also a define`);
+      expect(() =>
+        build("base", `function main(BoundAsset: Address) { ${INTENT} }`, {
+          args: [TO],
+          tokens: { BoundAsset: TO },
+          intents: INTENTS,
+        }),
+      ).toThrow("BoundAsset is main's parameter, given in args; it is not also a define");
+    });
+
+    it.each<[string, EntryValue]>([
+      ["Int256", -5n],
+      ["Int256", 5n],
+      ["Uint256", 5n],
+      ["Address", TO],
+      ["bool", true],
+    ])("refuses an explicit define replacing %s (%s)", (type, value) => {
+      expect(() =>
+        build("base", `function main(delta: ${type}) { ${INTENT} }`, {
+          args: [value],
+          defines: { delta: 1n },
+          intents: INTENTS,
+        }),
+      ).toThrow("delta is main's parameter, given in args; it is not also a define");
+    });
+
+    it.each([-5n, 5n])("refuses an explicit define of a commented parameter (%s)", (value) => {
+      expect(() =>
+        build("base", `function main(/* input */ delta /* signed */: Int256) { ${INTENT} }`, {
+          args: [value],
+          defines: { delta: 1n },
+          intents: INTENTS,
+        }),
+      ).toThrow("delta is main's parameter, given in args; it is not also a define");
+    });
+
+    it.each([-5n, 5n])("refuses a destination-only token name for Int256 %s", (value) => {
+      const source = sourceGlobals("base");
+      const destination = sourceGlobals("ethereum");
+      const token = destination.tokens.find(
+        ({ symbol, stock }) =>
+          stock === undefined &&
+          /^[A-Za-z_$][\w$]*$/.test(symbol) &&
+          !Object.hasOwn(source.defines, symbol),
+      );
+      expect(token).toBeDefined();
+      const name = token!.symbol;
+      expect(source.tokens.some(({ symbol }) => symbol === name)).toBe(false);
+      expect(Object.hasOwn(destination.defines, name)).toBe(true);
+      // The same binding is valid on Base alone: only the destination owns this name.
+      expect(
+        compileSauceProgram("base", `function main(${name}: Int256): Int256 { return ${name}; }`, {
+          args: [value],
+        }).bytecode,
+      ).toEqual(
+        compileSauceProgram(
+          "base",
+          `const ${name}: Int256 = ${value};\nfunction main(): Int256 { return ${name}; }`,
+        ).bytecode,
+      );
+      // Both the direct-call lowering and a child's program must guard destination defines.
+      for (const body of [
+        `USDC.transfer(${TO}, ${name});`,
+        `require(${name} == ${value}, "bound value changed");`,
+      ]) {
+        expect(() =>
+          build(
+            "base",
+            `function main(${name}: Int256) {
+              Ethereum(() => { ${body} }).reward({ tokens: [{ token: USDC, amount: 1 }] });
+            }`,
+            { args: [value], intents: INTENTS },
+          ),
+        ).toThrow(
+          `${name} is main's parameter, given in args; it is not also a define (${name} on ethereum)`,
+        );
+      }
+    });
+
+    it("carries exactly -5 into the destination body, with no capture or unsigned replacement", () => {
+      const body = `require(delta == -5, "bound delta changed");
+        evm.sstore(0, Uint256.fromBits(delta));`;
+      const site = `Ethereum(() => { ${body} })
+        .reward({ tokens: [{ token: USDC, amount: 1 }] });`;
+      const bound = build("base", `function main(delta: Int256) { ${site} }`, {
+        args: [-5n],
+        intents: INTENTS,
+      });
+      const written = build("base", `const delta: Int256 = -5;\nfunction main() { ${site} }`, {
+        intents: INTENTS,
+      });
+      expect(bound.entryParams).toEqual([]);
+      expect(bound.intents).toHaveLength(1);
+      const child = bound.intents[0]!;
+      expect(child.captures).toEqual([]);
+      expect(child.sentinels).toEqual([]);
+      expect(child.intent).toEqual(written.intents[0]!.intent);
+      expect(child.intent.route.calls).toHaveLength(1);
+      const cook = decodeFunctionData({ abi: v12Pot.abi, data: child.intent.route.calls[0]!.data });
+      expect(cook.functionName).toBe("cook");
+      const expected = compileSauceProgram(
+        "ethereum",
+        `const delta: Int256 = -5;\nfunction main() { ${body} }`,
+      );
+      expect(cook.args?.[1]).toBe(bytesToHex(expected.bytecode));
+    });
+
+    it.each([
+      [
+        "a direct transfer",
+        `Ethereum(() => { USDC.transfer(${TO}, delta); })
+        .reward({ tokens: [{ token: USDC, amount: 1 }] });`,
+      ],
+      [
+        "a reward",
+        `Ethereum(() => { USDC.transfer(${TO}, 1); })
+        .reward({ tokens: [{ token: USDC, amount: delta }] });`,
+      ],
+      [
+        "a delivery",
+        `Ethereum(() => { require(true); },
+        { tokens: [{ token: USDC, amount: delta }] })
+        .reward({ tokens: [{ token: USDC, amount: 1 }] });`,
+      ],
+    ])("never interprets a bound negative amount as unsigned in %s", (_, site) => {
+      expect(() =>
+        build("base", `function main(delta: Int256) { ${site} }`, {
+          args: [-5n],
+          intents: INTENTS,
+        }),
+      ).toThrow(/negative.*(?:address|amount)|(?:address|amount).*negative/);
+    });
   });
 });
 

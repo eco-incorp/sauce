@@ -286,7 +286,10 @@ interface Resolver {
 
 function literalOf(node: AstNode): bigint | undefined {
   const value = literalValue(node);
-  if (value !== undefined) return value;
+  if (value !== undefined) {
+    if (value < 0n) fail("a negative literal is not a valid address or amount");
+    return value;
+  }
   if (node.type === "UnaryExpression" && (node as { operator?: string }).operator === "-") {
     fail("a negative literal is not a valid address or amount");
   }
@@ -303,7 +306,10 @@ function makeResolver(
     if (node.type === "Identifier") {
       const name = (node as unknown as { name: string }).name;
       const define = defines.get(name);
-      if (define !== undefined) return { literal: define };
+      if (define !== undefined) {
+        if (define < 0n) fail(`'${name}' is negative and is not a valid address or amount`);
+        return { literal: define };
+      }
       if (outerLocals.has(name)) return { capture: name };
       if (unknown !== undefined) return fail(unknown(name));
       return fail(
@@ -405,6 +411,7 @@ function lowerStatement(
           "`Token(address)` with a literal, a define or a top-level `const` of a literal.",
       );
     }
+    if (address < 0n) fail(`'${name}' is negative and is not a valid token address`);
     target = address;
   } else if (
     object.type === "CallExpression" &&

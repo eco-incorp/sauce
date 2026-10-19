@@ -44,11 +44,25 @@ interface Declaration {
   readonly literal?: bigint;
 }
 
-/** The value a literal folds to — an integer, a bigint or a boolean — or `undefined`. An integer
- *  is read from its text, as the compiler reads it: the parser's `number` for
- *  `1000000000000000000` or an address is a rounded float. */
+/** The value a literal folds to — an integer (including unary minus), a bigint or a boolean — or
+ *  `undefined`. An integer is read from its text, as the compiler reads it: the parser's `number`
+ *  for `1000000000000000000` or an address is a rounded float. Callers using an unsigned address or
+ *  amount must reject negative values. */
 export function literalValue(node: unknown): bigint | undefined {
-  if ((node as AstNode | null | undefined)?.type !== "Literal") return undefined;
+  const expression = node as AstNode | null | undefined;
+  if (expression?.type === "UnaryExpression" && expression.operator === "-") {
+    const argument = expression.argument as AstNode;
+    if (
+      argument.type !== "Literal" ||
+      (typeof argument.value !== "number" && typeof argument.value !== "bigint")
+    ) {
+      return undefined;
+    }
+    const value = literalValue(argument);
+
+    return value === undefined ? undefined : -value;
+  }
+  if (expression?.type !== "Literal") return undefined;
   const { value, raw } = node as { value?: unknown; raw?: string };
   if (typeof value === "bigint") return value;
   if (typeof value === "number") {
