@@ -42,6 +42,7 @@ import {
   lowerProgramIntents,
   type CompiledSauceProgram,
   type SauceCompileOptions,
+  type SauceProgramOptions,
 } from "../routes/sauce-route.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
@@ -164,6 +165,8 @@ export interface ProgramInput {
   readonly sourceDir?: string;
   readonly chain: CanonicalChain;
   readonly defines: Record<string, DefineValue>;
+  /** Wallet-published arguments, kept separate from caller defines until the shared binding path. */
+  readonly boundArgs?: readonly EntryValue[];
   /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
    *  report shows as one. */
   readonly addressDefines?: readonly string[];
@@ -263,7 +266,7 @@ function compileOptions(
   input: ProgramInput,
   files: CliFiles,
   onContract?: (reference: string, target: AccessorTarget) => void,
-): SauceCompileOptions {
+): SauceProgramOptions {
   const dir = sourceDirOf(input);
   const { deadline, rewardDeadline, creator, prover, executionFee, fundVia, svm } = input.intents;
   const intents = {
@@ -278,6 +281,7 @@ function compileOptions(
 
   return {
     defines: input.defines,
+    ...(input.boundArgs === undefined ? {} : { args: input.boundArgs }),
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
     // The intents the program opens compile with these options too, so this hears their contracts.

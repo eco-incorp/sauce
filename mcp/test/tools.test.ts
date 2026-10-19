@@ -1324,6 +1324,27 @@ describe("sauce_intent_publish", () => {
     notes: string[];
   };
 
+  it("refuses bound argument collisions before publishing, including commented names", async () => {
+    for (const name of ["chainId", "USDC"]) {
+      for (const value of ["-5", "5"]) {
+        assert.match(
+          failed(
+            await mcp.call("sauce_intent_publish", {
+              ...args,
+              chain: "base",
+              source: `function main(${name} /* debt */: Int256) {
+                Ethereum(() => { require(${name} < 10, "bound"); }).reward({ nativeAmount: 1 });
+              }`,
+              args: [value],
+              intentExecutionFee: "0",
+            }),
+          ),
+          new RegExp(`${name} is main's parameter.*define`),
+        );
+      }
+    }
+  });
+
   it("builds the unsigned transfer into the vault and publish of a fixed intent", async () => {
     const out = ok(await mcp.call("sauce_intent_publish", args)) as Published;
     assert.equal(out.chainId, 1);

@@ -111,11 +111,10 @@ export function definesReach(file: string, text: string, names: readonly string[
 }
 
 /**
- * A program whose intents a wallet publishes, with `main`'s arguments given: the same program with
- * each argument bound as a constant (`bindEntryArguments`). A wallet publishes an intent from values
- * it knows before anything runs, so `main(amount: Uint256, recipient: Address)` with `--args 1000000
- * 0x…` is compiled as if its body read `amount` and `recipient` as those values. The program keeps
- * its shape, and the intents it opens come out fixed.
+ * A program whose intents a wallet publishes, with `main`'s arguments given and validated by
+ * `bindEntryArguments`. Keep the arguments separate from caller defines until the shared program
+ * lowering can check every effective define, including each destination chain's. A wallet publishes
+ * from values known before anything runs, so the intents it opens come out fixed.
  *
  * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
  * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
@@ -162,8 +161,7 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
 
   return {
     ...input,
-    text: bound.source,
-    defines: { ...input.defines, ...bound.constants },
+    boundArgs: args.values as EntryValue[],
     ...(bound.addresses.length === 0
       ? {}
       : { addressDefines: [...(input.addressDefines ?? []), ...bound.addresses] }),
