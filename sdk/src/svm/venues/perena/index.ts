@@ -497,6 +497,12 @@ function arithmeticLines(
   const a = c.aRaw * RESCALE;
   const d = dScaled(amp, a);
   const fourAmpWad = 4n * amp * WAD;
+  // K = D - P + A*WAD/P is a SIGNED quantity: D (a pool constant, -96 WAD for
+  // A=100, a=1) is negative for a steep curve, and K goes negative for any
+  // pool when the side being solved sits far above equilibrium. So K and the
+  // root v are Int256; everything that is non-negative by construction (the
+  // reserves, the discriminant, w and u once the `>= 0` check has passed)
+  // returns to Uint256 through a checked conversion that cannot fail there.
   return [
     `  let ${outVar} = 0;`,
     `  if (${x} > 0 && ${r}lin > 0 && ${r}lout > 0) {`,
@@ -505,23 +511,23 @@ function arithmeticLines(
     `    const ${p}uin = Math.mulDiv(${p}xin2, ${WAD}, ${r}lin);`,
     `    const ${p}pin = ${p}uin + ${a};`,
     `    if (${p}pin > 0) {`,
-    `      const ${p}kin = ${d} - ${p}pin + Math.mulDiv(${amp}, ${WAD}, ${p}pin);`,
-    `      const ${p}discin = ${p}kin * ${p}kin + ${fourAmpWad};`,
-    `      const ${p}vin = (${p}kin + Math.sqrt(${p}discin)) / 2;`,
+    `      const ${p}kin = Int256(${d}) - Int256(${p}pin) + Int256(Math.mulDiv(${amp}, ${WAD}, ${p}pin));`,
+    `      const ${p}discin = Uint256(${p}kin * ${p}kin) + ${fourAmpWad};`,
+    `      const ${p}vin = (${p}kin + Int256(Math.sqrt(${p}discin))) / 2;`,
     `      const ${p}win = ${p}vin - ${a};`,
     `      if (${p}win >= 0) {`,
-    `        const ${p}yin2 = Math.mulDiv(${p}win, ${r}lin, ${WAD});`,
+    `        const ${p}yin2 = Math.mulDiv(Uint256(${p}win), ${r}lin, ${WAD});`,
     `        if (${p}yin2 < ${r}yin) {`,
     `          const ${p}dnum = ${r}yin - ${p}yin2;`,
     `          const ${p}wout = Math.mulDiv(${r}yout + ${p}dnum, ${WAD}, ${r}lout);`,
     `          const ${p}pout = ${p}wout + ${a};`,
     `          if (${p}pout > 0) {`,
-    `            const ${p}kout = ${d} - ${p}pout + Math.mulDiv(${amp}, ${WAD}, ${p}pout);`,
-    `            const ${p}discout = ${p}kout * ${p}kout + ${fourAmpWad};`,
-    `            const ${p}vout = (${p}kout + Math.sqrt(${p}discout)) / 2;`,
+    `            const ${p}kout = Int256(${d}) - Int256(${p}pout) + Int256(Math.mulDiv(${amp}, ${WAD}, ${p}pout));`,
+    `            const ${p}discout = Uint256(${p}kout * ${p}kout) + ${fourAmpWad};`,
+    `            const ${p}vout = (${p}kout + Int256(Math.sqrt(${p}discout))) / 2;`,
     `            const ${p}uout = ${p}vout - ${a};`,
     `            if (${p}uout >= 0) {`,
-    `              const ${p}xout2 = Math.mulDiv(${p}uout, ${r}lout, ${WAD});`,
+    `              const ${p}xout2 = Math.mulDiv(Uint256(${p}uout), ${r}lout, ${WAD});`,
     `              if (${p}xout2 < ${r}xout) {`,
     `                const ${p}raw = ${r}xout - ${p}xout2;`,
     `                ${outVar} = Math.mulDiv(${p}raw, ${10_000n - MARGIN_BPS}, 10000);`,

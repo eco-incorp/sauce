@@ -159,7 +159,7 @@ function main(
           evm.call(self, 0n, swapV3.concat(args));
         } else {
           const key = abi.encode(currency0, currency1, fees[i], tickSpacings[i], 0n);
-          const rest = abi.encode(zeroForOne ? 1n : 0n, -remaining, limits[i], self, self);
+          const rest = abi.encode(zeroForOne ? 1n : 0n, -Int256(remaining), limits[i], self, self);
           evm.call(
             self,
             0n,
