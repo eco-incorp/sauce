@@ -314,9 +314,10 @@ const ARGS = z
   .optional()
   .describe(
     "main's runtime arguments, in order, as JSON values: an integer in base units as a decimal " +
-      "string (or a number up to 2^53), an address as 0x hex (on Solana a base58 key), bytes " +
-      "as 0x hex, a bool as true/false, an array as an array, a tuple as an array of its fields " +
-      "or an object naming them. sauce_compile's entryParams lists what main takes.",
+      'string (or a number up to 2^53; negative for an Int256 parameter, such as "-5"), an ' +
+      "address as 0x hex (on Solana a base58 key), bytes as 0x hex, a bool as true/false, an " +
+      "array as an array, a tuple as an array of its fields or an object naming them. " +
+      "sauce_compile's entryParams lists what main takes.",
   );
 
 /** An intent file's `main` arguments, which a wallet's intents are built with (`bindMainArguments`). */
@@ -328,7 +329,8 @@ export const INTENT_ARGS = z
     "main's arguments, in order, as JSON values: the values the intents are built with. " +
       "A wallet publishes what it knows before anything runs, so each is bound into the " +
       "intents as it is, and each is one word: an integer in base units as a decimal " +
-      "string (or a number up to 2^53), an address as 0x hex, or a bool. Required " +
+      "string (or a number up to 2^53; negative for an Int256 parameter), an address as 0x hex, " +
+      "or a bool. Required " +
       "exactly when main declares parameters.",
   );
 

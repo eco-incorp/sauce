@@ -1020,6 +1020,9 @@ function sample(type) {
   if (/^(?:bool|boolean)$/.test(t)) return true;
   if (t === "bytes") return "0x";
   if (t === "string") return "text";
+  // A signed value is sampled below zero, so a program that takes one runs its usage line with a
+  // negative `--args` word, which is no flag.
+  if (t === "Int256") return "-1";
   return "1";
 }
 
@@ -1567,7 +1570,7 @@ for (const file of [
   if (existsSync(file)) keys(JSON.parse(read(file)));
 }
 // SauceScript keywords and builtins, JavaScript keywords, and tool names.
-for (const word of `main require throw ctx evm svm abi hex Math self catch at owner dataLen Uint256
+for (const word of `main require throw ctx evm svm abi hex Math self catch at owner dataLen Uint256 Int256
   Address Account Writable Signer bytes bool string void true false null undefined bigint number
   boolean const let function return if else for while break continue of in new import from export
   default interface type await async typeof pnpm node npm npx tsc git cast sauce`.split(/\s+/))

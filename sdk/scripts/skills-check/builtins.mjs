@@ -175,6 +175,8 @@ const ACCOUNTS = [
   "state",
 ];
 const ARRAYS = { amounts: "Uint256[]" };
+// The names the reference's examples give a signed value: an `Int256`, as the ABI's `intN` is.
+const SIGNED = new Set(["signed", "delta", "tick"]);
 const SVM_ROLES = {
   state: "Account<Writable, Signer>",
   source: "Account<Writable>",
@@ -218,13 +220,14 @@ const ABIS = {
   ]),
 };
 const RESERVED = new Set(
-  "const let if else for while of return true false new Array require revert throw log eval hex ctx crypto Math abi evm svm function break continue".split(
+  "const let if else for while of return true false new Array require revert throw log eval hex ctx crypto Math abi evm svm function break continue Int256 Uint256".split(
     " ",
   ),
 );
 function typeOf(name, target, code) {
   if (BYTES.includes(name)) return "bytes";
   if (ARRAYS[name]) return ARRAYS[name];
+  if (SIGNED.has(name)) return "Int256";
   const account =
     ACCOUNTS.includes(name) || (/svm\.call\(/.test(code) && ["owner", "router"].includes(name));
   if (account) return target === "svm" && SVM_ROLES[name] ? SVM_ROLES[name] : "Account";
