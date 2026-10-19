@@ -10,7 +10,6 @@
  *    NEGATED unsigned amount. Negating a `Uint256` reverts for every nonzero value, so the program
  *    negates it as an `Int256`; the line is cut out of the file and its bytes read back.
  */
-import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -31,6 +30,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
+import { freePortSync, spawnAnvil } from "../anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -57,7 +57,8 @@ const OWNER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 );
 
-const PORT = 9300 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const GAS_LIMIT = 10_000_000n;
 const RATE = 2n * 10n ** 18n; // currency1 per currency0
@@ -71,19 +72,6 @@ const erc20 = parseAbi([
   "function mint(address to, uint256 amount)",
   "function balanceOf(address account) view returns (uint256)",
 ]);
-
-// anvil's own startup: it announces nothing to await, so the port is polled.
-const waitForRpc = async (deadline: number): Promise<void> => {
-  for (;;) {
-    try {
-      await publicClient.getChainId();
-      return;
-    } catch {
-      if (Date.now() >= deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-};
 
 const send = async (to: Address | null, data: Hex): Promise<{ status: string; at?: Address }> => {
   const hash = await walletClient.sendTransaction({
@@ -149,8 +137,7 @@ const standaloneV4 = (manager: Address, tickSpacing: bigint, amount: bigint): st
 
 describeEvm("the demo programs' signed values, executed", () => {
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
-    await waitForRpc(Date.now() + 20_000);
+    anvil = await spawnAnvil(PORT);
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
     sauce = await startGatedEngine(
       { publicClient, testClient, walletClient },
