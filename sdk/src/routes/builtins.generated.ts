@@ -159,22 +159,22 @@ declare global {
     addMod(a: bigint, b: bigint, n: bigint): bigint;
     /** `Math.mulMod(a: Uint256, b: Uint256, n: Uint256): Uint256` — EVM and SVM. */
     mulMod(a: bigint, b: bigint, n: bigint): bigint;
-    /** `Math.sDiv(a: Uint256, b: Uint256): Uint256` — EVM and SVM. */
+    /** `Math.sDiv(a: integer, b: integer): Int256` — EVM and SVM. */
     sDiv(a: bigint, b: bigint): bigint;
-    /** `Math.sMod(a: Uint256, b: Uint256): Uint256` — EVM and SVM. */
+    /** `Math.sMod(a: integer, b: integer): Int256` — EVM and SVM. */
     sMod(a: bigint, b: bigint): bigint;
-    /** `Math.sShr(value: Uint256, bits: Uint256): Uint256` — EVM and SVM. */
+    /** `Math.sShr(value: integer, bits: integer): Int256` — EVM and SVM. */
     sShr(value: bigint, bits: bigint): bigint;
-    /** `Math.signExtend(value: Uint256, byte: Uint256): Uint256` — EVM and SVM. */
+    /** `Math.signExtend(value: integer, byte: integer): Int256` — EVM and SVM. */
     signExtend(value: bigint, byte: bigint): bigint;
-    /** `Math.sLt(a: Uint256, b: Uint256): Uint256` — EVM and SVM. */
-    sLt(a: bigint, b: bigint): bigint;
-    /** `Math.sGt(a: Uint256, b: Uint256): Uint256` — EVM and SVM. */
-    sGt(a: bigint, b: bigint): bigint;
-    /** `Math.sLte(a: Uint256, b: Uint256): Uint256` — EVM and SVM. */
-    sLte(a: bigint, b: bigint): bigint;
-    /** `Math.sGte(a: Uint256, b: Uint256): Uint256` — EVM and SVM. */
-    sGte(a: bigint, b: bigint): bigint;
+    /** `Math.sLt(a: integer, b: integer): bool` — EVM and SVM. */
+    sLt(a: bigint, b: bigint): boolean;
+    /** `Math.sGt(a: integer, b: integer): bool` — EVM and SVM. */
+    sGt(a: bigint, b: bigint): boolean;
+    /** `Math.sLte(a: integer, b: integer): bool` — EVM and SVM. */
+    sLte(a: bigint, b: bigint): boolean;
+    /** `Math.sGte(a: integer, b: integer): bool` — EVM and SVM. */
+    sGte(a: bigint, b: bigint): boolean;
   }
 
   /** Methods on a number. */
@@ -190,12 +190,26 @@ declare global {
     new (length: bigint): bigint[];
   }
 
+  /** `Int256(value: integer): Int256` — EVM and SVM. */
+  function Int256(value: bigint): bigint;
+  /** `Uint256(value: integer): Uint256` — EVM and SVM. */
+  function Uint256(value: bigint): bigint;
   /** `revert(data?: bytes): void` — EVM and SVM. */
   function revert(data?: SauceBytesLike): void;
   /** `log(data: bytes, ...topics: scalar[]): void` — EVM and SVM. */
   function log(data: SauceBytesLike, ...topics: SauceScalar[]): void;
   /** `eval(program: bytes, ...args: scalar[]): bytes` — EVM and SVM. */
   function eval(program: SauceBytesLike, ...args: SauceScalar[]): SauceBytes;
+  namespace Int256 {
+    /** `Int256.fromBits(value: Uint256): Int256` — EVM and SVM. */
+    function fromBits(value: bigint): bigint;
+  }
+
+  namespace Uint256 {
+    /** `Uint256.fromBits(value: Int256): Uint256` — EVM and SVM. */
+    function fromBits(value: bigint): bigint;
+  }
+
   /** `hex`digits`: bytes` — EVM and SVM. */
   function hex(strings: TemplateStringsArray): SauceBytes;
 

@@ -10,6 +10,8 @@
 // <type>`, or `<receiver>.<name>: <type>` for a property. A builtin whose signature is none of
 // those is syntax TypeScript already has (`throw`, `==`, `-x`), or a contract binding, which
 // takes its methods from the ABI it binds and is typed by `source-globals.generated.ts`.
+// `Int256` and `Uint256` are both a function (the checked conversion) and a namespace
+// (`fromBits`), so their methods are emitted in a namespace of that name.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,9 +53,11 @@ function tsType(type, position) {
   if (/^Account(<.*>)?$/.test(type)) return "SauceAccount";
   switch (type) {
     case "Uint256":
+    case "Int256":
     case "Address":
     case "number":
     case "bigint":
+    case "integer":
       return "bigint";
     case "bool":
       return "boolean";
@@ -86,6 +90,9 @@ const targetsOf = ({ targets }) =>
 const doc = (builtin, indent) =>
   `${indent}/** \`${builtin.signature}\` — ${targetsOf(builtin)}. */\n`;
 
+/** The integer types, each a conversion function and a namespace holding `fromBits`. */
+const INTEGERS = ["Int256", "Uint256"];
+
 /** Members by where they are declared. */
 const members = new Map();
 const add = (where, text) => members.set(where, [...(members.get(where) ?? []), text]);
@@ -93,7 +100,7 @@ const declared = [];
 
 for (const builtin of builtins) {
   const { signature } = builtin;
-  const method = /^([A-Za-z]+)\.(\w+)\((.*)\): (.+)$/.exec(signature);
+  const method = /^([A-Za-z][A-Za-z0-9]*)\.(\w+)\((.*)\): (.+)$/.exec(signature);
   const fn = /^(\w+)\((.*)\): (.+)$/.exec(signature);
   const property = /^(account|\(bytes \| T\[\]\))\.(\w+): (.+)$/.exec(signature);
   const construct = /^new (\w+)\((.*)\): (.+)$/.exec(signature);
@@ -105,7 +112,7 @@ for (const builtin of builtins) {
     const text =
       receiver === "abi" && name === "decode"
         ? `${doc(builtin, "  ")}  decode<const Shape extends readonly string[]>(data: SauceBytesLike, shape: Shape): { -readonly [K in keyof Shape]: SauceDecoded<Shape[K]> };`
-        : `${doc(builtin, "  ")}  ${name}(${splitTop(params).map(tsParam).join(", ")}): ${tsType(returns, "return")};`;
+        : `${doc(builtin, "  ")}  ${INTEGERS.includes(receiver) ? "function " : ""}${name}(${splitTop(params).map(tsParam).join(", ")}): ${tsType(returns, "return")};`;
     add(receiver, text);
   } else if (fn !== null) {
     const [, name, params, returns] = fn;
@@ -142,6 +149,7 @@ const known = new Set([
   "account",
   "function",
   "new Array",
+  ...INTEGERS,
 ]);
 for (const where of members.keys()) {
   if (!known.has(where)) throw new Error(`gen-builtins: no declaration for receiver '${where}'`);
@@ -254,6 +262,12 @@ ${block("new Array").replace(/^ {2}/gm, "    ")}
   }
 
 ${globalFunctions.join("\n")}
+${INTEGERS.map(
+  (name) => `  namespace ${name} {
+${block(name).replace(/^ {2}/gm, "    ")}
+  }
+`,
+).join("\n")}
 ${declared.join("\n")}
 
   namespace NodeJS {

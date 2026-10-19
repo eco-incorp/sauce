@@ -34,6 +34,8 @@ type SauceTokenSource = import("../routes/source-globals.generated.js").SauceTok
 
 /** One unsigned 256-bit integer. */
 type Uint256 = bigint;
+/** One signed 256-bit integer: an ABI `intN` value, a negative literal, what the signed `Math` helpers return. */
+type Int256 = bigint;
 /** An address: a number, on the EVM 20 bytes, on Solana a 32-byte key. */
 type Address = bigint;
 /** A bool. */
@@ -133,15 +135,29 @@ interface Math {
   mulDiv(x: SauceInt, y: SauceInt, d: SauceInt): bigint;
   addMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
   mulMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
-  /** Signed (two's-complement) division. */
-  sDiv(a: SauceInt, b: SauceInt): bigint;
-  sMod(a: SauceInt, b: SauceInt): bigint;
-  sShr(value: SauceInt, bits: SauceInt): bigint;
-  signExtend(value: SauceInt, byte: SauceInt): bigint;
-  sLt(a: SauceInt, b: SauceInt): bigint;
-  sGt(a: SauceInt, b: SauceInt): bigint;
-  sLte(a: SauceInt, b: SauceInt): bigint;
-  sGte(a: SauceInt, b: SauceInt): bigint;
+  /** Signed (two's-complement) division of two words. */
+  sDiv(a: SauceInt, b: SauceInt): Int256;
+  sMod(a: SauceInt, b: SauceInt): Int256;
+  sShr(value: SauceInt, bits: SauceInt): Int256;
+  signExtend(value: SauceInt, byte: SauceInt): Int256;
+  /** Signed comparisons of two words. */
+  sLt(a: SauceInt, b: SauceInt): boolean;
+  sGt(a: SauceInt, b: SauceInt): boolean;
+  sLte(a: SauceInt, b: SauceInt): boolean;
+  sGte(a: SauceInt, b: SauceInt): boolean;
+}
+
+/** `Int256(value)`: the value as a signed integer; one above 2^255 - 1 is rejected. */
+declare function Int256(value: SauceInt): Int256;
+declare namespace Int256 {
+  /** Reads an unsigned word's bits as signed: bit 255 becomes the sign. */
+  function fromBits(value: SauceInt): Int256;
+}
+/** `Uint256(value)`: the value as an unsigned integer; a negative one is rejected. */
+declare function Uint256(value: SauceInt): Uint256;
+declare namespace Uint256 {
+  /** Reads a signed value as the unsigned word of its bits: -1 becomes 2^256 - 1. */
+  function fromBits(value: SauceInt): Uint256;
 }
 
 /** EVM: ABI encoding. */
