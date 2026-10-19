@@ -267,6 +267,41 @@ describe("action programs — errors are precise and complete", () => {
   });
 });
 
+describe("action programs — balancerV2BatchSwap's output floor is a negative int256 limit", () => {
+  const BOUND = 1n << 255n;
+  const MESSAGE = `must be at most 2^255 (${BOUND}): the Vault output floor is a negative int256 limit`;
+  const program = (amountOutMin: bigint) =>
+    withAction({ ...SAMPLES.balancerV2BatchSwap, amountOutMin: amountOutMin.toString() });
+
+  it("accepts exactly 2^255 through parseProgram and compileProgram", () => {
+    const input = program(BOUND);
+    assert.doesNotThrow(() => parseProgram(input));
+    assert.ok(compileProgram(input as ActionProgram).bytecode.length > 0);
+  });
+
+  for (const [name, value] of [
+    ["2^255 + 1", BOUND + 1n],
+    ["2^256 - 1", (1n << 256n) - 1n],
+  ] as const) {
+    for (const [entry, run] of [
+      ["parseProgram", (input: unknown) => parseProgram(input)],
+      ["compileProgram", (input: unknown) => compileProgram(input as ActionProgram)],
+    ] as const) {
+      it(`rejects ${name} through ${entry} at actions[0].amountOutMin`, () => {
+        assert.throws(
+          () => run(program(value)),
+          (error: unknown) =>
+            error instanceof ProgramError &&
+            error.issues.some(
+              (issue) =>
+                issue.path === "actions[0].amountOutMin" && issue.message.includes(MESSAGE),
+            ),
+        );
+      });
+    }
+  }
+});
+
 describe("action programs — Arc, whose native coin is USDC", () => {
   // Arc's native USDC is 18 decimals and ALSO the 6-decimal ERC-20 at 0x3600…0000, one balance.
   const ARC = 5042;

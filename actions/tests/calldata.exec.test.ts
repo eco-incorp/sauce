@@ -48,6 +48,7 @@ const TRUE = pad("0x01");
 /** What a fee quote answers: 42 — twice for Stargate's (nativeFee, lzTokenFee). */
 const FEE = pad("0x2a");
 const MAX_INT256 = (1n << 255n) - 1n;
+const MIN_INT256 = -(1n << 255n);
 const MAX_UINT256 = (1n << 256n) - 1n;
 
 const call = (abi: string, name: string, args: readonly unknown[]): Hex =>
@@ -470,6 +471,58 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
           assets,
           steps,
           amountOutMin: "37",
+        }),
+      );
+      assert.equal(receipt.status, "success", "the batch swap program reverted");
+      const calls = recordedCalls(receipt, RECORDERS);
+      assert.equal(calls.length, 1, "the batch swap must make exactly one call");
+      assert.equal(calls[0]!.to.toLowerCase(), T.toLowerCase());
+      assert.equal(calls[0]!.value, 0n);
+      assert.equal(
+        calls[0]!.data,
+        call(
+          "function batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)",
+          "batchSwap",
+          [
+            0,
+            steps.map((step) => [
+              step.poolId,
+              BigInt(step.assetInIndex),
+              BigInt(step.assetOutIndex),
+              BigInt(step.amount),
+              "0x",
+            ]),
+            assets,
+            [env.pot, false, R, false],
+            limits,
+            DEADLINE,
+          ],
+        ).toLowerCase(),
+      );
+    });
+  }
+
+  for (const { name, assets, steps, limits } of [
+    {
+      name: "output first in the assets list",
+      assets: [B, A, R],
+      steps: [{ poolId: B32, assetInIndex: 1, assetOutIndex: 0, amount: "1000" }],
+      limits: [MIN_INT256, MAX_INT256, MAX_INT256],
+    },
+    {
+      name: "output in the middle of the assets list",
+      assets: [A, B, R],
+      steps: [{ poolId: B32, assetInIndex: 0, assetOutIndex: 1, amount: "1000" }],
+      limits: [MAX_INT256, MIN_INT256, MAX_INT256],
+    },
+  ]) {
+    it(`balancerV2BatchSwap limits the output at amountOutMin = 2^255 to int256's minimum: ${name}`, async () => {
+      const receipt = await env.cook(
+        compiled({
+          ...SAMPLES.balancerV2BatchSwap,
+          assets,
+          steps,
+          amountOutMin: (1n << 255n).toString(),
         }),
       );
       assert.equal(receipt.status, "success", "the batch swap program reverted");

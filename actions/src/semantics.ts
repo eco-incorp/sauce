@@ -215,11 +215,11 @@ const same = (a: string, b: string): boolean | undefined => {
 };
 
 /**
- * What `@sauce/router` would refuse when the program runs, refused here instead, with a path: a
- * swap of a token for itself; a DODO V2 or Trader Joe LB trade that is not between the two tokens
- * the action says the pool holds; and a WOOFi swap with no floor, which the pool needs because it
- * prices from an oracle. A comparison only the chain can decide (a name beside an address) is left
- * to the compile, which runs these again on the resolved addresses.
+ * Swap constraints refused here with a path: a swap of a token for itself; a DODO V2 or Trader
+ * Joe LB trade outside the pool's token pair; a WOOFi swap with no oracle-price floor; and a
+ * Balancer batch output floor whose negation does not fit the Vault's int256 limit. A comparison
+ * only the chain can decide (a name beside an address) is left to the compile, which runs these
+ * again on the resolved addresses.
  */
 function swapIssues(action: Action, i: number): ProgramIssue[] {
   const at = (key: string): string => `actions[${i}].${key}`;
@@ -261,6 +261,14 @@ function swapIssues(action: Action, i: number): ProgramIssue[] {
     issues.push({
       path: at("amountOutMin"),
       message: "must be positive: WooPPV2 prices from an oracle, so a WOOFi swap needs a floor",
+    });
+  }
+  if (action.type === "balancerV2BatchSwap" && BigInt(action.amountOutMin) > 1n << 255n) {
+    issues.push({
+      path: at("amountOutMin"),
+      message:
+        `must be at most 2^255 (${1n << 255n}): ` +
+        "the Vault output floor is a negative int256 limit",
     });
   }
 
