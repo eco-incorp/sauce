@@ -10,7 +10,9 @@
  * behind an offset — `encodeAbiEntry`) by default, compact-v1 under `compactArgs`.
  * `encodeEntryArguments` checks each value against the type the program declares and encodes it in
  * the encoding the program was compiled for. Only annotations are types here: a parameter without
- * one is a `Uint256`, as the compiler reads it.
+ * one is a `Uint256`, as the compiler reads it. An integer is a `Uint256` (0 to 2^256 - 1) or an
+ * `Int256` (-2^255 to 2^255 - 1, the ABI's `int256`: a negative value travels as its
+ * two's-complement word and is read back signed).
  */
 import { address as svmAddress, getAddressEncoder, isAddress as isSvmKey } from "@solana/kit";
 import {
@@ -43,14 +45,15 @@ import type { CompiledSauceProgram } from "./sauce-route.js";
 /** One of `main`'s runtime parameters, as the program declares it. */
 export interface EntryParam {
   readonly name: string;
-  /** The declared type as written (`Address`, `Uint256[]`, `{ amount: Uint256 }`); `Uint256` when
-   *  the parameter has no annotation. */
+  /** The declared type as written (`Address`, `Uint256[]`, `Int256`, `{ amount: Uint256 }`);
+   *  `Uint256` when the parameter has no annotation. */
   readonly type: string;
 }
 
-/** A value for an entry parameter: a scalar as a bigint, safe-integer number or integer string, an
- *  address as hex, a `bool` as a boolean, `bytes` as a `Uint8Array` or hex, an array as an array,
- *  and a tuple as an array of its fields in order or an object naming them. */
+/** A value for an entry parameter: a `Uint256` as a bigint, safe-integer number or digit string; an
+ *  `Int256` the same, a negative one included (`-5n`, `-5`, `"-5"`); an address as hex, a `bool` as
+ *  a boolean, `bytes` as a `Uint8Array` or hex, an array as an array, and a tuple as an array of
+ *  its fields in order or an object naming them. */
 export type EntryValue =
   | bigint
   | number
@@ -280,12 +283,13 @@ function inlineRecords(type: string, records: ReadonlyMap<string, string>, depth
 
 /** A declared entry type, parsed. */
 export type EntryType =
-  | { readonly kind: "uint" | "address" | "bool" | "bytes" | "string" | "account" }
+  | { readonly kind: "uint" | "int" | "address" | "bool" | "bytes" | "string" | "account" }
   | { readonly kind: "array"; readonly of: EntryType }
   | { readonly kind: "tuple"; readonly fields: ReadonlyArray<{ name: string; type: EntryType }> };
 
 const SCALARS: Readonly<Record<string, EntryType["kind"]>> = {
   Uint256: "uint",
+  Int256: "int",
   number: "uint",
   bigint: "uint",
   Address: "address",
@@ -316,8 +320,8 @@ export function parseEntryType(text: string): EntryType {
   const scalar = SCALARS[type.replace(/<[^]*>$/, "")];
   if (scalar === undefined) {
     throw new TypeError(
-      `'${type}' is not a type an entry argument can be encoded for: Uint256, Address, Account, ` +
-        "bool, bytes, string, T[] or an inline { field: T } tuple",
+      `'${type}' is not a type an entry argument can be encoded for: Uint256, Int256, Address, ` +
+        "Account, bool, bytes, string, T[] or an inline { field: T } tuple",
     );
   }
 
@@ -331,6 +335,8 @@ function abiParam(type: EntryType, name?: string): AbiParam {
   switch (type.kind) {
     case "uint":
       return { ...named, type: "uint256" };
+    case "int":
+      return { ...named, type: "int256" };
     case "address":
     case "account":
       return { ...named, type: "address" };
@@ -359,6 +365,22 @@ const shown = (value: unknown): string =>
         ? "a byte array"
         : (JSON.stringify(value) ?? String(value));
 
+const INT256_MIN = -(1n << 255n);
+const INT256_MAX = (1n << 255n) - 1n;
+
+/** The integer a value for an `Int256` spells: a bigint, a safe-integer number, or digits (decimal,
+ *  or `0x` hex for the magnitude) with an optional minus. `undefined` for anything else; the range
+ *  is the caller's. */
+function signedInteger(value: EntryValue): bigint | undefined {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") return Number.isSafeInteger(value) ? BigInt(value) : undefined;
+  const spelled = typeof value === "string" ? /^(-?)(\d+|0x[0-9a-fA-F]+)$/.exec(value) : null;
+  if (spelled === null) return undefined;
+  const magnitude = BigInt(spelled[2]!);
+
+  return spelled[1] === "-" ? -magnitude : magnitude;
+}
+
 /** Normalized for both encoders: scalars as bigint, addresses and bytes as hex, tuples as arrays. */
 type Normalized = bigint | boolean | string | Uint8Array | Normalized[];
 
@@ -378,6 +400,16 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
               : undefined;
       if (word === undefined || word < 0n || word >= 1n << 256n) {
         return fail("an unsigned integer below 2^256 (a bigint, a safe integer, or its digits)");
+      }
+
+      return word;
+    }
+    case "int": {
+      const word = signedInteger(value);
+      if (word === undefined || word < INT256_MIN || word > INT256_MAX) {
+        return fail(
+          "a signed integer from -2^255 to 2^255 - 1 (a bigint, a safe integer, or its digits)",
+        );
       }
 
       return word;
@@ -531,10 +563,10 @@ function decodeAbiEntry(
 }
 
 /**
- * One of `main`'s arguments as the single word a compile-time value is: an unsigned integer or an
- * address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any other type (bytes,
- * a string, an array, a record, an `Account`), which no one word holds. Throws, naming `at`, on a
- * value that is not of the declared type, as `encodeEntryArguments` does.
+ * One of `main`'s arguments as the single word a compile-time value is: an integer (a `Int256` may be
+ * negative) or an address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any
+ * other type (bytes, a string, an array, a record, an `Account`), which no one word holds. Throws,
+ * naming `at`, on a value that is not of the declared type, as `encodeEntryArguments` does.
  */
 export function entryConstant(
   type: string,
@@ -542,7 +574,12 @@ export function entryConstant(
   at: string,
 ): bigint | boolean | undefined {
   const parsed = parseEntryType(type);
-  if (parsed.kind !== "uint" && parsed.kind !== "address" && parsed.kind !== "bool") {
+  if (
+    parsed.kind !== "uint" &&
+    parsed.kind !== "int" &&
+    parsed.kind !== "address" &&
+    parsed.kind !== "bool"
+  ) {
     return undefined;
   }
   // A Solana key, in base58: an account an intent to Solana names, bound as the 32-byte word
@@ -558,19 +595,25 @@ export function entryConstant(
 /** {@link bindEntryArguments}'s result. */
 export interface BoundEntryArguments {
   /** The source with `main`'s parameter list blanked: each of its characters a space, so every
-   *  position after it is the source's own. */
+   *  position before the end is the source's own. A negative `Int256` is declared after the
+   *  source's last line (`const delta: Int256 = -5;`), since no define can spell it. */
   readonly source: string;
-  /** Each parameter's value, by its name: the compile-time value the compiler reads it as. */
+  /** Each parameter's value, by its name: the compile-time value the compiler reads it as. A
+   *  negative `Int256` is not among them; `source` declares it. */
   readonly constants: Readonly<Record<string, bigint | boolean>>;
+  /** The parameters `source` declares itself (a negative `Int256`): a define of the same name would
+   *  replace the declaration, so none may be given. */
+  readonly declared: readonly string[];
   /** The parameters declared `Address`. */
   readonly addresses: readonly string[];
 }
 
 /**
  * `source` with `main`'s arguments bound into it as constants: `main(amount: Uint256)` given
- * `[1000000n]` compiles as if its body read `amount` as `1000000`. How a wallet publishes the
- * intents a file opens from values known before anything runs, so they come out fixed. Each must be
- * one word: an unsigned integer, an address or a `bool`.
+ * `[1000000n]` compiles as if its body read `amount` as `1000000`, and `main(delta: Int256)` given
+ * `[-5n]` as if it read `delta` as `-5`. How a wallet publishes the intents a file opens from
+ * values known before anything runs, so they come out fixed. Each must be one word: an integer, an
+ * address or a `bool`.
  *
  * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
  * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.
@@ -592,26 +635,35 @@ export function bindEntryArguments(
     );
   }
   const constants: Record<string, bigint | boolean> = {};
+  const declared: Array<readonly [string, bigint]> = [];
   const addresses: string[] = [];
   params.forEach((param, index) => {
     const at = `argument ${index + 1} (${param.name}: ${param.type})`;
     const value = entryConstant(param.type, values[index]!, at);
     if (value === undefined) {
       throw new TypeError(
-        `${at}: only one word binds as a constant: an unsigned integer, an address or a bool`,
+        `${at}: only one word binds as a constant: an integer, an address or a bool`,
       );
     }
-    constants[param.name] = value;
+    // A define is an unsigned literal's text; the one value that is not (a negative Int256) is
+    // declared in the source, where the compiler reads it as the signed literal it is.
+    if (typeof value === "bigint" && value < 0n) declared.push([param.name, value]);
+    else constants[param.name] = value;
     if (parseEntryType(param.type).kind === "address") addresses.push(param.name);
   });
   const list = source.slice(signature.open + 1, signature.close);
+  const blanked =
+    source.slice(0, signature.open + 1) +
+    list.replace(/[^\r\n]/g, " ") +
+    source.slice(signature.close);
 
   return {
     source:
-      source.slice(0, signature.open + 1) +
-      list.replace(/[^\r\n]/g, " ") +
-      source.slice(signature.close),
+      declared.length === 0
+        ? blanked
+        : `${blanked}\n${declared.map(([name, value]) => `const ${name}: Int256 = ${value};`).join("\n")}\n`,
     constants,
+    declared: declared.map(([name]) => name),
     addresses,
   };
 }
@@ -669,6 +721,9 @@ function typed(type: EntryType, value: unknown): EntryValue {
   switch (type.kind) {
     case "uint":
       return value as bigint;
+    case "int":
+      // ABI-v1 reads a signed word already; compact-v1 reads every scalar as an unsigned one.
+      return BigInt.asIntN(256, value as bigint);
     case "address":
     case "account":
       return getAddress(

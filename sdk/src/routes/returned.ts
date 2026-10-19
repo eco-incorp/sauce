@@ -1,10 +1,11 @@
 /**
  * What a cook returned, read as the type `main` declares (`routes/entry.ts#mainReturnType`).
  *
- * A program's return comes back with no ABI framing: a scalar (`Address`, `Uint256`, `bool`) as one
- * 32-byte word, a record as its fields one word each, an array as its elements one after another
- * with no length in front, and `bytes` as the bytes themselves. So `Uint256[]` of 371 words is
- * 371 numbers here, not 11 KB of hex to split by hand.
+ * A program's return comes back with no ABI framing: a scalar (`Address`, `Uint256`, `Int256`,
+ * `bool`) as one 32-byte word, a record as its fields one word each, an array as its elements one
+ * after another with no length in front, and `bytes` as the bytes themselves. So `Uint256[]` of 371
+ * words is 371 numbers here, not 11 KB of hex to split by hand. An `Int256` word is read as signed:
+ * `-5` comes back as `-5`, not as 2^256 - 5.
  */
 import { getAddressDecoder } from "@solana/kit";
 import { bytesToHex, getAddress, hexToBytes, type Hex } from "viem";
@@ -12,7 +13,8 @@ import { bytesToHex, getAddress, hexToBytes, type Hex } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { parseEntryType, type EntryType } from "./entry.js";
 
-/** A returned value as JSON: an address or key as text, a number in decimal, bytes as hex. */
+/** A returned value as JSON: an address or key as text, a number in decimal (negative for an
+ *  `Int256` below zero), bytes as hex. */
 export type Returned =
   string | boolean | readonly Returned[] | { readonly [field: string]: Returned };
 
@@ -20,6 +22,7 @@ export type Returned =
 function wordsOf(type: EntryType): number | undefined {
   switch (type.kind) {
     case "uint":
+    case "int":
     case "address":
     case "bool":
     case "account":
@@ -64,7 +67,9 @@ function readValue(
       : getAddress(bytesToHex(word.subarray(12)));
   }
 
-  return BigInt(bytesToHex(word)).toString();
+  const unsigned = BigInt(bytesToHex(word));
+
+  return (type.kind === "int" ? BigInt.asIntN(256, unsigned) : unsigned).toString();
 }
 
 /**
