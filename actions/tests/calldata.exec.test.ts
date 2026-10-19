@@ -440,6 +440,67 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     });
   }
 
+  for (const { name, assets, steps, limits } of [
+    {
+      name: "output first in the assets list",
+      assets: [B, A, R],
+      steps: [{ poolId: B32, assetInIndex: 1, assetOutIndex: 0, amount: "1000" }],
+      limits: [-37n, MAX_INT256, MAX_INT256],
+    },
+    {
+      name: "output in the middle of the assets list",
+      assets: [A, B, R],
+      steps: [{ poolId: B32, assetInIndex: 0, assetOutIndex: 1, amount: "1000" }],
+      limits: [MAX_INT256, -37n, MAX_INT256],
+    },
+    {
+      name: "independent legs with different output assets",
+      assets: [A, B, R],
+      steps: [
+        { poolId: B32, assetInIndex: 0, assetOutIndex: 2, amount: "1000" },
+        { poolId: B32, assetInIndex: 0, assetOutIndex: 1, amount: "500" },
+      ],
+      limits: [MAX_INT256, -37n, MAX_INT256],
+    },
+  ]) {
+    it(`balancerV2BatchSwap limits only the final step's output: ${name}`, async () => {
+      const receipt = await env.cook(
+        compiled({
+          ...SAMPLES.balancerV2BatchSwap,
+          assets,
+          steps,
+          amountOutMin: "37",
+        }),
+      );
+      assert.equal(receipt.status, "success", "the batch swap program reverted");
+      const calls = recordedCalls(receipt, RECORDERS);
+      assert.equal(calls.length, 1, "the batch swap must make exactly one call");
+      assert.equal(calls[0]!.to.toLowerCase(), T.toLowerCase());
+      assert.equal(calls[0]!.value, 0n);
+      assert.equal(
+        calls[0]!.data,
+        call(
+          "function batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)",
+          "batchSwap",
+          [
+            0,
+            steps.map((step) => [
+              step.poolId,
+              BigInt(step.assetInIndex),
+              BigInt(step.assetOutIndex),
+              BigInt(step.amount),
+              "0x",
+            ]),
+            assets,
+            [env.pot, false, R, false],
+            limits,
+            DEADLINE,
+          ],
+        ).toLowerCase(),
+      );
+    });
+  }
+
   it("a saved output is delivered to the Pot: the amount @sauce/router returns, or a balance delta", async () => {
     const saved = (type: ActionType): Uint8Array =>
       compiled({ ...SAMPLES[type], saveOutputAs: "out" } as Action);

@@ -7,6 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Ajv2020 } from "ajv/dist/2020.js";
+import { encodeAbiParameters } from "viem";
 
 import { sourceGlobals } from "../../sdk/dist/routes/index.js";
 import {
@@ -604,6 +605,50 @@ describe("names — quotes", () => {
     const quote = quoteAction(named as never, { chain: "ethereum" });
     assert.deepEqual(quote, { ...quoteAction(addressed as never), decode: quote.decode });
     assert.equal(quote.to.toLowerCase(), addressOf("ethereum", "BalancerV2.Vault").toLowerCase());
+  });
+
+  it("quotes a batch's final step output, not the last asset or an earlier leg's output", () => {
+    for (const { assets, input, output, deltas } of [
+      {
+        assets: ["WETH", "USDC", "USDT"],
+        input: 1,
+        output: 0,
+        deltas: [-37n, 1500n, -11n],
+      },
+      {
+        assets: ["USDC", "WETH", "USDT"],
+        input: 0,
+        output: 1,
+        deltas: [1500n, -37n, -11n],
+      },
+    ]) {
+      const quote = quoteAction(
+        {
+          ...SAMPLES.balancerV2BatchSwap,
+          vault: "BalancerV2.Vault",
+          assets,
+          steps: [
+            {
+              ...SAMPLES.balancerV2BatchSwap.steps[0]!,
+              assetInIndex: input,
+              assetOutIndex: 2,
+            },
+            {
+              ...SAMPLES.balancerV2BatchSwap.steps[0]!,
+              assetInIndex: input,
+              assetOutIndex: output,
+              amount: "500",
+            },
+          ],
+        },
+        { chain: "ethereum" },
+      );
+      assert.equal(
+        quote.decode(encodeAbiParameters([{ type: "int256[]" }], [deltas])),
+        37n,
+        `output at assets[${output}]`,
+      );
+    }
   });
 
   it("a split swap refuses a candidate whose pool is named by its key", () => {
