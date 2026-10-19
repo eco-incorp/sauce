@@ -2,7 +2,8 @@
 // `window` seconds ago and now, returned as abi.encode(then, now). The factory and the pool are
 // namespaces; `observe`, which the registry's UniswapV3.Pool ABI does not declare, is called
 // through the program's own ABI beside it, IOracle.json: that one function, with the pool's
-// deployed types. The average tick over the window is (now - then) / window.
+// deployed types. The cumulatives are signed (int56 on chain, an `Int256` here), so the average
+// tick over the window is (now - then) / window as a signed division, below zero for a negative tick.
 //
 //   sauce simulate twap.sauce.ts --chain <chain> \
 //     --owner <address> --args <tokenA> <tokenB> <fee> <window>

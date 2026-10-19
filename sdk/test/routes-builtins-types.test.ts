@@ -65,7 +65,12 @@ Base(() => {
   const sum: bigint = Math.addMod(held, fee, 7n) + Math.mulMod(held, fee, 7n);
   const signed2: bigint = Math.sDiv(held, 2n) + Math.sMod(held, 3n) + Math.sShr(held, 1n);
   const extended: bigint = Math.signExtend(held, 2n);
-  const order: bigint = Math.sLt(held, 0n) + Math.sGt(held, 0n) + Math.sLte(held, 0n) + Math.sGte(held, 0n);
+  const order: boolean = Math.sLt(held, 0n) && Math.sGt(held, 0n) && Math.sLte(held, 0n) && Math.sGte(held, 0n);
+
+  // integer conversions
+  const signedHeld: bigint = Int256(held);
+  const unsignedHeld: bigint = Uint256(signedHeld);
+  const reread: bigint = Uint256.fromBits(Int256.fromBits(held));
 
   // abi
   const encoded = abi.encode(held, caller, input);
@@ -121,8 +126,8 @@ Base(() => {
   const selector = hex\`a9059cbb\`;
   const negative: bigint = -held;
   return [chain, at, now, wei, value, gas, size, codeHash, contract, eoa, vault, bump, root, sum,
-    signed2, extended, order, amount, reply, read, seen, returned, result, call, word, fields,
-    length, key, owner, dataLen, same, xs, selector, negative];
+    signed2, extended, order, signedHeld, unsignedHeld, reread, amount, reply, read, seen, returned,
+    result, call, word, fields, length, key, owner, dataLen, same, xs, selector, negative];
 }, OPTIONS);
 `;
 
@@ -160,6 +165,7 @@ Base(() => {
   require();
   log();
   ctx.origin();
+  Int256.fromBits(1n, 2n);
 }, OPTIONS);
 `;
 
@@ -249,7 +255,7 @@ describe("a typed closure using SauceScript's builtins", () => {
   });
 
   it("still rejects a wrong call shape", () => {
-    expect(diagnostics("WRONG_SHAPES")).toHaveLength(7);
+    expect(diagnostics("WRONG_SHAPES")).toHaveLength(8);
   });
 
   it.each(Object.keys(ENVIRONMENTS) as Environment[])("typechecks with %s", (environment) => {

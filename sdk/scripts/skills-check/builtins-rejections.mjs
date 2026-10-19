@@ -133,9 +133,34 @@ export const rejections = [
 
   // Operators
   {
-    quotes: ["constant `-` expression overflows 256 bits"],
+    quotes: ["constant `+` expression overflows 256 bits"],
+    targets: ["evm"],
+    src: "function main(): Uint256 { return ~0n + 1n; }",
+  },
+  {
+    quotes: ["constant subtraction underflows Uint256; …"],
     targets: ["evm"],
     src: "function main(): Uint256 { return 0n - 1n; }",
+  },
+  {
+    quotes: ["cannot combine Int256 and Uint256 in this expression; …"],
+    targets: ["evm", "svm"],
+    src: "function main(a: Int256, b: Uint256): Int256 { return a + b; }",
+  },
+  {
+    quotes: ["constant Int256 value is outside Uint256's range; …"],
+    targets: ["evm", "svm"],
+    src: "function main(): Uint256 { return -1; }",
+  },
+  {
+    quotes: ["constant Uint256 value is outside Int256's range; …"],
+    targets: ["evm", "svm"],
+    src: "function main(): Int256 { return Int256(57896044618658097711785492504343953926634992332820282019728792003956564819968); }",
+  },
+  {
+    quotes: ["a helper returning a signed integer needs an explicit `: Int256` return annotation"],
+    targets: ["evm", "svm"],
+    src: "function f(a: Int256) { return a; } function main(a: Int256): Int256 { return f(a); }",
   },
   {
     quotes: ["constant `/` expression divides by zero"],
@@ -302,13 +327,6 @@ export const rejections = [
     ],
     targets: ["evm"],
     src: "let x = 1n << 160n; function main(): Uint256 { return x; }",
-  },
-  {
-    quotes: [
-      "a module-scope `let <name>` must be initialized with a literal — a number, address or boolean literal. …",
-    ],
-    targets: ["evm"],
-    src: "let x = -1n; function main(): Uint256 { return x; }",
   },
   {
     quotes: [
@@ -593,9 +611,9 @@ export const rejections = [
     src: "function main(a: Uint256, b: Uint256): Uint256 { return Math.pow(a, b); }",
   },
   {
-    quotes: ["a return value: expected a bool, found a number"],
+    quotes: ["a return value: expected a number, found a bool"],
     targets: ["evm"],
-    src: "function main(a: Uint256, b: Uint256): bool { return Math.sLt(a, b); }",
+    src: "function main(a: Uint256, b: Uint256): Uint256 { return Math.sLt(a, b); }",
   },
   {
     quotes: ["`Math.sqrt` takes 1 argument(s), but this call passes 2"],

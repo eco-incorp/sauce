@@ -38,7 +38,7 @@ const PROGRAMS: ReadonlyArray<readonly [string, string, ReadonlyArray<"evm" | "s
     "function main(a: Address): Uint256 { if (a == 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913$) { return 1$; } return 0$; }",
   ],
   ["separators", "function main(a: Uint256): Uint256 { return a + 1_000_000$; }"],
-  ["negation", "function main(a: Uint256): Uint256 { return a + -1$; }"],
+  ["negation", "function main(a: Int256): Int256 { return a + -1$; }"],
   ["the maximum, ~0", "function main(): Uint256 { return ~0$; }"],
   ["a power", "function main(a: Uint256): Uint256 { return a * 10$ ** 18$; }"],
   ["folded division", "function main(): Uint256 { return 99$ / 100$ + 7$ / 2$; }"],
@@ -62,7 +62,16 @@ const PROGRAMS: ReadonlyArray<readonly [string, string, ReadonlyArray<"evm" | "s
   ["a builtin's arguments", "function main(a: Uint256): bytes { return a.toBytesBe(32$); }"],
   [
     "signed math",
-    "function main(a: Uint256): Uint256 { return Math.sDiv(a, -2$) + Math.mulDiv(a, 30$, 10000$); }",
+    "function main(a: Uint256): Int256 { return Math.sDiv(a, -2$) + Int256(Math.mulDiv(a, 30$, 10000$)); }",
+  ],
+  ["a signed constant", "function main(): Int256 { const d: Int256 = 1$ - 2$; return d; }"],
+  [
+    "the smallest signed integer",
+    "function main(): Int256 { return -57896044618658097711785492504343953926634992332820282019728792003956564819968$; }",
+  ],
+  [
+    "a signed conversion",
+    "function main(a: Uint256): Uint256 { return Uint256.fromBits(Int256.fromBits(a) + -1$); }",
   ],
   ["a script", "let total: Uint256 = 0$;\ntotal = total + 5$;"],
   [
