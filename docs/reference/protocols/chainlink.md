@@ -33,7 +33,7 @@ top of this document shows, and write SauceScript's values (`~0`, not `type(uint
 import { AggregatorV3ABI as IAggregatorV3 } from "./abis";
 function main(feedAddress: Address): {
   roundId: Uint256;
-  answer: Uint256;
+  answer: Int256;
   startedAt: Uint256;
   updatedAt: Uint256;
   answeredInRound: Uint256;
@@ -45,7 +45,7 @@ function main(feedAddress: Address): {
 
 ## Notes
 
-- Price feeds return answer in int256 with feed-specific decimals (usually 8 for USD pairs)
+- Price feeds return `answer` as `Int256` (ABI `int256`), with feed-specific decimals (usually 8 for USD pairs); keep it signed for arithmetic and comparisons. Round IDs and timestamps remain `Uint256`
 - Always check updatedAt timestamp for staleness - stale prices can cause issues
 - Feed Registry is Ethereum-only; on L2s, use individual feed addresses directly
 - VRF provides verifiable randomness for on-chain applications

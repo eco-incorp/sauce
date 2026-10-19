@@ -39,8 +39,9 @@ function main(
 ```
 
 - `poolAddress`: The specific Curve pool contract address (each pool is a separate contract)
-- `i`: Index of the input token within the pool (0-based)
-- `j`: Index of the output token within the pool (0-based)
+- `i`: Index of the input token within the pool (0-based, never negative)
+- `j`: Index of the output token within the pool (0-based, never negative)
+- `i` and `j` stay `Uint256`: the pool's ABI takes `int128`, so each index passes through a checked conversion and a value above `2**127 - 1` reverts. No signed type is needed for a coin index
 - `amountIn`: Exact amount of input token (in wei)
 - `minAmountOut`: Minimum output for slippage protection
 - Token indices vary per pool

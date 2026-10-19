@@ -109,8 +109,8 @@ function main(
   token0: Address,
   token1: Address,
   fee: Uint256,
-  tickLower: Uint256,
-  tickUpper: Uint256,
+  tickLower: Int256,
+  tickUpper: Int256,
   amount0Desired: Uint256,
   amount1Desired: Uint256,
   amount0Min: Uint256,
@@ -137,7 +137,7 @@ function main(
 - `nfpmAddress`: NonfungiblePositionManager contract address
 - `token0` / `token1`: Pair tokens sorted by address (token0 < token1)
 - `fee`: Pool fee tier (500, 3000, or 10000)
-- `tickLower` / `tickUpper`: Price range boundaries as tick values. Ticks must be multiples of the pool's tick spacing (10 for 0.05%, 60 for 0.3%, 200 for 1%)
+- `tickLower` / `tickUpper`: Price range boundaries as signed tick values, `Int256`: a negative tick is an ordinary negative number such as `-60`, never a two's-complement word. They reach the position manager's ABI `int24` parameters through a checked conversion, so each must fit -8388608 through 8388607, and the pool accepts only ticks from -887272 through 887272, with `tickLower` below `tickUpper`. Ticks must be multiples of the pool's tick spacing (10 for 0.05%, 60 for 0.3%, 200 for 1%)
 - `amount0Desired` / `amount1Desired`: Target deposit amounts
 - `amount0Min` / `amount1Min`: Minimum deposit amounts (slippage protection)
 - Both tokens must be approved to the NonfungiblePositionManager
