@@ -70,7 +70,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Flowrate is in tokens per second (int96) - e.g. 1e18 / (30 * 86400) for ~1 token/month
+- Flowrate is in tokens per second - e.g. 1e18 / (30 * 86400) for ~1 token/month. `createFlow` and `updateFlow` keep it a nonnegative `Uint256`: the ABI takes an `int96`, so it passes through a checked conversion and a value above `2**95 - 1` reverts. A flow rate is never negative here; `deleteFlow` stops a stream
 - Uses Super Tokens - wrapped ERC-20s with streaming capability (wrap before streaming)
 - Same host and cfaForwarder addresses on all 5 chains
 - CFAForwarder is the simplified interface; host is the core protocol contract

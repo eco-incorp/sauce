@@ -44,7 +44,7 @@ function main(
   inBaseQty: bool,
   qty: Uint256,
   minOut: Uint256,
-): { baseFlow: Uint256; quoteFlow: Uint256 } {
+): { baseFlow: Int256; quoteFlow: Int256 } {
   const dex = ICrocSwapDex.at(dexAddress);
   return dex.swap(base, quote, poolIdx, isBuy, inBaseQty, qty, 0, 0, minOut, 0);
 }
@@ -59,6 +59,7 @@ function main(
 - `qty`: Amount to swap (in wei)
 - `minOut`: Minimum output for slippage protection
 - Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit, so `minOut` is the only bound), `reserveFlags` (no reserve usage)
+- Returns `baseFlow` and `quoteFlow` as `Int256` (ABI `int128`): positive flows are tokens paid by the caller, negative flows are tokens received by the caller. Keep these mathematical signs when comparing or calculating net flows
 
 ## Notes
 

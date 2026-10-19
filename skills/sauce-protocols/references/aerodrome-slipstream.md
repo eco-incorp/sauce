@@ -32,6 +32,7 @@ function main(
 ```
 
 - Pools are keyed by `(tokenA, tokenB, tickSpacing)` within one factory
+- `tickSpacing`: the pool's tick spacing, a positive whole number such as `50`, kept as a `Uint256`. The factory's ABI takes an `int24`, so it passes through a checked conversion and a value above 8388607 reverts. A tick spacing is never negative, so no signed type is needed
 - On Base, **ask every CLFactory**: each generation keeps its own pools, so a pair can have a pool at the same tick spacing under more than one. The WETH/USDC tick-spacing-50 pool exists under all three factories, tick spacing 1 under the initial and Gauges V3 ones, and tick spacing 100 under the initial one only
 - **The fee is per pool and changes over time**: read it as `AerodromeSlipstream.Pool(pool).fee()` (in millionths) when it matters. The same pair at the same tick spacing can charge different fees under different factories, and `tickSpacingToFee(tickSpacing)` is only the factory's default for a spacing: Base's WETH/USDC pools charge other fees than it
 

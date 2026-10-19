@@ -29,7 +29,7 @@ function main(vaultAddress: Address, nftId: Uint256, amount: Uint256, to: Addres
 export const repay = `
 import { FluidVaultABI as IFluidVault } from "./abis";
 
-function main(vaultAddress: Address, nftId: Uint256, negativeDebtDelta: Uint256, to: Address): Uint256 {
+function main(vaultAddress: Address, nftId: Uint256, negativeDebtDelta: Int256, to: Address): Uint256 {
   const vault = IFluidVault.at(vaultAddress);
   vault.operate(nftId, 0, negativeDebtDelta, to);
   return 1;
