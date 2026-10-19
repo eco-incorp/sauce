@@ -542,4 +542,48 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
       call("function transfer(address,uint256)", "transfer", [env.pot, 5n]).toLowerCase(),
     );
   });
+
+  describe("balancerV2BatchSwap's `int256[] limits` are signed", () => {
+    const BATCH =
+      "function batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)";
+    /** Two steps over three assets: the Vault may take any amount of all but the last. */
+    const batch = (amountOutMin: string): Action => ({
+      ...SAMPLES.balancerV2BatchSwap,
+      steps: [
+        { poolId: B32, assetInIndex: 0, assetOutIndex: 1, amount: "1000" },
+        { poolId: B32, assetInIndex: 1, assetOutIndex: 2, amount: "0" },
+      ],
+      assets: [A, B, R],
+      amountOutMin,
+    });
+
+    for (const min of [0n, 1n, 10n ** 30n, (1n << 255n) - 1n, 1n << 255n]) {
+      it(`amountOutMin ${min} is the limit ${-min} on the last asset, and no limit on the others`, async () => {
+        const receipt = await env.cook(compiled(batch(`${min}`)));
+        assert.equal(receipt.status, "success", "the program reverted");
+        const [sent] = recordedCalls(receipt, RECORDERS);
+        assert.equal(
+          sent!.data,
+          call(BATCH, "batchSwap", [
+            0,
+            [
+              [B32, 0n, 1n, 1000n, "0x"],
+              [B32, 1n, 2n, 0n, "0x"],
+            ],
+            [A, B, R],
+            [env.pot, false, R, false],
+            [MAX_INT256, MAX_INT256, -min],
+            DEADLINE,
+          ]).toLowerCase(),
+        );
+      });
+    }
+
+    it("an amountOutMin no negative int256 can carry does not compile, rather than wrapping into a looser limit", () => {
+      // 2^255 + 1 as a wrapped negation is 2^255 - 1: int256's maximum, which is no floor at all.
+      for (const min of [(1n << 255n) + 1n, (1n << 256n) - 1n]) {
+        assert.throws(() => compiled(batch(`${min}`)), /Int256/, `amountOutMin ${min}`);
+      }
+    });
+  });
 });

@@ -14,6 +14,9 @@ import assert from "node:assert/strict";
 import { createPublicClient, custom, http, parseAbi, type Address } from "viem";
 
 import { quoteAction, type QuoteOptions } from "../src/index.js";
+import { fn, newEmitter, type Fragment } from "../src/emit.js";
+import { quoteCall } from "../src/to-quote.js";
+import { compileSauceProgram } from "../../sdk/dist/routes/sauce-route.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
@@ -538,6 +541,38 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
       const quoted = await quote(action);
       assert.equal(quoted, await expected());
       assert.ok(quoted >= atLeast, `${name} quoted ${quoted}`);
+    });
+  }
+
+  // The quotes the split swap runs inside a transaction read and write signed values: Ambient's
+  // `int128` flows, and the negative `int256 amountSpecified` the Router's V4 quote takes. Each is
+  // run as the program the split compiles, with its amount read from the Pot while it runs, and
+  // must agree with the quoter asked directly.
+  for (const type of ["uniswapV4Swap", "ambientSwap"] as const) {
+    it(`${type}: its on-chain forms quote what the quoter does`, async () => {
+      const { action, expected } = cases.find((c) => c.action.type === type)!;
+      const given = "amount" in action ? action.amount : undefined;
+      assert.ok(given !== undefined, `${type} quotes an amount`);
+      const amount = BigInt(given);
+      const call = quoteCall(action, amount, quoters);
+      const returned = (fragment: Fragment): Promise<bigint> =>
+        env
+          .returned(
+            compileSauceProgram(
+              "ethereum",
+              fn("main", [], "Uint256", [...fragment.stmts, `return ${fragment.expr};`]),
+            ).bytecode,
+          )
+          .then(BigInt);
+      await env.testClient.setBalance({ address: env.pot, value: amount });
+      const want = await expected();
+
+      assert.equal(await returned(call.toSauce!(newEmitter())), want, "toSauce");
+      assert.equal(
+        await returned(call.toSauceDynamic!(newEmitter(), "ctx.balance(ctx.self())")),
+        want,
+        "toSauceDynamic",
+      );
     });
   }
 
