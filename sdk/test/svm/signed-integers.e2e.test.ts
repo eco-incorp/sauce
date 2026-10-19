@@ -32,7 +32,9 @@ const words = (args: readonly bigint[]): Uint8Array =>
   Uint8Array.from(Buffer.from(args.map((a) => a.toString(16).padStart(64, "0")).join(""), "hex"));
 
 describeSvm("SauceScript's Int256, executed through the released Solana engine", () => {
-  for (const { group, name, source, args, returns, signed } of SIGNED_CASES) {
+  for (const { group, name, source, args, returns, signed, evmOnly } of SIGNED_CASES) {
+    if (evmOnly) continue;
+
     it(`${group}: ${name}`, async () => {
       const artifact = compile({
         target: "svm",

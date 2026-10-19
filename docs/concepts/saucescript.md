@@ -87,10 +87,15 @@ and every example and quoted error in it is checked against the compiler this pa
 literals, operators, statements, functions and modules, every builtin on each target, and the
 limits. What most often surprises a TypeScript author:
 
-- Numbers are unsigned 256-bit integers, written plainly (`3000`, `10 ** 18`), and arithmetic is
-  checked: overflow, underflow and division by zero revert. Write a negative amount as `-x`;
-  `~x + 1` reverts when `x` is zero. A route callback written in TypeScript uses `bigint` literals
-  (`3000n`), which TypeScript types; the compiler reads both spellings as the same integer.
+- Numbers are 256-bit integers, written plainly (`3000`, `10 ** 18`), and arithmetic is checked:
+  overflow, underflow and division by zero revert. They are unsigned (`Uint256`) unless they are
+  signed (`Int256`): a negative literal such as `-5`, every contract `intN` value, and what the
+  signed `Math` helpers return. The two kinds do not mix in arithmetic but do compare by value;
+  `Int256(x)` and `Uint256(x)` convert and revert when the value does not fit, and
+  `Int256.fromBits(word)` and `Uint256.fromBits(x)` keep the bits. Write a negative amount as an
+  `Int256`: `-x` on a `Uint256` reverts for every `x` but 0. A route callback written in TypeScript
+  uses `bigint` literals (`3000n`), which TypeScript types; the compiler reads both spellings as the
+  same integer.
 - `bool` is kept apart from numbers, and `bytes`/`string` are byte strings: `"text"` is its UTF-8
   bytes and `` hex`a9059cbb` `` raw bytes. Every untagged template literal is rejected, with or
   without `${}`.

@@ -29,6 +29,8 @@ export interface SignedCase {
   /** What `main` returns, read as signed when `signed`, or that the cook reverts. */
   returns: bigint | typeof REVERTS;
   signed?: boolean;
+  /** The program uses a builtin only the EVM arm has. */
+  evmOnly?: boolean;
 }
 
 const one = (source: string) => `function main(x: Uint256): ${source}`;
@@ -57,7 +59,8 @@ const row = (
   args: readonly bigint[],
   returns: bigint | typeof REVERTS,
   signed = false,
-): SignedCase => ({ group, name, source, args, returns, signed });
+  evmOnly = false,
+): SignedCase => ({ group, name, source, args, returns, signed, evmOnly });
 
 export const SIGNED_CASES: readonly SignedCase[] = [
   // Int256(x) and Uint256(x) keep the value; they reject what does not fit.
@@ -221,6 +224,93 @@ export const SIGNED_CASES: readonly SignedCase[] = [
     WORD - 5n,
   ),
   row("negation", "and 0 stays 0", negativeWord, [0n], 0n),
+  row("negation", "~x on an Int256 is -x - 1", onSigned("return ~a;"), [5n], -6n, true),
+
+  // Kinds and contexts.
+  row(
+    "literal context",
+    "a literal expression in an Int256 context is signed",
+    one("Int256 { const d: Int256 = 1 - 2; return d + Int256(x); }"),
+    [0n],
+    -1n,
+    true,
+  ),
+  row(
+    "literal context",
+    "beside a Uint256, 1 - 2 is an underflow",
+    two("Uint256 { return a - b; }"),
+    [0n, 1n],
+    REVERTS,
+  ),
+  row(
+    "annotation",
+    "a Uint256 local given a non-negative Int256 keeps it",
+    one("Uint256 { const d: Uint256 = Int256.fromBits(x); return d; }"),
+    [5n],
+    5n,
+  ),
+  row(
+    "annotation",
+    "a Uint256 local given a negative Int256 reverts",
+    one("Uint256 { const d: Uint256 = Int256.fromBits(x); return d; }"),
+    [bits(-1n)],
+    REVERTS,
+  ),
+  row(
+    "annotation",
+    "a Uint256 return given a negative Int256 reverts",
+    one("Uint256 { return Int256.fromBits(x); }"),
+    [bits(-1n)],
+    REVERTS,
+  ),
+  row(
+    "annotation",
+    "a Uint256 return given a non-negative Int256 keeps it",
+    one("Uint256 { return Int256.fromBits(x); }"),
+    [7n],
+    7n,
+  ),
+
+  // The unsigned Math helpers convert an Int256 argument with a check.
+  row(
+    "Math.mulDiv",
+    "takes a non-negative Int256",
+    one("Uint256 { return Math.mulDiv(Int256.fromBits(x), 2, 1); }"),
+    [5n],
+    10n,
+  ),
+  row(
+    "Math.mulDiv",
+    "rejects a negative Int256",
+    one("Uint256 { return Math.mulDiv(Int256.fromBits(x), 2, 1); }"),
+    [bits(-1n)],
+    REVERTS,
+  ),
+  row(
+    "Math.sqrt",
+    "takes a non-negative Int256",
+    one("Uint256 { return Math.sqrt(Int256.fromBits(x)); }"),
+    [16n],
+    4n,
+  ),
+  row(
+    "Math.sqrt",
+    "rejects a negative Int256",
+    one("Uint256 { return Math.sqrt(Int256.fromBits(x)); }"),
+    [bits(-1n)],
+    REVERTS,
+  ),
+
+  // abi.decode reads an "Int256" field as signed. EVM only: `abi` has no Solana arm.
+  row(
+    "abi.decode",
+    "an Int256 field is signed",
+    one('Int256 { const t = abi.decode(abi.encode(x), ["Int256"]); return t[0]; }'),
+    [bits(-7n)],
+    -7n,
+    true,
+    true,
+  ),
 
   // A module-level let may start negative.
   row(

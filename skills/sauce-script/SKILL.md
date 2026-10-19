@@ -149,10 +149,20 @@ function main(recipients: Address[], amount: Uint256) {
 
 ## Values
 
-- **Integers** are 256-bit, written plainly (`3000`, `10 ** 18`), never as floats (`1.5` is
-  rejected). A constant expression that overflows or underflows (`0 - 1`, `2 ** 256 - 1`) is a
-  compile error: write the maximum as `~0`, and a two's-complement negative as **`-x`**, which never
-  fails (`~x + 1` reverts when `x` is `0`).
+- **Integers** are 256-bit and checked, written plainly (`3000`, `10 ** 18`), never as floats (`1.5` is
+  rejected). A constant expression that overflows or underflows (`0 - 1`, `2 ** 256`) is a compile
+  error: write the maximum as `~0`.
+- **Signed integers** are `Int256`: a negative literal (`-5`), every contract `intN` value (a tick, a
+  price feed's answer, a pool's flow) and what `Math.sDiv`, `Math.sMod`, `Math.sShr` and
+  `Math.signExtend` return. Every other integer is a `Uint256`. The two kinds do not mix in arithmetic
+  (an `Int256` plus a `Uint256` is a compile error) but they compare by value. Convert with `Int256(x)`
+  or `Uint256(x)`, which keep the value and revert when it does not fit, or with `Int256.fromBits(word)`
+  and `Uint256.fromBits(x)`, which keep the bits: use those only where the word really is a
+  two's-complement pattern. Write a negative amount as an `Int256`, `-5` or `-Int256(x)`. `-x` on a
+  `Uint256` is not a wrapping word: it reverts for every `x` but 0.
+- **A contract's `intN` parameter takes an `Int256`.** A `Uint256` given to one is converted with the
+  same check, so a two's-complement word for a negative amount compiles and reverts when the call is
+  made; a green compile proves nothing, so run it. Pass the `Int256`, or `Int256.fromBits(word)`.
 - **Addresses** are numbers: a `main` parameter, a name such as `USDC`, or a literal from the
   registry written as its hex (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`), never an invented one.
 - **`bytes`**: `` hex`a9059cbb` ``, `"text"`, `.concat`, `.slice(a, b)`, `.length`, `b[i]`,
@@ -170,10 +180,22 @@ function main(recipients: Address[], amount: Uint256) {
   the transaction's accounts (`sauce-solana`); on an EVM chain only a bare `Account` compiles, as
   an address.
 - **Module level takes only scalar literals.** A module-level `let` starts as a number, address or
-  boolean literal and is scratch, reset every run; anything else (`[1, 2]`, `new Array(n)`, `-1`,
-  `1 << 160`, a call) is refused with "must be initialized with a literal". A module-level `const`
+  boolean literal (a negative one makes it an `Int256`) and is scratch, reset every run; anything
+  else (`[1, 2]`, `new Array(n)`, `1 << 160`, a call) is refused with "must be initialized with a literal". A module-level `const`
   array is a lookup table read at a literal index (`FEES[0]`), never looped over. Persistent state
   is `evm.sstore`/`evm.sload` (`svm.sstore`/`svm.sload`).
+
+A negative amount stays an `Int256` from where it is made to where it is used:
+
+```sauce chain=base,ethereum
+// A debt below zero: made once with a checked conversion, compared with an unsigned floor.
+function main(amount: Uint256, floor: Uint256): Int256 {
+  require(amount >= floor, "below the floor");
+  const debt: Int256 = -Int256(amount);
+  require(debt < floor, "a negative number is below every Uint256");
+  return debt - 1;
+}
+```
 
 ### `ctx`: the transaction's context
 
@@ -269,6 +291,9 @@ function main(onBehalfOf: Address, amount: Uint256) {
 - **A helper that returns a value returns it on every path.** An `if` with a `return` and no `else`,
   or a loop that may end without one, fails with "does not return on every path": end the helper
   with a `return`.
+- **A helper that returns an `Int256` declares `: Int256`.** Without it the compile fails with
+  "a helper returning a signed integer needs an explicit `: Int256` return annotation"; `main` may
+  leave its return type out.
 
 ```sauce fails chain=base
 function larger(a: Uint256, b: Uint256): Uint256 {
@@ -431,22 +456,29 @@ A compile error fails the command; there is no warning channel. `sauce compile` 
 file's line and column, including on a line the package rewrote, and a `hint:` line names what to
 add. For any message not here, search [references/builtins.md](references/builtins.md).
 
-| Message                                                | Means                                                                                | Do                                                     |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `X is not a declared variable`                         | a typo, a name the chain does not have, or a value that should be a `main` parameter | check the name (`sauce-globals`), or add the parameter |
-| `Unexpected token`                                     | a syntax error at that line and column                                               | fix the syntax                                         |
-| `a function argument: expected a number, found a bool` | the called function's parameter has no annotation, so it is a number                 | annotate it: `first: bool`                             |
-| `does not return on every path`                        | a helper can end without a `return`                                                  | end it with a `return`                                 |
-| `a nested function declaration is not supported`       | a function declared inside another function or a block                               | declare it at the top level                            |
-| `X is called but never declared`                       | a function not in scope, usually a typo                                              | fix the name                                           |
-| `calling anything other than a plain function name`    | a method called on a literal (``hex`…`.concat(…)``)                                  | bind the literal to a `const` first                    |
-| `must be initialized with a literal`                   | a module-level `let` or `const` given a computed value                               | compute it inside a function                           |
-| `the registry does not record which contract it is`    | a method called on an address a registry function returns, of no recorded contract   | name its interface, as the message spells it           |
-| `does not name a function`                             | a method called on an address in a variable or parameter                             | name its interface: `UniswapV3.Pool(pool).liquidity()` |
+| Message                                                 | Means                                                                                | Do                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `X is not a declared variable`                          | a typo, a name the chain does not have, or a value that should be a `main` parameter | check the name (`sauce-globals`), or add the parameter |
+| `Unexpected token`                                      | a syntax error at that line and column                                               | fix the syntax                                         |
+| `a function argument: expected a number, found a bool`  | the called function's parameter has no annotation, so it is a number                 | annotate it: `first: bool`                             |
+| `does not return on every path`                         | a helper can end without a `return`                                                  | end it with a `return`                                 |
+| `cannot combine Int256 and Uint256 in this expression`  | an `Int256` and a `Uint256` in one arithmetic or bitwise operator                    | convert one: `Int256(x)` or `Uint256(x)`               |
+| `a helper returning a signed integer needs an explicit` | a helper that returns an `Int256` has no return annotation                           | declare it `: Int256`                                  |
+| `a nested function declaration is not supported`        | a function declared inside another function or a block                               | declare it at the top level                            |
+| `X is called but never declared`                        | a function not in scope, usually a typo                                              | fix the name                                           |
+| `calling anything other than a plain function name`     | a method called on a literal (``hex`…`.concat(…)``)                                  | bind the literal to a `const` first                    |
+| `must be initialized with a literal`                    | a module-level `let` or `const` given a computed value                               | compute it inside a function                           |
+| `the registry does not record which contract it is`     | a method called on an address a registry function returns, of no recorded contract   | name its interface, as the message spells it           |
+| `does not name a function`                              | a method called on an address in a variable or parameter                             | name its interface: `UniswapV3.Pool(pool).liquidity()` |
 
 ## Pitfalls
 
 - **An untyped helper parameter is a `Uint256`.** Annotate every parameter that is not.
+- **`-x` on a `Uint256` is not a negative amount.** It reverts for every `x` but 0. Hold the amount as an
+  `Int256` (`-Int256(x)`), and convert to a word with `Uint256.fromBits` only where an unsigned word is
+  the point.
+- **A two's-complement word given to a contract's `intN` parameter reverts when the call is made**, and
+  compiles. Pass the `Int256` instead, and run the program.
 - **A comparison returned from an unannotated function is a number.** Annotate `: bool`.
 - **A script's top-level `const` is invisible to its helpers.** Pass it in, or use `main` and a
   module constant.

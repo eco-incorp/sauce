@@ -59,6 +59,8 @@ example program each, is `builtins.json`.
 
 - `Uint256`, `Address`, `number`, `bigint`: A **number**: one unsigned 256-bit integer. An address
   is a number.
+- `Int256`: A **signed number**: one signed 256-bit integer, from −2²⁵⁵ to 2²⁵⁵ − 1 (see Signed
+  integers below).
 - `bool`, `boolean`: A **bool**: true or false. It is kept apart from numbers, so `flag + 1` is an
   error. Comparisons produce bools.
 - `bytes`, `string`: A **bytes value**. A `"text"` literal is its UTF-8 bytes.
@@ -71,14 +73,14 @@ example program each, is `builtins.json`.
   alone".
 - `void`: No value (return type only)
 
-- A parameter without an annotation is a number. So is the result of a function without a return annotation,
+- A parameter without an annotation is a number (`Uint256`). So is the result of a function without a return annotation,
   even one that returns a comparison or `true`: it comes back as 1 or 0. `if`, `while`, `&&` and `!` take that,
   but a `: bool` function cannot return it: "a return value: expected a bool, found a number". Give a helper
   that answers yes or no a `: bool` return type.
 - An unknown type name is rejected with a list of the valid ones, as in "`uint256` is not a type — write
   `Uint256`, `Address`, `Account`, `bool`, `bytes` or `string`, an array `T[]`, an inline object type `{ a: Uint256 }`
   for a tuple …". Union types, `Array<T>` and `[A, B]` tuple types are rejected the same way.
-- In this reference, **scalar** means a number or a bool.
+- In this reference, **scalar** means a number, signed or not, or a bool.
 
 Common type errors:
 
@@ -92,11 +94,38 @@ Common type errors:
 A builtin that does not exist on your target fails as "`<name>` is not available on the `<evm|svm>` target",
 usually followed by what to use instead.
 
+### Signed integers
+
+An `Int256` is a signed 256-bit integer. These values are `Int256`; every other integer is a `Uint256`:
+
+- an ABI `intN` value from a contract (`int24`, `int128`, `int256`, …): a return value, a record field or
+  an array element;
+- a negative literal, `-1`, and a constant expression given an `: Int256` annotation;
+- what `Math.sDiv`, `Math.sMod`, `Math.sShr` and `Math.signExtend` return.
+
+Rules, which hold on both targets:
+
+- **Arithmetic does not mix kinds.** An `Int256` and a `Uint256` cannot be added, subtracted or combined
+  in any arithmetic or bitwise operator (§3). Convert one operand with `Int256(x)` or `Uint256(x)`.
+- **Comparisons do mix.** `<`, `>=`, `==` and the rest between the two compare their values: a negative
+  number is below every `Uint256` and equal to none.
+- **Conversions keep the value or revert.** `Int256(x)` reverts for a `Uint256` above 2²⁵⁵ − 1, and
+  `Uint256(x)` for a negative `Int256`. A parameter, return or local annotated with the other kind
+  converts the same way, so an `Int256` returned from a `: Uint256` function reverts when it is negative.
+  A constant that does not fit is a compile error: "constant Int256 value is outside Uint256's range; …".
+- **`fromBits` keeps the bits.** `Int256.fromBits(word)` reads a `Uint256` word as signed (the all-ones
+  word is −1), and `Uint256.fromBits(x)` gives an `Int256` its two's-complement word. Neither checks
+  anything; use them where the word really is a bit pattern (§8).
+- **A `Uint256` given to an `intN` parameter of a contract is converted with that check.** A
+  two's-complement word for a negative amount is above 2²⁵⁵ − 1: it compiles and reverts when the call is
+  made, so pass an `Int256` (§13).
+
 ## 2. Literals
 
 | Literal                            | Meaning                                                                | Example                                    |
 | ---------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
-| integers: `1`, `0xff`, `1_000_000` | numbers                                                                | `const ONE_TOKEN = 1000000000000000000;`   |
+| integers: `1`, `0xff`, `1_000_000` | numbers (`Uint256`)                                                    | `const ONE_TOKEN = 1000000000000000000;`   |
+| a negative integer: `-1`           | an `Int256`                                                            | `const delta = -1;`                        |
 | `true`, `false`                    | bools                                                                  | `let filled = true;`                       |
 | `"text"`                           | bytes (UTF-8)                                                          | `throw "below floor";`                     |
 | `` hex`…` ``                       | raw bytes: an even number of hex digits, optional `0x`, spaces ignored | ``const selector = hex`a9059cbb`;``        |
@@ -104,7 +133,8 @@ usually followed by what to use instead.
 | `{ a: 1, b }`                      | a record; shorthand fields work                                        | `const order = { amount, recipient: to };` |
 
 Write integers plainly. Each is read from its text as a 256-bit integer, so one past 2^53 is
-exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the same integer.
+exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the same integer. A negative
+literal is an `Int256`, from −2²⁵⁵ up.
 
 **Not literals:**
 
@@ -120,21 +150,35 @@ exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the
 
 ## 3. Operators
 
-- `+ - * / % **`, on numbers → number
-  - **Checked.** Overflow, underflow and division by zero revert. With constant operands they are
-    compile errors: "constant `-` expression overflows 256 bits", "constant `/` expression divides
-    by zero".
+- `+ - * / % **`, on numbers → number, on `Int256` values → `Int256`
+  - **Checked.** Overflow, underflow and division by zero revert, and so does a result outside the
+    operands' kind: below 0 for a `Uint256`, outside −2²⁵⁵ to 2²⁵⁵ − 1 for an `Int256`. With constant
+    operands they are compile errors: "constant `+` expression overflows 256 bits", "constant
+    subtraction underflows Uint256; …", "constant `/` expression divides by zero".
+  - **Both operands are one kind:** "cannot combine Int256 and Uint256 in this expression; …". A
+    literal that fits takes the other operand's kind (`delta + 1`, `delta + -1`), and a literal
+    expression takes the kind its annotation gives it: `const d: Int256 = 1 - 2;` is −1, where `1 - 2`
+    beside a `Uint256` is an underflow.
+  - On an `Int256`, `/` rounds toward zero, `%` takes the dividend's sign, and the smallest value
+    divided by −1 reverts.
+- `-x`, on an `Int256` → `Int256`
+  - Checked negation: only the smallest value, which has no negative, reverts. **Use an `Int256` for a
+    negative amount:** a negative literal, `-5`, or `-Int256(x)` for a value you hold as a `Uint256`.
 - `-x`, on a number → number
-  - Two's-complement negation; it never fails. **Use `-x` for a negative amount.** `~x + 1` reverts
-    when `x` is `0`, because the `+` is checked. `-1` is 2²⁵⁶ − 1.
+  - Checked too: 0 for 0, and a revert for any other value, because no `Uint256` is the negative of
+    another. It never gives a two's-complement word. For the word of a negative amount, write
+    `Uint256.fromBits(-Int256(x))`.
 - `~x`, on a number → number
-  - bitwise NOT. `~0` is the maximum value.
+  - bitwise NOT. `~0` is the maximum value. On an `Int256`, `~x` is `-x - 1`.
 - `& | ^ << >>`, on numbers → number
-  - Bitwise. `>>` fills with zeros; use `Math.sShr` for a signed shift.
+  - Bitwise, on two operands of one kind. `>>` fills with zeros on a `Uint256` and copies the sign bit
+    on an `Int256`, so `-8 >> 1` is −4.
 - `< <= > >=`, on scalars → bool
-  - unsigned; use `Math.sLt` and friends for signed
+  - By value, also between an `Int256` and a `Uint256`: a negative number is below every `Uint256`.
+    `Math.sLt` and friends compare two words as two's complement (§8).
 - `== === != !==`, on scalars, or two accounts → bool
-  - Bytes cannot be compared: "a comparison operator requires a scalar value". Compare
+  - A negative `Int256` equals no `Uint256`. Bytes cannot be compared: "a comparison operator
+    requires a scalar value". Compare
     `crypto.keccak256(a) == crypto.keccak256(b)` instead.
 - `!x`, on a scalar → bool
 - `a && b`, `a || b`, on scalars → bool
@@ -176,6 +220,8 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
   value from a function other than `main` needs a return-type annotation — …".
 - Every path must return ("`f` does not return on every path"). A bare `return;` is allowed only in a `: void`
   function.
+- A function other than `main` that returns a signed value declares it, `: Int256`: "a helper returning a
+  signed integer needs an explicit `: Int256` return annotation". `main` may leave its return type out.
 - A `: void` function's result is not a value: "a call to a `: void` function produces no value, so its result
   can't be used as one — call it as a statement instead".
 - `main` is the entry point and cannot be called from your code.
@@ -213,8 +259,8 @@ a module-level constant with functions, or to return a value.
   time inside a function.
 - A top-level `let` is scratch space, reset on every run. It is not persistent storage.
 - A top-level `let` starts as a number, address or boolean literal, nothing else: "a module-scope `let <name>`
-  must be initialized with a literal — a number, address or boolean literal. …". An array, bytes, a record, a
-  negative number, an expression or a call goes inside a function.
+  must be initialized with a literal — a number, address or boolean literal. …". An array, bytes, a record, an
+  expression or a call goes inside a function. A negative literal is a literal, and makes the `let` an `Int256`.
 - The compile option `defines` replaces a `const` of the same name.
 
 **Imports**
@@ -372,9 +418,13 @@ An unknown name gives "`crypto.sha256` is not a crypto intrinsic".
 These are SauceScript's integer functions, on **Both** targets. They are not JavaScript's `Math`: `Math.min`,
 `max`, `abs`, `pow`, `floor` and the rest give "`Math.min` is not a Math intrinsic".
 
-- Every argument is a scalar.
-- Every result is a **number**, including the signed comparisons. `if (Math.sLt(a, b)) { … }` works, but
-  returning one from a `: bool` function fails with "a return value: expected a bool, found a number".
+- Every argument is an integer: a `Uint256` or an `Int256`. The signed helpers read it as the 256-bit word it
+  is. `sqrt`, `mulDiv`, `addMod` and `mulMod` take unsigned values, so an `Int256` argument is converted
+  with a check, and a negative one reverts.
+- `Math.sqrt`, `mulDiv`, `addMod` and `mulMod` give a **number**. `Math.sDiv`, `sMod`, `sShr` and
+  `signExtend` give an `Int256`. The four signed comparisons give a **bool**: `if (Math.sLt(a, b)) { … }`
+  works, and so does returning one from a `: bool` function. Returning one from a `: Uint256` function fails
+  with "a return value: expected a number, found a bool".
 
 - `Math.sqrt(x)`: the integer square root
   - Reverts when: never
@@ -388,24 +438,53 @@ These are SauceScript's integer functions, on **Both** targets. They are not Jav
 - `Math.mulMod(a, b, n)`: (a · b) mod n
   - Reverts when: `n` is 0
   - Example: `Math.mulMod(a, b, P)`
-- `Math.sDiv(a, b)`: signed division
-  - Reverts when: `b` is 0
+- `Math.sDiv(a, b)`: signed division of two words, rounded toward zero; gives an `Int256`
+  - Reverts when: `b` is 0. The smallest `Int256` divided by −1 gives the smallest `Int256`, where the
+    operator `/` reverts.
   - Example: `Math.sDiv(delta, 2)`
-- `Math.sMod(a, b)`: signed remainder
+- `Math.sMod(a, b)`: signed remainder of two words, with the sign of `a`; gives an `Int256`
   - Reverts when: `b` is 0
   - Example: `Math.sMod(delta, 3)`
-- `Math.sShr(value, bits)`: signed (arithmetic) right shift
+- `Math.sShr(value, bits)`: signed (arithmetic) right shift of a word; gives an `Int256`
   - Reverts when: never
   - Example: `Math.sShr(tick, 1)`
-- `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte
+- `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte; gives an
+  `Int256`
   - Reverts when: never
   - Example: `Math.signExtend(raw, 2)` for an int24
-- `Math.sLt(a, b)`, `Math.sGt(a, b)`, `Math.sLte(a, b)`, `Math.sGte(a, b)`: signed comparisons,
-  giving 1 or 0
+- `Math.sLt(a, b)`, `Math.sGt(a, b)`, `Math.sLte(a, b)`, `Math.sGte(a, b)`: compare two words as
+  two's complement, giving a bool. For `Int256` values the operators `<` and `>` already compare by
+  value; these are for a `Uint256` word that holds signed bits, where `<` reads the all-ones word as the
+  largest number and `Math.sLt` reads it as −1.
   - Reverts when: never
   - Example: `if (Math.sLt(tick, 0)) { … }`
 
 A wrong argument count gives "`Math.sqrt` takes 1 argument(s), but this call passes 2".
+
+### Integer conversions
+
+These move a value between `Uint256` and `Int256`: `Int256(value)` and `Uint256(value)` keep the value and
+revert when it does not fit; `fromBits` keeps the 256 bits and never reverts. Each takes one argument.
+
+- `Int256(value)`: `(number or Int256) → Int256`, **Both**
+  - Keeps the value. A `Uint256` above 2²⁵⁵ − 1 reverts; a constant that does not fit is a compile
+    error: "constant Uint256 value is outside Int256's range; …".
+  - Reverts when: `value` is above 2²⁵⁵ − 1
+  - Example: `const delta = -Int256(amount);`
+- `Uint256(value)`: `(Int256 or number) → Uint256`, **Both**
+  - Keeps the value. A negative `Int256` reverts.
+  - Reverts when: `value` is negative
+  - Example: `const owed = Uint256(delta);`
+- `Int256.fromBits(word)`: `(Uint256) → Int256`, **Both**
+  - Reads the 256 bits as a signed number: bit 255 is the sign, so the all-ones word is −1. No check
+    and no cost. Use it where the word really is a two's-complement bit pattern, such as bytes read
+    from account data. It takes a `Uint256`: an `Int256` argument is a compile error.
+  - Reverts when: never
+  - Example: `const delta = Int256.fromBits(word);`
+- `Uint256.fromBits(value)`: `(Int256) → Uint256`, **Both**
+  - Gives a negative value its two's-complement word: −1 becomes 2²⁵⁶ − 1. It takes an `Int256`.
+  - Reverts when: never
+  - Example: `const word = Uint256.fromBits(-Int256(amount));`
 
 ## 9. `abi` (EVM)
 
@@ -421,8 +500,8 @@ work on SVM; they are decoded separately.
   - Types: `data`: bytes. The shapes must be written in place as an array of strings. Returns a
     record with unnamed fields.
   - Read fields by position or by destructuring. Field types use SauceScript names: `"Uint256"`,
-    `"Address"`, `"bool"`, `"bytes"`, `"string"`, `"number"`, `"bigint"`, `"boolean"`, any of them
-    followed by `[]`, and records `"{Uint256, bool}"`. Solidity spellings are rejected: "`uint256`
+    `"Int256"`, `"Address"`, `"bool"`, `"bytes"`, `"string"`, `"number"`, `"bigint"`, `"boolean"`, any of
+    them followed by `[]`, and records `"{Uint256, bool}"`. Solidity spellings are rejected: "`uint256`
     is not an abi.decode field type — …". Errors: "abi.decode takes exactly 2 arguments (data,
     shape), got N"; "abi.decode's first argument must be bytes"; shapes held in a variable give
     "abi.decode's second argument must be an array literal of shape strings, e.g. ["Uint256",
@@ -430,8 +509,9 @@ work on SVM; they are decoded separately.
     resolves against nothing — read a field by position instead (`t[0]`)".
   - Example: `const [amount, to] = abi.decode(data, ["Uint256", "Address"]);`
 
-A `"bool"` field decodes as a bool, an `"Address"` field keeps only the address-sized low 20 bytes, and every
-other single-value field decodes as a number.
+A `"bool"` field decodes as a bool, an `"Address"` field keeps only the address-sized low 20 bytes, an
+`"Int256"` field decodes as a signed number (the all-ones word is −1), and every other single-value field
+decodes as an unsigned number.
 
 ## 10. `evm` (EVM)
 
@@ -587,9 +667,14 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   - A method with one output returns that output.
   - A method with several outputs returns a record named after the ABI's outputs: read `.amountOut` or `[0]`,
     or destructure it with `const [a, b] = …`.
-- **Every single-value output is typed as a number, `bool` and `address` included.** Write
-  `ERC20.at(t).transfer(to, x) == 1` if you need a bool. A `: bool` function cannot return the call directly
-  ("a return value: expected a bool, found a number").
+- **Every single-value output is typed as a number, `bool` and `address` included**, except an `intN`,
+  which is an `Int256`. Write `ERC20.at(t).transfer(to, x) == 1` if you need a bool. A `: bool` function
+  cannot return the call directly ("a return value: expected a bool, found a number"). An `Int256`
+  output assigned to a `Uint256` is converted with a check, so a negative value reverts.
+- **An `intN` argument takes an `Int256`.** A `Uint256` given to an `intN` parameter is converted with the
+  same check: a small value arrives as itself, and a two's-complement word, which is above 2²⁵⁵ − 1,
+  compiles and reverts when the call is made. Pass the `Int256`, or `Int256.fromBits(word)` for such a
+  word. A narrow parameter also takes only its own range: an `int24` reaches −2²³ to 2²³ − 1.
 - **Struct arguments** can be object literals with the fields in any order; they are matched to the ABI by name.
 - **No value.** A bound call never sends value. Use `evm.call(address, value, data)` (§10) when you need to.
 - **Token transfers.** For ERC-20 `transfer` and `approve`, prefer `@sauce/token` (`import { transfer, approve }
@@ -649,7 +734,7 @@ Rules and errors:
 | object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
 | spread `[...xs]`, `f(...xs)`                                     | explicit elements, or a loop                                                                                      |
 | `?.`, `??`, `x!`, `as`, `satisfies`                              | explicit checks; annotations                                                                                      |
-| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `Math.sShr`, or plain values                                                                                      |
+| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `>>` on an `Int256`, `Math.sShr`, or plain values                                                                 |
 | `>>>=`, `\|\|=`, `&&=`, `??=`                                    | `x = …`                                                                                                           |
 | `a[i] += v`, `t.f += v`, `a[i]++`                                | `a[i] = a[i] + v`                                                                                                 |
 | `i++` used as a value                                            | `i += 1` on its own line                                                                                          |
