@@ -101,7 +101,7 @@ An `Int256` is a signed 256-bit integer. These values are `Int256`; every other 
 - an ABI `intN` value from a contract (`int24`, `int128`, `int256`, …): a return value, a record field or
   an array element;
 - a negative literal, `-1`, and a constant expression given an `: Int256` annotation;
-- what `Math.sDiv`, `Math.sMod`, `Math.sShr` and `Math.signExtend` return.
+- what `Math.signExtend` returns, and the result of an operator on `Int256` values.
 
 Rules, which hold on both targets:
 
@@ -174,8 +174,8 @@ literal is an `Int256`, from −2²⁵⁵ up.
   - Bitwise, on two operands of one kind. `>>` fills with zeros on a `Uint256` and copies the sign bit
     on an `Int256`, so `-8 >> 1` is −4.
 - `< <= > >=`, on scalars → bool
-  - By value, also between an `Int256` and a `Uint256`: a negative number is below every `Uint256`.
-    `Math.sLt` and friends compare two words as two's complement (§8).
+  - By value, also between an `Int256` and a `Uint256`: a negative number is below every `Uint256`. To
+    compare a `Uint256` word as two's complement, read it as signed first: `Int256.fromBits(word) < 0`.
 - `== === != !==`, on scalars, or two accounts → bool
   - A negative `Int256` equals no `Uint256`. Bytes cannot be compared: "a comparison operator
     requires a scalar value". Compare
@@ -418,13 +418,15 @@ An unknown name gives "`crypto.sha256` is not a crypto intrinsic".
 These are SauceScript's integer functions, on **Both** targets. They are not JavaScript's `Math`: `Math.min`,
 `max`, `abs`, `pow`, `floor` and the rest give "`Math.min` is not a Math intrinsic".
 
-- Every argument is an integer: a `Uint256` or an `Int256`. The signed helpers read it as the 256-bit word it
-  is. `sqrt`, `mulDiv`, `addMod` and `mulMod` take unsigned values, so an `Int256` argument is converted
-  with a check, and a negative one reverts.
-- `Math.sqrt`, `mulDiv`, `addMod` and `mulMod` give a **number**. `Math.sDiv`, `sMod`, `sShr` and
-  `signExtend` give an `Int256`. The four signed comparisons give a **bool**: `if (Math.sLt(a, b)) { … }`
-  works, and so does returning one from a `: bool` function. Returning one from a `: Uint256` function fails
-  with "a return value: expected a number, found a bool".
+- Every argument is an integer: a `Uint256` or an `Int256`. `sqrt`, `mulDiv`, `addMod` and `mulMod` take
+  unsigned values, so an `Int256` argument is converted with a check, and a negative one reverts.
+  `signExtend` reads its argument as the 256-bit word it is.
+- `Math.sqrt`, `mulDiv`, `addMod` and `mulMod` give a **number**; `Math.signExtend` gives an `Int256`.
+- Signed division, remainder, arithmetic shift and comparison are the operators on `Int256` values:
+  `/ % >> < <= > >=` (§3). For a `Uint256` word that holds signed bits, read it with
+  `Int256.fromBits(word)` first. `Math.sDiv`, `sMod`, `sShr`, `sLt`, `sGt`, `sLte` and `sGte` are not
+  intrinsics: each gives an error naming its operator, such as "`Math.sDiv` was removed; use `/` on
+  `Int256` values …".
 
 - `Math.sqrt(x)`: the integer square root
   - Reverts when: never
@@ -438,26 +440,14 @@ These are SauceScript's integer functions, on **Both** targets. They are not Jav
 - `Math.mulMod(a, b, n)`: (a · b) mod n
   - Reverts when: `n` is 0
   - Example: `Math.mulMod(a, b, P)`
-- `Math.sDiv(a, b)`: signed division of two words, rounded toward zero; gives an `Int256`
-  - Reverts when: `b` is 0. The smallest `Int256` divided by −1 gives the smallest `Int256`, where the
-    operator `/` reverts.
-  - Example: `Math.sDiv(delta, 2)`
-- `Math.sMod(a, b)`: signed remainder of two words, with the sign of `a`; gives an `Int256`
-  - Reverts when: `b` is 0
-  - Example: `Math.sMod(delta, 3)`
-- `Math.sShr(value, bits)`: signed (arithmetic) right shift of a word; gives an `Int256`
-  - Reverts when: never
-  - Example: `Math.sShr(tick, 1)`
 - `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte; gives an
   `Int256`
   - Reverts when: never
   - Example: `Math.signExtend(raw, 2)` for an int24
-- `Math.sLt(a, b)`, `Math.sGt(a, b)`, `Math.sLte(a, b)`, `Math.sGte(a, b)`: compare two words as
-  two's complement, giving a bool. For `Int256` values the operators `<` and `>` already compare by
-  value; these are for a `Uint256` word that holds signed bits, where `<` reads the all-ones word as the
-  largest number and `Math.sLt` reads it as −1.
-  - Reverts when: never
-  - Example: `if (Math.sLt(tick, 0)) { … }`
+
+A comparison returns a **bool**, `Int256` values included: `if (a < b) { … }` works, and so does returning
+one from a `: bool` function. Returning one from a `: Uint256` function fails with "a return value:
+expected a number, found a bool".
 
 A wrong argument count gives "`Math.sqrt` takes 1 argument(s), but this call passes 2".
 
@@ -734,7 +724,7 @@ Rules and errors:
 | object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
 | spread `[...xs]`, `f(...xs)`                                     | explicit elements, or a loop                                                                                      |
 | `?.`, `??`, `x!`, `as`, `satisfies`                              | explicit checks; annotations                                                                                      |
-| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `>>` on an `Int256`, `Math.sShr`, or plain values                                                                 |
+| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `>>` on an `Int256`, or plain values                                                                              |
 | `>>>=`, `\|\|=`, `&&=`, `??=`                                    | `x = …`                                                                                                           |
 | `a[i] += v`, `t.f += v`, `a[i]++`                                | `a[i] = a[i] + v`                                                                                                 |
 | `i++` used as a value                                            | `i += 1` on its own line                                                                                          |

@@ -89,8 +89,9 @@ limits. What most often surprises a TypeScript author:
 
 - Numbers are 256-bit integers, written plainly (`3000`, `10 ** 18`), and arithmetic is checked:
   overflow, underflow and division by zero revert. They are unsigned (`Uint256`) unless they are
-  signed (`Int256`): a negative literal such as `-5`, every contract `intN` value, and what the
-  signed `Math` helpers return. The two kinds do not mix in arithmetic but do compare by value;
+  signed (`Int256`): a negative literal such as `-5`, every contract `intN` value, and what
+  `Math.signExtend` returns. On `Int256` values `/`, `%`, `>>` and `<` are signed. The two kinds do not
+  mix in arithmetic but do compare by value;
   `Int256(x)` and `Uint256(x)` convert and revert when the value does not fit, and
   `Int256.fromBits(word)` and `Uint256.fromBits(x)` keep the bits. Write a negative amount as an
   `Int256`: `-x` on a `Uint256` reverts for every `x` but 0. A route callback written in TypeScript

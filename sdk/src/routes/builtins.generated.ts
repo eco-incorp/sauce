@@ -159,22 +159,8 @@ declare global {
     addMod(a: bigint, b: bigint, n: bigint): bigint;
     /** `Math.mulMod(a: Uint256, b: Uint256, n: Uint256): Uint256` — EVM and SVM. */
     mulMod(a: bigint, b: bigint, n: bigint): bigint;
-    /** `Math.sDiv(a: integer, b: integer): Int256` — EVM and SVM. */
-    sDiv(a: bigint, b: bigint): bigint;
-    /** `Math.sMod(a: integer, b: integer): Int256` — EVM and SVM. */
-    sMod(a: bigint, b: bigint): bigint;
-    /** `Math.sShr(value: integer, bits: integer): Int256` — EVM and SVM. */
-    sShr(value: bigint, bits: bigint): bigint;
     /** `Math.signExtend(value: integer, byte: integer): Int256` — EVM and SVM. */
     signExtend(value: bigint, byte: bigint): bigint;
-    /** `Math.sLt(a: integer, b: integer): bool` — EVM and SVM. */
-    sLt(a: bigint, b: bigint): boolean;
-    /** `Math.sGt(a: integer, b: integer): bool` — EVM and SVM. */
-    sGt(a: bigint, b: bigint): boolean;
-    /** `Math.sLte(a: integer, b: integer): bool` — EVM and SVM. */
-    sLte(a: bigint, b: bigint): boolean;
-    /** `Math.sGte(a: integer, b: integer): bool` — EVM and SVM. */
-    sGte(a: bigint, b: bigint): boolean;
   }
 
   /** Methods on a number. */

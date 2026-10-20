@@ -135,16 +135,8 @@ interface Math {
   mulDiv(x: SauceInt, y: SauceInt, d: SauceInt): bigint;
   addMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
   mulMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
-  /** Signed (two's-complement) division of two words. */
-  sDiv(a: SauceInt, b: SauceInt): Int256;
-  sMod(a: SauceInt, b: SauceInt): Int256;
-  sShr(value: SauceInt, bits: SauceInt): Int256;
+  /** Sign-extends `value` from byte `byte` (0 is the lowest), reading it as a raw word. */
   signExtend(value: SauceInt, byte: SauceInt): Int256;
-  /** Signed comparisons of two words. */
-  sLt(a: SauceInt, b: SauceInt): boolean;
-  sGt(a: SauceInt, b: SauceInt): boolean;
-  sLte(a: SauceInt, b: SauceInt): boolean;
-  sGte(a: SauceInt, b: SauceInt): boolean;
 }
 
 /** `Int256(value)`: the value as a signed integer; one above 2^255 - 1 is rejected. */

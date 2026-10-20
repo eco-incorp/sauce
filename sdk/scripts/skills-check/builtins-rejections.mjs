@@ -613,7 +613,12 @@ export const rejections = [
   {
     quotes: ["a return value: expected a number, found a bool"],
     targets: ["evm"],
-    src: "function main(a: Uint256, b: Uint256): Uint256 { return Math.sLt(a, b); }",
+    src: "function main(a: Int256, b: Int256): Uint256 { return a < b; }",
+  },
+  {
+    quotes: ["`Math.sDiv` was removed; use `/` on `Int256` values …"],
+    targets: ["evm", "svm"],
+    src: "function main(delta: Int256): Int256 { return Math.sDiv(delta, 2); }",
   },
   {
     quotes: ["`Math.sqrt` takes 1 argument(s), but this call passes 2"],

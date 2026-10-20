@@ -153,9 +153,10 @@ function main(recipients: Address[], amount: Uint256) {
   rejected). A constant expression that overflows or underflows (`0 - 1`, `2 ** 256`) is a compile
   error: write the maximum as `~0`.
 - **Signed integers** are `Int256`: a negative literal (`-5`), every contract `intN` value (a tick, a
-  price feed's answer, a pool's flow) and what `Math.sDiv`, `Math.sMod`, `Math.sShr` and
-  `Math.signExtend` return. Every other integer is a `Uint256`. The two kinds do not mix in arithmetic
-  (an `Int256` plus a `Uint256` is a compile error) but they compare by value. Convert with `Int256(x)`
+  price feed's answer, a pool's flow) and what `Math.signExtend` returns. Every other integer is a
+  `Uint256`. The two kinds do not mix in arithmetic (an `Int256` plus a `Uint256` is a compile error) but
+  they compare by value. On `Int256` values the operators are signed: `/` rounds toward zero, `%` takes the
+  dividend's sign, `>>` copies the sign bit, and `<` compares as signed. Convert with `Int256(x)`
   or `Uint256(x)`, which keep the value and revert when it does not fit, or with `Int256.fromBits(word)`
   and `Uint256.fromBits(x)`, which keep the bits: use those only where the word really is a
   two's-complement pattern. Write a negative amount as an `Int256`, `-5` or `-Int256(x)`. `-x` on a
