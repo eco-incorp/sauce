@@ -376,7 +376,7 @@ const SPECS: readonly ActionSpec[] = [
       ),
       assets: f(
         { k: "array", of: tokenOrNative, min: 2 },
-        'every asset the steps index; "native" is the native currency',
+        'each asset the steps index, once only (including symbol/address aliases); "native" and the zero address are the same native currency',
       ),
       amountOutMin: f(
         uint256,

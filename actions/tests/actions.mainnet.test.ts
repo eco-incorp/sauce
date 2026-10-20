@@ -442,6 +442,33 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(USDC, RECEIVER), 0n);
     });
 
+    it("balancerV2BatchSwap cannot spend the Pot's ETH: its Vault call sends no native value", async () => {
+      const before = await ether(env.pot);
+      assert.ok(before >= ONE_ETH);
+      const actions: Action[] = [
+        {
+          type: "balancerV2BatchSwap",
+          vault: BALANCER_V2_VAULT,
+          steps: [
+            {
+              poolId: BALANCER_V2_WETH_USDC,
+              assetInIndex: 0,
+              assetOutIndex: 1,
+              amount: `${ONE_ETH}`,
+            },
+          ],
+          assets: ["native", USDC],
+          amountOutMin: "1",
+          recipient: RECEIVER,
+          deadline: DEADLINE,
+        },
+      ];
+      const receipt = await env.cook(compileProgram({ version: 1, chainId: 1, actions }).bytecode);
+      assert.equal(receipt.status, "reverted");
+      assert.equal(await ether(env.pot), before);
+      assert.equal(await balance(USDC, RECEIVER), 0n);
+    });
+
     it("balancerV2BatchSwap cannot satisfy its output floor with an earlier leg's other asset", async () => {
       const minimum = 1_000_000_000n;
       const actions: Action[] = [

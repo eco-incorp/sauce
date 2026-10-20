@@ -13,12 +13,13 @@ import {
   compileProgram,
   parseProgram,
   programSchema,
+  quoteAction,
   serializeProgram,
 } from "../src/index.js";
 import { ACTION_TYPES } from "../src/spec.js";
 import type { ActionProgram, ActionType } from "../src/types.js";
 import { REPO_ROOT } from "./anvil.js";
-import { A, R, SAMPLES, sampleProgram } from "./samples.js";
+import { A, B, R, SAMPLES, sampleProgram } from "./samples.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
@@ -443,5 +444,75 @@ describe("action programs — the published JSON Schema", () => {
       assert.ok(validate(input), "the schema cannot express this rule");
       assert.ok(rejects(input));
     }
+  });
+});
+
+describe("action programs — balancerV2BatchSwap's assets are distinct", () => {
+  const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const batch = (assets: string[]) => ({ ...SAMPLES.balancerV2BatchSwap, assets });
+
+  /** `run` throws a ProgramError with an issue at `assets[index]` whose message matches. */
+  function refusedAt(run: () => unknown, index: number, message: RegExp): void {
+    const path = new RegExp(`^(actions?\\[0\\]|action)\\.assets\\[${index}\\]$`);
+    assert.throws(
+      run,
+      (error: unknown) =>
+        error instanceof ProgramError &&
+        error.issues.some((issue) => path.test(issue.path) && message.test(issue.message)),
+    );
+  }
+
+  /** Each entry point; the document carries chainId 1, and compile and quote are given Ethereum. */
+  const entries = (assets: string[]): Array<[string, () => unknown]> => [
+    ["parseProgram", () => parseProgram(withAction(batch(assets)))],
+    [
+      "compileProgram",
+      () => compileProgram(withAction(batch(assets)) as ActionProgram, { chain: "ethereum" }),
+    ],
+    ["quoteAction", () => quoteAction(batch(assets) as never, { chain: "ethereum" })],
+  ];
+
+  for (const [name, assets, index, first] of [
+    ["a literal address repeated after another asset", [A, B, A], 2, 0],
+    ["the same address in another case", [USDC, POOL, USDC.toLowerCase()], 2, 0],
+    ["native and then the zero address", ["native", ZERO], 1, 0],
+    ["the zero address and then native", [ZERO, "native"], 1, 0],
+  ] as const) {
+    for (const [entry, run] of entries([...assets])) {
+      it(`refuses ${name} through ${entry} at assets[${index}]`, () => {
+        refusedAt(run, index, new RegExp(`duplicates assets\\[${first}\\]`));
+      });
+    }
+  }
+
+  // WETH and native are separate Pot balances and separate Vault assets, so both may appear.
+  for (const assets of [
+    [WETH, USDC, "native"],
+    [ZERO, USDC, WETH],
+  ]) {
+    it(`accepts WETH and native together (${assets.join(", ")}) through parse, compile and quote`, () => {
+      assert.doesNotThrow(() => parseProgram(withAction(batch(assets))));
+      assert.ok(
+        compileProgram(withAction(batch(assets)) as ActionProgram, { chain: "ethereum" }).bytecode
+          .length > 0,
+      );
+      assert.ok(quoteAction(batch(assets) as never, { chain: "ethereum" }).data.length > 2);
+    });
+  }
+
+  it("quoteAction refuses an output floor above 2^255, and takes exactly 2^255", () => {
+    const BOUND = 1n << 255n;
+    const floor = (amountOutMin: bigint) =>
+      ({ ...SAMPLES.balancerV2BatchSwap, amountOutMin: amountOutMin.toString() }) as never;
+    assert.ok(quoteAction(floor(BOUND)).data.length > 2);
+    assert.throws(
+      () => quoteAction(floor(BOUND + 1n)),
+      (error: unknown) =>
+        error instanceof ProgramError &&
+        error.issues.some(
+          (issue) => /amountOutMin$/.test(issue.path) && /2\^255/.test(issue.message),
+        ),
+    );
   });
 });
