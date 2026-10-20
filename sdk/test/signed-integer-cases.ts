@@ -207,6 +207,15 @@ export const SIGNED_CASES: readonly SignedCase[] = [
   row("two's complement", "-8 >> 1", signedShr, [bits(-8n), 1n], -4n, true),
   row(
     "two's complement",
+    "-1 >> 300, a run-time count past 255",
+    signedShr,
+    [bits(-1n), 300n],
+    -1n,
+    true,
+  ),
+  row("two's complement", "8 >> 1", signedShr, [8n, 1n], 4n, true),
+  row(
+    "two's complement",
     "a negative shift count reverts",
     signedShr,
     [bits(-8n), bits(-1n)],
