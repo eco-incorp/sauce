@@ -273,8 +273,8 @@ Swaps along Balancer V2 pools in one batch; the output is a balance delta. Calls
 | `type` | `"balancerV2BatchSwap"` | yes | the action |
 | `vault` | contract | yes | the Balancer V2 Vault |
 | `steps` | array of objects (below) (at least 1) | yes | the batch's steps; the last step's output asset is the output |
-| `assets` | array of token or `"native"` (at least 2) | yes | every asset the steps index; "native" is the native currency |
-| `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
+| `assets` | array of token or `"native"` (at least 2) | yes | each asset the steps index, once only (including symbol/address aliases); "native" and the zero address are the same native currency |
+| `amountOutMin` | base-10 integer string, uint256 | yes | the least net payout of the last step's output asset; at most 2^255 inclusive, so its negative Vault limit fits int256 |
 | `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
 | `deadline` | integer ≥ 0 | yes | Unix seconds after which the venue reverts |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |

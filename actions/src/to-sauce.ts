@@ -819,11 +819,12 @@ function balancerV2BatchSwap(
       }),
     ),
   );
-  // The Vault may take any amount of every asset but the last, and must pay at least
-  // `amountOutMin` of the last (a negative limit is an amount the Vault pays out).
+  const outputIndex = action.steps[action.steps.length - 1]!.assetOutIndex;
+  // Limits apply to net asset deltas: the Vault must pay at least `amountOutMin` of the last
+  // step's output asset, wherever it appears in `assets`. Other assets have no output floor.
   const limits = list(
     action.assets.map((_, i) =>
-      i === action.assets.length - 1 ? `-${word(action.amountOutMin)}` : word(MAX_INT256),
+      i === outputIndex ? `-${word(action.amountOutMin)}` : word(MAX_INT256),
     ),
   );
   const funds = record({
@@ -835,8 +836,7 @@ function balancerV2BatchSwap(
 
   // `batchSwap` returns `int256[] assetDeltas`, signed and negative for what was received; the
   // realized output is the executing account's delta on the last step's output asset instead.
-  const lastStep = action.steps[action.steps.length - 1]!;
-  const assetOut = action.assets[Number(lastStep.assetOutIndex)]!;
+  const assetOut = action.assets[outputIndex]!;
 
   return balanceDelta(
     l,

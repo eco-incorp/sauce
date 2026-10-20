@@ -5,6 +5,7 @@
  */
 import type { CanonicalChain } from "../../sdk/dist/chains/canonical.js";
 import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
+import { TOKEN_REGISTRY } from "../../sdk/dist/routes/index.js";
 
 import { ACTION_SPECS } from "./spec.js";
 import type { Action, ActionType } from "./types.js";
@@ -192,9 +193,49 @@ export function programIssues(actions: readonly Action[], chainId?: number): Pro
     }
   });
 
-  actions.forEach((action, i) => issues.push(...swapIssues(action, i)));
+  actions.forEach((action, i) =>
+    issues.push(...swapIssues(action, i), ...balancerBatchIssues(action, at(i), chainId)),
+  );
 
   if (chainId !== undefined) issues.push(...nativeErc20Issues(actions, chainId));
+  return issues;
+}
+
+/** Batch value rules shared by program parsing, standalone actions and resolved-name callers. */
+export function balancerBatchIssues(
+  action: Action,
+  path: string,
+  chainId?: number,
+): ProgramIssue[] {
+  if (action.type !== "balancerV2BatchSwap") return [];
+  const issues: ProgramIssue[] = [];
+  if (BigInt(action.amountOutMin) > 1n << 255n) {
+    issues.push({
+      path: `${path}.amountOutMin`,
+      message:
+        `must be at most 2^255 (${1n << 255n}): ` +
+        "the Vault output floor is a negative int256 limit",
+    });
+  }
+  const seen = new Map<string, number>();
+  for (const [i, asset] of action.assets.entries()) {
+    // Parsing may already know the chain, while resolveNames supplies addresses directly.
+    const resolved =
+      chainId === undefined
+        ? asset
+        : (TOKEN_REGISTRY[chainId]?.find((token) => token.symbol === asset)?.address ?? asset);
+    const key =
+      resolved === "native" ? "0x0000000000000000000000000000000000000000" : resolved.toLowerCase();
+    const first = seen.get(key);
+    if (first !== undefined) {
+      issues.push({
+        path: `${path}.assets[${i}]`,
+        message: `duplicates assets[${first}]: each asset must appear once so its limit covers its net payout`,
+      });
+    } else {
+      seen.set(key, i);
+    }
+  }
   return issues;
 }
 
@@ -215,11 +256,10 @@ const same = (a: string, b: string): boolean | undefined => {
 };
 
 /**
- * What `@sauce/router` would refuse when the program runs, refused here instead, with a path: a
- * swap of a token for itself; a DODO V2 or Trader Joe LB trade that is not between the two tokens
- * the action says the pool holds; and a WOOFi swap with no floor, which the pool needs because it
- * prices from an oracle. A comparison only the chain can decide (a name beside an address) is left
- * to the compile, which runs these again on the resolved addresses.
+ * Swap constraints refused here with a path: a swap of a token for itself; a DODO V2 or Trader
+ * Joe LB trade outside the pool's token pair; and a WOOFi swap with no oracle-price floor. A
+ * comparison only the chain can decide (a name beside an address) is left to the compile, which
+ * runs these again on the resolved addresses.
  */
 function swapIssues(action: Action, i: number): ProgramIssue[] {
   const at = (key: string): string => `actions[${i}].${key}`;

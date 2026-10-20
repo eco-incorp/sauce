@@ -754,13 +754,13 @@
           "type": "array",
           "items": { "$ref": "#/$defs/tokenOrNative" },
           "minItems": 2,
-          "description": "every asset the steps index; \"native\" is the native currency"
+          "description": "each asset the steps index, once only (including symbol/address aliases); \"native\" and the zero address are the same native currency"
         },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
           "maxLength": 78,
-          "description": "the least output accepted; the venue reverts below it"
+          "description": "the least net payout of the last step's output asset; at most 2^255 inclusive, so its negative Vault limit fits int256"
         },
         "recipient": {
           "$ref": "#/$defs/recipient",

@@ -376,9 +376,12 @@ const SPECS: readonly ActionSpec[] = [
       ),
       assets: f(
         { k: "array", of: tokenOrNative, min: 2 },
-        'every asset the steps index; "native" is the native currency',
+        'each asset the steps index, once only (including symbol/address aliases); "native" and the zero address are the same native currency',
       ),
-      amountOutMin: MIN_OUT,
+      amountOutMin: f(
+        uint256,
+        "the least net payout of the last step's output asset; at most 2^255 inclusive, so its negative Vault limit fits int256",
+      ),
       recipient: RECIPIENT,
       deadline: DEADLINE,
     },
