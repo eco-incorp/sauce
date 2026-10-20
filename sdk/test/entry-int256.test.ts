@@ -263,7 +263,7 @@ describe("Int256 arguments bound into a program", () => {
       ["an annotated return", "Int256", "return x - 10;"],
       ["an inferred const", "Int256", "const y = x - 10; return y;"],
       ["a comparison", "bool", "return x - 10 < 0;"],
-      ["Math.sDiv", "Int256", "return Math.sDiv(x - 10, 2);"],
+      ["a signed division", "Int256", "return (x - 10) / 2;"],
       ["a mutable local", "Int256", "let y = x; y = y - 10; return y;"],
     ])("keeps a positive Int256 signed through %s", (_, returns, body) => {
       const bound = compileSauceProgram(chain, `function main(x: Int256): ${returns} { ${body} }`, {

@@ -63,9 +63,7 @@ Base(() => {
   const root: bigint = Math.sqrt(held);
   const fee: bigint = Math.mulDiv(held, 30n, 10000n);
   const sum: bigint = Math.addMod(held, fee, 7n) + Math.mulMod(held, fee, 7n);
-  const signed2: bigint = Math.sDiv(held, 2n) + Math.sMod(held, 3n) + Math.sShr(held, 1n);
   const extended: bigint = Math.signExtend(held, 2n);
-  const order: boolean = Math.sLt(held, 0n) && Math.sGt(held, 0n) && Math.sLte(held, 0n) && Math.sGte(held, 0n);
 
   // integer conversions
   const signedHeld: bigint = Int256(held);
@@ -126,7 +124,7 @@ Base(() => {
   const selector = hex\`a9059cbb\`;
   const negative: bigint = -held;
   return [chain, at, now, wei, value, gas, size, codeHash, contract, eoa, vault, bump, root, sum,
-    signed2, extended, order, signedHeld, unsignedHeld, reread, amount, reply, read, seen, returned,
+    extended, signedHeld, unsignedHeld, reread, amount, reply, read, seen, returned,
     result, call, word, fields, length, key, owner, dataLen, same, xs, selector, negative];
 }, OPTIONS);
 `;

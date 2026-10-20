@@ -62,7 +62,7 @@ const PROGRAMS: ReadonlyArray<readonly [string, string, ReadonlyArray<"evm" | "s
   ["a builtin's arguments", "function main(a: Uint256): bytes { return a.toBytesBe(32$); }"],
   [
     "signed math",
-    "function main(a: Uint256): Int256 { return Math.sDiv(a, -2$) + Int256(Math.mulDiv(a, 30$, 10000$)); }",
+    "function main(a: Uint256): Int256 { return Int256.fromBits(a) / -2$ + Int256(Math.mulDiv(a, 30$, 10000$)); }",
   ],
   ["a signed constant", "function main(): Int256 { const d: Int256 = 1$ - 2$; return d; }"],
   [

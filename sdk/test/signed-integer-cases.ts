@@ -42,11 +42,11 @@ const toUint = one("Uint256 { return Uint256(Int256.fromBits(x)); }");
 const toBits = one("Uint256 { return Uint256.fromBits(Int256.fromBits(x)); }");
 const onSigned = (body: string) => one(`Int256 { const a = Int256.fromBits(x); ${body} }`);
 const mixed = (operator: string) => two(`bool { return Int256.fromBits(a) ${operator} b; }`);
-const sLt = two("bool { return Math.sLt(a, b); }");
+const signedLt = two("bool { return Int256.fromBits(a) < Int256.fromBits(b); }");
 const lt = two("bool { return a < b; }");
-const sDiv = two("Int256 { return Math.sDiv(a, b); }");
-const sMod = two("Int256 { return Math.sMod(a, b); }");
-const sShr = two("Int256 { return Math.sShr(a, b); }");
+const signedDiv = two("Int256 { return Int256.fromBits(a) / Int256.fromBits(b); }");
+const signedMod = two("Int256 { return Int256.fromBits(a) % Int256.fromBits(b); }");
+const signedShr = two("Int256 { return Int256.fromBits(a) >> Int256.fromBits(b); }");
 const signExtend = two("Int256 { return Math.signExtend(a, b); }");
 const negateSigned = one("Int256 { return -Int256(x); }");
 const negateUnsigned = one("Uint256 { return -x; }");
@@ -178,28 +178,40 @@ export const SIGNED_CASES: readonly SignedCase[] = [
   row("comparison", "4 < 3", mixed("<"), [4n, 3n], 0n),
   row("comparison", "4 == 4", mixed("=="), [4n, 4n], 1n),
   row("comparison", "2^255 - 1 is below 2^255", mixed("<"), [MAX, 2n ** 255n], 1n),
-  row("Math.sLt", "reads the all-ones word as below 0", sLt, [WORD - 1n, 0n], 1n),
-  row("Math.sLt", "where < reads it as above", lt, [WORD - 1n, 0n], 0n),
-  row("Math.sLt", "0 is not below the all-ones word", sLt, [0n, WORD - 1n], 0n),
-
-  // The signed helpers return Int256.
-  row("Math.sDiv", "-7 / 2 rounds toward zero", sDiv, [bits(-7n), 2n], -3n, true),
-  row("Math.sDiv", "7 / -2", sDiv, [7n, bits(-2n)], -3n, true),
+  // A Uint256 word that holds signed bits compares as signed once read with fromBits; plain < reads it
+  // as the largest number.
   row(
-    "Math.sDiv",
-    "the smallest value / -1 returns the smallest value",
-    sDiv,
-    [bits(MIN), bits(-1n)],
-    MIN,
-    true,
+    "two's complement",
+    "fromBits reads the all-ones word as below 0",
+    signedLt,
+    [WORD - 1n, 0n],
+    1n,
   ),
-  row("Math.sDiv", "a zero divisor reverts", sDiv, [1n, 0n], REVERTS),
-  row("Math.sMod", "-7 % 3", sMod, [bits(-7n), 3n], -1n, true),
-  row("Math.sMod", "7 % -3", sMod, [7n, bits(-3n)], 1n, true),
-  row("Math.sMod", "a zero divisor reverts", sMod, [1n, 0n], REVERTS),
-  row("Math.sShr", "-8 >> 1", sShr, [bits(-8n), 1n], -4n, true),
-  row("Math.sShr", "-1 >> 300", sShr, [bits(-1n), 300n], -1n, true),
-  row("Math.sShr", "8 >> 1", sShr, [8n, 1n], 4n, true),
+  row("two's complement", "where < reads it as above", lt, [WORD - 1n, 0n], 0n),
+  row("two's complement", "0 is not below the all-ones word", signedLt, [0n, WORD - 1n], 0n),
+
+  // Signed division, remainder and shift on two words read with fromBits.
+  row("two's complement", "-7 / 2 rounds toward zero", signedDiv, [bits(-7n), 2n], -3n, true),
+  row("two's complement", "7 / -2", signedDiv, [7n, bits(-2n)], -3n, true),
+  row(
+    "two's complement",
+    "the smallest value / -1 reverts",
+    signedDiv,
+    [bits(MIN), bits(-1n)],
+    REVERTS,
+  ),
+  row("two's complement", "a zero divisor reverts", signedDiv, [1n, 0n], REVERTS),
+  row("two's complement", "-7 % 3", signedMod, [bits(-7n), 3n], -1n, true),
+  row("two's complement", "7 % -3", signedMod, [7n, bits(-3n)], 1n, true),
+  row("two's complement", "a zero modulus reverts", signedMod, [1n, 0n], REVERTS),
+  row("two's complement", "-8 >> 1", signedShr, [bits(-8n), 1n], -4n, true),
+  row(
+    "two's complement",
+    "a negative shift count reverts",
+    signedShr,
+    [bits(-8n), bits(-1n)],
+    REVERTS,
+  ),
   row("Math.signExtend", "0xff from byte 0 is -1", signExtend, [0xffn, 0n], -1n, true),
   row("Math.signExtend", "0x7f from byte 0 is 127", signExtend, [0x7fn, 0n], 127n, true),
   row("Math.signExtend", "0xfffe from byte 1 is -2", signExtend, [0xfffen, 1n], -2n, true),
