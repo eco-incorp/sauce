@@ -17,41 +17,11 @@ Decentralized, non-custodial liquid restaking protocol. Stake ETH to receive eET
 | Namespace | `Etherfi` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Stake ETH and receive eETH
 - **wrap**: Wrap eETH into weETH (non-rebasing)
 - **unwrap**: Unwrap weETH back to eETH
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit ETH for eETH
-import { LiquidityPoolABI as ILiquidityPool } from "./abis";
-function main(liquidityPoolAddress: Address): Uint256 {
-  const pool = ILiquidityPool.at(liquidityPoolAddress);
-  return pool.deposit();
-}
-
-// Wrap eETH to weETH
-import { WeETHABI as IWeETH } from "./abis";
-function main(weethAddress: Address, amount: Uint256): Uint256 {
-  const weeth = IWeETH.at(weethAddress);
-  return weeth.wrap(amount);
-}
-
-// Unwrap weETH to eETH
-import { WeETHABI as IWeETH } from "./abis";
-function main(weethAddress: Address, amount: Uint256): Uint256 {
-  const weeth = IWeETH.at(weethAddress);
-  return weeth.unwrap(amount);
-}
-```
 
 ## Notes
 
@@ -104,3 +74,9 @@ function main() {
 - `getEETHByWeETH(uint256 _weETHAmount) view returns (uint256)`
 - `getWeETHByeETH(uint256 _eETHAmount) view returns (uint256)`
 - `balanceOf(address account) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

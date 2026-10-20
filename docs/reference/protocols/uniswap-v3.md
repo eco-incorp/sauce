@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Concentrated liquidity AMM allowing LPs to allocate capital within custom price ranges for higher capital efficiency. Supports multiple fee tiers per pair and NFT-based liquidity positions.
 
@@ -61,125 +61,11 @@ function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, re
 the WETH it did not take goes back to `recipient` too: `amountIn` less what the swap spent, not
 the Pot's whole WETH balance.
 
-## Key Operations
+## What it offers
 
 - **swap**: Swap tokens using exact input (single-hop or multi-hop via encoded path)
 - **addLiquidity**: Mint a new concentrated liquidity position as an NFT within a tick range
 - **removeLiquidity**: Decrease liquidity from an existing NFT position
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { UniswapV3SwapRouterABI as ISwapRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenIn: Address,
-  tokenOut: Address,
-  fee: Uint256,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256 {
-  const router = ISwapRouter.at(routerAddress);
-  return router.exactInputSingle({
-    tokenIn: tokenIn,
-    tokenOut: tokenOut,
-    fee: fee,
-    recipient: recipient,
-    deadline: 99999999999,
-    amountIn: amountIn,
-    amountOutMinimum: amountOutMin,
-    sqrtPriceLimitX96: 0,
-  });
-}
-```
-
-- `routerAddress`: Uniswap V3 SwapRouter address for the target chain. This `swap` uses SwapRouter's params (with `deadline`); chains that only have SwapRouter02 (Base, BSC, Avalanche, Celo, Monad) need `UniswapV3SwapRouter02ABI`, whose params have no `deadline`
-- `tokenIn` / `tokenOut`: Input and output token addresses
-- `fee`: Pool fee tier in hundredths of a bip. Common values: `500` (0.05%), `3000` (0.3%), `10000` (1%)
-- `amountIn`: Exact amount of input token (in wei)
-- `amountOutMin`: Minimum output for slippage protection
-- `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. With `@sauce/router`'s `uniswapV3`, set a real limit ([the `@sauce/router` reference](../../api/router.md))
-
-### addLiquidity (mint position)
-
-```typescript
-import { UniswapV3NonfungiblePositionManagerABI as INonfungiblePositionManager } from "./abis";
-
-function main(
-  nfpmAddress: Address,
-  token0: Address,
-  token1: Address,
-  fee: Uint256,
-  tickLower: Uint256,
-  tickUpper: Uint256,
-  amount0Desired: Uint256,
-  amount1Desired: Uint256,
-  amount0Min: Uint256,
-  amount1Min: Uint256,
-  recipient: Address,
-): { tokenId: Uint256; liquidity: Uint256; amount0: Uint256; amount1: Uint256 } {
-  const nfpm = INonfungiblePositionManager.at(nfpmAddress);
-  return nfpm.mint({
-    token0: token0,
-    token1: token1,
-    fee: fee,
-    tickLower: tickLower,
-    tickUpper: tickUpper,
-    amount0Desired: amount0Desired,
-    amount1Desired: amount1Desired,
-    amount0Min: amount0Min,
-    amount1Min: amount1Min,
-    recipient: recipient,
-    deadline: 99999999999,
-  });
-}
-```
-
-- `nfpmAddress`: NonfungiblePositionManager contract address
-- `token0` / `token1`: Pair tokens sorted by address (token0 < token1)
-- `fee`: Pool fee tier (500, 3000, or 10000)
-- `tickLower` / `tickUpper`: Price range boundaries as tick values. Ticks must be multiples of the pool's tick spacing (10 for 0.05%, 60 for 0.3%, 200 for 1%)
-- `amount0Desired` / `amount1Desired`: Target deposit amounts
-- `amount0Min` / `amount1Min`: Minimum deposit amounts (slippage protection)
-- Both tokens must be approved to the NonfungiblePositionManager
-
-### removeLiquidity (decrease liquidity)
-
-```typescript
-import { UniswapV3NonfungiblePositionManagerABI as INonfungiblePositionManager } from "./abis";
-
-function main(
-  nfpmAddress: Address,
-  tokenId: Uint256,
-  liquidity: Uint256,
-  amount0Min: Uint256,
-  amount1Min: Uint256,
-): { amount0: Uint256; amount1: Uint256 } {
-  const nfpm = INonfungiblePositionManager.at(nfpmAddress);
-  return nfpm.decreaseLiquidity({
-    tokenId: tokenId,
-    liquidity: liquidity,
-    amount0Min: amount0Min,
-    amount1Min: amount1Min,
-    deadline: 99999999999,
-  });
-}
-```
-
-- `tokenId`: NFT ID of the liquidity position
-- `liquidity`: Amount of liquidity to remove (not token amounts)
-- `amount0Min` / `amount1Min`: Minimum tokens to receive (slippage protection)
-- After decreasing liquidity, call `collect` to actually withdraw the tokens
 
 ## Notes
 
@@ -299,3 +185,9 @@ functions, and its writes are SafeERC20.
 - `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`
 - `exactOutputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountIn)`
 - `exactOutput((bytes path, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum) params) payable returns (uint256 amountIn)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

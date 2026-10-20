@@ -263,7 +263,7 @@ export const supportedChainNames = (): string => listed(supportedChains().map((c
 
 /** One sentence of what a preview chain still does, for a help text or a note. */
 export const previewChainsNote = (): string =>
-  `For the initial release, transactions are built and sent only on ${supportedChainNames()}. ` +
+  `Transactions are built and sent only on ${supportedChainNames()}. ` +
   "Every other chain is a preview chain: programs compile there, and simulate, dry runs and " +
   `reads work, but no transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
 
@@ -285,7 +285,7 @@ export function previewRefusal(
   }));
   const message = [
     `${action} is refused: it involves ${named}, ${preview.length === 1 ? "a preview chain" : "preview chains"}. ` +
-      `For the initial release, the sauce command and its MCP server build and send transactions ` +
+      `The sauce command and its MCP server build and send transactions ` +
       `only on ${supportedChainNames()}. On a preview chain a program still compiles, and ` +
       "simulate and dry runs still run it.",
     ...requests.map(

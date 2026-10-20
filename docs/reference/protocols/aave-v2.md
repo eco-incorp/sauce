@@ -26,7 +26,8 @@ Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum
 
 - The supply call is `deposit`, not `supply`; approve the LendingPool first.
 - `onBehalfOf` receives the aTokens. The caller is the Pot, so `ctx.self()` keeps them in the
-  Pot, not in the user's wallet: ask which the user wants, and pass the wallet to deliver them.
+  Pot, not in the user's wallet: choose which, and pass the wallet as a `main` parameter to
+  deliver them.
 - aTokens are rebasing: measure balances as deltas.
 - A frozen reserve refuses new deposits: check the reserve accepts them before relying on it.
 - Borrowing and liquidation work as in Aave V3, by health factor.
@@ -41,103 +42,6 @@ function main(onBehalfOf: Address, amount: Uint256) {
   AaveV2.LendingPool.deposit(USDC, amount, onBehalfOf, 0);
 }
 ```
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### deposit
-
-Deposit assets into the lending pool to earn interest. Mints aTokens to the depositor.
-
-```typescript
-import { LendingPoolABI as ILendingPool } from "./abis";
-
-function main(
-  lendingPoolAddress: Address,
-  asset: Address,
-  amount: Uint256,
-  onBehalfOf: Address,
-): Uint256 {
-  const pool = ILendingPool.at(lendingPoolAddress);
-  pool.deposit(asset, amount, onBehalfOf, 0);
-  return 1;
-}
-```
-
-- `lendingPoolAddress`: LendingPool contract for the target chain
-- `asset`: ERC-20 token address to deposit
-- `amount`: Amount in token's native decimals (e.g. 1e6 for 1 USDC). Use `type(uint256).max` to deposit entire balance
-- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
-- Requires ERC-20 approval to the LendingPool before calling
-
-### withdraw
-
-Withdraw deposited assets by burning aTokens.
-
-```typescript
-import { LendingPoolABI as ILendingPool } from "./abis";
-
-function main(lendingPoolAddress: Address, asset: Address, amount: Uint256, to: Address): Uint256 {
-  const pool = ILendingPool.at(lendingPoolAddress);
-  return pool.withdraw(asset, amount, to);
-}
-```
-
-- `amount`: Amount to withdraw. Use `type(uint256).max` to withdraw entire deposited balance
-- `to`: Address that receives the underlying tokens
-- Returns the actual withdrawn amount
-
-### borrow
-
-Borrow assets against deposited collateral.
-
-```typescript
-import { LendingPoolABI as ILendingPool } from "./abis";
-
-function main(
-  lendingPoolAddress: Address,
-  asset: Address,
-  amount: Uint256,
-  interestRateMode: Uint256,
-  onBehalfOf: Address,
-): Uint256 {
-  const pool = ILendingPool.at(lendingPoolAddress);
-  pool.borrow(asset, amount, interestRateMode, 0, onBehalfOf);
-  return 1;
-}
-```
-
-- `interestRateMode`: 1 = stable rate, 2 = variable rate. Variable is more common and typically lower
-- `onBehalfOf`: Address that receives the debt tokens (must have delegated credit to the caller, the Pot, if it is not the Pot)
-- Must have sufficient collateral deposited first
-
-### repay
-
-Repay borrowed assets to reduce debt.
-
-```typescript
-import { LendingPoolABI as ILendingPool } from "./abis";
-
-function main(
-  lendingPoolAddress: Address,
-  asset: Address,
-  amount: Uint256,
-  rateMode: Uint256,
-  onBehalfOf: Address,
-): Uint256 {
-  const pool = ILendingPool.at(lendingPoolAddress);
-  return pool.repay(asset, amount, rateMode, onBehalfOf);
-}
-```
-
-- `rateMode`: Must match the rate mode of the existing debt (1 = stable, 2 = variable)
-- `amount`: Use `type(uint256).max` to repay entire debt
-- Requires ERC-20 approval to the LendingPool
-- Returns the actual repaid amount
 
 ## Notes
 
@@ -176,3 +80,9 @@ function main() {
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
 - `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

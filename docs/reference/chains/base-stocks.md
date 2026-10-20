@@ -80,3 +80,9 @@ address. [Base](base.md) has the chain's other tokens and its contracts;
 | `bNIU` | Backed Niu Technologies | Backed | `0x2f11EeeE0bf21E7661A22dbBbb9068F4ad191b86` | 18 |
 | `bNVDA` | Backed NVIDIA Corp | Backed | `0xA34C5e0AbE843E10461E2C9586Ea03E55Dbcc495` | 18 |
 | `bTSLA` | Backed Tesla Inc | Backed | `0x14A5f2872396802C3Cc8942A39Ab3E4118EE5038` | 18 |
+
+## Next
+
+- [Base](base.md): the chain's other tokens and its contracts.
+- [Tokenized stocks](../tokens.md#tokenized-stocks): what a stock token is, and how its symbol is spelled.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

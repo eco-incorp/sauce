@@ -74,3 +74,9 @@ body may leave in it.
 
 The engine owns every Pot, and a program on Solana reads it as `ctx.self()`. A Pot is the
 Kitchen's program address for the seeds `"pot"`, the owner and the 32-byte salt.
+
+## Next
+
+- [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md): what these contracts do.
+- [Upgrading](../guides/upgrading.md): moving to a new release of Sauce.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

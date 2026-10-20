@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
 
@@ -61,65 +61,11 @@ function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, re
 (`10`) and hooks (`0`, none), pays `recipient` and reverts below `minOut`. The WETH the pool did
 not take before the price limit goes back to `recipient` too.
 
-## Key Operations
+## What it offers
 
 - **swap**: Execute a swap through the UniversalRouter using command-based encoding
 - **addLiquidity**: Modify liquidity positions through the PositionManager
 - **removeLiquidity**: Decrease or remove liquidity positions through the PositionManager
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { UniswapV4UniversalRouterABI as IUniversalRouter } from "./abis";
-
-function main(routerAddress: Address, commands: bytes, inputs: bytes[]): Uint256 {
-  const router = IUniversalRouter.at(routerAddress);
-  router.execute(commands, inputs, 99999999999);
-  return 1;
-}
-```
-
-- `routerAddress`: UniversalRouter address for the target chain
-- `commands`: Encoded bytes of command IDs defining the sequence of operations (each byte = one command)
-- `inputs`: Encoded bytes array of ABI-encoded parameters for each command
-- Commands and inputs must be pre-encoded off-chain; the router decodes and executes sequentially
-
-### addLiquidity
-
-```typescript
-import { UniswapV4PositionManagerABI as IPositionManager } from "./abis";
-
-function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
-  const pm = IPositionManager.at(positionManagerAddress);
-  pm.modifyLiquidities(unlockData, 99999999999);
-  return 1;
-}
-```
-
-- `positionManagerAddress`: PositionManager address for the target chain
-- `unlockData`: ABI-encoded liquidity modification data including pool key, tick range, and amounts
-- Data must be pre-encoded off-chain with the position parameters
-
-### removeLiquidity
-
-```typescript
-import { UniswapV4PositionManagerABI as IPositionManager } from "./abis";
-
-function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
-  const pm = IPositionManager.at(positionManagerAddress);
-  pm.modifyLiquidities(unlockData, 99999999999);
-  return 1;
-}
-```
-
-- Same interface as addLiquidity but with negative liquidityDelta in the encoded data
 
 ## Notes
 
@@ -243,3 +189,9 @@ functions, and its writes are SafeERC20.
 
 - `execute(bytes commands, bytes[] inputs, uint256 deadline) payable`
 - `execute(bytes commands, bytes[] inputs) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

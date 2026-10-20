@@ -6,7 +6,8 @@
 
 > SauceScript is the language programs are written in: a small, strict TypeScript. This page is its
 > dictionary: every type, statement and built-in function, and which chains allow each. Learning the
-> language? Start with [Writing SauceScript](../concepts/saucescript.md).
+> language? Start with [Write your first program](../guides/write-your-first-program.md);
+> [SauceScript](../concepts/saucescript.md) explains why it is shaped this way.
 
 SauceScript is the checked subset of TypeScript that Sauce programs are written in. You compile a program for
 one of two targets:
@@ -623,7 +624,8 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
 Rules and errors:
 
 - The block takes no parameter: "a `.catch()` handler parameter (the caught error is not supported)".
-- Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else.
+- Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else in the language
+  (an intent opened from a program for a chain is not one: see the end of section 14).
 - A `return`, or a `break`/`continue` leaving the block, is not allowed in the statement form ("a `return` in a
   `.catch()` handler …").
 - The value form needs exactly `return <constant>;`:
@@ -667,6 +669,11 @@ Rules and errors:
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
 
+One closure is not the compiler's: in a program compiled for a chain, `Base(() => { … }).reward(…)`
+opens a cross-chain intent whose body runs on that chain. The chain's body is taken out of the
+program and compiled on its own before the compiler sees the rest, so it is not an arrow function
+of the language; the raw compiler, given the same source, rejects it.
+
 ## 15. Limits
 
 | Limit                                                                                   | Value                                            |
@@ -683,3 +690,9 @@ The compiler rejects each of these. Most messages read "… is not supported", n
 | One caller-supplied collection in `main`'s arguments                                    | 16 KiB                                           |
 | Working memory on SVM                                                                   | 64 KiB per run                                   |
 | One Solana transaction: the program, its arguments and the cook                         | 1,232 bytes; `sauce run` stages a larger program |
+
+## Next
+
+- [Write your first program](../guides/write-your-first-program.md): the language, by example.
+- [SauceScript](../concepts/saucescript.md): why the language is shaped this way.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

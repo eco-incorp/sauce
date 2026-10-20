@@ -30,10 +30,14 @@ and `Route` is
   3 Refunded. A vault funded by a transfer stays Initial.
 - `withdraw(uint64 destination, bytes32 routeHash, Reward reward)`, `0xf987b9bc`: once the reward's
   prover has recorded the fill, pays the reward to the claimant the fill named. Anyone may send it.
-- `refund(uint64 destination, bytes32 routeHash, Reward reward)`, `0x308adade`: after the reward's
-  deadline, with no fill proven, returns the vault's reward tokens and native balance to the
-  creator. Anyone may send it; before the deadline it reverts `InvalidStatusForRefund`. A proven
-  but unclaimed intent cannot be refunded.
+  With no proof it reverts `InvalidClaimant`; for a proven cancellation, `CancelledIntent`.
+- `batchWithdraw(uint64[] destinations, bytes32[] routeHashes, Reward[] rewards)`, `0x7af10029`:
+  `withdraw` for each intent in one transaction; one withdrawal that reverts reverts them all.
+- `refund(uint64 destination, bytes32 routeHash, Reward reward)`, `0x308adade`: returns the vault's
+  reward tokens and native balance to the creator. Anyone may send it: at once for a proven
+  cancellation; with no fill proven, from the reward's deadline on, and before it reverts
+  `InvalidStatusForRefund`. A proven but unclaimed intent cannot be refunded. There is no batch
+  refund.
 - `refundTo(uint64 destination, bytes32 routeHash, Reward reward, address refundee)`, `0x572ac041`:
   the same, sent by the creator, to a recipient the creator names.
 
@@ -50,6 +54,25 @@ and `Route` is
   reverts `CallToEOA(target)` (`0x2db59289`) for a call with data to an address with no code, and
   `CallFailed(call, result)` (`0x12988136`) when a call reverts, with the call's own revert data in
   `result`. It checks nothing else: a token transfer that returns `false` passes.
+- `prove(address prover, uint64 sourceChainDomainID, bytes32[] intentHashes, bytes data)`,
+  `0x17d4e807`, payable: sends what this Portal recorded for each intent (its claimant, or a
+  cancellation) through `prover`, the destination chain's prover, to the source chain.
+  `sourceChainDomainID` is the bridge's id for the source chain (Hyperlane's is an EVM chain's id),
+  `data` the prover's message data, and the value the fee the prover quotes (`fetchFee`); the prover
+  refunds what it does not keep. A hash this Portal neither filled nor cancelled reverts
+  `IntentNotFulfilled`.
+- `fulfillAndProve(bytes32 intentHash, Route route, bytes32 rewardHash, bytes32 claimant, address prover, uint64 sourceChainDomainID, bytes data)`,
+  `0xb6681e39`, payable: `fulfill`, then `prove` for that one intent, in one transaction. Its value
+  is `route.nativeAmount` plus the prover's fee.
+- `cancel(bytes32 intentHash, Route route, bytes32 rewardHash)`, `0x377eacd1`: where the Portal has
+  it, anyone may cancel an unfilled intent strictly after the route's deadline (before, it reverts
+  `RouteNotExpired`). It moves nothing: it records a cancellation in place of a claimant, so no
+  fill can land, and emits `IntentCancelled`. A proven cancellation lets the creator refund before
+  the reward's deadline.
+- `cancelAndProve(bytes32 intentHash, Route route, bytes32 rewardHash, address prover, uint64 sourceChainDomainID, bytes data)`,
+  `0xee433264`, payable: `cancel`, then `prove` for that intent, its value the prover's fee. Prove a
+  cancellation only once the cancel is final on the destination: `cancel`, then `prove` after
+  finality, is the safe order.
 
 ## Events
 
@@ -58,20 +81,25 @@ and `Route` is
 | `IntentPublished(bytes32 indexed intentHash, uint64 destination, bytes route, address indexed creator, address indexed prover, uint64 rewardDeadline, uint256 rewardNativeAmount, (address,uint256)[] rewardTokens)` | `0x43974895be1bcec7344337863fa7de24a0d1c315c0a994f663fe0ee220ddc8e4` |
 | `IntentFunded(bytes32 intentHash, address funder, bool complete)`                                                                                                                                                    | `0xc1ed05721d27ad6b2555d61388ac393b120f5cc0e6009e53230e02c68e60064a` |
 | `IntentFulfilled(bytes32 indexed intentHash, bytes32 indexed claimant)`, on the destination                                                                                                                          | `0xc471de166a60c0b81727dfa2f57d4fc3ad1b45b057c1f034b7058365613bde8d` |
+| `IntentCancelled(bytes32 indexed intentHash)`, on the destination                                                                                                                                                    | `0xc08eb64db16a39d2848960af04e3f16fb404d9d436a9f0e9d7d0d4854715c9dc` |
 | `IntentProven(bytes32 indexed intentHash, bytes32 indexed claimant)`                                                                                                                                                 | `0xe6d8040a8a6bc519f4e5a42fb2677067c929ddbf2cca9287a44b23fb617a6f00` |
 | `IntentWithdrawn(bytes32 intentHash, address indexed claimant)`                                                                                                                                                      | `0xbb062c23e818de8ea9c157514eb098052cf36904bbe431cd50d4ec92264ca3ac` |
 | `IntentRefunded(bytes32 intentHash, address indexed refundee)`                                                                                                                                                       | `0x8d53c2b04800cf061b987a07179bb6c9730c05536b2f6a3a091fe62303682eb6` |
 
 ## Errors
 
-| Error                                                                         | Selector     | When                                                     |
-| ----------------------------------------------------------------------------- | ------------ | -------------------------------------------------------- |
-| `InsufficientNativeAmount(uint256 sent, uint256 required)`                    | `0x172f1184` | `fulfill` with less value than `route.nativeAmount`      |
-| `InvalidStatusForRefund(uint8 status, uint256 currentTime, uint256 deadline)` | `0xc6a2514b` | `refund` before the reward's deadline                    |
-| `InsufficientFunds(bytes32 intentHash)`                                       | `0x07b90620` | `publishAndFund`/`fund` that cannot cover the reward     |
-| `IntentExpired()`                                                             | `0x408b2234` | `fulfill` after the route's deadline                     |
-| `InvalidHash(bytes32 expectedHash)`                                           | `0x44d659bf` | `fulfill` whose route and reward hash differently        |
-| `InvalidPortal(address portal)`                                               | `0xd16be752` | `fulfill` on a Portal the route does not name            |
-| `IntentAlreadyFulfilled(bytes32 intentHash)`                                  | `0x373d2079` | a second `fulfill`                                       |
-| `CallToEOA(address target)` (the Executor)                                    | `0x2db59289` | a route call with data to an address with no code        |
-| `CallFailed((address,bytes,uint256) call, bytes result)` (the Executor)       | `0x12988136` | a route call that reverted (`result` is its revert data) |
+| Error                                                                         | Selector     | When                                                          |
+| ----------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------- |
+| `InsufficientNativeAmount(uint256 sent, uint256 required)`                    | `0x172f1184` | `fulfill` with less value than `route.nativeAmount`           |
+| `InvalidStatusForRefund(uint8 status, uint256 currentTime, uint256 deadline)` | `0xc6a2514b` | `refund` before the reward's deadline                         |
+| `InsufficientFunds(bytes32 intentHash)`                                       | `0x07b90620` | `publishAndFund`/`fund` that cannot cover the reward          |
+| `IntentExpired()`                                                             | `0x408b2234` | `fulfill` after the route's deadline                          |
+| `InvalidHash(bytes32 expectedHash)`                                           | `0x44d659bf` | `fulfill` whose route and reward hash differently             |
+| `InvalidPortal(address portal)`                                               | `0xd16be752` | `fulfill` on a Portal the route does not name                 |
+| `IntentAlreadyFulfilled(bytes32 intentHash)`                                  | `0x373d2079` | a second `fulfill`                                            |
+| `RouteNotExpired(uint64 deadline)`                                            | `0x81322225` | `cancel` before the route's deadline has passed               |
+| `IntentNotFulfilled(bytes32 intentHash)`                                      | `0xdab74d1e` | `prove` of an intent this Portal neither filled nor cancelled |
+| `InvalidClaimant()`                                                           | `0xdbdf7dda` | `withdraw` of an intent with no proof                         |
+| `CancelledIntent(bytes32 intentHash)`                                         | `0x47e5160f` | `withdraw` of an intent whose cancellation was proven         |
+| `CallToEOA(address target)` (the Executor)                                    | `0x2db59289` | a route call with data to an address with no code             |
+| `CallFailed((address,bytes,uint256) call, bytes result)` (the Executor)       | `0x12988136` | a route call that reverted (`result` is its revert data)      |

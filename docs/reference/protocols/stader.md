@@ -17,25 +17,9 @@ Multi-chain liquid staking protocol. ETHx is Stader's non-rebasing liquid stakin
 | Namespace | `Stader` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Stake ETH to receive ETHx
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Stake ETH for ETHx
-import { StakePoolManagerABI as IStakePoolManager } from "./abis";
-function main(stakePoolManagerAddress: Address, receiver: Address): Uint256 {
-  const pool = IStakePoolManager.at(stakePoolManagerAddress);
-  return pool.deposit(receiver);
-}
-```
 
 ## Notes
 
@@ -76,3 +60,9 @@ function main() {
 
 - `deposit(address _receiver) payable returns (uint256)`
 - `getExchangeRate() view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

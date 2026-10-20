@@ -8,14 +8,11 @@
 > with the name a program writes for each contract. Avalanche C-Chain is a preview chain: programs
 > compile and simulate here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Avalanche C-Chain a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Avalanche C-Chain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Avalanche+C-Chain%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Avalanche+C-Chain+%2843114%29&chain=Avalanche+C-Chain&chain-id=43114) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Avalanche C-Chain a program
+compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
+`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -109,3 +106,14 @@ address.
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0x54a8e5f9c4CbA08F9943965859F6c34eAF03E26c` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x0e082F06FF657D94310cB8cE8B0D9a04541d8052` | `Wormhole.TokenBridge` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+
+## Requesting support
+
+To request Avalanche C-Chain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Avalanche+C-Chain%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Avalanche+C-Chain+%2843114%29&chain=Avalanche+C-Chain&chain-id=43114) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -67,3 +67,9 @@ function main(contract: Address) {
 - `PORTAL() view returns (address)`
 - `isWhitelisted(bytes32 addr) view returns (bool)`
 - `fetchFee(uint64 domainID, bytes encodedProofs, bytes data) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -17,35 +17,10 @@ Non-pegged stablecoin protocol issuing RAI. Uses a PID controller to dampen RAI 
 | Namespace | `Reflexer` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **exitRai**: Exit RAI from the system (withdraw RAI tokens)
 - **joinRai**: Join RAI into the system (deposit RAI tokens)
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Exit RAI from system
-import { CoinJoinABI as ICoinJoin } from "./abis";
-function main(coinJoinAddress: Address, account: Address, amount: Uint256): Uint256 {
-  const coinJoin = ICoinJoin.at(coinJoinAddress);
-  coinJoin.exit(account, amount);
-  return 1;
-}
-
-// Join RAI into system
-import { CoinJoinABI as ICoinJoin } from "./abis";
-function main(coinJoinAddress: Address, account: Address, amount: Uint256): Uint256 {
-  const coinJoin = ICoinJoin.at(coinJoinAddress);
-  coinJoin.join(account, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -98,3 +73,9 @@ function main() {
 
 - `modifySAFECollateralization(bytes32 collateralType, address safe, address collateralSource, address debtDestination, int256 deltaCollateral, int256 deltaDebt)`
 - `safes(bytes32 collateralType, address safe) view returns (uint256 lockedCollateral, uint256 generatedDebt)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

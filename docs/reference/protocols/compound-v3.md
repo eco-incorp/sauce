@@ -29,7 +29,8 @@ Single-asset lending protocol (Comet) with isolated markets per base asset. Each
 
 - Approve the Comet before `supply`.
 - `supply(asset, amount)` credits its caller, the Pot: the position is then the Pot's, not the
-  user's wallet's. `supplyTo(dst, asset, amount)` credits `dst`; ask the user which they want.
+  user's wallet's. `supplyTo(dst, asset, amount)` credits `dst`; choose which, passing the wallet as
+  a `main` parameter for `dst`.
 - Supplying the base asset while you have a borrow repays the borrow first.
 - Withdrawing more base asset than you supplied **borrows** the rest, if your collateral allows:
   check `balanceOf` and `borrowBalanceOf` before and after.
@@ -49,79 +50,6 @@ function main(onBehalfOf: Address, amount: Uint256) {
   require(CompoundV3.CUSDCv3.balanceOf(onBehalfOf) > before, "supply not credited");
 }
 ```
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### supply
-
-Supply the base asset to earn interest, or supply collateral to enable borrowing.
-
-```typescript
-import { CometABI as IComet } from "./abis";
-
-function main(cometAddress: Address, asset: Address, amount: Uint256): Uint256 {
-  const comet = IComet.at(cometAddress);
-  comet.supply(asset, amount);
-  return 1;
-}
-```
-
-- `cometAddress`: The specific Comet market (e.g. cUSDCv3, cWETHv3)
-- `asset`: If base asset (e.g. USDC) -- earns interest. If collateral asset -- enables borrowing
-- Requires ERC-20 approval to the Comet address
-
-### withdraw
-
-Withdraw base asset or collateral. If withdrawing more base than supplied, creates a borrow position.
-
-```typescript
-import { CometABI as IComet } from "./abis";
-
-function main(cometAddress: Address, asset: Address, amount: Uint256): Uint256 {
-  const comet = IComet.at(cometAddress);
-  comet.withdraw(asset, amount);
-  return 1;
-}
-```
-
-- Withdrawing base asset beyond your supply automatically borrows
-
-### supplyTo
-
-Supply assets on behalf of another address.
-
-```typescript
-import { CometABI as IComet } from "./abis";
-
-function main(cometAddress: Address, dst: Address, asset: Address, amount: Uint256): Uint256 {
-  const comet = IComet.at(cometAddress);
-  comet.supplyTo(dst, asset, amount);
-  return 1;
-}
-```
-
-- `dst`: Destination address that receives the supply position
-
-### withdrawTo
-
-Withdraw assets to a specific address.
-
-```typescript
-import { CometABI as IComet } from "./abis";
-
-function main(cometAddress: Address, to: Address, asset: Address, amount: Uint256): Uint256 {
-  const comet = IComet.at(cometAddress);
-  comet.withdrawTo(to, asset, amount);
-  return 1;
-}
-```
-
-- `to`: Address that receives the withdrawn tokens
 
 ## Notes
 
@@ -171,3 +99,9 @@ function main() {
 - `withdrawTo(address to, address asset, uint256 amount)`
 - `balanceOf(address account) view returns (uint256)`
 - `borrowBalanceOf(address account) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

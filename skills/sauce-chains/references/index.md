@@ -2,18 +2,17 @@
 
 # Chains
 
-Every chain the SDK knows, with a file each: whether the initial release supports it, ids, native
+Every chain the SDK knows, with a file each: whether Sauce supports transactions on it, ids, native
 coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
 [deployments.json](deployments.json) lists them once, with the shared intent Pot.
 
-For the initial release, Sauce supports transactions on Ethereum, Base and Solana
-(`ethereum`, `base`, `solana`). Every other chain is a preview chain: a program
-compiles and simulates there, but the `sauce` command and the MCP server build and send no
-transaction, and say so with the supported chains and how to request that chain. To request one,
-look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to the chain's,
-or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each preview chain's
-file links its own.
+Sauce supports transactions on Ethereum, Base and Solana (`ethereum`, `base`, `solana`). Every other chain is a preview chain:
+a program compiles and simulates there, but the `sauce` command and the MCP server build and
+send no transaction, and say so with the supported chains and how to request that chain. To
+request one, look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to
+the chain's, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each
+preview chain's file links its own.
 
 | Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

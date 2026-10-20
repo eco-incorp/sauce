@@ -1,6 +1,6 @@
 ---
 name: sauce-typescript
-description: The TypeScript side of Sauce (@eco-incorp/sauce), for application code that builds the transactions itself. Compiling a .sauce.ts program for a chain exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, the protocol registry, JSON action programs, settlement verification, the Solana Kitchen client and token helpers, intents and cascades from code, testing on a forked chain, browser compilation with ready(), which import or subpath to use, and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies, tests or submits Sauce programs, or when the user asks which import or subpath to use.
+description: The TypeScript side of Sauce (@eco-incorp/sauce), for application code that builds the transactions itself. Compiling a .sauce.ts program for a chain exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, the protocol registry, JSON action programs, settlement verification, the Solana Kitchen client and token helpers, intents and cascades from code, testing on a forked chain, browser compilation with ready(), which import or subpath to use, and the rule that the library embeds no RPC. Use when writing application or script code that compiles, encodes, verifies, tests or submits Sauce programs, or when the user asks which import or subpath to use.
 ---
 
 # Sauce from TypeScript
@@ -24,9 +24,10 @@ manual, which starts at `node_modules/@eco-incorp/sauce/docs/README.md`, with th
 
 ## Core model
 
-- **The package embeds no RPC endpoint and reads no environment variable**: anything that touches a
-  chain takes a client or an `rpcUrl` from you. Every address comes from the package
-  (`/deployments`, the registries) or from the developer; never invent one.
+- **The library embeds no RPC endpoint and reads no environment variable**: anything an import does
+  that touches a chain takes a client or an `rpcUrl` from you (only the `sauce` command falls back
+  to public endpoints). Every address comes from the package (`/deployments`, the registries) or
+  from the developer; never invent one.
 - **A project depends on `@eco-incorp/sauce` and `viem`, both directly**: the API is typed in viem's
   types (`Address`, `Hex`, `PublicClient`), and a package manager that installs a package's own
   dependencies beside it (pnpm) resolves only the project's. Pin viem to the version the package
@@ -119,10 +120,12 @@ source and resolver, and for compact arguments.
   inlines that tuple instead; `routes.encodeEntryArguments` writes the layout `main` reads.
 - `compactArgs: true` returns an `entrySchema` for
   `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).
-- `resolveSdkModule` and `resolveSdkPackage` serve `@sauce/token`, the package's artifact ABIs and
-  every `./protocols/<slug>/<Export>.json` to your resolver.
-- In a browser, `await ready()` once before the first compile; `/svm/engine-artifacts` is the one
-  Node-only subpath. Reference: `node_modules/@eco-incorp/sauce/docs/api/compiler.md`.
+- `resolveSdkModule` and `resolveSdkPackage` serve `@sauce/token`, `@sauce/router`, the package's
+  artifact ABIs (`./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json`) and every
+  `./protocols/<slug>/<Export>.json` to your resolver.
+- In a browser, `await ready()` once before the first compile. Every subpath runs in a browser but
+  two, which are Node-only: `/svm/engine-artifacts` and `/testing`. Reference:
+  `node_modules/@eco-incorp/sauce/docs/api/compiler.md`.
 
 ## The protocol registry
 
@@ -178,8 +181,8 @@ address in `deployments` is recorded, not proof of live code.
     `routes.sourceGlobals("solana").accounts` lists the expressions.
     `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` resolves one to
     the address the cook's `AccountResolution` takes, as `sauce run` does; a venue namespace's
-    `slot:@pool:USDC.<part>` needs `load`, from which `svmPoolSlot(load, pool, payMint)` reads the
-    pool's nine accounts.
+    `slot:@pool:USDC.<part>` also needs `load`, an owned-account loader, through which it reads the
+    pool's nine accounts (give `slots`, one map per cook, to read each pool once).
   - A venue namespace's swap at a price is listed in `stoppable`, by its stop's derivation
     (`stop:<pool>:<token>:<limit>`). `svmProgramStops(program, chain, accounts, integers, load)`
     from `@eco-incorp/sauce/svm` works each stop out as `sauce` does (`accounts`: each derived name

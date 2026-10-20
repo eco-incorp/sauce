@@ -17,40 +17,6 @@ Generic cross-chain messaging protocol with guardian-based attestation. Supports
 | Namespace | `Wormhole` on ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridgeTokens
-
-Transfer tokens cross-chain via the Wormhole TokenBridge.
-
-```typescript
-import { WormholeTokenBridgeABI as ITokenBridge } from "./abis";
-
-function main(
-  tokenBridgeAddress: Address,
-  token: Address,
-  amount: Uint256,
-  recipientChain: Uint256,
-  recipient: Uint256,
-): Uint256 {
-  const bridge = ITokenBridge.at(tokenBridgeAddress);
-  return bridge.transferTokens(token, amount, recipientChain, recipient, 0, 0);
-}
-```
-
-- `token`: ERC-20 token to bridge
-- `recipientChain`: Wormhole chain ID (NOT EVM chain ID). E.g. Ethereum=2, Arbitrum=23, Base=30
-- `recipient`: Destination address as bytes32 (left-padded)
-- `arbiterFee`: Fee for relayer (set to 0 for self-redemption)
-- `nonce`: Unique identifier (set to 0)
-- Requires ERC-20 approval to the TokenBridge
-- Requires native token for Wormhole message fee (sent as msg.value, use `coreBridge.messageFee()` to query)
-
 ## Notes
 
 - Uses Wormhole chain IDs (NOT EVM chain IDs). E.g. Ethereum=2, BSC=4, Polygon=5, Avalanche=6, Arbitrum=23, Optimism=24, Base=30
@@ -106,3 +72,9 @@ function main() {
 - `transferTokens(address token, uint256 amount, uint16 recipientChain, bytes32 recipient, uint256 arbiterFee, uint32 nonce) payable returns (uint64 sequence)`
 - `completeTransfer(bytes encodedVm)`
 - `wrappedAsset(uint16 tokenChainId, bytes32 tokenAddress) view returns (address)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

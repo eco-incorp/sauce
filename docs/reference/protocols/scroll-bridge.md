@@ -17,56 +17,6 @@ Official Scroll zkEVM bridge via L1ScrollMessenger and L1GatewayRouter. Deposits
 | Namespace | `ScrollBridge` on ethereum, scroll |
 | Chains | ethereum, scroll |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### depositETH
-
-Deposit ETH from Ethereum L1 to Scroll L2.
-
-```typescript
-import { ScrollL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
-
-function main(gatewayRouterAddress: Address, amount: Uint256, gasLimit: Uint256): Uint256 {
-  const router = IL1GatewayRouter.at(gatewayRouterAddress);
-  router.depositETH(amount, gasLimit);
-  return 1;
-}
-```
-
-- `amount`: Amount of ETH to deposit (also send as `msg.value`)
-- `gasLimit`: L2 gas limit for the deposit execution (e.g. 200000)
-- Requires ETH as msg.value covering amount + L2 gas fees
-
-### depositERC20
-
-Deposit ERC-20 tokens from Ethereum L1 to Scroll L2.
-
-```typescript
-import { ScrollL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
-
-function main(
-  gatewayRouterAddress: Address,
-  token: Address,
-  amount: Uint256,
-  gasLimit: Uint256,
-): Uint256 {
-  const router = IL1GatewayRouter.at(gatewayRouterAddress);
-  router.depositERC20(token, amount, gasLimit);
-  return 1;
-}
-```
-
-- `token`: L1 ERC-20 token address
-- `amount`: Amount of tokens to deposit
-- `gasLimit`: L2 gas limit for the deposit execution (e.g. 200000)
-- Requires ERC-20 approval to the L1GatewayRouter
-- Requires ETH as msg.value for L2 gas fees
-
 ## Notes
 
 - **L1 to L2** via GatewayRouter (for token deposits) or L1ScrollMessenger (for arbitrary messages)
@@ -112,3 +62,9 @@ function main() {
 `import ScrollL1MessengerABI from "./protocols/scroll-bridge/ScrollL1MessengerABI.json";` Speaks for: l1ScrollMessenger.
 
 - `sendMessage(address to, uint256 value, bytes message, uint256 gasLimit) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

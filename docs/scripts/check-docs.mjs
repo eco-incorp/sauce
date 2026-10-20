@@ -45,7 +45,13 @@ const manual = [
     ? ["CLAUDE.md", "sdk/README.md", "actions/README.md", "dev-tools/README.md"]
     : []),
   "docs/README.md",
+  "docs/changelog.md",
 ].map((path) => join(root, path));
+// The changelog is a page of the manual like any other: its links, fragments and fenced integers are
+// checked with the rest, and it is held to the releases below.
+if (!existsSync(join(root, "docs/changelog.md"))) {
+  throw new Error("docs/changelog.md: missing; the manual records every release in its changelog");
+}
 // The agent skills ship in the package, and link to their own supporting files.
 manual.push(...markdownFiles(join(root, "skills")));
 for (const directory of ["concepts", "guides", "api", "reference", "examples"]) {
@@ -104,6 +110,7 @@ console.log(`Manual links: ${manual.length} files checked`);
   const taught = [
     join(root, "README.md"),
     join(root, "docs/README.md"),
+    join(root, "docs/changelog.md"),
     ...["concepts", "guides", "api", "examples"].flatMap((directory) =>
       markdownFiles(join(root, "docs", directory)),
     ),
@@ -306,6 +313,71 @@ console.log(`Manual links: ${manual.length} files checked`);
   if (shape.length) throw new Error(`The manual's shape:\n${shape.join("\n")}`);
   console.log(
     `The manual's shape: ${readerPages.length} pages, none into skills/, each in the index once`,
+  );
+}
+
+// ---- Every tutorial leads on, and the changelog records every release -------------------------------
+// A tutorial is one step of the learning path, so it ends with `## Next` naming the following step
+// (CLAUDE.md). The changelog has a heading for each release the SDK pins
+// (`sdk/src/deployments/releases.json`), so a bump that lands its releases without saying what
+// changed fails here.
+{
+  const docs = join(root, "docs");
+  const problems = [];
+  const outsideFences = (file) => readFileSync(file, "utf8").replace(/```[^]*?```/g, "");
+  const tutorials = [];
+  let part;
+  for (const line of readFileSync(join(docs, "README.md"), "utf8").split("\n")) {
+    const heading = /^## (.+)$/.exec(line);
+    if (heading) part = heading[1];
+    const entry = /^- \[[^\]]*\]\(([^)#\s]+)/.exec(line);
+    if (part === "Tutorials" && entry && !/^[a-z]+:/i.test(entry[1])) tutorials.push(entry[1]);
+  }
+  if (tutorials.length === 0) problems.push("docs/README.md: lists no page under ## Tutorials");
+  for (const target of tutorials) {
+    const file = resolve(docs, target);
+    // A page that does not exist is the link check's to report.
+    if (existsSync(file) && !/^## Next\s*$/m.test(outsideFences(file)))
+      problems.push(
+        `${relative(root, file).split("\\").join("/")}: is listed under ## Tutorials, so it ends with a \`## Next\` heading naming the next step`,
+      );
+  }
+
+  // One heading per component version a pinned row names: `### Compiler 2.5.0`, `### v12-evm 1.2.0`,
+  // `### v12-svm 1.3.0`, `### kitchen-evm 1.2.0`, `### kitchen-svm 1.0.0`; text after the version
+  // (a date) is welcome. A row is not out yet when the sync would refuse it: a `null` engine id,
+  // Kitchen, Pot init-code hash or asset digest in any of its components. Such a row needs no
+  // entries. A component with no version is one no release publishes: it needs no heading, and
+  // its row's other headings stay required. The quote router pin names a kitchen-evm version, so
+  // that heading covers it. The installed package ships no releases.json, and its run skips this.
+  const pinned = join(root, "sdk/src/deployments/releases.json");
+  if (existsSync(pinned)) {
+    const releases = JSON.parse(readFileSync(pinned, "utf8"));
+    const COMPONENTS = ["v12-evm", "v12-svm", "kitchen-evm", "kitchen-svm"];
+    const pending = (entry) =>
+      ["engine", "kitchen", "potInitCodeHash"].some((key) => entry?.[key] === null) ||
+      Object.values(entry?.assets ?? {}).some((digest) => digest === null);
+    const wanted = new Map();
+    const want = (component, version, why) => {
+      if (typeof version === "string" && version !== "") wanted.set(`${component} ${version}`, why);
+    };
+    for (const row of releases.releases) {
+      if (COMPONENTS.some((component) => pending(row[component]))) continue;
+      const why = `releases.json, compiler ${row.compiler}`;
+      want("Compiler", row.compiler, why);
+      for (const component of COMPONENTS) want(component, row[component]?.version, why);
+    }
+    if (releases.quoteRouter && !pending(releases.quoteRouter))
+      want("kitchen-evm", releases.quoteRouter.version, "releases.json, quoteRouter");
+    const changelog = outsideFences(join(docs, "changelog.md"));
+    const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    for (const [heading, why] of wanted)
+      if (!new RegExp(`^### ${escaped(heading)}(?=\\s|$)`, "m").test(changelog))
+        problems.push(`docs/changelog.md: has no "### ${heading}" heading (${why})`);
+  }
+  if (problems.length) throw new Error(`Tutorials and the changelog:\n${problems.join("\n")}`);
+  console.log(
+    `Tutorials: ${tutorials.length} end with ## Next; the changelog covers every pinned release`,
   );
 }
 

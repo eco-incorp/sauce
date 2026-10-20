@@ -7,9 +7,9 @@
 > Everything a program can name on Base: its tokens, and every protocol deployed there with the name
 > a program writes for each contract. The `sauce` command builds and sends transactions on Base.
 
-**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
-Base a program compiles and simulates, and the `sauce` command and the MCP server build
-its transactions and send them.
+**Supported.** Sauce supports transactions on Ethereum, Base and Solana. On Base a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
@@ -143,3 +143,9 @@ address.
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627` | `Wormhole.TokenBridge` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

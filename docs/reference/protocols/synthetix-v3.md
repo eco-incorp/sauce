@@ -17,48 +17,13 @@ Modular liquidity protocol powering perpetual futures and synthetic assets on Ba
 | Namespace | `SynthetixV3` on base |
 | Chains | base |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Deposit collateral into an account
 - **withdraw**: Withdraw collateral from an account
 - **delegateCollateral**: Delegate collateral to a pool (via CoreProxy)
 - **commitOrder**: Commit a perps trade order (via PerpsMarketProxy)
 - **modifyCollateral**: Modify perps account collateral
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit collateral
-import { CoreProxyABI as ICoreProxy } from "./abis";
-function main(
-  coreProxyAddress: Address,
-  accountId: Uint256,
-  collateralType: Address,
-  amount: Uint256,
-): Uint256 {
-  const core = ICoreProxy.at(coreProxyAddress);
-  core.deposit(accountId, collateralType, amount);
-  return 1;
-}
-
-// Withdraw collateral
-import { CoreProxyABI as ICoreProxy } from "./abis";
-function main(
-  coreProxyAddress: Address,
-  accountId: Uint256,
-  collateralType: Address,
-  amount: Uint256,
-): Uint256 {
-  const core = ICoreProxy.at(coreProxyAddress);
-  core.withdraw(accountId, collateralType, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -102,3 +67,9 @@ function main() {
 
 - `commitOrder((uint128 marketId, uint128 accountId, int128 sizeDelta, uint128 settlementStrategyId, uint256 acceptablePrice, bytes32 trackingCode, address referrer) commitment) returns ((uint256 commitmentTime, (uint128 marketId, uint128 accountId, int128 sizeDelta, uint128 settlementStrategyId, uint256 acceptablePrice, bytes32 trackingCode, address referrer) request) retOrder, uint256 fees)`
 - `modifyCollateral(uint128 accountId, uint128 collateralId, int256 amountDelta)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -17,37 +17,6 @@ Permissionless interchain messaging protocol. Supports modular security with ISM
 | Namespace | `Hyperlane` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### dispatch
-
-Send a cross-chain message via Hyperlane Mailbox.
-
-```typescript
-import { HyperlaneMailboxABI as IMailbox } from "./abis";
-
-function main(
-  mailboxAddress: Address,
-  destinationDomain: Uint256,
-  recipientAddress: Uint256,
-  messageBody: bytes,
-): Uint256 {
-  const mailbox = IMailbox.at(mailboxAddress);
-  return mailbox.dispatch(destinationDomain, recipientAddress, messageBody);
-}
-```
-
-- `destinationDomain`: Hyperlane domain ID (NOT EVM chain ID). Each chain has a unique uint32 domain identifier
-- `recipientAddress`: Destination contract address as bytes32 (left-padded with zeros)
-- `messageBody`: Arbitrary message payload (bytes)
-- Requires native token (ETH) as msg.value for interchain gas payment
-- Use `quoteDispatch()` to estimate fees before sending
-
 ## Notes
 
 - This is a messaging protocol, not a direct token bridge. Token bridging uses Warp Routes built on top of Hyperlane
@@ -94,3 +63,9 @@ function main() {
 - `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) view returns (uint256)`
 - `process(bytes _metadata, bytes _message) payable`
 - `delivered(bytes32 _id) view returns (bool)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

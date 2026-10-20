@@ -500,12 +500,12 @@ line numbers in its errors.
 
 On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `simulate`, `inspect`,
 `verify`, `price`, `pools`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`,
-`sauce intent status` and `sauce intent import` work, and `sauce pot` predicts the Pot (and reads
-it) but leaves its deployment out. Everything that leaves a transaction ready to sign, unsigned JSON
-included, or sends one is refused before anything is read or signed: `tx`, `run`, `pot --deploy`,
-`pot --format cast`, `sauce intent publish` and the intent steps sent there
-(`sauce intent fill --send`, `prove`, `claim`, `refund`, `cancel`). No flag overrides it. The refusal exits 1 and names
-the supported chains and the chain's request:
+`sauce intent status`, `sauce intent import`, `sauce intent list` and `sauce intent show` work, and
+`sauce pot` predicts the Pot (and reads it) but leaves its deployment out. Everything that leaves a
+transaction ready to sign, unsigned JSON included, or sends one is refused before anything is read
+or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`, `sauce intent publish` and the intent
+steps sent there (`sauce intent fill --send`, `prove`, `claim`, `refund`, `cancel`). No flag
+overrides it. The refusal exits 1 and names the supported chains and the chain's request:
 
 ```
 sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. …

@@ -8,7 +8,7 @@
 > it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Blast-native ve(3,3) DEX and liquidity hub. Solidly-fork with concentrated liquidity and gauge voting, leveraging Blast's native yield on ETH and USDB for enhanced LP returns.
 
@@ -19,50 +19,9 @@ Blast-native ve(3,3) DEX and liquidity hub. Solidly-fork with concentrated liqui
 | Namespace | `Fenix` on blast |
 | Chains | blast |
 
-## Key Operations
+## What it offers
 
 - **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { FenixRouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenIn: Address,
-  tokenOut: Address,
-  stable: bool,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256[] {
-  const router = IRouter.at(routerAddress);
-  return router.swapExactTokensForTokens(
-    amountIn,
-    amountOutMin,
-    [{ from: tokenIn, to: tokenOut, stable: stable }],
-    recipient,
-    99999999999,
-  );
-}
-```
-
-- `routerAddress`: Fenix Router on Blast (`0xbD571125856975DBfC2E9b6d1DE496D614D7BAEE`)
-- `tokenIn` / `tokenOut`: Input and output token addresses
-- `stable`: `true` for stable pools (pegged assets like USDB/USDC), `false` for volatile pools
-- `amountIn`: Exact input amount (in wei)
-- `amountOutMin`: Minimum output for slippage protection
-- `recipient`: Address to receive output tokens
-- Routes support multi-hop: `[{from: A, to: B, stable: false}, {from: B, to: C, stable: true}]`
-- Note: Fenix routes do NOT include a `factory` field (unlike Velodrome/Aerodrome)
 
 ## Notes
 
@@ -99,3 +58,9 @@ function main() {
 
 - `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, (address from, address to, bool stable)[] routes, address to, uint256 deadline) returns (uint256[] amounts)`
 - `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

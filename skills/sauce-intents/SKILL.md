@@ -448,13 +448,14 @@ function main(recipient: Address) {
   hop does not undo an earlier one.
 - **The child is published and funded by the parent's body**, as (b): when the Ethereum level runs,
   the shared Pot there pays the next level's reward into its vault on Ethereum's Portal, in
-  Ethereum's USDC, and calls `publish`, so any solver can discover it.
+  Ethereum's USDC, and calls `publish`, so any solver can discover it (with
+  `--intent-fund-via publishAndFund`, it approves the Portal and calls `publishAndFund` instead).
 - **Every level takes the same** `--intent-deadline`, `--intent-reward-deadline`,
-  `--intent-creator` and `--intent-execution-fee`; a `.reward(...)` sets only `tokens` and
-  `nativeAmount`. A later level has whatever time the earlier ones leave before that one deadline,
-  the creator reclaims each level's unearned reward on the chain that escrowed it, and one fee pays
-  every program body's cook (`--intent-execution-fee auto` refuses when those Kitchens charge
-  different fees). The Portal and the prover are looked up per level, for its own two chains.
+  `--intent-creator`, `--intent-fund-via` and `--intent-execution-fee`; a `.reward(...)` sets only
+  `tokens` and `nativeAmount`. A later level has whatever time the earlier ones leave before that
+  one deadline, the creator reclaims each level's unearned reward on the chain that escrowed it, and
+  one fee pays every program body's cook (`--intent-execution-fee auto` refuses when those Kitchens
+  charge different fees). The Portal and the prover are looked up per level, for its own two chains.
 - **A lower level's hash exists only once the level above has run**: import it from that fill's
   transaction (`sauce intent import <tx hash> --chain <chain>`), then fill, prove and claim it like
   any other. (The TypeScript builder, `.nest()` in `sauce-typescript`, takes options per level.)

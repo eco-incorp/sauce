@@ -17,64 +17,6 @@ Cross-chain trading infrastructure with DLN (DeBridge Liquidity Network). Suppor
 | Namespace | `Debridge` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Create a cross-chain order via DLN (DeBridge Liquidity Network).
-
-```typescript
-import { DlnSourceABI as IDlnSource } from "./abis";
-
-function main(
-  dlnSourceAddress: Address,
-  giveToken: Address,
-  giveAmount: Uint256,
-  takeToken: bytes,
-  takeAmount: Uint256,
-  takeChainId: Uint256,
-  receiver: bytes,
-): Uint256 {
-  const dln = IDlnSource.at(dlnSourceAddress);
-  return dln.createOrder(
-    {
-      giveTokenAddress: giveToken,
-      giveAmount: giveAmount,
-      takeTokenAddress: takeToken,
-      takeAmount: takeAmount,
-      takeChainId: takeChainId,
-      receiverDst: receiver,
-      givePatchAuthoritySrc: ctx.msgSender(),
-      orderAuthorityAddressDst: receiver,
-      allowedTakerDst: 0x00,
-      externalCall: 0x00,
-      allowedCancelBeneficiarySrc: 0x00,
-    },
-    0x00,
-    0,
-    0x00,
-  );
-}
-```
-
-- `giveToken`: ERC-20 token address to send on source chain
-- `giveAmount`: Amount of source token to send
-- `takeToken`: Token address on destination chain (as bytes, since it may be on a non-EVM chain)
-- `takeAmount`: Minimum amount to receive on destination. Set slightly below `giveAmount` to account for market maker spread
-- `takeChainId`: Destination chain ID (uses EVM chain IDs)
-- `receiver`: Recipient address on destination chain (as bytes)
-- `givePatchAuthoritySrc`: Address allowed to increase give amount (set to `msg.sender`)
-- `orderAuthorityAddressDst`: Address that can cancel/modify order on destination (set to `receiver`)
-- `allowedTakerDst`: Restrict which market maker can fill (empty `0x00` = any taker)
-- `externalCall`: Optional calldata to execute on destination after fill
-- `allowedCancelBeneficiarySrc`: Restrict who receives refund on cancellation (empty `0x00` = order creator)
-- Requires ERC-20 approval to DlnSource
-
 ## Notes
 
 - Intent/order-based architecture: users create orders specifying desired outcome, market makers compete to fill
@@ -133,3 +75,9 @@ function main() {
 `import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource.
 
 - `createOrder((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, bytes _affiliateFee, uint32 _referralCode, bytes _permitEnvelope) payable returns (bytes32 orderId)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

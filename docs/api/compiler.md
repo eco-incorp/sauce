@@ -6,14 +6,15 @@
 > chain runs. This page is its exact interface for TypeScript: every option you can pass, and
 > everything it gives back.
 
+This page is for a TypeScript developer who calls the compiler directly: a build tool, a server
+that compiles programs, or a test. It assumes you have written a SauceScript program
+([Write your first program](../guides/write-your-first-program.md)). To compile a program for one
+chain by name, with its tokens and protocols resolved for you, the
+[compiling guide](../guides/compiling.md) is the shorter path.
+
 `@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
 argument format. Both ship with the SDK; there is nothing extra to install. It runs in
 Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
-
-This SDK pins compiler **2.5.0**, EVM engine/Kitchen **1.2.0**, SVM engine **1.3.0**, and SVM Kitchen
-**1.0.0**. Deploy the matching stack before using the release defaults on-chain. A Pot keeps the
-code of the Kitchen that deployed it, so a Pot from Kitchen 1.1.0 runs only with that release's
-engine and SDK.
 
 ```ts
 import {
@@ -28,13 +29,14 @@ import {
 } from "@eco-incorp/sauce/compiler";
 ```
 
-This SDK pins one compiler and the four v12 releases its output runs on: the EVM
-engine and Kitchen, and the SVM engine and Kitchen. `v12ReleaseSet()` names them —
-see [Which engine runs a program](#which-engine-runs-a-program). Release addresses
-identify this compatible set; they do not confirm it has been deployed on a chain.
-Check deployment readiness before using it live.
+Each SDK release pins one compiler version and the engine and Kitchen releases its output runs on.
+The [changelog](../changelog.md) records which versions each SDK release pins, and
+[Deployments](../reference/deployments.md) lists the current set and its addresses. A recorded
+address does not confirm that the release is deployed on a chain: check that the code is there
+before you use it live. [Which engine runs a program](#which-engine-runs-a-program) explains the
+pairing.
 
-Every example here is checked against the compiler version this package ships.
+The examples on this page use the compiler this package ships.
 
 ## `compile(options): CompileResult`
 
@@ -44,7 +46,7 @@ callbacks; the compiler does not fetch a filesystem path or network URL itself.
 ```ts
 const source = new TextEncoder().encode(`
   function main(amount: Uint256): Uint256 {
-    return amount + 1n;
+    return amount + 1;
   }
 `);
 
@@ -71,6 +73,8 @@ console.log(artifact.bytecode.length, artifact.entryEncoding);
 | `defines`         | `[name, value][]`                                      | Program-wide scalar compile-time constants; values are integer strings |
 | `optimize`        | `boolean`                                              | Enable compiler optimizations; default `true`                          |
 | `compactArgs`     | `boolean`                                              | Use compact-v1 entry arguments; default `false`                        |
+| `chain`           | `string`                                               | The chain the program runs on: a key of `chainProfiles`                |
+| `chainProfiles`   | `Record<string, ChainProfile>`                         | Each chain's builtin profile, keyed by a chain key you choose          |
 | `cache`           | `boolean`                                              | Enable the per-function lowering cache; default `true`                 |
 
 `optimize: false` turns the optimizer off. Every check the compiler performs still
@@ -85,6 +89,55 @@ module's same-named `const`; incompatible declarations, such as a module-level
 An ambient export yields to a module's own declarations, imports, and bindings.
 Two ambient modules exporting the same name are an error. Ambient libraries must
 be resolvable SauceScript modules and cannot supply an entry `main`.
+
+### Chain profiles
+
+A target is a virtual machine, and two EVM chains can run the same engine while a builtin behaves
+differently on them: a chain with no blobs has no blob base fee to report. A chain profile tells the
+compiler what one chain does with such a builtin, so the program is compiled for that chain.
+
+```ts
+const source = new TextEncoder().encode(`
+  function main(): Uint256 {
+    return ctx.prevrandao();
+  }
+`);
+
+const artifact = compile({
+  target: "evm",
+  entry: "main.ts",
+  resolve: (path) => (path === "main.ts" ? source : undefined),
+  chain: "base",
+  chainProfiles: {
+    base: { builtins: { "ctx.prevrandao": { constant: "0" } } },
+    arbitrum: { name: "Arbitrum", builtins: { "ctx.prevrandao": "unsupported" } },
+  },
+});
+
+console.log(artifact.chain); // "base"
+```
+
+A `ChainProfile` is `{ name?: string; builtins?: Record<string, "unsupported" | { constant: string }> }`:
+
+- A key of `builtins` is a builtin's source spelling, such as `"ctx.prevrandao"` or `"evm.create2"`.
+  Only a builtin whose behaviour depends on the chain can be named. A typo, or a portable read such
+  as `ctx.timestamp`, is a compile error.
+- `"unsupported"` makes any use of the builtin a compile error, naming the chain
+  (`` `ctx.prevrandao()` is not available on Arbitrum ``), instead of a program that reverts there.
+- `{ constant: "0" }` compiles the builtin to that value, as a decimal or `0x` string, and constant
+  folding sees through it. It applies only to a builtin that takes no arguments.
+- `name` is the chain's name in error messages. Without it, the error names the chain by its key.
+- A builtin the profile does not name compiles as it does with no profile.
+
+`chain` and `chainProfiles` go together. A `chain` that has no profile is an error; give a chain
+whose builtins all behave as the target's an empty profile, `{}`. Profiles with no `chain` are an
+error too. Every profile is checked, whether or not this compile uses it. The keys are yours: a
+chain id or a name, whichever your host uses.
+
+The same source can compile to different bytecode on two chains, so the function cache treats each
+profile as an input. The SDK's own route compilation and the `sauce` command pass no profile. The
+`/compiler` subpath does not re-export the `ChainProfile` type; in TypeScript, write
+`NonNullable<CompileOptions["chainProfiles"]>[string]`.
 
 ### Resolver contract
 
@@ -138,6 +191,7 @@ interface CompileResult {
   entryEncoding: "abi-v1" | "compact-v1";
   entrySchema?: Uint8Array;
   manifest?: AccountManifest;
+  chain?: string;
 }
 ```
 
@@ -157,11 +211,47 @@ interface CompileResult {
   the compact codec; do not infer or rebuild it from example bytes.
 - `manifest` is present for SVM and describes attached accounts. It is absent
   for EVM.
+- `chain` echoes the `chain` option, and is absent when the compile named none.
+  It tells an artifact built for one chain apart from one built for another.
 
-Compilation and resolution failures throw. A source diagnostic carries a location
-and span; an error about an option, a resolver or a feature the target lacks has
-nothing to point at. A message thrown by your own resolver is preserved. There is
-no success-with-warnings result to inspect — if `compile()` returns, it worked.
+There is no success-with-warnings result to inspect: if `compile()` returns, it
+worked.
+
+### Errors
+
+Compilation and resolution failures throw. The thrown error's `message` is the
+full report: the rule that was broken, the source line and a caret under the
+span. Its `diagnostics` array places each source error, in source order:
+
+```ts
+try {
+  compile(options);
+} catch (error) {
+  const diagnostics = (error as { diagnostics?: unknown }).diagnostics;
+  if (Array.isArray(diagnostics)) {
+    for (const { path, message, start, end } of diagnostics) {
+      console.log(`${path}:${start.line}:${start.column}-${end.line}:${end.column} ${message}`);
+    }
+  }
+  throw error;
+}
+```
+
+Each entry is `{ path, message, start, end, secondary? }`:
+
+- `path` is the module as `resolve` was asked for it. An error in an imported module names the
+  import, not the entry.
+- `start` and `end` are `{ offset, line, column }`. Lines and columns start at 1. Every count is in
+  UTF-16 code units, the unit a JavaScript string indexes in, so
+  `source.slice(start.offset, end.offset)` is the span.
+- `secondary`, when present, is a second location with its own note, such as where a name was
+  first declared.
+
+An error with no place in the source has an empty `diagnostics` array: an invalid option, a
+resolver failure, or a builtin a chain profile refuses. A message thrown by your own resolver is
+kept. The error `compile()` throws in a browser before [`ready()`](#in-a-browser) has resolved
+carries no `diagnostics` at all, which is why the example checks for the array. The `/compiler`
+subpath does not re-export the `CompileError` or `Diagnostic` types.
 
 ### SVM account manifest
 
@@ -185,7 +275,8 @@ uses it. SVM `Account` parameters do not occupy compact argument fields.
 
 The subpath also exports `AccountEntry`, `AccountManifest`, `AccountRole`,
 `CompileOptions`, `CompileResult`, `ResolveModule`, `ResolvePackage`, and
-`SauceTarget` as types from the compiler package.
+`SauceTarget` as types from the compiler package, and its own `CompactValue` and
+`WasmSource`.
 
 ### Which engine runs a program
 
@@ -333,9 +424,10 @@ await ready(await (await fetch("/assets/sauce_wasm_bg.wasm")).arrayBuffer());
 The first `source` that succeeds is the one used; the compiler warns if a later call
 passes a different one.
 
-Every subpath works in a browser except `/svm/engine-artifacts`. It returns filesystem
-paths to the packaged engine binaries for a local LiteSVM harness, and is Node-only.
-In Node, the SDK requires Node **24 or newer**.
+Two subpaths do not run in a browser: `/svm/engine-artifacts`, which returns
+filesystem paths to the packaged engine binaries for a local LiteSVM harness, and
+`/testing`, which starts local chains for tests. Both are Node-only. The
+[API reference](README.md#where-each-import-runs) lists where each import runs.
 
 ## Compiler-only features
 
@@ -343,3 +435,8 @@ The compiler package also exports `clearFunctionCache()` and `functionCacheStats
 for inspecting its internal lowering cache. The SDK's `/compiler` export does not
 re-export those; an application that wants them declares the compiler as a direct
 dependency and imports from its own package name.
+
+## Next
+
+[Routes](routes.md) compiles a program for one chain by name and builds intents around it. To run
+what you compiled, [Pots and cooks in code](README.md#pots-and-cooks-in-code) lists each step.

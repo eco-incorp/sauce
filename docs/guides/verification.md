@@ -6,8 +6,13 @@
 > confirms that the program inside is the real settlement program, and reads its settings. It does
 > not check everything around it. That part is still yours.
 
-Somebody hands you an intent and says it settles a swap to your address. These helpers answer one
-question about it: **is the program inside really the settlement program, and with what parameters?**
+This page is for a developer whose application receives intents or payloads that someone else
+built, such as a solver or a partner's front end, and must check them before relying on them. It
+assumes you know what an intent and a Pot are
+([Your first cross-chain intent](first-intent.md)). The program it checks is the **settlement
+program**, `settle.sauce.ts`, which the package ships: it sweeps a Pot's tokens to one recipient,
+with a floor. The checks answer one question: **is the program inside really the settlement
+program, and with what parameters?**
 
 That is a narrower question than "is this intent safe to sign", and the gap matters. A genuine
 settlement can sit next to calls that are not, on a chain you did not expect, aimed at a Pot you do
@@ -19,9 +24,27 @@ execution target, the account identities and every other call in the intent rema
 | `@eco-incorp/sauce/verify`     | Validate the EVM program hash and decode its canonical runtime argument tail                       | Node, browsers, and edge runtimes; depends on `viem`, not the compiler     |
 | `@eco-incorp/sauce/svm/verify` | Recompile SVM settlement with expected parameters, compare bytecode, and inspect attached accounts | Node and browsers; loads the compiler (`await ready()` first in a browser) |
 
+## Check a settlement from the command line
+
+`sauce verify` runs the same checks on a payload, a cook's calldata, an intent's `publish` calldata,
+or a transaction:
+
+```sh
+sauce verify 0x<payload>
+sauce verify 0x<tx hash> --chain base
+sauce verify <signature> --chain solana --min-out 0 --spl-count 1
+```
+
+It prints the tokens, the floor and the recipient, or exits 1 with the reason it refused, such as
+`PROGRAM_HASH` or `NO_SETTLE`. A cook must name the released engine, or one you add with
+`--engine <address>`. `--pin <hash:bytes>` also accepts a historical settlement program, as
+[below](#compiler-upgrades-and-historical-pins). On Solana, the floor and the split are compiled
+into the program, so give them with `--min-out` and `--spl-count`. An agent runs the same checks
+through the MCP tool `sauce_verify`. The rest of this page does it in code.
+
 ## Settlement behavior
 
-The EVM recipe sweeps the Pot's **entire current balance** of every listed token to one recipient.
+The EVM settlement program sweeps the Pot's **entire current balance** of every listed token to one recipient.
 Before the first transfer it checks `minOut` against the balance of `tokens[0]`; `minOut: 0n` turns
 that floor off.
 
@@ -29,7 +52,7 @@ Read "current balance" literally. A balance that was already there, or that some
 toward the floor and is swept along with everything else. The floor tells you what the Pot holds, not
 what the swap before it produced.
 
-The SVM recipe applies the same pattern to escrow token accounts. It takes an
+The SVM settlement program applies the same pattern to escrow token accounts. It takes an
 escrow count and compile-time `minOut`/`splCount`, then attaches token programs,
 escrows, mints, destination token accounts, and the owner. `splCount` selects how
 the escrows are split between the two token-program slots.
@@ -78,7 +101,7 @@ execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
 This surface verifies the pinned **ABI-v1** settlement artifact. Recompiling the
-recipe with `compactArgs: true` changes that contract and is not accepted by the
+settlement program with `compactArgs: true` changes that contract and is not accepted by the
 existing settlement decoder.
 
 ### Inspection levels
@@ -146,18 +169,24 @@ engine it names.
 program with a different length. Passing an empty list accepts no program; it
 does not fall back to the default pin.
 
-Programs from earlier releases, before the sweep followed `SafeERC20`:
+Three earlier builds of the settlement program can still be accepted, when you list them. Each is
+the same program from an earlier compiler or source; the last two predate the sweep following
+`SafeERC20`:
 
-| Released in     | `bytes` | `hash`                                                               |
-| --------------- | ------- | -------------------------------------------------------------------- |
-| 0.99.2 – 0.99.4 | 356     | `0xf9fffd262b32ad0cb07f2748f813626363497e09e4f4da134bed1b8da0c5d5fe` |
-| 0.99.0 – 0.99.1 | 362     | `0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11` |
+| Built by                                   | `bytes` | Published in    |
+| ------------------------------------------ | ------- | --------------- |
+| Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release      |
+| Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4 |
+| Compiler 2.2.0 and 2.2.1                   | 362     | 0.99.0 – 0.99.1 |
 
-An explicit list replaces the default, so include the current pin —
-`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }` — alongside the historical
-ones you accept.
+Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
+editor shows on hover. The current pin is
+`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`, the program 0.99.5 and
+every later release produce. An explicit list replaces the default, so include the current pin
+alongside the historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
+adds one.
 
-A compiler change can change program bytes without changing a line of the recipe. So an SDK or
+A compiler change can change program bytes without changing a line of the source. So an SDK or
 compiler upgrade is the moment to check two separate things: which program version your application
 now _produces_, and which versions it still _accepts_. Import the SDK's pins rather than copying
 their values, and keep an older pin only for a version you have decided to accept.
@@ -294,3 +323,9 @@ As on EVM, finding a genuine settlement does not validate adjacent calls or an
 arbitrary callee that accepts the same instruction discriminator. Match the
 reported target and account plan to the deployment and intent your application
 expects.
+
+## Next
+
+- What changed in each release, the settlement program included: the [changelog](../changelog.md).
+- The intents a settlement usually arrives in: [Create an intent](intents.md).
+- Moving to a newer package, and the pins to accept: [Upgrading](upgrading.md).

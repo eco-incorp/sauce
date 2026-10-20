@@ -17,27 +17,10 @@ Flash loan aggregator that routes across Aave, Maker, Balancer and other sources
 | Namespace | `Instadapp` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **getRoutes**: Query available flash loan routes and their IDs
 - **flashLoan**: Execute a flash loan via optimal route
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Get available flash loan routes
-import { FlashAggregatorABI as IFlashAggregator } from "./abis";
-function main(aggregatorAddress: Address): Uint256 {
-  const aggregator = IFlashAggregator.at(aggregatorAddress);
-  aggregator.getRoutes();
-  return 1;
-}
-```
 
 ## Notes
 
@@ -72,3 +55,9 @@ function main() {
 
 - `flashLoan(address[] tokens, uint256[] amounts, uint256 route, bytes data, bytes extraData)`
 - `getRoutes() pure returns (uint16[] routes)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

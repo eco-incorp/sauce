@@ -2,10 +2,15 @@
 
 **How-to guide** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Command reference](../reference/cli.md)
 
-> `sauce` is a command you type in a terminal. Think of it as the remote control for your Pot: it
-> turns a program file into a transaction, tries it for free, signs it and sends it. It also has
-> buttons for wallets, for intents, and for looking things up on a chain. New here? The
-> [quick start](quick-start.md) walks you through your first program.
+> `sauce` is a command you type in a terminal. Think of it as the remote control for your **Pot**,
+> your own account on the chain, which holds the tokens your programs spend. The command turns a
+> program file into a transaction, tries it for free, signs it and sends it. It also has buttons for
+> wallets, for intents, and for looking things up on a chain.
+
+This page is for anyone who has done the [quick start](quick-start.md) and now wants to set the
+command up properly: install it, start a project, pick a chain and an endpoint, and keep it working.
+It needs Node.js 24 or newer and a terminal, nothing else. Each command's own page is linked in the
+table below, and [the command reference](../reference/cli.md) prints every flag.
 
 ## Install
 
@@ -14,10 +19,70 @@ npm install -g @eco-incorp/sauce
 sauce --version
 ```
 
-You need Node.js 24 or newer. The command needs no other tool and no configuration, and it reads
-no environment variable you did not name.
+`sauce --version` prints the version. The command needs no other tool and no configuration, and it
+reads no environment variable you did not name. Every command takes `--help`, which prints what it
+does and every flag it takes.
 
-## What it does
+### Run it from a project
+
+In a project that depends on the package (one `sauce init` wrote, or one where you ran
+`npm i -D -E @eco-incorp/sauce`), `npx sauce <command>` runs the version the project's
+`package.json` pins. A global `sauce` run in that project runs the global version instead.
+`sauce skills status` reports skills that were installed from another version than the command's.
+
+### Run it without installing
+
+`npx -y @eco-incorp/sauce <command>` fetches the package and runs it. Never run a bare `npx sauce`
+outside a project that depends on the package: npx then fetches and runs npm's unrelated `sauce`
+package instead.
+
+### Runtime packages
+
+Two commands load packages that no install of `@eco-incorp/sauce` brings, because they are its
+optional peer dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana simulation in a local
+copy (LiteSVM). Each uses your own copies where they are exactly the versions the package pins.
+Otherwise its first use installs them for itself, once per version, into
+`~/.sauce/runtime/<version>`, and says so on stderr.
+
+- `sauce runtime` says where each command's packages come from, and `sauce runtime install`
+  installs the folder now.
+- `sauce mcp setup` installs it too, so an agent's first start of the server does not wait.
+- `sauce mcp --offline` installs nothing. Without npm, or without its registry, the command
+  refuses and says why.
+
+The install runs `npm ci` on the lockfile the package ships, so every package is the one pinned,
+checked by its integrity hash. The folder is owner-only and installed whole or not at all. The
+command refuses to load from it if another user owns it or can write a folder above it. npm reaches
+the registry your npm configuration names, a mirror or a proxy included. [Upgrading](upgrading.md)
+says what happens to the folder when you update.
+
+## Start a project
+
+To start a new project, let the command make it:
+
+```sh
+sauce init my-app
+cd my-app
+npm install
+```
+
+`sauce init` writes:
+
+- a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran it, `viem` to
+  exactly the version installed beside it, and `@types/node` for the skills' TypeScript runners.
+  The SDK's TypeScript API is written in viem's types, and a package manager that does not hoist
+  dependencies (pnpm) resolves only a project's own;
+- an `AGENTS.md` with the project's instructions for coding agents, and a `CLAUDE.md` and a
+  `GEMINI.md` that import it for the two agents that read their own file;
+- a `.gitignore` that keeps local configuration out of git, and `sauce.config.example.json`;
+- `programs/tsconfig.json`, so an editor types the programs in `programs/`
+  ([In an editor](cli-programs.md#in-an-editor));
+- the agent skills, for every agent unless `--agent` names some ([Agent skills](skills.md)).
+
+`init` refuses to overwrite a file that already has other content, and lists it, unless you pass
+`--force`. It runs no package manager unless you pass `--install`.
+
+## Find the right command
 
 | Command          | What it does                                                         | Guide                                     |
 | ---------------- | -------------------------------------------------------------------- | ----------------------------------------- |
@@ -36,29 +101,22 @@ no environment variable you did not name.
 | `sauce pools`    | A pair's pools on a chain, deepest first, with their prices          | [Look things up](cli-lookup.md)           |
 | `sauce inspect`  | Take a transaction, a call or a program apart                        | [Look things up](cli-lookup.md)           |
 | `sauce verify`   | Check that a payload runs the audited settle program                 | [Look things up](cli-lookup.md)           |
-| `sauce init`     | Start a project that uses the package                                | [Install](#other-ways-to-run-it)          |
+| `sauce init`     | Start a project that uses the package                                | [Start a project](#start-a-project)       |
 | `sauce skills`   | Install, update or check the agent skills in a project               | [Agent skills](skills.md)                 |
 | `sauce mcp`      | Serve the commands to a coding agent                                 | [The MCP server](mcp.md)                  |
-| `sauce update`   | Update this command, the way it was installed                        | [Updates](#updates)                       |
+| `sauce update`   | Update this command, the way it was installed                        | [Upgrading](upgrading.md)                 |
 | `sauce runtime`  | Install the extra packages `sauce mcp` and Solana simulations load   | [Runtime packages](#runtime-packages)     |
 
-Every command takes `--help`, and the [command reference](../reference/cli.md) collects them all.
+## Pick a chain and an endpoint
 
-## Which chains
-
-The command sends transactions on three chains: **Ethereum**, **Base** and **Solana**. Every other
-chain it knows is a **preview chain**. There a program still compiles and simulates, and every read
-works, but the command builds and sends nothing. [Chains](../reference/chains.md) lists them all.
-
-## Endpoints
-
-To read a chain, the command needs an RPC endpoint. You don't have to give one: it uses a built-in
-public endpoint and says so. Public endpoints can be slow or rate-limited, so for anything serious,
-use your own.
-
-## Details
+The command reads a chain through an **RPC endpoint**, the URL of a node that answers questions
+about the chain. It sends transactions on three chains: **Ethereum**, **Base** and **Solana**.
+Every other chain it knows is a **preview chain**. [Chains](../reference/chains.md) lists them all.
 
 ### Supported and preview chains
+
+On a preview chain a program still compiles and simulates, and every read works, but the command
+builds and sends nothing:
 
 | On a preview chain                                                                                                                  | Does                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -82,12 +140,13 @@ title, chain and chain id filled in.
 `sauce pot` on a preview chain prints the Pot's address, owner, salt and Kitchen, but no `to`,
 `data` or `value`. Its JSON adds `refused`, the same refusal as an object: `code`
 (`"preview-chain"`), `action`, `message`, `supportedChains` and `previewChains`, each with its
-`request`. `sauce --help` and the `--help` of every refused command say the same. No flag lifts
-the refusal.
+`request`. No flag lifts the refusal.
 
 ### Your own endpoints
 
-Give one of these:
+You don't have to give an endpoint: the command uses a built-in public one and says so on stderr.
+Public endpoints can be slow or rate-limited, so for anything serious, use your own. Give one of
+these:
 
 - `--rpc-url <url>`, the endpoint of the chain the command is for; or
 - `--config <file>`, a JSON file of endpoints by chain id. A chain it does not name is read through
@@ -97,9 +156,9 @@ Give one of these:
   { "rpcUrls": { "1": "https://…", "8453": "https://…", "1399811149": "https://…" } }
   ```
 
-`sauce init` writes `sauce.config.example.json` with `<…>` placeholders. Copy it to
-`sauce.config.json`, which the project's `.gitignore` keeps out of git. A placeholder left in is
-refused.
+Give `--rpc-url` or `--config`, not both. `sauce init` writes `sauce.config.example.json` with `<…>`
+placeholders. Copy it to `sauce.config.json`, which the project's `.gitignore` keeps out of git. A
+placeholder left in is refused.
 
 The command checks that an EVM endpoint serves the chain you named. It never prints your URL,
 because a provider's URL often carries a key.
@@ -109,99 +168,30 @@ state overrides. When one cannot be reached, refuses, rate-limits or fails, the 
 Kava, ZetaChain and Evmos have none. `--offline` reads no chain at all: `sauce tx` then needs
 `--value`, and `sauce pot` only predicts.
 
-### Other ways to run it
+## Keep the command current
 
-The global install is how this manual writes every command, `sauce …`. Two other ways run the same
-command:
-
-- **A project's pinned copy.** In a project that depends on the package (one `sauce init` wrote, or
-  `npm i -D -E @eco-incorp/sauce`), `npx sauce <command>` runs the version its `package.json` pins.
-  A global `sauce` there runs the global version, and `sauce skills status` reports skills installed
-  from another version than the command's.
-- **No install.** `npx -y @eco-incorp/sauce <command>` fetches the package and runs it. Never run a
-  bare `npx sauce` outside a project that depends on the package: npx then fetches and runs npm's
-  unrelated `sauce` package instead.
-
-To start a new project, let the command make it:
-
-```sh
-sauce init my-app
-cd my-app
-npm install
-```
-
-`sauce init` writes:
-
-- a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran it, `viem` to
-  exactly the version installed beside it, and `@types/node` for the skills' TypeScript runners.
-  The SDK's TypeScript API is written in viem's types, and a package manager that does not hoist
-  dependencies (pnpm) resolves only a project's own;
-- an `AGENTS.md` with the project's instructions for coding agents, and the agent skills
-  ([Agent skills](skills.md));
-- a `.gitignore` that keeps local configuration out of git, and `sauce.config.example.json`;
-- `programs/tsconfig.json`, so an editor types the programs in `programs/`
-  ([In an editor](cli-programs.md#in-an-editor)).
-
-`init` refuses to overwrite a file that already has other content, and lists it, unless you pass
-`--force`. It runs no package manager unless you pass `--install`.
-
-### Updates
-
-`sauce update` upgrades the command to the latest release (or `--version <version>`), the way it
-was installed. A global install by npm, pnpm, yarn or bun is installed again by that manager, and
-skills installed in the current directory are then updated by the new `sauce`. A project's own copy
-is the project's to update, so `sauce update` prints the command its package manager takes and
-changes nothing. A copy in npx's cache prints the `npx -y` command. `sauce update --check` says
-which version is installed and which is the latest, and installs nothing.
+`sauce update` installs the latest release the way the command was installed. After a global
+update, the new version also updates the skills in the current directory and its runtime packages.
+When a newer release is out, a command says so on stderr after it finishes.
+[Upgrading](upgrading.md) covers both, and what changed in each release is in the
+[changelog](../changelog.md).
 
 ### The update notice
 
-After a command, one line on stderr says when a newer release is out:
+After a command, one line on stderr says when a newer release is out. It never slows a command
+down, it is off with `--offline` and `--no-update-check`, and it never touches `--json` output.
+[Upgrading](upgrading.md#the-update-notice) says how it works and how to turn it off.
 
-```text
-sauce 0.99.12 → 0.99.13 is available: run `sauce update`
-```
-
-It never slows a command down. The line comes from a cache, `~/.sauce/update-check.json`
-(owner-only), which `sauce` refreshes from the npm registry at most once a day, in a process of its
-own that no command waits for. So the first command after a release may say nothing yet. The
-registry is the only host it reads. The line goes to stderr only, so `--json` output and anything
-piped from stdout stay as they are. It names a newer release only, and a prerelease only to a
-prerelease.
-
-Nothing is shown, and nothing read, with `--offline`. To turn it off:
-
-- pass `--no-update-check`. Every command takes it, and so does `sauce` before the command, so a
-  shell alias can carry it: `alias sauce='sauce --no-update-check'`;
-- or add `"updateCheck": false` to the `--config` file a command is given
-  (`{ "rpcUrls": { … }, "updateCheck": false }`).
-
-`sauce mcp` prints no notice: it puts one note in its first tool result instead
-([A newer version](mcp.md#a-newer-version)).
-
-### Runtime packages
-
-Two commands load packages that no install of `@eco-incorp/sauce` brings, because they are its
-optional peer dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana simulation in a local
-copy (LiteSVM). Each takes your own copies where they are exactly the versions the package pins.
-Otherwise its first use installs them for itself, once per version, into
-`~/.sauce/runtime/<version>`, and says so on stderr. That is `npm ci` on the lockfile the package
-ships, so every package is the one pinned, checked by its integrity hash, and LiteSVM's native
-binary is your platform's.
-
-- `sauce runtime` says where each command's packages come from. `sauce runtime install` installs
-  the folder now.
-- `sauce mcp setup` installs it too, so an agent's first start of the server does not wait.
-  `sauce update` has the new version install its own folder where the version it replaces had one.
-- `sauce mcp --offline` installs nothing. Without npm, or without its registry, the command
-  refuses and says why.
-
-The folder is owner-only and installed whole or not at all. The command refuses to load from it if
-another user owns it, if it is not owner-only any more, or if anyone else can write a folder above
-it. Older versions' folders are removed, except the newest of them; a newer version's is never
-touched. npm reaches the registry your npm configuration names, a mirror or a proxy included.
-
-### Exit codes
+## Read the exit code
 
 A mistyped command exits 2. A program that does not compile, a cook that reverts, a rejected
-settle, an outdated skills install and a transaction on a preview chain exit 1.
+settle, an outdated skills install and a transaction on a preview chain exit 1. When a command
+fails, [troubleshooting](troubleshooting.md) lists the messages a newcomer meets, with their causes
+and fixes.
+
+## Next
+
+- Run your first program with everything explained: [Run a program](cli-run.md).
+- Make the wallet that signs it: [Wallets and signing](cli-wallets.md).
+- Write your own program: [Programs and arguments](cli-programs.md).
+- What a Pot, a cook and the Kitchen are: [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md).

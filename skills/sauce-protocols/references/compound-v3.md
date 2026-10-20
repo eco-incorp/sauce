@@ -14,7 +14,8 @@ Single-asset lending protocol (Comet) with isolated markets per base asset. Each
 
 - Approve the Comet before `supply`.
 - `supply(asset, amount)` credits its caller, the Pot: the position is then the Pot's, not the
-  user's wallet's. `supplyTo(dst, asset, amount)` credits `dst`; ask the user which they want.
+  user's wallet's. `supplyTo(dst, asset, amount)` credits `dst`; choose which, passing the wallet as
+  a `main` parameter for `dst`.
 - Supplying the base asset while you have a borrow repays the borrow first.
 - Withdrawing more base asset than you supplied **borrows** the rest, if your collateral allows:
   check `balanceOf` and `borrowBalanceOf` before and after.

@@ -2,7 +2,7 @@
 
 # A distributed swap: one limit order over several pools
 
-**How-to guide** · [Documentation](../README.md)
+**How-to guide** · [Documentation](../README.md) · [`@sauce/router`](../api/router.md)
 
 > Say you want to buy a lot of a token, and never pay more than a set price for any of it. One pool
 > alone gets dearer as you buy. A distributed swap spreads the order over several pools: each sells
@@ -11,11 +11,11 @@
 
 The caller gives **one price: the most they pay for any unit, fees included**. Every pool trades
 until its own price reaches that price, and the budget it does not take stays in the Pot for the
-next pool. This skill owns that method, its arithmetic (`priceLimit`, `minTokens`, `maxAvgPrice`), how
-to set and simulate it, and the complete program for EVM chains. One swap is [the `@sauce/router` reference](../api/router.md)'s; the
-same order on Solana is [the distributed swap on Solana](solana-distributed-swap.md)'s, on these rules.
+next pool. The method, its arithmetic (`priceLimit`, `minTokens`, `maxAvgPrice`), how to set and
+simulate it, and the complete program for EVM chains are here. For one swap, see [the `@sauce/router` reference](../api/router.md);
+for the same order on Solana, on these rules, see [the distributed swap on Solana](solana-distributed-swap.md).
 
-## Core model
+## How it works
 
 - **The price does the splitting.** The program never computes an amount per pool and never sorts:
   each pool is offered everything still unspent, and its own price limit stops it.
@@ -82,7 +82,8 @@ first. With enough budget for every pool to reach its limit, every pool's last u
 `distributed-swap.sauce.ts` is one complete
 implementation of those rules: it buys SpaceX stock on Base, SPCXc, with USDC, over Base's
 Aerodrome Slipstream, Uniswap V3 and hookless Uniswap V4 pools. Its header gives every input with
-its units and the command that runs it. Its code:
+its units and the command that runs it. Save it as `distributed-swap.sauce.ts` in your project:
+every command below runs that file. Its code:
 
 ```ts
 // Buys SpaceX stock on Base, SPCXc (Coinbase's tokenized SpaceX), with up to `budget` of the Pot's
@@ -468,3 +469,9 @@ differently gets its own `venue` value and branch in `trade`.
 - **A V4 pool id as an `Address`.** It is a 256-bit `Uint256`.
 - **Lookups for venues that never hold the pair.** Each costs gas on every cook; walk what
   `sauce pools` lists.
+
+## Next
+
+- [`@sauce/router`](../api/router.md): every venue's swap function.
+- [A distributed swap on Solana](solana-distributed-swap.md): the same order over Solana's pools.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

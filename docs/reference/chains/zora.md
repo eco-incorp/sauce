@@ -8,14 +8,11 @@
 > a program writes for each contract. Zora is a preview chain: programs compile and simulate here,
 > and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Zora a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Zora, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Zora%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Zora+%287777777%29&chain=Zora&chain-id=7777777) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Zora a program
+compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
+`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -60,3 +57,14 @@ address.
 | [Uniswap V2](../protocols/uniswap-v2.md) | router | `0xa00F34A632630EFd15223B1968358bA4845bEEC7` | `UniswapV2.Router` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x0575338e4c17006ae181b47900a84404247ca30f` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x385785af07d63b50d0a0ea57c4ff89d06adf7328` | `UniswapV4.StateView` |
+
+## Requesting support
+
+To request Zora, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Zora%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Zora+%287777777%29&chain=Zora&chain-id=7777777) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

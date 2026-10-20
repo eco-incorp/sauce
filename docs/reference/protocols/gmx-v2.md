@@ -17,90 +17,11 @@ Next generation of GMX perpetual exchange with isolated markets, improved risk m
 | Namespace | `GmxV2` on arbitrum |
 | Chains | arbitrum |
 
-## Key Operations
+## What it offers
 
 - **createOrder**: Create a market/limit order for trading (complex tuple params)
 - **sendTokens**: Send tokens via ExchangeRouter (used before creating orders)
 - **cancelOrder**: Cancel a pending order by key
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Create a market order
-import { ExchangeRouterABI as IExchangeRouter } from "./abis";
-function main(
-  exchangeRouterAddress: Address,
-  receiver: Address,
-  cancellationReceiver: Address,
-  market: Address,
-  initialCollateralToken: Address,
-  sizeDeltaUsd: Uint256,
-  initialCollateralDeltaAmount: Uint256,
-  triggerPrice: Uint256,
-  acceptablePrice: Uint256,
-  executionFee: Uint256,
-  minOutputAmount: Uint256,
-  orderType: Uint256,
-  isLong: bool,
-): Uint256 {
-  const router = IExchangeRouter.at(exchangeRouterAddress);
-  const result = router.createOrder({
-    addresses: {
-      receiver: receiver,
-      cancellationReceiver: cancellationReceiver,
-      callbackContract: 0x0000000000000000000000000000000000000000,
-      uiFeeReceiver: 0x0000000000000000000000000000000000000000,
-      market: market,
-      initialCollateralToken: initialCollateralToken,
-      swapPath: [],
-    },
-    numbers: {
-      sizeDeltaUsd: sizeDeltaUsd,
-      initialCollateralDeltaAmount: initialCollateralDeltaAmount,
-      triggerPrice: triggerPrice,
-      acceptablePrice: acceptablePrice,
-      executionFee: executionFee,
-      callbackGasLimit: 0,
-      minOutputAmount: minOutputAmount,
-      validFromTime: 0,
-    },
-    orderType: orderType,
-    decreasePositionSwapType: 0,
-    isLong: isLong,
-    shouldUnwrapNativeToken: false,
-    autoCancel: false,
-    referralCode: 0x0000000000000000000000000000000000000000000000000000000000000000,
-    dataList: [],
-  });
-  return result;
-}
-
-// Send tokens to market vault before creating order
-import { ExchangeRouterABI as IExchangeRouter } from "./abis";
-function main(
-  exchangeRouterAddress: Address,
-  token: Address,
-  receiver: Address,
-  amount: Uint256,
-): Uint256 {
-  const router = IExchangeRouter.at(exchangeRouterAddress);
-  router.sendTokens(token, receiver, amount);
-  return 1;
-}
-
-// Cancel pending order
-import { ExchangeRouterABI as IExchangeRouter } from "./abis";
-function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
-  const router = IExchangeRouter.at(exchangeRouterAddress);
-  router.cancelOrder(orderKey);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -143,3 +64,9 @@ function main() {
 - `createOrder(((address receiver, address cancellationReceiver, address callbackContract, address uiFeeReceiver, address market, address initialCollateralToken, address[] swapPath) addresses, (uint256 sizeDeltaUsd, uint256 initialCollateralDeltaAmount, uint256 triggerPrice, uint256 acceptablePrice, uint256 executionFee, uint256 callbackGasLimit, uint256 minOutputAmount, uint256 validFromTime) numbers, uint8 orderType, uint8 decreasePositionSwapType, bool isLong, bool shouldUnwrapNativeToken, bool autoCancel, bytes32 referralCode, bytes32[] dataList) params) payable returns (bytes32 orderKey)`
 - `cancelOrder(bytes32 key) payable`
 - `sendTokens(address token, address receiver, uint256 amount) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.
