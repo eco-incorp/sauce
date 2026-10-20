@@ -392,9 +392,60 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await allowance(WETH, env.pot, BALANCER_V2_VAULT), 0n, "the approval was exact");
     });
 
-    it("balancerV2BatchSwap's output is its balance delta, spent by the next action", async () => {
+    it("balancerV2BatchSwap's reordered output is its balance delta, spent by the next action", async () => {
       await run([
         ...wrapAndApprove(ONE_ETH, BALANCER_V2_VAULT),
+        {
+          type: "balancerV2BatchSwap",
+          vault: BALANCER_V2_VAULT,
+          steps: [
+            {
+              poolId: BALANCER_V2_WETH_USDC,
+              assetInIndex: 1,
+              assetOutIndex: 0,
+              amount: `${ONE_ETH}`,
+            },
+          ],
+          assets: [USDC, WETH],
+          amountOutMin: "1",
+          recipient: "self",
+          deadline: DEADLINE,
+        },
+        { type: "transfer", token: USDC, recipient: RECEIVER },
+      ]);
+      assert.ok((await balance(USDC, RECEIVER)) > 0n);
+      assert.equal(await balance(USDC, env.pot), 0n);
+    });
+
+    it("balancerV2BatchSwap rejects an impossible floor on a reordered output", async () => {
+      const actions: Action[] = [
+        ...wrapAndApprove(ONE_ETH, BALANCER_V2_VAULT),
+        {
+          type: "balancerV2BatchSwap",
+          vault: BALANCER_V2_VAULT,
+          steps: [
+            {
+              poolId: BALANCER_V2_WETH_USDC,
+              assetInIndex: 1,
+              assetOutIndex: 0,
+              amount: `${ONE_ETH}`,
+            },
+          ],
+          assets: [USDC, WETH],
+          amountOutMin: `${1n << 200n}`,
+          recipient: RECEIVER,
+          deadline: DEADLINE,
+        },
+      ];
+      const receipt = await env.cook(compileProgram({ version: 1, chainId: 1, actions }).bytecode);
+      assert.equal(receipt.status, "reverted");
+      assert.equal(await balance(USDC, RECEIVER), 0n);
+    });
+
+    it("balancerV2BatchSwap cannot spend the Pot's ETH: its Vault call sends no native value", async () => {
+      const before = await ether(env.pot);
+      assert.ok(before >= ONE_ETH);
+      const actions: Action[] = [
         {
           type: "balancerV2BatchSwap",
           vault: BALANCER_V2_VAULT,
@@ -406,15 +457,57 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
               amount: `${ONE_ETH}`,
             },
           ],
-          assets: [WETH, USDC],
+          assets: ["native", USDC],
           amountOutMin: "1",
-          recipient: "self",
+          recipient: RECEIVER,
           deadline: DEADLINE,
         },
-        { type: "transfer", token: USDC, recipient: RECEIVER },
-      ]);
-      assert.ok((await balance(USDC, RECEIVER)) > 0n);
-      assert.equal(await balance(USDC, env.pot), 0n);
+      ];
+      const receipt = await env.cook(compileProgram({ version: 1, chainId: 1, actions }).bytecode);
+      assert.equal(receipt.status, "reverted");
+      assert.equal(await ether(env.pot), before);
+      assert.equal(await balance(USDC, RECEIVER), 0n);
+    });
+
+    it("balancerV2BatchSwap cannot satisfy its output floor with an earlier leg's other asset", async () => {
+      const minimum = 1_000_000_000n;
+      const actions: Action[] = [
+        ...wrapAndApprove(ONE_ETH, BALANCER_V2_VAULT),
+        {
+          type: "balancerV2BatchSwap",
+          vault: BALANCER_V2_VAULT,
+          steps: [
+            {
+              poolId: BALANCER_V2_WETH_USDC,
+              assetInIndex: 0,
+              assetOutIndex: 1,
+              amount: `${ONE_ETH}`,
+            },
+            {
+              poolId: BALANCER_V2_WETH_USDC,
+              assetInIndex: 1,
+              assetOutIndex: 0,
+              amount: "1",
+            },
+          ],
+          assets: [WETH, USDC],
+          amountOutMin: `${minimum}`,
+          recipient: RECEIVER,
+          deadline: DEADLINE,
+        },
+      ];
+      // The final step buys a tiny amount of WETH, but the batch spends WETH net. An earlier
+      // step pays out > minimum USDC: that unrelated asset must not satisfy the WETH floor.
+      const receipt = await env.cook(compileProgram({ version: 1, chainId: 1, actions }).bytecode);
+      const wethReceived = await balance(WETH, RECEIVER);
+      const usdcReceived = await balance(USDC, RECEIVER);
+      assert.equal(
+        receipt.status,
+        "reverted",
+        `impossible WETH floor accepted: received ${wethReceived} WETH and ${usdcReceived} USDC`,
+      );
+      assert.equal(wethReceived, 0n);
+      assert.equal(usdcReceived, 0n);
     });
 
     it("balancerV3Swap sells USDC for WETH, pulled through a Permit2 allowance", async () => {

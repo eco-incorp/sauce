@@ -7,6 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Ajv2020 } from "ajv/dist/2020.js";
+import { encodeAbiParameters } from "viem";
 
 import { sourceGlobals } from "../../sdk/dist/routes/index.js";
 import {
@@ -606,6 +607,50 @@ describe("names — quotes", () => {
     assert.equal(quote.to.toLowerCase(), addressOf("ethereum", "BalancerV2.Vault").toLowerCase());
   });
 
+  it("quotes a batch's final step output, not the last asset or an earlier leg's output", () => {
+    for (const { assets, input, output, deltas } of [
+      {
+        assets: ["WETH", "USDC", "USDT"],
+        input: 1,
+        output: 0,
+        deltas: [-37n, 1500n, -11n],
+      },
+      {
+        assets: ["USDC", "WETH", "USDT"],
+        input: 0,
+        output: 1,
+        deltas: [1500n, -37n, -11n],
+      },
+    ]) {
+      const quote = quoteAction(
+        {
+          ...SAMPLES.balancerV2BatchSwap,
+          vault: "BalancerV2.Vault",
+          assets,
+          steps: [
+            {
+              ...SAMPLES.balancerV2BatchSwap.steps[0]!,
+              assetInIndex: input,
+              assetOutIndex: 2,
+            },
+            {
+              ...SAMPLES.balancerV2BatchSwap.steps[0]!,
+              assetInIndex: input,
+              assetOutIndex: output,
+              amount: "500",
+            },
+          ],
+        },
+        { chain: "ethereum" },
+      );
+      assert.equal(
+        quote.decode(encodeAbiParameters([{ type: "int256[]" }], [deltas])),
+        37n,
+        `output at assets[${output}]`,
+      );
+    }
+  });
+
   it("a split swap refuses a candidate whose pool is named by its key", () => {
     const { amount: _, ...candidate } = V3_BY_KEY;
     assert.throws(
@@ -626,6 +671,102 @@ describe("names — quotes", () => {
       () =>
         quoteAction(V3_BY_KEY as never, { router: "0x5000000000000000000000000000000000000005" }),
       /a pool named by its key \(`factory`\) is found only on chain/,
+    );
+  });
+});
+
+describe("names — a Balancer batch's assets are distinct once resolved", () => {
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const batch = (assets: string[]) => ({
+    ...SAMPLES.balancerV2BatchSwap,
+    vault: "BalancerV2.Vault",
+    assets,
+  });
+
+  /** An issue at `assets[index]` of the one action whose message matches, among `found`. */
+  const locatedAt = (found: string[], index: number, message: RegExp): boolean =>
+    found.some((line) => {
+      const [path, ...rest] = line.split(": ");
+
+      return (
+        new RegExp(`^(actions?\\[0\\]|action)\\.assets\\[${index}\\]$`).test(path!) &&
+        message.test(rest.join(": "))
+      );
+    });
+
+  const entries = (assets: string[]): Array<[string, () => unknown]> => [
+    ["compileProgram", () => compileProgram(doc(batch(assets)), { chain: "ethereum" })],
+    ["quoteAction", () => quoteAction(batch(assets) as never, { chain: "ethereum" })],
+    ["parseProgram with chainId 1", () => parseProgram({ ...doc(batch(assets)), chainId: 1 })],
+  ];
+
+  const cases: Array<[string, () => string[], number, RegExp]> = [
+    [
+      "a symbol and its own address",
+      () => ["USDC", "WETH", addressOf("ethereum", "USDC")],
+      2,
+      /duplicates assets\[0\]/,
+    ],
+    [
+      "an address and then its symbol",
+      () => [addressOf("ethereum", "USDC").toLowerCase(), "WETH", "USDC"],
+      2,
+      /duplicates assets\[0\]/,
+    ],
+    [
+      "native and then the zero address",
+      () => ["native", "USDC", ZERO],
+      2,
+      /duplicates assets\[0\]/,
+    ],
+  ];
+
+  for (const [name, assets, index, message] of cases) {
+    for (const [entry, run] of entries(assets())) {
+      it(`refuses ${name} on Ethereum through ${entry}, at assets[${index}]`, () => {
+        const found = problems(run);
+        assert.ok(
+          locatedAt(found, index, message),
+          `no issue at assets[${index}] matched ${message}:\n  ${found.join("\n  ")}`,
+        );
+      });
+    }
+  }
+
+  it("accepts WETH by symbol or address beside native or the zero address, on Ethereum", () => {
+    for (const assets of [
+      ["USDC", "WETH", "native"],
+      ["native", "USDC", "WETH"],
+      [addressOf("ethereum", "WETH"), "USDC", ZERO],
+    ]) {
+      assert.ok(
+        compileProgram(doc(batch(assets)), { chain: "ethereum" }).bytecode.length > 0,
+        assets.join(", "),
+      );
+      assert.ok(
+        quoteAction(batch(assets) as never, { chain: "ethereum" }).data.length > 2,
+        assets.join(", "),
+      );
+      assert.doesNotThrow(() => parseProgram({ ...doc(batch(assets)), chainId: 1 }));
+    }
+  });
+
+  it("a split swap refuses a batch candidate whose output floor is above 2^255", () => {
+    const candidate = {
+      ...SAMPLES.balancerV2BatchSwap,
+      amountOutMin: ((1n << 255n) + 1n).toString(),
+    };
+    const found = problems(() =>
+      compileSplitSwap({
+        candidates: [candidate as never],
+        amount: "1000",
+        buckets: 1,
+        amountOutMin: "0",
+      }),
+    );
+    assert.ok(
+      found.some((line) => /^candidates\[0\]\.amountOutMin: .*2\^255/.test(line)),
+      found.join("\n"),
     );
   });
 });

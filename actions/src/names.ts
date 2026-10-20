@@ -19,7 +19,7 @@ import { sourceGlobals, SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../../sdk/dis
 import { NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 
 import { ACTION_SPECS, type FieldKind } from "./spec.js";
-import type { ProgramIssue } from "./semantics.js";
+import { balancerBatchIssues, type ProgramIssue } from "./semantics.js";
 import type { Action } from "./types.js";
 
 /** A registry token symbol: the registry's own ticker rule (`token-registry.ts`). */
@@ -373,6 +373,7 @@ export function resolveNames(
     const out = walk(at, action, { k: "object", fields: spec.fields }, names, issues) as Action;
     const factory = factoryIssue(action, at, names);
     if (factory !== undefined) issues.push(factory);
+    issues.push(...balancerBatchIssues(out, at));
 
     return out;
   });
