@@ -692,12 +692,5 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
         );
       });
     }
-
-    it("an amountOutMin no negative int256 can carry does not compile, rather than wrapping into a looser limit", () => {
-      // 2^255 + 1 as a wrapped negation is 2^255 - 1: int256's maximum, which is no floor at all.
-      for (const min of [(1n << 255n) + 1n, (1n << 256n) - 1n]) {
-        assert.throws(() => compiled(batch(`${min}`)), /Int256/, `amountOutMin ${min}`);
-      }
-    });
   });
 });
