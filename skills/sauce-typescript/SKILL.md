@@ -9,7 +9,8 @@ Every `sauce` command is a thin layer over the package's functions; this skill o
 from application code. The program itself is still SauceScript (`sauce-script`); a person at a
 terminal uses the command (`sauce-cli`). It is the one skill that points into the package's own
 manual, which starts at `node_modules/@eco-incorp/sauce/docs/README.md`, with the subpath list at
-`node_modules/@eco-incorp/sauce/docs/api/README.md`.
+`node_modules/@eco-incorp/sauce/docs/api/README.md` and a first walk-through (install, compile, cook,
+simulate, build an intent) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.md`.
 
 ## When to use
 
@@ -199,6 +200,10 @@ address in `deployments` is recorded, not proof of live code.
     `svmKitchenIdlPath()` from `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the
     packaged programs; their ids are `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from
     `/deployments`. Writing the programs is `sauce-solana`'s.
+  - Reference: `node_modules/@eco-incorp/sauce/docs/guides/solana-from-typescript.md` (compile and
+    keep the account list, create the client, simulate, send, build the pieces yourself) and, for
+    the swap functions a program calls on Solana,
+    `node_modules/@eco-incorp/sauce/docs/api/router-solana.md`.
 - **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
   `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
   `fulfill`), `destinationPot(chain)` the shared Pot and
@@ -232,7 +237,8 @@ rpcUrl })` forks a chain at a pinned block on a local anvil (replaying `state`, 
   `mint:PYUSD`), derive the rest, create the token accounts the cook names that are missing, and
   stage a program too large for one transaction; `fund(holder, { USDC: "1", SOL: "1" })` writes
   balances, and `CookReverted`'s `reason` is the program's `require` message.
-  Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md`.
+  Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md` (one task at a time) and
+  `node_modules/@eco-incorp/sauce/docs/api/testing-kit.md` (every export of `/testing`).
 
 ## Pitfalls
 

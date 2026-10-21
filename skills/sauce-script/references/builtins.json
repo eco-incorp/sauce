@@ -3,7 +3,7 @@
   "abis": {
     "ERC20": "[{\"type\":\"function\",\"name\":\"balanceOf\",\"stateMutability\":\"view\",\"inputs\":[{\"name\":\"owner\",\"type\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"totalSupply\",\"stateMutability\":\"view\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"transfer\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"to\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]},{\"type\":\"function\",\"name\":\"approve\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"spender\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[]}]"
   },
-  "count": 74,
+  "count": 83,
   "intrinsics": [
     {
       "name": "ctx.msgSender",
@@ -172,6 +172,141 @@
         "svm": {
           "program": "function main(a: Uint256): bool { return ctx.isEOA(a); }",
           "error": "`ctx.isEOA` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.txOrigin",
+      "group": "ctx",
+      "signature": "ctx.txOrigin(): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Address { return ctx.txOrigin(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.txOrigin(); }",
+          "error": "`ctx.txOrigin` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.coinbase",
+      "group": "ctx",
+      "signature": "ctx.coinbase(): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Address { return ctx.coinbase(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.coinbase(); }",
+          "error": "`ctx.coinbase` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.prevrandao",
+      "group": "ctx",
+      "signature": "ctx.prevrandao(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.prevrandao(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.prevrandao(); }",
+          "error": "`ctx.prevrandao` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.blockGasLimit",
+      "group": "ctx",
+      "signature": "ctx.blockGasLimit(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.blockGasLimit(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.blockGasLimit(); }",
+          "error": "`ctx.blockGasLimit` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.baseFee",
+      "group": "ctx",
+      "signature": "ctx.baseFee(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(maxBaseFee: Uint256): void { require(ctx.baseFee() <= maxBaseFee); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.baseFee(); }",
+          "error": "`ctx.baseFee` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.gasPrice",
+      "group": "ctx",
+      "signature": "ctx.gasPrice(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.gasPrice(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.gasPrice(); }",
+          "error": "`ctx.gasPrice` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.blockHash",
+      "group": "ctx",
+      "signature": "ctx.blockHash(n: Uint256): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.blockHash(ctx.blockNumber() - 1); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(n: Uint256): Uint256 { return ctx.blockHash(n); }",
+          "error": "`ctx.blockHash` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.blobHash",
+      "group": "ctx",
+      "signature": "ctx.blobHash(i: Uint256): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(i: Uint256): Uint256 { return ctx.blobHash(i); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(i: Uint256): Uint256 { return ctx.blobHash(i); }",
+          "error": "`ctx.blobHash` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.blobBaseFee",
+      "group": "ctx",
+      "signature": "ctx.blobBaseFee(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.blobBaseFee(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.blobBaseFee(); }",
+          "error": "`ctx.blobBaseFee` is not available on the svm target"
         }
       }
     },

@@ -64,6 +64,24 @@ export interface SauceContext {
   isContract(address: bigint): boolean;
   /** `ctx.isEOA(address: Uint256): bool` — EVM only. */
   isEOA(address: bigint): boolean;
+  /** `ctx.txOrigin(): Address` — EVM only. */
+  txOrigin(): bigint;
+  /** `ctx.coinbase(): Address` — EVM only. */
+  coinbase(): bigint;
+  /** `ctx.prevrandao(): Uint256` — EVM only. */
+  prevrandao(): bigint;
+  /** `ctx.blockGasLimit(): Uint256` — EVM only. */
+  blockGasLimit(): bigint;
+  /** `ctx.baseFee(): Uint256` — EVM only. */
+  baseFee(): bigint;
+  /** `ctx.gasPrice(): Uint256` — EVM only. */
+  gasPrice(): bigint;
+  /** `ctx.blockHash(n: Uint256): Uint256` — EVM only. */
+  blockHash(n: bigint): bigint;
+  /** `ctx.blobHash(i: Uint256): Uint256` — EVM only. */
+  blobHash(i: bigint): bigint;
+  /** `ctx.blobBaseFee(): Uint256` — EVM only. */
+  blobBaseFee(): bigint;
 }
 
 /** `abi`: Solidity ABI encoding. */

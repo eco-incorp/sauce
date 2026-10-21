@@ -53,6 +53,15 @@ Base(() => {
   const codeHash: bigint = ctx.codeHash(me);
   const contract: boolean = ctx.isContract(me);
   const eoa: boolean = ctx.isEOA(caller);
+  const origin: bigint = ctx.txOrigin();
+  const recipient: bigint = ctx.coinbase();
+  const seed: bigint = ctx.prevrandao();
+  const blockLimit: bigint = ctx.blockGasLimit();
+  const baseFee: bigint = ctx.baseFee();
+  const gasPrice: bigint = ctx.gasPrice();
+  const previous: bigint = ctx.blockHash(at - 1n);
+  const blob: bigint = ctx.blobHash(0n);
+  const blobFee: bigint = ctx.blobBaseFee();
 
   // crypto
   const topic: bigint = crypto.keccak256("Transfer(address,address,uint256)");
@@ -125,9 +134,10 @@ Base(() => {
   const xs = new Array(3n);
   const selector = hex\`a9059cbb\`;
   const negative: bigint = -held;
-  return [chain, at, now, wei, value, gas, size, codeHash, contract, eoa, vault, bump, root, sum,
-    signed2, extended, order, amount, reply, read, seen, returned, result, call, word, fields,
-    length, key, owner, dataLen, same, xs, selector, negative];
+  return [chain, at, now, wei, value, gas, size, codeHash, contract, eoa, origin, recipient, seed,
+    blockLimit, baseFee, gasPrice, previous, blob, blobFee, vault, bump, root, sum, signed2,
+    extended, order, amount, reply, read, seen, returned, result, call, word, fields, length, key,
+    owner, dataLen, same, xs, selector, negative];
 }, OPTIONS);
 `;
 

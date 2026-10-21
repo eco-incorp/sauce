@@ -38,7 +38,8 @@ example program each, is `builtins.json`.
 - `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account, and not only
   Pot accounts),
   `ctx.msgSender()` the first signer among the accounts the engine receives, and
-  `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract` and `isEOA` do not exist.
+  `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract`, `isEOA` and the block and
+  transaction reads (`txOrigin`, `baseFee`, `blockHash`, …) do not exist.
 - `log` takes no topics (§5).
 - `abi`, `evm` and contract bindings with `.catch()` (§9, §10, §13) are EVM only: a call to another
   program is `svm.call`.
@@ -328,12 +329,58 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
   - On EVM: true if `address` has no code
   - On SVM: not available
   - Example: `require(ctx.isEOA(ctx.msgSender()));`
+- `ctx.txOrigin()` → number, **EVM**
+  - On EVM: the account that signed the transaction (`tx.origin`). It is not the program's caller
+    whenever a contract stands between them, such as a smart wallet or a relayer. Authorize on
+    `ctx.msgSender()`: a check of the origin passes for any contract the signer calls.
+  - On SVM: not available
+  - Example: `const signer = ctx.txOrigin();`
+- `ctx.coinbase()` → number, **EVM**
+  - On EVM: the block's fee recipient (`block.coinbase`)
+  - On SVM: not available
+  - Example: `const recipient = ctx.coinbase();`
+- `ctx.prevrandao()` → number, **EVM**
+  - On EVM: the block's randomness value (`block.prevrandao`). Whoever produces the block can bias
+    it: do not decide anything they would profit from choosing with it.
+  - On SVM: not available
+  - Example: `const seed = ctx.prevrandao();`
+- `ctx.blockGasLimit()` → number, **EVM**
+  - On EVM: the block's gas limit (`block.gaslimit`), not the transaction's; `ctx.gasLeft()` is
+    what the program has left
+  - On SVM: not available
+  - Example: `const limit = ctx.blockGasLimit();`
+- `ctx.baseFee()` → number, **EVM**
+  - On EVM: the block's base fee per gas, in wei (`block.basefee`)
+  - On SVM: not available
+  - Example: `require(ctx.baseFee() <= maxBaseFee);`
+- `ctx.gasPrice()` → number, **EVM**
+  - On EVM: the price per gas the transaction pays, in wei (`tx.gasprice`): the base fee plus the
+    priority fee, not the fee cap
+  - On SVM: not available
+  - Example: `const price = ctx.gasPrice();`
+- `ctx.blockHash(n)` → number, **EVM**
+  - On EVM: the hash of block `n`, for the 256 blocks before the current one. It is 0 for the
+    current block, a later one or an older one, and never reverts.
+  - On SVM: not available
+  - Example: `const previous = ctx.blockHash(ctx.blockNumber() - 1);`
+- `ctx.blobHash(i)` → number, **EVM**
+  - On EVM: the versioned hash of the transaction's blob `i`. It is 0 past the last blob, and for
+    every index of a transaction that carries none.
+  - On SVM: not available
+  - Example: `const first = ctx.blobHash(0);`
+- `ctx.blobBaseFee()` → number, **EVM**
+  - On EVM: the block's base fee per unit of blob gas, in wei (`block.blobbasefee`). Not every
+    chain has it: on Arbitrum and Polygon, a cook that reaches the read halts, using up its gas and
+    returning no revert data. It still compiles for those chains, so read it only where the chain
+    has it.
+  - On SVM: not available
+  - Example: `const blobFee = ctx.blobBaseFee();`
 
 - A wrong argument count gives "`ctx.timestamp` takes 0 argument(s), but this call passes 1".
-- An unknown name gives "`ctx.origin` is not a context builtin".
-- A bare `gasLeft()` gives "… is called but never declared; write `ctx.gasLeft()` instead".
-- There is no read for the transaction origin, the block hash, the base fee or the gas price. Pass such a value
-  in as a `main` argument.
+- An unknown name gives "`ctx.origin` is not a context builtin"; the origin is `ctx.txOrigin()`.
+- A bare `gasLeft()` gives "… is called but never declared; write `ctx.gasLeft()` instead". A bare
+  `blockHash(n)`, `blobHash(i)` or `blobBaseFee()` is pointed to its `ctx` spelling the same way,
+  and so are `origin()` and `gasLimit()`, to `ctx.txOrigin()` and `ctx.blockGasLimit()`.
 
 ## 7. `crypto`
 
@@ -408,6 +455,9 @@ work on SVM; they are decoded separately.
   - Types: 1 to 255 values of any type except accounts; returns bytes
   - Standard Solidity ABI encoding of the values as one argument list. A single record argument is
     encoded as its fields. "abi.encode requires at least one value to encode"; "abi.encode takes at most 255 arguments, got 256"
+  - Nesting is checked only when the program runs: arrays, or records holding bytes or arrays,
+    nested more than 146 levels deep in one `abi.encode` (fewer when the program holds many other
+    values at that point) halt the cook, using up its gas. Records of numbers alone do not count.
   - Example: `return abi.encode(total, recipient);`
 - `abi.decode(data, ["Shape", …])`
   - Types: `data`: bytes. The shapes must be written in place as an array of strings. Returns a
@@ -611,6 +661,10 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
   - "`ERC20.transfer()` expects 2 argument(s), but this call passes 1".
   - "`.at()` (a contract binding) takes exactly 1 argument (the address)".
   - Overloaded methods with the same argument count are not supported.
+  - A function whose ABI has a fixed-size array of 256 or more elements, as a parameter or an
+    output, cannot be called: "the ABI type `uint256[256]` is a fixed-size array of more than 255
+    elements, which SauceScript cannot encode or decode". An ABI may still declare one; only the
+    call is refused.
   - On SVM: "`Contract.at` is not available on the svm target; invoke another program with svm.call(program,
     accounts, calldata), or import a library's SVM arm (@sauce/token)".
 
@@ -692,6 +746,8 @@ of the language; the raw compiler, given the same source, rejects it.
 | `log` topics                                                                            | 4 on EVM; none on SVM                            |
 | `eval` arguments                                                                        | 16                                               |
 | `abi.encode` values, record fields encoded, `abi.decode` fields                         | 255                                              |
+| Elements in a fixed-size array (`T[N]`) of a function a program calls                   | 255                                              |
+| Arrays, or records holding bytes or arrays, nested in one `abi.encode`                  | 146 levels (checked when run, §9)                |
 | Elements in an array literal                                                            | 65,535                                           |
 | Bytes in a string or `hex` literal                                                      | 65,535                                           |
 | `.catch()` block                                                                        | about 255 bytes of compiled code                 |

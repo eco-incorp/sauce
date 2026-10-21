@@ -147,6 +147,7 @@ describe("sauce_dev", () => {
     assert.deepEqual(topicsFor("How do I open a cross-chain intent with a reward?"), ["intents"]);
     assert.deepEqual(topicsFor("compileSauceProgram with compact arguments"), ["compile"]);
     assert.deepEqual(topicsFor("the Solana SVM client and its accounts"), ["solana"]);
+    assert.deepEqual(topicsFor("fork a chain on anvil in a test"), ["testing"]);
     const asked = ok(await mcp.call("sauce_dev", { question: "verify a settle" }));
     assert.deepEqual(asked.topics, ["verification"]);
     for (const { topic, files } of DEV_TOPICS) {

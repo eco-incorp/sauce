@@ -114,6 +114,24 @@ declare const ctx: {
   isContract(address: SauceInt): boolean;
   /** EVM. */
   isEOA(address: SauceInt): boolean;
+  /** EVM: the account that signed the transaction. Authorize on `msgSender()`, not on this. */
+  txOrigin(): bigint;
+  /** EVM: the block's fee recipient. */
+  coinbase(): bigint;
+  /** EVM: the block's randomness value, which its producer can bias. */
+  prevrandao(): bigint;
+  /** EVM: the block's gas limit. */
+  blockGasLimit(): bigint;
+  /** EVM: the block's base fee per gas. */
+  baseFee(): bigint;
+  /** EVM: the price per gas the transaction pays. */
+  gasPrice(): bigint;
+  /** EVM: the hash of block `n`; 0 outside the 256 blocks before this one. */
+  blockHash(n: SauceInt): bigint;
+  /** EVM: the versioned hash of the transaction's blob `i`; 0 past its last blob. */
+  blobHash(i: SauceInt): bigint;
+  /** EVM: the block's blob base fee. Halts the cook on a chain without one. */
+  blobBaseFee(): bigint;
 };
 
 declare const crypto: {
