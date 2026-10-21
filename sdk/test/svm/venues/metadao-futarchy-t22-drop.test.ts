@@ -9,7 +9,7 @@ import type { AccountLoader } from "../../../src/svm/index.js";
 import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const codec = getAddressCodec();
-const DAO_ACCOUNT_SIZE = 1205;
+const DAO_ACCOUNT_SIZE = 1264; // the Dao after the 2026-10-20 program upgrade (was 1205)
 const DAO_DISCRIMINATOR = [0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31];
 const QUOTE_RESERVES_OFFSET = 109;
 const BASE_RESERVES_OFFSET = 117;
