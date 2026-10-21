@@ -72,13 +72,18 @@ live are the [production checklist](../guides/production-checklist.md).
   your password, in a file on your machine. Whoever has the file and the password has the key, so
   keep small balances in it.
 - **A policy limits what a wallet sends.** A policy file beside a wallet caps what it may send, per
-  transaction and per day: which chains, which recipients, how much native coin and how much of
-  each token. Before each send, the command measures what the transaction would move, from a
-  simulation, and refuses what breaks a limit or what it cannot measure.
+  transaction and per day: which chains, which addresses a transaction may go to, how much native
+  coin and how much of each token. Before each send, the command measures what the transaction
+  would move, from a simulation, and refuses what breaks a limit or what it cannot measure. The
+  addresses are the transaction's own target: on EVM the contract the wallet calls, usually its
+  Pot, and on Solana the programs its instructions call. Allowing a Pot does not limit whom its
+  program pays: that is for the program to check, and for you to review.
 - **A key can stay somewhere else.** `sauce tx` prints the transaction unsigned, and a hardware
   wallet or a key service signs it ([Wallets and signing](../guides/cli-wallets.md)).
-- **A coding agent signs only where you let it.** The MCP server signs only when you start it with
-  wallets on your own machine, under their policies. Served over HTTP, it never signs
+- **A coding agent signs only where you let it.** Over stdio, `sauce mcp` serves the wallets in
+  your wallet directory, and an agent can enable them with `sauce_wallet_enable`, naming a
+  password file or variable it can read. A policy applies only to a wallet that has one. Start the
+  server with `--no-wallets` when the agent must not sign. Served over HTTP, it never signs
   ([The MCP server](../guides/mcp.md)).
 
 ## The habit: review before you sign

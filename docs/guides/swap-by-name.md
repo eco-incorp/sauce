@@ -147,8 +147,9 @@ runs a program, and the Kitchen's fee for it.
 ## 4. Set a floor
 
 A swap's price moves between the moment you look and the moment your transaction lands. The floor,
-`minOut`, is the least you accept; below it the whole transaction reverts and nothing moves. Ask
-for 30 USDT, more than 0.01 WETH buys:
+`minOut`, is the least you accept; below it the whole transaction reverts and nothing moves. Take
+the USDT amount your simulation printed at `[6]`, and ask for more than that. In the sample above it
+was 24.51 USDT, so ask for 30, in USDT's base units (6 decimals):
 
 ```sh
 sauce simulate router-swap.sauce.ts --chain ethereum --wallet me \
@@ -160,14 +161,16 @@ The cook reverts: "Exchange resulted in fewer coins than expected"
 ```
 
 Curve refused to pay less than the floor, so even the first swap is undone. Now set a fair one: 1%
-under what the simulation returned, 24.51 USDT less 1%, is about 24.26 USDT:
+under what your simulation returned. Write that amount in base units, multiply by 99, divide by
+100, and round down. For the sample's 24.512278 USDT that is 24512278 × 99 / 100, so 24266155:
 
 ```sh
 sauce simulate router-swap.sauce.ts --chain ethereum --wallet me \
-  --assume-balance WETH:0.01 --args 24260000
+  --assume-balance WETH:0.01 --args 24266155
 ```
 
-The cook succeeds again. That number is what you would pass to `sauce run`.
+The cook succeeds again. Before a real `sauce run`, simulate once more and work the floor out from
+that run: prices will have moved since this one.
 
 ## 5. See a name on another chain
 

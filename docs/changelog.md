@@ -714,7 +714,7 @@ The SDK paired it with v12-evm 0.6.0, kitchen-evm 0.2.0, v12-svm 0.7.0 and kitch
 before 0.99.
 
 - **Breaking:** ABI types keep their width both ways. An `address` output, or
-  `abi.decode(d, ["Address"])`, is masked to 20 bytes, and `uintN` to N bytes, so `["Address"]`
+  `abi.decode(d, ["Address"])`, is masked to 20 bytes, and `uintN` to N bits, so `["Address"]`
   and `["Uint256"]` no longer compile to the same bytecode. Recompile programs that decode
   addresses or small integers.
 - **Breaking:** A `bytesN` argument (N below 32) to an external call sits at the high end of its

@@ -457,9 +457,27 @@ equivalent.
 
 - Storage belongs to the executing contract, the Pot.
 - `evm.create(initcode, value?)`, `evm.create2(initcode, salt, value?)`, and
-  `evm.create3(initcode, salt, value?)` deploy from the Pot and return the address. Init code must
-  be bytes: "evm.create's init code requires a bytes value". CREATE/CREATE2 return zero on failure;
-  CREATE3 reverts. These are EVM-only.
+  `evm.create3(initcode, salt, value?)` deploy from the Pot and return the address. Init code is
+  creation bytecode, not the deployed code, and must be bytes: "evm.create's init code requires a
+  bytes value". An omitted `value` sends none, and the Pot pays any `value` given. CREATE/CREATE2
+  return zero on failure; CREATE3 reverts.
+- Three builtins predict where those land, each returning an address:
+  - `evm.createAddress(deployer, nonce)`: where `evm.create` from `deployer` at `nonce` lands.
+  - `evm.create2Address(deployer, salt, initCodeHash)`: where `evm.create2` from `deployer` lands;
+    `initCodeHash` is `crypto.keccak256(initcode)`.
+  - `evm.create3Address(salt)`: where `evm.create3` run by the Pot lands. It takes no deployer,
+    because the salt alone gives the address.
+- All six are EVM-only. A program that deploys and checks the address:
+
+```sauce chain=base
+function main(initcode: bytes, salt: Uint256): Address {
+  const expected = evm.create2Address(ctx.self(), salt, crypto.keccak256(initcode));
+  const deployed = evm.create2(initcode, salt);
+  require(deployed == expected, "create2");
+  require(evm.create3Address(salt + 1) != expected, "create3");
+  return deployed;
+}
+```
 
 ## 11. `svm` (SVM)
 
