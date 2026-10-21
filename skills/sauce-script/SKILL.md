@@ -196,7 +196,8 @@ Each read is a call; the complete list, per target, is section 6 of
 `ctx.txOrigin()` is the account that signed the transaction, which is not the program's caller
 whenever a contract stands between them. Authorize on `ctx.msgSender()`, never on the origin: a
 check of the origin passes for any contract the signer calls. `ctx.blobBaseFee()` halts the cook
-on a chain without a blob base fee, such as Arbitrum or Polygon, although it compiles there.
+on a chain that does not implement that read, such as Arbitrum or Polygon, although it compiles
+there.
 
 ## Calling a contract
 

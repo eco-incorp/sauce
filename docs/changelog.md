@@ -306,8 +306,9 @@ Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 
 - **Added** (EVM): Block and transaction reads: `ctx.txOrigin()`, `ctx.coinbase()`,
   `ctx.prevrandao()`, `ctx.blockGasLimit()`, `ctx.baseFee()`, `ctx.gasPrice()`, `ctx.blockHash(n)`
   and `ctx.blobHash(i)`. Each is a compile error in a Solana program.
-- **Added** (EVM): `ctx.blobBaseFee()`, the block's blob base fee. On a chain with no blobs, such
-  as Arbitrum or Polygon, the cook halts, and the SDK still compiles it for those chains.
+- **Added** (EVM): `ctx.blobBaseFee()`, the block's blob base fee. On a chain that does not
+  implement that read, such as Arbitrum or Polygon, the cook halts, and the SDK still compiles it
+  for those chains.
 - **Added** (EVM): Contract creation from the Pot: `evm.create(initcode, value?)`,
   `evm.create2(initcode, salt, value?)` and `evm.create3(initcode, salt, value?)`, each returning
   the new address, and the predictions `evm.createAddress(deployer, nonce)`,
