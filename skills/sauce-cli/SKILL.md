@@ -556,19 +556,19 @@ answer it.
   message lists each one. Show the user the list; once they agree, run it again with `--yes`
   (`-y`) and a password source that needs no prompt.
 - **A policy refusal** (exit 1). `refused by the policy of wallet <name> (<policy file>)…`, then the
-  limit: `chains allows …`; `to allows <n> address(es), and this transaction goes to …` (a target
-  outside `to`), or the same ending `…deploys the wallet's Pot …, which is not one of them` (the
-  wallet's own Pot is not in `to`); `<limit>.perTransaction is …`; `<limit>.perDay is …`;
+  limit: `chains allows …`; `to allows <n> address(es), and this transaction …` (a target outside
+  `to`, or the wallet's own Pot, deployed first, missing from it: add the Pot to `to`);
+  `<limit>.perTransaction is …`; `<limit>.perDay is …`;
   `this transaction approves …` (an approval above what a token's limit leaves); or
   `native is limited, and …` (`tokens.<symbol> is limited, and …`), when what the transaction
   moves could not be measured: on an EVM chain, give an endpoint that runs `eth_simulateV1`. Tell
   the user which limit; the policy is theirs to change. `<policy file> can be written by others…`:
   the user runs `chmod 600` on it.
-- **The cook reverts** (exit 1). `sauce simulate` prints `The cook reverts: <reason>` first (with
+- **The cook reverts** (exit 1). `sauce simulate` prints `The cook reverts: …` first (with
   `--json`, `reverted: true` and `error` lead the JSON), and a send simulated first and refused
-  prints `not sent — it would revert: <reason>`. The reason, by its first words:
-  - `the program threw "<text>"`: the program's own `require` or `throw`; its text says which.
-  - `The cook reverts: ERC20InsufficientBalance(…)`, or Uniswap's
+  prints `not sent — it would revert: …`. The reason, by its first words:
+  - `the program threw "…`: the program's own `require` or `throw`; its text says which.
+  - `The cook reverts: ERC20InsufficientBalance(…`, or Uniswap's
     `"STF" (a token's transferFrom failed…` and `"ST" (a token's transfer failed…`: the payer
     holds, or has approved, less of the token than the transfer moves, most often a Pot short of
     what the program spends. Send the Pot the token, add `--fund USDC:<amount>` to `run`, or give
@@ -576,8 +576,8 @@ answer it.
   - `"SPL" (a V3-style pool's price-limit check…`: the swap's price limit is on the wrong side of
     the pool's price, or past a bound. Work it out again with `sauce price` or `sauce pools`, and
     simulate on the block they read (`--block`).
-  - `"Too little received" (the swap's output is below its minimum)`: the program's minimum is
-    above what the pool pays at that price.
+  - `"Too little received" (…`: the swap's output is below its minimum, which is above what the
+    pool pays at that price.
   - `revert data …`, then the raw data: an error the command has no name for, the called
     contract's own; read it against that contract's ABI.
 
@@ -586,23 +586,23 @@ answer it.
   the transaction that would revert; `sauce simulate` shows why.
 
 - **Solana's size, compute and rent** (exit 1).
-  - `the cook names <n> accounts, more than one lookup table holds (256)`, or
-    `the staged cook is a <n>-byte transaction even with every account it names in a lookup table…`:
-    staged in a code buffer and through a lookup table, the cook still does not fit one
-    transaction (1232 bytes). Make it smaller: fewer pools or accounts, or two programs.
+  - `the cook names <n> accounts, more than one lookup table holds…`, or
+    `the staged cook is a <n>-byte transaction…`: staged in a code buffer and through a lookup
+    table, the cook still does not fit one transaction (1232 bytes, and a lookup table holds 256
+    accounts). Make it smaller: fewer pools or accounts, or two programs.
     `sauce compile --json` reports the cook's size against the limit before a run.
   - `The cook runs out of compute units…`: with every pool's stop worked out again, the swaps still
     need more than a transaction's compute budget. Offer fewer pools, or a tighter `priceLimit`,
     and simulate again.
-  - `<owner> holds <n> lamports, and the cook takes …`, or a failure ending
-    `…which the transaction would leave below its rent-exempt minimum`: the owner pays, in SOL, the
-    rent of the Pot, the token accounts and the code buffer a run creates, the Kitchen's fee and
-    the transaction's, and holds too little. Send it more SOL. `sauce reclaim` closes the code
-    buffers and lookup tables an earlier run left open and returns their rent.
+  - `<owner> holds <n> lamports, and the cook takes …`, or a failure that names an account the
+    transaction would leave below its rent-exempt minimum: the owner pays, in SOL, the rent of the
+    Pot, the token accounts and the code buffer a run creates, the Kitchen's fee and the
+    transaction's, and holds too little. Send it more SOL. `sauce reclaim` closes the code buffers
+    and lookup tables an earlier run left open and returns their rent.
   - `the engine refused: ExecutionFeeExceedsMaximum…`: the Kitchen's fee rose after the cook read
     it; run it again.
-  - `… would fail, so nothing was sent: <reason>…`: the cluster's simulation of the transaction
-    failed; the program's logs follow the reason.
+  - `<transaction> would fail, so nothing was sent…`: the cluster's simulation of the transaction
+    failed; the reason follows, then the program's logs.
 
 ## Over MCP: the tools
 
