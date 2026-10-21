@@ -475,7 +475,8 @@ equivalent.
   - `evm.create2Address(deployer, salt, initCodeHash)`: where `evm.create2` from `deployer` lands;
     `initCodeHash` is `crypto.keccak256(initcode)`.
   - `evm.create3Address(salt)`: where `evm.create3` run by the Pot lands. It takes no deployer,
-    because the salt alone gives the address.
+    because the deployer is always the Pot running the program: the address depends on the Pot and
+    the salt, not on the init code.
 - All six are EVM-only. A program that deploys and checks the address:
 
 ```sauce chain=base
