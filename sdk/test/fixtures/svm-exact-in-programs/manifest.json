@@ -161,7 +161,7 @@
       "name": "metadao-futarchy",
       "programId": "FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq",
       "file": "metadao-futarchy.so.gz",
-      "sha256": "753daac67ed0393dc6b3678420ead88814205780eae13cacb5dbafdb179bf8d6"
+      "sha256": "7fbec573921093f421d90c283c52cb842020f219b39316c4d501c4fb8ec3070e"
     },
     {
       "name": "scale-amm",
