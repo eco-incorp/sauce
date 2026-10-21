@@ -318,9 +318,9 @@ console.log(`Manual links: ${manual.length} files checked`);
 
 // ---- Every tutorial leads on, and the changelog records every release -------------------------------
 // A tutorial is one step of the learning path, so it ends with `## Next` naming the following step
-// (CLAUDE.md). The changelog has a heading for each release the SDK pins
-// (`sdk/src/deployments/releases.json`), so a bump that lands its releases without saying what
-// changed fails here.
+// (CLAUDE.md). The changelog's version table has a row for each release set the SDK pins
+// (`sdk/src/deployments/releases.json`), and an entry for each SDK release in it, so a bump that
+// lands its releases without saying what changed fails here.
 {
   const docs = join(root, "docs");
   const problems = [];
@@ -343,37 +343,78 @@ console.log(`Manual links: ${manual.length} files checked`);
       );
   }
 
-  // One heading per component version a pinned row names: `### Compiler 2.5.0`, `### v12-evm 1.2.0`,
-  // `### v12-svm 1.3.0`, `### kitchen-evm 1.2.0`, `### kitchen-svm 1.0.0`; text after the version
-  // (a date) is welcome. A row is not out yet when the sync would refuse it: a `null` engine id,
-  // Kitchen, Pot init-code hash or asset digest in any of its components. Such a row needs no
-  // entries. A component with no version is one no release publishes: it needs no heading, and
-  // its row's other headings stay required. The quote router pin names a kitchen-evm version, so
-  // that heading covers it. The installed package ships no releases.json, and its run skips this.
+  // The table under `## Which versions work together` has a row whose Compiler, v12-evm,
+  // kitchen-evm, v12-svm and kitchen-svm cells are the versions of each released row. A row is not
+  // out yet when the sync would refuse it: a `null` engine id, Kitchen, Pot init-code hash or asset
+  // digest in any of its components. Such a row needs no table row. Every table row whose SDK cell
+  // is a version has its `## SDK <version>` entry; a row whose SDK cell is `Unreleased` needs none.
+  // The quote router pin names a kitchen-evm release, which the page names outside code. The
+  // installed package ships no releases.json, and its run skips this.
   const pinned = join(root, "sdk/src/deployments/releases.json");
   if (existsSync(pinned)) {
     const releases = JSON.parse(readFileSync(pinned, "utf8"));
-    const COMPONENTS = ["v12-evm", "v12-svm", "kitchen-evm", "kitchen-svm"];
+    const COMPONENTS = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
     const pending = (entry) =>
       ["engine", "kitchen", "potInitCodeHash"].some((key) => entry?.[key] === null) ||
       Object.values(entry?.assets ?? {}).some((digest) => digest === null);
-    const wanted = new Map();
-    const want = (component, version, why) => {
-      if (typeof version === "string" && version !== "") wanted.set(`${component} ${version}`, why);
-    };
-    for (const row of releases.releases) {
-      if (COMPONENTS.some((component) => pending(row[component]))) continue;
-      const why = `releases.json, compiler ${row.compiler}`;
-      want("Compiler", row.compiler, why);
-      for (const component of COMPONENTS) want(component, row[component]?.version, why);
-    }
-    if (releases.quoteRouter && !pending(releases.quoteRouter))
-      want("kitchen-evm", releases.quoteRouter.version, "releases.json, quoteRouter");
     const changelog = outsideFences(join(docs, "changelog.md"));
-    const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    for (const [heading, why] of wanted)
-      if (!new RegExp(`^### ${escaped(heading)}(?=\\s|$)`, "m").test(changelog))
-        problems.push(`docs/changelog.md: has no "### ${heading}" heading (${why})`);
+    const COLUMNS = ["SDK", "Compiler", ...COMPONENTS];
+    const section = /^## Which versions work together\s*$([^]*?)(?=^## |(?![^]))/m.exec(changelog);
+    const cells = (line) =>
+      line
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split("|")
+        .map((cell) => cell.trim());
+    const tableLines = (section?.[1] ?? "").split("\n").filter((line) => line.startsWith("|"));
+    const header = tableLines.length ? cells(tableLines[0]) : [];
+    const parsed = section && COLUMNS.every((column, i) => header[i] === column);
+    if (!section)
+      problems.push("docs/changelog.md: has no ## Which versions work together section");
+    else if (!parsed)
+      problems.push(
+        `docs/changelog.md: the table under ## Which versions work together has columns ${header.join(", ") || "(none)"}; it needs ${COLUMNS.join(", ")}`,
+      );
+    if (parsed) {
+      const table = tableLines.slice(2).map((line) => {
+        const row = cells(line);
+        return Object.fromEntries(COLUMNS.map((column, i) => [column, row[i] ?? ""]));
+      });
+      for (const row of releases.releases) {
+        if (COMPONENTS.some((component) => pending(row[component]))) continue;
+        // A component with no version is one no release publishes: its cell is not compared, and
+        // the row's other cells still are.
+        const want = { Compiler: row.compiler };
+        for (const component of COMPONENTS) {
+          const version = row[component]?.version;
+          if (typeof version === "string" && version !== "") want[component] = version;
+        }
+        if (!table.some((entry) => Object.keys(want).every((key) => entry[key] === want[key])))
+          problems.push(
+            `docs/changelog.md: no row of the table under ## Which versions work together has ${Object.entries(
+              want,
+            )
+              .map(([key, version]) => `${key} ${version}`)
+              .join(", ")} (releases.json, compiler ${row.compiler})`,
+          );
+      }
+      const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (const { SDK: sdk } of table)
+        if (
+          /^\d+\.\d+\.\d+$/.test(sdk) &&
+          !new RegExp(`^## SDK ${escaped(sdk)}(?= |$)`, "m").test(changelog)
+        )
+          problems.push(
+            `docs/changelog.md: has no "## SDK ${sdk}" heading (its row in the table under ## Which versions work together)`,
+          );
+    }
+    const quote = releases.quoteRouter;
+    if (quote && !pending(quote) && typeof quote.version === "string" && quote.version !== "") {
+      if (!changelog.split(/\s+/).join(" ").includes(`kitchen-evm ${quote.version}`))
+        problems.push(
+          `docs/changelog.md: never names "kitchen-evm ${quote.version}" outside code fences (releases.json, quoteRouter)`,
+        );
+    }
   }
   if (problems.length) throw new Error(`Tutorials and the changelog:\n${problems.join("\n")}`);
   console.log(

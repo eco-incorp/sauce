@@ -7,9 +7,10 @@
 > so that programs you compiled before keep running.
 
 This page is for anyone who already uses the `sauce` command or the SDK, and sees that a newer
-version is out. It needs the command installed ([Install](cli.md#install)). What changed in
-SauceScript between SDK releases, and in each compiler, engine and Kitchen release, is in the
-[changelog](../changelog.md); read the entries from your version up to the one you move to first.
+version is out. It needs the command installed ([Install](cli.md#install)). The
+[changelog](../changelog.md) has an entry for each SDK release: what changed in SauceScript, and
+what the compiler and engine releases it shipped changed. Read the entries from your version up to
+the one you move to first.
 
 ## Check which version you run
 
@@ -127,8 +128,8 @@ The package pins one compiler and ships the engines that compiler pairs with
 - **Rebuild unsigned transactions.** A cook printed by `sauce tx` before the upgrade names the old
   engine. Build it again with the new version.
 - **Know which release made each Pot.** `sauce pot list` shows the release each recorded Pot was
-  created under. The changelog entry for a new Kitchen or engine release says what changes for
-  existing Pots.
+  created under. The changelog entry for the SDK release that ships a new Kitchen or engine says,
+  under **Compiler and engines**, what changes for existing Pots.
 - **In TypeScript**, every SDK builder that names an engine checks the pairing first and throws for
   an engine paired with another compiler, naming the one it needs
   ([Which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
@@ -145,6 +146,6 @@ historical pins.
 
 ## Next
 
-- What changed in SauceScript, and in the compiler and engines, in each release: the [changelog](../changelog.md).
+- What changed in SauceScript, and in the compiler and engines, in each SDK release: the [changelog](../changelog.md).
 - Before running the upgraded version with funds: the [production checklist](production-checklist.md).
 - When something stopped working after the update: [Troubleshooting](troubleshooting.md).

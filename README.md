@@ -99,7 +99,8 @@ protocol, token, command and import. The [glossary](docs/concepts/glossary.md) p
 next to one you already know.
 
 When something fails, [Troubleshooting](docs/guides/troubleshooting.md) says what an error means
-and what to do. The [changelog](docs/changelog.md) records what changed in every release.
+and what to do. The [changelog](docs/changelog.md) records what each SDK release changed in
+SauceScript, the compiler and the engines.
 
 ## Three words you will see
 

@@ -119,4 +119,4 @@ Read in this order; each page uses the words the one before it explains.
 - [`@sauce/router` on Solana](api/router-solana.md): the swap library's Solana venues, their accounts and price limits.
 - [Testing kit](api/testing-kit.md): the local chains, recordings and helpers your tests use.
 - [Coverage](api/coverage.md): how the registries differ, and what each answers.
-- [Changelog](changelog.md): what changed in SauceScript between SDK releases, and in each release of the compiler, the engines and the Kitchens.
+- [Changelog](changelog.md): each SDK 0.99.x release, what changed in SauceScript, and what the compiler and engines it shipped changed.
