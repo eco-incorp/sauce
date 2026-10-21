@@ -37,15 +37,16 @@ a token, but not Sauce, from nothing to proficient, read in this order, which is
 8. `docs/guides/agent-quick-start.md`, "Your first agent session"
 
 A tutorial runs an example `docs/examples/` already has and a suite already executes; it does not
-add a program of its own. Every hand-written page follows one shape: its title; its breadcrumb
-(`**Tutorial** · `, `**How-to guide** · `, `**Concept** · ` or `**Reference** · `, then its links,
-copied from a page of the same part); the blockquote intro; near the top, who the page is for and
-what it needs, each prerequisite linked to the page that covers it; and at the end `## Next`,
-linking the next step of the path or the closest related page. A tutorial also has a "You will
-need" list (real funds, when it spends them, said first) and a "You will have" outcome, follows one
-path with no choices, shows a result at each step, and its `## Next` names the next tutorial and
-the concept that explains what it just did. `docs:check` fails a page listed under `## Tutorials`
-with no `## Next` heading.
+add a program of its own. A tutorial that builds a program up step by step ends on such an example,
+quoted whole, and adds no other program: its steps are versions on the way to it. Every
+hand-written page follows one shape: its title; its breadcrumb (`**Tutorial** · `,
+`**How-to guide** · `, `**Concept** · ` or `**Reference** · `, then its links, copied from a page
+of the same part); the blockquote intro; near the top, who the page is for and what it needs, each
+prerequisite linked to the page that covers it; and at the end `## Next`, linking the next step of
+the path or the closest related page. A tutorial also has a "You will need" list (real funds, when
+it spends them, said first) and a "You will have" outcome, follows one path with no choices, shows
+a result at each step, and its `## Next` names the next tutorial and the concept that explains what
+it just did. `docs:check` fails a page listed under `## Tutorials` with no `## Next` heading.
 
 ## What this repo is
 

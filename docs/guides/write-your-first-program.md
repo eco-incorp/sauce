@@ -21,14 +21,14 @@ The quick start's words, such as Pot, cook and simulate, are in the
 
 ## You will have
 
-- `payout.sauce.ts`, a program of your own that pays a list of people from your Pot, never more
+- `pay-list.sauce.ts`, a program of your own that pays a list of people from your Pot, never more
   than a limit you give it, and returns what it paid;
 - read a compile error, and fixed it;
 - simulated each version of the program, and read what it did.
 
 ## 1. Start from the quick start's program
 
-Make a new file, `payout.sauce.ts`, with the quick start's program in it, without its comments:
+Make a new file, `pay-list.sauce.ts`, with the quick start's program in it, without its comments:
 
 ```js
 function main(to: Address, amount: Uint256) {
@@ -45,13 +45,13 @@ Rename the recipient in the last line only, so it reads `USDC.transfer(recipient
 compile the program for Base:
 
 ```sh
-sauce compile payout.sauce.ts --chain base
+sauce compile pay-list.sauce.ts --chain base
 ```
 
 It refuses, and says where and why:
 
 ```text
-sauce compile: payout.sauce.ts does not compile for base
+sauce compile: pay-list.sauce.ts does not compile for base
 compiling the program failed
 │
 ├─▶ compilation failed
@@ -59,14 +59,14 @@ compiling the program failed
 ╰─▶ `recipient` is not a declared variable
     ├╴`recipient` is not a declared variable (bytes 267..276)
     ╰╴error: `recipient` is not a declared variable
-       --> payout.sauce.ts:3:17
+       --> pay-list.sauce.ts:3:17
         |
       3 |   USDC.transfer(recipient, amount);
         |                 ^^^^^^^^^
 hint: if recipient is a value you supply, make it a parameter of main (`recipient: Uint256`, or `Address`) and pass it with --args
 ```
 
-The line `--> payout.sauce.ts:3:17` points at line 3, column 17 of your file, and the `hint:` line
+The line `--> pay-list.sauce.ts:3:17` points at line 3, column 17 of your file, and the `hint:` line
 says what to do. Here the name is simply wrong: change it back to `to`, and compile again. It
 prints the bytecode, the compiled program, as one line of hex.
 
@@ -90,7 +90,7 @@ function main(to: Address, amount: Uint256, limit: Uint256) {
 1000000 is 1 USDC. Ask the compiler what `main` takes now:
 
 ```sh
-sauce compile payout.sauce.ts --chain base --json
+sauce compile pay-list.sauce.ts --chain base --json
 ```
 
 Among what it prints is `entryParams`, the parameters it found, in order:
@@ -116,7 +116,7 @@ Each is one value after `--args`, in that order. Simulate a payment of 2 USDC wi
 1 USDC, giving the Pot 5 USDC for the simulation as in the quick start:
 
 ```sh
-sauce simulate payout.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
+sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args <recipient> 2000000 1000000
 ```
 
@@ -154,7 +154,7 @@ in single quotes so the shell passes it whole. Simulate paying two recipients 1 
 limit of 2 USDC:
 
 ```sh
-sauce simulate payout.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
+sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args '["<recipient>","<another recipient>"]' 1000000 2000000
 ```
 
@@ -202,7 +202,7 @@ function main(recipients: Address[], amount: Uint256, limit: Uint256): Uint256 {
 Simulate the same two recipients with a limit of 1.5 USDC:
 
 ```sh
-sauce simulate payout.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
+sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args '["<recipient>","<another recipient>"]' 1000000 1500000
 ```
 
@@ -232,7 +232,8 @@ knows how to run it. The finished program:
 // Pays `amount` of USDC from your Pot to each of `recipients` in turn, and stops paying once the
 // next payment would take the total past `limit`. Returns the total it paid.
 //
-//   sauce simulate payout.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args '["<recipient>","<recipient>"]' 1000000 1500000
+//   sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args '["<recipient>","<recipient>"]' 1000000 1500000
+//   sauce run pay-list.sauce.ts --chain base --wallet me --args '["<recipient>","<recipient>"]' 1000000 1500000
 //
 //   recipients: Address[]   who gets paid, in order: addresses on Base
 //   amount: Uint256         what each one gets, in USDC's smallest unit: 1000000 is 1 USDC
@@ -251,7 +252,7 @@ function main(recipients: Address[], amount: Uint256, limit: Uint256): Uint256 {
 }
 ```
 
-Compile it once more with `sauce compile payout.sauce.ts --chain base`: it prints the bytecode.
+Compile it once more with `sauce compile pay-list.sauce.ts --chain base`: it prints the bytecode.
 
 This program is for Base, and for Ethereum, where the same names exist. Compiled for Solana it is
 refused: there, each recipient's token account must be known when the transaction is built, and a
@@ -264,8 +265,8 @@ it would do. You used typed inputs, including an array, two kinds of check (`req
 everything, and `if`, which decides one step), a loop, a running total and a return value. Every
 run was a simulation, so nothing was spent.
 
-To run `payout.sauce.ts` for real, use `sauce run` with the same `--chain`, `--wallet` and `--args`,
-as in step 5 of the quick start.
+To run `pay-list.sauce.ts` for real, use `sauce run` with the same `--chain`, `--wallet` and
+`--args`, as its header's second line does and as in step 5 of the quick start.
 
 ## Next
 
