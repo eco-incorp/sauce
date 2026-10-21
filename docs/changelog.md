@@ -59,6 +59,7 @@ Each SDK release and the five releases it pins:
 
 | SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ------- | -------- | ------- | ----------- | ------- | ----------- |
+| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
 | 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
 | 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
 | 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
@@ -93,13 +94,14 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## Unreleased
+## SDK 0.99.15 — 2026-10-21
 
-These changes are on the SDK's main branch and in no published release yet; the newest SDK on npm is
-0.99.14. Compiler 2.5.0 and the engines are unchanged from 0.99.14, so each change here comes from
-the SDK. Only changes to the language are listed.
+Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 1.0.0. Same compiler
+and engines as 0.99.14, so each change here comes from the SDK.
 
-### Solana swaps by venue name
+### SauceScript
+
+#### Solana swaps by venue name
 
 - **Added** (Solana): A program swaps at a venue by its name. `Orca.Whirlpool`, `Raydium.CLMM`,
   `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Cropper.Whirlpool`, `Defituna.Fusion`,
@@ -141,7 +143,7 @@ function main(to: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint2
 }
 ```
 
-### Solana accounts and tokens written in place
+#### Solana accounts and tokens written in place
 
 - **Added** (Solana): Token methods work as on an EVM chain, with every account derived and
   checked: `USDC.transfer(to, amount)`, `Token(mint).transfer(to, amount)`,
@@ -163,7 +165,7 @@ function main(to: Address, amount: Uint256) {
 }
 ```
 
-### Balances and chained calls
+#### Balances and chained calls
 
 - **Added** (both): `<holder>.<TOKEN>` reads a balance for more holders: the native coin
   (`self.ETH`, `who.ETH`), `ctx.self().USDC`, a registry contract (`UniswapV4.PoolManager.WETH`), a
@@ -181,7 +183,7 @@ function main(vault: Address, to: Address, amount: Uint256): Uint256 {
 }
 ```
 
-### Intents to and from Solana
+#### Intents to and from Solana
 
 - **Added** (EVM): A program on an EVM chain can open an intent whose body runs on Solana, as
   `Solana(() => { … }).reward({ … })`, with a body of token writes or a program. Every value the
@@ -200,6 +202,19 @@ function main(recipient: Address, amount: Uint256) {
 ```
 
 It compiles when `recipient` and `amount` are bound with `--args` as the file is published.
+
+#### MetaDAO on Solana
+
+- **Fixed** (Solana): MetaDAO's futarchy pools are found and traded again after MetaDAO's program
+  upgrade of 2026-10-20, which grew every Dao account from 1205 to 1264 bytes. The SDK refused every
+  upgraded account, so those pools dropped out of Solana routing; quotes were never wrong and no
+  swap reverted. A Dao shorter than the new layout is refused, and a longer one is accepted.
+
+**Also breaking:** The package's Solana dependencies move to Solana Kit 8: `@solana/kit` ^8.5, with
+`@solana-program/token` ^0.17, `system` ^0.15, `compute-budget` ^0.19 and `address-lookup-table`
+^0.15. A project that installs the package beside Kit 6 and its program clients must move to Kit 8
+with it. The SDK keeps Solana's 1232-byte transaction size limit itself, still exported from
+`@eco-incorp/sauce/svm` as `TRANSACTION_SIZE_LIMIT`, because Kit 8 no longer exports it.
 
 ## SDK 0.99.14 — 2026-10-11
 

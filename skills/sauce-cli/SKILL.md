@@ -528,11 +528,13 @@ Offer the user that request; the command's own help ends with the same note.
 ## When a command stops
 
 A command that stops prints one message on stderr, after its own name and a colon. It exits 2 when
-the invocation is wrong (a flag missing or mistyped) and 1 for any other refusal or failure; a
-message saying `nothing was sent` means nothing left the machine. Each message below is quoted by
-its first words, which name the cause, with `…` for the rest: the values and, often, the flag that
-fixes it. A question put at a terminal (a password, a yes or no) is not here: pass the flags that
-answer it.
+the invocation is wrong (a flag missing or mistyped) and 1 for any other refusal or failure. A
+message saying `nothing was sent` means the transaction it names was not broadcast. A run that
+sends several transactions, such as a Solana cook with its setup, may already have landed the
+earlier ones: read the hashes the command printed before the message, and check the Pot and the
+token accounts, before running it again. Each message below is quoted by its first words, which
+name the cause, with `…` for the rest: the values and, often, the flag that fixes it. A question
+put at a terminal (a password, a yes or no) is not here: pass the flags that answer it.
 
 - **No endpoint** (exit 2). `missing --rpc-url <url> (or --config <file>)…`: the command reads the
   chain and has no endpoint for it; a few chains have no built-in public one. Pass
@@ -587,10 +589,13 @@ answer it.
 
 - **Solana's size, compute and rent** (exit 1).
   - `the cook names <n> accounts, more than one lookup table holds…`, or
-    `the staged cook is a <n>-byte transaction…`: staged in a code buffer and through a lookup
-    table, the cook still does not fit one transaction (1232 bytes, and a lookup table holds 256
-    accounts). Make it smaller: fewer pools or accounts, or two programs.
-    `sauce compile --json` reports the cook's size against the limit before a run.
+    `the staged cook is a <n>-byte transaction even with every account it names in a lookup table…`:
+    staged in a code buffer and through a lookup table, the cook still does not fit one transaction
+    (1232 bytes, and a lookup table holds 256 accounts). Make it smaller: fewer pools or accounts,
+    or two programs. `sauce compile --json` reports the cook's size against the limit before a run.
+  - `the staged cook is a <n>-byte transaction even through the lookup tables given…`: the lookup
+    table given with `--lookup-table` does not hold every account the cook names. Pass one that
+    does, or leave the flag out and the run creates one.
   - `The cook runs out of compute units…`: with every pool's stop worked out again, the swaps still
     need more than a transaction's compute budget. Offer fewer pools, or a tighter `priceLimit`,
     and simulate again.
