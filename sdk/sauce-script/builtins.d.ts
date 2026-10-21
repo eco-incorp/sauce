@@ -151,7 +151,7 @@ declare const abi: {
   decode(data: SauceData, shapes: readonly string[]): any;
 };
 
-/** EVM: calls and storage. */
+/** EVM: calls, storage and contract creation. */
 declare const evm: {
   call(address: SauceInt, value: SauceInt, data: SauceData): SauceBytes;
   static(address: SauceInt, data: SauceData): SauceBytes;
@@ -160,6 +160,12 @@ declare const evm: {
   sstore(slot: SauceInt, value: SauceInt): void;
   tload(key: SauceInt): bigint;
   tstore(key: SauceInt, value: SauceInt): void;
+  create(initcode: SauceData, value?: SauceInt): bigint;
+  create2(initcode: SauceData, salt: SauceInt, value?: SauceInt): bigint;
+  create3(initcode: SauceData, salt: SauceInt, value?: SauceInt): bigint;
+  createAddress(deployer: SauceInt, nonce: SauceInt): bigint;
+  create2Address(deployer: SauceInt, salt: SauceInt, initCodeHash: SauceInt): bigint;
+  create3Address(salt: SauceInt): bigint;
 };
 
 /** Solana: account data and cross-program calls. */

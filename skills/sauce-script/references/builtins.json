@@ -3,7 +3,7 @@
   "abis": {
     "ERC20": "[{\"type\":\"function\",\"name\":\"balanceOf\",\"stateMutability\":\"view\",\"inputs\":[{\"name\":\"owner\",\"type\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"totalSupply\",\"stateMutability\":\"view\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"transfer\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"to\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]},{\"type\":\"function\",\"name\":\"approve\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"spender\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[]}]"
   },
-  "count": 68,
+  "count": 74,
   "intrinsics": [
     {
       "name": "ctx.msgSender",
@@ -457,6 +457,96 @@
         "svm": {
           "program": "function main(k: Uint256): void { evm.tstore(k, 1); }",
           "error": "`evm.tstore` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.create",
+      "group": "evm",
+      "signature": "evm.create(initcode: bytes, value?: Uint256): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(initcode: bytes): Address { return evm.create(initcode); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(c: bytes): Address { return evm.create(c); }",
+          "error": "`evm.create` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.create2",
+      "group": "evm",
+      "signature": "evm.create2(initcode: bytes, salt: Uint256, value?: Uint256): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(initcode: bytes, salt: Uint256): Address { return evm.create2(initcode, salt, 0); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(c: bytes, s: Uint256): Address { return evm.create2(c, s); }",
+          "error": "`evm.create2` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.create3",
+      "group": "evm",
+      "signature": "evm.create3(initcode: bytes, salt: Uint256, value?: Uint256): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(initcode: bytes, salt: Uint256): Address { return evm.create3(initcode, salt); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(c: bytes, s: Uint256): Address { return evm.create3(c, s); }",
+          "error": "`evm.create3` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.createAddress",
+      "group": "evm",
+      "signature": "evm.createAddress(deployer: Address, nonce: Uint256): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(nonce: Uint256): Address { return evm.createAddress(ctx.self(), nonce); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Address, n: Uint256): Address { return evm.createAddress(a, n); }",
+          "error": "`evm.createAddress` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.create2Address",
+      "group": "evm",
+      "signature": "evm.create2Address(deployer: Address, salt: Uint256, initCodeHash: Uint256): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(initcode: bytes, salt: Uint256): Address { return evm.create2Address(ctx.self(), salt, crypto.keccak256(initcode)); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Address, s: Uint256, h: Uint256): Address { return evm.create2Address(a, s, h); }",
+          "error": "`evm.create2Address` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.create3Address",
+      "group": "evm",
+      "signature": "evm.create3Address(salt: Uint256): Address",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(salt: Uint256): Address { return evm.create3Address(salt); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(s: Uint256): Address { return evm.create3Address(s); }",
+          "error": "`evm.create3Address` is not available on the svm target"
         }
       }
     },

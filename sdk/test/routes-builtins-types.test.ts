@@ -79,6 +79,11 @@ Base(() => {
   evm.sstore(0n, slot + 1n);
   const seen: bigint = evm.tload(0n);
   evm.tstore(0n, 1n);
+  const made: bigint = evm.create(encoded) + evm.create2(encoded, 1n, 0n) + evm.create3(encoded, 2n);
+  const predicted: bigint =
+    evm.createAddress(caller, 1n) +
+    evm.create2Address(caller, 1n, crypto.keccak256(encoded)) +
+    evm.create3Address(2n);
 
   // svm
   const extra = svm.remainingAccount(0n);
