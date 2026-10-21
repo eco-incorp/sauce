@@ -15,7 +15,8 @@ The part is the index's and the breadcrumb's, never the folder's: a tutorial liv
 beside the how-tos, and a page keeps its path when it changes part. A page stays in its mode: a
 how-to does not wander into a concept essay, a concept page lists no flags, and a fact has one
 owning page that the others link instead of repeating. No history or changelog prose, except in
-`docs/changelog.md`, which is the one page for it. Every page
+`docs/changelog.md`, which is the one page for it: what changed in SauceScript between SDK releases,
+and what each compiler, engine and Kitchen release changed. Every page
 then opens with a short plain-words intro in a blockquote: a few short sentences and an everyday
 analogy, any Sauce word in it explained on the spot (the [glossary](docs/concepts/glossary.md) maps
 each to a familiar one). The real content follows it, examples before rules, edge cases in a section
@@ -1724,16 +1725,26 @@ which is what proves the relative targets also ship. An absolute
 tarball. New public doc links must target files shipped in the package.
 
 **Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records what
-changed in each release of the package and of the five components it pins. Each SDK release adds
-its entry, and so does each new `sdk/src/deployments/releases.json` row once its releases are out,
-one heading per version: `### Compiler <version>`, `### v12-evm <version>`,
-`### v12-svm <version>`, `### kitchen-evm <version>` and `### kitchen-svm <version>`, the version
-optionally followed by more (`### v12-evm 1.2.0 — 2026-10-06`). `docs:check` reads `releases.json`
-and fails while a released version a row names has no heading. It skips a whole row with a `null`
-digest, engine id, Kitchen or hash (a release not out yet, which the sync refuses too), and only the
-heading of a component a row gives no version; the row's other headings stay required. The
-`quoteRouter` pin names a kitchen-evm version, so that version's heading covers it.
-The changelog is checked like every other page (links, fragments, plain integers, no define
-taught), and it is the only page where release history belongs.
+changed in SauceScript, the language, between SDK releases, and below that what each release of the
+five components the SDK pins changed. Each SDK release adds a `### SDK <version> — <date>` entry
+under `## SauceScript by SDK release`: one line naming its compiler (`Compiler 2.5.0, new in this
+release.` or `…, unchanged.`), then **Added**, **Changed**, **Now refused**, **Removed** and
+**Fixed** bullets, each written for a program author and marked EVM, Solana or both, or
+`No language change.` A change to the SDK's names, `@sauce/token`, `@sauce/router` or the way it
+compiles a program counts; a fix to a TypeScript function, a command or the MCP server does not. A
+breaking change outside the language (a removed export, a renamed command, the chain gate, a Portal
+version) is one closing `**Also breaking:**` bullet, named tersely. Every SauceScript example
+compiles with the release it is listed under. Each new `sdk/src/deployments/releases.json` row,
+once its releases are out, adds one heading per version: `### Compiler <version>`,
+`### v12-evm <version>`, `### v12-svm <version>`, `### kitchen-evm <version>` and
+`### kitchen-svm <version>`, the version optionally followed by more
+(`### v12-evm 1.2.0 — 2026-10-06`). A compiler entry from 2.2.0 on points at the SDK release that
+first shipped it and keeps only what that entry does not say, such as engine pairing.
+`docs:check` reads `releases.json` and fails while a released version a row names has no heading.
+It skips a whole row with a `null` digest, engine id, Kitchen or hash (a release not out yet, which
+the sync refuses too), and only the heading of a component a row gives no version; the row's other
+headings stay required. The `quoteRouter` pin names a kitchen-evm version, so that version's
+heading covers it. The changelog is checked like every other page (links, fragments, plain
+integers, no define taught), and it is the only page where release history belongs.
 
 **The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.

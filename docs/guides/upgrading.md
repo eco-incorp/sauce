@@ -7,8 +7,9 @@
 > so that programs you compiled before keep running.
 
 This page is for anyone who already uses the `sauce` command or the SDK, and sees that a newer
-version is out. It needs the command installed ([Install](cli.md#install)). What changed in each
-release is in the [changelog](../changelog.md); read the entry for the version you move to first.
+version is out. It needs the command installed ([Install](cli.md#install)). What changed in
+SauceScript between SDK releases, and in each compiler, engine and Kitchen release, is in the
+[changelog](../changelog.md); read the entries from your version up to the one you move to first.
 
 ## Check which version you run
 
@@ -144,6 +145,6 @@ historical pins.
 
 ## Next
 
-- What changed in each release: the [changelog](../changelog.md).
+- What changed in SauceScript, and in the compiler and engines, in each release: the [changelog](../changelog.md).
 - Before running the upgraded version with funds: the [production checklist](production-checklist.md).
 - When something stopped working after the update: [Troubleshooting](troubleshooting.md).
