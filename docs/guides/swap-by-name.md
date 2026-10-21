@@ -162,11 +162,11 @@ The cook reverts: "Exchange resulted in fewer coins than expected"
 
 Curve refused to pay less than the floor, so even the first swap is undone. Now set a fair one: 1%
 under what your simulation returned. Write that amount in base units, multiply by 99, divide by
-100, and round down. For the sample's 24.512278 USDT that is 24512278 × 99 / 100, so 24266155:
+100, and round down. For the sample's 24.512278 USDT that is 24512278 × 99 / 100, so 24267155:
 
 ```sh
 sauce simulate router-swap.sauce.ts --chain ethereum --wallet me \
-  --assume-balance WETH:0.01 --args 24266155
+  --assume-balance WETH:0.01 --args 24267155
 ```
 
 The cook succeeds again. Before a real `sauce run`, simulate once more and work the floor out from

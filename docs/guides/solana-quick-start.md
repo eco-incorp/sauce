@@ -15,8 +15,8 @@ charges a small fee for each cook ([glossary](../concepts/glossary.md)).
 
 **You will need:**
 
-- **Real funds for step 4:** 0.1 SOL and 1 USDC on Solana, in any wallet or exchange account you can
-  send from. Steps 1 to 3 cost nothing.
+- **Real funds for steps 5 and 6:** 0.1 SOL and 1 USDC on Solana, in any wallet or exchange account
+  you can send from. Steps 1 to 4 cost nothing.
 - Node.js 24 or newer and the `sauce` command. If you have not done the quick start, install it:
 
 ```sh

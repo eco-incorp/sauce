@@ -132,8 +132,10 @@ fall on two sides:
   fee of the prover, the bridge that carries the proof of the fill back. It then claims the reward.
 
 So the reward has to cover what the solver spends there, with a margin, or nobody fills it.
-`sauce intent publish` suggests a reward that does, and shows how it got there. A job made only of
-token transfers and approvals runs as plain calls with no cook, and pays no Kitchen's fee.
+`sauce intent publish`, when it makes an intent step by step, suggests a reward: what is delivered
+plus a margin over the solver's costs there, where it can price them, and shows how it got there.
+Otherwise you set the reward yourself. A job made only of token transfers and approvals runs as
+plain calls with no cook, and pays no Kitchen's fee.
 
 An intent nobody fills loses its creator only what publishing it and refunding it cost: after the
 reward deadline, the reward can be refunded.

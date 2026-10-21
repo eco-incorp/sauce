@@ -131,9 +131,11 @@ sends along (the Kitchen's fee for each cook, plus what the calls spend), the ga
 the prover's fee. Nothing on the destination pays any of that back. The reward is the solver's
 only income, so the difference between the reward and what the solver delivers must cover its costs.
 
-Neither the SDK nor the `sauce` command prices the reward, and no solver is obliged to fill. A
-reward equal to what the solver delivers earns it nothing, and will most likely be refunded to you
-instead. [Costs](costs.md) lists what each part costs.
+The SDK does not price the reward, and no solver is obliged to fill. `sauce intent publish`, when it
+makes an intent step by step, suggests one: what is delivered plus a margin over the solver's costs
+on the destination, where it can price them. A reward equal to what the solver delivers earns it
+nothing, and will most likely be refunded to you instead. [Costs](costs.md) lists what each part
+costs.
 
 ## Names follow the chain
 

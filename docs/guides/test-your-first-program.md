@@ -15,7 +15,7 @@ no real tokens. It uses three things from earlier tutorials:
 - how a program's `main` and `require` work, from
   [Write your first program](write-your-first-program.md).
 
-**You will need:** Node.js 24 or newer, a terminal, and an internet connection for step 4 only.
+**You will need:** Node.js 24 or newer, a terminal, and an internet connection for steps 4 and 5.
 
 **You will have:** two test files. One runs a program on an empty chain, offline from the start.
 The other runs `pay.sauce.ts` on a copy of Base, recorded once and replayed offline in under a
@@ -92,8 +92,9 @@ node --test --test-timeout=120000 double.test.ts
 What happened:
 
 - `local()` started an empty chain on your computer with `anvil`. It has Sauce's Kitchen and
-  engine, and ten test accounts, each with a **Pot**, its own account that runs programs. It has no
-  tokens and no protocols, and it needs no network.
+  engine, and ten test accounts. Account 0 already has its **Pot**, its own account that runs
+  programs; any other account gets its Pot on its first cook. The chain has no tokens and no
+  protocols, and it needs no network.
 - `chain.run` sent a **cook**, the transaction that runs a program on a Pot, from test account 0.
   `args` are `main`'s arguments in order, and integers are bigints in TypeScript, so `21n`.
   `result.returned` is what `main` returned.

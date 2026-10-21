@@ -63,7 +63,7 @@ argument 1 (token: Address): '0x12' is not an address: 20 bytes of 0x-prefixed h
 ### `… is refused: it involves …, a preview chain`
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. For the initial release, the sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. …
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. …
 ```
 
 **Cause.** The command builds and sends transactions only on Ethereum, Base and Solana. Every other

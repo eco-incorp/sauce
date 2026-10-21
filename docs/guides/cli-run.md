@@ -204,9 +204,8 @@ in the cook's own transaction, with nothing asked, when the two fit in one.
 ### Know what it refuses
 
 A cook that would fail is never sent: the run simulates it first, stops with the reason and exits
-
-1. On a preview chain the run is refused before it reads anything
-   ([Supported and preview chains](cli.md#supported-and-preview-chains)).
+with code 1. On a preview chain the run is refused before it reads anything
+([Supported and preview chains](cli.md#supported-and-preview-chains)).
 
 ### Approve ahead with `--yes`
 

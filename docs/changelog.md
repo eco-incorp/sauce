@@ -454,7 +454,7 @@ function main(tokenA: Address, tokenB: Address): Uint256 {
 
 **Also breaking:** The `sauce` command and the MCP server build and send transactions only on
 Ethereum, Base and Solana. The `sauce-dev-tools` bin is removed; the `sauce-run` skill is renamed
-`sauce-cli`; intent commands move under `sauce intent <verb>`, and `--yes` becomes `--auto-approve`.
+`sauce-cli`; intent commands move under `sauce intent <verb>`.
 Solana token rows need `tokenProgram`. The `swap` namespace, `swapThenDepositSource` and several
 swap action kinds are removed. The per-chain helpers leave `@eco-incorp/sauce/deployments`. Intents
 target eco-routes' Portal 2.12.
