@@ -8,37 +8,13 @@
 > transactions. Every other chain is a preview chain: programs compile and simulate there, and
 > nothing is sent. Each chain has a page with its tokens and the protocols a program can call on it.
 
-Every chain the SDK knows, with a page each: whether the initial release supports it, ids, native
+Every chain the SDK knows, with a page each: whether Sauce supports transactions on it, ids, native
 coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
 [Deployments](deployments.md) lists them once, with the shared intent Pot.
 
-For the initial release, Sauce supports transactions on Ethereum, Base and Solana
-(`ethereum`, `base`, `solana`). Every other chain is a preview chain: a program
-compiles and simulates there, but the `sauce` command and the MCP server build and send no
-transaction, and say so with the supported chains and how to request that chain. To request one,
-look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to the chain's,
-or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each preview chain's
-page links its own.
-
-On a preview chain the `sauce` command and the MCP server still simulate and read:
-`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and
-every read. What they refuse there, before any endpoint is reached or any key is read, is
-building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)
-and [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. An intent
-publishes only when its source and every destination it opens are supported; the later levels
-of a cascade (an intent opened inside another's body) are not checked, so keep every level on a
-supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a
-proof or a cancellation by the destination, a claim or a refund by the source. Every refusal
-names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.
-
-The TypeScript SDK is not gated: its builders take every chain below and build its
-transactions, and an integrator who submits one on a preview chain does so at their own risk.
-
-A chain-support request gives the chain and its id, what you want to run there, the protocols
-and tokens it needs, the volume you expect and from when, and optionally how to reach you. Where
-a request for the chain exists, add your use case to it as a comment instead of opening another.
-A refusal links both, prefilled for the chain it refused.
+Sauce supports transactions on Ethereum, Base and Solana (`ethereum`, `base`, `solana`); every other chain is a preview chain, as the last
+section says.
 
 | Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -83,3 +59,38 @@ A refusal links both, prefilled for the chain it refused.
 | [Zora](chains/zora.md) | `zora` | 7777777 | EVM | preview | no | — | 0 | 2 |
 | [Aurora](chains/aurora.md) | `aurora` | 1313161554 | EVM | preview | no | — | 0 | 0 |
 | [Solana](chains/solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | yes | — | 1803 | 0 |
+
+## Supported and preview chains
+
+Every chain but Ethereum, Base and Solana is a preview chain:
+a program compiles and simulates there, but the `sauce` command and the MCP server build and
+send no transaction, and say so with the supported chains and how to request that chain. To
+request one, look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to
+the chain's, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each
+preview chain's page links its own.
+
+On a preview chain the `sauce` command and the MCP server still simulate and read:
+`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and
+every read. What they refuse there, before any endpoint is reached or any key is read, is
+building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)
+and [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. An intent
+publishes only when its source and every destination it opens are supported; the later levels
+of a cascade (an intent opened inside another's body) are not checked, so keep every level on a
+supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a
+proof or a cancellation by the destination, a claim or a refund by the source. Every refusal
+names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.
+
+The TypeScript SDK is not gated: its builders take every chain below and build its
+transactions, and an integrator who submits one on a preview chain does so at their own risk.
+
+A chain-support request gives the chain and its id, what you want to run there, the protocols
+and tokens it needs, the volume you expect and from when, and optionally how to reach you. Where
+a request for the chain exists, add your use case to it as a comment instead of opening another.
+A refusal links both, prefilled for the chain it refused.
+
+## Next
+
+- [Tokens](tokens.md): every chain's tokens, by the symbol a program writes.
+- [Protocols](protocols.md): every protocol a program can call by name.
+- [Names and registries](../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

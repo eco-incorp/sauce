@@ -17,46 +17,11 @@ Frax Finance's liquid staking derivative. Two tokens: frxETH (pegged 1:1 to ETH)
 | Namespace | `FraxEther` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **submitAndDeposit**: Stake ETH and deposit directly into sfrxETH vault (one-step)
 - **deposit**: Deposit frxETH into sfrxETH vault
 - **redeem**: Redeem sfrxETH shares for frxETH
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Stake ETH and get sfrxETH directly
-import { FrxETHMinterABI as IFrxETHMinter } from "./abis";
-function main(minterAddress: Address, recipient: Address): Uint256 {
-  const minter = IFrxETHMinter.at(minterAddress);
-  return minter.submitAndDeposit(recipient);
-}
-
-// Deposit frxETH into sfrxETH vault
-import { SfrxETHABI as ISfrxETH } from "./abis";
-function main(sfrxethAddress: Address, assets: Uint256, receiver: Address): Uint256 {
-  const sfrxeth = ISfrxETH.at(sfrxethAddress);
-  return sfrxeth.deposit(assets, receiver);
-}
-
-// Redeem sfrxETH for frxETH
-import { SfrxETHABI as ISfrxETH } from "./abis";
-function main(
-  sfrxethAddress: Address,
-  shares: Uint256,
-  receiver: Address,
-  owner: Address,
-): Uint256 {
-  const sfrxeth = ISfrxETH.at(sfrxethAddress);
-  return sfrxeth.redeem(shares, receiver, owner);
-}
-```
 
 ## Notes
 
@@ -100,3 +65,9 @@ function main() {
 - `convertToShares(uint256 assets) view returns (uint256)`
 - `convertToAssets(uint256 shares) view returns (uint256)`
 - `balanceOf(address account) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

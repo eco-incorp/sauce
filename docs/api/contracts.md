@@ -5,9 +5,13 @@
 > Every protocol and token in Sauce's address book has a name, and you use the same name in a program
 > and in TypeScript. This page lists the shapes those names take.
 
+This page is for a developer who already calls protocols by name and needs the exact shape of a
+name: what `Base.UniswapV3.Factory` is, what a call built from it holds, and what each member does.
+It assumes the [protocols and tokens guide](../guides/protocols-and-tokens.md), which shows the names
+in use. Which registry a name comes from, and whether a chain has it, is [Coverage](coverage.md).
+
 Every registry protocol is a namespace and every registered token a name, with the same names in a
-program and in TypeScript. This page lists both surfaces; the
-[guide](../guides/protocols-and-tokens.md) shows them in use.
+program and in TypeScript:
 
 | Registry entry             | In a program                                    | In TypeScript                                        |
 | -------------------------- | ----------------------------------------------- | ---------------------------------------------------- |
@@ -20,6 +24,33 @@ program and in TypeScript. This page lists both surfaces; the
 | A family alias             | `Uniswap.UniversalRouter`                       | `Base.Uniswap.UniversalRouter`                       |
 | Another chain's address    | `Arbitrum.UniswapV3.Factory`                    | `Arbitrum.UniswapV3.Factory`                         |
 | Whether the chain has it   | `available(UniswapV3.Factory)`                  | `Base.UniswapV3.Factory.available`                   |
+
+## One name, both sides
+
+The same pool lookup on Base, first in a program:
+
+```js
+function main(): Uint256 {
+  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
+  return pool.liquidity();
+}
+```
+
+Compiled for Base, `UniswapV3.Factory`, `USDC` and `WETH` become Base's addresses, and `pool` is a
+`UniswapV3.Pool` because the registry knows what `getPool` returns. Then in TypeScript, as a call you
+build offline and read through your own viem client:
+
+```ts
+import { Base } from "@eco-incorp/sauce";
+import { createPublicClient, http } from "viem";
+import { base } from "viem/chains";
+
+const client = createPublicClient({ chain: base, transport: http("<your Base RPC URL>") });
+
+const getPool = Base.UniswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, 500);
+console.log(getPool.toCall()); // { target, data, value }, built with no network access
+const pool = await getPool.read(client); // one eth_call through your client
+```
 
 ## Names
 
@@ -85,9 +116,10 @@ A `ContractCall` is built synchronously and reads nothing.
 
 `read` exists on every call: a view's value, or what a state-changing method would return. `simulate`
 and `write` exist on a state-changing method's call only, and throw on a view or pure one. All three
-take a viem client the caller creates; the SDK embeds no RPC endpoint. Each first checks that the
-client is on the call's chain — from `client.chain`, or by asking a client that has none for its
-chain id once — and refuses one on another chain. viem's actions are imported on the first call.
+take a viem client the caller creates; no import of the package carries an RPC endpoint. Each first
+checks that the client is on the call's chain — from `client.chain`, or by asking a client that has
+none for its chain id once — and refuses one on another chain. viem's actions are imported on the
+first call.
 
 ## Programs
 
@@ -110,3 +142,8 @@ is compiled for has it. A branch it rules out is removed before anything in it r
 The declarations a typed closure checks against, for every namespace, token and `available`, ship
 in the package root's types. The ERC-20 syntax for tokens is in the
 [guide](../guides/protocols-and-tokens.md#token-methods-and-balances).
+
+## Next
+
+[Coverage](coverage.md) says which registry each name comes from and how to check that a chain has
+it. To compile a program that uses these names from TypeScript, see [Routes](routes.md).

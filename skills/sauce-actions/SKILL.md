@@ -121,6 +121,7 @@ must say where its amount comes from.
 | Source                                             | What it is                                                                                   |
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | a swap's, a stake's or a wrap's output             | what it delivered to the Pot                                                                 |
+| `lidoUnstake`'s output                             | the stETH it queued: it delivers a withdrawal NFT, and the ETH only when that is claimed     |
 | an approve's, a supply's, a transfer's, a bridge's | the amount it spent                                                                          |
 | `{ "type": "argument", "name": "amount" }`         | a runtime input: `main`'s argument, passed with `--args`, so one compile serves every amount |
 | `{ "type": "balanceOf", "token": "USDC" }`         | what the Pot holds when the program reaches it                                               |

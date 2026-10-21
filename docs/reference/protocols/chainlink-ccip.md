@@ -17,46 +17,6 @@ Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain
 | Namespace | `ChainlinkCcip` on ethereum, optimism, polygon, arc, base, arbitrum |
 | Chains | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### sendMessage
-
-Send a cross-chain message via CCIP Router.
-
-```typescript
-import { CCIPRouterABI as ICCIPRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  destinationChainSelector: Uint256,
-  receiver: bytes,
-  data: bytes,
-): Uint256 {
-  const router = ICCIPRouter.at(routerAddress);
-  return router.ccipSend(destinationChainSelector, {
-    receiver: receiver,
-    data: data,
-    tokenAmounts: [],
-    feeToken: 0x0000000000000000000000000000000000000000,
-    extraArgs: 0x00,
-  });
-}
-```
-
-- `destinationChainSelector`: CCIP chain selector (NOT EVM chain ID). These are unique uint64 identifiers per chain
-- `receiver`: ABI-encoded destination address (bytes, not raw address)
-- `data`: Arbitrary message payload (bytes)
-- `tokenAmounts`: Array of `{token, amount}` tuples for cross-chain token transfers. Empty array `[]` for message-only
-- `feeToken`: Address of token to pay fees in. `address(0)` = pay in native token (ETH). Can also use LINK token address
-- `extraArgs`: Optional encoded extra arguments (gas limits, etc.). `0x00` for defaults
-- Requires native token (ETH) as msg.value when `feeToken` is `address(0)`
-- Requires ERC-20 approval to the Router for any tokens in `tokenAmounts`
-
 ## Notes
 
 - Uses CCIP chain selectors (uint64), NOT EVM chain IDs. Each supported chain has a unique selector
@@ -100,3 +60,9 @@ function main() {
 - `ccipSend(uint64 destinationChainSelector, (bytes receiver, bytes data, (address token, uint256 amount)[] tokenAmounts, address feeToken, bytes extraArgs) message) payable returns (bytes32 messageId)`
 - `getFee(uint64 destinationChainSelector, (bytes receiver, bytes data, (address token, uint256 amount)[] tokenAmounts, address feeToken, bytes extraArgs) message) view returns (uint256 fee)`
 - `isChainSupported(uint64 chainSelector) view returns (bool)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

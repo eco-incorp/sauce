@@ -114,6 +114,24 @@ declare const ctx: {
   isContract(address: SauceInt): boolean;
   /** EVM. */
   isEOA(address: SauceInt): boolean;
+  /** EVM: the account that signed the transaction. Authorize on `msgSender()`, not on this. */
+  txOrigin(): bigint;
+  /** EVM: the block's fee recipient. */
+  coinbase(): bigint;
+  /** EVM: the block's randomness value, which its producer can bias. */
+  prevrandao(): bigint;
+  /** EVM: the block's gas limit. */
+  blockGasLimit(): bigint;
+  /** EVM: the block's base fee per gas. */
+  baseFee(): bigint;
+  /** EVM: the price per gas the transaction pays. */
+  gasPrice(): bigint;
+  /** EVM: the hash of block `n`; 0 outside the 256 blocks before this one. */
+  blockHash(n: SauceInt): bigint;
+  /** EVM: the versioned hash of the transaction's blob `i`; 0 past its last blob. */
+  blobHash(i: SauceInt): bigint;
+  /** EVM: the block's blob base fee. Halts the cook on a chain without one. */
+  blobBaseFee(): bigint;
 };
 
 declare const crypto: {
@@ -151,7 +169,7 @@ declare const abi: {
   decode(data: SauceData, shapes: readonly string[]): any;
 };
 
-/** EVM: calls and storage. */
+/** EVM: calls, storage and contract creation. */
 declare const evm: {
   call(address: SauceInt, value: SauceInt, data: SauceData): SauceBytes;
   static(address: SauceInt, data: SauceData): SauceBytes;
@@ -160,6 +178,12 @@ declare const evm: {
   sstore(slot: SauceInt, value: SauceInt): void;
   tload(key: SauceInt): bigint;
   tstore(key: SauceInt, value: SauceInt): void;
+  create(initcode: SauceData, value?: SauceInt): bigint;
+  create2(initcode: SauceData, salt: SauceInt, value?: SauceInt): bigint;
+  create3(initcode: SauceData, salt: SauceInt, value?: SauceInt): bigint;
+  createAddress(deployer: SauceInt, nonce: SauceInt): bigint;
+  create2Address(deployer: SauceInt, salt: SauceInt, initCodeHash: SauceInt): bigint;
+  create3Address(salt: SauceInt): bigint;
 };
 
 /** Solana: account data and cross-program calls. */

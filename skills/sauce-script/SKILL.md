@@ -189,8 +189,15 @@ Each read is a call; the complete list, per target, is section 6 of
 | `ctx.balance(a)`                                                                                             | the balance of `a`                                      | an attached account's lamports: pass `acct.address`       |
 | `ctx.blockNumber()`                                                                                          | block number                                            | slot                                                      |
 | `ctx.msgValue()`, `ctx.gasLeft()`, `ctx.codeSize(a)`, `ctx.codeHash(a)`, `ctx.isContract(a)`, `ctx.isEOA(a)` | yes                                                     | rejected                                                  |
+| `ctx.txOrigin()`, `ctx.gasPrice()`                                                                           | the transaction's signer and gas price                  | rejected                                                  |
+| `ctx.coinbase()`, `ctx.prevrandao()`, `ctx.blockGasLimit()`, `ctx.baseFee()`, `ctx.blobBaseFee()`            | the block's fee recipient, randomness, gas limit, fees  | rejected                                                  |
+| `ctx.blockHash(n)`, `ctx.blobHash(i)`                                                                        | a recent block's hash; the transaction's blob hashes    | rejected                                                  |
 
-There is no read for the transaction's origin.
+`ctx.txOrigin()` is the account that signed the transaction, which is not the program's caller
+whenever a contract stands between them. Authorize on `ctx.msgSender()`, never on the origin: a
+check of the origin passes for any contract the signer calls. `ctx.blobBaseFee()` halts the cook
+on a chain that does not implement that read, such as Arbitrum or Polygon, although it compiles
+there.
 
 ## Calling a contract
 

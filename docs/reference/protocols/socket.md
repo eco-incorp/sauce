@@ -17,32 +17,6 @@ Cross-chain bridge aggregator that finds optimal routes across multiple bridges 
 | Namespace | `Socket` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Bridge tokens via Socket Gateway using a pre-computed route.
-
-```typescript
-import { SocketGatewayABI as ISocketGateway } from "./abis";
-
-function main(gatewayAddress: Address, routeId: Uint256, bridgeData: bytes): Uint256 {
-  const gateway = ISocketGateway.at(gatewayAddress);
-  gateway.executeRoute(routeId, bridgeData);
-  return 1;
-}
-```
-
-- `routeId`: Route identifier obtained from the Socket API. Each route corresponds to a specific bridge integration (uint32)
-- `bridgeData`: ABI-encoded bridge parameters specific to the selected route. Obtained from the Socket API
-- Socket requires off-chain route computation via their API before on-chain execution
-- Requires ERC-20 approval to the Socket Gateway
-
 ## Notes
 
 - Socket is a bridge **aggregator** -- routes through underlying bridges (Across, Stargate, Hop, cBridge, Connext, etc.)
@@ -85,3 +59,9 @@ function main() {
 `import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway.
 
 - `executeRoute(uint32 routeId, bytes routeData) payable returns (bytes result)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

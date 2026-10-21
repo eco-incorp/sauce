@@ -171,15 +171,20 @@ Every chain the SDK knows has a generated file, `references/<slug>.md`
 [references/index.md](references/index.md) with a Support column; a chain with tokenized stocks has
 `references/<slug>-stocks.md` too.
 
-| Section         | What it gives                                                                        |
-| --------------- | ------------------------------------------------------------------------------------ |
-| The top         | supported, or a preview chain with the link to request it                            |
-| The facts table | slug and aliases for `--chain`, chain id, kind, the name a program uses, native coin |
-| Sauce           | a pointer to `references/deployments.json`                                           |
-| Intents         | whether it takes intents, and its eco-routes contracts (`sauce-intents`)             |
-| In a program    | a compiled example of the chain's names                                              |
-| Tokens          | every token symbol a program can name there, with its address and decimals           |
-| Protocols       | every recorded deployment, each with how a program names it                          |
+| Section          | What it gives                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| The top          | supported, or a preview chain with the link to request it                                    |
+| The facts table  | slug and aliases for `--chain`, chain id, kind, the name a program uses, native coin (below) |
+| Notes            | the chain's own caveats, where it has any                                                    |
+| In a program     | a compiled example of the chain's names, where the registry names any there                  |
+| Tokens           | every token symbol a program can name there, with its address and decimals                   |
+| Venues, Accounts | on Solana: each venue's namespace, and the accounts a program writes (`sauce-solana`)        |
+| Protocols        | every recorded deployment, each with how a program names it                                  |
+
+The facts table also has a **Sauce** row, pointing at `references/deployments.json`; an
+**Intents (eco-routes)** row, saying whether the chain takes intents and with which eco-routes
+contracts, followed on an EVM chain that does by **Intent Executor** and **Shared intent Pot**
+(`sauce-intents`); and, where the chain has one, its **CCTP domain**, its id on USDC's bridge.
 
 | When you need                 | Look at                                                                            |
 | ----------------------------- | ---------------------------------------------------------------------------------- |
@@ -195,15 +200,16 @@ The Sauce contracts have the same address on every EVM chain, and the Sauce prog
 every Solana cluster, so one file lists them, each entry with what it is:
 [references/deployments.json](references/deployments.json).
 
-| Key                         | What it is                                                                   |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| `evm.engine`                | the engine a cook names: the Pot's `cook(engine, program)`                   |
-| `evm.kitchen`               | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays     |
-| `evm.router`                | the Router a new Pot starts on, through which swaps with a callback run      |
-| `evm.quoteRouter`           | quotes Uniswap V3 and V4 swaps through `eth_call`; no Pot's Router           |
-| `evm.pot`                   | how a Pot's address follows from its owner and salt                          |
-| `evm.intentPot`             | the shared Pot an intent's program body cooks on, with its owner and salt    |
-| `svm.engine`, `svm.kitchen` | the Solana engine and Kitchen programs, each as its id and its 32-byte `key` |
+| Key                         | What it is                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| `evm.engine`                | the engine a cook names: the Pot's `cook(engine, program)`                                |
+| `evm.kitchen`               | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays                  |
+| `evm.kitchenImplementation` | the implementation behind the Kitchen, an upgradeable proxy: call the Kitchen, never this |
+| `evm.router`                | the Router a new Pot starts on, through which swaps with a callback run                   |
+| `evm.quoteRouter`           | quotes Uniswap V3 and V4 swaps through `eth_call`; no Pot's Router                        |
+| `evm.pot`                   | how a Pot's address follows from its owner and salt                                       |
+| `evm.intentPot`             | the shared Pot an intent's program body cooks on, with its owner and salt                 |
+| `svm.engine`, `svm.kitchen` | the Solana engine and Kitchen programs, each as its id and its 32-byte `key`              |
 
 A program names none of them: the `sauce` command puts the engine and the Kitchen into every cook it
 builds, and finds the Pot. Read the file to check a cook's `to` and `data`, to deploy a Pot by hand,

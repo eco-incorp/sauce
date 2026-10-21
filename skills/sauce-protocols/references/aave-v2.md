@@ -11,7 +11,8 @@ Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum
 
 - The supply call is `deposit`, not `supply`; approve the LendingPool first.
 - `onBehalfOf` receives the aTokens. The caller is the Pot, so `ctx.self()` keeps them in the
-  Pot, not in the user's wallet: ask which the user wants, and pass the wallet to deliver them.
+  Pot, not in the user's wallet: choose which, and pass the wallet as a `main` parameter to
+  deliver them.
 - aTokens are rebasing: measure balances as deltas.
 - A frozen reserve refuses new deposits: check the reserve accepts them before relying on it.
 - Borrowing and liquidation work as in Aave V3, by health factor.

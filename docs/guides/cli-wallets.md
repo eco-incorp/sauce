@@ -8,6 +8,10 @@
 > else, such as a hardware wallet or a company vault, `sauce` hands you the transaction unsigned and
 > sends it once it is signed.
 
+This page is for anyone about to send a transaction with the `sauce` command. It needs the command
+installed ([Install](cli.md#install)). Make a wallet first: every command that sends needs one, or
+another signer from the end of this page.
+
 The wallets `sauce` keeps are quick to set up, and right for trying things out with small amounts.
 For real money, a wallet that keeps its key to itself is safer: with a coding agent, let your
 wallet's own MCP server sign ([Sign with your wallet's MCP server](wallet-mcp.md)).
@@ -21,18 +25,36 @@ sauce wallet list                   # every wallet, with its address
 sauce wallet address me             # one wallet's address
 ```
 
-`new` asks for a password twice (8 characters or more), then prints the wallet's address. The key is
-stored encrypted in `~/.sauce/wallets`, and `list` and `address` need no password.
+`new` asks for a password twice (8 characters or more), then prints the wallet's name, kind,
+address and file. The key is stored encrypted in `~/.sauce/wallets`, and `list` and `address` need
+no password. A name is up to 64 lowercase letters, digits, `-` and `_`. A wallet is never
+overwritten: pick another name for a second one.
 
-Already have a key? Keep it as a wallet:
+Send the wallet's address a little of the chain's coin (ETH on Ethereum and Base, SOL on Solana)
+before its first run: it pays the gas and the Kitchen's fee.
+
+### Import a key you have
 
 ```sh
 sauce wallet import me key.txt                          # a private key in hex, or a keystore file
 sauce wallet import me-solana ~/.config/solana/id.json  # a Solana keypair file
 ```
 
-The key is read from a file, or from stdin with `-`, never from the command line. `sauce wallet
-export me` shows a key again, on the terminal only, after you type the wallet's name.
+The key is read from a file, or from stdin with `-`, never from the command line. A keystore is
+opened with its password, which the wallet then keeps.
+
+### Show a key again
+
+`sauce wallet export me` shows the key on the terminal itself, never on stdout, after you type the
+wallet's name. It refuses without a terminal.
+
+### Know where wallets are kept
+
+Each wallet is one file, `<name>.json`, created readable only by you in a directory only you can
+open. `--wallets <dir>` keeps them in another directory. An Ethereum-style wallet's file is a
+standard encrypted keystore, exactly as geth and `cast wallet` write one, so `--keystore <file>`
+and `cast wallet` read it too. A Solana wallet's file is the same envelope around the keypair. Each
+file names its address in the clear, which is why `list` and `address` need no password.
 
 ## Sign with it
 
@@ -42,18 +64,20 @@ Every command that sends takes `--wallet <name>`, and asks for the password when
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 
-That is `run`, `pot --deploy`, `simulate --fund`, `intent publish`, `intent fill --send` and the
-intent steps after it. An Ethereum-style wallet signs on Ethereum and Base, a Solana wallet on
-Solana. A command that only needs to know whose Pot, such as `sauce simulate` and `sauce pot`, takes
-`--wallet` too, and asks no password.
+That is `run`, `pot --deploy`, `intent publish`, `intent fill --send` and the intent steps after
+it. An Ethereum-style wallet signs on Ethereum and Base, a Solana wallet on Solana.
+
+`sauce simulate` and `sauce pot` take `--wallet` only to know whose Pot (your own account on the
+chain, which holds what your programs spend), and ask no password. The one exception is
+`simulate --fund`, which asks for it to sign the token pulls it simulates. It still sends nothing.
 
 **These are hot wallets.** Whoever holds a wallet's file and its password holds the key. Keep
 small balances in them, and give each one a spending limit.
 
 ## Put a spending limit on a wallet
 
-A file named `<name>.policy.json`, beside the wallet in `~/.sauce/wallets`, limits what the wallet
-sends. Every field is optional:
+A **policy** is a file named `<name>.policy.json`, beside the wallet in `~/.sauce/wallets`, that
+limits what the wallet sends. Every field is optional:
 
 ```json
 {
@@ -75,7 +99,35 @@ A send that breaks a limit is refused before anything is signed, and the refusal
 sauce run: refused by the policy of wallet me (…/me.policy.json): tokens.USDC.perTransaction is 100 USDC, and this transaction sends 250 USDC
 ```
 
-With no policy file, sends work, and each says that no limits are set.
+With no policy file, sends work, and each says that no limits are set. Make the file readable and
+writable only by you (`chmod 600`): a policy file that others can write is refused, because they
+could loosen it.
+
+### Know what each limit counts
+
+- Amounts are strings in whole tokens (`"1.5"`), or in base units ending in `n` (`"1500000n"`).
+- `to` on Solana names the programs a transaction's instructions call. Deploying the wallet's own
+  Pot counts as a transaction to that Pot, so a policy that lets the wallet cook on its Pot lets a
+  command create the Pot first.
+- `native` counts the chain's coin leaving the wallet or the Pot the transaction cooks on. On
+  Solana the fee and any rent are included.
+- `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
+  leaves the wallet or its Pot. An approval above what the limit leaves room for is refused, an
+  approval of Permit2 aside, which moves nothing without a later signature. A token the policy does
+  not name is not limited.
+- `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside the
+  wallet.
+
+A field the policy does not know is an error, so a typo never silently lifts a limit.
+
+### Know how a send is measured
+
+What a transaction moves is measured, not read from its calldata. An EVM transaction is simulated
+with `eth_simulateV1` (a node method that runs it and returns its logs), and its token and native
+transfers out of the wallet and its Pot are counted. A Solana transaction is simulated with the
+accounts it writes reported. A limit that cannot be measured on the endpoint (one without
+`eth_simulateV1`, for one) refuses the send. Every wallet send also holds to the
+[supported chains](cli.md#supported-and-preview-chains).
 
 ## Passwords without a prompt
 
@@ -94,8 +146,15 @@ sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
 ```
 
-There is no `--password <value>`: a value on the command line lands in your shell history and the
-process list.
+Give one source only. With none, the password is asked for at the terminal without echo. There is
+no `--password <value>`: a value on the command line lands in your shell history and the process
+list.
+
+`--password-file` and `--password-command` drop one trailing newline. `--password-command` runs
+with no stdin, and if it fails, the error gives its exit status and never its output.
+`--password-env` is the command's one read of the environment, and only of the variable you name.
+No command prints a key or a password: everything a command writes passes through a filter that
+removes any secret it was given, error messages included.
 
 ## Sign somewhere else: `sauce tx` and `sauce send`
 
@@ -108,104 +167,28 @@ sauce tx pay.sauce.ts --chain base --owner 0xYou --args <recipient> 1000000
 sauce send 0x02f8…signed
 ```
 
+The signer is always the Pot's owner, `--owner`. Simulate the same program and arguments first, so
+you know what the transaction you sign does ([Try it](cli-run.md#try-it-sauce-simulate)).
+
+### Read the unsigned transaction
+
 `sauce tx` prints the transaction for the owner to sign:
 
 ```json
 { "chainId": 8453, "to": "0x8a…", "data": "0x…", "value": "0x3e8", "sendCalls": { … } }
 ```
 
-The value is in wei, written in hex as wallets read it: `0x3e8` is 1000. The transaction is exactly
-what a wallet's MCP server takes, and `sendCalls` is the same as one batch
+`to` is the Pot and `data` the cook, the call that runs the program on it. The value is in wei,
+written in hex as wallets read it: `0x3e8` is 1000. It defaults to the Kitchen's fee, read from the
+chain; `--value` sets it. The transaction is exactly what a wallet's MCP server takes, and
+`sendCalls` is the same transactions as one batch, for a wallet that sends a batch
 ([Sign with your wallet's MCP server](wallet-mcp.md)).
 
-When the Pot does not exist yet, it prints a plan of two instead, the Pot's creation then the cook,
-each with the `gas` to sign it with. Sign and send them in that order.
+### Sign a new Pot's creation and its first cook
 
-`--fund USDC:100` puts the tokens the program spends into the plan too: a transfer from you into the
-Pot, right before the cook. A wallet that sends a batch then creates the Pot, fills it and runs the
-program in one go.
-
-`sauce send` takes the signed transactions, in order. It checks each would succeed before sending
-it, waits for each to land, and prints what it did, as `sauce run` does. It takes no key.
-
-## Other signers
-
-Besides `--wallet`, a command signs with:
-
-- `--keystore <path>`: a JSON keystore file, as `cast wallet` and geth write. It takes the same
-  password sources.
-- `--private-key <hex>`: works, with a warning, because it lands in your shell history.
-- `--keypair <path>`, on Solana: a keypair file, the JSON array of 64 bytes `solana-keygen` writes.
-
-The signer is always the Pot's owner.
-
-## Details
-
-### Wallet files
-
-| Verb      | Does                                                                                                                                                                                                      |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `new`     | Generates a key and stores it as `<name>.json`, created `0600` in a directory created `0700`, written once and never overwritten. `--solana` makes a Solana keypair. The password is 8 characters or more |
-| `list`    | Each wallet's name, kind (`evm` or `solana`), address, and whether a policy limits it                                                                                                                     |
-| `address` | One wallet's address                                                                                                                                                                                      |
-| `import`  | A key you have, read from a file or stdin (`-`), never from the command line: an EVM private key, a keystore (opened with the password, which the wallet keeps), or a Solana keypair file                 |
-| `export`  | The key, shown on the terminal itself (never stdout) once you type the wallet's name. It refuses without a terminal, and the MCP server has no such tool                                                  |
-
-`--wallets <dir>` keeps them in another directory. An EVM wallet's file is a Web3 Secret Storage v3
-keystore (scrypt, AES-128-CTR, a keccak-256 MAC), exactly as geth and `cast wallet` write one, so
-`--keystore <file>` and `cast wallet` read it too. A Solana wallet's file is the same envelope around
-the keypair's 64 bytes, marked `"kind": "solana"`. Each file names its address in the clear, so
-`list` and `address` need no password.
-
-### Passwords in detail
-
-A wallet's or a keystore's password comes from the one source you name, or else it is asked for at
-the terminal without echo. `--password-file` and `--password-command` drop one trailing newline.
-`--password-command` runs with no stdin, and if it fails, the error gives its exit status and never
-its output. `--password-env` is the command's one read of the environment, and only of the variable
-you name. Keys are read from the paths and wallets named only, never from the config file, and no
-command prints one or a password: everything a command writes passes through a filter that removes
-any secret it was given, error messages included.
-
-The `--keystore` format is Web3 Secret Storage v3, with scrypt or PBKDF2. On Solana with
-`--via engine`, which uses no Pot, the signer is the program's authority instead of a Pot's owner.
-
-### Policies in detail
-
-Every amount in a policy is a string in whole tokens (`"1.5"`), or in base units ending in `n`, as
-`--fund` takes them.
-
-- `chains` names the only chains it sends on, and `to` the only addresses a transaction goes to (on
-  Solana, the programs its instructions call). Deploying the wallet's own Pot (the released
-  Kitchen's `deployPot` of that wallet, with no value) counts as a transaction to the Pot, not to
-  the Kitchen: a policy that lets the wallet cook on its Pot lets a command deploy that Pot first,
-  and one that does not refuses the deployment, naming the Pot to add.
-- `native` is the chain's native coin leaving the wallet or the Pot the transaction cooks on. On
-  Solana the fee and any rent are included.
-- `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
-  leaves the wallet or its Pot, and an approval above what the limit leaves room for is refused (an
-  approval of Permit2 aside, which moves nothing without a signature in a later cook). A token the
-  policy does not name is not limited.
-- `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside the
-  wallet.
-
-What a transaction moves is measured, not read from its calldata. An EVM transaction is simulated
-with `eth_simulateV1`, and its token and native transfers out of the wallet and its Pot are
-counted. A Solana transaction is simulated with the accounts it writes reported. A limit that cannot
-be measured on the endpoint (no `eth_simulateV1`, for one) refuses the send. A policy file that
-others can write is refused: they could loosen it. Every wallet send also holds to the
-[supported chains](cli.md#supported-and-preview-chains).
-
-### `sauce tx` in detail
-
-The value is `--value`, or else the Kitchen's fee, read from the chain, which also checks the Pot.
-When the chain shows the Pot has no code yet, it prints the plan instead: the Pot's deployment
-first, marked `deploysPot`, then the cook, to send in that order (any account may send the first;
-only the owner the second). Each comes with `gas`, the limit to sign it with: the two are simulated
-together, so the cook's is estimated as if the deployment had landed, with 30% room. A signer's own
-estimate of the cook, taken while the Pot has no code, prices a call to an empty address and is far
-too low. Where the endpoint does not report the deployment's gas apart, the deployment carries
-none, as a signer's own estimate of it is right (the Kitchen it calls has code). The plan:
+When the chain shows the Pot has no code yet, `sauce tx` prints a plan of two instead: the Pot's
+creation, marked `deploysPot`, then the cook. Sign and send them in that order. Any account may
+send the first; only the owner can send the second.
 
 ```json
 {
@@ -234,37 +217,68 @@ none, as a signer's own estimate of it is right (the Kitchen it calls has code).
 }
 ```
 
-What must be true for it to land (the Pot funded, sent from its owner) goes to stderr. A cook that
-would revert after the deployment, as a cook on a Pot not funded yet does, comes with no `gas` and a
-note saying why: fund the Pot (its address takes tokens before it is deployed) and build it again.
-A Pot named with `--pot` and no code is not planned (its owner and salt are not known): the note
-names `sauce pot --deploy`. On Solana a cook may need several transactions; `sauce tx` then prints
+Sign each with the `gas` the plan gives it. The two are simulated together, so the cook's gas is
+estimated as if the creation had landed, with 30% room. A signer's own estimate of the cook, taken
+while the Pot has no code, is far too low.
+
+What must be true for the plan to land goes to stderr: the Pot funded, and sent from its owner. A
+cook that would revert, as a cook on a Pot not funded yet does, comes with no `gas` and a note
+saying why: fund the Pot (its address takes tokens before it is deployed) and build it again. A Pot
+named with `--pot` and no code is not planned, because its owner and salt are not known: the note
+names `sauce pot --deploy`. On Solana a cook may need several transactions, and `sauce tx` prints
 the first step of a plan ([Solana](cli-solana.md#a-cook-in-several-transactions)).
 
-`--format cast` prints the same transactions as `cast send` lines instead, for
-[Foundry](https://getfoundry.sh/cast/overview) users. The line leaves the endpoint and the signer
-as `<RPC_URL>` and `<PRIVATE_KEY>` placeholders: the command never fills in either.
+### Fund the Pot in the same batch
 
-### `sauce send` in detail
+`--fund USDC:100` puts the tokens the program spends into the plan too: a transfer from you into the
+Pot, right before the cook. A wallet that sends a batch then creates the Pot, fills it and runs the
+program in one go, or does nothing.
+
+### Send what you signed
 
 ```sh
 sauce send 0x02f8…deploy 0x02f8…cook --rpc-url <url>
 sauce send AQAB… --chain solana
 ```
 
-Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns (its
-chain and sender are read from it), on Solana the base64 wire transaction (every signature is
-checked against its message); `-` reads them from stdin. They go out in the order given, each
-simulated as it was signed first (an `eth_call` from its sender with its gas limit held to what that
-used, or a Solana simulation that checks the signatures), and one that would fail is not sent: the
-reason is printed, exit 1, and nothing after it goes out. Each lands before the next is simulated,
-so the cook after its Pot's deployment runs on the Pot. Sign each with the `gas` the plan gives it:
-a cook signed with less than its simulation uses is refused, unsent. A transaction already on chain
-is read back, not sent again; one the chain had, pending, then lost (dropped, or reorged out) is
-reported as gone rather than waited for, to sign anew. A Solana transaction missing a signature
-(its fee payer's, or any its message names) is refused by name, before any request.
+Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns, on
+Solana the base64 wire transaction. `-` reads them from stdin. They go out in the order given:
+
+- Each is simulated as it was signed first. One that would fail is not sent: the reason is printed,
+  the command exits 1, and nothing after it goes out.
+- Each lands before the next is simulated, so the cook after its Pot's creation runs on the Pot.
+- A cook signed with less gas than its simulation uses is refused, unsent.
+- A transaction already on chain is read back, not sent again. One the chain had, pending, then
+  lost is reported as gone, to sign anew.
+- A Solana transaction lands within about a minute of being built, or never: one whose blockhash
+  has expired is refused, to build and sign again.
 
 For each, it prints the hash (a Solana signature), the status and what it cost, the explorer and
-trace pages, the decoded reason a failure gives, and for a cook what moved and what it left in the
-Pot; on Solana, what `main` returned. A Solana transaction lands within about a minute of being
-built, or never: one whose blockhash has expired is refused, to build and sign again.
+trace pages, and for a cook what moved and what it left in the Pot, as `sauce run` does. It takes
+no key.
+
+### Print `cast send` lines
+
+`--format cast` prints the same transactions as `cast send` lines instead, for
+[Foundry](https://getfoundry.sh/cast/overview) users. The line leaves the endpoint and the signer
+as `<RPC_URL>` and `<PRIVATE_KEY>` placeholders: the command never fills in either.
+
+## Other signers
+
+Besides `--wallet`, a command signs with:
+
+- `--keystore <path>`: a JSON keystore file, as `cast wallet` and geth write. It takes the same
+  password sources.
+- `--private-key <hex>`: works, with a warning, because it lands in your shell history.
+- `--keypair <path>`, on Solana: a keypair file, the JSON array of 64 bytes `solana-keygen` writes.
+
+Give one signer per command. The signer is always the Pot's owner. On Solana with `--via engine`,
+which uses no Pot, the signer is the program's authority instead ([Solana](cli-solana.md)).
+
+## Next
+
+- Run a program with the wallet you made: [Run a program](cli-run.md).
+- Let a coding agent sign through your wallet's own MCP server:
+  [Sign with your wallet's MCP server](wallet-mcp.md).
+- Why a policy and a simulation protect you: [Safety](../concepts/safety.md).
+- Before you run with real funds: the [production checklist](production-checklist.md).

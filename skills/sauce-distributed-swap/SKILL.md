@@ -7,9 +7,9 @@ description: A Sauce program that spreads one exact-input swap over several pric
 
 The caller gives **one price: the most they pay for any unit, fees included**. Every pool trades
 until its own price reaches that price, and the budget it does not take stays in the Pot for the
-next pool. This skill owns that method, its arithmetic (`priceLimit`, `minTokens`, `maxAvgPrice`), how
-to set and simulate it, and the complete program for EVM chains. One swap is `sauce-swaps`'s; the
-same order on Solana is `sauce-solana-distributed-swap`'s, on these rules.
+next pool. The method, its arithmetic (`priceLimit`, `minTokens`, `maxAvgPrice`), how to set and
+simulate it, and the complete program for EVM chains are here. For one swap, see `sauce-swaps`;
+for the same order on Solana, on these rules, see `sauce-solana-distributed-swap`.
 
 ## When to use
 
@@ -88,7 +88,8 @@ first. With enough budget for every pool to reach its limit, every pool's last u
 [examples/distributed-swap.sauce.ts](examples/distributed-swap.sauce.ts) is one complete
 implementation of those rules: it buys SpaceX stock on Base, SPCXc, with USDC, over Base's
 Aerodrome Slipstream, Uniswap V3 and hookless Uniswap V4 pools. Its header gives every input with
-its units and the command that runs it. Its code:
+its units and the command that runs it. Save it as `distributed-swap.sauce.ts` in your project:
+every command below runs that file. Its code:
 
 ```sauce chain=base
 import { uniswapV3, uniswapV4 } from "@sauce/router";

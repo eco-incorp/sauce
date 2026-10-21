@@ -1,0 +1,118 @@
+# What Sauce is
+
+**Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Glossary](glossary.md)
+
+> Sauce lets you write a short program that does several things on a blockchain in one go, and
+> either all of it happens or none of it does. Think of a recipe handed to a cook: the cook follows
+> every step, and if one step fails, the dish is thrown out as if it was never started. This page
+> says what Sauce is, what it is not, and how your program becomes one transaction.
+
+Read this page first. It needs only the basic ideas of a blockchain: a wallet, a transaction, a
+token. It explains and asks you to run nothing; the [quick start](../guides/quick-start.md) does
+that next.
+
+## Sauce in two sentences
+
+You write a **program** in SauceScript, a small and strict TypeScript, and Sauce compiles it into
+compact code for the chain you name. Your wallet sends that code in one transaction, a **cook**, to
+your own account on chain, your **Pot**, where an **engine** already on chain runs every step of it.
+
+## A program
+
+This is the program the quick start runs, without its comments:
+
+```js
+function main(to: Address, amount: Uint256) {
+  require(self.USDC >= amount, "not enough USDC");
+  USDC.transfer(to, amount);
+}
+```
+
+It reads how much USDC your Pot holds, stops if that is less than `amount`, and pays `amount` to
+`to`. Three things make it short:
+
+- **`main`'s parameters are its inputs.** You give `to` and `amount` each time you run it, so one
+  program serves every payment.
+- **`USDC` is a name, not an address.** Sauce knows where USDC lives on each chain it runs on, and
+  the same file runs on Base and on Solana.
+- **`require` is a check.** When it fails, the whole transaction stops and nothing moves.
+
+## How a program becomes one transaction
+
+```text
+pay.sauce.ts                  your program
+     │  compile for a chain   each name becomes its address there; out comes bytecode
+     ▼
+bytecode, then main's arguments
+     │  build the cook        to: your Pot   data: the program   value: the Kitchen's fee
+     ▼
+the cook, unsigned
+     │  simulate              run it on a copy of the chain: free, nothing is sent
+     │  sign and send         your wallet signs
+     ▼
+your Pot                      checks the cook is from its owner, pays the Kitchen,
+                              and has the engine run the program: every step, or none
+```
+
+1. **Compile.** The compiler checks every line, turns each name into its address on the chain you
+   chose, and produces **bytecode**: Sauce's own compact code, which only a Sauce engine reads.
+   There is no contract to write or deploy. The program is data, carried by the transaction.
+2. **Build the cook.** The cook is an ordinary transaction to your Pot. It carries the program with
+   `main`'s arguments after it, and as its value the **Kitchen**'s small fee. The Kitchen is the
+   contract that makes Pots and charges that fee.
+3. **Simulate.** Before anything is signed, the cook runs on a copy of the chain as it is right now.
+   You see what would move, or why it would fail, for free.
+4. **Sign and send.** Your wallet signs. Your key stays with you: Sauce builds the transaction, and
+   the `sauce` command signs it with a wallet on your computer or hands it to another one.
+5. **Run.** Your Pot checks that the cook comes from its owner, pays the Kitchen, and has the engine
+   run the program as the Pot. Every call the program makes comes from your Pot, and what it
+   receives lands there. If any step fails, the whole transaction reverts: nothing moves, and only
+   the network's fee for the attempt, the gas, is spent.
+
+## Why one transaction matters
+
+Say you want to swap USDC for ETH and pay a friend what the swap returned. As two transactions,
+the price can move between them, someone can act in between, and a failed second step leaves you
+half done. As one program, the swap and the payment happen together or not at all, and nobody acts
+between your steps.
+
+A program is also more than a list of calls sent in a row. Between calls it reads balances and
+results as they are at that moment, computes, and decides: it can measure what the swap actually
+returned, refuse it below a minimum you set, and pay out exactly that.
+
+## What Sauce is not
+
+- **Not a contract you write.** You never write, audit or deploy a smart contract of your own. The
+  engine and the Kitchen are already on chain, and your Pot is a standard account the Kitchen makes
+  for you.
+- **Not one protocol.** Sauce is not a wrapper around one exchange or lender. A program calls any
+  of the 135 protocols Sauce knows, by name, and mixes them in one transaction.
+- **Not a bridge.** A program reaches another chain by posting a job there with a reward attached,
+  an [intent](cross-chain-intents.md). Someone else, a solver, does the job and collects the reward.
+  Sauce builds the intent; it does not carry your tokens across chains itself.
+- **Not a custodian.** Only your wallet can run programs on your Pot, and nobody else, Sauce
+  included, can move what it holds.
+- **Not your application's code.** A program runs on chain, inside the transaction. It cannot call
+  back into your application or read its variables, so everything it needs is given to it at the
+  start, as `main`'s arguments.
+
+## Where it runs
+
+The `sauce` command sends transactions on **Ethereum**, **Base** and **Solana**. Sauce knows 41
+chains in all. On the others, the **preview chains**, a program compiles and simulates, but nothing
+is sent. [Names and registries](names-and-registries.md) explains how a name such as `USDC` finds
+its address on each chain.
+
+## Three ways to use it
+
+- **The `sauce` command**, in a terminal: compile, simulate and run a program. The tutorials use it.
+- **The TypeScript package**, `@eco-incorp/sauce`: the same compiler and the same knowledge of
+  chains, tokens and protocols, as a library for your application, in Node.js or a browser.
+- **The MCP server**, `sauce mcp`: Sauce's commands as tools for a coding agent in your editor.
+
+The [glossary](glossary.md) puts every Sauce word next to one you already know.
+
+## Next
+
+- Run a program for real: the [quick start](../guides/quick-start.md), the first tutorial.
+- The Pot, the cook and the Kitchen in detail: [Kitchen, Pot and cook](kitchen-pot-cook.md).

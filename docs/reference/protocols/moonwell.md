@@ -17,73 +17,6 @@ Leading lending protocol on Base. Compound V2 fork with governance and safety mo
 | Namespace | `Moonwell` on base |
 | Chains | base |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### supply
-
-Supply assets by minting mTokens. Exchange rate grows as interest accrues.
-
-```typescript
-import { MTokenABI as IMToken } from "./abis";
-
-function main(mTokenAddress: Address, amount: Uint256): Uint256 {
-  const mToken = IMToken.at(mTokenAddress);
-  return mToken.mint(amount);
-}
-```
-
-- `mTokenAddress`: The mToken market contract (each asset has its own mToken)
-- Returns 0 on success, error code on failure
-- Requires ERC-20 approval of underlying to the mToken
-
-### withdraw
-
-Withdraw underlying assets by specifying the exact amount.
-
-```typescript
-import { MTokenABI as IMToken } from "./abis";
-
-function main(mTokenAddress: Address, amount: Uint256): Uint256 {
-  const mToken = IMToken.at(mTokenAddress);
-  return mToken.redeemUnderlying(amount);
-}
-```
-
-### borrow
-
-Borrow assets against mToken collateral. Must call enterMarkets first.
-
-```typescript
-import { MTokenABI as IMToken } from "./abis";
-
-function main(mTokenAddress: Address, amount: Uint256): Uint256 {
-  const mToken = IMToken.at(mTokenAddress);
-  return mToken.borrow(amount);
-}
-```
-
-- Must enable collateral via `MoonwellComptroller.enterMarkets([mTokenAddress])` first
-
-### repay
-
-Repay borrowed assets.
-
-```typescript
-import { MTokenABI as IMToken } from "./abis";
-
-function main(mTokenAddress: Address, amount: Uint256): Uint256 {
-  const mToken = IMToken.at(mTokenAddress);
-  return mToken.repayBorrow(amount);
-}
-```
-
-- Requires ERC-20 approval of underlying to the mToken
-
 ## Notes
 
 - Same interface as Compound V2 (forked codebase)
@@ -126,3 +59,9 @@ function main() {
 
 - `enterMarkets(address[] mTokens) returns (uint256[])`
 - `exitMarket(address mToken) returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

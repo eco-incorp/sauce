@@ -17,39 +17,12 @@ Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetua
 | Namespace | `MuxProtocol` on arbitrum |
 | Chains | arbitrum |
 
-## Key Operations
+## What it offers
 
 - **addLiquidity**: Place an order adding liquidity to the MUX pool (receive MLP tokens)
 - **removeLiquidity**: Place an order removing liquidity (burn MLP tokens)
 - **placePositionOrder3**: Place a leveraged position order
 - **cancelOrder**: Cancel a pending order
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-Liquidity moves through OrderBook orders that MUX brokers fill; the LiquidityPool's own add/remove functions are callable only by the OrderBook.
-
-```typescript
-// Add liquidity: a liquidity order that deposits `rawAmount` of asset `assetId`
-import { OrderBookABI as IOrderBook } from "./abis";
-function main(orderBookAddress: Address, assetId: Uint256, rawAmount: Uint256): Uint256 {
-  const orderBook = IOrderBook.at(orderBookAddress);
-  orderBook.placeLiquidityOrder(assetId, rawAmount, true);
-  return 1;
-}
-
-// Remove liquidity: a liquidity order that burns `mlpAmount` MLP for asset `assetId`
-import { OrderBookABI as IOrderBook } from "./abis";
-function main(orderBookAddress: Address, assetId: Uint256, mlpAmount: Uint256): Uint256 {
-  const orderBook = IOrderBook.at(orderBookAddress);
-  orderBook.placeLiquidityOrder(assetId, mlpAmount, false);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -94,3 +67,9 @@ function main() {
 - `cancelOrder(uint64 orderId)`
 - `placeLiquidityOrder(uint8 assetId, uint96 rawAmount, bool isAdding) payable`
 - `placePositionOrder3(bytes32 subAccountId, uint96 collateralAmount, uint96 size, uint96 price, uint8 profitTokenId, uint8 flags, uint32 deadline, bytes32 referralCode, (uint96 tpPrice, uint96 slPrice, uint8 tpslProfitTokenId, uint32 tpslDeadline) extra) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -17,42 +17,12 @@ DeFi options protocol known for Squeeth (squared ETH), a power perpetual that pr
 | Namespace | `Opyn` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **burnSqueeth**: Burn oSQTH to close/reduce a squeeth position
 - **withdrawCollateral**: Withdraw ETH collateral from a vault
 - **mintSqueeth**: Mint oSQTH (open squeeth position) by depositing ETH collateral
 - **deposit**: Deposit additional ETH collateral to an existing vault
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Burn Squeeth to reduce position
-import { ControllerABI as IController } from "./abis";
-function main(
-  controllerAddress: Address,
-  vaultId: Uint256,
-  amount: Uint256,
-  withdrawAmount: Uint256,
-): Uint256 {
-  const controller = IController.at(controllerAddress);
-  controller.burnPowerPerpAmount(vaultId, amount, withdrawAmount);
-  return 1;
-}
-
-// Withdraw collateral from vault
-import { ControllerABI as IController } from "./abis";
-function main(controllerAddress: Address, vaultId: Uint256, amount: Uint256): Uint256 {
-  const controller = IController.at(controllerAddress);
-  controller.withdraw(vaultId, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -91,3 +61,9 @@ function main() {
 - `burnPowerPerpAmount(uint256 _vaultId, uint256 _powerPerpAmount, uint256 _withdrawAmount) returns (uint256 wPowerPerpAmount)`
 - `deposit(uint256 _vaultId) payable`
 - `withdraw(uint256 _vaultId, uint256 _amount)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

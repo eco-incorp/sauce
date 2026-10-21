@@ -33,8 +33,8 @@ and the map of the other skills. Every other fact has one owner in the map: load
 
 A program has control flow, reads and checks, and the engine runs it as written:
 it is not a multicall, and it does not use a magic header. On Solana the Kitchen and the engine are
-programs, the Pot is the Kitchen's account for the owner and salt, and a cook is the Kitchen's
-`cook` instruction signed by the owner (`sauce-solana`).
+programs, the Pot is an account at the Kitchen's program address for the owner and salt, owned by
+the engine, and a cook is the Kitchen's `cook` instruction signed by the owner (`sauce-solana`).
 
 ## The protocol with a user
 

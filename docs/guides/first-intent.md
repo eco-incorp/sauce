@@ -1,16 +1,47 @@
 # Your first cross-chain intent
 
-**Tutorial** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Create an intent](intents.md)
+**Tutorial** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Cross-chain intents](../concepts/cross-chain-intents.md)
 
 > Sometimes what you want happens on another chain. An **intent** is a job you post: "pay this person
 > 1 USDC on Ethereum, and the reward waiting here on Base is yours." Someone called a **solver** sees
 > it, does the job on Ethereum with their own money, proves it, and collects the reward. You never
 > touch the other chain. If nobody does the job in time, you take your reward back.
 
-This page posts that job from a Sauce program, on your Pot. Do the [quick start](quick-start.md)
-first: you will use its wallet `me`, and the same steps of simulating and then running.
+In this tutorial you post that job from a Sauce program on your Pot on Base, follow it, and then
+simulate a second job that pays a wallet on Solana. It takes about fifteen minutes. It follows the
+[quick start](quick-start.md): the same wallet, and the same habit of simulating before running.
 
-## The program
+**Posting the job uses real funds**: a little ETH on Base for gas and the Kitchen's fee, and the
+USDC you put up as the reward. That USDC waits in escrow on Base until a solver earns it or you take
+it back. Every simulation is free.
+
+## You will need
+
+- The `sauce` command and the wallet `me` from the [quick start](quick-start.md), holding a little
+  ETH on Base (0.001 ETH is plenty).
+- 2 USDC on Base, which you send to your Pot in step 3.
+- An address on Ethereum to pay, `<recipient>`. Your own works: `sauce wallet address me` prints
+  it.
+
+## You will have
+
+- An intent published on Base: a job that pays `<recipient>` on Ethereum, its reward locked in
+  escrow on Base.
+- The intent kept by the `sauce` command, and the commands that follow it to its end: filled and
+  claimed by a solver, or refunded to you.
+- A simulated intent to Solana, published from Ethereum.
+
+## 1. Write the program
+
+The program's comments name three parts of eco-routes, Eco's intent system, which Sauce uses on
+every chain it supports:
+
+- the **Portal**, a contract on each chain where jobs are posted and paid out;
+- the **vault**, an escrow address, one per intent, where your reward waits;
+- the **prover**, which carries word back to Base that the job was done.
+
+You never call them yourself. [Cross-chain intents](../concepts/cross-chain-intents.md) explains
+each.
 
 Save this as `cross-chain-intent.sauce.ts`:
 
@@ -49,7 +80,8 @@ function main(recipient: Address, minAmount: Uint256) {
 
 Line by line:
 
-- `const amount = self.USDC` reads how much USDC your Pot holds on Base right now.
+- `const amount = self.USDC` reads how much USDC your Pot holds on Base right now. The program
+  forwards all of it.
 - `require(...)` stops everything when there is too little to bother.
 - `Ethereum(() => { ... })` is the job: what happens on Ethereum. Inside the braces, `USDC` means
   Ethereum's USDC.
@@ -57,96 +89,78 @@ Line by line:
   the Pot measured, so the solver is paid on Base exactly what it pays out on Ethereum.
 
 So the program says: "whoever pays `recipient` this much USDC on Ethereum gets the same USDC from my
-Pot on Base." A real solver wants a little more than it pays out, so a real reward adds a margin.
+Pot on Base."
 
-Nothing here names a contract. Sauce knows eco-routes, Eco's intent system, on every chain it
-supports: its Portal, where jobs are posted, and the prover, which carries the proof back.
+The header signs with `--keystore`, a key file. This tutorial signs with your wallet, `--wallet me`,
+instead; the two work the same way.
 
-## Try it for free
+## 2. Simulate it
 
-An intent needs two things the program does not say: until when a solver may do the job (the
-deadline), and who may take the reward back if nobody does (the creator, you). Give them as flags:
+An intent needs two things the program does not say: until when a solver may do the job (its
+deadline), and who may take the reward back if nobody does (its creator, you). Give them as flags:
 
 ```sh
 sauce simulate cross-chain-intent.sauce.ts --chain base --wallet me --assume-balance USDC:2 \
   --intent-deadline <unix seconds> --intent-creator <your address> --args <recipient> 1000000
 ```
 
-The deadline is a moment in the future, in unix seconds: `$(($(date +%s) + 3600))` is an hour from
-now in most shells. `sauce wallet address me` prints your address, for the creator and, if you like,
-the recipient.
+- `--intent-deadline` is a moment in the future, in Unix seconds: `$(($(date +%s) + 3600))` is an
+  hour from now in most shells.
+- `--intent-creator` is your address, which `sauce wallet address me` prints.
+- `--args` gives `main` the recipient, then `minAmount`: 1000000 is 1 USDC.
 
-The simulation shows the Pot paying 2 USDC into the intent's own escrow address, called its
-**vault**, and one event from the Portal: the intent, published.
+The simulation shows the Pot paying the Kitchen its fee and 2 USDC into the intent's vault. Under
+`Intents published` it lists the new intent: its route to Ethereum, its 2 USDC reward, its vault,
+and from when the reward can be refunded if no fill is proven.
 
-## Post it for real
+Now pretend the Pot holds less than `minAmount`, with `--assume-balance USDC:0.5`. The simulation
+says `The cook reverts: the program threw "nothing to forward"`, and nothing is published.
 
-Send your Pot some USDC on Base, as in the quick start, then run the same line with `sauce run` and
-no `--assume-balance`:
+## 3. Post it
+
+Find your Pot's address on Base, as in the quick start, and send it 2 USDC:
+
+```sh
+sauce pot --chain base --wallet me
+```
+
+Then run the same line with `sauce run`, and no `--assume-balance`:
 
 ```sh
 sauce run cross-chain-intent.sauce.ts --chain base --wallet me \
   --intent-deadline <unix seconds> --intent-creator <your address> --args <recipient> 1000000
 ```
 
-The command keeps every intent it publishes. Follow yours with:
+It asks for your password, then sends one cook. In that one transaction your Pot measures its USDC,
+pays it into the intent's vault on Base, and publishes the intent.
+
+## 4. Follow it
+
+The command keeps every intent it publishes. List them, then ask where yours stands:
 
 ```sh
 sauce intent list
 sauce intent status <intent hash>
 ```
 
-`status` reads both chains and says where the intent stands: `funded` while it waits for a solver,
-then `filled`, `proven` and `claimed`. If the deadline passes with no fill, `sauce intent refund`
-gives you the reward back once the Portal allows it.
+`status` reads both chains. It says `funded` while the intent waits for a solver, then `filled`,
+`proven` and `claimed` as a solver does the job and collects the reward.
 
-## From TypeScript
+This reward equals what the solver pays out, so a solver earns nothing for its gas and fees, and may
+well leave the job alone. That is fine for a first intent. Once the deadline has passed, `status`
+says a refund is possible, and this returns the USDC to you:
 
-The same intent can be built in an application. This builds an intent to Base, offline: the
-creator and the fee are fixtures, and nothing is sent.
-
-```ts
-import { Base } from "@eco-incorp/sauce";
-
-const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
-
-const built = Base(
-  () => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
-
-console.log(built.hash().intentHash);
+```sh
+sauce intent refund <intent hash> --chain base --wallet me
 ```
 
-`Base` names where the job happens; `.reward(...)` names where the bounty waits. That one expression
-looks up USDC and the Universal Router on Base, compiles the body, finds the Portals and the prover,
-and assembles the intent. What stays yours: the deadlines, the creator, the Kitchen's fee, and a
-reward worth a solver's while. The SDK sends nothing, and does not price the reward.
+A real intent offers a reward a little larger than what the solver pays out, so the fill is worth
+its while.
 
-Three things trip people up:
+## 5. Simulate an intent to Solana
 
-- **The callback is source, not a function.** It is read as text and compiled. It never runs as
-  JavaScript, so it captures nothing: a surrounding `const amount` is invisible inside it. Pass
-  application values through `defines`, or write the body as a string.
-- **`USDC` and `Uniswap` are not imports.** They are names the compiler resolves on the destination
-  chain. `Base`, by contrast, is a named export.
-- **The Pot is not yours.** On the destination, an intent's program runs on a Pot that every
-  solver's fill shares. Bring assets into it, use them, and take what is left out in the same fill.
-  [The destination Pot](intents.md#the-destination-pot) explains it.
-
-[first-intent.ts](../examples/first-intent.ts) builds both sides of a transfer intent and the
-transactions that post it.
-
-## To Solana
-
-An intent can pay a Solana wallet too, and you still only send transactions on Ethereum. Inside
-the braces, `USDC` is Solana's USDC and `recipient` a Solana wallet, given in base58:
+The destination can be Solana too, while you only send transactions on Ethereum or Base. Save this
+as `ethereum-to-solana.sauce.ts`:
 
 ```js
 // Pays a Solana wallet USDC, for a USDC reward on the chain that publishes it.
@@ -157,18 +171,33 @@ function main(recipient: Address, amount: Uint256, reward: Uint256) {
 }
 ```
 
+Inside the braces, `USDC` is Solana's USDC and `recipient` a Solana wallet. Here the reward, 1.05
+USDC, is larger than the 1 USDC delivered. Every amount is one of `main`'s arguments, so your wallet
+can publish this intent directly, with no Pot. Simulate publishing it from Ethereum:
+
 ```sh
-sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --keystore <path> \
+sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --dry-run \
+  --from <your address> --assume-balance USDC:2 \
   --intent-deadline <unix seconds> --intent-creator <your address> \
   --args <solana wallet> 1000000 1050000
 ```
 
-If the wallet has no USDC account yet, the solver creates one first, and the command adds its rent
-to what the solver brings. [ethereum-to-solana.ts](../examples/ethereum-to-solana.ts) builds the
-same intent from TypeScript.
+Give any Solana wallet's address in base58, the way Solana writes addresses. `--dry-run` simulates
+the transactions your wallet would send on Ethereum, the reward paid into the vault and then the
+publication, and asks the Portal whether the intent is funded. Nothing is signed or sent.
+
+## What just happened
+
+Your Pot ran one cook on Base. It measured its USDC, paid it into the vault of a new intent, and
+published the intent on Base's Portal. Nothing has happened on Ethereum: a solver does that part, if
+the reward is worth it, and the reward waits in the vault until a solver claims it or you refund
+it. Then you simulated a second intent, published by your wallet instead of your Pot, whose job is
+done on Solana.
 
 ## Next
 
-- Every option of an intent, and how to fund, publish and follow it: [create an intent](intents.md).
-- An intent that posts the next one: [nested intents](nested-intents.md).
-- Every intent command: [the sauce command](cli-intents.md).
+- The next tutorial: run the quick start's program on Solana, in the
+  [Solana quick start](solana-quick-start.md).
+- What you just did, explained: [cross-chain intents](../concepts/cross-chain-intents.md).
+- Every intent command, for the one who posts and the one who fills:
+  [intents from the command line](cli-intents.md).

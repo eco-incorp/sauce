@@ -7,9 +7,9 @@ description: A Sauce program for Solana that spreads one exact-input swap over s
 
 The limit order of `sauce-distributed-swap`, on Solana: one price, the most the caller pays for any
 unit, fees included, and every pool trading until its own price reaches it. The method (the price
-does the splitting, no sorting, the two checks on the total) is that skill's. This skill owns what
-Solana changes: the program finds its pools by key, as an EVM program asks a factory for a pool,
-every account a pool takes is read from it as the cook is built, and what fits in one transaction.
+does the splitting, no sorting, the two checks on the total) is explained there; what Solana changes
+is here: the program finds its pools by key, as an EVM program asks a factory for a pool, every
+account a pool takes is read from it as the cook is built, and what fits in one transaction.
 
 ## When to use
 
@@ -139,9 +139,9 @@ its pool takes and how to list a pair's pools are in [references/venues.md](refe
 complete implementation of those rules, buying SpaceX's tokenized share, `SPCX_US` (a Token-2022
 mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%,
 Byreal's at 0.1% and PancakeSwap's at 0.08%; its header gives every input with its units and how to
-run it. Each venue's byte layout,
-instruction format and account order is `@sauce/router`'s, which every compile the package makes
-resolves with no option. Its code:
+run it. Each venue's byte layout, instruction format and account order is `@sauce/router`'s, which
+every compile the package makes resolves with no option. Save it as
+`solana-distributed-swap.sauce.ts` in your project: every command below runs that file. Its code:
 
 ```sauce chain=solana
 // Each pool is found by its key: `Raydium.CLMM.pool(USDC, SPCX_US, 2500)` is the pool Raydium's
@@ -326,8 +326,8 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
    the released engine and Kitchen (`sauce-solana`): `--owner` is any wallet's address, or any
    address with no account, never a program's account such as a pool or a mint;
    `--assume-balance` gives the Pot's USDC account the budget in that copy. `<recipient>` is a
-   wallet, or the Pot's address. The program file is the example's, in the project (or run where
-   the skill is installed):
+   wallet, or the Pot's address. The program file is the one saved above,
+   `solana-distributed-swap.sauce.ts`:
 
    ```sh
    sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \

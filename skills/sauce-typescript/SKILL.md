@@ -1,6 +1,6 @@
 ---
 name: sauce-typescript
-description: The TypeScript side of Sauce (@eco-incorp/sauce), for application code that builds the transactions itself. Compiling a .sauce.ts program for a chain exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, the protocol registry, JSON action programs, settlement verification, the Solana Kitchen client and token helpers, intents and cascades from code, testing on a forked chain, browser compilation with ready(), which import or subpath to use, and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies, tests or submits Sauce programs, or when the user asks which import or subpath to use.
+description: The TypeScript side of Sauce (@eco-incorp/sauce), for application code that builds the transactions itself. Compiling a .sauce.ts program for a chain exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, the protocol registry, JSON action programs, settlement verification, the Solana Kitchen client and token helpers, intents and cascades from code, testing on a forked chain, browser compilation with ready(), which import or subpath to use, and the rule that the library embeds no RPC. Use when writing application or script code that compiles, encodes, verifies, tests or submits Sauce programs, or when the user asks which import or subpath to use.
 ---
 
 # Sauce from TypeScript
@@ -9,7 +9,8 @@ Every `sauce` command is a thin layer over the package's functions; this skill o
 from application code. The program itself is still SauceScript (`sauce-script`); a person at a
 terminal uses the command (`sauce-cli`). It is the one skill that points into the package's own
 manual, which starts at `node_modules/@eco-incorp/sauce/docs/README.md`, with the subpath list at
-`node_modules/@eco-incorp/sauce/docs/api/README.md`.
+`node_modules/@eco-incorp/sauce/docs/api/README.md` and a first walk-through (install, compile, cook,
+simulate, build an intent) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.md`.
 
 ## When to use
 
@@ -24,9 +25,10 @@ manual, which starts at `node_modules/@eco-incorp/sauce/docs/README.md`, with th
 
 ## Core model
 
-- **The package embeds no RPC endpoint and reads no environment variable**: anything that touches a
-  chain takes a client or an `rpcUrl` from you. Every address comes from the package
-  (`/deployments`, the registries) or from the developer; never invent one.
+- **The library embeds no RPC endpoint and reads no environment variable**: anything an import does
+  that touches a chain takes a client or an `rpcUrl` from you (only the `sauce` command falls back
+  to public endpoints). Every address comes from the package (`/deployments`, the registries) or
+  from the developer; never invent one.
 - **A project depends on `@eco-incorp/sauce` and `viem`, both directly**: the API is typed in viem's
   types (`Address`, `Hex`, `PublicClient`), and a package manager that installs a package's own
   dependencies beside it (pnpm) resolves only the project's. Pin viem to the version the package
@@ -119,10 +121,12 @@ source and resolver, and for compact arguments.
   inlines that tuple instead; `routes.encodeEntryArguments` writes the layout `main` reads.
 - `compactArgs: true` returns an `entrySchema` for
   `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).
-- `resolveSdkModule` and `resolveSdkPackage` serve `@sauce/token`, the package's artifact ABIs and
-  every `./protocols/<slug>/<Export>.json` to your resolver.
-- In a browser, `await ready()` once before the first compile; `/svm/engine-artifacts` is the one
-  Node-only subpath. Reference: `node_modules/@eco-incorp/sauce/docs/api/compiler.md`.
+- `resolveSdkModule` and `resolveSdkPackage` serve `@sauce/token`, `@sauce/router`, the package's
+  artifact ABIs (`./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json`) and every
+  `./protocols/<slug>/<Export>.json` to your resolver.
+- In a browser, `await ready()` once before the first compile. Every subpath runs in a browser but
+  two, which are Node-only: `/svm/engine-artifacts` and `/testing`. Reference:
+  `node_modules/@eco-incorp/sauce/docs/api/compiler.md`.
 
 ## The protocol registry
 
@@ -178,8 +182,8 @@ address in `deployments` is recorded, not proof of live code.
     `routes.sourceGlobals("solana").accounts` lists the expressions.
     `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` resolves one to
     the address the cook's `AccountResolution` takes, as `sauce run` does; a venue namespace's
-    `slot:@pool:USDC.<part>` needs `load`, from which `svmPoolSlot(load, pool, payMint)` reads the
-    pool's nine accounts.
+    `slot:@pool:USDC.<part>` also needs `load`, an owned-account loader, through which it reads the
+    pool's nine accounts (give `slots`, one map per cook, to read each pool once).
   - A venue namespace's swap at a price is listed in `stoppable`, by its stop's derivation
     (`stop:<pool>:<token>:<limit>`). `svmProgramStops(program, chain, accounts, integers, load)`
     from `@eco-incorp/sauce/svm` works each stop out as `sauce` does (`accounts`: each derived name
@@ -196,6 +200,10 @@ address in `deployments` is recorded, not proof of live code.
     `svmKitchenIdlPath()` from `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the
     packaged programs; their ids are `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from
     `/deployments`. Writing the programs is `sauce-solana`'s.
+  - Reference: `node_modules/@eco-incorp/sauce/docs/guides/solana-from-typescript.md` (compile and
+    keep the account list, create the client, simulate, send, build the pieces yourself) and, for
+    the swap functions a program calls on Solana,
+    `node_modules/@eco-incorp/sauce/docs/api/router-solana.md`.
 - **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
   `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
   `fulfill`), `destinationPot(chain)` the shared Pot and
@@ -229,7 +237,8 @@ rpcUrl })` forks a chain at a pinned block on a local anvil (replaying `state`, 
   `mint:PYUSD`), derive the rest, create the token accounts the cook names that are missing, and
   stage a program too large for one transaction; `fund(holder, { USDC: "1", SOL: "1" })` writes
   balances, and `CookReverted`'s `reason` is the program's `require` message.
-  Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md`.
+  Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md` (one task at a time) and
+  `node_modules/@eco-incorp/sauce/docs/api/testing-kit.md` (every export of `/testing`).
 
 ## Pitfalls
 

@@ -485,3 +485,10 @@ returned.
 | `Velodrome.Pool(<address>)` | [`velodrome`](protocols/velodrome.md) |
 | `Venus.VToken(<address>)` | [`venus`](protocols/venus.md) |
 | `YearnV3.Vault(<address>)` | [`yearn-v3`](protocols/yearn-v3.md) |
+
+## Next
+
+- [Swap by name](../guides/swap-by-name.md): a first program that calls a protocol by name.
+- [Protocols and tokens](../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Names and registries](../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

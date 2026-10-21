@@ -40,12 +40,14 @@ export const DEV_TOPICS: ReadonlyArray<{
   {
     topic: "start",
     about:
-      "install the package, run a first program on Base and on Solana, and build a first intent; the glossary",
+      "install the package, run a first program on Base and on Solana, build a first intent, and compile and test a program from TypeScript; the glossary",
     keywords: ["start", "install", "quick", "first", "hello", "begin", "typescript", "glossary"],
     files: [
       "guides/quick-start.md",
       "guides/solana-quick-start.md",
       "guides/first-intent.md",
+      "guides/typescript-quick-start.md",
+      "guides/test-your-first-program.md",
       "concepts/glossary.md",
       "examples/first-intent.ts",
     ],
@@ -114,13 +116,20 @@ export const DEV_TOPICS: ReadonlyArray<{
     topic: "solana",
     about: "Solana from TypeScript: the SVM client, account plans, the Kitchen, staging",
     keywords: ["solana", "svm", "spl", "manifest", "lamports", "staging"],
-    files: ["guides/solana.md"],
+    files: ["guides/solana.md", "guides/solana-from-typescript.md"],
   },
   {
     topic: "verification",
     about: "checking a settle program and a settlement from TypeScript",
     keywords: ["verify", "verification", "settle", "settlement", "audit", "validate"],
     files: ["guides/verification.md"],
+  },
+  {
+    topic: "testing",
+    about:
+      "tests that run programs from TypeScript: fork() and local() on anvil or LiteSVM, fund, run, simulate, the testing kit's exports",
+    keywords: ["test", "tests", "testing", "fork", "anvil", "litesvm", "snapshot", "fixture"],
+    files: ["guides/test-your-first-program.md", "guides/testing.md", "api/testing-kit.md"],
   },
   {
     topic: "api",
@@ -143,9 +152,9 @@ export const DEV_TOPICS: ReadonlyArray<{
   {
     topic: "mcp",
     about:
-      "this MCP server and the agent skills: running it, endpoints, agent setup, skills, self-hosting",
+      "this MCP server and the agent skills: a first agent session, running it, endpoints, agent setup, skills, self-hosting",
     keywords: ["mcp", "server", "setup", "agent", "agents", "selfhost", "http", "stdio", "skills"],
-    files: ["guides/mcp.md", "guides/skills.md"],
+    files: ["guides/agent-quick-start.md", "guides/mcp.md", "guides/skills.md"],
   },
 ];
 

@@ -8,14 +8,11 @@
 > name a program writes for each contract. opBNB is a preview chain: programs compile and simulate
 > here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On opBNB a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request opBNB, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22opBNB%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+opBNB+%28204%29&chain=opBNB&chain-id=204) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On opBNB a program
+compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
+`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -58,3 +55,14 @@ address.
 | --- | --- | --- | --- |
 | [PancakeSwap V2](../protocols/pancakeswap-v2.md) | factory | `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E` | `PancakeswapV2.Factory` |
 | [PancakeSwap V2](../protocols/pancakeswap-v2.md) | router | `0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb` | `PancakeswapV2.Router` |
+
+## Requesting support
+
+To request opBNB, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22opBNB%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+opBNB+%28204%29&chain=opBNB&chain-id=204) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

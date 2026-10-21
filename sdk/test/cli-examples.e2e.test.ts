@@ -18,7 +18,9 @@
  *
  * The manual's quick start, `docs/examples/pay.sauce.ts`, runs here too: its header's `sauce
  * simulate` and `sauce run` lines for Base, as written, from the wallet `me` the page makes, the
- * Pot deployed when the run asks and paying from what the page has its reader send it.
+ * Pot deployed when the run asks and paying from what the page has its reader send it. So does the
+ * program its second tutorial builds, `docs/examples/pay-list.sauce.ts`: its header's two lines,
+ * from the same wallet, a list of two recipients and a limit that pays only the first.
  *
  * The output the skill quotes is the output of these runs: each ```text block of its SKILL.md that
  * quotes one is held, line by line, to what the command printed here, with the addresses written as
@@ -541,6 +543,23 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
     }, 120_000);
   });
 
+  /** The quick start's wallet, `me`, made as the page makes it: its password from a variable here,
+   *  where the page's reader types it at the prompt. Made once, funded with gas, and kept in the
+   *  snapshot, for every page of the manual that runs from it. */
+  const PASSWORD = ["--password-env", "SAUCE_WALLET_PASSWORD"];
+  let quickStartWallet: Address | undefined;
+  const walletMe = async (): Promise<Address> => {
+    if (quickStartWallet === undefined) {
+      await fresh();
+      quickStartWallet = getAddress(
+        jsonOf(await sauce("wallet", "new", "me", ...PASSWORD, "--json")).address as string,
+      );
+      await base.send(base.deployer, quickStartWallet, "0x", parseEther("1"));
+      snapshot = await base.testClient.snapshot();
+    }
+    return quickStartWallet;
+  };
+
   describe("the manual's quick start, docs/examples/pay.sauce.ts", () => {
     const PAY = relative(process.cwd(), join(HERE, "../../docs/examples/pay.sauce.ts"));
     /** The `sauce <command> pay.sauce.ts --chain base` line of the example's header, as words, its
@@ -557,18 +576,10 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         .slice(1)
         .map((word) => ({ "pay.sauce.ts": PAY, "<recipient>": RECIPIENT })[word] ?? word);
     };
-    /** The quick start's wallet, `me`, made as the page makes it: its password from a variable here,
-     *  where the page's reader types it at the prompt. */
-    const PASSWORD = ["--password-env", "SAUCE_WALLET_PASSWORD"];
     let me: Address;
 
     beforeAll(async () => {
-      await fresh();
-      me = getAddress(
-        jsonOf(await sauce("wallet", "new", "me", ...PASSWORD, "--json")).address as string,
-      );
-      await base.send(base.deployer, me, "0x", parseEther("1"));
-      snapshot = await base.testClient.snapshot();
+      me = await walletMe();
     }, 120_000);
 
     it("simulates as the page says: the wallet names the owner, no password, nothing sent", async () => {
@@ -598,6 +609,74 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(run.stdout).toMatch(/^deployed Pot 0x[0-9a-fA-F]{40} in 0x[0-9a-f]{64}: success/m);
       expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
       expect(await base.balanceOf(usdc, RECIPIENT)).toBe(1_000_000n);
+      expect(await base.balanceOf(usdc, pot)).toBe(0n);
+    }, 120_000);
+  });
+
+  describe("the manual's second tutorial, docs/examples/pay-list.sauce.ts", () => {
+    const PAY_LIST = relative(process.cwd(), join(HERE, "../../docs/examples/pay-list.sauce.ts"));
+    const FIRST: Address = "0x9999999999999999999999999999999999999999";
+    const SECOND: Address = "0x5555555555555555555555555555555555555555";
+    /** The `sauce <command> pay-list.sauce.ts --chain base` line of the example's header, as words:
+     *  the file given by its path, and the `--args` JSON word as the shell passes it, its single
+     *  quotes gone and its two `<recipient>`s filled in with FIRST and SECOND, in that order. */
+    const usage = (command: string): string[] => {
+      const line = readFileSync(PAY_LIST, "utf8")
+        .split("\n")
+        .map((one) => one.replace(/^\/\/\s*/, ""))
+        .find((one) => one.startsWith(`sauce ${command} pay-list.sauce.ts --chain base `));
+      if (line === undefined) throw new Error(`pay-list.sauce.ts has no \`sauce ${command}\` line`);
+
+      const recipients = [FIRST, SECOND];
+      return line
+        .split(/\s+/)
+        .slice(1)
+        .map((word) => {
+          if (word === "pay-list.sauce.ts") return PAY_LIST;
+          if (!word.startsWith("'")) return word;
+          return word.slice(1, -1).replace(/<recipient>/g, () => recipients.shift()!);
+        });
+    };
+    let me: Address;
+
+    beforeAll(async () => {
+      me = await walletMe();
+    }, 120_000);
+
+    it("reads its header's lines: two recipients, 1 USDC each, a limit of 1.5 USDC", () => {
+      for (const command of ["simulate", "run"]) {
+        const words = usage(command);
+        expect(words.slice(words.indexOf("--args") + 1)).toEqual([
+          JSON.stringify([FIRST, SECOND]),
+          "1000000",
+          "1500000",
+        ]);
+      }
+    });
+
+    it("simulates as the page says: the first recipient paid, the second not, 1 USDC returned", async () => {
+      await fresh();
+      const run = await sauce(...usage("simulate"), ...rpc(), "--json");
+      expect(jsonOf(run)).toMatchObject({ ok: true, returnType: "Uint256" });
+      expect(String(jsonOf(run).returned)).toBe("1000000");
+      const transfers = jsonOf(run).transfers as { token: string; to: string; amount: string }[];
+      expect(transfers).toContainEqual(
+        expect.objectContaining({ token: usdc, to: FIRST, amount: "1000000" }),
+      );
+      expect(transfers.filter(({ to }) => to === SECOND)).toEqual([]);
+      expect(await base.balanceOf(usdc, FIRST)).toBe(0n);
+      expect(await base.balanceOf(usdc, SECOND)).toBe(0n);
+    }, 120_000);
+
+    it("runs with sauce run: 1 USDC paid on chain to the first recipient, none to the second", async () => {
+      await fresh();
+      const pot = getAddress(v12PredictPot(me) as Address);
+      await base.mint(usdc, pot, 1_000_000n);
+      const run = await sauce(...usage("run"), ...PASSWORD, ...rpc());
+      expect(run.code).toBe(0);
+      expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
+      expect(await base.balanceOf(usdc, FIRST)).toBe(1_000_000n);
+      expect(await base.balanceOf(usdc, SECOND)).toBe(0n);
       expect(await base.balanceOf(usdc, pot)).toBe(0n);
     }, 120_000);
   });

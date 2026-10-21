@@ -5,10 +5,57 @@
 **Reference** · [Documentation](../README.md)
 
 > This is the `sauce` command's manual page: every command and every flag, word for word as `--help`
-> prints it. The guides explain what each one is for; come here to look up an exact flag.
+> prints it. The list below links each command; the guides explain what each one is for, and this
+> page is where you look up an exact flag.
 
-Every command of `sauce`, and every flag it takes, as `sauce <command> --help` prints it. The
-guides show the commands in use: [the sauce command](../guides/cli.md) lists them.
+Every command of `sauce`, and every flag it takes, as `sauce <command> --help` prints it, in
+the order `sauce --help` lists them. The first block is `sauce --help` itself: what every
+command shares, from endpoints and signing to the chains it sends on. A command with verbs is
+followed by each verb's help.
+
+## Commands
+
+Most work goes through four of them: `sauce compile` checks a program, `sauce simulate` tries
+it with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsigned
+transaction for another wallet to sign.
+
+- [`sauce compile`](#sauce-compile): Compile a SauceScript program; print its bytecode
+- [`sauce actions`](#sauce-actions): Lower an actions document to SauceScript for a chain; print the source and bytecode
+- [`sauce simulate`](#sauce-simulate): Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
+- [`sauce run`](#sauce-run): Compile, sign, send and wait for the cook on your Pot
+- [`sauce intent`](#sauce-intent): Publish, fill, prove, claim, refund and cancel cross-chain intents
+  - `sauce intent publish`: Publish a file's fixed intents from a wallet (or make one, step by step)
+  - `sauce intent fill`: Fill a file's (or a stored) intents on their destination: simulated, or --send
+  - `sauce intent prove`: Send the proof of filled (or cancelled) intents, paying the prover's fee
+  - `sauce intent claim`: Withdraw proven intents' rewards to their claimants, on the source
+  - `sauce intent refund`: Return unearned rewards from their vaults to their creators, on the source
+  - `sauce intent cancel`: Cancel unfilled intents after their route's deadline, for an early refund
+  - `sauce intent status`: Where intents stand on both chains, and what can be done next
+  - `sauce intent list`: Every intent the store keeps, and where each stands
+  - `sauce intent show`: One stored intent: its route, reward, deadlines and events, and where it stands
+  - `sauce intent import`: Store the intents a transaction published, rebuilt from its logs
+- [`sauce wallet`](#sauce-wallet): Create, list and import the wallets --wallet signs with
+  - `sauce wallet new`: Create a wallet with a fresh key, encrypted under its password
+  - `sauce wallet list`: Every wallet: its name, kind and address
+  - `sauce wallet address`: A wallet's address, with no password
+  - `sauce wallet import`: Keep a key you have as a wallet: a private key, keystore or Solana keypair
+  - `sauce wallet export`: Show a wallet's key at your terminal, once you confirm
+- [`sauce tx`](#sauce-tx): Print the unsigned cook transaction, for a wallet to sign
+- [`sauce send`](#sauce-send): Broadcast transactions signed elsewhere, wait for them, and report what they did
+- [`sauce reclaim`](#sauce-reclaim): List the code buffers and lookup tables a Solana owner left open, and close them
+- [`sauce pot`](#sauce-pot): Predict a Pot's address, deploy it, and list the Pots you deployed
+  - `sauce pot list`: List the Pots you deployed or imported, each with the release it was minted under
+  - `sauce pot import`: Record a Pot deployed elsewhere, read from the chain with the release that minted it
+- [`sauce globals`](#sauce-globals): List the tokens, protocols and other names a program on a chain can use
+- [`sauce price`](#sauce-price): Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
+- [`sauce pools`](#sauce-pools): List a pair's price-limit pools on a chain, deepest first, with their prices
+- [`sauce inspect`](#sauce-inspect): Take a cook, a Portal or Kitchen call, a program or a file apart
+- [`sauce verify`](#sauce-verify): Check that a payload, cook or intent runs the audited settle program
+- [`sauce skills`](#sauce-skills): Install, update or check this package's agent skills in a project
+- [`sauce update`](#sauce-update): Update this sauce command, the way it was installed
+- [`sauce runtime`](#sauce-runtime): Install or check the packages sauce mcp and Solana simulations load
+- [`sauce init`](#sauce-init): Scaffold a project that uses this package
+- [`sauce mcp`](#sauce-mcp): Serve the commands and the agent skills to coding agents over MCP
 
 ## `sauce`
 
@@ -53,9 +100,9 @@ registry once a day, in the background, never delaying a command. It is off with
 with --no-update-check (any command takes it, before the command too), and for a command
 whose --config file says "updateCheck": false.
 
-For the initial release, transactions are built and sent only on Ethereum, Base and Solana.
-Every other chain is a preview chain: programs compile there, and simulate, dry runs and reads
-work, but no transaction is built or sent. Ask for a chain:
+Transactions are built and sent only on Ethereum, Base and Solana. Every other chain is a
+preview chain: programs compile there, and simulate, dry runs and reads work, but no transaction
+is built or sent. Ask for a chain:
 https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
 
 A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain
@@ -260,14 +307,16 @@ accounts the transaction writes before it and as the simulation leaves them — 
 (a program's revert message decoded) and the program logs. Solana's simulateTransaction
 takes no account overrides, so the owner must hold the Pot's rent and the fees there.
 A cook too large for one transaction, or one given --assume-balance, is simulated in a
-local copy instead (LiteSVM, which the package brings): every account it names read from
-the cluster with its rent, the released engine and Kitchen, the owner given the lamports
-the staging and the fees take (any address can simulate), the Pot created
-if missing, the program staged into a code buffer as `sauce run` stages it, then the cook,
-its accounts through a lookup table. There --assume-balance TOKEN:amount gives the account
-the cook spends that token from (the Pot's, or the owner's with --via engine) that balance,
-and a pot:<token> or owner:<token> account the cluster does not have yet is made empty,
-which `sauce run` creates before the cook. An --owner that is not a wallet is refused.
+local copy instead, with LiteSVM, which the package does not bundle: your own copy at the
+version it pins, else the runtime folder its first use installs (sauce runtime). Every
+account the cook names is read from the cluster with its rent, the released engine and
+Kitchen loaded, the owner given the lamports the staging and the fees take (any address
+can simulate), the Pot created if missing, the program staged into a code buffer as
+`sauce run` stages it, then the cook, its accounts through a lookup table. There
+--assume-balance TOKEN:amount gives the account the cook spends that token from (the
+Pot's, or the owner's with --via engine) that balance, and a pot:<token> or owner:<token>
+account the cluster does not have yet is made empty, which `sauce run` creates before the
+cook. An --owner that is not a wallet is refused.
 
 A cook that reverts exits 1, and the first line says so: The cook reverts: <reason>. In
 --json, reverted: true and error lead the JSON, and the same line leads stderr.
@@ -395,9 +444,9 @@ Both pay the same execution fee into the Kitchen's treasury. The cook signs the 
 as its max_execution_fee, so it pays that or fails; --max-execution-fee <lamports> refuses
 a fee above it before anything is sent.
 
-Runs only on a supported chain: Ethereum, Base and Solana, for the initial release. On any other
-(a preview chain) it is refused before anything is read or signed, with the supported chains and
-the GitHub issue to ask for that chain with; compile and simulate work there.
+Runs only on a supported chain: Ethereum, Base and Solana. On any other (a preview chain) it is
+refused before anything is read or signed, with the supported chains and the GitHub issue to ask
+for that chain with; compile and simulate work there.
 
 Examples:
   sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json
@@ -567,10 +616,9 @@ publishing it (--dry-run) and filling it on the destination (`sauce intent fill`
 with a signer publishes it once you approve (or with --yes), storing it. It reads
 both chains.
 
-Publishes (or prints the transactions) only on a supported chain: Ethereum, Base and Solana, for
-the initial release. On any other (a preview chain) it is refused before anything is read or
-signed, with the supported chains and the GitHub issue to ask for that chain with; compile and
-simulate work there.
+Publishes (or prints the transactions) only on a supported chain: Ethereum, Base and Solana. On
+any other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \
@@ -679,10 +727,9 @@ an address on the source chain, is required: the reward pays it, and a Solana ke
 With --send and --keypair it is sent, then its proof through the HyperProver, the IGP's gas
 paid in the same transaction, each spend approved.
 
---send sends a fill only on a supported chain: Ethereum, Base and Solana, for the initial
-release. On any other (a preview chain) it is refused before anything is read or signed, with
-the supported chains and the GitHub issue to ask for that chain with; compile and simulate work
-there.
+--send sends a fill only on a supported chain: Ethereum, Base and Solana. On any other (a
+preview chain) it is refused before anything is read or signed, with the supported chains and
+the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce intent fill swap-on-base.sauce.ts --chain ethereum \
@@ -747,10 +794,9 @@ The intent is a hash the store holds (`sauce intent publish`, `run`, `fill` and 
 store them), or the file that opens it (with --chain, its source, and the flags it was
 built with). It reads the destination, and the source to skip what is proven already.
 
-Proves (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for the
-initial release. On any other (a preview chain) it is refused before anything is read or signed,
-with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
-work there.
+Proves (or prints the transaction) only on a supported chain: Ethereum, Base and Solana. On any
+other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Example:
   sauce intent prove 0x<intent hash> --keystore ~/.keys/me.json
@@ -813,10 +859,9 @@ id. A proven CANCELLATION pays no claimant: refund it instead.
 An intent from Solana is claimed on Solana, one transaction an intent, paid by --keypair
 (any key): the claimant's token account opened where it has none, then Portal.withdraw.
 
-Claims (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for the
-initial release. On any other (a preview chain) it is refused before anything is read or signed,
-with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
-work there.
+Claims (or prints the transaction) only on a supported chain: Ethereum, Base and Solana. On any
+other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Example:
   sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
@@ -877,10 +922,9 @@ refund: several intents are refunded one transaction each. With no signer, print
 unsigned transactions. An intent from Solana is refunded on Solana, paid by --keypair (any
 key): the creator's token account opened where it has none, then Portal.refund.
 
-Refunds (or prints the transactions) only on a supported chain: Ethereum, Base and Solana, for
-the initial release. On any other (a preview chain) it is refused before anything is read or
-signed, with the supported chains and the GitHub issue to ask for that chain with; compile and
-simulate work there.
+Refunds (or prints the transactions) only on a supported chain: Ethereum, Base and Solana. On
+any other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Example:
   sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
@@ -948,10 +992,9 @@ reorg past the deadline that re-includes a fill would leave that solver unpaid. 
 sends only the cancel; --and-prove sends cancelAndProve, proving at once, with the fee
 approved as for prove. With no signer, prints the unsigned transaction.
 
-Cancels (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for
-the initial release. On any other (a preview chain) it is refused before anything is read or
-signed, with the supported chains and the GitHub issue to ask for that chain with; compile and
-simulate work there.
+Cancels (or prints the transaction) only on a supported chain: Ethereum, Base and Solana. On any
+other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Example:
   sauce intent cancel 0x<intent hash> --keystore ~/.keys/me.json
@@ -1314,10 +1357,9 @@ same transaction, ahead of the cook (createsPot). It reads the cluster (for the 
 and the fee), and the --account flags simulate takes; --max-execution-fee refuses a fee
 above it.
 
-Prints the transaction only on a supported chain: Ethereum, Base and Solana, for the initial
-release. On any other (a preview chain) it is refused before anything is read or signed, with
-the supported chains and the GitHub issue to ask for that chain with; compile and simulate work
-there.
+Prints the transaction only on a supported chain: Ethereum, Base and Solana. On any other (a
+preview chain) it is refused before anything is read or signed, with the supported chains and
+the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
@@ -1387,9 +1429,9 @@ and in the intent store (--store, default ~/.sauce/intents) every intent one pub
 and what one did to an intent the store holds (filled, proving, claimed, refunded,
 cancelled), read from the Portal's own events.
 
-Sends only on a supported chain: Ethereum, Base and Solana, for the initial release. On any
-other (a preview chain) it is refused before anything is read or signed, with the supported
-chains and the GitHub issue to ask for that chain with; compile and simulate work there.
+Sends only on a supported chain: Ethereum, Base and Solana. On any other (a preview chain) it is
+refused before anything is read or signed, with the supported chains and the GitHub issue to ask
+for that chain with; compile and simulate work there.
 
 Examples:
   sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)
@@ -1451,9 +1493,9 @@ With the owner's key (--keypair, or --wallet), it asks, then sends each transact
 prints it; --yes sends without asking. With --owner alone it prints the transactions
 unsigned, as JSON, for the owner to sign anywhere and send with sauce send.
 
-Closes only on a supported chain: Ethereum, Base and Solana, for the initial release. On any
-other (a preview chain) it is refused before anything is read or signed, with the supported
-chains and the GitHub issue to ask for that chain with; compile and simulate work there.
+Closes only on a supported chain: Ethereum, Base and Solana. On any other (a preview chain) it
+is refused before anything is read or signed, with the supported chains and the GitHub issue to
+ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce reclaim --chain solana --owner <pubkey>
@@ -1526,10 +1568,9 @@ Verbs (`sauce pot <verb> --help` for each):
   list      List the Pots you deployed or imported, each with the release it was minted under
   import    Record a Pot deployed elsewhere, read from the chain with the release that minted it
 
-Deploys (or prints the deployment) only on a supported chain: Ethereum, Base and Solana, for the
-initial release. On any other (a preview chain) it is refused before anything is read or signed,
-with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
-work there.
+Deploys (or prints the deployment) only on a supported chain: Ethereum, Base and Solana. On any
+other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce pot --owner 0x… --chain base
@@ -2021,13 +2062,17 @@ Options:
   -h, --help                        Show this help
       --no-update-check             No notice of a newer sauce, and no registry read for one
 
-The Sauce MCP server. Its tools are this command's building half — sauce_compile,
-sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,
-sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools
-and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,
-sauce_install_skills) and as resources, at sauce://skills/<path>. No tool takes a key or a
-password: a transaction comes back unsigned, for the user's own wallet, or is sent from
-one of the server's own wallets (below).
+The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half
+as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,
+sauce_actions, sauce_tx, sauce_pot, sauce_reclaim, sauce_simulate, sauce_intent_publish,
+sauce_inspect and sauce_verify; an intent's later steps, sauce_intent_import,
+sauce_intent_status, sauce_intent_fill, sauce_intent_prove, sauce_intent_claim,
+sauce_intent_refund and sauce_intent_cancel; sauce_send, which broadcasts what the caller
+signed; the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,
+sauce_install_skills) and as resources, at sauce://skills/<path>; and two prompts,
+sauce_write_program and sauce_open_intent. Over stdio it also has the wallet tools and the
+store tools (below). No tool takes a key or a password: a transaction comes back unsigned,
+for the user's own wallet, or is sent from one of the server's own wallets.
 
 A coding agent starts the server itself, from its MCP configuration. Add it once:
   claude mcp add sauce -- sauce mcp    # Claude Code
@@ -2086,3 +2131,9 @@ Examples:
   sauce mcp --http 3000
   sauce mcp setup --agent claude,cursor
 ```
+
+## Next
+
+- [The sauce command](../guides/cli.md): installing it, and what each command is for.
+- [Troubleshooting](../guides/troubleshooting.md): what a command's message means.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

@@ -17,55 +17,6 @@ Omnichain liquidity transport protocol built on LayerZero. Provides native asset
 | Namespace | `Stargate` on ethereum, base, arbitrum |
 | Chains | ethereum, base, arbitrum |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Send tokens cross-chain via Stargate pool using LayerZero messaging.
-
-```typescript
-import { StargatePoolABI as IStargatePool } from "./abis";
-
-function main(
-  poolAddress: Address,
-  dstEid: Uint256,
-  recipient: Uint256,
-  amount: Uint256,
-  minAmount: Uint256,
-): {
-  msgReceipt: { guid: Uint256; nonce: Uint256; fee: { nativeFee: Uint256; lzTokenFee: Uint256 } };
-  oftReceipt: { amountSentLD: Uint256; amountReceivedLD: Uint256 };
-} {
-  const pool = IStargatePool.at(poolAddress);
-  return pool.send(
-    {
-      dstEid: dstEid,
-      to: recipient,
-      amountLD: amount,
-      minAmountLD: minAmount,
-      extraOptions: 0x00,
-      composeMsg: 0x00,
-      oftCmd: 0x00,
-    },
-    { nativeFee: ctx.msgValue(), lzTokenFee: 0 },
-    ctx.msgSender(),
-  );
-}
-```
-
-- `poolAddress`: Token-specific pool (e.g. poolUSDC, poolNative)
-- `dstEid`: LayerZero endpoint ID for destination chain (NOT the EVM chain ID)
-- `recipient`: Destination address as bytes32 (left-padded)
-- `amount`: Amount in token's native decimals (LD = local decimals)
-- `minAmount`: Minimum amount to receive on destination (slippage protection)
-- Requires native token (ETH) for LayerZero messaging fee (sent as msg.value)
-- Requires ERC-20 approval to the pool for non-native tokens
-
 ## Notes
 
 - Uses LayerZero endpoint IDs (dstEid) for destination chains, NOT EVM chain IDs
@@ -107,3 +58,9 @@ function main() {
 
 - `send((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) _sendParam, (uint256 nativeFee, uint256 lzTokenFee) _fee, address _refundAddress) payable returns ((bytes32 guid, uint64 nonce, (uint256 nativeFee, uint256 lzTokenFee) fee) msgReceipt, (uint256 amountSentLD, uint256 amountReceivedLD) oftReceipt)`
 - `quoteOFT((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) _sendParam) view returns ((uint256 minAmountLD, uint256 maxAmountLD) oftLimit, (int256 feeAmountLD, string description)[] oftFeeDetails, (uint256 amountSentLD, uint256 amountReceivedLD) oftReceipt)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

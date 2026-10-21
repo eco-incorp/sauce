@@ -17,41 +17,11 @@ The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a
 | Namespace | `Lido` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 
-## Key Operations
+## What it offers
 
 - **submit**: Stake ETH and receive stETH (rebasing)
 - **wrap**: Wrap stETH into wstETH (non-rebasing, DeFi-compatible)
 - **unwrap**: Unwrap wstETH back to stETH
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Stake ETH for stETH
-import { LidoABI as ILido } from "./abis";
-function main(lidoAddress: Address): Uint256 {
-  const lido = ILido.at(lidoAddress);
-  return lido.submit(0x0000000000000000000000000000000000000000);
-}
-
-// Wrap stETH to wstETH
-import { WstETHABI as IWstETH } from "./abis";
-function main(wstethAddress: Address, amount: Uint256): Uint256 {
-  const wsteth = IWstETH.at(wstethAddress);
-  return wsteth.wrap(amount);
-}
-
-// Unwrap wstETH to stETH
-import { WstETHABI as IWstETH } from "./abis";
-function main(wstethAddress: Address, amount: Uint256): Uint256 {
-  const wsteth = IWstETH.at(wstethAddress);
-  return wsteth.unwrap(amount);
-}
-```
 
 ## Notes
 
@@ -98,3 +68,9 @@ function main() {
 - `unwrap(uint256 _wstETHAmount) returns (uint256)`
 - `getStETHByWstETH(uint256 _wstETHAmount) view returns (uint256)`
 - `getWstETHByStETH(uint256 _stETHAmount) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -64,6 +64,24 @@ export interface SauceContext {
   isContract(address: bigint): boolean;
   /** `ctx.isEOA(address: Uint256): bool` — EVM only. */
   isEOA(address: bigint): boolean;
+  /** `ctx.txOrigin(): Address` — EVM only. */
+  txOrigin(): bigint;
+  /** `ctx.coinbase(): Address` — EVM only. */
+  coinbase(): bigint;
+  /** `ctx.prevrandao(): Uint256` — EVM only. */
+  prevrandao(): bigint;
+  /** `ctx.blockGasLimit(): Uint256` — EVM only. */
+  blockGasLimit(): bigint;
+  /** `ctx.baseFee(): Uint256` — EVM only. */
+  baseFee(): bigint;
+  /** `ctx.gasPrice(): Uint256` — EVM only. */
+  gasPrice(): bigint;
+  /** `ctx.blockHash(n: Uint256): Uint256` — EVM only. */
+  blockHash(n: bigint): bigint;
+  /** `ctx.blobHash(i: Uint256): Uint256` — EVM only. */
+  blobHash(i: bigint): bigint;
+  /** `ctx.blobBaseFee(): Uint256` — EVM only. */
+  blobBaseFee(): bigint;
 }
 
 /** `abi`: Solidity ABI encoding. */
@@ -90,6 +108,18 @@ export interface SauceEvm {
   tload(key: bigint): bigint;
   /** `evm.tstore(key: Uint256, value: Uint256): void` — EVM only. */
   tstore(key: bigint, value: bigint): void;
+  /** `evm.create(initcode: bytes, value?: Uint256): Address` — EVM only. */
+  create(initcode: SauceBytesLike, value?: bigint): bigint;
+  /** `evm.create2(initcode: bytes, salt: Uint256, value?: Uint256): Address` — EVM only. */
+  create2(initcode: SauceBytesLike, salt: bigint, value?: bigint): bigint;
+  /** `evm.create3(initcode: bytes, salt: Uint256, value?: Uint256): Address` — EVM only. */
+  create3(initcode: SauceBytesLike, salt: bigint, value?: bigint): bigint;
+  /** `evm.createAddress(deployer: Address, nonce: Uint256): Address` — EVM only. */
+  createAddress(deployer: bigint, nonce: bigint): bigint;
+  /** `evm.create2Address(deployer: Address, salt: Uint256, initCodeHash: Uint256): Address` — EVM only. */
+  create2Address(deployer: bigint, salt: bigint, initCodeHash: bigint): bigint;
+  /** `evm.create3Address(salt: Uint256): Address` — EVM only. */
+  create3Address(salt: bigint): bigint;
 }
 
 /** `svm`: accounts and cross-program calls on the SVM. */

@@ -118,9 +118,10 @@ functions, a token a swap buys or sells.
 | Base     | Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens                                                                                                          |
 | Solana   | Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities' (`NVDA_US`, `SPCX_US`), PreStocks' private companies (`SPACEX`, `OPENAI`) |
 
-- **The symbol is the issuer's own ticker, in its case**: symbols are case-sensitive (`SPCXC` is
-  not `SPCXc`), a `.` is written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`), and
-  PreStocks' symbol is the company's name (`SPACEX`).
+- **The symbol is the issuer's own ticker, in its case**: in a program symbols are case-sensitive
+  (`SPCXC` is not `SPCXc`; the `sauce` command's token flags, such as `--fund`, match one without
+  regard to case), a `.` is written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`),
+  and PreStocks' symbol is the company's name (`SPACEX`).
 - **One company has one token per issuer**: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on
   Base, and `SPCXx`, `SPCXon`, `SPCX_US` and `SPACEX` on Solana. Find one by name or ticker with
   `sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
@@ -175,11 +176,11 @@ function main(recipient: Address, amount: Uint256): Uint256 {
 Every catalogued protocol has a namespace, resolved for the chain the program is compiled for, with
 its address and ABI from the registry. A member is one of three kinds:
 
-| Member              | Example                                                  | In a program                                                        |
-| ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- |
-| A deployed contract | `UniswapV3.Factory`, `AerodromeSlipstream.CLFactory`     | its address as a value; `.method(...)` calls it                     |
-| An address only     | `Camelot.V3Factory` (no ABI the registry has verified)   | its address                                                         |
-| An interface        | `Erc4626.Vault`, `UniswapV3.Pool` (no one fixed address) | called with an address in the same expression: `(addr).method(...)` |
+| Member              | Example                                                       | In a program                                                        |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
+| A deployed contract | `UniswapV3.Factory`, `AerodromeSlipstream.CLFactory`          | its address as a value; `.method(...)` calls it                     |
+| An address only     | `AaveV3.PoolAddressesProvider`, `Maker.Dai` (no ABI recorded) | its address                                                         |
+| An interface        | `Erc4626.Vault`, `UniswapV3.Pool` (no one fixed address)      | called with an address in the same expression: `(addr).method(...)` |
 
 - `UniswapV3.Factory.getPool(a, b, 500)` calls the chain's factory; a Uniswap fee is in millionths
   (`500` is the 0.05% tier, `3000` 0.3%).
@@ -190,8 +191,9 @@ its address and ABI from the registry. A member is one of three kinds:
 - **A contract a call returns** is called on directly where the registry records what it is:
   `UniswapV3.Factory.getPool(a, b, 500).liquidity()`, `Erc4626.Vault(vault).asset().decimals()`
   (`sauce-script`, Calling a contract).
-- **A namespace's default contract** is also called by the namespace alone:
-  `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
+- **A namespace's default contract** is also called by the namespace alone, when the namespace has
+  exactly one deployed contract with an ABI: `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
+  A namespace with several (`UniswapV3`) names the contract.
 - **A family alias** (`Uniswap`, `Aave`, …) names a contract only when one member has it on the
   chain: `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`; `Uniswap.Factory` is ambiguous.
 - **A chain-qualified contract** (`Ethereum.UniswapV4.UniversalRouter`) is that chain's address
@@ -212,7 +214,7 @@ contract and removes it, names and all, where it does not.
 
 - It takes a contract or a token symbol (`available(USDT)`).
 - It folds `if`/`else`, `?:`, `&&`, `||` and `!`; a guard `if (!available(X)) { return 0; }` drops
-  the rest of its function.
+  the statements after it in the same block or function body.
 - A name no chain has is an error, not `false`, so a typo cannot quietly drop a branch.
 - Without it, a member is required: the program does not compile for a chain that lacks it.
 

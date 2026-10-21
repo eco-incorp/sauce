@@ -35,6 +35,23 @@ const ERC20 = JSON.stringify([
   },
 ]);
 const contracts = [["ERC20", ERC20]];
+// A function taking a fixed-size array of 256 elements, and one returning it.
+const BIG_ARRAY = JSON.stringify([
+  {
+    type: "function",
+    name: "put",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "xs", type: "uint256[256]" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "get",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256[256]" }],
+  },
+]);
 const many = (n, value) => Array.from({ length: n }, () => value).join(", ");
 const long = Array.from({ length: 60 }, (_, i) => `v = v + ${i}n;`).join(" ");
 
@@ -811,6 +828,22 @@ export const rejections = [
     targets: ["evm"],
     contracts,
     src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t, o).balanceOf(o); }",
+  },
+  {
+    quotes: [
+      "the ABI type `uint256[256]` is a fixed-size array of more than 255 elements, which SauceScript cannot encode or decode",
+    ],
+    targets: ["evm"],
+    contracts: [["Big", BIG_ARRAY]],
+    src: "function main(t: Address, xs: Uint256[]): void { Big.at(t).put(xs); }",
+  },
+  {
+    quotes: [
+      "the ABI type `uint256[256]` is a fixed-size array of more than 255 elements, which SauceScript cannot encode or decode",
+    ],
+    targets: ["evm"],
+    contracts: [["Big", BIG_ARRAY]],
+    src: "function main(t: Address): void { Big.at(t).get(); }",
   },
   {
     quotes: [

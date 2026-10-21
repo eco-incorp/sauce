@@ -1,4 +1,4 @@
-# Builders
+# Builders and actions
 
 **How-to guide** · [Documentation](../README.md) · [Protocol calls](protocols-and-tokens.md) · [Compiler](../api/compiler.md)
 
@@ -6,9 +6,10 @@
 > that fill in a program for you from those facts. You get the program's text back, and compile it
 > like any other.
 
-Sometimes a program is not something you write — it is something your application assembles from
-data it already has: a token and an amount, a vault and a deposit. The builders on this page take
-that data and emit SauceScript source you compile like any other program.
+This page is for a TypeScript developer whose application assembles programs from data it already
+holds: a token and an amount, a vault and a deposit. It assumes you can compile a program from
+TypeScript ([Compiling programs](compiling.md)). The builders on this page take that data and emit
+SauceScript source you compile like any other program.
 
 They emit source. They do not pick a market route, quote a price, or send anything. The ABIs that
 source imports ship inside the SDK, and route compilation serves them itself, so the output compiles
@@ -33,18 +34,11 @@ export function compileTokenTransfer(
 }
 ```
 
-Every token WRITE these builders emit — and every one the SDK emits anywhere — carries OpenZeppelin
-`SafeERC20` semantics. The call goes out as raw calldata, so nothing decodes a `bool` a token like
-USDT never returns, and the result is then checked: empty returndata is accepted only from an
-address that has code, and anything else must decode as an ABI word equal to `1`. A token that
-returns `false` reverts rather than passing silently, and so do a write to an address with no code
-and a return shorter than one ABI word. `approve` adds `forceApprove`'s reset — it reads the current
-allowance and zeroes it first when it is non-zero, which USDT requires and a shared Pot makes
-likely. The `@sauce/token` functions a program calls directly (`transfer`, `transferFrom`,
-`approve`) behave the same way, and so does the route-body syntax — `USDC.transfer(...)`,
-`Token(address).approve(...)` — which compiles to those functions. Only an ABI binding you write
-yourself, `IERC20.at(address).transfer(...)`, is the raw unchecked call; see
-[protocols and tokens](protocols-and-tokens.md#writes-follow-safeerc20).
+Every token write these builders emit, like every one the SDK emits anywhere, follows OpenZeppelin's
+`SafeERC20`: a token such as USDT that returns nothing is accepted, a token that returns `false` or
+an address with no code reverts, and `approve` resets a standing allowance to zero first.
+Only an `IERC20.at(address)` binding you write yourself is the raw, unchecked call.
+[Safety](../concepts/safety.md) explains why the checks matter.
 
 The visible consequence is that a literal amount is encoded into the calldata rather than appearing
 as a decimal in the emitted source.
@@ -56,16 +50,17 @@ Use `Token.approve({ token, spender, amount })` for approvals and `Token.balance
 ## Swaps
 
 A swap is not a builder: it is a call into [`@sauce/router`](../api/router.md), the SauceScript
-library with one function per venue — Uniswap V2, V3 and V4, Curve, Balancer V2, DODO V2, Trader Joe
-LB, WOOFi and Maverick V2. Its functions take the pool, tokens and amount as run-time arguments, so
-a program can spend what an earlier call returned, or choose the venue while it runs, and each
-returns what it received. Write the call into your program:
+library with one function per venue. It has eleven: Uniswap V2, V3 and V4, Curve, Balancer V2, DODO
+V2, Trader Joe LB, WOOFi, Maverick V2, and PancakeSwap Infinity's CL and Bin pools. Its functions
+take the pool, tokens and amount as run-time arguments, so a program can spend what an earlier call
+returned, or choose the venue while it runs, and each returns what it received. Write the call into
+your program, with its inputs as `main`'s parameters:
 
 ```js
 import { uniswapV3 } from "@sauce/router";
 
-function main(recipient: Address) {
-  uniswapV3(POOL, WETH, USDC, AMOUNT_IN, 0, MIN_OUT, recipient);
+function main(pool: Address, amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
+  return uniswapV3(pool, WETH, USDC, amountIn, 0, minOut, recipient);
 }
 ```
 
@@ -102,9 +97,9 @@ export function compileSupply(
 }
 ```
 
-The default approval policy is `"exact"`; `"none"` assumes an existing allowance, and `"max"` grants the maximum allowance. The default beneficiary is the executing contract where the protocol supports it. Native-funded templates require value in the executing Pot and use a call carrying native value.
+The default approval policy is `"exact"`; `"none"` assumes an existing allowance, and `"max"` grants the maximum allowance. The default beneficiary is the executing Pot where the protocol supports it. Native-funded templates require value in the executing Pot and use a call carrying native value.
 
-`amount: "balance"` reads the executing Pot's balance: native ETH for native-funded templates, the WETH `target` for unwrapping, or the supplied `token` for other templates — which is how a deposit spends what a swap before it delivered. To swap and then supply in one program from data, write an [action program](actions.md): a swap action's output is what the next action spends.
+`amount: "balance"` reads the executing Pot's balance: native ETH for native-funded templates, the WETH `target` for unwrapping, or the supplied `token` for other templates — which is how a deposit spends what a swap before it delivered. To swap and then supply in one program from data, write an [actions document](actions.md): a swap action's output is what the next action spends.
 
 On Arc the native coin is USDC at 18 decimals, and it is also the 6-decimal ERC-20 at `0x3600…0000`; a native-funded template's `"balance"` is that 18-decimal figure. Arc has no canonical wrapped native, so the `weth` templates have nothing to target there: `toDeposit` rejects Arc's `USDC` and its registry tokens, whose `WETH` is bridged ETH, as a `weth` target. See [Arc: USDC is the native coin](../reference/chains/arc.md#notes).
 
@@ -112,8 +107,14 @@ For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max
 
 ## Routing actions
 
-Higher-level routing actions — swaps, bridges, wraps, stakes, and the chaining between them — live
-behind the package's `/actions` subpath and are documented in [Actions](actions.md). An action
-program is plain JSON that compiles, for a chain, to one program — one document for every chain
-where its tokens and contracts exist; `programIntent(program, { ...options, chain })` makes it the
+Higher-level routing actions (swaps, bridges, wraps, stakes, and the chaining between them) live
+behind the package's `/actions` subpath and are documented in [Actions](actions.md). An actions
+document is plain JSON that compiles, for a chain, to one program: one document for every chain
+where its tokens and contracts exist. `programIntent(program, { ...options, chain })` makes it the
 route of an [intent](intents.md) directly, and `sauce actions` prints what it lowers to.
+
+## Next
+
+- Write the same steps as JSON instead of TypeScript: [Actions](actions.md).
+- Every swap function and its arguments: [`@sauce/router`](../api/router.md).
+- Run what you built from your tests: [Testing programs](testing.md).

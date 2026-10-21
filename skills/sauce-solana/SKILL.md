@@ -520,6 +520,19 @@ staged cook's accounts when they do not fit, from the signer, which pays its ren
 address; `--lookup-table <address>` (on `run`, `simulate` and `tx`) takes the accounts through a
 table that holds them, so a later cook naming the same accounts reuses it.
 
+**What a first run costs.** Beside the cook's `fee`, the owner pays the rent of what a run creates
+and a fee per transaction. Rent is the rent-exempt minimum, `(data bytes + 128) × 6,960` lamports
+(3,480 per byte-year, for two years) at mainnet's rate, so these figures are approximate and move
+with the cluster's rent:
+
+| What                                     | Lamports                                                                             | About                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| the Pot, 10,240 bytes, created once      | 72,161,280                                                                           | 0.072 SOL                                        |
+| a token account, 165 bytes (SPL Token)   | 2,039,280                                                                            | 0.002 SOL; a Token-2022 one with extensions more |
+| a code buffer, 91 bytes, and its code    | 1,524,240 + (payload bytes + 128) × 6,960, the payload the program and its arguments | back to the owner when the buffer closes         |
+| a lookup table, 56 bytes and 32 an entry | 1,280,640 + 222,720 for each address it holds                                        | back to the owner when the table closes          |
+| each transaction's signature             | 5,000                                                                                | a staged run sends several transactions          |
+
 **Rent left open.** A code buffer a plan never closed, and the lookup tables cooks keep for the next
 cook, hold the owner's rent. `sauce reclaim --chain solana --owner <pubkey>` lists them with that
 rent and prints the transactions that close them, unsigned (the tool `sauce_reclaim`); with

@@ -98,8 +98,10 @@ sauce run pools.sauce.ts --chain base --keystore <keystore> \
 - **Recorded is not live.** A registry address is not proof of code: confirm `eth_getCode` returns
   code before relying on it.
 - **Swapping through a protocol's own router.** Use `@sauce/router` (`sauce-swaps`).
-- **An address-only factory called for a pool** (Algebra forks such as Camelot V3 and QuickSwap
-  V3): the registry has no verified ABI with its pool lookup; pass the pool as a `main` input.
+- **An address-only factory called for a pool** (`Kyberswap.ElasticFactory`): the registry has no
+  ABI for it, only its address; pass the pool as a `main` input. An Algebra factory (Camelot V3,
+  QuickSwap V3) is a deployed contract: `Camelot.V3Factory.poolByPair(a, b)` returns the pool, with
+  no fee argument (Algebra fees are dynamic).
 - **A standing allowance.** Approve exactly what the call spends: the Pot keeps any allowance it
   grants.
 - **An output left in the Pot by default.** A call naming no beneficiary credits its caller, the

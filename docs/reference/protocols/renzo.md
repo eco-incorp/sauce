@@ -17,35 +17,10 @@ Liquid restaking protocol built on EigenLayer. Deposit ETH or LSTs and receive e
 | Namespace | `Renzo` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **depositETH**: Deposit ETH directly to receive ezETH
 - **deposit**: Deposit LST collateral (stETH, etc.) to receive ezETH
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit ETH for ezETH
-import { RestakeManagerABI as IRestakeManager } from "./abis";
-function main(restakeManagerAddress: Address): Uint256 {
-  const manager = IRestakeManager.at(restakeManagerAddress);
-  manager.depositETH();
-  return 1;
-}
-
-// Deposit LST for ezETH
-import { RestakeManagerABI as IRestakeManager } from "./abis";
-function main(restakeManagerAddress: Address, collateralToken: Address, amount: Uint256): Uint256 {
-  const manager = IRestakeManager.at(restakeManagerAddress);
-  manager.deposit(collateralToken, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -87,3 +62,9 @@ function main() {
 
 - `deposit(address _collateralToken, uint256 _amount)`
 - `depositETH() payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -7,18 +7,46 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 repository maintenance instructions belong here.
 
 The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
-**Tutorials** (learn by doing: the EVM quick start `docs/guides/quick-start.md`, the Solana quick
-start and the first intent, on `docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`),
-**How-to guides** (one task a page), **Concepts** (explanation: what a Pot is, why atomic) and
-**Reference** (flags, API, the generated pages). `docs/README.md` is the map: every page is listed
-under exactly one of its four `##` sections, and says which on its breadcrumb line (`**How-to
-guide** · ` before its links); `docs:check` holds both. A page stays in its mode: a
+**Tutorials** (learn by doing), **How-to guides** (one task a page), **Concepts** (explanation: what
+a Pot is, why atomic) and **Reference** (flags, API, the generated pages, the changelog).
+`docs/README.md` is the map: every page is listed under exactly one of its four `##` sections, and
+says which on its breadcrumb line (`**How-to guide** · ` before its links); `docs:check` holds both.
+The part is the index's and the breadcrumb's, never the folder's: a tutorial lives in `docs/guides/`
+beside the how-tos, and a page keeps its path when it changes part. A page stays in its mode: a
 how-to does not wander into a concept essay, a concept page lists no flags, and a fact has one
-owning page that the others link instead of repeating. No history or changelog prose. Every page
+owning page that the others link instead of repeating. No history or changelog prose, except in
+`docs/changelog.md`, which is the one page for it: each SDK 0.99.x release, its SauceScript
+changes, and the compiler and engine changes it shipped. Every page
 then opens with a short plain-words intro in a blockquote: a few short sentences and an everyday
 analogy, any Sauce word in it explained on the spot (the [glossary](docs/concepts/glossary.md) maps
 each to a familiar one). The real content follows it, examples before rules, edge cases in a section
 at the end. Say "simulate", never "rehearse".
+
+**The learning path.** The tutorials take a reader who knows TypeScript, a wallet, a transaction and
+a token, but not Sauce, from nothing to proficient, read in this order, which is the order
+`docs/README.md` lists them under `## Tutorials`:
+
+1. `docs/guides/quick-start.md`, "Quick start" (on `docs/examples/pay.sauce.ts`)
+2. `docs/guides/write-your-first-program.md`, "Write your first program"
+3. `docs/guides/swap-by-name.md`, "Swap by name"
+4. `docs/guides/first-intent.md`, "Your first cross-chain intent" (on
+   `docs/examples/cross-chain-intent.sauce.ts`)
+5. `docs/guides/solana-quick-start.md`, "Solana quick start"
+6. `docs/guides/typescript-quick-start.md`, "Sauce from TypeScript"
+7. `docs/guides/test-your-first-program.md`, "Test your first program"
+8. `docs/guides/agent-quick-start.md`, "Your first agent session"
+
+A tutorial runs an example `docs/examples/` already has and a suite already executes; it does not
+add a program of its own. A tutorial that builds a program up step by step ends on such an example,
+quoted whole, and adds no other program: its steps are versions on the way to it. Every
+hand-written page follows one shape: its title; its breadcrumb (`**Tutorial** · `,
+`**How-to guide** · `, `**Concept** · ` or `**Reference** · `, then its links, copied from a page
+of the same part); the blockquote intro; near the top, who the page is for and what it needs, each
+prerequisite linked to the page that covers it; and at the end `## Next`, linking the next step of
+the path or the closest related page. A tutorial also has a "You will need" list (real funds, when
+it spends them, said first) and a "You will have" outcome, follows one path with no choices, shows
+a result at each step, and its `## Next` names the next tutorial and the concept that explains what
+it just did. `docs:check` fails a page listed under `## Tutorials` with no `## Next` heading.
 
 ## What this repo is
 
@@ -470,7 +498,8 @@ first. Keep the page version-free, free of engine internals and free of placehol
 skills' wording rules).
 
 Compiler migration inventories and implementation plans have been removed. Git history retains
-those investigations; do not add them back to the public SDK manual.
+those investigations; do not add them back to the public SDK manual. What a release changed is
+`docs/changelog.md`'s alone (see "Publishing").
 
 **`sdk/`** — registries plus executable SDK logic. `src/protocols/<slug>/` holds per-protocol `info`,
 `addresses`, `abis` as-const, and `functions` SauceScript templates; `src/protocols/index.ts` is the
@@ -1350,11 +1379,13 @@ test that builds or sends a transaction through the CLI or MCP uses a supported 
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
-`sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
-`sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
-Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents — or a
-contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
-them, `references/`.
+`sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`,
+`sauce-solana-distributed-swap`, `sauce-intents`, `sauce-solana`, `sauce-cli`, `sauce-actions`,
+`sauce-typescript` and the `sauce-examples` index: fourteen. Each is a `SKILL.md` plus `examples/`
+(`.sauce.ts` programs, `.json` actions documents — or a contract ABI, a JSON array, that a program
+beside it imports — and `.mts` runners) and, for seven of them (`sauce-actions`, `sauce-chains`,
+`sauce-globals`, `sauce-intents`, `sauce-protocols`, `sauce-script`,
+`sauce-solana-distributed-swap`), `references/`.
 
 - **One shape, one owner per fact.** Every `SKILL.md` opens with a scope paragraph saying what the
   skill owns, then `## When to use` (a table: this skill, or which neighbour instead) and
@@ -1405,8 +1436,10 @@ them, `references/`.
   `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
   issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
   byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
-  rendered as a guide (its example's whole file in place of the code the skill quotes, and its
-  agent-only sections, When to use and Files, left out: `AGENT_SECTIONS`). The two
+  rendered as a guide, and `docs/guides/solana-distributed-swap.md`, the
+  `sauce-solana-distributed-swap` skill and its venues reference rendered the same way (each
+  example's whole file in place of the code the skill quotes, and the agent-only sections, When to
+  use and Files, left out: `AGENT_SECTIONS`). The two
   renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
   manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
   never sent into `skills/`, nor an agent into `docs/`. And each manual page opens with the
@@ -1691,5 +1724,34 @@ headings; `check-packed-package.mjs` reruns the same checks and examples on the 
 which is what proves the relative targets also ship. An absolute
 `github.com/eco-incorp/sauce/blob/…/docs/…` URL is rejected: it pins a branch and breaks in the
 tarball. New public doc links must target files shipped in the package.
+
+**Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records each
+SDK 0.99.x release: what changed in SauceScript, the language, and what the compiler and engine
+releases it shipped changed. It does not record component releases on their own, nor anything
+before SDK 0.99.0. Each SDK release puts its pinned set in the table under
+`## Which versions work together` and adds a `## SDK <version> — <date>` entry, newest first. The
+entry opens with one line naming the set it ships, in prose (`Compiler 2.5.0, v12-evm 1.2.0, …`),
+and what moved (`New since 0.99.8: …` or `Same compiler and engines as 0.99.N.`).
+`### SauceScript` follows: **Added**, **Changed**,
+**Now refused**, **Removed** and **Fixed** bullets, each written for a program author and marked
+EVM, Solana or both, or `No language change.` A change to the SDK's names, `@sauce/token`,
+`@sauce/router` or the way it compiles a program counts; a fix to a TypeScript function, a command
+or the MCP server does not. Every SauceScript example compiles with the release it is listed under.
+When a component moved, `### Compiler and engines` has one bullet per moved component
+(`**Compiler 2.4.0 → 2.5.0:**`) saying what that release changes for someone using the SDK
+release: pairing, the compiler's JavaScript API, what a cook can notice of the engines (gas,
+limits, refusals), Pot addresses, the Kitchen's fee and Router, Solana accounts and wire. It points
+at the SauceScript bullets rather than repeating them, and leaves out internals no SDK user acts
+on. A breaking change outside the language (a removed export, a renamed command, the chain gate, a
+Portal version) is one closing `**Also breaking:**` line, named tersely. `docs:check` reads
+`releases.json` and fails while the table has no row whose Compiler, v12-evm, kitchen-evm, v12-svm
+and kitchen-svm cells are a released row's versions; while a table row whose SDK cell is a version
+has no `## SDK <version>` heading (a row whose SDK cell is `Unreleased` needs none); and while the
+`quoteRouter` pin's version is not written as `kitchen-evm <version>` outside code fences. It skips
+a whole row with a `null` digest, engine id, Kitchen or hash (a release not out yet, which the sync
+refuses too), and compares only the cells of the components a row gives a version; the installed
+package ships no `releases.json`, so the packed check skips all three. The changelog is checked
+like every other page (links, fragments, plain integers, no define taught), and it is the only page
+where release history belongs.
 
 **The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.

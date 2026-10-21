@@ -17,60 +17,12 @@ Self-repaying loan protocol. Deposit yield-bearing collateral to borrow syntheti
 | Namespace | `Alchemix` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Deposit yield-bearing token as collateral
 - **withdraw**: Withdraw collateral
 - **mint**: Borrow synthetic asset (alUSD or alETH) against collateral
 - **burn**: Repay synthetic asset debt
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit yield-bearing collateral
-import { AlchemistABI as IAlchemist } from "./abis";
-function main(
-  alchemistAddress: Address,
-  yieldToken: Address,
-  amount: Uint256,
-  recipient: Address,
-): Uint256 {
-  const alchemist = IAlchemist.at(alchemistAddress);
-  return alchemist.deposit(yieldToken, amount, recipient);
-}
-
-// Withdraw collateral
-import { AlchemistABI as IAlchemist } from "./abis";
-function main(
-  alchemistAddress: Address,
-  yieldToken: Address,
-  shares: Uint256,
-  recipient: Address,
-): Uint256 {
-  const alchemist = IAlchemist.at(alchemistAddress);
-  return alchemist.withdraw(yieldToken, shares, recipient);
-}
-
-// Borrow (mint) synthetic asset
-import { AlchemistABI as IAlchemist } from "./abis";
-function main(alchemistAddress: Address, amount: Uint256, recipient: Address): Uint256 {
-  const alchemist = IAlchemist.at(alchemistAddress);
-  alchemist.mint(amount, recipient);
-  return 1;
-}
-
-// Repay (burn) synthetic asset
-import { AlchemistABI as IAlchemist } from "./abis";
-function main(alchemistAddress: Address, amount: Uint256, recipient: Address): Uint256 {
-  const alchemist = IAlchemist.at(alchemistAddress);
-  return alchemist.burn(amount, recipient);
-}
-```
 
 ## Notes
 
@@ -113,3 +65,9 @@ function main() {
 - `burn(uint256 amount, address recipient) returns (uint256)`
 - `liquidate(address yieldToken, uint256 shares, uint256 minimumAmountOut) returns (uint256)`
 - `accounts(address owner) view returns (int256 debt, address[] depositedTokens)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

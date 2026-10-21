@@ -17,57 +17,6 @@ Official Base L1StandardBridge for depositing ETH and ERC-20 tokens from Ethereu
 | Namespace | `BaseBridge` on ethereum, base |
 | Chains | ethereum, base |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### depositETH
-
-Deposit ETH from Ethereum L1 to Base L2.
-
-```typescript
-import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
-
-function main(bridgeAddress: Address): Uint256 {
-  const bridge = IL1StandardBridge.at(bridgeAddress);
-  bridge.depositETH(200000, 0x00);
-  return 1;
-}
-```
-
-- ETH amount is sent as `msg.value`
-- `_minGasLimit`: Minimum gas for the L2 deposit execution (200000 is a safe default)
-- `_extraData`: Optional extra data (typically `0x00`)
-
-### depositERC20
-
-Deposit ERC-20 tokens from Ethereum L1 to Base L2.
-
-```typescript
-import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
-
-function main(
-  bridgeAddress: Address,
-  l1Token: Address,
-  l2Token: Address,
-  amount: Uint256,
-): Uint256 {
-  const bridge = IL1StandardBridge.at(bridgeAddress);
-  bridge.depositERC20(l1Token, l2Token, amount, 200000, 0x00);
-  return 1;
-}
-```
-
-- `l1Token`: Token address on Ethereum L1
-- `l2Token`: Corresponding token address on Base L2 (must be the official bridged representation)
-- `amount`: Amount of tokens to deposit
-- `_minGasLimit`: Minimum gas for L2 execution (200000 is a safe default)
-- `_extraData`: Optional extra data (typically `0x00`)
-- Requires ERC-20 approval to the L1StandardBridge
-
 ## Notes
 
 - **L1 to L2 only** via this contract. For L2 to L1 withdrawals, use the L2StandardBridge on Base (takes 7 days)
@@ -108,3 +57,9 @@ function main() {
 - `depositERC20(address _l1Token, address _l2Token, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
 - `depositETHTo(address _to, uint32 _minGasLimit, bytes _extraData) payable`
 - `depositERC20To(address _l1Token, address _l2Token, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

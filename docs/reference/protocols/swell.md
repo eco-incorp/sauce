@@ -17,35 +17,10 @@ Liquid staking and restaking protocol for Ethereum. Offers swETH for liquid stak
 | Namespace | `Swell` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **stakeSwETH**: Deposit ETH for swETH (liquid staking)
 - **stakeRswETH**: Deposit ETH for rswETH (liquid restaking)
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Stake ETH for swETH
-import { SwETHABI as ISwETH } from "./abis";
-function main(swethAddress: Address): Uint256 {
-  const sweth = ISwETH.at(swethAddress);
-  sweth.deposit();
-  return 1;
-}
-
-// Stake ETH for rswETH (restaking)
-import { RswETHABI as IRswETH } from "./abis";
-function main(rswethAddress: Address): Uint256 {
-  const rsweth = IRswETH.at(rswethAddress);
-  rsweth.deposit();
-  return 1;
-}
-```
 
 ## Notes
 
@@ -88,3 +63,9 @@ function main() {
 - `deposit() payable`
 - `swETHToETHRate() view returns (uint256)`
 - `balanceOf(address account) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

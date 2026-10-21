@@ -1,14 +1,27 @@
 # Actions
 
-**How-to guide** · [Documentation](../README.md) · [Intents](intents.md) · [Nested intents](nested-intents.md) · [Compiling](compiling.md)
+**How-to guide** · [Documentation](../README.md) · [Programs and arguments](cli-programs.md) · [Protocols and tokens](protocols-and-tokens.md) · [Intents](intents.md)
 
 > Actions are the steps of a program written as a list instead of code, like a shopping list: "swap
 > 100 USDC for ETH on Uniswap, then deposit the ETH in Aave". Sauce turns the list into a program and
 > runs it in one go. Any language that can write JSON can write one.
 
-An **action** is one protocol operation written as data: swap on a Uniswap V3 pool, supply to Aave, bridge through Across, wrap ETH. An **action program** is an ordered list of actions. `@eco-incorp/sauce/actions` compiles it, for a chain, into one Sauce program that executes, atomically, in a Pot on that chain — directly, or as the destination route of an Eco intent.
+This page is for you if your steps are fixed protocol operations and you would rather generate data
+than code: from a service, a form or a language other than TypeScript. It assumes you have run a
+program once ([Quick start](quick-start.md)) and know that Sauce resolves a name such as USDC or
+`UniswapV3.Factory` on each chain ([Names and registries](../concepts/names-and-registries.md)).
 
-A program is plain JSON. You can write it by hand, store it, sign it, generate it from a service in any language, and validate it against the published [JSON Schema](../../actions/action-program.schema.json) before it reaches TypeScript. It names tokens and contracts the way a hand-written Sauce program does — `"USDC"`, `"UniswapV3.Factory"` — so one document compiles for every chain where those names exist:
+An **action** is one protocol operation written as data: swap on a Uniswap V3 pool, supply to Aave,
+bridge through Across, wrap ETH. An **actions document** is an ordered list of actions; the package
+calls its type `ActionProgram`. `@eco-incorp/sauce/actions` compiles it, for a chain, into one Sauce
+program that executes, atomically, in a Pot on that chain: directly, or as the destination route of
+an Eco intent.
+
+A document is plain JSON. You can write it by hand, store it, sign it, generate it from a service in
+any language, and validate it against the published
+[JSON Schema](../../actions/action-program.schema.json) before it reaches TypeScript. It names tokens
+and contracts the way a hand-written Sauce program does, `"USDC"` and `"UniswapV3.Factory"`, so one
+document compiles for every chain where those names exist:
 
 ```json
 {
@@ -41,7 +54,71 @@ This wraps 1 ETH, swaps it for USDC in the pool Uniswap V3's factory keys at 0.0
 
 The document has no `chainId`, so it is not tied to a chain: compiled for Ethereum it trades Ethereum's WETH, USDC and pool, and compiled for Base, Arbitrum or Optimism, theirs. (On Polygon it is refused: the native coin there is not ETH, and the registry's `"WETH"` is bridged ETH, not a wrapper of it.) Compiled for a chain that lacks a name, it is refused, naming the chain, the name and where it is used (see [names](#names-tokens-contracts-and-the-chain)).
 
+## From the command line: `sauce actions`
+
+The [`sauce` command](cli.md) takes an actions document as it takes a program file. Save this as
+`swap.json`: it takes the amount to sell as an input, then swaps that much USDC for WETH in the pool
+Uniswap V3's factory keys at 0.05%, and keeps the WETH in the Pot.
+
+```json
+{
+  "version": 1,
+  "actions": [
+    { "type": "argument", "name": "amount" },
+    {
+      "type": "uniswapV3Swap",
+      "tokenIn": "USDC",
+      "tokenOut": "WETH",
+      "factory": "UniswapV3.Factory",
+      "fee": 500,
+      "amountOutMin": "1",
+      "recipient": "self"
+    }
+  ]
+}
+```
+
+`sauce actions <file>` prints the SauceScript the document lowers to on a chain, `main`'s
+parameters, and the bytecode:
+
+```text
+$ sauce actions swap.json --chain base
+// swap.json, lowered for base (chain 8453)
+import { uniswapV3 } from "@sauce/router";
+
+function main(a_amount: Uint256): void {
+  let t_out0 = a_amount;
+  const pool0 = UniswapV3.Factory.getPool(USDC, WETH, 500);
+  require(pool0 != 0, "actions[1]: no pool under that key");
+  uniswapV3(pool0, USDC, WETH, t_out0, 0, 1, ctx.self());
+}
+
+// main(a_amount: Uint256): pass the arguments in this order
+// bytecode, 388 bytes: 0xa502…
+```
+
+The `argument` action became `main`'s parameter `a_amount`. Simulate the document as you would a
+program, giving the amount after `--args` (1000 USDC here):
+
+```sh
+sauce simulate swap.json --chain base --owner <owner> \
+  --assume-balance USDC:1000 --args 1000000000
+```
+
+- `--chain` takes a slug or a chain id, and defaults to the document's `chainId`.
+- `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they
+  take a `.sauce.ts` file, with the same flags. Its `argument` actions are `main`'s parameters, in
+  the order the document declares them, and its cook runs on the Pot `--owner` or `--pot` names,
+  funded by `--fund` if you like ([Run a program](cli-run.md)).
+- `--json` prints the report `sauce compile --json` does (`bytecode`, `size`, `entryParams`, the
+  paired compiler and engine, and `contracts`, the protocol contracts it calls), with the parsed
+  `document`, the `source`, the ABI bindings it calls through (`bindings`) and the argument names
+  (`parameters`).
+- `--compact-args` compiles the arguments compact-v1.
+
 ## Compile and run a program
+
+From TypeScript, parse the document, compile it for a chain, and wrap the bytecode in a cook:
 
 ```ts
 import { compileProgram, parseProgram } from "@eco-incorp/sauce/actions";
@@ -71,36 +148,9 @@ Send the resulting calldata to the Pot from its owner, with the Kitchen's execut
 
 `compileProgram` and `programIntent` validate the program too, so a typed program that skipped `parseProgram` is held to the same rules — and they check every name it uses on the chain they compile for.
 
-### From the command line: `sauce actions`
-
-The [`sauce` command](cli.md) takes an actions document as it takes a program file. `sauce actions <file>` prints the SauceScript the document lowers to on a chain, `main`'s parameters, and the bytecode:
-
-```text
-$ sauce actions swap.json --chain base
-// swap.json, lowered for base (chain 8453)
-import { uniswapV3 } from "@sauce/router";
-
-function main(a_amount: Uint256): void {
-  let t_out0 = a_amount;
-  const pool0 = UniswapV3.Factory.getPool(USDC, WETH, 500n);
-  require(pool0 != 0n, "actions[1]: no pool under that key");
-  uniswapV3(pool0, USDC, WETH, t_out0, 0n, 1n, ctx.self());
-}
-
-// main(a_amount: Uint256): pass the arguments in this order
-// bytecode, 313 bytes: 0xa502…
-```
-
-`--chain` takes a slug or a chain id and defaults to the document's `chainId`; `--json` prints the report `sauce compile --json` does — `bytecode`, `size`, `entryParams`, the paired compiler and engine — with the parsed `document`, the `source`, the ABI bindings it calls through (`bindings`), beside the protocol contracts it calls (`contracts`, as `sauce compile --json` reports them) and the argument names (`parameters`); `--compact-args` compiles the arguments compact-v1. `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they take a `.sauce.ts` file, with the same flags: its `argument` actions are `main`'s parameters, passed with `--args`, and its cook runs on the Pot `--owner` or `--pot` names, funded by `--fund` if you like.
-
-```sh
-sauce simulate swap.json --chain base --owner <owner> \
-  --assume-balance USDC:1000 --args 1000000000
-```
-
 ## The JSON format
 
-A program is `{ "version": 1, "actions": [ … ] }`, with an optional `"chainId"`. Every action runs in one transaction on the chain the program is compiled for; a bridge's destination is one of its own fields, not a second place the program runs. Each action is an object whose `type` selects its fields; the [reference](#supported-actions) lists every type, and the schema lists every field with its documentation. A `$schema` key is allowed and ignored.
+A document is `{ "version": 1, "actions": [ … ] }`, with an optional `"chainId"`. Every action runs in one transaction on the chain the document is compiled for; a bridge's destination is one of its own fields, not a second place the program runs. Each action is an object whose `type` selects its fields; the [reference](#supported-actions) lists every type, and the schema lists every field with its documentation. A `$schema` key is allowed and ignored.
 
 | Value                                                         | Encoding                                                                                       |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -141,7 +191,11 @@ The schema cannot express four rules, which the parser and the compile enforce a
 
 ## Names: tokens, contracts and the chain
 
-Wherever an action takes a token, it takes a **registry token symbol** as well as an address: `"USDC"`, `"WETH"`, `"USDT"`, or a tokenized stock's, which is its issuer's ticker (`"SPCXc"` on Base, `"TSLAon"` on Ethereum) — the symbols a Sauce program uses with no import. Wherever it takes a protocol contract — a pool, a vault, a router, a factory, a lending pool, a spender — it takes a **namespace reference**, `"Namespace.Contract"`, in the spelling a program uses: `"UniswapV3.Factory"`, `"UniswapV4.PoolManager"`, `"BalancerV2.Vault"`, `"AaveV3.Pool"`, `"Permit2.Permit2"`, a family alias such as `"Uniswap.PoolManager"`. A field whose contract is also a token — `weth`, `wstETH`, `stETH`, `rETH`, `eETH`, a Curve RouterNG `route` — takes either. `sauce globals --chain <chain> --tokens` and `--protocols` list the names a chain has; [protocols and tokens](protocols-and-tokens.md) explains them.
+Wherever an action takes a token, it takes a **registry token symbol** as well as an address: `"USDC"`, `"WETH"`, `"USDT"`, or a tokenized stock's, which is its issuer's ticker (`"SPCXc"` on Base, `"TSLAon"` on Ethereum). These are the symbols a Sauce program uses with no import.
+
+Wherever an action takes a protocol contract (a pool, a vault, a router, a factory, a lending pool, a spender), it takes a **namespace reference**, `"Namespace.Contract"`, in the spelling a program uses: `"UniswapV3.Factory"`, `"UniswapV4.PoolManager"`, `"BalancerV2.Vault"`, `"AaveV3.Pool"`, `"Permit2.Permit2"`, or a family alias such as `"Uniswap.PoolManager"`.
+
+A field whose contract is also a token (`weth`, `wstETH`, `stETH`, `rETH`, `eETH`, a Curve RouterNG `route`) takes either. `sauce globals --chain <chain> --tokens` and `--protocols` list the names a chain has; [protocols and tokens](protocols-and-tokens.md) explains them.
 
 A name lowers to the program global of that name. It is not resolved to an address while the program is generated: the compile for a chain resolves it there, exactly as it resolves the token in a hand-written program's `USDC.transfer(to, amount)`. That is what makes a document with no `chainId` chain-agnostic. A name stands for the same value its address would, so where it is a value — a call's target, an argument — it compiles to the same bytes; an ERC-20 write's spender or recipient given by name is encoded while the program runs rather than spliced into calldata ahead of time.
 
@@ -266,7 +320,7 @@ Everything in [creating an intent](intents.md) applies: the Pot must be owned by
 
 ### Fund a child from a measured amount
 
-A program's output is only known once it runs. An action program has no action that opens an intent, so it is chained to another with the TypeScript builder's `.nest()`. [Dynamic nesting](../api/routes.md#dynamic-children) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
+A program's output is only known once it runs. An actions document has no action that opens an intent, so it is chained to another with the TypeScript builder's `.nest()`. [Dynamic nesting](../api/routes.md#dynamic-children) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
 
 1. The parent program keeps its output in the Pot (`"recipient": "self"`).
 2. `.nest(child, { via: "dynamic", measure: { kind: "erc20Balance", token } })` measures that balance.
@@ -349,9 +403,19 @@ An intent route is compiled without arguments, so `programIntent` refuses a prog
 
 ## Quotes and split swaps
 
-`quoteAction(action, options)` returns the `eth_call` that prices a swap action at its own `amount` — `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance. An action that names a token or a contract needs `options.chain`, the chain to resolve the names on, because the quote is calldata built here; a pool given by key is refused (see [pools by key](#pools-by-key)). Venues that price through a separate contract take its address in `options`: `router`, the generation-3 quote service (`v12QuoteRouterAddress()` from `@eco-incorp/sauce/deployments`) for `uniswapV3Swap` and `uniswapV4Swap`. The generation-4 execution Router (`v12RouterAddress()`) has no quote method. The other options are `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`. The rest price on the contract the action names: a Uniswap V2 pair's reserves, a Curve pool's `get_dy`, a DODO pool's `querySellBase`/`querySellQuote`, an LB pair's `getSwapOut` (zero when the pair cannot take the whole input, since the swap would revert), WooPPV2's `query`. Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
+`quoteAction(action, options)` returns the `eth_call` that prices a swap action at its own `amount`: `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance.
 
-`compileSplitSwap({ candidates, amount, buckets, amountOutMin, approvals, sweep, quoters, chain })` compiles one program that divides `amount` into `buckets` equal slices and hands each, in turn, to the candidate whose on-chain quote pays most for it, then executes every candidate's share. Candidates are ordinary swap actions without an amount, each with its `pool`; each delivers to the Pot. `chain` resolves the candidates', approvals' and sweep's names, and is needed only when they use any. `amountOutMin` bounds the total output, checked once after every leg, and `"0"` waives it explicitly. A candidate must have an on-chain quote with a runtime amount, which every swap has except the three Balancer swaps and Carbon. `approvals` run first, for a candidate that pulls through a periphery contract; a `@sauce/router` swap needs none.
+- An action that names a token or a contract needs `options.chain`, the chain to resolve the names on, because the quote is calldata built here. A pool given by key is refused (see [pools by key](#pools-by-key)).
+- Venues that price through a separate contract take its address in `options`. `router` is the generation-3 quote service (`v12QuoteRouterAddress()` from `@eco-incorp/sauce/deployments`), for `uniswapV3Swap` and `uniswapV4Swap`; the generation-4 execution Router (`v12RouterAddress()`) has no quote method. The other options are `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`.
+- The rest price on the contract the action names: a Uniswap V2 pair's reserves, a Curve pool's `get_dy`, a DODO pool's `querySellBase`/`querySellQuote`, an LB pair's `getSwapOut` (zero when the pair cannot take the whole input, since the swap would revert), WooPPV2's `query`.
+- Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
+
+`compileSplitSwap({ candidates, amount, buckets, amountOutMin, approvals, sweep, quoters, chain })` compiles one program that divides `amount` into `buckets` equal slices and hands each, in turn, to the candidate whose on-chain quote pays most for it, then executes every candidate's share.
+
+- Candidates are ordinary swap actions without an amount, each with its `pool`; each delivers to the Pot. A candidate must have an on-chain quote with a runtime amount, which every swap has except the three Balancer swaps and Carbon.
+- `chain` resolves the candidates', approvals' and sweep's names, and is needed only when they use any.
+- `amountOutMin` bounds the total output, checked once after every leg, and `"0"` waives it explicitly.
+- `approvals` run first, for a candidate that pulls through a periphery contract; a `@sauce/router` swap needs none.
 
 ## What the compiled program does
 
@@ -380,7 +444,7 @@ function main(): void {
 
 - ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise.
 - A binding decodes only the outputs an action reads.
-- ERC-20 `transfer` and `approve` follow OpenZeppelin `SafeERC20`, through the lowering every SDK token write uses. Tokens such as USDT return no `bool`, and decoding empty return data reverts, so the call is raw, its calldata encoded ahead of time where its values are literals; its returndata must then be empty from a contract, or decode as an ABI word equal to `1`. A token that returns `false` or fewer than 32 bytes, or an address with no code, reverts the program. `approve` first reads the allowance and resets a non-zero one to zero, as `forceApprove` does, because USDT refuses to change one non-zero allowance to another.
+- ERC-20 `transfer` and `approve` are checked writes, through the lowering every SDK token write uses, with their calldata encoded ahead of time where the values are literals. A token that returns nothing, such as USDT, works; a `false` return or an address with no code reverts the program. [Writes follow SafeERC20](protocols-and-tokens.md#writes-follow-safeerc20) says exactly what is checked.
 - A call carrying native value (`wrapETH`, the staking deposits, the Stargate and Hyperlane fees) is a raw `evm.call`, because a bound call cannot attach value. Its selector comes from the same ABI fragment. The bridges' fees are quoted on-chain, just before the call that pays them, and come from the Pot's balance.
 - Binding names start with `I` and contain no underscore, so they cannot collide with the route compiler's protocol namespaces or its own `IERC20`.
 
@@ -470,7 +534,10 @@ The venues the library does not cover, each through its own contract:
 - **Uniswap V4** takes the pool key as `tokenIn` and `tokenOut` in sort order with `fee`, `tickSpacing` and `hooks` (absent for none); `"native"` is the native currency, keyed as the zero address, which the Pot pays from its own balance.
 - **Curve `curveSwap`** calls the pool's 4-argument `exchange` in the pool's `indexType` (`int128` for StableSwap and NG pools, `uint256` for CryptoSwap), which older pools implement without a return value; the pool pays the Pot, which forwards the balance delta to `recipient`.
 - **WOOFi `woofiSwap`** trades at the WooPPV2 itself, not the WooRouterV2, and needs a positive `amountOutMin`: the pool prices from an oracle and passes it as its own `minToAmount`.
-- **Balancer V2 batch** amounts are per step: a later step's `"0"` spends the previous step's output. Each asset appears once, including symbol/address aliases, and the floor is on the Pot's balance of the last step's output asset. The output and `amountOutMin` refer to the last step's `assetOutIndex`, wherever that asset appears in `assets`. The floor applies to that asset's net payout across the whole batch, not just the final step's proceeds. Other assets have no output floor, including assets received by earlier independent legs; their limits let the Vault take any amount. `"native"` and the zero address are the same asset; native ETH and WETH remain separate Pot balances. The batch sends no native value to the Vault, so a native-input batch reverts even when the Pot holds enough ETH.
+- **Balancer V2 batch** amounts are per step: a later step's `"0"` spends the previous step's output. Each asset appears once, including symbol/address aliases.
+  - The output and `amountOutMin` refer to the last step's `assetOutIndex`, wherever that asset appears in `assets`. The floor is on the Pot's balance of that asset: its net payout across the whole batch, not just the final step's proceeds.
+  - Other assets have no output floor, including assets received by earlier independent legs; their limits let the Vault take any amount.
+  - `"native"` and the zero address are the same asset; native ETH and WETH remain separate Pot balances. The batch sends no native value to the Vault, so a native-input batch reverts even when the Pot holds enough ETH.
 - **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
 - **Stargate** sends in taxi mode and refunds the Pot. **CCTP** lets anyone relay the mint (`destinationCaller` is zero); `maxFee` defaults to `"0"` and `minFinalityThreshold` to 2000, a standard transfer.
 - **Lido withdrawals** mint the withdrawal NFT to `owner`, which claims the ETH once Lido finalizes it.
@@ -507,4 +574,18 @@ is executed against Arc.
 
 ## TypeScript types
 
-Every type is the JSON it describes. `ActionProgram` is the document, `Action` the union of every action, `ActionType` its `type`, and each action has its own type (`UniswapV3SwapAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction` (with `RouterSwapAction`, the nine `@sauce/router` swaps), `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`. A field's type says what it takes: `Token` (a `TokenSymbol` or an address), `TokenOrNative`, `Contract` (a `ContractName`, `"Namespace.Contract"`, or an address) and `TokenContract`. A swap that names its pool by key is a union: `UniswapV3SwapAction` is a pool, or a factory with a fee, or a factory with a tick spacing, and TypeScript refuses the mix the parser refuses. `CompileOptions` carries `chain` and `compactArgs`, and `ProgramIntentOptions` is an intent's options with `chain`. A program typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.
+Every type is the JSON it describes:
+
+- `ActionProgram` is the document, `Action` the union of every action, and `ActionType` its `type`.
+- Each action has its own type (`UniswapV3SwapAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction` (with `RouterSwapAction`, the nine `@sauce/router` swaps), `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`.
+- A field's type says what it takes: `Token` (a `TokenSymbol` or an address), `TokenOrNative`, `Contract` (a `ContractName`, `"Namespace.Contract"`, or an address) and `TokenContract`.
+- A swap that names its pool by key is a union: `UniswapV3SwapAction` is a pool, or a factory with a fee, or a factory with a tick spacing, and TypeScript refuses the mix the parser refuses.
+- `CompileOptions` carries `chain` and `compactArgs`, and `ProgramIntentOptions` is an intent's options with `chain`.
+
+A document typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.
+
+## Next
+
+- What each swap does and refuses, called from a program you write yourself: [`@sauce/router`](../api/router.md).
+- Run the document and read what came back: [Run a program](cli-run.md).
+- Carry the result to another chain: [Create an intent](intents.md).

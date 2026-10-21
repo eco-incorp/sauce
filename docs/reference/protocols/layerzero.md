@@ -17,41 +17,6 @@ Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT t
 | Namespace | `Layerzero` on ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
 | Chains | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### sendMessage
-
-Send a cross-chain message via LayerZero Endpoint V2.
-
-```typescript
-import { LayerZeroEndpointV2ABI as IEndpointV2 } from "./abis";
-
-function main(
-  endpointAddress: Address,
-  dstEid: Uint256,
-  receiver: Uint256,
-  message: bytes,
-): { guid: Uint256; nonce: Uint256; fee: { nativeFee: Uint256; lzTokenFee: Uint256 } } {
-  const endpoint = IEndpointV2.at(endpointAddress);
-  return endpoint.send(
-    { dstEid: dstEid, receiver: receiver, message: message, options: 0x00, payInLzToken: false },
-    ctx.msgSender(),
-  );
-}
-```
-
-- `dstEid`: LayerZero endpoint ID for destination chain (NOT the EVM chain ID)
-- `receiver`: Destination contract address as bytes32 (left-padded)
-- `message`: Arbitrary message payload
-- `options`: Execution options (gas limits, etc.). Use `0x00` for defaults
-- `payInLzToken`: false = pay fees in native token, true = pay in ZRO token
-- Requires native token (ETH) for messaging fees (sent as msg.value)
-
 ## Notes
 
 - This is a messaging protocol, not a direct token bridge. Token bridging is done via OFT (Omnichain Fungible Token) contracts built on top of LayerZero
@@ -98,3 +63,9 @@ function main() {
 
 - `send((uint32 dstEid, bytes32 receiver, bytes message, bytes options, bool payInLzToken) _params, address _refundAddress) payable returns ((bytes32 guid, uint64 nonce, (uint256 nativeFee, uint256 lzTokenFee) fee) receipt)`
 - `quote((uint32 dstEid, bytes32 receiver, bytes message, bytes options, bool payInLzToken) _params, address _sender) view returns ((uint256 nativeFee, uint256 lzTokenFee) fee)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

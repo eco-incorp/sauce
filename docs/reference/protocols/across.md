@@ -17,57 +17,6 @@ Optimistic cross-chain bridge powered by UMA's optimistic oracle. Uses relayers 
 | Namespace | `Across` on ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
 | Chains | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Deposit tokens into the SpokePool for a cross-chain transfer, through `depositV3`.
-
-```typescript
-import { AcrossSpokePoolABI as ISpokePool } from "./abis";
-
-function main(
-  spokePoolAddress: Address,
-  token: Address,
-  outputToken: Address,
-  amount: Uint256,
-  outputAmount: Uint256,
-  destinationChainId: Uint256,
-  recipient: Address,
-  quoteTimestamp: Uint256,
-  fillDeadline: Uint256,
-): Uint256 {
-  const spokePool = ISpokePool.at(spokePoolAddress);
-  spokePool.depositV3(
-    ctx.msgSender(),
-    recipient,
-    token,
-    outputToken,
-    amount,
-    outputAmount,
-    destinationChainId,
-    0x0000000000000000000000000000000000000000,
-    quoteTimestamp,
-    fillDeadline,
-    0,
-    "",
-  );
-  return 1;
-}
-```
-
-- `token` / `outputToken`: ERC-20 to bridge, and the token the recipient receives on the destination
-- `outputAmount`: amount the relayer delivers (input minus the quoted fees)
-- `quoteTimestamp`: the quote's timestamp; the SpokePool rejects one outside its `depositQuoteTimeBuffer`
-- `fillDeadline`: unix time after which the deposit can no longer be filled
-- `recipient`: Address to receive tokens on destination chain
-- Requires ERC-20 approval to the SpokePool
-
 ## Notes
 
 - Fast fills: relayers fill deposits on destination within minutes, then claim reimbursement via optimistic oracle
@@ -125,3 +74,9 @@ functions, and its writes are SafeERC20.
 
 - `depositV3(address depositor, address recipient, address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, address exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) payable`
 - `deposit(bytes32 depositor, bytes32 recipient, bytes32 inputToken, bytes32 outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

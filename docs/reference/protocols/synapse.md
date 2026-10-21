@@ -17,37 +17,6 @@ Cross-chain bridge and DEX with multi-chain AMM pools. Supports token swaps and 
 | Namespace | `Synapse` on ethereum, optimism, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, polygon, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Deposit tokens for cross-chain transfer via SynapseBridge.
-
-```typescript
-import { SynapseBridgeABI as ISynapseBridge } from "./abis";
-
-function main(
-  bridgeAddress: Address,
-  recipient: Address,
-  chainId: Uint256,
-  token: Address,
-  amount: Uint256,
-): Uint256 {
-  const bridge = ISynapseBridge.at(bridgeAddress);
-  bridge.deposit(recipient, chainId, token, amount);
-  return 1;
-}
-```
-
-- `chainId`: Destination EVM chain ID
-- `token`: ERC-20 token to bridge
-- Requires ERC-20 approval to the SynapseBridge
-
 ## Notes
 
 - `deposit`: For canonical tokens supported directly by the bridge
@@ -90,3 +59,9 @@ function main() {
 - `deposit(address to, uint256 chainId, address token, uint256 amount)`
 - `depositAndSwap(address to, uint256 chainId, address token, uint256 amount, uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 minDy, uint256 deadline)`
 - `redeem(address to, uint256 chainId, address token, uint256 amount)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.
