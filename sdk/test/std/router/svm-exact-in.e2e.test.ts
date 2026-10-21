@@ -932,14 +932,14 @@ const VENUES: Venue[] = [
           pay: c.quoteMint as Address,
           buy: c.baseMint as Address,
           amountIn: 1_000_000n,
-          received: 221_720n,
+          received: 192_296n,
         },
         {
           vector: "metadao-futarchy:CUPo:sell",
           dir: true,
           pay: c.baseMint as Address,
           buy: c.quoteMint as Address,
-          amountIn: 221_720n,
+          amountIn: 192_296n,
         },
       ];
     },
