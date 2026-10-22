@@ -18,13 +18,13 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the generated references, no RPC endpoint, no description of Sauce as a multicall, no
-//      "rehearse" for a simulation, and nothing that tells the reader to copy, adapt or start from
-//      an example (the agent writes each program itself: COPY_FRAMING), no skill named in code
-//      (`sauce-<name>`) that the package does not ship; the command is written `sauce …`,
-//      `sauce-cli` says in one paragraph how to get it and why never a bare `npx sauce`, and no
-//      other line in the skills writes a bare `npx sauce`; and every protocol document with a
-//      swap template opens with the one pointer to `sauce-swaps`;
+//      a third-party protocol's own document, no RPC endpoint, no description of Sauce as a
+//      multicall, no "rehearse" for a simulation, and nothing that tells the reader to copy, adapt
+//      or start from an example (the agent writes each program itself: COPY_FRAMING), no skill
+//      named in code (`sauce-<name>`) that the package does not ship; the command is written
+//      `sauce …`, `sauce-cli` says in one paragraph how to get it and why never a bare
+//      `npx sauce`, and no other line in the skills writes a bare `npx sauce`; and every protocol
+//      document with a swap template opens with the one pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
@@ -182,21 +182,6 @@ const exportKeys = Object.keys(sdkPkg.exports);
 const sdk = await load(PKG);
 const compilerApi = await load(`${PKG}/compiler`);
 const deploymentsApi = await load(`${PKG}/deployments`);
-// The eco-routes registry protocol, for a package that still carries it: where it does not, there
-// is no `protocols/eco-routes` to resolve, and the checker has no eco-routes address to know.
-const hasModule = (specifier) => {
-  try {
-    requireFromSkills.resolve(specifier);
-    return true;
-  } catch (error) {
-    if (error.code === "MODULE_NOT_FOUND" || error.code === "ERR_PACKAGE_PATH_NOT_EXPORTED")
-      return false;
-    throw error;
-  }
-};
-const ecoRoutes = hasModule(`${PKG}/protocols/eco-routes`)
-  ? await load(`${PKG}/protocols/eco-routes`)
-  : undefined;
 const { runCli } = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/run.js")).href);
 // Which chains the command builds transactions on: the CLI's own policy, which the package exports
 // none of, read from the bin's module as `runCli` is.
@@ -592,19 +577,7 @@ const KNOWN_ADDRESSES = new Set();
   );
   for (const module of modules) collect(module.deployments);
   collect(deploymentsApi.v12DeployedAddresses());
-  for (const chain of sdk.CANONICAL_CHAINS) {
-    // Only a package that still records eco-routes' deployments has them to know (the registry
-    // protocol, and the shared Pot derived from its Executor).
-    for (const lookup of ["ecoRoutesPortal", "ecoRoutesExecutor"]) {
-      try {
-        collect(ecoRoutes?.[lookup](chain.slug));
-      } catch {}
-    }
-    try {
-      collect(sdk.destinationPot?.(chain.slug));
-    } catch {}
-    collect(sdk.routes.chainDefines(chain));
-  }
+  for (const chain of sdk.CANONICAL_CHAINS) collect(sdk.routes.chainDefines(chain));
 }
 
 // A third-party protocol's own document may name its own Portal, so the Portal rule and the
@@ -612,13 +585,10 @@ const KNOWN_ADDRESSES = new Set();
 const PROTOCOL_DOCUMENTS = join(SKILLS_DIR, "sauce-protocols", "references");
 const handWritten = (file) => !file.startsWith(PROTOCOL_DOCUMENTS + "/");
 // Every generated reference, rendered from the package the skills resolve, once: section 8 holds
-// the files on disk to it, and the wording rules exempt exactly these files from the Portal rule
-// (they record what the registries hold: a chain's file names an eco-routes deployment the
-// registry carries).
+// the files on disk to it.
 const REFERENCES = await skillsReferences(
   {
     sdk,
-    ecoRoutes,
     deployments: deploymentsApi,
     cctp: await load(`${PKG}/protocols/cctp`),
     compiler: compilerApi,
@@ -700,7 +670,7 @@ function wording(skill, file) {
     }
     if (/multicall|magic header/i.test(line) && !/\b(never|not|don't|do not|isn't)\b/i.test(line))
       fail(where(i), "describes Sauce as a multicall or with a magic header");
-    if (!isGenerated(file) && /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line))
+    if (/\b(?:Portal|portal|[Pp]rover)s?\b/.test(line))
       fail(where(i), "names the Portal or a prover; skills keep both out");
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
       counts.addresses++;
@@ -721,7 +691,7 @@ for (const skill of skills) {
 // file and point at it everywhere else, runners and their comments included
 // (`release-addresses.mjs`).
 {
-  const addresses = releaseAddresses({ sdk, deployments: deploymentsApi });
+  const addresses = releaseAddresses({ deployments: deploymentsApi });
   const home = join(SKILLS_DIR, DEPLOYMENTS_FILE);
   for (const file of walk(SKILLS_DIR, (path) => path !== home)) {
     for (const problem of releaseAddressProblems({
