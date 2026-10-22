@@ -1307,7 +1307,7 @@ Examples:
 ```text
 Serve the commands and the agent skills to coding agents over MCP.
 
-Usage: sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--store <dir>] [--no-stores]
+Usage: sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--no-stores]
        sauce mcp (--password-env <NAME> | --password-file <path> | --password-command <command>) [--wallets <dir>] [--config <file>]
        sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]
        sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]

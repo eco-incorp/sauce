@@ -3129,7 +3129,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   mcp: {
     usage: [
-      "sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--store <dir>] [--no-stores]",
+      "sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--no-stores]",
       "sauce mcp (--password-env <NAME> | --password-file <path> | --password-command <command>) [--wallets <dir>] [--config <file>]",
       "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
       "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
