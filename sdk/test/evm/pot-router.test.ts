@@ -5,7 +5,7 @@
 import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
 
 import { v12KitchenAddress } from "../../src/deployments/index.js";
-import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
+import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12PotAbi, type PotRouterClient } from "../../src/evm/engine.js";
 
 const OWNER = "0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082" as Address;
@@ -36,7 +36,7 @@ const stub = (answers: {
       router: answers.potRouter,
       kitchen,
       owner: answers.owner ?? OWNER,
-      userSalt: answers.salt ?? SAUCE_INTENT_POT_SALT,
+      userSalt: answers.salt ?? DEFAULT_POT_SALT,
     }[functionName];
   }) as unknown as PotRouterClient["readContract"];
 

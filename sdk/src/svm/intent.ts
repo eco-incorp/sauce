@@ -207,11 +207,6 @@ export interface SvmIntentCallLike {
   pin?: BytesInput;
 }
 
-/** An intent, duck-typed to just the SVM route calls this reads. */
-export interface SvmIntentLike {
-  route: { calls: readonly SvmIntentCallLike[] };
-}
-
 export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
   /** Defaults to released gated engine CPI data; Kitchen envelopes are not decoded here. */
   wireFormat?: SvmExecutionWireFormat;
@@ -295,12 +290,4 @@ export function extractSvmSettleFromCalls(
     // so a genuine settle later in the batch is never masked by an earlier lookalike.
   }
   return null;
-}
-
-/** Inspect the route's calls with the same trust boundaries as extractSvmSettleFromCalls. */
-export function extractSvmSettleFromIntent(
-  intent: SvmIntentLike,
-  options: ExtractSvmSettleOptions,
-): ExtractedSvmSettle | null {
-  return extractSvmSettleFromCalls(intent.route.calls, options);
 }

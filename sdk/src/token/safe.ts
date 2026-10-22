@@ -30,16 +30,16 @@
  * execution matrix in `test/std/token/evm.e2e.test.ts` ran it beside OpenZeppelin.
  *
  * APPROVE ALSO HANDLES USDT'S RULE, which is `forceApprove`'s job. USDT reverts when a non-zero
- * allowance is changed to another non-zero value, and that is not a theoretical hazard here: every
- * intent on a chain shares ONE Executor-owned Pot, so a residual allowance left by an earlier
- * fulfilment breaks the next one. OZ tries the approve and falls back on catching the revert; a
+ * allowance is changed to another non-zero value, and a residual allowance left by an earlier cook
+ * on the same Pot would break the next one. OZ tries the approve and falls back on catching the
+ * revert; a
  * reverting `evm.call` cannot be caught in a Sauce program, so this READS the allowance first — a
  * `uint256`, always safe to decode — and emits a reset to zero only when it is non-zero. Same end
  * state, decided before the call instead of after, at the cost of one STATICCALL.
  *
  * The calldata itself is built off-chain by the same viem encoder every other ERC-20 call in this
  * SDK goes through, cut at the words only known at run time, and reassembled by the program with
- * `.concat` — the mechanism `routes/template.ts` uses to splice an intent.
+ * `.concat`.
  *
  * `@sauce/token`'s EVM writes have the same semantics, as library functions. This file does not call
  * them, and stays INLINE on purpose: the settle recipe is compiled by partners whose resolver serves
@@ -143,8 +143,8 @@ function chunksFor(
 /**
  * The statements that issue one ERC-20 write with no output decode.
  *
- * `prefix` namespaces the locals this introduces, the same discipline `nest.ts` and
- * `nest-dynamic.ts` already use so several of these merge into one program scope. Each literal byte
+ * `prefix` namespaces the locals this introduces, so several of these merge into one program
+ * scope. Each literal byte
  * run is bound to its own `const` before `.concat` is called on it — a method call directly on a
  * `hex` literal is outside the compiler's M1 subset.
  */

@@ -79,6 +79,10 @@ export const GROWTH_STEP = 10_240;
 export const MAX_CODE_LEN = 1_048_576;
 export const MAX_POT_LEN = 10_240;
 
+/** Rent-exempt lamports for an account of `bytes` of data, at mainnet's rent: 3,480 lamports per
+ *  byte-year, two years, over the data and the 128 bytes every account carries. */
+export const svmRentExempt = (bytes: number): bigint => BigInt(128 + bytes) * 6_960n;
+
 /** A Pot's salt and a code buffer's `expected_sha256` are both exactly 32 bytes. */
 export const SALT_BYTES = 32;
 

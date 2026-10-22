@@ -1,7 +1,7 @@
 /**
- * The PDA sites that used to derive raw, beside the Kitchen's (kitchen-pda-memo.test.ts): the
- * eco-routes Portal's PDAs, the lookup table `createAltWithAddresses` creates, perps-jlp's and
- * voltr's program-wide PDAs, and every known-bump `create_program_address` (stabble, saber-
+ * The PDA sites that used to derive raw, beside the Kitchen's (kitchen-pda-memo.test.ts): a token
+ * account `svmTokenAccount` derives, the lookup table `createAltWithAddresses` creates, perps-jlp's
+ * and voltr's program-wide PDAs, and every known-bump `create_program_address` (stabble, saber-
  * stableswap, mercurial, sanctum-stake-pool, fluxbeam, the spl-token-swap forks, orca-legacy-
  * token-swap). Each goes through the shared memo (src/svm/venues/pda-memo.ts), so:
  *
@@ -32,17 +32,7 @@ import {
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import type { AccountLoader } from "../../src/svm/index.js";
 import { createAltWithAddresses } from "../../src/svm/alt.js";
-import {
-  associatedTokenAccount,
-  hyperlaneDispatchedMessagePda,
-  hyperlaneOutboxPda,
-  igpGasPaymentPda,
-  igpProgramDataPda,
-  svmExecutorPda,
-  svmFulfillMarkerPda,
-  svmHyperDispatcherPda,
-  svmPortalDispatcherPda,
-} from "../../src/svm/portal.js";
+import { svmTokenAccount } from "../../src/svm/token-accounts.js";
 import { __pdaMemoStats, __resetPdaMemoForTest } from "../../src/svm/venues/pda-memo.js";
 import {
   eventAuthorityPda,
@@ -85,14 +75,8 @@ const dec = getAddressDecoder();
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 const key = (b: number): Address => dec.decode(new Uint8Array(32).fill(b));
 
-const PORTAL = key(1);
-const PROVER = key(2);
-const MAILBOX = key(3);
-const IGP = key(4);
-const UNIQUE = key(5);
 const OWNER = key(6);
 const MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-const INTENT_HASH = `0x${"ab".repeat(32)}` as const;
 const CLOCK = address("SysvarC1ock11111111111111111111111111111111");
 
 beforeEach(() => {
@@ -116,53 +100,9 @@ async function direct(programAddress: Address, seeds: (string | Uint8Array)[]): 
 
 describe("find-style sites use the shared PDA memo", () => {
   const cases: [string, () => Promise<Address>, () => Promise<Address>][] = [
-    ["svmExecutorPda", () => svmExecutorPda(PORTAL), () => direct(PORTAL, ["executor"])],
     [
-      "svmFulfillMarkerPda",
-      () => svmFulfillMarkerPda(PORTAL, INTENT_HASH),
-      () => direct(PORTAL, ["fulfill_marker", new Uint8Array(32).fill(0xab)]),
-    ],
-    [
-      "svmPortalDispatcherPda",
-      () => svmPortalDispatcherPda(PORTAL, PROVER),
-      () => direct(PORTAL, ["dispatcher", enc.encode(PROVER) as Uint8Array]),
-    ],
-    [
-      "svmHyperDispatcherPda",
-      () => svmHyperDispatcherPda(PROVER),
-      () => direct(PROVER, ["dispatcher"]),
-    ],
-    [
-      "hyperlaneOutboxPda",
-      () => hyperlaneOutboxPda(MAILBOX),
-      () => direct(MAILBOX, ["hyperlane", "-", "outbox"]),
-    ],
-    [
-      "hyperlaneDispatchedMessagePda",
-      () => hyperlaneDispatchedMessagePda(MAILBOX, UNIQUE),
-      () =>
-        direct(MAILBOX, [
-          "hyperlane",
-          "-",
-          "dispatched_message",
-          "-",
-          enc.encode(UNIQUE) as Uint8Array,
-        ]),
-    ],
-    [
-      "igpProgramDataPda",
-      () => igpProgramDataPda(IGP),
-      () => direct(IGP, ["hyperlane_igp", "-", "program_data"]),
-    ],
-    [
-      "igpGasPaymentPda",
-      () => igpGasPaymentPda(IGP, UNIQUE),
-      () =>
-        direct(IGP, ["hyperlane_igp", "-", "gas_payment", "-", enc.encode(UNIQUE) as Uint8Array]),
-    ],
-    [
-      "associatedTokenAccount",
-      () => associatedTokenAccount(OWNER, MINT, TOKEN_PROGRAM_ADDRESS),
+      "svmTokenAccount",
+      () => svmTokenAccount({ mint: MINT, tokenProgram: TOKEN_PROGRAM_ADDRESS }, OWNER),
       async () =>
         (
           await findAssociatedTokenPda({

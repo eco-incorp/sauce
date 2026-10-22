@@ -18,7 +18,7 @@
 // only because the arguments left the program — so what these helpers return is now "the audited
 // settle, with these params", not "something settle-shaped, params unverified".
 //
-// The SVM analogue is `extractSvmSettleFromIntent` in `@eco-incorp/sauce/svm/verify`: an SVM intent
+// The SVM analogue is `extractSvmSettleFromCalls` in `@eco-incorp/sauce/svm/verify`: an SVM intent
 // wraps its settle CPI one layer deeper (the Eco Portal `CalldataWithAccounts` Borsh envelope), so that
 // module decodes the envelope itself before handing the halves to `decodeSvmSettleExecution` /
 // `verifySvmSettleExecution` — same "one call from intent to params" story, on the SVM side. It reaches
@@ -200,22 +200,4 @@ export function extractEvmSettleFromCalls(
     if (decoded) return { ...decoded, callIndex: i, target: calls[i]!.target };
   }
   return null;
-}
-
-/** An intent, duck-typed to just the calls this reads — so it accepts eco-solver's `Intent` (and its
- *  persisted schema) without importing either. */
-export interface IntentLike {
-  route: { calls: readonly IntentCallLike[] };
-}
-
-/**
- * Extracts the EVM settle params `(tokens, minOut, recipient)` from an intent object — the thin
- * intent-level wrapper over `extractEvmSettleFromCalls`. Duck-typed on `{ route: { calls } }`, so it takes
- * an eco-solver `Intent` (runtime or persisted) as-is. `null` if the intent carries no settle cook.
- */
-export function extractEvmSettleFromIntent(
-  intent: IntentLike,
-  accepted?: readonly (Hex | ProgramPin)[],
-): ExtractedEvmSettle | null {
-  return extractEvmSettleFromCalls(intent.route.calls, accepted);
 }

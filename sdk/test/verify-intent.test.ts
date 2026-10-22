@@ -1,8 +1,8 @@
 /**
- * @eco-incorp/sauce/verify — intent/cook extraction coverage.
+ * @eco-incorp/sauce/verify — cook extraction coverage.
  *
- * `decodeSettleCall` / `extractEvmSettleFromIntent` sit on top of `validateSettleProgram`: a producer
- * hands you an intent whose `route.calls[]` batch carries the settle payload as ONE ingredient inside a
+ * `decodeSettleCall` / `extractEvmSettleFromCalls` sit on top of `validateSettleProgram`: a producer
+ * hands you calls whose batch carries the settle payload as ONE ingredient inside a
  * `Pot.cook(bytes[])` call, so these unwrap the cook calldata and hand the settle ingredient to the
  * decoder. Everything below builds real `cook(bytes[])` calldata with viem and asserts the params
  * round-trip, that a non-cook / non-settle call yields null, and that the settle cook is found by
@@ -18,7 +18,6 @@ import {
   decodeSettleCall,
   encodeSettleProgram,
   extractEvmSettleFromCalls,
-  extractEvmSettleFromIntent,
   SETTLE_PROGRAM,
   SETTLE_WIRE,
 } from "../src/verify/index";
@@ -103,7 +102,7 @@ describe("decodeSettleCall", () => {
   });
 });
 
-describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
+describe("extractEvmSettleFromCalls", () => {
   const calls = [
     {
       data: encodeFunctionData({
@@ -124,12 +123,6 @@ describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
     expect(found!.target).toBe("0x" + "03".repeat(20));
     expect(found!.minOut).toBe(MINOUT);
     expect(BigInt(found!.recipient)).toBe(BigInt(RECIPIENT));
-  });
-
-  it("extractEvmSettleFromIntent takes a duck-typed intent object", () => {
-    const found = extractEvmSettleFromIntent({ route: { calls } });
-    expect(found!.callIndex).toBe(2);
-    expect(found!.tokens.map((t) => BigInt(t))).toEqual([BigInt(TOKEN0), BigInt(TOKEN1)]);
   });
 
   // The pin is re-pinned when compiler codegen changes; every intent already on chain still carries

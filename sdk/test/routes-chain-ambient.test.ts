@@ -1,20 +1,18 @@
 /**
  * P7 — chain-bundle activation: the ambient-MODULE dimension (`chainAmbient`, `ambient.ts`)
- * threaded into `openRoute`'s compile seam (`intent-dsl.ts`), alongside the already-landed
- * scalar-defines half (`chainDefines`, see `routes-ambient.test.ts`).
+ * a program compile adds (`compileSauceProgram`), alongside the scalar-defines half (`chainDefines`,
+ * see `routes-ambient.test.ts`).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { chainAmbient, openRoute } from "../src/routes/index.js";
-import type { IntentOptions } from "../src/routes/index.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { chainAmbient } from "../src/routes/index.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const AMBIENT_FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "rs-ambient");
 /** Serves the fixture directory off disk, as a caller's own `resolve` would. */
 const resolveFixture = (path: string): Uint8Array | undefined => {
@@ -25,22 +23,8 @@ const resolveFixture = (path: string): Uint8Array | undefined => {
 /** The SPL Token program — any valid base58 program id serves as an SVM execution buffer here. */
 const SVM_BUFFER = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as const;
 
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
-
 describe("chainAmbient", () => {
-  // `@sauce/token` ships as the default ambient MODULE: it is activated for every openRoute compile,
+  // `@sauce/token` ships as the default ambient MODULE: it is activated for every program compile,
   // resolvable because the SDK serves its own copy (`embedded/resolve.ts`) whatever the caller
   // resolves. The default-path test at the bottom of this file proves an UNUSED
   // ambient module leaves bytecode untouched.
@@ -50,29 +34,22 @@ describe("chainAmbient", () => {
   });
 });
 
-describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
+describe("a program compile: chain-scoped ambient bundle activation (P7)", () => {
   const bareBody = "function main() { return double(21n); }"; // no `import` line anywhere
 
   it("a program using an ambient symbol compiles via the RS path when the merged ambient list is non-empty", () => {
-    const built = openRoute(
-      "base",
-      bareBody,
-      evmOptions({
-        compile: { resolve: resolveFixture, ambient: ["./math-helpers.js"] },
-      }),
-    ).reward(0n);
-    expect(built.compiled.bytecode.length).toBe(1);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    const built = compileSauceProgram("base", bareBody, {
+      resolve: resolveFixture,
+      ambient: ["./math-helpers.js"],
+    });
+    expect(built.bytecode.length).toBeGreaterThan(0);
   });
 
   it("is byte-identical to calling compileSauceRoute directly with the same ambient list", () => {
-    const viaOpenRoute = openRoute(
-      "base",
-      bareBody,
-      evmOptions({
-        compile: { resolve: resolveFixture, ambient: ["./math-helpers.js"] },
-      }),
-    ).reward(0n);
+    const program = compileSauceProgram("base", bareBody, {
+      resolve: resolveFixture,
+      ambient: ["./math-helpers.js"],
+    });
 
     const direct = compileSauceRoute(
       requireChain("base"),
@@ -80,11 +57,10 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
       { pot: POT, engine: ENGINE },
       {
         resolve: resolveFixture,
-        // openRoute merges chainAmbient() (`@sauce/token`) with the caller's list -- match that merge
-        // here so this is a true apples-to-apples bytecode comparison, not a false negative.
+        // A program compile merges chainAmbient() (`@sauce/token`) with the caller's list -- match
+        // that merge here so this is a true apples-to-apples bytecode comparison.
         ambient: ["@sauce/token", "./math-helpers.js"],
-        // openRoute also threads chain-scoped scalar defines (chainId/CHAIN_ID) underneath -- match
-        // them here so this is a true apples-to-apples bytecode comparison, not a false negative.
+        // The chain's own values, given as defines, are the ones a program compile adds.
         defines: {
           chainId: BigInt(requireChain("base").id),
           CHAIN_ID: BigInt(requireChain("base").id),
@@ -92,19 +68,16 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
       },
     );
 
-    expect(Array.from(viaOpenRoute.compiled.bytecode[0]!)).toEqual(
-      Array.from(direct.compiled.bytecode[0]!),
-    );
+    expect(Array.from(program.bytecode)).toEqual(Array.from(direct.compiled.bytecode[0]!));
   });
 
   it("default bundle (@sauce/token, UNUSED): bytecode is byte-identical to no ambient module at all", () => {
-    const built = openRoute("base", "function main() { return chainId; }", evmOptions()).reward(0n);
-    expect(built.compiled.bytecode.length).toBe(1);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    const built = compileSauceProgram("base", "function main() { return chainId; }");
+    expect(built.bytecode.length).toBeGreaterThan(0);
 
     // The default `@sauce/token` ambient module is broadcast into this compile but the program uses
     // none of its exports, so it treeshakes away -- the bytecode is byte-identical to compiling with
-    // NO ambient module, only the chain defines openRoute threads underneath. This is what proves the
+    // NO ambient module, only the chain's defines. This is what proves the
     // default flip costs a token-free route nothing (routes-ambient.test.ts pins the chainDefines
     // half of the same equivalence).
     const withoutAmbient = compileSauceRoute(
@@ -118,9 +91,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
         },
       },
     );
-    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(
-      Array.from(withoutAmbient.compiled.bytecode[0]!),
-    );
+    expect(Array.from(built.bytecode)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
   });
 
   it("default bundle on an SVM destination too: an unused @sauce/token treeshakes to the same bytes", () => {
@@ -129,17 +100,8 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     // SVM compile just as unconditionally — and a treeshake regression there would be invisible to
     // the EVM assertion.
     const body = "function main() { return chainId; }";
-    const built = openRoute("solana", body, {
-      execution: { code: SVM_BUFFER, accounts: [] },
-      deadline: 2000n,
-      portal: PORTAL,
-      source: "base",
-      creator: "0x3333333333333333333333333333333333333333",
-      prover: "0x4444444444444444444444444444444444444444",
-      rewardDeadline: 1000n,
-    }).reward(0n);
-    expect(built.compiled.bytecode.length).toBe(1);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    const built = compileSauceProgram("solana", body);
+    expect(built.bytecode.length).toBeGreaterThan(0);
 
     const withoutAmbient = compileSauceRoute(
       requireChain("solana"),
@@ -152,8 +114,6 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
         },
       },
     );
-    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(
-      Array.from(withoutAmbient.compiled.bytecode[0]!),
-    );
+    expect(Array.from(built.bytecode)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
   });
 });

@@ -388,7 +388,8 @@ export class SvmLowering {
     readonly tokens: ReadonlyMap<string, bigint>,
     rows: readonly SvmTokenRow[],
     /** Compile-time values a holder may name, by name: a key bound before the program compiles —
-     *  main's `Address` argument, bound into an intent's body — which the cook attaches by value. */
+     *  main's `Address` argument, bound into the program (`args`) — which the cook attaches by
+     *  value. */
     private readonly keys: ReadonlyMap<string, bigint> = new Map(),
     /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads as a token's is read. */
     readonly native?: string,

@@ -224,8 +224,8 @@ export function memoizedCreateProgramAddress(
  * {@link memoizedGetProgramDerivedAddressWithBump}, synchronously: the same search kit's
  * `getProgramDerivedAddress` makes (bump 255 down to 0, the first `create_program_address` off the
  * curve), hashed with the synchronous SHA-256 {@link memoizedCreateProgramAddress} uses, for a
- * caller that cannot await — the intent lowering, which runs inside the synchronous compile. Same
- * key and map as the asynchronous find, so the two share each result.
+ * caller that cannot await — a pool's key derived inside the synchronous compile (`pool-keys.ts`).
+ * Same key and map as the asynchronous find, so the two share each result.
  */
 export function memoizedFindProgramAddressSync(
   programAddress: Address,
@@ -255,16 +255,6 @@ export function memoizedFindProgramAddressSync(
     }
   }
   throw new Error(`no off-curve address for ${programAddress}'s seeds`);
-}
-
-/** {@link memoizedFindAssociatedTokenPda}, synchronously (see {@link memoizedFindProgramAddressSync}). */
-export function memoizedAssociatedTokenAccountSync(seeds: AssociatedTokenSeeds): Address {
-  const encoder = getAddressEncoder();
-  return memoizedFindProgramAddressSync(ASSOCIATED_TOKEN_PROGRAM_ADDRESS, [
-    encoder.encode(seeds.owner),
-    encoder.encode(seeds.tokenProgram),
-    encoder.encode(seeds.mint),
-  ])[0];
 }
 
 /**

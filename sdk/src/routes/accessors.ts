@@ -24,8 +24,8 @@ import {
 export type { PascalOf, ChainRef };
 export { pascalOfSlug };
 
-/** The generated record: `const { Base, Solana, Ethereum } = chainAccessors;` -- each entry is
- *  BOTH callable (`Base(sauce, opts)`) and a namespace (`Base.chain`/`Base.route`). */
+/** The generated record: `const { Base, Solana, Ethereum } = chainAccessors;` -- each entry a
+ *  namespace with `.chain`. */
 export const chainAccessors: ChainGlobals = createChainGlobals();
 
 /**

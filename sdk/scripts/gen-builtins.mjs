@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SauceScript's builtins, declared for TypeScript route closures, generated from the reference's
-// own data: `skills/sauce-script/references/builtins.json`. A closure passed to `Base(() => { ... })` is compiled source,
+// own data: `skills/sauce-script/references/builtins.json`. A closure handed to the SDK as source is compiled source,
 // but the host type-checks it first, so `ctx`, `crypto.keccak256`, `hex` and the rest need
 // declarations. They install nothing at run time.
 //

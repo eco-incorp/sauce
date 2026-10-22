@@ -30,7 +30,6 @@ import { svmSettleRefs, svmSettleSource } from "../../src/svm/recipes/index.js";
 import {
   decodePortalCalldataWithAccounts,
   extractSvmSettleFromCalls,
-  extractSvmSettleFromIntent,
   type SvmSettleExpectation,
 } from "../../src/svm/verify.js";
 import { compileSource } from "../helpers";
@@ -175,11 +174,10 @@ function decoyEnvelope(n: number, opts: { pin?: Uint8Array } = {}): Uint8Array {
   return encodeEnvelope(instructionData, accounts);
 }
 
-describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
-  it("extracts + VERIFIES a genuine settle from an intent with no partner bytecode (pin proof)", () => {
+describe("extractSvmSettleFromCalls", () => {
+  it("extracts + VERIFIES a genuine settle from calls with no partner bytecode (pin proof)", () => {
     const fx = buildIntentFixture(2, { minOut: 4242n });
-    const intent = { route: { calls: [{ data: fx.envelope, pin: fx.pin }] } };
-    const found = extractSvmSettleFromIntent(intent, fx.expected);
+    const found = extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin }], fx.expected);
     expect(found).not.toBeNull();
     expect(found!.callIndex).toBe(0);
     expect(found!.escrowCount).toBe(2);
@@ -191,10 +189,10 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
 
   it("additionally byte-matches when the staged bytecode is supplied", () => {
     const fx = buildIntentFixture(2);
-    const found = extractSvmSettleFromIntent(
-      { route: { calls: [{ data: fx.envelope, pin: fx.pin }] } },
-      { bytecode: fx.bytecode, ...fx.expected },
-    );
+    const found = extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin }], {
+      bytecode: fx.bytecode,
+      ...fx.expected,
+    });
     expect(found).not.toBeNull();
     expect(found!.genuine).toBe(true);
     expect(found!.verifiedBy).toBe("bytecode");

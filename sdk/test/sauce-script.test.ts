@@ -1,7 +1,7 @@
 /**
  * The SauceScript declarations an editor loads for a program file, and the plugin beside them,
  * through a real TypeScript language service set up as `sauce init`'s `programs/tsconfig.json`
- * sets it up: every program in the repository — those the package ships, the three an agent wrote
+ * sets it up: every program in the repository — those the package ships, the two an agent wrote
  * in a project of its own (copied unchanged into `fixtures/sauce-script/demo`), the fixtures — as
  * the repository's tsconfig.json lists them, checks with no error at all, and a real mistake in one
  * still does not.
@@ -53,7 +53,7 @@ const programs = (dir: string): string[] =>
   });
 
 /** Every program in the repository, as its tsconfig.json — the project an editor opens them in —
- *  lists them: those the package ships (skills, docs, recipes), the agent's three, the fixtures. */
+ *  lists them: those the package ships (skills, docs, recipes), the agent's two, the fixtures. */
 const CORPUS = ts
   .getParsedCommandLineOfConfigFile(
     join(ROOT, "tsconfig.json"),
@@ -142,7 +142,7 @@ describe("SauceScript in an editor", () => {
     }
   });
 
-  it("checks every program in the repository, the agent's three among them, with no error", () => {
+  it("checks every program in the repository, the agent's two among them, with no error", () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(14);
     const checked = service(textOf(CORPUS));
     expect(CORPUS.flatMap((file) => report(checked, file))).toEqual([]);
@@ -292,7 +292,6 @@ describe("SauceScript in an editor", () => {
         'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
         [2305, 2724],
       ],
-      ["reward", "Base(() => {}).rewards({ tokens: [] });\n", missing],
       // Solana's accounts, and a token's, as a program for it writes them.
       ["systemProgram", "function main() { const p = Solana.systemProgramm; }\n", missing],
       ["pda", "function main() { const p = Solana.pda(ctx.self()); }\n", [2554]],
