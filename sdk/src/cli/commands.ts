@@ -242,12 +242,6 @@ export function compileProgram(
   }
 }
 
-/** The chains a cook of `input` is refused by — what {@link requireSupported} is asked about
- *  before anything that sends it: its own. */
-export function programChains(input: ProgramInput): CanonicalChain[] {
-  return [input.chain];
-}
-
 /** The installed compiler's package name and version, read from its own manifest. */
 function compilerPackage(): { name: string; version: string } {
   const require = createRequire(import.meta.url);

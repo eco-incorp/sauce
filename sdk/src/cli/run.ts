@@ -56,7 +56,6 @@ import {
   potDeployCommand,
   type PotInput,
   potStatusCommand,
-  programChains,
   type ProgramInput,
   readInput,
   runCommand,
@@ -1916,8 +1915,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           io,
         );
       }
-      // The cook's chain, before the key is unlocked.
-      requireSupported("sending the cook", programChains(program));
       const account = await signerOf(args, io);
       const input = cookInput(args, io, trailing, account.address, program);
       const rpcUrl = requiredEndpoint(args, io, input.chain);

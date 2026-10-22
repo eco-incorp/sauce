@@ -34,7 +34,6 @@ export {
   compileProgram,
   expectingRevert,
   potCommand,
-  programChains,
   txCommand,
   type CliFiles,
   type CommandOutput,
