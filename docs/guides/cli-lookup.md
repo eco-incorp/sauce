@@ -28,10 +28,9 @@ sauce globals --chain base --protocol UniswapV3  # one namespace, with its metho
 ```
 
 It lists every name a program compiled for the chain may use without declaring it: the tokens with
-their addresses and decimals, each protocol's contracts with their addresses, the chain names that
-open intents, and the token functions. A name it lists is one the compiler accepts, at the address
-the program gets. [Names and registries](../concepts/names-and-registries.md) explains where the
-names come from.
+their addresses and decimals, each protocol's contracts with their addresses, and the token
+functions. A name it lists is one the compiler accepts, at the address the program gets.
+[Names and registries](../concepts/names-and-registries.md) explains where the names come from.
 
 `--protocol <name>` adds each method, with every parameter:
 
@@ -243,9 +242,8 @@ with `--per-venue`, as many as `--slots` (4). It prints them as `chosen`; in slo
 `poolArgs`, ready for the program's `--args` (the System program for a slot with none); and as
 `accounts`, the slots' accounts as `--accounts` takes them.
 
-A venue that could not be read leaves the listing partial: a note says which, and the command exits
-
-1. `--block` and `--v4-key` are EVM's.
+A venue that could not be read makes the command exit 1, with the listing partial and a note saying
+which. `--block` and `--v4-key` are EVM's.
 
 ## Read a transaction, a cook or a program: `sauce inspect`
 
@@ -266,37 +264,28 @@ calldata. The other inputs it takes:
 
 ```sh
 sauce inspect 0x<tx hash> --chain base          # a transaction
-sauce inspect cross-chain-intent.sauce.ts --chain base \
-  --intent-deadline 2000000000 --intent-creator <address> # a file
+sauce inspect pay.sauce.ts --chain base          # a file
 ```
 
 What it reports, by input:
 
-- **A `Pot.cook`:** the engine (and whether it is the released one) and the program: its size, hash,
-  and every intent it opens, with the route's calls, the reward, the intent hash, the vault the
-  reward is escrowed in, and how the program funds it (`fundVia`: paid into the vault then
-  `publish`, or `publishAndFund`).
+- **A `Pot.cook`:** the engine (and whether it is the released one) and the program: its size and
+  hash.
 - **With `--source <file>`:** whether the program is that file's, and the arguments the cook appends,
   decoded against its `main`.
-- **A `Kitchen.deployPot`** (the Pot it makes), **a `Portal.publish` or `publishAndFund`** (the
-  route, the reward, and the intent's vault, the address a funder's `transfer` pays), an ERC-20
-  call, or bare program bytes.
+- **A `Kitchen.deployPot`** (the Pot it makes), an ERC-20 call, or bare program bytes.
 - **A 32-byte hash with `--chain`:** the transaction, fetched: its status, sender, value and call,
   what it cost (gas, an OP-stack chain's L1 data fee, the value), and the token transfers,
   approvals and net balance changes its receipt's logs record.
-- **A file:** the program it compiles to, and its intents, with every value it measures at run time
-  named (`reward: <amount> of 0x…`).
+- **A file:** the program it compiles to, and the parameters its `main` takes.
 
-An intent whose values the program measures at run time is only partly readable from the bytes: its
-destination, and that the rest is filled in on chain. There is no opcode listing or disassembly:
-programs are reported by what they are and what they open.
+There is no opcode listing or disassembly: programs are reported by their size and hash.
 
 ## Check a settlement: `sauce verify`
 
-A **settle program** is the audited program that ends a swap intent: it sweeps the Pot's tokens to
-one recipient once a minimum output is met. `sauce verify` checks that a payload, a cook, an
-intent's publish or a transaction runs it, and prints the `tokens`, `minOut` and `recipient` it
-carries:
+A **settle program** is the audited program that sweeps the Pot's tokens to one recipient once a
+minimum output is met. `sauce verify` checks that a payload, a cook or a transaction runs it, and
+prints the `tokens`, `minOut` and `recipient` it carries:
 
 ```sh
 sauce verify 0x<settle payload>
@@ -320,9 +309,8 @@ rejected (PROGRAM_TRUNCATED): decodeSettleProgram: payload is 314 bytes, shorter
 - A transaction must have succeeded: one that reverted, or has no receipt yet, settled nothing.
 
 The rejection codes are the SDK's `SettleFailureCode` (`PROGRAM_HASH`, `TOKENS_OFFSET`, …), and
-`UNKNOWN_ENGINE`, `NO_SETTLE` for an intent without a settle cook, `TX_FAILED` or `TX_PENDING`. On
-Solana it checks the engine invocation a settle cook made
-([Solana](cli-solana.md#verifying-a-settle-on-solana)).
+`UNKNOWN_ENGINE`, `TX_FAILED` or `TX_PENDING`. On Solana it checks the engine invocation a settle
+cook made ([Solana](cli-solana.md#verifying-a-settle-on-solana)).
 
 ## Next
 

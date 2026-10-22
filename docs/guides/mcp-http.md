@@ -27,7 +27,7 @@ curl -s -X POST http://127.0.0.1:3000/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-The answer is one JSON object whose `result.tools` lists 25 tools, from `sauce_chains` to
+The answer is one JSON object whose `result.tools` lists 17 tools, from `sauce_chains` to
 `sauce_install_skills`. A server over HTTP has no wallet tools and no store tools
 ([Every tool](mcp-tools.md#every-tool)).
 
@@ -38,8 +38,8 @@ any replica can answer any request. A GET or DELETE is refused (405).
   the `--config` file's ([Use your own endpoints](mcp.md#use-your-own-endpoints) has the format),
   and the built-in public ones for a chain the file does not name. It holds no key: nothing it
   builds is signed. `--wallets` and the password flags are refused over HTTP, and the wallet tools
-  are not registered there. It keeps nothing on disk either: it has no Pot store and no intent
-  store, none of their tools, and no `intentHash`.
+  are not registered there. It keeps nothing on disk either: it has no Pot store and none of its
+  tools.
 - **It authenticates no one.** Bound to loopback (`127.0.0.1`), the default, it answers only
   requests whose `Host`, and `Origin` when one is sent, is a loopback name. That keeps a web page
   from reaching it through DNS rebinding, a trick that points a web page's own domain at your

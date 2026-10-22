@@ -64,9 +64,8 @@ addresses, and send it what it will spend.
 
 ## What Sauce hands over
 
-Every Sauce tool that builds a transaction (`sauce_tx`, `sauce_pot`, `sauce_actions`,
-`sauce_intent_publish` and the intent steps), and `sauce tx` on the command line, returns its
-transactions the way these wallets take them:
+Every Sauce tool that builds a transaction (`sauce_tx`, `sauce_pot`, `sauce_actions`), and
+`sauce tx` on the command line, returns its transactions the way these wallets take them:
 
 - Each transaction is exactly what Phantom's `evm_send` takes. Amounts are written in hex, as
   wallets read them, and the labels Sauce adds, such as `what`, are left out by the wallet.
@@ -146,13 +145,6 @@ shows what the Pot holds now.
 A Solana transaction has to land within about a minute of being built. If approving takes longer,
 ask your agent to build it again: `sauce_send` with the cursor alone, or the same tool as before.
 
-Some steps of a cross-chain intent, such as a proof, come already signed by a second key that
-Sauce made for an account the transaction creates. The result lists those keys in `signedBy`. Your
-wallet must sign such a transaction exactly as it is. If a wallet rebuilds the transaction before
-signing it, for example to give it a newer blockhash, that second signature stops matching, and
-Solana refuses the transaction. If that happens, sign that one step with a key that signs as given,
-and send it with `sauce_send`.
-
 ## On Base or Ethereum, with Phantom
 
 Your agent calls `evm_send` with each transaction as it is, in order, waiting for each to land
@@ -189,15 +181,7 @@ that would fail, sends them in order, and stops at the first that does not succe
 - **A cook that would revert** after the deployment (a Pot not funded yet) comes with no `gas`, and
   a note saying why: fund the Pot and call `sauce_tx` again.
 - `sauce_pot`'s deployment, by hand, can be sent from any account.
-- `sauce_intent_publish`'s transactions go in order, from the wallet that funds the reward: the
-  transfers into the vault first, then `publish` once they have landed.
-- `sauce_intent_fill`'s go in order from the solver it names (`from`): the Portal, eco-routes'
-  contract where intents are filled, pulls what the route delivers from the account that calls
-  `fulfill`.
-- The proof, claim, refund and cancellation can be sent from any account. Each `transactions`
-  entry names its `chainId`; the sender pays the gas and the value, and the reward goes to the
-  claimant or the creator, never the sender.
-- On Solana, each transaction is signed last by its `feePayer`, the `from` the call named, and
+- On Solana, each transaction is signed by its `feePayer`, the owner the call named, and
   `sauce_tx`'s `transaction` goes to `sauce_send` with its `cursor`, which also reads back what
   `main` returned. Its blockhash expires in about a minute: one signed later is refused, to build
   and sign again.

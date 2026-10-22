@@ -50,8 +50,6 @@ The file names no chain. It is compiled for the chain you name with `--chain`, a
 - `USDC` and the chain's other tokens are names, with no import and no address.
 - Protocol contracts are names too: `UniswapV3.Factory`, `AaveV3.Pool`.
 - `transfer`, `approve`, `balanceOf` and the other token functions need no import.
-- An intent the program opens to another chain resolves its names there
-  ([your first cross-chain intent](first-intent.md)).
 
 So one file compiles for every chain whose names it uses.
 [Names and registries](../concepts/names-and-registries.md) explains how a name becomes an address,
@@ -90,9 +88,7 @@ sauce compile: --args: argument 1 (to: Address): '0x12' is not an address: 20 by
 `--args-json '[…]'` gives them all as one JSON array instead, inline or in a file. A flag after
 `--args` is still a flag; put `--` before an argument that starts with `--`.
 
-A value the program fixes for every run, such as a fee, is a `const` beside `main`. An intent file
-takes its inputs the same way, and `sauce intent publish` fixes them into the intents it publishes
-([Intents from the command line](cli-intents.md)).
+A value the program fixes for every run, such as a fee, is a `const` beside `main`.
 
 ## When it does not compile
 
@@ -147,11 +143,9 @@ It prints one JSON object. The parts you will read:
 - `defines`: each name the chain gave the program, with its value, its `kind` (a `token` symbol, a
   protocol `contract` such as `UniswapV3_Factory`, the `chain id`) and the `chain` it applied on. A
   value is an address where it is a token or a contract (on Solana a base58 key); any other is the
-  integer it is. An intent body the file opens reads its own chain's names, so its `USDC` is listed
-  again with that chain.
+  integer it is.
 - `contracts`: each protocol contract the program calls or reads (`UniswapV3.Factory.getPool(…)`,
-  `Cctp.TokenMessenger`), as written and as resolved, with the chain whose deployment it is. An
-  intent body's resolve on the intent's own chain.
+  `Cctp.TokenMessenger`), as written and as resolved, with the chain whose deployment it is.
 - `returnType`: the type `main` declares it returns, an `interface` spelled out, or `null` when it
   returns nothing. `simulate` reads the cook's return data as that type.
 - `compiler` and `engine`: the compiler that compiled it and the engine release it runs on.

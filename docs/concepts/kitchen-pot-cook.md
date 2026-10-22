@@ -122,15 +122,6 @@ program spends comes on top. The fee is on-chain state: the Kitchen's owner sets
 what the Kitchen collects. A cook reads it when it is built, and a cook that reverts pays none.
 [Costs](costs.md) puts it beside the gas and the other costs of a run.
 
-## Your Pot and the intent Pot
-
-Your own programs run on your Pot. An intent's program runs as a cook too, on the destination
-chain, but on a Pot that is not yours. Its owner is that chain's Executor, the contract of the
-intent system, eco-routes, that makes an intent's calls there, and every solver's fill drives it.
-The solver deploys it and pays the fee for the cook. Every intent to that chain shares that Pot, so
-a program takes out everything it brought in within the same fill: anything left behind is anyone's.
-[Cross-chain intents](cross-chain-intents.md) explains the model.
-
 ## On Solana
 
 The three roles are the same, and Solana's accounts change the details:
@@ -153,8 +144,7 @@ large program and the two ways to cook.
 
 Everything above describes the default kind, a **private Pot**: one owner, who alone may cook on
 it. The Kitchen also makes **Shared Pots**, which have no owner: anyone can cook on one and spend
-what it holds, so a Shared Pot is funded and emptied within one transaction. An intent's Pot is a
-private Pot owned by the Executor, even though every intent through that Executor shares it.
+what it holds, so a Shared Pot is funded and emptied within one transaction.
 [Pots and cooks in code](../api/README.md#pots-and-cooks-in-code) lists the Kitchen calls for each
 kind.
 

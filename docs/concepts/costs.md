@@ -13,17 +13,15 @@ This page is for you once you know what a Pot, a cook and the Kitchen are
 
 ## At a glance
 
-| What                                | Who pays                                   | Paid in                           | How much                                           |
-| ----------------------------------- | ------------------------------------------ | --------------------------------- | -------------------------------------------------- |
-| Simulating a program                | nobody                                     | nothing                           | free                                               |
-| A cook's gas                        | the wallet that sends the cook             | the chain's native coin           | depends on the program; the simulation says        |
-| The Kitchen's fee                   | the wallet that sends the cook             | the chain's native coin           | a flat fee per cook, set on chain                  |
-| Native coin a program spends        | the Pot, or the wallet in the cook's value | the chain's native coin           | what the program spends                            |
-| Deploying a Pot on Ethereum or Base | whoever sends the deployment, once         | the chain's native coin           | its gas only                                       |
-| Creating a Pot on Solana            | its owner, once                            | SOL                               | about 0.072 SOL of rent, plus fees                 |
-| A token account on Solana           | whoever creates it                         | SOL                               | about 0.002 SOL of rent                            |
-| An intent's reward                  | its creator                                | the reward's tokens               | what you offer, enough to cover the solver's costs |
-| An intent's fill                    | the solver, who then claims the reward     | the destination's coin and tokens | what the job needs on the destination              |
+| What                                | Who pays                                   | Paid in                 | How much                                    |
+| ----------------------------------- | ------------------------------------------ | ----------------------- | ------------------------------------------- |
+| Simulating a program                | nobody                                     | nothing                 | free                                        |
+| A cook's gas                        | the wallet that sends the cook             | the chain's native coin | depends on the program; the simulation says |
+| The Kitchen's fee                   | the wallet that sends the cook             | the chain's native coin | a flat fee per cook, set on chain           |
+| Native coin a program spends        | the Pot, or the wallet in the cook's value | the chain's native coin | what the program spends                     |
+| Deploying a Pot on Ethereum or Base | whoever sends the deployment, once         | the chain's native coin | its gas only                                |
+| Creating a Pot on Solana            | its owner, once                            | SOL                     | about 0.072 SOL of rent, plus fees          |
+| A token account on Solana           | whoever creates it                         | SOL                     | about 0.002 SOL of rent                     |
 
 The **native coin** is the coin a chain charges its fees in: ETH on Ethereum and Base, SOL on
 Solana. The tokens your program moves, such as USDC, come from your Pot and pay none of these.
@@ -119,26 +117,6 @@ Besides the Pot, a first run on Solana can pay for:
 - **Transaction fees.** 5,000 lamports for each signature, a fraction of a cent.
 
 [How Sauce runs on Solana](solana-model.md) explains token accounts, staging and lookup tables.
-
-## An intent
-
-An [intent](cross-chain-intents.md) is a job on another chain with a reward attached. Its costs
-fall on two sides:
-
-- **The creator** locks the reward on the source chain, in the intent's vault, and pays the gas to
-  publish the intent there. Published from a program, that is part of a cook, with its fee.
-- **The solver**, whoever does the job, pays everything on the destination: the tokens the job
-  delivers, the gas of the fill, the destination Kitchen's fee when the job runs a program, and the
-  fee of the prover, the bridge that carries the proof of the fill back. It then claims the reward.
-
-So the reward has to cover what the solver spends there, with a margin, or nobody fills it.
-`sauce intent publish`, when it makes an intent step by step, suggests a reward: what is delivered
-plus a margin over the solver's costs there, where it can price them, and shows how it got there.
-Otherwise you set the reward yourself. A job made only of token transfers and approvals runs as
-plain calls with no cook, and pays no Kitchen's fee.
-
-An intent nobody fills loses its creator only what publishing it and refunding it cost: after the
-reward deadline, the reward can be refunded.
 
 ## Seeing the figure before you pay
 

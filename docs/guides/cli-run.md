@@ -133,7 +133,7 @@ A revert prints `The cook reverts: <reason>` (or `Deploying the Pot reverts: …
 reason is decoded where it can be:
 
 - `the program threw "…"` for your own `require` or `throw` message;
-- a Pot, Kitchen, Router, Permit2 or Portal error by name, and ERC-20's standard errors, such as
+- a Pot, Kitchen, Router or Permit2 error by name, and ERC-20's standard errors, such as
   `ERC20InsufficientBalance`;
 - a pool's short revert string with what it checks, such as
   `"SPL" (a V3-style pool's price-limit check …)`, `STF` from a token transfer, or a V2-style
@@ -150,12 +150,6 @@ overrides: a Pot that is not deployed is put in place as its deployment would le
 cook runs against it. That route reports the result and an estimated gas, but no logs, so not what
 moved. The `Simulated with …` line names the route taken and why it fell back. Give an endpoint of
 your own ([Your own endpoints](cli.md#your-own-endpoints)) to get the full report.
-
-### Simulate a program that opens an intent
-
-A program that opens a cross-chain intent shows it too. The reward it pays into the intent's vault
-is a move to `vault of intent 0x1234…`, and each intent is listed under `Intents published:` with
-its hash, destination, calls and reward. [Intents](cli-intents.md) covers what happens next.
 
 ## Run it: `sauce run`
 
@@ -365,8 +359,8 @@ still there. `--pots <dir>` keeps the store somewhere else.
 ### What a record holds
 
 A Pot is recorded once the chain shows it deployed: by `pot --deploy`, by a run that deploys its
-Pot, by a deployment broadcast with `sauce send`, and by an intent fill that deploys the Pot it
-cooks on. `sauce tx` sends nothing, and records nothing. A record holds:
+Pot, and by a deployment broadcast with `sauce send`. `sauce tx` sends nothing, and records nothing.
+A record holds:
 
 - the chain, on Solana with its cluster, so a devnet Pot is never recorded as mainnet's;
 - the Pot's address, its owner and salt, and its kind: `private`, `private-fixed-router` or

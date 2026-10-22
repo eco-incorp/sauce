@@ -1,6 +1,6 @@
 # Actions
 
-**How-to guide** · [Documentation](../README.md) · [Programs and arguments](cli-programs.md) · [Protocols and tokens](protocols-and-tokens.md) · [Intents](intents.md)
+**How-to guide** · [Documentation](../README.md) · [Programs and arguments](cli-programs.md) · [Protocols and tokens](protocols-and-tokens.md)
 
 > Actions are the steps of a program written as a list instead of code, like a shopping list: "swap
 > 100 USDC for ETH on Uniswap, then deposit the ETH in Aave". Sauce turns the list into a program and
@@ -14,8 +14,7 @@ program once ([Quick start](quick-start.md)) and know that Sauce resolves a name
 An **action** is one protocol operation written as data: swap on a Uniswap V3 pool, supply to Aave,
 bridge through Across, wrap ETH. An **actions document** is an ordered list of actions; the package
 calls its type `ActionProgram`. `@eco-incorp/sauce/actions` compiles it, for a chain, into one Sauce
-program that executes, atomically, in a Pot on that chain: directly, or as the destination route of
-an Eco intent.
+program that executes, atomically, in a Pot on that chain.
 
 A document is plain JSON. You can write it by hand, store it, sign it, generate it from a service in
 any language, and validate it against the published
@@ -142,11 +141,10 @@ Send the resulting calldata to the Pot from its owner, with the Kitchen's execut
 | `serializeProgram(program, space?)` | Writes canonical JSON                                                                                                                           |
 | `programSchema()`                   | Returns the JSON Schema                                                                                                                         |
 | `compileProgram(program, options?)` | Compiles standalone for `options.chain` (else the program's `chainId`): bytecode, source, and a payload for [runtime amounts](#runtime-amounts) |
-| `programIntent(program, options)`   | Opens the program as an [intent route](#turn-a-program-into-an-intent) on `options.chain` (else its `chainId`)                                  |
 | `quoteAction(action, options?)`     | Builds the `eth_call` that [prices a swap](#quotes-and-split-swaps)                                                                             |
 | `compileSplitSwap(splitSwap)`       | Compiles a swap [split across venues](#quotes-and-split-swaps) by on-chain quotes                                                               |
 
-`compileProgram` and `programIntent` validate the program too, so a typed program that skipped `parseProgram` is held to the same rules — and they check every name it uses on the chain they compile for.
+`compileProgram` validates the program too, so a typed program that skipped `parseProgram` is held to the same rules — and it checks every name it uses on the chain it compiles for.
 
 ## The JSON format
 
@@ -203,7 +201,7 @@ A name lowers to the program global of that name. It is not resolved to an addre
 
 **Addresses still work everywhere**, and a document can mix the two. An address means the same address on every chain, which suits a contract deployed at one address everywhere (Permit2, the Sauce Router) and nothing else: a document that spells a token by address is a document for that token's chain.
 
-**`chainId` is optional.** Leave it out and the document compiles for whichever chain you name — `compileProgram(program, { chain: "base" })`, `programIntent(program, { ...options, chain: "base" })`, `sauce actions file.json --chain base`. Give it, and the document compiles for that chain alone: compiling it for another is refused, because its addresses are that chain's.
+**`chainId` is optional.** Leave it out and the document compiles for whichever chain you name — `compileProgram(program, { chain: "base" })`, `sauce actions file.json --chain base`. Give it, and the document compiles for that chain alone: compiling it for another is refused, because its addresses are that chain's.
 
 ```text
 invalid action program (1 issue):
@@ -275,7 +273,7 @@ An action's output is one of:
 - **its amount** — the amount the action spent, unchanged: transfers, approvals, supplies, borrows, repayments, bridges, WETH wrapping.
 - **the value read** — for a source action.
 
-When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "self"` to keep an unspent output in the Pot, for example for a [dynamic child](#fund-a-child-from-a-measured-amount).
+When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "self"` to keep an unspent output in the Pot.
 
 ### Source actions
 
@@ -297,81 +295,6 @@ A source action whose value nothing reads is an error.
   }
 ]
 ```
-
-## Turn a program into an intent
-
-`programIntent(program, options)` opens the program as the route of an Eco intent on `options.chain`, or on the program's `chainId` when it has one. It is `Base(body, options)` with the program as the body; its ABI bindings are merged into `options.compile.contracts`, and a caller binding of the same name with a different ABI is an error. The program's names resolve on the route's chain.
-
-```ts
-import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
-import type { routes } from "@eco-incorp/sauce";
-
-export function buildActionIntent(
-  program: ActionProgram,
-  chain: string,
-  options: routes.IntentOptions,
-  reward: routes.RewardArg,
-) {
-  return programIntent(program, { ...options, chain }).reward(reward);
-}
-```
-
-Everything in [creating an intent](intents.md) applies: the Pot must be owned by the destination Portal's Executor, delivered route tokens arrive in the Executor and need a precall to reach the Pot, and every cook pays the Kitchen fee.
-
-### Fund a child from a measured amount
-
-A program's output is only known once it runs. An actions document has no action that opens an intent, so it is chained to another with the TypeScript builder's `.nest()`. [Dynamic nesting](../api/routes.md#dynamic-children) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
-
-1. The parent program keeps its output in the Pot (`"recipient": "self"`).
-2. `.nest(child, { via: "dynamic", measure: { kind: "erc20Balance", token } })` measures that balance.
-3. The child program starts with `balanceOf`, so it spends exactly what was delivered rather than an amount written before the parent ran.
-
-```ts
-import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
-import { destinationPot, routes } from "@eco-incorp/sauce";
-import { encodeFunctionData, parseAbi, type Address } from "viem";
-
-const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
-
-export function buildCascade(
-  parentProgram: ActionProgram, // e.g. a swap into USDC with "recipient": "self", run on Base
-  childProgram: ActionProgram, // e.g. balanceOf "USDC", an approve, then aaveV3Supply, on Arbitrum
-  parentOptions: routes.IntentOptions,
-  childOptions: routes.IntentOptions,
-  usdcBase: Address,
-  usdcArbitrum: Address,
-  parentReward: routes.SauceRewardSpec,
-  childReward: Omit<routes.SauceRewardSpec, "tokens">,
-) {
-  // The Executor receives the child's tokens; move them into the Pot the child program runs in,
-  // the shared one the SDK derives for Arbitrum's Portal.
-  const toPot = encodeFunctionData({
-    abi: parseAbi(["function transfer(address,uint256)"]),
-    functionName: "transfer",
-    args: [destinationPot("arbitrum", childOptions), AMOUNT_OUT_PLACEHOLDER],
-  });
-  const child = programIntent(childProgram, {
-    ...childOptions,
-    chain: "arbitrum",
-    tokens: [{ token: usdcArbitrum, amount: AMOUNT_OUT_PLACEHOLDER }],
-    precalls: [{ target: usdcArbitrum, data: toPot }],
-  }).reward({ ...childReward, tokens: [{ token: usdcBase, amount: AMOUNT_IN_PLACEHOLDER }] });
-
-  return programIntent(parentProgram, { ...parentOptions, chain: "base" })
-    .nest(child, {
-      via: "dynamic",
-      measure: { kind: "erc20Balance", token: usdcBase },
-      placeholders: [
-        { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
-        // The route's token amount and the precall that moves it.
-        { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 2 },
-      ],
-    })
-    .reward(parentReward);
-}
-```
-
-The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of [dynamic children](../api/routes.md#dynamic-children) — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
 
 ## Runtime amounts
 
@@ -398,8 +321,6 @@ export function reusableApproval(chain: string) {
 ```
 
 Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileProgram(program, { chain, compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#pass-arguments-with-compact-v1) describes both encodings. On the command line, `sauce tx|simulate|run` take the arguments after `--args`, in the order the `argument` actions declare them.
-
-An intent route is compiled without arguments, so `programIntent` refuses a program that has them. Inside an intent, read a runtime amount on-chain with `balanceOf` instead.
 
 ## Quotes and split swaps
 
@@ -580,7 +501,7 @@ Every type is the JSON it describes:
 - Each action has its own type (`UniswapV3SwapAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction` (with `RouterSwapAction`, the nine `@sauce/router` swaps), `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`.
 - A field's type says what it takes: `Token` (a `TokenSymbol` or an address), `TokenOrNative`, `Contract` (a `ContractName`, `"Namespace.Contract"`, or an address) and `TokenContract`.
 - A swap that names its pool by key is a union: `UniswapV3SwapAction` is a pool, or a factory with a fee, or a factory with a tick spacing, and TypeScript refuses the mix the parser refuses.
-- `CompileOptions` carries `chain` and `compactArgs`, and `ProgramIntentOptions` is an intent's options with `chain`.
+- `CompileOptions` carries `chain` and `compactArgs`.
 
 A document typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.
 
@@ -588,4 +509,3 @@ A document typed in TypeScript is already valid input for `serializeProgram`, an
 
 - What each swap does and refuses, called from a program you write yourself: [`@sauce/router`](../api/router.md).
 - Run the document and read what came back: [Run a program](cli-run.md).
-- Carry the result to another chain: [Create an intent](intents.md).

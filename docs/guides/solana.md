@@ -4,8 +4,7 @@
 
 > A program you wrote for Base already runs on Solana: Sauce lists the accounts it touches for you.
 > This page is for what goes further: writing an account a program needs where it uses it, swapping
-> at Solana's pools by name, moving Token-2022 tokens, choosing how a program runs, and sending a
-> program to Solana through an intent.
+> at Solana's pools by name, moving Token-2022 tokens, and choosing how a program runs.
 
 This page assumes you have run a program with the [Solana quick start](solana-quick-start.md) and
 know the words account, token account and staging from
@@ -49,7 +48,7 @@ What the lowering guarantees and requires:
 - **Each holder's account is checked on chain.** After each write the program requires the token account it paid, or paid from, to belong to the holder the call named: `wrong recipient account`, `wrong sender account`, `wrong spender account`, and `wrong holder account` for a read. A builder that attaches another account cannot redirect the transfer.
 - **Each mint's own write.** An SPL Token mint moves by the plain `transfer`/`approve` (about 360 bytes with the check): for such a mint it does what the checked write does, in about 220 bytes less and one account fewer. A Token-2022 mint moves by `transferChecked`/`approveChecked`, with the registry's decimals and the mint as one more account (about 585 bytes). `Token(mint)` of an `Address` argument takes the checked write, with the decimals read from the mint. Its token program is read from the cluster when the cook is built; a mint whose program cannot be read is refused, never assumed, and every write requires its token program to be SPL Token or Token-2022 before calling it.
 - **Every holder is known when the transaction is built.** A holder can be `self` (or `ctx.self()`): as a token's holder it is the Pot, as on an EVM chain, and `self.USDC` is its balance. It can also be `Solana.owner`, an `Address` parameter of `main` (`to.USDC`), or a 32-byte key. `<holder>.SOL` is a holder's lamports, read from its account, which is added to `main` too: `self.SOL` is the Pot's. A holder computed as the program runs is refused, because no transaction can attach its account. Pass its token account as an `Account` parameter in the holder's place instead (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). That account is paid as attached: the call names no holder, so nothing checks whose it is, and whoever builds the transaction chooses it. Prefer an `Address` recipient, which the program checks, or check the account in the program (`require(ownerOf(USDC, dest) == expected, ...)`).
-- **Only in `main`, in a module.** The methods must stand in `main` itself: a helper has no account parameters, and a script has no `main` to add them to. `compileSauceRoute` refuses the added accounts, because a route's `execution.accounts` are built before the compile.
+- **Only in `main`, in a module.** The methods must stand in `main` itself: a helper has no account parameters, and a script has no `main` to add them to.
 
 ## Accounts where they are used
 
@@ -83,7 +82,7 @@ Saved as `wrap.sauce.ts`, it runs with `sauce run wrap.sauce.ts --chain solana -
 - **Roles.** Each account is read-only; `.writable()` and `.signer()` give it a role, and chain. An account written more than once is one slot with every role its uses give it.
 - **Known when the transaction is built.** A program, key, holder or seed is an `Address` parameter of `main`, a 32-byte key, `ctx.self()`, `Solana.self`, `Solana.owner` or a program account. A seed can also be a token symbol (its mint), a string of up to 32 bytes, an integer parameter's or literal's `.toBytesLe(n)` (`n` 1, 2, 4, 8 or 16) or ``hex`…` ``. A seed computed as the program runs is refused: take that account as an `Account` parameter.
 - **Names.** A slot is named for what it holds (`systemProgram`, `potWSOL`); a derived address for the constant it initializes (`destPda`) or its first string seed (`statePda`).
-- **Each is checked on chain.** The cook commands attach what the expression derives. A transaction built another way, such as a solver filling the cook, could attach another account, so compiling adds a check for each account at the top of `main`. A wrong account is refused with one of these reasons:
+- **Each is checked on chain.** The cook commands attach what the expression derives. A transaction built another way could attach another account, so compiling adds a check for each account at the top of `main`. A wrong account is refused with one of these reasons:
   - `wrong account`: `Solana.account(key)` is not at `key`.
   - `wrong program-derived address`: the engine derives `Solana.pda(...)` again with `crypto.findPDA`, at the program's canonical bump.
   - `wrong holder account`: `USDC.accountOf(holder)` is not a USDC token account held by `holder`.
@@ -189,103 +188,6 @@ buffer afterwards. `sauce compile --json` reports the cook's size against the 1,
 `cook`, so you can tell before you run. [A program too big for one transaction](cli-solana.md#a-program-too-big-for-one-transaction)
 shows the run, and [stage a larger program](solana-from-typescript.md#stage-a-larger-program) the
 same steps in code.
-
-## SVM destinations in Eco intents
-
-A program published from Ethereum or Base can send work to Solana through an intent. This section
-is the one place that covers intents to and from Solana; the
-[intents guide](intents.md#sending-to-solana) covers intents in general.
-
-### Write the intent in a program
-
-`Solana(() => { ... }).reward({ ... })` in a program published from Ethereum or Base builds the
-Solana route for you:
-
-- a body that only pays wallets (`USDC.transfer(recipient, amount)`) becomes Solana's own token
-  transfers: the Associated Token Account program's `CreateIdempotent` for each wallet with no
-  account yet, the Portal's executor paying the rent, then `TransferChecked` from the executor's
-  account;
-- any other body is compiled for Solana and cooked through the Kitchen on the executor's Pot. The
-  route first creates that Pot if it is missing (`create_pot` needs its owner's signature, and only
-  the Portal signs for the executor, so only a route can), creates each token account the program
-  names that is missing, and moves what the solver delivered into the Pot.
-
-Which accounts exist decides the route, so it is read from the cluster first: with
-`compileSauceProgram`, pass it as `intents.svm` (`potExists`, the token accounts in `existing`,
-and the Kitchen's fee as `executionFee`). The `sauce` command reads it for you.
-
-### Build a route by hand
-
-`Solana(body, { execution, ... }).reward(...)` in TypeScript,
-`routes.compileSauceRoute()`, `buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an
-`execute_from_account` instruction carrying only its 8-byte discriminator. The engine needs 65
-further bytes of Pot derivation material and a trailing Pot signer that the Kitchen supplies, so
-that instruction is not one it will run — and pointing the helper at a different engine id does
-not add the missing bytes.
-
-The SVM Portal's fulfillment
-forwards a route's instruction bytes to their target unchanged and signs each
-call for its own executor, a program-derived address. So the executor can own a Kitchen Pot and cook on
-it: the Solana counterpart of an EVM intent's cook on the Executor's shared Pot.
-`svm` has the pieces the program path is built from:
-
-- `svmIntentPot({ portal, kitchen })` is the executor's Pot (the zero salt by
-  convention), which every intent's cook through that Portal shares: send on in the
-  program what the intent delivers.
-- `svmIntentPotInstruction(...)` is the Kitchen's `create_pot` with the executor as
-  owner and rent payer. One route carries it once, the rent its native amount; a
-  second route carrying it fails, the Pot existing.
-- `svmIntentCookInstruction({ portal, kitchen, engineProgram, bytecode, manifest,
-resolution, maxExecutionFee })` is the Kitchen's `cook` with the executor as owner
-  and fee payer, the fee the route's native amount, the program's accounts resolved
-  from its manifest as for any cook.
-- `svmRouteCalls(portal, instructions, tokens)` turns instructions into route calls.
-  The Portal hashes each call account's flags as the fill transaction carries them,
-  and a transaction gives an account one set of flags: an account written anywhere
-  (the executor paying the cook's fee, the executor's token account the fill funds) is
-  committed writable everywhere, and the executor never as a signer. A route committed
-  with each call's own flags is another intent, which no fill matches.
-
-Publish a hand-built route with the EVM Portal helpers (`routes.publishAndFundTx`).
-The fill must request the engine's heap frame, as every cook does; `sauce intent fill`
-adds it when a route call is the Kitchen's. The whole route rides in the solver's one
-fill transaction, which Solana caps at 1,232 bytes, and a program's bytecode is most
-of it; a fill too large as it is takes its accounts through an address lookup table
-the solver creates first, which `sauce intent fill` builds (`lookupTable` in its
-result, the table's transactions first).
-
-A route's program runs through the Kitchen, on the executor's Pot: that is what
-these builders make, and the `sauce intent` commands take no `--via`. The direct
-entry ([Two ways to run a program](#two-ways-to-run-a-program), `via: "engine"`)
-is for a cook a wallet sends with its own authority. An executor issuing one is
-not something this package builds or tests.
-
-### The Portal's instructions
-
-The Portal's own instructions are `buildPortalFulfillInstruction`,
-`buildPortalHyperProveInstructions` (the proof through the HyperProver, with the
-gas for Hyperlane's delivery paid in the same transaction) and
-`buildPortalCancelInstruction`. `decodeFulfillMarker` reads what the Portal
-recorded, and `svmTokenTransferCall` is the route call eco-routes' Solana deposit
-addresses publish. `sauce intent fill`, `prove` and `cancel` send them
-([CLI guide](cli-intents.md#an-intent-to-solana)).
-
-One detail worth knowing if you are reading routes somebody already built:
-`execution.code` there means the finalized **code account**, not its metadata
-address, and the helper neither stages that code nor checks it against the bytes
-it just compiled. Keep the direct compilation result when you inspect one.
-
-### An intent that starts on Solana
-
-An intent can also start on Solana, its reward held by Solana's Portal. The
-builders for that side are `buildPortalFundInstruction` (moves the reward into the
-intent's vault, `svmVaultPda`), `buildPortalPublishInstruction` (announces the
-intent), `buildPortalWithdrawInstruction` (pays the claimant once the proof is
-recorded) and `buildPortalRefundInstruction` (returns the reward to its creator).
-`decodeSvmProof` reads the proof the HyperProver records when Hyperlane delivers
-it. `sauce intent publish --chain solana`, `claim` and `refund` send them
-([CLI guide](cli-intents.md#an-intent-from-solana)). A Sauce program running on Solana
-cannot open an intent itself: the wallet calls the Portal.
 
 ## Next
 

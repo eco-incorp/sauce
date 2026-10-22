@@ -43,50 +43,46 @@ export async function loadSigner(path: string) {
 
 ## Compile and keep the account manifest
 
-Compile with `@eco-incorp/sauce/compiler` directly. Its result carries the **account manifest**,
-the list of accounts the program needs, which you resolve to addresses before a cook.
-`routes.compileSauceRoute()` returns calls and bytecode but drops the manifest.
+`routes.compileSauceProgram("solana", source)` compiles a program for Solana, as `sauce compile`
+does. Its result carries the **account manifest**, the list of accounts the program needs, which you
+resolve to addresses before a cook.
 
-The universal token builder emits account parameters and an SPL `TransferChecked` call into the
-token program. Its source needs no imports, so a single-module resolver is enough:
+A program that names its token pays, approves and reads it as it would on Base, and every account
+those calls take is added to `main` for you
+([Solana](solana.md#the-token-methods-every-account-derived)). `derivedAccounts` says how each is
+derived:
 
 ```ts
-import { token } from "@eco-incorp/sauce";
-import { compile } from "@eco-incorp/sauce/compiler";
+import { routes } from "@eco-incorp/sauce";
 
-export function compileSplTransfer(amount: bigint) {
-  const source = token.Token.transfer({
-    amount,
-    svm: {
-      source: "sourceAta",
-      mint: "mint",
-      dest: "destinationAta",
-      owner: "owner",
-      tokenProgram: "tokenProgram",
-    },
-  }).source("svm");
+const source = `
+function main(to: Address, amount: Uint256) {
+  require(self.USDC >= amount, "not enough USDC");
+  USDC.transfer(to, amount);
+}
+`;
 
-  return compile({
-    target: "svm",
-    entry: "main.ts",
-    resolve: (id) => (id === "main.ts" ? new TextEncoder().encode(source) : null),
-  });
+const program = routes.compileSauceProgram("solana", source);
+console.log("main's arguments:", program.entryParams.map((p) => `${p.name}: ${p.type}`).join(", "));
+console.log("derived accounts:", program.derivedAccounts);
+```
+
+```text
+main's arguments: to: Address, amount: Uint256
+derived accounts: {
+  potUSDC: 'self:USDC',
+  pot: 'self',
+  tokenProgram: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+  toUSDC: '@to:USDC'
 }
 ```
 
 The account references are names, not addresses. `manifest.accounts` records their order and
-required roles. Resolve them to the mint, source token account, destination token account,
-authority, and token program before execution. Amounts are smallest-unit integers. The builder
-reads mint decimals for the checked instruction and defaults to the classic SPL Token program. Set
-the builder's top-level `tokenProgram: "token-2022"` for a supported Token-2022 operation;
-`svm.tokenProgram` names the account reference and must resolve to that token program.
-
-A program that uses the token methods (`USDC.transfer(to, amount)`) or writes its accounts where it
-uses them gets those accounts added to `main` ([Solana](solana.md#the-token-methods-every-account-derived)).
-Compile it with `routes.compileSauceProgram("solana", source)`, whose `derivedAccounts` says how
-each is derived. `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })`
+required roles: the Pot's USDC account and the recipient's are writable, the Pot signs. Amounts are
+smallest-unit integers. `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })`
 from `@eco-incorp/sauce/svm` resolves one derivation to the address to put in the cook's
-`AccountResolution`.
+`AccountResolution`. The raw compiler, `compile` from `@eco-incorp/sauce/compiler`, returns the
+same manifest for a program that declares its `Account` parameters itself.
 
 ## Create the client
 
@@ -147,11 +143,11 @@ import {
   type AccountResolution,
   type SauceSvmClientConfig,
 } from "@eco-incorp/sauce/svm";
-import type { CompileResult } from "@eco-incorp/sauce/compiler";
+import type { routes } from "@eco-incorp/sauce";
 
 export async function simulateProgram(
   config: SauceSvmClientConfig,
-  compiled: CompileResult,
+  compiled: routes.CompiledSauceProgram,
   accounts: AccountResolution,
 ) {
   if (!compiled.manifest) throw new Error("Expected an SVM account manifest");
@@ -161,7 +157,7 @@ export async function simulateProgram(
 ```
 
 The resolution maps each manifest name to an account. For the transfer above, its keys are
-`sourceAta`, `mint`, `destinationAta`, `owner`, and `tokenProgram`.
+`potUSDC`, `pot`, `tokenProgram`, and `toUSDC`.
 
 - **Signers.** A non-payer authority is `{ address, signer: transactionSigner }`: an address alone
   cannot provide its signature.
@@ -199,12 +195,12 @@ lookup table ([lookup tables](../concepts/solana-model.md#lookup-tables)). You w
   whose `lookupTables` you pass on. `simulate` refuses a cook that does not fit and says so.
 
 ```ts
-import type { CompileResult } from "@eco-incorp/sauce/compiler";
+import type { routes } from "@eco-incorp/sauce";
 import type { AccountResolution, SauceSvmClient } from "@eco-incorp/sauce/svm";
 
 export async function simulateThenSend(
   client: SauceSvmClient,
-  compiled: CompileResult,
+  compiled: routes.CompiledSauceProgram,
   accounts: AccountResolution,
 ) {
   if (!compiled.manifest) throw new Error("Expected an SVM account manifest");
@@ -378,7 +374,6 @@ calls a venue itself, `routerSvmAccountOrder`, `routerSvmAccounts`, `routerSvmDa
 
 ## Next
 
-- Send a Solana program through an intent from Ethereum or Base:
-  [SVM destinations in Eco intents](solana.md#svm-destinations-in-eco-intents).
+- Run what this page describes from the command line: [Solana from the command line](cli-solana.md).
 - Test a Solana program on a local copy of the cluster: [Testing](testing.md).
 - The swap functions a program calls: [`@sauce/router` on Solana](../api/router-solana.md).

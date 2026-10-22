@@ -33,9 +33,9 @@ function main(minOut: Uint256) {
 }
 ```
 
-The SDK carries the library and serves it to every compile it makes — a route body, an intent, an
-[action program](../guides/actions.md) — so an import is all a program needs. [router-swap.ts](../examples/router-swap.ts)
-compiles this one.
+The SDK carries the library and serves it to every compile it makes — a program compiled for a
+chain, an [action program](../guides/actions.md) — so an import is all a program needs.
+[router-swap.ts](../examples/router-swap.ts) compiles this one.
 
 It is the one implementation of a swap at these venues: an action such as `uniswapV2Swap` is a
 call into it, so a JSON action program and a hand-written program trade a venue through the same
@@ -253,7 +253,7 @@ which are the program globals of those names, and three may name their pool by k
 
 ## Compile it yourself
 
-`compileSauceRoute`, the chain helpers, `openRoute` and the actions package resolve `@sauce/router`
+`routes.compileSauceProgram`, `routes.compileSauceRoute` and the actions package resolve `@sauce/router`
 with no option. A raw `compile()` resolves it through the SDK's own resolvers, which serve the
 library, the `@sauce/token` it imports and the pool ABIs it binds from memory:
 

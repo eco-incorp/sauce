@@ -64,8 +64,8 @@ Every command that sends takes `--wallet <name>`, and asks for the password when
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 
-That is `run`, `pot --deploy`, `intent publish`, `intent fill --send` and the intent steps after
-it. An Ethereum-style wallet signs on Ethereum and Base, a Solana wallet on Solana.
+That is `run`, `pot --deploy` and, on Solana, `reclaim`. An Ethereum-style wallet signs on Ethereum
+and Base, a Solana wallet on Solana.
 
 `sauce simulate` and `sauce pot` take `--wallet` only to know whose Pot (your own account on the
 chain, which holds what your programs spend), and ask no password. The one exception is

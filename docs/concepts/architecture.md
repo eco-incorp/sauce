@@ -17,11 +17,11 @@ problem tells you where to look when something fails.
 Sauce turns a program into one atomic execution on chain: every step happens, or none does. Three
 pieces divide that work:
 
-| Piece    | Where it lives                                   | What it does                                                                                     |
-| -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| This SDK | `@eco-incorp/sauce` and its subpaths             | Knows every chain, protocol and token; builds programs, cooks and intents; checks and plans them |
-| Compiler | bundled, exposed at `@eco-incorp/sauce/compiler` | Checks SauceScript, resolves modules and ABIs, emits bytecode for one chain's kind               |
-| Engine   | deployed on chain, with a Kitchen and Pots       | Executes that bytecode against the chain's real contracts and accounts                           |
+| Piece    | Where it lives                                   | What it does                                                                            |
+| -------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| This SDK | `@eco-incorp/sauce` and its subpaths             | Knows every chain, protocol and token; builds programs and cooks; checks and plans them |
+| Compiler | bundled, exposed at `@eco-incorp/sauce/compiler` | Checks SauceScript, resolves modules and ABIs, emits bytecode for one chain's kind      |
+| Engine   | deployed on chain, with a Kitchen and Pots       | Executes that bytecode against the chain's real contracts and accounts                  |
 
 You install one package. The compiler comes with it, and the engine is already on chain. A program
 passes through all three:
@@ -69,10 +69,10 @@ give the program the value instead ([SauceScript](saucescript.md) explains how v
 program).
 
 That is why `Base` and `USDC` behave differently even though both are bare names in your editor.
-`Base` is a value you import from the package and call in your application. `USDC` is a name inside
-the program, which the compiler resolves for the chain. The package ships TypeScript declarations
-for the program's names so your editor checks them, but a declaration is a type, not a value you
-can use in your application.
+`Base` is a value you import from the package and read in your application, for that chain's
+addresses, such as `Base.USDC.address`. `USDC` is a name inside the program, which the compiler
+resolves for the chain. The package ships TypeScript declarations for the program's names so your
+editor checks them, but a declaration is a type, not a value you can use in your application.
 
 ## On the chain
 
@@ -100,19 +100,6 @@ Compiling for Solana also returns an **account manifest**: every account the pro
 order, with the role each must have. The SDK works out most of those accounts from your wallet, your
 Pot and the arguments, builds the transactions, and uploads a program too large for one transaction
 before running it. [How Sauce runs on Solana](solana-model.md) explains each part.
-
-## Intents connect executions across chains
-
-An intent is a job on another chain with a reward attached. `Base(body, options).reward(reward)`
-builds one whose job runs on Base: the SDK compiles the job's program for Base, assembles the
-intent, and hands back its hashes and the transactions that publish it. A program can open an
-intent itself, with the same `Base(() => { ... }).reward({ ... })` written in its body. That is how
-a next step whose amount is only known on arrival gets built at all.
-
-Building an intent publishes nothing. Your application or your Pot publishes it on the source
-chain, and a solver does the job on the destination. An intent opened by another intent's program
-is opened when that program runs, so a chain of intents is a series of separate executions, not
-one call spanning chains. [Cross-chain intents](cross-chain-intents.md) explains the model.
 
 ## Versions travel with artifacts
 

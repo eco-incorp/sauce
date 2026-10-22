@@ -115,7 +115,7 @@ The GitHub Copilot CLI adds it to its user configuration with `copilot mcp add s
 - **Claude Desktop:** the "+" button in the message box, then Connectors, lists `sauce`.
 - **VS Code:** the MCP: List Servers command shows its status.
 - **Any agent:** ask it to list the `sauce_` tools. It names `sauce_compile`, `sauce_globals`,
-  `sauce_tx` and the rest, 35 in all.
+  `sauce_tx` and the rest, 25 in all.
 
 **If a desktop client cannot start it.** A desktop or GUI client may not see your shell's `PATH`,
 so it may not find a `sauce` installed under nvm or another version manager. Give it the absolute
@@ -127,9 +127,9 @@ configure. Your own endpoint is optional, and faster ([Use your own endpoints](#
 
 ## What your agent gets
 
-- **The tools.** Compile a program, simulate it, build its transaction, publish and follow an
-  intent, look up a chain's names and pools, take a transaction apart: each is the `sauce` command
-  of the same name. [Tools](mcp-tools.md) lists them.
+- **The tools.** Compile a program, simulate it, build its transaction, look up a chain's names and
+  pools, take a transaction apart: each is the `sauce` command of the same name.
+  [Tools](mcp-tools.md) lists them.
 - **The skills.** The package's agent skills, as tools and resources, so the agent learns to write
   Sauce programs ([Agent skills](skills.md)).
 - **Transactions for your wallet to sign.** Everything comes back unsigned, ready for your

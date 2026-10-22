@@ -154,8 +154,6 @@ compile everywhere: a token the chain lacks is an unknown name in any branch tha
 - A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
   family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
   own `available` keeps it.
-- Inside an [intent](../concepts/cross-chain-intents.md) to another chain,
-  `Arbitrum(() => { ... })`, it is decided for that chain.
 
 A name used as a token or a protocol that the chain does not have at all fails when the program
 compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Base reports
@@ -293,7 +291,7 @@ stocks.
 ## From TypeScript
 
 The second audience: an application that imports `@eco-incorp/sauce` and uses the same registry to
-build calls, compile route bodies or check a chain's names. The same names hang off each chain's
+build calls, compile programs or check a chain's names. The same names hang off each chain's
 export:
 
 ```ts
@@ -307,52 +305,61 @@ Base.SPCXc.address; // a tokenized stock, as a program names it
 On Solana, a token's mint is `Solana.TSLAx.mint`. `contracts.listContracts(slug)` lists a
 protocol's contracts.
 
-### Compile a global call
+### Compile a program by name
+
+`routes.compileSauceProgram(chain, source)` compiles a program for the chain you name, as
+`sauce compile` does. The names in it are the registry's, so one source serves every chain that has
+them:
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
 
-export function compileApproval(pot: routes.AddressInput, engine: routes.AddressInput) {
-  return routes.compileSauceRoute("base", "USDC.approve(Uniswap.UniversalRouter, 1_000_000n);", {
-    pot,
-    engine,
-  });
+const source = `
+function main(amount: Uint256) {
+  USDC.approve(Uniswap.UniversalRouter, amount);
 }
+`;
+
+export function compileApproval(chain: routes.ChainRef) {
+  return routes.compileSauceProgram(chain, source);
+}
+
+const program = compileApproval("base");
+console.log("main takes:", program.entryParams.map((p) => `${p.name}: ${p.type}`).join(", "));
+console.log("bytecode:", program.bytecode.length, "bytes");
 ```
 
-The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The
-same body can be a callback to `Base(() => { ... }, options).reward(...)`; see
-[creating intents](intents.md).
+Nothing is sent: the result is the bytecode and `main`'s parameters, whose values
+`routes.encodeEntryArguments` encodes. [Compiling programs](compiling.md) turns them into a cook.
 
-### Add or override a token symbol
+### A token the registry does not name
 
-Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s
-compile options. Overrides merge per symbol with the registry. These maps contain **addresses**;
-`IntentOptions.tokens` instead declares the **token amounts** a solver must deliver for the route.
+Take its address as one of `main`'s inputs and call it with `Token(address)`. One compiled program
+then serves any token, and nothing is spliced into the source:
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
 
-export function compileCustomTokenApproval(
-  pot: routes.AddressInput,
-  engine: routes.AddressInput,
-  asset: routes.AddressInput,
-) {
-  return routes.compileSauceRoute(
-    "base",
-    "ASSET.approve(Uniswap.UniversalRouter, 100n);",
-    { pot, engine },
-    { tokens: { ASSET: asset } },
-  );
+const source = `
+function main(asset: Address, amount: Uint256) {
+  Token(asset).approve(Uniswap.UniversalRouter, amount);
 }
+`;
+
+export function compileCustomTokenApproval(chain: routes.ChainRef) {
+  return routes.compileSauceProgram(chain, source);
+}
+
+const program = compileCustomTokenApproval("base");
+console.log("main takes:", program.entryParams.map((p) => `${p.name}: ${p.type}`).join(", "));
+console.log("bytecode:", program.bytecode.length, "bytes");
 ```
 
-Custom symbol names work in source strings. The package's generated TypeScript declarations cover
-registered names; applications authoring callbacks with additional names must supply their own
-declarations. A declaration provides a type, while the token map provides the address used by the
-compiler.
+To give the token a symbol for one compile instead, pass `tokens: { ASSET: address }` in
+`compileSauceProgram`'s options; it merges per symbol with the registry. The package's TypeScript
+declarations cover registered names only.
 
-### Route source and host JavaScript
+### Program source and host JavaScript
 
 Two different mechanisms share the look of a bare name, and the difference is what you import.
 
@@ -360,9 +367,9 @@ Chain accessors such as `Base` and `Solana`, the `chain(ref)` front door, and th
 builder are **named exports**: `import { Base, Solana, Token } from "@eco-incorp/sauce"`. They are
 ordinary JavaScript values, and importing the package installs nothing on `globalThis`.
 
-Bare route names such as `USDC`, `Uniswap` and `available` are **route syntax**, resolved by the
-compiler against the destination chain. The package supplies TypeScript declarations for them so a
-typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or
+Bare names in a program such as `USDC`, `Uniswap` and `available` are **program syntax**, resolved
+by the compiler against the chain the program is compiled for. The package supplies TypeScript
+declarations for them, but there is no host JavaScript `USDC` or `Uniswap` object to import or
 execute. The host spelling of the same registry entry is on the chain export: `Base.USDC`,
 `Base.Uniswap`.
 
@@ -434,21 +441,21 @@ token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is
 
 ### Chain selection and ABI bindings
 
-A bare protocol reference uses the enclosing destination. A qualified reference such as
+A bare protocol reference uses the chain the program is compiled for. A qualified reference such as
 `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not**
-move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use
-separate intents and [nesting](nested-intents.md) for cross-chain execution. Set
-`compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
+move execution to Ethereum: the resulting call still executes on the program's chain. Set
+`accessors: { chainScope }` in `compileSauceProgram`'s options to restrict explicitly qualified
+chain names when needed.
 
-Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every registry
+Compiling rejects missing methods, ambiguous aliases and missing deployments. Every registry
 ABI declares its contract's deployed types, so the selectors it computes are the ones the deployed
 contract dispatches.
 
-To call a contract outside the registry, supply an ABI binding through `compile.contracts` or a
+To call a contract outside the registry, supply an ABI binding through the `contracts` option or a
 resolved ABI import, then call `Binding.at(address).method(...)` in source. See
 [compiler integration](../api/compiler.md).
 
-The protocol rewrites apply to EVM routes. The token methods compile on Solana too, where the SDK
+The protocol rewrites apply to EVM programs. The token methods compile on Solana too, where the SDK
 adds the token accounts each call moves through to `main` and the cook derives them; every other
 Solana account is an account parameter, and venues are adapters, all covered in the
 [Solana guide](solana.md).
