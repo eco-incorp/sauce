@@ -83,7 +83,7 @@ export const DEV_TOPICS: ReadonlyArray<{
     topic: "execution",
     about: "running a program on a Pot from TypeScript: the cook, the engine, the Kitchen",
     keywords: ["execute", "execution", "cook", "engine", "client", "deployments", "architecture"],
-    files: ["examples/evm-execution.ts", "concepts/architecture.md"],
+    files: ["examples/prepare-pot.ts", "concepts/architecture.md"],
   },
   {
     topic: "solana",
