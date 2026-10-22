@@ -1,8 +1,10 @@
 # Sauce
 
-**Sauce lets you write a short program that does several things on a blockchain in one go, and
-either all of it happens or none of it does.** Swap, then pay. Borrow, then repay. Check a price,
-then trade. Then hand the rest to another chain.
+**Sauce lets you write a short program in SauceScript, a subset of TypeScript, that reads live
+onchain state, chooses a path and composes contract calls in one transaction.** Swap, then pay.
+Borrow, then repay. Check a price, then trade. Your program enforces the conditions you write, an
+unhandled failure reverts every step, and it runs through your own Pot, so you deploy no contract
+for each program.
 
 This README is for developers who know TypeScript and the basic ideas of a blockchain (a wallet, a
 transaction, a token) and have never used Sauce. You need nothing else to start.
@@ -48,9 +50,6 @@ What Sauce is not:
   Your program runs on your **Pot**, a small account on chain that belongs to your wallet.
 - **Not one protocol.** Sauce is not a wrapper around a single exchange or lender. A program calls
   any of the protocols Sauce knows, by name, and mixes them in one transaction.
-- **Not a bridge.** A program can post a job on another chain with a reward attached, called an
-  intent. Someone else, a solver, does the job there and collects the reward. Sauce builds the
-  intent; it does not move your money across chains itself.
 - **Not a custodian.** Your keys stay with you. Sauce builds the transaction, and your wallet signs
   it.
 
@@ -63,8 +62,6 @@ What Sauce is not:
   with no named token, a program writes the token's address once.
 - **Try before you pay.** `sauce simulate` runs your program on a copy of the chain as it is right
   now. It needs no key and no money, and shows you what would move.
-- **Reach another chain.** A program can post a job on another chain with a reward attached:
-  "pay this person on Ethereum, and the reward waiting here on Base is yours".
 - **Hand it to a coding agent.** The agent in your editor can write, simulate and run programs for
   you, with Sauce's own tools.
 
@@ -82,16 +79,15 @@ money: a little ETH for the fee and 1 USDC, on Base.
 ## The learning path
 
 The [documentation](docs/README.md) is written to be followed in order. Read
-[What Sauce is](docs/concepts/what-is-sauce.md) for the picture, then do the eight tutorials:
+[What Sauce is](docs/concepts/what-is-sauce.md) for the picture, then do the seven tutorials:
 
 1. Quick start: install, try a program for free, run it on Base.
 2. Write your first program: inputs, checks and transfers of your own.
 3. Swap by name: trade through protocols you name, and set the least you will accept.
-4. Your first cross-chain intent: post a job on another chain, with a reward.
-5. Solana quick start: the same program on Solana.
-6. Sauce from TypeScript: compile programs and build intents in your own code.
-7. Test your first program: run a program in your tests, on a local copy of a chain.
-8. Your first agent session: let a coding agent write and simulate a program.
+4. Solana quick start: the same program on Solana.
+5. Sauce from TypeScript: compile programs and build their transactions in your own code.
+6. Test your first program: run a program in your tests, on a local copy of a chain.
+7. Your first agent session: let a coding agent write and simulate a program.
 
 Each tutorial ends with a link to the next one. After the path, the manual's how-to guides each
 get one task done, its concepts explain how Sauce works, and its reference lists every chain,
@@ -120,6 +116,8 @@ Sauce sends transactions on **Ethereum**, **Base** and **Solana**. Every other c
 preview chain: programs compile and simulate there, but the `sauce` command sends nothing.
 [Chains](docs/reference/chains.md) lists them all, and how to ask for one.
 
+Cross-chain intents are not in this release; see [what is coming next](docs/concepts/what-is-sauce.md#coming-next-cross-chain-intents).
+
 ## From your application
 
 Install it in a project instead, and the same compiler and registries are a TypeScript library.
@@ -129,30 +127,28 @@ It runs in Node.js and in a browser.
 npm install @eco-incorp/sauce
 ```
 
-This builds a cross-chain intent offline: a job on Base, with its reward on Ethereum. The creator
-and the fee are fixtures, and nothing is sent.
+This compiles a program for Base offline: it approves Aave V3's pool for `amount` of USDC and
+supplies it. Nothing is sent.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { routes } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
+const program = routes.compileSauceProgram(
+  "base",
+  `function main(amount: Uint256) {
+    USDC.approve(AaveV3.Pool, amount);
+    AaveV3.Pool.supply(USDC, amount, ctx.self(), 0);
+  }`,
+);
 
-const built = Base(
-  () => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
-
-console.log(built.hash().intentHash);
+// What a Pot cooks: the bytecode, with main's argument appended.
+const args = routes.encodeEntryArguments(program, [1_000_000n]);
+console.log(`${program.bytecode.length} bytes, plus ${args.length} of arguments`);
+console.log(program.entryParams.map((p) => `${p.name}: ${p.type}`).join(", "));
 ```
 
-`USDC` and `Uniswap` are not imports: the compiler finds them on Base. `.reward(...)` returns the
-intent's hash, its compiled program and the transactions your application sends.
+`USDC` and `AaveV3` are not imports: the compiler finds them on Base. `entryParams` is what `main`
+takes, and the bytecode with its encoded arguments is what your Pot runs.
 [Sauce from TypeScript](docs/guides/typescript-quick-start.md) walks through it, the
 [API reference](docs/api/README.md) lists every import, and the [examples](docs/examples/README.md)
 run on every release.

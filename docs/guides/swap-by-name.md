@@ -1,6 +1,6 @@
 # Swap by name
 
-**Tutorial** · [Documentation](../README.md) · [Write your first program](write-your-first-program.md) · [Your first cross-chain intent](first-intent.md)
+**Tutorial** · [Documentation](../README.md) · [Write your first program](write-your-first-program.md) · [Solana quick start](solana-quick-start.md)
 
 > You are going to write a program that makes two swaps in a row on Ethereum: WETH for USDC on
 > Uniswap, then that USDC for USDT on Curve. You call every token, exchange and pool by its name,
@@ -201,5 +201,5 @@ put tokens in your Pot.
 
 ## Next
 
-- The next tutorial: [Your first cross-chain intent](first-intent.md).
+- The next tutorial: [Solana quick start](solana-quick-start.md).
 - How a name becomes an address on each chain: [Names and registries](../concepts/names-and-registries.md).

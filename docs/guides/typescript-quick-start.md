@@ -1,22 +1,20 @@
 # Sauce from TypeScript
 
-**Tutorial** · [Documentation](../README.md) · [Your first cross-chain intent](first-intent.md) · [Compiling programs](compiling.md)
+**Tutorial** · [Documentation](../README.md) · [Solana quick start](solana-quick-start.md) · [Compiling programs](compiling.md)
 
 > Everything the `sauce` command does, your own code can do too. You are going to install Sauce as
 > a library in a project, compile a program, build the transaction that runs it and simulate it on
-> Base, then build a cross-chain intent and the transactions that post it. Nothing is signed or
-> sent.
+> Base, then compile the same program for every chain Sauce sends on. Nothing is signed or sent.
 
-This is tutorial 6 of 8. It takes about fifteen minutes and costs nothing. It builds on two earlier
-tutorials: the [quick start](quick-start.md), whose `pay.sauce.ts` you compile here, and
-[your first cross-chain intent](first-intent.md), which explains what an intent is.
+This is tutorial 5 of 7. It takes about fifteen minutes and costs nothing. It builds on the
+[quick start](quick-start.md), whose `pay.sauce.ts` you compile here.
 
 **You will need:** Node.js 24 or newer, a terminal, and an internet connection. You need no wallet
 and no tokens: the addresses in the code are stand-ins, and nothing is sent.
 
 **You will have:** a project with three scripts. One compiles a program, one simulates its **cook**
 (the transaction that runs a program on your **Pot**, your own account on chain) on Base, and one
-builds an intent from Ethereum to Base with the transactions that post it.
+compiles the same program for Base, Ethereum and Solana.
 
 ## 1. Make a project
 
@@ -160,80 +158,51 @@ Your gas figures may differ. Step by step:
 To send it for real, the owner signs and sends `deploy` once, then `{ to: pot, data, value: fee }`
 with any wallet library. [Run a program](cli-run.md) does the same from the command line.
 
-## 4. Build an intent
+## 4. Compile for every chain
 
-An **intent** is a job posted on one chain for a **solver** to do on another, paid by a reward that
-waits where it was posted. The package ships an example that builds one from Ethereum to Base.
-Copy it and run it:
+A program names no chain: `USDC` is a name, and compiling for a chain turns it into that chain's
+USDC. Save this as `chains.ts`:
+
+```ts
+import { readFileSync } from "node:fs";
+import { routes } from "@eco-incorp/sauce";
+
+const source = readFileSync("pay.sauce.ts", "utf8");
+
+for (const chain of ["base", "ethereum", "solana"] as const) {
+  const program = routes.compileSauceProgram(chain, source);
+  const inputs = program.entryParams.map((p) => `${p.name}: ${p.type}`).join(", ");
+  console.log(`${chain}: ${program.bytecode.length} bytes, main takes ${inputs}`);
+}
+```
 
 ```sh
-cp node_modules/@eco-incorp/sauce/docs/examples/first-intent.ts intent.ts
-node intent.ts
+node chains.ts
 ```
 
 ```text
-Ethereum → Base intent: 0x4eaf…7d32
-Prepared source transactions: 2
+base: 250 bytes, main takes to: Address, amount: Uint256
+ethereum: 250 bytes, main takes to: Address, amount: Uint256
+solana: 695 bytes, main takes to: Address, amount: Uint256
 ```
 
-The heart of `intent.ts` is one expression:
-
-```ts
-const built = Base(
-  () => {
-    USDC.transfer(recipient, amount);
-  },
-  {
-    // The route's native amount, which the solver sends with the fill, defaults to this fee.
-    execution: { value: executionFee },
-    deadline: 2_000_000_000n,
-    // Callbacks capture nothing: explicitly supply every external scalar.
-    defines: { recipient, amount },
-    tokens: [{ token: baseUsdc, amount }],
-    // Route assets arrive at the Executor; the Sauce program spends from the Pot.
-    precalls: [token.Token.transfer({ token: baseUsdc, to: pot, amount }).toCall()],
-  },
-).reward({
-  source: Ethereum.chain,
-  creator: "0x6666666666666666666666666666666666666666",
-  deadline: 2_000_003_600n,
-  tokens: [{ token: sourceUsdc, amount }],
-});
-```
-
-Read it from the outside in:
-
-- `Base(...)` is the job, on Base. The arrow function is a Sauce program, not JavaScript: the
-  package reads its text and compiles it for Base, so `USDC` means Base's USDC. It never runs as
-  JavaScript, so it sees no variable around it; `defines` hands it `recipient` and `amount`.
-- `tokens` are what the solver brings to Base, and `precalls` move them into the Pot the program
-  spends from. On Base, an intent's program runs on a Pot that every solver's fill shares, not on
-  yours.
-- `.reward(...)` is the bounty, on Ethereum: 1 USDC, which the **creator** may take back if no
-  solver does the job by the deadline.
-- `built.hash().intentHash` names the intent, and `built.sourceTxs()` are the transactions that
-  post it on Ethereum: a transfer of the reward into the intent's vault, then the Portal's
-  `publish`. Those are the two "prepared source transactions".
-
-The deadlines and the creator are stand-ins, and so is the fee: before posting a real intent, read
-Base's Kitchen fee with `destinationExecutionFee()`, as `cook.ts` did. Sending `built.sourceTxs()`
-in order from the creator's wallet on Ethereum posts the intent:
-[submit the source reward](intents.md#submit-the-source-reward) says how, and
-`sauce intent publish` does it for you.
+One file, three programs. On Base and Ethereum `USDC` is each chain's own USDC contract. On Solana
+the program is larger: it also checks the token accounts the payment moves between, the ones the
+[Solana quick start](solana-quick-start.md#3-see-the-accounts-sauce-found) listed. `main` takes the
+same inputs everywhere, so the same `--args` run it on any of the three.
+[Solana from TypeScript](solana-from-typescript.md) builds and sends that Solana cook.
 
 ## What just happened
 
 You used Sauce as a library. `routes.compileSauceProgram` compiled a program for one chain, as the
 command does. A few calls turned it into a cook, the transaction that runs it on a Pot, and viem
-simulated that cook on Base. Then `Base(...).reward(...)` built a whole cross-chain intent offline:
-the program that runs on Base, the reward on Ethereum, and the transactions that post it.
+simulated that cook on Base. Then the same file compiled for Base, Ethereum and Solana, each name
+resolved on its own chain.
 
 ## Next
 
 - Run your programs in your own tests: [Test your first program](test-your-first-program.md), the
   next tutorial.
 - Why a cook, a Pot and the Kitchen fit together: [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md).
-- Who does what in an intent, and where the reward waits: [Cross-chain intents](../concepts/cross-chain-intents.md).
-- Every option of `Base(...).reward(...)`: [build an intent in TypeScript](intents.md#build-an-intent-in-typescript).
 - Every way to compile from TypeScript, arguments included: [Compiling programs](compiling.md).
 - Every import of the package, by task: [the API reference](../api/README.md).

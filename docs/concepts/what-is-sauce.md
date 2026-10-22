@@ -2,10 +2,17 @@
 
 **Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Glossary](glossary.md)
 
-> Sauce lets you write a short program that does several things on a blockchain in one go, and
-> either all of it happens or none of it does. Think of a recipe handed to a cook: the cook follows
-> every step, and if one step fails, the dish is thrown out as if it was never started. This page
-> says what Sauce is, what it is not, and how your program becomes one transaction.
+> Sauce lets you write a short program in SauceScript, a subset of TypeScript, that reads live
+> onchain state, chooses a path and composes contract calls in one transaction. Think of a recipe
+> handed to a cook: the cook follows every step, and if one step fails, the dish is thrown out as
+> if it was never started. This page says what Sauce is, what it is not, and how your program
+> becomes one transaction.
+
+Your program enforces the conditions you write, at execution time, and an unhandled failure
+reverts every step of the transaction. Approvals your wallet or Pot gave in earlier transactions
+are outside that rollback: they stay as they were. You run new logic through your Pot without
+deploying a contract for each program, and one language serves EVM chains and Solana, though
+protocol calls and account setup differ between them.
 
 Read this page first. It needs only the basic ideas of a blockchain: a wallet, a transaction, a
 token. It explains and asks you to run nothing; the [quick start](../guides/quick-start.md) does
@@ -87,9 +94,8 @@ returned, refuse it below a minimum you set, and pay out exactly that.
   for you.
 - **Not one protocol.** Sauce is not a wrapper around one exchange or lender. A program calls any
   of the 135 protocols Sauce knows, by name, and mixes them in one transaction.
-- **Not a bridge.** A program reaches another chain by posting a job there with a reward attached,
-  an [intent](cross-chain-intents.md). Someone else, a solver, does the job and collects the reward.
-  Sauce builds the intent; it does not carry your tokens across chains itself.
+- **Not a bridge.** A program runs on one chain. To move tokens to another, it calls a bridge
+  protocol by name, such as Across or Circle's CCTP, as it calls any other.
 - **Not a custodian.** Only your wallet can run programs on your Pot, and nobody else, Sauce
   included, can move what it holds.
 - **Not your application's code.** A program runs on chain, inside the transaction. It cannot call
@@ -111,6 +117,16 @@ its address on each chain.
 - **The MCP server**, `sauce mcp`: Sauce's commands as tools for a coding agent in your editor.
 
 The [glossary](glossary.md) puts every Sauce word next to one you already know.
+
+## Coming next: cross-chain intents
+
+Cross-chain intents are not in this release; they are coming back as `@sauce/hop`. A program will
+describe a hop to another chain and what runs when it arrives. The sketch below is a preview of the
+planned syntax: it is not available, and it may change.
+
+```text
+Ethereum.hop({ send: { token: USDC, amount: reward }, receive: { token: USDC, amount }, refundee: refundTo }).then(() => { USDC.transfer(recipient, amount) })
+```
 
 ## Next
 
