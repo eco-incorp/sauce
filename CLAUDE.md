@@ -1372,7 +1372,8 @@ beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`,
   `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
   README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
   exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
-  than an index with more than 3 links per 100 words; every page, generated or not, opening with a
+  than an index or the command reference (`docs/reference/cli.md`) with more than 3 links per 100
+  words; every page, generated or not, opening with a
   plain-words intro (a blockquote after its title and breadcrumb); and `docs/guides/skills.md`'s
   table naming exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
@@ -1440,12 +1441,12 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 - **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
-  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; Sauce never described as a
-  multicall; no pointer into the
+  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover (the
+  SDK has no intents); Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
-  documents are third-party facts and are exempt from the address and multicall rules only.
+  documents are third-party facts and are exempt from the address, Portal and multicall rules only.
 - **Simulate, never rehearse, enforced.** What runs with no key and sends nothing —
   `sauce simulate`, a dry run — is a simulation, in everything a user or
   an agent reads. `docs/scripts/simulate-wording.mjs` is the rule; `skills:check` applies it to every
