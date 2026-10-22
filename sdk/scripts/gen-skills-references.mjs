@@ -1045,7 +1045,7 @@ function supportLines(chain, supported, site) {
 
   return [
     `**Preview chain.** Sauce supports transactions on ${names} only. On ${chain.name} a program`,
-    "compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`",
+    "compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`",
     "command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and",
     "`sauce pot --deploy` are refused,",
     `naming the supported chains and how to request this one${site === DOCS_SITE ? " (the last section)" : ""}.`,

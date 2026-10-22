@@ -1,5 +1,5 @@
 // The word for running something with no key and sending nothing is simulate: the command is
-// `sauce simulate`, and what it and a dry run run is a simulation. So nothing a user or an agent
+// `sauce simulate`, and what it runs is a simulation. So nothing a user or an agent
 // reads says rehearse or rehearsal. `docs:check` applies this to the manual (the README, every page
 // under docs/ and the examples), `skills:check` to every file of the skills,
 // comments included, and `sdk/test/simulate-wording.test.ts` to every string the shipped source

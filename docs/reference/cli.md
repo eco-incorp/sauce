@@ -89,8 +89,8 @@ with --no-update-check (any command takes it, before the command too), and for a
 whose --config file says "updateCheck": false.
 
 Transactions are built and sent only on Ethereum, Base and Solana. Every other chain is a
-preview chain: programs compile there, and simulate, dry runs and reads work, but no transaction
-is built or sent. Ask for a chain:
+preview chain: programs compile there, and simulate and reads work, but no transaction is built
+or sent. Ask for a chain:
 https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
 
 A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain
