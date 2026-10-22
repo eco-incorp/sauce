@@ -139,9 +139,10 @@ pinned release sets pair with another compiler than the SDK's.
 call in a single step. `execution` is `{ pot, engine, value? }` on an EVM chain. It returns
 `{ calls, compiled, source }`: `calls` holds the one cook call, `compiled` a result with `bytecode:
 Uint8Array[]` and an empty `warnings` array, and `source` the rewritten program. It gives the program
-the registry rewrites but not the chain's ambient `@sauce/token` functions, takes no run-time
-arguments, and keeps neither the entry schema nor the Solana manifest. Use `compileSauceProgram`
-when you need any of those.
+the chain's token symbols and the registry rewrites, but neither `chainId`/`CHAIN_ID` nor the
+`@sauce/token` functions with no import: pass `chainId` in `defines` and import `@sauce/token`
+instead. It takes no run-time arguments, and keeps neither the entry schema nor the Solana manifest.
+Use `compileSauceProgram` when you need any of those.
 
 `buildSauceSvmCall` and an SVM `compileSauceRoute` emit an 8-byte engine instruction that the Solana
 engine does not accept, whatever code account or engine id you give them: they do not build the
