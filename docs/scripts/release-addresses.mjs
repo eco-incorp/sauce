@@ -21,10 +21,9 @@ const svmKey = (programId) =>
 
 /**
  * Every release address, each as it is searched for (hex lowercased; base58 as Solana writes it),
- * with what it is. `sdk` is the package root module and `deployments` its `/deployments` module, of
- * the package the checker holds.
+ * with what it is. `deployments` is the `/deployments` module of the package the checker holds.
  */
-export function releaseAddresses({ sdk, deployments }) {
+export function releaseAddresses({ deployments }) {
   const named = new Map();
   const add = (needle, what) => {
     if (!named.has(needle)) named.set(needle, what);
