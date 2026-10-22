@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Base, Optimism, routes } from "@eco-incorp/sauce";
-import type { PublicClient } from "viem";
+import { encodeFunctionData, type PublicClient } from "viem";
 
 const program = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "venue-where-deployed.sauce.ts"),
@@ -41,7 +41,12 @@ if (
 // The same names on the host: a token is its registry row, a contract call is typed from its ABI.
 const usdc = Base.USDC; // { address, decimals, symbol, chain }
 const getPool = Base.PancakeswapV3.Factory.getPool(usdc.address, Base.WETH.address, 500);
-if (usdc.decimals !== 6 || !getPool.data.startsWith("0x1698ee82")) {
+const expected = encodeFunctionData({
+  abi: Base.PancakeswapV3.Factory.abi,
+  functionName: "getPool",
+  args: [usdc.address, Base.WETH.address, 500],
+});
+if (usdc.decimals !== 6 || getPool.data !== expected) {
   throw new Error("Expected Base's USDC row and an encoded getPool call");
 }
 console.log("Base pool lookup:", getPool.toCall());
