@@ -40,16 +40,14 @@ export const DEV_TOPICS: ReadonlyArray<{
   {
     topic: "start",
     about:
-      "install the package, run a first program on Base and on Solana, build a first intent, and compile and test a program from TypeScript; the glossary",
+      "install the package, run a first program on Base and on Solana, and compile and test a program from TypeScript; the glossary",
     keywords: ["start", "install", "quick", "first", "hello", "begin", "typescript", "glossary"],
     files: [
       "guides/quick-start.md",
       "guides/solana-quick-start.md",
-      "guides/first-intent.md",
       "guides/typescript-quick-start.md",
       "guides/test-your-first-program.md",
       "concepts/glossary.md",
-      "examples/first-intent.ts",
     ],
   },
   {
@@ -70,35 +68,10 @@ export const DEV_TOPICS: ReadonlyArray<{
     files: ["guides/compiling.md", "api/compiler.md", "examples/compile-program.ts"],
   },
   {
-    topic: "intents",
-    about: "cross-chain intents from TypeScript: openRoute, rewards, publishing, nesting",
-    keywords: [
-      "intent",
-      "intents",
-      "route",
-      "routes",
-      "openroute",
-      "reward",
-      "portal",
-      "crosschain",
-      "nest",
-      "nested",
-      "cascade",
-    ],
-    files: [
-      "guides/intents.md",
-      "guides/nested-intents.md",
-      "api/routes.md",
-      "examples/cross-chain-intent.ts",
-      "examples/cross-chain-intent.sauce.ts",
-      "examples/ethereum-to-solana.ts",
-    ],
-  },
-  {
     topic: "protocols",
     about: "tokens and protocols from TypeScript: the registries, the namespaces, coverage",
     keywords: ["registry", "registries", "coverage", "descriptor", "descriptors", "viem"],
-    files: ["guides/protocols-and-tokens.md", "api/coverage.md", "examples/protocol-approval.ts"],
+    files: ["guides/protocols-and-tokens.md", "api/coverage.md", "examples/registry-names.ts"],
   },
   {
     topic: "actions",
@@ -110,7 +83,7 @@ export const DEV_TOPICS: ReadonlyArray<{
     topic: "execution",
     about: "running a program on a Pot from TypeScript: the cook, the engine, the Kitchen",
     keywords: ["execute", "execution", "cook", "engine", "client", "deployments", "architecture"],
-    files: ["examples/evm-execution.ts", "concepts/architecture.md"],
+    files: ["examples/prepare-pot.ts", "concepts/architecture.md"],
   },
   {
     topic: "solana",

@@ -21,7 +21,6 @@ const PROGRAM_ID = address("Stake11111111111111111111111111111111111111");
 const PAYER = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const BUFFER = address("So11111111111111111111111111111111111111112");
 const STAKE_CODE = address("StakeConfig11111111111111111111111111111111");
-/** A representative 32-byte PDA seed (e.g. an intent hash) — the u8 index is gone. */
 
 describe("buildExecuteInstruction", () => {
   const bytecode = new Uint8Array([0x01, 0xaa, 0x00]); // BYTE_1 0xAA, STOP

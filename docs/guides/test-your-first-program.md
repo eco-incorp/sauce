@@ -6,7 +6,7 @@
 > Node.js tests, on a private copy of a chain on your computer. Your test accounts get as many
 > tokens as you like, nothing real is touched, and a test recorded once runs again with no network.
 
-This is tutorial 7 of 8. It takes about fifteen minutes and costs nothing: no wallet, no key and
+This is tutorial 6 of 7. It takes about fifteen minutes and costs nothing: no wallet, no key and
 no real tokens. It uses three things from earlier tutorials:
 
 - the `sauce-app` project from [Sauce from TypeScript](typescript-quick-start.md), which has the

@@ -41,11 +41,11 @@ seed is only known while it runs is refused at compile time. A program calls ano
 through a **cross-program invocation** (CPI): the call goes out with the accounts the transaction
 already listed.
 
-A compiled program also checks the accounts it was given. A transaction built by someone else, a
-solver filling an intent, say, could attach a different account in a slot, so the program verifies
-each one against what the program says it must be: a token account that belongs to the named
-holder, an address that really derives from its seeds, the right program. A wrong account fails
-the whole cook with a reason such as `wrong holder account`.
+A compiled program also checks the accounts it was given. A transaction built by someone else could
+attach a different account in a slot, so the program verifies each one against what the program
+says it must be: a token account that belongs to the named holder, an address that really derives
+from its seeds, the right program. A wrong account fails the whole cook with a reason such as
+`wrong holder account`.
 
 ## Token accounts
 

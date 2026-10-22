@@ -158,11 +158,6 @@ into other programs: with no Kitchen in between, it has one level more to spare.
 same either way. [Two ways to cook](../concepts/solana-model.md#two-ways-to-cook) sets the two side
 by side.
 
-## Intents
-
-An intent can go to Solana ([An intent to Solana](cli-intents.md#an-intent-to-solana)) or start
-there, published with a Solana wallet ([An intent from Solana](cli-intents.md#an-intent-from-solana)).
-
 ## Details
 
 ### Account values in full
@@ -391,5 +386,3 @@ not one it checks.
 
 - Write programs for Solana: the [Solana guide](solana.md) covers accounts in a program, pools by
   name and Token-2022 tokens.
-- Send a program to Solana from Ethereum or Base:
-  [An intent to Solana](cli-intents.md#an-intent-to-solana).

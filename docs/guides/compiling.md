@@ -15,22 +15,20 @@ npm install @eco-incorp/sauce viem
 ```
 
 The compiler is already in the package, and the output is a program a Sauce engine runs, not a
-contract you deploy. Four entry points compile, and they differ in who resolves names such as
+contract you deploy. Two entry points compile, and they differ in who resolves names such as
 `USDC` and `Uniswap.UniversalRouter`:
 
-| Entry point                                                         | You supply                                                  | The SDK supplies                                                                  |
-| ------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `routes.compileSauceProgram(chain, source, options?)`               | A program file's text and the chain                         | The chain's names, `@sauce/token`, `main`'s parameters; what `sauce compile` runs |
-| `Base(body, options)` / `routes.openRoute(...)`                     | An intent's body and options                                | The chain's names, the ambient token module, the Pot and engine, a built intent   |
-| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token names, one encoded call for an intent's route            |
-| `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing: you get the compiler's own result                                        |
+| Entry point                                           | You supply                                                  | The SDK supplies                                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `routes.compileSauceProgram(chain, source, options?)` | A program file's text and the chain                         | The chain's names, `@sauce/token`, `main`'s parameters; what `sauce compile` runs |
+| `compile({ target, resolve, ... })`                   | All source and dependency resolution, and compiler settings | Nothing: you get the compiler's own result                                        |
 
-The first three resolve names for one chain. The last, the raw compiler, resolves nothing: reach
-for it when you want full control over modules, compact arguments, or a Solana account manifest
-you keep yourself.
+The first resolves names for one chain. The second, the raw compiler, resolves nothing: reach for
+it when you want full control over modules, compact arguments, or a Solana account manifest you
+declare yourself.
 
 Bare `USDC`, `Token(address)` and protocol members such as `Uniswap.UniversalRouter` exist only in
-the first three. There, `USDC.approve(Uniswap.UniversalRouter, 1000000)` becomes a call to
+the first. There, `USDC.approve(Uniswap.UniversalRouter, 1000000)` becomes a call to
 `@sauce/token`'s `approve`, with `USDC` and the router as the chain's addresses. Every token write
 the SDK emits follows OpenZeppelin's `SafeERC20`; [Safety](../concepts/safety.md) explains what
 that checks. With raw `compile()` you write those calls yourself, resolving `@sauce/token` with
@@ -57,46 +55,46 @@ The result carries:
 - `entryParams`: what `main` takes. `routes.encodeEntryArguments(program, values)` encodes values
   for them, checked against their types, as `--args` does.
 - `entryEncoding`: `"abi-v1"`, or `"compact-v1"` when you pass `compactArgs: true`.
-- `intents`: the intents the program opens, if any. Such a program takes their deadline and
-  creator in `options.intents`.
 - `manifest` and `derivedAccounts` on Solana: the accounts to attach, and those the SDK added.
 
-`options.args` binds `main`'s arguments into the program as it compiles, as
-`sauce intent publish --args` does. The program then takes no arguments when it runs.
+`options.args` binds `main`'s arguments into the program as it compiles. The program then takes no
+arguments when it runs.
 
 [Sauce from TypeScript](typescript-quick-start.md) turns this result into a cook and simulates it.
 
-## Compile an EVM route
+## Encode a program's inputs
 
-An intent's route on the destination chain is one call to a Pot. `routes.compileSauceRoute` builds
-it from a body:
+A program that takes its inputs as `main`'s parameters compiles once. `routes.encodeEntryArguments`
+then encodes each call's values, checked against their types:
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
-import type { Address } from "viem";
 
-export function buildApprovalRoute(pot: Address, engine: Address, executionFee: bigint) {
-  return routes.compileSauceRoute("base", "USDC.approve(Uniswap.UniversalRouter, 1000000);", {
-    pot,
-    engine,
-    value: executionFee,
-  });
+export function buildApprovalProgram(chain: routes.ChainRef) {
+  const program = routes.compileSauceProgram(
+    chain,
+    `function main(amount: Uint256) {
+  USDC.approve(Uniswap.UniversalRouter, amount);
+}`,
+  );
+  // `bytecode` is the program; `encodeEntryArguments` encodes `amount`, checked against its type.
+  const args = routes.encodeEntryArguments(program, [1_000_000n]);
+  return { program, args };
 }
+
+const { program, args } = buildApprovalProgram("base");
+console.log("bytecode:", program.bytecode.length, "bytes; arguments:", args.length, "bytes");
 ```
 
-The destination selects the registry addresses. The result has one entry in `calls` and the program
-in `compiled.bytecode[0]`; read `source` to see exactly what the rewrites produced.
+The chain selects the registry addresses; read `program.source` to see exactly what the SDK's
+rewrites produced. The cook runs the bytecode with the encoded arguments after it, on your Pot. Its
+`value` is the Kitchen fee plus whatever native coin the program itself spends; this approval
+spends none.
 
-The call's `value` is the Kitchen fee plus whatever native coin the program itself spends; this
-approval spends none. For Portal fulfillment the Pot must be owned by the destination Portal's
-Executor, and `route.nativeAmount` must cover every call value, which is what the intent builder
-sets it to. [Create an intent](intents.md) covers reading the fee, deriving that Pot, and adding
-the reward and Portal calldata.
-
-`compileSauceRoute` takes a SauceScript file as written: a module declaring `function main(...)`,
+`compileSauceProgram` takes a SauceScript file as written: a module declaring `function main(...)`,
 or a script whose top-level statements are the entry. Its rewrites parse SauceScript as the
 compiler does, type annotations included, so a typed helper that takes or returns an array or a
-record compiles the same way through either.
+record compiles the same way as through the raw compiler.
 
 ## Compile a reusable program
 
@@ -258,11 +256,11 @@ somebody else wrote, serve them from an allowlisted in-memory map instead. Fetch
 _before_ compiling: the resolver cannot await.
 
 For an ABI you already hold, raw compilation takes
-`inlineContracts: [["ERC20", JSON.stringify(abi)]]`. The route API takes the parsed form,
+`inlineContracts: [["ERC20", JSON.stringify(abi)]]`. `compileSauceProgram` takes the parsed form,
 `contracts: { ERC20: { abi } }`, and adapts it. The two shapes are not interchangeable.
 
-Raw compilation serves nothing you do not. The chain-aware entry points serve the SDK's own files
-themselves: the `@sauce/token` and [`@sauce/router`](../api/router.md) libraries, the ERC-20 and
+Raw compilation serves nothing you do not. `compileSauceProgram` serves the SDK's own files
+itself: the `@sauce/token` and [`@sauce/router`](../api/router.md) libraries, the ERC-20 and
 Sauce Router ABIs and every protocol ABI twin. For a raw compile that needs them, fall back to
 `resolveSdkModule` and `resolveSdkPackage` from `@eco-incorp/sauce/compiler`; the
 [compiler reference](../api/compiler.md#the-sdks-own-modules) shows how.
@@ -314,8 +312,7 @@ in manifest order with the SVM helpers. The manifest records what the _author_ d
 discover an account's address, balance, owner or existence.
 
 To run a larger program, stage its bytes through the Kitchen, finalize the code account, then
-execute. Keep the raw compilation result: `compileSauceRoute` drops the manifest.
-[Solana from TypeScript](solana-from-typescript.md) has the full flow.
+execute. [Solana from TypeScript](solana-from-typescript.md) has the full flow.
 
 ## Keep compilation reproducible
 

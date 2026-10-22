@@ -31,7 +31,7 @@ The SDK carries the address book in its **registries**, which ship inside the pa
 | --------- | ------------------------------------------------------------------------------------------- |
 | Chains    | The 41 chains a program can name, each with a slug (`base`), aliases (`eth`) and a chain id |
 | Tokens    | Each chain's token symbols with their addresses and decimals, tokenized stocks included     |
-| Protocols | 135 protocols, each with its contracts per chain and the ABI of each one                    |
+| Protocols | 134 protocols, each with its contracts per chain and the ABI of each one                    |
 
 Each registry row is checked, in the SDK's own tests, against the contract deployed at its address:
 a token's symbol and decimals, a protocol contract's functions. A token symbol is in the registry
@@ -58,11 +58,6 @@ At compile time, for the chain named by `--chain`, and nowhere else.
   chain has the contract. The branch it rules out is removed before its names are looked up, so one
   program can use a venue only where it exists.
 
-An intent changes the chain a name is read on. Inside `Base(() => { … })`, the body runs on Base,
-so its `USDC` is Base's. The reward, which waits on the chain the program runs on, is that chain's
-USDC. Each level of an intent reads its names on its own chain
-([Cross-chain intents](cross-chain-intents.md)).
-
 From TypeScript, the same entries hang off each chain's export, `Base.USDC.address`, and do not
 exist as bare names at run time. Bare `USDC` is SauceScript, read by the compiler.
 
@@ -80,9 +75,8 @@ command, and the MCP server built on it, sends transactions on three of them: **
 and **Solana**. These are the **supported chains**. Every other chain is a **preview chain**:
 
 - a program compiles and simulates there, and every lookup and read works;
-- the command builds nothing to sign and sends nothing, and says why;
-- a cook or an intent is refused if it runs on a preview chain, or opens an intent to one. Only
-  the intents a program opens itself are checked, not those a destination program opens in turn.
+- the command builds nothing to sign and sends nothing, and says why: a cook is refused before
+  anything is signed.
 
 The split is the command's policy, not the registry's or the library's: the SDK's own builders
 take any chain, and a TypeScript application that signs for itself decides for itself. A preview

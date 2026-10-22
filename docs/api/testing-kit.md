@@ -120,8 +120,7 @@ What `fork` and `local` return on an EVM chain.
 ### Programs and arguments
 
 A program is a path, a `file:` URL, or `{ source }`. It compiles with the chain's names, as
-`sauce compile` compiles it, and its relative imports resolve beside the file. A program that opens
-a cross-chain intent does not compile here: the kit takes no intent deadline or creator.
+`sauce compile` compiles it, and its relative imports resolve beside the file.
 
 | `CookOptions` | Meaning                                                                      |
 | ------------- | ---------------------------------------------------------------------------- |

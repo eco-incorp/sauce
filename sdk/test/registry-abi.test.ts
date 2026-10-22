@@ -449,7 +449,7 @@ describe("registry ABI evidence: coverage", () => {
       const exports = Object.entries(modules[slug]!).filter(([, value]) => Array.isArray(value));
       const path = (name: string) => join(PROTOCOLS, slug, `${name}.json`);
       // A protocol that ships twins ships one per export, so a new export cannot miss its twin;
-      // one that ships none at all (eco-routes) has nothing to compare.
+      // one that ships none at all has nothing to compare.
       if (!exports.some(([name]) => existsSync(path(name)))) continue;
       for (const [name, value] of exports) {
         const json = existsSync(path(name))

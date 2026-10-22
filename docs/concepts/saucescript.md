@@ -59,9 +59,7 @@ A program has no exceptions to catch. `require(condition, "message")` stops the 
 when its condition is false, and so do `throw`, a failed call and any checked operation: nothing
 that ran before survives. That is what makes a program safe to write without cleanup code. The one
 failure a program can survive is a failed call to another contract on an EVM chain, with
-`.catch(() => { ... })`, the only arrow function the compiler takes. A program compiled for a chain
-can also open an intent with `Base(() => { ... }).reward(...)`: the SDK lifts that body out and
-compiles it for the destination before the compiler sees the program.
+`.catch(() => { ... })`, the only arrow function the compiler takes.
 
 ## How values reach a program
 

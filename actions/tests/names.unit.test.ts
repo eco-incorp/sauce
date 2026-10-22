@@ -15,7 +15,6 @@ import {
   compileProgram,
   compileSplitSwap,
   parseProgram,
-  programIntent,
   programSchema,
   quoteAction,
 } from "../src/index.js";
@@ -304,32 +303,6 @@ describe("names — one document, compiled for each chain", () => {
     assert.match(source, /ILBFactory\.at\(0x[0-9a-f]+\)\.getLBPairInformation\(.*, 20\)/);
     assert.match(source, /const pool\d+ = pool\d+\.LBPair;/);
     assert.match(source, /ILBPair\.at\(pool\d+\)\.getTokenX\(\)/);
-  });
-
-  it("opens an intent on the chain it is given, resolving the names there", () => {
-    const person = "0x6000000000000000000000000000000000000004";
-    const options = {
-      pot: "0x6000000000000000000000000000000000000001",
-      engine: "0x6000000000000000000000000000000000000002",
-      portal: "0x6000000000000000000000000000000000000003",
-      deadline: 2_000_000_000n,
-    } as const;
-    const reward = {
-      source: "base",
-      creator: person,
-      prover: person,
-      deadline: 2_000_000_200n,
-      nativeAmount: 1n,
-    } as const;
-    const program = doc(
-      { type: "balanceOf", token: "USDC" },
-      { type: "approve", token: "USDC", spender: "Permit2.Permit2" },
-    );
-    for (const chain of CHAINS) {
-      const built = programIntent(program, { ...options, chain }).reward(reward);
-      assert.equal(built.destination.slug, chain);
-      assert.deepEqual(built.compiled.bytecode[0], compileProgram(program, { chain }).bytecode);
-    }
   });
 });
 

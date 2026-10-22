@@ -87,52 +87,34 @@ describe("chain accessors: the names resolve through an import, and only through
     expect(diagnostics.some((d) => d.code === 2304)).toBe(true);
   });
 
-  it("`import { Base }` typechecks: Base(sauce, opts) and Base.route(...) both, and .reward(...) is typed, not `any`", () => {
+  it("`import { Base }` typechecks: Base.chain is the chain's record, typed, not `any`", () => {
     const diagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
-      const opts = {
-        pot: "0x1111111111111111111111111111111111111111" as const,
-        engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const,
-        deadline: 2000n,
-        portal: "0x2222222222222222222222222222222222222222" as const,
-        source: "base" as const,
-        creator: "0x3333333333333333333333333333333333333333" as const,
-        prover: "0x4444444444444444444444444444444444444444" as const,
-      };
-      const viaCall = Base("function main() { return 1n; }", opts);
-      const built = viaCall.reward(0n);
-      const intent: unknown = built.intent;
-      const viaRoute = Base.route("function main() { return 1n; }", opts);
-      const built2 = viaRoute.reward(0n);
-      // type-level pin: .route carries EXACTLY the call signature's own interface.
-      const _pin: (typeof Base)["route"] = Base;
+      const id: number = Base.chain.id;
+      const slug: string = Base.chain.slug;
       export {};
     `);
     expect(diagnostics).toHaveLength(0);
   });
 
-  it("negative control: the old reward-first Base.route({deadline,creator,prover}) still does not typecheck", () => {
+  it("negative control: the removed Base(body).reward(...) form does not typecheck", () => {
     const diagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
-      const reward = {
-        deadline: 1000n,
-        creator: "0x1111111111111111111111111111111111111111" as const,
-        prover: "0x2222222222222222222222222222222222222222" as const,
-      };
-      const x: unknown = Base.route(reward);
+      const x: unknown = Base("function main() { return 1n; }", {});
+      const y: unknown = Base.route;
       export {};
     `);
-    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.length).toBeGreaterThanOrEqual(2);
   });
 
   // --- the native contract-accessor tree rides on the SAME import ---
 
-  it("the imported Base ALSO carries the native accessor tree alongside .route -- both capabilities, one name", () => {
+  it("the imported Base ALSO carries the native accessor tree alongside .chain -- both capabilities, one name", () => {
     const diagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
       const canonical: unknown = Base.UniswapV4.UniversalRouter;
       const alias: unknown = Base.Uniswap.UniversalRouter;
-      const stillHasRoute: unknown = Base.route;
+      const chain: unknown = Base.chain;
       export {};
     `);
     expect(diagnostics).toHaveLength(0);
@@ -287,12 +269,12 @@ describe("chain accessors: the names resolve through an import, and only through
 
   // --- the svm venue accessor tree rides on Solana's export only ---
 
-  it("the imported Solana ALSO carries the svm venue accessor tree, alongside .route", () => {
+  it("the imported Solana ALSO carries the svm venue accessor tree, alongside .chain", () => {
     const diagnostics = typecheckProbe(`
       import { Solana } from ${ROOT};
       const programId: unknown = Solana.RaydiumCpSwap.programId;
       const swap: unknown = Solana.MeteoraDammV2.swap;
-      const stillHasRoute: unknown = Solana.route;
+      const chain: unknown = Solana.chain;
       export {};
     `);
     expect(diagnostics).toHaveLength(0);

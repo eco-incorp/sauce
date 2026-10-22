@@ -361,11 +361,20 @@ Encoding successfully says nothing about whether the payload fits a transaction 
 the engine's own execution limits. And compact-v1 is about **entry arguments only**:
 contract calls the program makes still use their contract ABIs.
 
-## Raw compiler versus route compilation
+## Raw compiler versus compiling for a chain
 
-`routes.compileSauceRoute()` is a separate SDK API with a source string,
-destination, execution settings, and `SauceCompileOptions`. It supplies registry
-rewrites and call encoding. Its result is:
+`routes.compileSauceProgram(chain, source, options?)` is the SDK's compile for one
+chain by name. It supplies the chain's token symbols, protocol addresses and
+`chainId`, the `@sauce/token` functions with no import, and the registry rewrites,
+then calls this compiler. Its result keeps the bytecode, the entry encoding and
+schema, `main`'s parameters, and the SVM manifest; its `args` option binds `main`'s
+arguments into the program.
+
+`routes.compileSauceRoute()` compiles the same way with two differences: it supplies neither
+`chainId` nor `CHAIN_ID`, and not the `@sauce/token` functions with no import, so a program that
+reads either name or calls `transfer(...)` bare does not compile there unchanged. Pass `chainId` in
+`defines` and import `@sauce/token` instead. It returns the program in a compatibility shape beside
+one encoded cook call:
 
 ```ts
 {
@@ -375,22 +384,22 @@ rewrites and call encoding. Its result is:
 }
 ```
 
-There is one compiled segment and one route call. `source` is the SDK-rewritten
+There is one compiled segment and one call. `source` is the SDK-rewritten
 program; the internal compiler adapter can additionally annotate a falling-through
-`main` as `void`. `warnings` is always empty — a compilation failure throws.
+`main` as `void`. `warnings` is always empty — a compilation failure throws. It
+keeps neither the entry schema nor the SVM manifest.
 
-The route adapter keeps neither the entry schema nor the SVM manifest, and its
-options do not expose `compactArgs`, `cache` or `optimize`. Use raw `compile()`
-when you need any of those, runtime entry parameters, or full resolver control.
-Route `target: "v1"` and `"v12"` both select the EVM backend.
+Neither exposes `cache` or `optimize`. Use raw `compile()` when you need either of
+those, or full resolver control. SDK target `"v1"` and `"v12"` both select the EVM
+backend.
 
-See [routes](routes.md) for the route-specific API.
+See [Programs and cooks](routes.md) for both, and for the cook builders.
 
 ## In a browser
 
-The SDK compiles in a browser exactly as it does in Node: raw `compile()`, route
-compilation (`Base(...)`, `.reward(...)`, `compileSauceRoute`), the builders, the
-recipes and `/actions` produce the same bytes in both. The difference is start-up.
+The SDK compiles in a browser exactly as it does in Node: raw `compile()`,
+`routes.compileSauceProgram`, the builders, the recipes and `/actions` produce the
+same bytes in both. The difference is start-up.
 Node instantiates the compiler's WebAssembly as the package loads; a browser has to
 fetch it, which cannot happen synchronously. Call `ready()` once, before the first
 compile:
@@ -399,8 +408,8 @@ compile:
 import { ready } from "@eco-incorp/sauce/compiler"; // also exported by "@eco-incorp/sauce"
 
 await ready();
-// compile(), compileSauceRoute(), Base(...).reward(...) and compileProgram() are now
-// synchronous, as in Node.
+// compile(), routes.compileSauceProgram() and compileProgram() are now synchronous,
+// as in Node.
 ```
 
 Until `ready()` resolves, every compile throws an error saying to await it. In Node
@@ -438,5 +447,6 @@ dependency and imports from its own package name.
 
 ## Next
 
-[Routes](routes.md) compiles a program for one chain by name and builds intents around it. To run
-what you compiled, [Pots and cooks in code](README.md#pots-and-cooks-in-code) lists each step.
+[Programs and cooks](routes.md) compiles a program for one chain by name and builds the cook that
+runs it. [Pots and cooks in code](README.md#pots-and-cooks-in-code) lists each step with the
+`sauce` command beside it.

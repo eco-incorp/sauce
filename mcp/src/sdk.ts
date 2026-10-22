@@ -1,8 +1,8 @@
 /**
  * The one place this server reaches into the SDK: the `sauce` command's own modules, as the SDK's
  * build emits them. Every tool calls the function the matching `sauce` command calls — compile,
- * tx, simulate, pot, globals, inspect, verify, publish — with the same inputs, so the two front
- * ends cannot drift. Nothing here is reimplemented.
+ * tx, simulate, pot, globals, inspect, verify — with the same inputs, so the two front ends cannot
+ * drift. Nothing here is reimplemented.
  *
  * By relative path into `sdk/dist`, the one spelling that resolves in the repository and in the
  * published tarball, where `mcp/dist` and `sdk/dist` are siblings (as `actions` reaches the SDK).
@@ -13,13 +13,10 @@ export {
   addressDefinesOf,
   CliError,
   parseAddress,
-  parseClaimant,
-  parseIntentParty,
   parseChain,
   parseDefineMap,
   parseLamports,
   parseSalt,
-  parseUnixSeconds,
   parseVia,
   parseWei,
   UsageError,
@@ -36,9 +33,7 @@ export {
   compileCommand,
   compileProgram,
   expectingRevert,
-  pastDeadline,
   potCommand,
-  programChains,
   txCommand,
   type CliFiles,
   type CommandOutput,
@@ -49,7 +44,6 @@ export {
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export {
   assumedBalances,
-  bindMainArguments,
   definesReach,
   fundingFor,
   fundTransfers,
@@ -60,15 +54,7 @@ export {
   withoutShebang,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
-export {
-  importCommand,
-  listCommand,
-  showCommand,
-  storedTargets,
-  type LifecycleContext,
-  type Target,
-} from "../../sdk/dist/cli/intent-commands.js";
-export { keeping, keepsAny, knowIntents, type LocalStores } from "../../sdk/dist/cli/keep.js";
+export { keeping, keepsAny, type LocalStores } from "../../sdk/dist/cli/keep.js";
 export type {
   McpEntry,
   McpServeOptions,
@@ -84,36 +70,12 @@ export {
   resolvePriceTokens,
   tokenGiven,
 } from "../../sdk/dist/cli/price.js";
-export {
-  defineLabels,
-  fillCommand,
-  fillTargets,
-  type FillTarget,
-} from "../../sdk/dist/cli/fill.js";
-export {
-  buildCancel,
-  buildClaim,
-  buildFill,
-  buildProve,
-  buildRefund,
-  importIntents,
-  INTENT_SCHEMA,
-  intentOf,
-  intentRecord,
-  intentStatus,
-  type IntentRecord,
-} from "../../sdk/dist/cli/lifecycle.js";
-export { presignedNote } from "../../sdk/dist/cli/lifecycle-svm.js";
 export { potImportCommand, potListCommand } from "../../sdk/dist/cli/pot-commands.js";
 export { PotStore } from "../../sdk/dist/cli/pot-store.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
-export { publishCommand } from "../../sdk/dist/cli/publish.js";
-export { publishSvmCommand } from "../../sdk/dist/cli/publish-svm.js";
-export { solanaIntentState } from "../../sdk/dist/cli/intent-solana.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
-export { IntentStore } from "../../sdk/dist/cli/store.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,
   CHAIN_SUPPORT_NEW_ISSUE_URL,

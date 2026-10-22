@@ -263,11 +263,13 @@ console.log(`Manual links: ${manual.length} files checked`);
         `${page(file)}: its breadcrumb line names no part of the manual: ${Object.values(KINDS).join(", ")}`,
       );
   }
-  // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.
+  // A page that is mostly links sends its reader on instead of telling them. The indexes are lists,
+  // and so is the command reference, which opens with a link to every command's section.
   const lists = new Set([
     "docs/README.md",
     "docs/examples/README.md",
     "docs/reference/chains.md",
+    "docs/reference/cli.md",
     "docs/reference/protocols.md",
   ]);
   for (const file of readerPages) {
@@ -432,7 +434,6 @@ console.log(`Manual links: ${manual.length} files checked`);
       return entry.isDirectory() ? files(child) : [child];
     });
   const addresses = releaseAddresses({
-    sdk: await import(pathToFileURL(join(root, "sdk/dist/index.js")).href),
     deployments: await import(pathToFileURL(join(root, "sdk/dist/deployments/index.js")).href),
   });
   const pages = [join(root, "README.md"), ...files(join(root, "docs"))]

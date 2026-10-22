@@ -67,7 +67,7 @@ sauce tx: building the cook transaction is refused: it involves optimism (Optimi
 ```
 
 **Cause.** The command builds and sends transactions only on Ethereum, Base and Solana. Every other
-chain is a preview chain. A program that opens an intent to a preview chain is refused too.
+chain is a preview chain.
 
 **Fix.** Compile and simulate there freely, and send on a supported chain. To ask for the chain,
 follow the two links the message prints: the first finds an existing request, the second opens a

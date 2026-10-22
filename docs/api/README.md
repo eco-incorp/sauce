@@ -19,13 +19,12 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | ------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | Compile a program to bytecode               | `compile` from `/compiler`                                                            | [Compiler](compiler.md)                                       |
 | Encode a program's arguments                | `encodeCompactArguments`, `decodeCompactArguments` from `/compiler`                   | [Compact argument codec](compiler.md#compact-argument-codec)  |
-| Compile a program for one chain, by name    | `routes.compileSauceProgram`, `routes.compileSauceRoute` from `.`                     | [Routes](routes.md)                                           |
-| Open a cross-chain intent from TypeScript   | `Base(...).reward(...)` (any chain export) from `.`                                   | [Routes](routes.md)                                           |
+| Compile a program for one chain, by name    | `routes.compileSauceProgram`, `routes.encodeEntryArguments` from `.`                  | [Programs and cooks](routes.md)                               |
 | Call a protocol or a token by name          | `Base.USDC`, `Base.UniswapV3.Factory`, `contracts` from `.`                           | [Contracts and tokens](contracts.md)                          |
 | Swap at a venue from a program              | `@sauce/router`, imported inside the program                                          | [`@sauce/router`](router.md)                                  |
 | Turn a JSON document into a program         | `compileProgram` and the rest of `/actions`                                           | [Actions](../guides/actions.md)                               |
 | Find out what a registry holds              | `getProtocol`, `listProtocols`, `routes.knownTokenSymbols`, `requireChain`            | [Coverage](coverage.md)                                       |
-| Predict a Pot and build a cook              | `v12PredictPot` from `.`; `v12Pot`, `v12Kitchen` from `/evm/engine`                   | [Pots and cooks in code](#pots-and-cooks-in-code)             |
+| Predict a Pot and build a cook              | `v12PredictPot`, `routes.buildSauceEvmCall` from `.`; `v12Pot` from `/evm/engine`     | [Programs and cooks](routes.md#build-a-cook)                  |
 | Find the Kitchen and engine                 | `v12KitchenAddress()`, `v12EngineAddress()` from `/deployments`                       | [Deployments](../reference/deployments.md)                    |
 | Run on Solana from TypeScript               | `createSauceSvmClient`, `SOLANA_CLUSTERS`, `resolveAccounts` from `/svm`              | [Solana from TypeScript](../guides/solana-from-typescript.md) |
 | Check a settlement payload                  | `validateSettleProgram` from `/verify`; `verifySvmSettleExecution` from `/svm/verify` | [Verification](../guides/verification.md)                     |
@@ -36,26 +35,26 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 
 ## Every import path
 
-| Import                         | Contents                                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`                            | Chain accessors (`Base`, `Solana`, …), `chain` and `Token`; the namespaces `routes`, `token`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries; Pot and cook helpers (`v12PredictPot`, `potSalt`, `destinationPot`, `destinationExecutionFee`); `sqrtPriceX96FromPrice`/`priceFromSqrtPriceX96`; `ready` |
-| `/compiler`                    | `compile`, `ready`, compiler types, the compact codec, and `resolveSdkModule`/`resolveSdkPackage`                                                                                                                                                                                                                       |
-| `/actions`                     | JSON action programs by names and pool keys: validation, compilation for a chain, and intents; the JSON Schema is `/actions/action-program.schema.json`                                                                                                                                                                 |
-| `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                                                                                                                                                                                                              |
-| `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                                                                                                                                                                                                       |
-| `/deployments`                 | Sauce engine and Kitchen addresses, Pot derivation inputs, and which engine runs which compiler's programs                                                                                                                                                                                                              |
-| `/recipes`                     | EVM settlement source and CCTP/plain-transfer recipe builders and sources                                                                                                                                                                                                                                               |
-| `/recipes/settle.sauce.ts`     | EVM settlement source asset                                                                                                                                                                                                                                                                                             |
-| `/svm`                         | The Solana side: clients (`createSauceSvmClient`), clusters, program-derived addresses (`derivePotPda`), account resolution (`resolveAccounts`), Kitchen instructions, transactions (`buildExecuteTransaction`), token accounts (`svmTokenAccount`), venue accessors (`venue`, `venues`), recipes, and the Portal       |
-| `/svm/engine`                  | SVM engine wire format and instruction builders                                                                                                                                                                                                                                                                         |
-| `/svm/engine-artifacts`        | Node-only: file paths to the packaged SVM engine and Kitchen binaries and the Kitchen IDL                                                                                                                                                                                                                               |
-| `/svm/verify`                  | SVM program and gated engine CPI verification (`verifySvmSettleProgram`, `decodeSvmSettleExecution`, `verifySvmSettleExecution`); the Kitchen's own envelope is decoded separately                                                                                                                                      |
-| `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                                                                                                                                                                                             |
-| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), and `potRouterUpdate`                                                                                                                                                                                                |
-| `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                                                                                                                                                                                                 |
-| `/skills`                      | The per-protocol documents and their index, as text                                                                                                                                                                                                                                                                     |
-| `/testing`                     | Node-only: run programs on a forked or empty local chain from a test, recorded once and replayed                                                                                                                                                                                                                        |
-| `/sauce-script`                | Types only: SauceScript's builtins, chains and ABI modules, for an editor checking `*.sauce.ts` programs                                                                                                                                                                                                                |
+| Import                         | Contents                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`                            | Chain namespaces (`Base`, `Solana`, …), `chain` and `Token`; the namespaces `routes`, `token`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries; Pot and cook helpers (`v12PredictPot`, `potSalt`, `DEFAULT_POT_SALT`, `kitchenExecutionFee`); `sqrtPriceX96FromPrice`/`priceFromSqrtPriceX96`; `ready` |
+| `/compiler`                    | `compile`, `ready`, compiler types, the compact codec, and `resolveSdkModule`/`resolveSdkPackage`                                                                                                                                                                                                                      |
+| `/actions`                     | JSON action programs by names and pool keys: validation and compilation for a chain; the JSON Schema is `/actions/action-program.schema.json`                                                                                                                                                                          |
+| `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                                                                                                                                                                                                             |
+| `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                                                                                                                                                                                                      |
+| `/deployments`                 | Sauce engine and Kitchen addresses, Pot derivation inputs, and which engine runs which compiler's programs                                                                                                                                                                                                             |
+| `/recipes`                     | The EVM settlement program's source (`settleSource`)                                                                                                                                                                                                                                                                   |
+| `/recipes/settle.sauce.ts`     | EVM settlement source asset                                                                                                                                                                                                                                                                                            |
+| `/svm`                         | The Solana side: clients (`createSauceSvmClient`), clusters, program-derived addresses (`derivePotPda`), account resolution (`resolveAccounts`), Kitchen instructions, transactions (`buildExecuteTransaction`), token accounts (`svmTokenAccount`), venue accessors (`venue`, `venues`) and recipes                   |
+| `/svm/engine`                  | SVM engine wire format and instruction builders                                                                                                                                                                                                                                                                        |
+| `/svm/engine-artifacts`        | Node-only: file paths to the packaged SVM engine and Kitchen binaries and the Kitchen IDL                                                                                                                                                                                                                              |
+| `/svm/verify`                  | SVM program and gated engine CPI verification (`verifySvmSettleProgram`, `decodeSvmSettleExecution`, `verifySvmSettleExecution`); the Kitchen's own envelope is decoded separately                                                                                                                                     |
+| `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                                                                                                                                                                                            |
+| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), and `potRouterUpdate`                                                                                                                                                                                               |
+| `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                                                                                                                                                                                                |
+| `/skills`                      | The per-protocol documents and their index, as text                                                                                                                                                                                                                                                                    |
+| `/testing`                     | Node-only: run programs on a forked or empty local chain from a test, recorded once and replayed                                                                                                                                                                                                                       |
+| `/sauce-script`                | Types only: SauceScript's builtins, chains and ABI modules, for an editor checking `*.sauce.ts` programs                                                                                                                                                                                                               |
 
 The [`exports` map](../../package.json) defines this list. There is no `/routes`, `/token`,
 `/deposit`, or `/contracts` subpath; import these namespaces from the root:
@@ -75,7 +74,7 @@ Importing the package puts nothing on `globalThis`. `chain(ref)` and the host `T
 named exports too.
 
 Bare names such as `USDC` and `Uniswap` are different: they are _program syntax_, resolved by the
-compiler inside a route body, with no host JavaScript object behind them. The same registry entries
+compiler inside a program, with no host JavaScript object behind them. The same registry entries
 are on the chain export in TypeScript (`Base.USDC`, `Base.Uniswap`). See
 [protocols and tokens](../guides/protocols-and-tokens.md).
 
@@ -121,7 +120,7 @@ Every import runs in Node and in a browser, with two exceptions, both Node-only:
 The [`sauce` command](../guides/cli.md) is not an import at all: it is the package's executable, and
 Node-only too. The [install](../guides/cli.md#install) section names the Node version.
 
-Anything that compiles — `/compiler`, route compilation, the builders, the recipes, `/actions`,
+Anything that compiles — `/compiler`, `routes.compileSauceProgram`, the builders, the recipes, `/actions`,
 `/svm/verify` — needs one `await ready()` first in a browser, while the compiler's WebAssembly
 loads; the [compiler reference](compiler.md#in-a-browser) covers it. In Node nothing needs it.
 `/verify` never loads the compiler: its dependency closure is `viem` alone, so an EVM settlement
@@ -143,12 +142,12 @@ Each step of running a program on a Pot, with the `sauce` command and in TypeScr
 | Simulate a cook             | `sauce simulate`                                | an `eth_call` of the cook from the owner, on a deployed Pot                      |
 | Build a cook                | `sauce tx`                                      | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`         |
 | Send a cook                 | `sauce run`                                     | your own wallet client, with the cook as `to`, `data` and `value`                |
-| Read the fee                | read by `sauce run` and `sauce tx`              | `destinationExecutionFee()`                                                      |
+| Read the fee                | read by `sauce run` and `sauce tx`              | `kitchenExecutionFee()`                                                          |
 | Find the Kitchen and engine | `sauce pot` prints the Kitchen                  | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments` |
 
-A cook is `Pot.cook(engine, program)`, so building one needs both addresses. A direct
-`routes.compileSauceRoute` takes them from you. An intent derives them: the released engine, and
-the Pot its Portal's Executor owns under salt zero, `SAUCE_INTENT_POT_SALT`.
+A cook is `Pot.cook(engine, program)`, so building one needs both addresses, which you pass to
+`routes.buildSauceEvmCall`. An owner's default Pot is the one under `DEFAULT_POT_SALT`, the zero
+bytes32: `v12PredictPot(owner)` derives it. [Programs and cooks](routes.md) documents each helper.
 
 On Arc, native value is USDC at 18 decimals, drawn from the same balance as the USDC ERC-20
 ([Arc: USDC is the native coin](../reference/chains/arc.md#notes)). The Kitchen fee there is paid
@@ -178,5 +177,5 @@ fund it and use it up within one transaction. Encode these calls with `v12Kitche
 
 ## Next
 
-Read the [Compiler](compiler.md) reference for `compile()` itself, or [Routes](routes.md) to build
-an intent.
+Read the [Compiler](compiler.md) reference for `compile()` itself, or
+[Programs and cooks](routes.md) to compile a program for a chain and build its cook.

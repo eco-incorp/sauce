@@ -13,27 +13,25 @@ the word is in.
 
 ## Index
 
-The groups: [First words](#first-words), [Chain words](#chain-words), [Writing programs](#writing-programs), [Running programs](#running-programs), [Swaps](#swaps), [Cross-chain intents](#cross-chain-intents), [Solana](#solana), [Coding agents](#coding-agents).
+The groups: [First words](#first-words), [Chain words](#chain-words), [Writing programs](#writing-programs), [Running programs](#running-programs), [Swaps](#swaps), [Solana](#solana), [Coding agents](#coding-agents).
 
 - **A**: ABI (Chain words) · Account (Solana) · Account manifest (Solana) · Actions (Writing programs) · Address (Chain words) · Agent skills (Coding agents) · Allowance (Chain words)
 - **B**: Builtin (Writing programs) · Bytecode (Chain words)
-- **C**: Cancel (Cross-chain intents) · Claim (Cross-chain intents) · Claimant (Cross-chain intents) · Compile (Writing programs) · Compute units (Solana) · Cook (First words) · CPI (Solana) · Creator (Cross-chain intents)
-- **D**: Decimals (Chain words) · Defines (Writing programs) · Derived account (Solana) · Destination (Cross-chain intents)
-- **E**: Engine (First words) · EVM chain (Chain words) · Executor (Cross-chain intents) · Explorer (Chain words)
-- **F**: Fill (Cross-chain intents) · Fill deadline (Cross-chain intents)
+- **C**: Compile (Writing programs) · Compute units (Solana) · Cook (First words) · CPI (Solana)
+- **D**: Decimals (Chain words) · Defines (Writing programs) · Derived account (Solana)
+- **E**: Engine (First words) · EVM chain (Chain words) · Explorer (Chain words)
 - **G**: Gas (Chain words)
-- **I**: Intent (Cross-chain intents) · Intent Pot (Cross-chain intents)
 - **K**: Kitchen (First words) · Kitchen fee (Running programs)
 - **L**: Lamports (Solana) · Lookup table (Solana) · Lowering (Writing programs)
 - **M**: `main`'s arguments (Writing programs) · MCP server (Coding agents) · Minimum output (Swaps)
-- **N**: Namespace (Writing programs) · Native coin (Chain words) · Nested intent (Cross-chain intents) · `NotOwner()` (Running programs)
+- **N**: Namespace (Writing programs) · Native coin (Chain words) · `NotOwner()` (Running programs)
 - **O**: Owner (First words)
-- **P**: PDA (Solana) · Policy (Running programs) · Pool (Swaps) · Portal (Cross-chain intents) · Pot (First words) · Preview chain (Running programs) · Price limit (Swaps) · Private Pot (Running programs) · Program (First words) · Program header (Writing programs) · Prove (Cross-chain intents) · Prover (Cross-chain intents)
-- **R**: Refund (Cross-chain intents) · Registry (Writing programs) · Rent (Solana) · `require` (Writing programs) · Revert (Chain words) · Reward (Cross-chain intents) · Reward deadline (Cross-chain intents) · Route (Cross-chain intents) · Route body (Writing programs) · Router (Running programs) · RPC endpoint (Chain words)
-- **S**: SafeERC20 (Chain words) · Salt (Running programs) · `@sauce/router` (Writing programs) · `@sauce/token` (Writing programs) · SauceScript (First words) · Script (Writing programs) · `self` (Writing programs) · Settle program (Running programs) · Shared Pot (Running programs) · Simulate (First words) · Slippage (Swaps) · Solver (Cross-chain intents) · Source (Cross-chain intents) · Staging (Solana) · stdio (Coding agents) · Supported chain (Running programs) · SVM (Chain words)
+- **P**: PDA (Solana) · Policy (Running programs) · Pool (Swaps) · Pot (First words) · Preview chain (Running programs) · Price limit (Swaps) · Private Pot (Running programs) · Program (First words) · Program header (Writing programs)
+- **R**: Registry (Writing programs) · Rent (Solana) · `require` (Writing programs) · Revert (Chain words) · Router (Running programs) · RPC endpoint (Chain words)
+- **S**: SafeERC20 (Chain words) · Salt (Running programs) · `@sauce/router` (Writing programs) · `@sauce/token` (Writing programs) · SauceScript (First words) · Script (Writing programs) · `self` (Writing programs) · Settle program (Running programs) · Shared Pot (Running programs) · Simulate (First words) · Slippage (Swaps) · Staging (Solana) · stdio (Coding agents) · Supported chain (Running programs) · SVM (Chain words)
 - **T**: Target (Writing programs) · Tick (Swaps) · Token account (Solana) · Token symbol (Writing programs) · Token-2022 (Solana)
 - **U**: Unsigned transaction (Running programs)
-- **V**: Vault (Cross-chain intents) · Venue (Swaps)
+- **V**: Venue (Swaps)
 - **W**: Wallet (Running programs)
 
 ## First words
@@ -98,7 +96,6 @@ where the names come from.
 | **`require`**          | An assertion                  | `require(condition, "message")` stops the whole cook when the condition is false. Nothing moves, and the message tells you why.                                                                               |
 | **Actions**            | A recipe written as JSON      | A list of steps (swap here, supply there) as a JSON document, which Sauce turns into a program.                                                                                                               |
 | **Lowering**           | Translating                   | Turning something into the SauceScript program that runs: an actions document, or a token write such as `USDC.transfer(...)` into its `@sauce/token` call.                                                    |
-| **Route body**         | A function body, as text      | An intent's job written as code, `Base(() => { ... })`, in a program or in TypeScript. Sauce reads its text and compiles it for the destination; it never runs as JavaScript.                                 |
 | **Defines**            | Build-time constants          | Values fixed into a program when it compiles. A chain's names (its token symbols, its protocols' contracts, its chain id) reach a program this way. A value you supply each run is a `main` argument instead. |
 
 ## Running programs
@@ -133,36 +130,6 @@ should.
 | **Price limit**    | A stop price              | The worst price a swap may reach in a pool. A pool stops filling there, so the swap takes less.                         |
 | **Slippage**       | Price drift               | How far the price moves between the quote you saw and what your swap gets, as the swap itself and other trades move it. |
 | **Tick**           | A step on a price ladder  | A unit of price in a concentrated-liquidity pool, such as Uniswap V3's: a swap moves the price from tick to tick.       |
-
-## Cross-chain intents
-
-An intent is how a program reaches another chain. You post a job on one chain with a reward
-attached, and someone does the job on the other chain to earn it.
-[Cross-chain intents](cross-chain-intents.md) explains the model.
-
-| Sauce says          | Think of it as                | What it is                                                                                                                                                                      |
-| ------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Intent**          | A job posting with a bounty   | "Do this on that chain, and the reward waiting here is yours." Sauce builds intents for Eco's intent system, called eco-routes.                                                 |
-| **Source**          | Where you post the job        | The chain where the intent is published and its reward waits.                                                                                                                   |
-| **Destination**     | Where the job is done         | The chain where the intent's work happens.                                                                                                                                      |
-| **Route**           | The job description           | What happens on the destination: the tokens brought there and the calls made with them, or a Sauce program. The SDK's `routes` module, which builds intents, is named after it. |
-| **Reward**          | The bounty                    | The tokens locked on the source until someone proves they did the job.                                                                                                          |
-| **Solver**          | A courier                     | Whoever does the job. A solver uses its own funds on the destination, then claims the reward.                                                                                   |
-| **Portal**          | The job board                 | eco-routes' contract on each chain, where intents are published, filled and paid out.                                                                                           |
-| **Executor**        | The Portal's hands            | A contract the destination Portal owns. It receives what the solver delivers and makes the route's calls; an intent's program runs on the Pot it owns.                          |
-| **Vault**           | An escrow account             | The address, one per intent, where the reward waits.                                                                                                                            |
-| **Prover**          | A messenger                   | The bridge that tells the source chain the job was done, so the reward can be paid.                                                                                             |
-| **Creator**         | The person who posted the job | Who may take the reward back if nobody does the job in time.                                                                                                                    |
-| **Claimant**        | Who gets paid                 | The address a fill records as the one to receive the reward.                                                                                                                    |
-| **Fill deadline**   | The closing date              | The last moment a solver may do the job. Also called the route deadline.                                                                                                        |
-| **Reward deadline** | The refund date               | When a reward nobody proved earning becomes refundable to its creator.                                                                                                          |
-| **Fill**            | The courier does the job      | A solver delivers what the route needs on the destination, and the Portal's Executor makes the calls. The Portal records who filled it, the claimant.                           |
-| **Prove**           | Sending word home             | The destination Portal hands its record of the fill to the prover, which carries it to the source chain, for a fee.                                                             |
-| **Claim**           | Collecting the bounty         | Once the source knows of the fill, anyone may send `withdraw`: it pays the reward to the claimant the proof names.                                                              |
-| **Refund**          | Taking the bounty back        | Returns what the vault holds to the creator: from the reward deadline when no fill is proven, or at once after a proven cancellation.                                           |
-| **Cancel**          | Calling the job off           | Anyone may cancel an unfilled intent on the destination strictly after its fill deadline; proving the cancellation allows an early refund.                                      |
-| **Intent Pot**      | A shared workbench            | The Pot owned by the destination Portal's Executor, one per Portal, shared by every intent through it. An intent's program runs there, not on your Pot.                         |
-| **Nested intent**   | A job that posts the next job | An intent opened inside another intent's program, often from an amount that program just measured.                                                                              |
 
 ## Solana
 

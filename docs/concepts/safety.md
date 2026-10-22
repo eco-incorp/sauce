@@ -35,10 +35,7 @@ live are the [production checklist](../guides/production-checklist.md).
   does, works; one that returns `false` reverts the cook; and an approval resets a standing one
   before it sets the new amount. The one unchecked spelling is a raw ABI call you write on purpose,
   `IERC20.at(token).transfer(...)`. [Token functions](../reference/tokens.md#token-functions) lists
-  each. An intent body made only of token `transfer` and `approve` statements is not a program:
-  the intent's Executor runs those as plain calls, and a token that returns `false` does not stop
-  them. Any other statement in the body makes it a program, with checked writes
-  ([Token-only bodies](../guides/intents.md#token-only-bodies-run-on-the-executor)).
+  each.
 - **Preview chains send nothing.** The `sauce` command builds and sends transactions only on
   Ethereum, Base and Solana. On every other chain a program compiles and simulates, and sending is
   refused before anything is signed ([Names and registries](names-and-registries.md)).
@@ -61,10 +58,6 @@ live are the [production checklist](../guides/production-checklist.md).
   not proof that code is at that address today. `sauce pot` reads whether the engine and the
   Kitchen are deployed on a chain. In a program, a token write to an address with no code reverts,
   and so does a call whose result the program reads, so a simulation shows the failure.
-- **That someone fills your intent.** An intent is a job others choose to do. Nobody may take it,
-  and its reward then waits in its vault until the reward deadline, when you can take it back. On
-  the destination, an intent's program runs on a Pot that every intent there shares, so it must
-  take out everything it brings in ([Cross-chain intents](cross-chain-intents.md)).
 
 ## Keys and wallets
 
@@ -108,10 +101,9 @@ balance. Below that, "What moved, in order" lists every transfer the cook makes,
 of each address. [Run a program](../guides/cli-run.md) shows how to read the rest of the output.
 
 When someone else built the transaction you are about to sign, `sauce inspect` reads it back: the
-program a cook carries, the arguments after it, and the intents it opens
-([Look things up](../guides/cli-lookup.md)). When a payment depends on an audited program, such as
-a settlement, `sauce verify` checks that the payload runs exactly that program
-([Verifying settlement programs](../guides/verification.md)).
+program a cook carries and the arguments after it ([Look things up](../guides/cli-lookup.md)).
+When a payment depends on an audited program, such as a settlement, `sauce verify` checks that the
+payload runs exactly that program ([Verifying settlement programs](../guides/verification.md)).
 
 ## Next
 

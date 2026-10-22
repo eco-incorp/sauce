@@ -13,19 +13,11 @@ const repeats = Number((inline ? maybeRepeats : sourceOrRepeats) ?? 7);
 const { compileSauceProgram } = await import(
   pathToFileURL(join(tree, "sdk/dist/routes/index.js")).href
 );
-const options = {
-  intents: {
-    executionFee: 1000n,
-    deadline: 2000000000n,
-    openedAt: 1900000000n,
-    salt: `0x${"5a".repeat(32)}`,
-  },
-};
 const run = (cold) => {
   if (cold) clearFunctionCache();
   globalThis.__sauceProfile.length = 0;
   const t = performance.now();
-  compileSauceProgram(chain, text, options);
+  compileSauceProgram(chain, text);
   const total = performance.now() - t;
   const calls = globalThis.__sauceProfile.map((e) => ({ ...e }));
   return { total, calls };

@@ -3,22 +3,20 @@
 **How-to guide** · [Documentation](../README.md) · [The MCP server](mcp.md) · [Tools](mcp-tools.md)
 
 > When the server runs on your own computer, it can keep things for your agent, like a desk drawer:
-> wallets to send from, a list of the Pots it made, and the intents it posted. They are the same
-> ones the `sauce` command keeps, in the same folders, so you and your agent see the same things.
-> A server run for a team over HTTP keeps nothing.
+> wallets to send from, and a list of the Pots it made. They are the same ones the `sauce` command
+> keeps, in the same folders, so you and your agent see the same things. A server run for a team
+> over HTTP keeps nothing.
 
 This page is for you once your agent has the [MCP server](mcp.md) and can simulate a program
 ([Your first agent session](agent-quick-start.md)). A **Pot** is the account that runs your
-programs, and an **intent** is a job posted on one chain for someone to do on another; the
-[glossary](../concepts/glossary.md) has both. Sending from a wallet spends real funds.
+programs ([glossary](../concepts/glossary.md)). Sending from a wallet spends real funds.
 
 ## What it keeps
 
-| What        | Where              | So that                                                 |
-| ----------- | ------------------ | ------------------------------------------------------- |
-| Wallets     | `~/.sauce/wallets` | the agent can sign and send, under each wallet's policy |
-| The Pots    | `~/.sauce/pots`    | `sauce_pot_list` lists the Pots its sends made          |
-| The intents | `~/.sauce/intents` | every intent tool can name an intent by its hash        |
+| What     | Where              | So that                                                 |
+| -------- | ------------------ | ------------------------------------------------------- |
+| Wallets  | `~/.sauce/wallets` | the agent can sign and send, under each wallet's policy |
+| The Pots | `~/.sauce/pots`    | `sauce_pot_list` lists the Pots its sends made          |
 
 A wallet's **policy** is a spending limit you set: a file beside the wallet that caps what it may
 send, per transaction and per day ([Put a spending limit on a wallet](cli-wallets.md#put-a-spending-limit-on-a-wallet)).
@@ -34,8 +32,7 @@ The usual flow:
 1. `sauce_wallet_enable`, once per server, naming the password's source. The agent asks you where
    the password should come from.
 2. `sauce_wallet_create` makes a wallet and returns its address. Send it some funds.
-3. Build with the wallet's address as `owner` (or `from`, for an intent): `sauce_simulate`, then
-   `sauce_tx`.
+3. Build with the wallet's address as `owner`: `sauce_simulate`, then `sauce_tx`.
 4. `sauce_wallet_send` takes `sauce_tx`'s result, simulates it, checks it against the wallet's
    policy, signs it and sends it.
 
@@ -130,9 +127,9 @@ There is no export tool: `sauce wallet export` shows a key only at a terminal.
 ### Send from a wallet
 
 `sauce_wallet_send` `{ wallet, transaction, chain?, rpcUrl? }` sends. `transaction` is the whole
-result of `sauce_tx`, `sauce_pot`, `sauce_actions` (with an owner), `sauce_intent_publish` or any
-`sauce_intent_*` step, or a transaction, or a list of them. Each tool that builds a transaction
-says, on a server with wallets, that `sauce_wallet_send` sends it.
+result of `sauce_tx`, `sauce_pot` or `sauce_actions` (with an owner), or a transaction, or a list
+of them. Each tool that builds a transaction says, on a server with wallets, that
+`sauce_wallet_send` sends it.
 
 1. It simulates them first. On an EVM chain it runs them all together in one simulated block, from
    the wallet; on Solana, each as signed. If any would revert, it refuses and sends nothing.
@@ -149,12 +146,12 @@ adds what its receipt shows: `moves`, in order and by role, `leftInPot`, and `su
 
 Wallet sends hold to the [supported chains](mcp-tools.md#supported-and-preview-chains) too.
 
-## The Pots and the intents
+## The Pots
 
 Over stdio the server is the `sauce` command for an agent that has no shell, so it keeps what the
 command keeps, where the command keeps it, with no flag.
 
-**The Pots.** The Pot store is `~/.sauce/pots`
+The Pot store is `~/.sauce/pots`
 ([The Pots you made](cli-run.md#the-pots-you-made-sauce-pot-list)). Every Pot a transaction the
 server sends deploys is recorded once the chain shows it, exactly as the command records it, and
 the result's `notes` say so. That covers a deployment through `sauce_send` or `sauce_wallet_send`,
@@ -162,21 +159,13 @@ and a cook whose program deploys one. `sauce_pot_list` lists the store, and `sau
 records a Pot deployed some other way. Both read and write the same files as `sauce pot list` and
 `sauce pot import`, so the command and the server see each other's Pots.
 
-**The intents.** The intent store is `~/.sauce/intents` ([Follow it](cli-intents.md#follow-it)).
-Every intent a transaction the server sends publishes is stored the same way. What a later
-transaction does to an intent (`filled`, `proving`, `claimed`, `refunded`, `cancelled`) is recorded
-from the Portal's own events, for an intent the store holds or one a call named by its `record` or
-`txHash`. `sauce_intent_list` and `sauce_intent_show` are `sauce intent list` and `show`,
-`sauce_intent_import` stores what it reads, and every intent tool takes `intentHash`, an intent the
-store holds, as the command takes a hash.
-
 ## Keep the stores elsewhere, or keep nothing
 
-`--pots <dir>` and `--store <dir>` keep the stores in other directories. `--no-stores` keeps
-nothing: then the server writes nothing, has none of those tools and no `intentHash`, and serves no
-wallet either. Either way, each transaction in a send's result carries `pots`, the record of each
-Pot it deployed, for the client to keep. Over HTTP the server keeps nothing, and `--pots`, `--store`
-and `--no-stores` are refused there.
+`--pots <dir>` keeps the Pot store in another directory, as `--wallets <dir>` serves other wallets.
+`--no-stores` keeps nothing: then the server writes nothing, has neither `sauce_pot_list` nor
+`sauce_pot_import`, and serves no wallet either. Either way, each transaction in a send's result
+carries `pots`, the record of each Pot it deployed, for the client to keep. Over HTTP the server
+keeps nothing, and `--pots` and `--no-stores` are refused there.
 
 ## Next
 

@@ -485,7 +485,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
     }
     const member = solanaMember(n);
     if (member !== undefined && !CALLS.has(member)) {
-      // `Solana.<chain thing>` that is no account (an intent's `.chain`, say) is left as it is.
+      // `Solana.<chain thing>` that is no account (its `.chain`, say) is left as it is.
       if (!Object.hasOwn(KNOWN, member)) return;
       const parent = parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;

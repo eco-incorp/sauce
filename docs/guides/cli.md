@@ -5,7 +5,7 @@
 > `sauce` is a command you type in a terminal. Think of it as the remote control for your **Pot**,
 > your own account on the chain, which holds the tokens your programs spend. The command turns a
 > program file into a transaction, tries it for free, signs it and sends it. It also has buttons for
-> wallets, for intents, and for looking things up on a chain.
+> wallets and for looking things up on a chain.
 
 This page is for anyone who has done the [quick start](quick-start.md) and now wants to set the
 command up properly: install it, start a project, pick a chain and an endpoint, and keep it working.
@@ -95,7 +95,6 @@ npm install
 | `sauce tx`       | Print the transaction unsigned, for another wallet to sign           | [Wallets and signing](cli-wallets.md)     |
 | `sauce send`     | Send transactions signed elsewhere, and report what they did         | [Wallets and signing](cli-wallets.md)     |
 | `sauce reclaim`  | Close the upload buffers and lookup tables a Solana owner left open  | [Solana](cli-solana.md)                   |
-| `sauce intent`   | Publish, fill, prove, claim, refund and cancel cross-chain intents   | [Intents](cli-intents.md)                 |
 | `sauce globals`  | The tokens, protocols and other names a program can use on a chain   | [Look things up](cli-lookup.md)           |
 | `sauce price`    | Turn a price into the numbers a swap program takes                   | [Look things up](cli-lookup.md)           |
 | `sauce pools`    | A pair's pools on a chain, deepest first, with their prices          | [Look things up](cli-lookup.md)           |
@@ -118,19 +117,17 @@ Every other chain it knows is a **preview chain**. [Chains](../reference/chains.
 On a preview chain a program still compiles and simulates, and every read works, but the command
 builds and sends nothing:
 
-| On a preview chain                                                                                                                  | Does                                                                           |
-| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `compile`, `actions`, `simulate`, `globals`, `price`, `pools`, `inspect`, `verify`, `intent status`, `intent import`, `intent list` | What it does everywhere                                                        |
-| `intent publish --dry-run`, `intent fill` without `--send`                                                                          | Simulates, sending nothing                                                     |
-| `pot`                                                                                                                               | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
-| `tx`, `run`, `pot --deploy`, `pot --format cast`                                                                                    | Refused                                                                        |
-| `intent publish`, also with `--format`; `intent fill --send`; `intent prove`, `claim`, `refund`, `cancel`                           | Refused                                                                        |
+| On a preview chain                                                                 | Does                                                                           |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `compile`, `actions`, `simulate`, `globals`, `price`, `pools`, `inspect`, `verify` | What it does everywhere                                                        |
+| `pot`                                                                              | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
+| `tx`, `run`, `pot --deploy`, `pot --format cast`                                   | Refused                                                                        |
 
 A refusal comes before the command reaches an endpoint or reads a key. The command exits 1 and
 says why, which chains are supported, and how to ask for the one it refused:
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate and dry runs still run it.
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate still runs it.
 To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10).
 ```
 

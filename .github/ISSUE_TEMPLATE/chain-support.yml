@@ -38,7 +38,7 @@ body:
     id: use-case
     attributes:
       label: What you want to run there
-      description: What your programs or intents would do on this chain.
+      description: What your programs would do on this chain.
     validations:
       required: true
   - type: textarea

@@ -9,9 +9,9 @@
 > and the `sauce` command sends nothing.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Arc a program
-compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
-`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
@@ -24,9 +24,6 @@ naming the supported chains and how to request this one (the last section).
 | In TypeScript | `import { Arc } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | USDC (USDC), 18 decimals; also the ERC-20 `USDC` (6 decimals), one balance |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [Deployments](../deployments.md#the-shared-intent-pot); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 26 |
 
 ## Notes
@@ -42,8 +39,8 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
 - `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei
   reads as 0. Compare a native amount with a token amount only after converting one to the
   other's scale.
-- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a
-  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.
+- Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native
+  value is 10^-12 USDC, not 1 USDC.
 - The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped
   silently: no error, and no receipt.
 - There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no
@@ -52,9 +49,6 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
   native coin are refused for Arc.
 - Native value sent to the zero address, to or from a blocklisted address, or to a
   self-destructed account reverts, also when a contract forwards it.
-- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one
-  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is
-  built. Fold the two into one amount.
 
 ## In a program
 

@@ -57,24 +57,25 @@ The SDK is still below 1.0, and it has made breaking changes in patch releases. 
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -93,6 +94,68 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK Unreleased
+
+Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 1.0.0. Same compiler
+and engines as 0.99.15, so each change here comes from the SDK.
+
+This release removes cross-chain intents from the SDK, the `sauce` command and the MCP server.
+Bridging is not an intent and does not change: the `acrossBridge`, `stargateBridge`, `cctpBridge`
+and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry stay.
+
+### SauceScript
+
+- **Removed** (EVM): A program can no longer open a cross-chain intent. `Base(() => { … })`, with
+  `.reward({ … })` or `.nest()`, for any chain, no longer compiles, whether its body is token
+  writes or a program; the error is the compiler's own.
+- **Removed** (EVM): The `EcoRoutes` namespace, with `EcoRoutes.Portal`, `EcoRoutes.HyperProver` and
+  `EcoRoutes.PolymerProver`, is no longer a name. The registry has 134 protocols and 313 contracts,
+  where it had 135 and 316.
+- **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
+  eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
+  an editor typed nothing on it.
+
+**Also breaking:**
+
+- The root and `routes`: the chain exports (`Base`, `Solana` and the rest) are plain namespaces,
+  and calling one, or its `.route`, is removed. `openRoute`, `assembleIntent`, `hashIntent`,
+  `routeHash`, `rewardHash`, the intent codecs, every Portal helper (`intentSourceTxs`,
+  `publishTx`, `fulfillTx`, `proveTx`, `withdrawTx`, `refundTx`, `cancelTx`,
+  `intentFromPublished`, `predictIntentVault`, `approvalTxs` and the rest), the vault helpers,
+  `destinationPot`, the nest and dynamic-child helpers and the intent types are removed.
+  `routes.compileSauceProgram` no longer takes an `intents` option.
+- `SAUCE_INTENT_POT_SALT` is renamed `DEFAULT_POT_SALT`, with no alias. It is every owner's default
+  Pot salt, the zero bytes32.
+- `destinationExecutionFee` is renamed `kitchenExecutionFee`, with no alias. It builds the read of a
+  chain's Kitchen execution fee, which every cook pays.
+- `@eco-incorp/sauce/svm`: the Portal exports and the intent-route exports (`svmCookRoute`,
+  `svmTransferRoute`, `SVM_INTENT_POT_SALT` and the rest) are removed.
+- `@eco-incorp/sauce/verify` and `/svm/verify`: `extractEvmSettleFromIntent`, `IntentLike`,
+  `extractSvmSettleFromIntent` and `SvmIntentLike` are removed. The settle codecs, the
+  `…FromCalls` extractors, the Solana envelope and `verifySvmSettleExecution` stay.
+- `@eco-incorp/sauce/recipes`: `buildCctpSplitTransfer`, `buildPlainTransfer`, `cctpSplitSource`,
+  `plainTransferSource` and `CctpTransferParams` are removed. The settle recipe stays.
+- `@eco-incorp/sauce/protocols/eco-routes` is removed.
+- `@eco-incorp/sauce/actions`: `programIntent` and `ProgramIntentOptions` are removed.
+- `@eco-incorp/sauce/sauce-script`: the `SauceDelivery`, `SauceReward` and `SauceIntent` types are
+  removed.
+- The `sauce` command: `sauce intent` is removed with every verb (`publish`, `fill`, `prove`,
+  `claim`, `refund`, `cancel`, `status`, `list`, `show` and `import`), with every `--intent-*`
+  flag, `--store` (on `run`, `send` and `mcp`) and the intent store under `~/.sauce/intents`.
+  `inspect` no longer takes `--args` or `--args-json`, nor reports intents or Portal calls;
+  `compile --json` no longer reports `intentPots`; `verify` no longer takes a Portal publish, and
+  its result no longer has `callIndex` or `target`. A cook on a preview chain is refused by its own
+  chain only.
+- The MCP server: the ten `sauce_intent_*` tools, the `sauce_open_intent` prompt, the `intent*`
+  inputs, `sauce_compile`'s `rpcUrls`, `sauce_inspect`'s `args` and `sauce_verify`'s Portal input
+  are removed. Its tools are `sauce_chains`, `sauce_globals`, `sauce_price`, `sauce_pools`,
+  `sauce_compile`, `sauce_actions`, `sauce_tx`, `sauce_pot`, `sauce_reclaim`, `sauce_simulate`,
+  `sauce_inspect`, `sauce_verify`, `sauce_send`, `sauce_skills`, `sauce_skill`, `sauce_dev` and
+  `sauce_install_skills`, and over stdio `sauce_wallet_enable`, `sauce_wallet_create`,
+  `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`, `sauce_wallet_send`,
+  `sauce_pot_list` and `sauce_pot_import`. Its one prompt is `sauce_write_program`.
+- The agent skills: `sauce-intents` is removed, so `sauce skills install` writes 13 skills.
 
 ## SDK 0.99.15 — 2026-10-21
 

@@ -19,8 +19,8 @@
  * and, in value position, `<Protocol>.<Contract>` / `<Chain>.<Protocol>.<Contract>` is the
  * contract's address on that chain — an address-only contract included.
  *
- * Chain qualification chooses an address; it does not change the execution chain or establish
- * ancestry between intents. `chainScope` optionally restricts the chains that may be named.
+ * Chain qualification chooses an address; it does not change the execution chain. `chainScope`
+ * optionally restricts the chains that may be named.
  *
  * This pass returns a parsed-ABI `contracts` map. The route compiler merges it with caller
  * bindings, and `rs-compile.ts` adapts the map to the published compiler's `inlineContracts`
@@ -52,10 +52,10 @@ export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
    *  rewritten anyway. Default `false` — a widened descriptor is refused with a named error quoting
    *  `descriptor.coverage.caveats`, since rewriting it would compile cleanly and then revert on
-   *  chain inside a value-carrying intent. */
+   *  chain. */
   allowWidenedSelectors?: boolean;
   /** Restricts a chain-QUALIFIED accessor (shapes C/D) to a named allowlist. Default: any canonical
-   *  chain (unrestricted — see the module doc's "names a chain, not an ancestor" note). */
+   *  chain. */
   chainScope?: readonly ChainRef[];
   /** Rewrites bare `self` -> `ctx.self()` in read position. Default `true`. */
   selfSugar?: boolean;
@@ -65,8 +65,7 @@ export interface ProtocolRewriteOptions {
   /**
    * Told each contract reference the rewrite resolved — a call (`UniswapV3.Factory.getPool(…)`) or a
    * value (`Cctp.TokenMessenger`) — with the reference as written and what it resolved to: which
-   * chain's deployment, and its address. A compile passes `accessors` on to the intents a program
-   * opens, so it hears about each intent body's references too, resolved for its own chain.
+   * chain's deployment, and its address.
    */
   onContract?: (reference: string, target: AccessorTarget) => void;
 }
@@ -686,8 +685,7 @@ export function rewriteProtocolAccessors(
 ): ProtocolRewriteResult {
   // A module parse, annotations included -- this pass runs unconditionally (default ON), so it
   // must take whatever the compiler does, including a source that ALREADY carries a leading
-  // `import { X } from "./X.json";` line, e.g. the ERC20-import-prefixed transfer program
-  // `nest.ts#nestedTransferProgram` can hand `compileSauceRoute` before this pass ever sees it.
+  // `import { X } from "./X.json";` line.
   const program = parseSauce(source);
   const shadowed = collectDeclaredNames(program);
 

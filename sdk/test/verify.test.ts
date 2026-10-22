@@ -280,7 +280,7 @@ describe("@eco-incorp/sauce/verify", () => {
 
     it("decodeSettleProgram accepts ANY program of the pinned length — it pins length, not identity", () => {
       // The structural tier deliberately says nothing about what the program does. This is the gap
-      // validateSettleProgram closes, and the reason intent.ts identifies by hash.
+      // validateSettleProgram closes, by hash.
       const impostor = ("0x" +
         "ee".repeat(SETTLE_WIRE.PROGRAM_BYTES) +
         SETTLE_VECTORS[0]!.args.slice(2)) as Hex;

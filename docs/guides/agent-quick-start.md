@@ -73,7 +73,7 @@ Ask the agent:
 List the sauce_ tools you can use.
 ```
 
-It names 35 of them, among them `sauce_skills`, `sauce_globals`, `sauce_compile`, `sauce_simulate`
+It names 25 of them, among them `sauce_skills`, `sauce_globals`, `sauce_compile`, `sauce_simulate`
 and `sauce_tx`. Each is a `sauce` command: `sauce_compile` is `sauce compile`, and the agent gives
 it what you would type. Four of them, starting with `sauce_skills`, hand the agent the instructions
 for writing Sauce programs, so it learns the language from the server and needs nothing installed
@@ -149,7 +149,7 @@ MCP server: [Sign with your wallet's MCP server](wallet-mcp.md).
 ## Next
 
 - Next tutorial: none. Your agent can now do everything the earlier tutorials did, by asking.
-  Pick one to go deeper by hand, such as [Your first cross-chain intent](first-intent.md).
+  Pick one to go deeper by hand, such as [Swap by name](swap-by-name.md).
 - What Sauce is and why a Pot runs the program: [What Sauce is](../concepts/what-is-sauce.md).
 - Every tool, its inputs and what it returns: [The MCP server's tools](mcp-tools.md).
 - Other agents, your own endpoints and a server for a team: [The MCP server](mcp.md).

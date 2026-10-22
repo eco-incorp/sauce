@@ -25,12 +25,6 @@
       "address": "CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)",
       "initCodeHash": "0xb4f700d3ee5e337e97dbf06e283bd19b35a9267b601c735c24ced66813d5d520",
       "about": "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen."
-    },
-    "intentPot": {
-      "address": "0x6340080a1967a03cAAD490a170828d4C59EE5983",
-      "owner": "0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082",
-      "salt": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "about": "The shared Pot an intent's program body cooks on, on every EVM chain that takes intents: the Pot of the eco-routes Executor (owner) under salt zero. The Kitchen's deployPot(owner, salt) creates it, from any account."
     }
   },
   "svm": {

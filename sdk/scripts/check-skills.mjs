@@ -18,13 +18,13 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, no "rehearse"
-//      for a simulation, and nothing that tells the reader to copy, adapt or start from an
-//      example (the agent writes each program itself: COPY_FRAMING), no skill named in code
-//      (`sauce-<name>`) that the package does not ship; the command is written `sauce …`,
-//      `sauce-cli` says in one paragraph how to get it and why never a bare `npx sauce`, and no
-//      other line in the skills writes a bare `npx sauce`; and every protocol document with a
-//      swap template opens with the one pointer to `sauce-swaps`;
+//      a third-party protocol's own document, no RPC endpoint, no description of Sauce as a
+//      multicall, no "rehearse" for a simulation, and nothing that tells the reader to copy, adapt
+//      or start from an example (the agent writes each program itself: COPY_FRAMING), no skill
+//      named in code (`sauce-<name>`) that the package does not ship; the command is written
+//      `sauce …`, `sauce-cli` says in one paragraph how to get it and why never a bare
+//      `npx sauce`, and no other line in the skills writes a bare `npx sauce`; and every protocol
+//      document with a swap template opens with the one pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
@@ -36,9 +36,9 @@
 //      are `main`'s parameters by name, `<name>` each, in order; a line per parameter
 //      (`//   name: Type  meaning and units`); and an example line on a supported chain with real
 //      values. The program compiles through the `sauce` command on each chain its index row names,
-//      run exactly as its usage line says (intent flags, `main`'s arguments), and on its
-//      example's chain as the example says, offline; every actions document (`.json`) names no
-//      chain and lowers through `sauce actions` on each chain its row names; and the cook either
+//      run exactly as its usage line says (`main`'s arguments), and on its example's chain as the
+//      example says, offline; every actions document (`.json`) names no chain and lowers through
+//      `sauce actions` on each chain its row names; and the cook either
 //      builds through `sauce tx`, on a chain the release supports (`chainSupport`), or — on a
 //      preview chain — is refused, with that chain's chain-support request in the refusal, as the
 //      skills tell an agent it will be;
@@ -118,7 +118,6 @@ if (skillsFlag >= 0 && !process.argv[skillsFlag + 1]) {
 const SKILLS_DIR =
   skillsFlag < 0 ? join(REPOSITORY, "skills") : resolve(process.argv[skillsFlag + 1]);
 const INDEX_SKILL = "sauce-examples";
-const INTENTS_SKILL = "sauce-intents";
 const PKG = "@eco-incorp/sauce";
 
 const failures = [];
@@ -183,7 +182,6 @@ const exportKeys = Object.keys(sdkPkg.exports);
 const sdk = await load(PKG);
 const compilerApi = await load(`${PKG}/compiler`);
 const deploymentsApi = await load(`${PKG}/deployments`);
-const ecoRoutes = await load(`${PKG}/protocols/eco-routes`);
 const { runCli } = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/run.js")).href);
 // Which chains the command builds transactions on: the CLI's own policy, which the package exports
 // none of, read from the bin's module as `runCli` is.
@@ -204,7 +202,7 @@ const NODE_TYPES = (() => {
 })();
 
 // anvil's first dev account: a real, well-known address for the developer's inputs (an owner, a
-// recipient, a creator) in an offline check. It is never written into a skill.
+// recipient) in an offline check. It is never written into a skill.
 const DEV = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const DEADLINE = String(Math.floor(Date.now() / 1000) + 86_400);
 
@@ -237,7 +235,7 @@ async function sauce(argv) {
   return { code, stdout, stderr };
 }
 
-// Each command and the flags its --help lists; a command with verbs (`sauce intent fill`), each
+// Each command and the flags its --help lists; a command with verbs (`sauce wallet new`), each
 // verb under `<command> <verb>`, from the verbs its own --help lists.
 const COMMANDS = new Map();
 {
@@ -302,7 +300,7 @@ function commandLines(lines) {
 }
 
 /** Fails an invocation that names no command, or a flag its command does not take. */
-/** `argv` with a command's verb joined to it: `intent fill …` is the command `intent fill`. */
+/** `argv` with a command's verb joined to it: `wallet new …` is the command `wallet new`. */
 function joinVerb(argv) {
   const [first, second, ...more] = argv;
 
@@ -451,12 +449,6 @@ const UNDECLARED_NAMES = {
     getCreateAssociatedTokenIdempotentInstruction:
       "@solana-program/token's ATA creation, a dependency the package re-exports none of",
   },
-  "sauce-intents": {
-    CallFailed:
-      "the eco-routes Executor's error for a route call that reverted; the registry declares the Portal's errors, not the Executor's",
-    CallToEOA:
-      "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
-  },
   "sauce-solana-distributed-swap": {
     SqrtPriceLimitOverflow:
       "Raydium CLMM's error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",
@@ -585,17 +577,7 @@ const KNOWN_ADDRESSES = new Set();
   );
   for (const module of modules) collect(module.deployments);
   collect(deploymentsApi.v12DeployedAddresses());
-  for (const chain of sdk.CANONICAL_CHAINS) {
-    for (const lookup of ["ecoRoutesPortal", "ecoRoutesExecutor"]) {
-      try {
-        collect(ecoRoutes[lookup](chain.slug));
-      } catch {}
-    }
-    try {
-      collect(sdk.destinationPot(chain.slug));
-    } catch {}
-    collect(sdk.routes.chainDefines(chain));
-  }
+  for (const chain of sdk.CANONICAL_CHAINS) collect(sdk.routes.chainDefines(chain));
 }
 
 // A third-party protocol's own document may name its own Portal, so the Portal rule and the
@@ -603,12 +585,10 @@ const KNOWN_ADDRESSES = new Set();
 const PROTOCOL_DOCUMENTS = join(SKILLS_DIR, "sauce-protocols", "references");
 const handWritten = (file) => !file.startsWith(PROTOCOL_DOCUMENTS + "/");
 // Every generated reference, rendered from the package the skills resolve, once: section 8 holds
-// the files on disk to it, and the wording rules exempt exactly these files from the Portal rule
-// (they record what the registries hold, a chain's eco-routes deployment included).
+// the files on disk to it.
 const REFERENCES = await skillsReferences(
   {
     sdk,
-    ecoRoutes,
     deployments: deploymentsApi,
     cctp: await load(`${PKG}/protocols/cctp`),
     compiler: compilerApi,
@@ -690,12 +670,8 @@ function wording(skill, file) {
     }
     if (/multicall|magic header/i.test(line) && !/\b(never|not|don't|do not|isn't)\b/i.test(line))
       fail(where(i), "describes Sauce as a multicall or with a magic header");
-    if (
-      skill.dir !== INTENTS_SKILL &&
-      !isGenerated(file) &&
-      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line)
-    )
-      fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
+    if (/\b(?:Portal|portal|[Pp]rover)s?\b/.test(line))
+      fail(where(i), "names the Portal or a prover; skills keep both out");
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
       counts.addresses++;
       if (!KNOWN_ADDRESSES.has(m[0].toLowerCase()))
@@ -715,7 +691,7 @@ for (const skill of skills) {
 // file and point at it everywhere else, runners and their comments included
 // (`release-addresses.mjs`).
 {
-  const addresses = releaseAddresses({ sdk, deployments: deploymentsApi });
+  const addresses = releaseAddresses({ deployments: deploymentsApi });
   const home = join(SKILLS_DIR, DEPLOYMENTS_FILE);
   for (const file of walk(SKILLS_DIR, (path) => path !== home)) {
     for (const problem of releaseAddressProblems({
@@ -1097,25 +1073,12 @@ async function runUsage(where, file, argv, chain, header = false) {
     if (flag === "--accounts") {
       accountsFile = true;
       i++;
-    } else if (flag === "--intent-execution-fee" && value === "auto") {
-      // `auto` reads the destination's Kitchen fee through --config; offline there is no endpoint,
-      // and the fee changes only the cook's value, so the run takes 0.
-      kept.push(flag, "0");
-      i++;
-    } else if (/^--intent-/.test(flag)) {
-      kept.push(flag, fill(value));
-      i++;
     } else if (flag === "--account") {
       accounts.push(value.split("=")[0]);
       i++;
     } else if (flag === "--compact-args") kept.push(flag);
     else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  if (/\.reward\(/.test(read(file)) && !kept.includes("--intent-deadline"))
-    fail(
-      where,
-      "opens an intent, so its usage line must give --intent-deadline and --intent-creator",
-    );
   const compiled = await compileJson(file, chain, kept);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
@@ -1324,11 +1287,8 @@ try {
       if (chains !== undefined) {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
-        const intents = /\.reward\(/.test(block.body)
-          ? ["--intent-deadline", DEADLINE, "--intent-creator", DEV, "--intent-execution-fee", "0"]
-          : [];
         for (const chain of chains) {
-          const compiled = await compileJson(file, chain, intents);
+          const compiled = await compileJson(file, chain, []);
           if (compiled.error !== undefined) errors.push(`${chain}: ${compiled.error}`);
         }
       } else {
@@ -1732,13 +1692,6 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     const [family, contract] = name.split(".");
     return [...(members.get(family) ?? [])].some((ns) => contracts.has(`${ns}.${contract}`));
   };
-  // The globals index leaves the eco-routes namespace out: a program opens an intent with the chain
-  // syntax, never by calling the Portal. The one exception is the skill that names the Portal, for
-  // an intent built elsewhere: `fund-by-transfer.sauce.ts` publishes one through the registry's
-  // Portal by name rather than by hand-written selectors. Each entry must still be used.
-  const PORTAL_GLOBALS = new Set(["EcoRoutes.Portal"]);
-  const portalGlobalsUsed = new Set();
-  const inIntentsSkill = (where) => where.split(/[\\/]/).includes(INTENTS_SKILL);
   const uses = (where, text, strict) => {
     const imported = new Set(
       [...text.matchAll(/import\s+(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from/g)].flatMap((m) =>
@@ -1763,10 +1716,6 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
         (chainNames.has(first) && !third)
       )
         continue;
-      if (PORTAL_GLOBALS.has(name) && inIntentsSkill(where)) {
-        portalGlobalsUsed.add(name);
-        continue;
-      }
       if (!strict && (!namespaces.has(name.split(".")[0]) || ambiguous(name))) continue; // prose may name what fails
       if (!contracts.has(name) && !aliases.has(name) && !interfaces.has(name) && !venues.has(name))
         fail(where, `uses the global ${name}, which the index does not list`);
@@ -1789,10 +1738,6 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
   for (const { where, text } of sauceSources) uses(where, text, true);
   for (const skill of skills)
     for (const span of inlineCode(skill)) uses(rel(skill.path), span, false);
-  for (const name of PORTAL_GLOBALS) {
-    if (!portalGlobalsUsed.has(name))
-      fail(INTENTS_SKILL, `no longer uses ${name}: drop it from the checker's PORTAL_GLOBALS`);
-  }
 }
 
 // ---- 9. The SauceScript reference: every example compiles, every rejection is refused ---------------------

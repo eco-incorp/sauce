@@ -1,7 +1,7 @@
 /**
  * What the `sauce` command keeps of the transactions it sends: the hook every store it keeps
- * attaches to — the Pot store (`pot-store.ts`) and the intent store (`store.ts`), and beside them
- * any other store a landed transaction feeds.
+ * attaches to — the Pot store (`pot-store.ts`), and beside it any other store a landed transaction
+ * feeds.
  *
  * The two places every send lands — `chain.ts#landed`, which every EVM transaction the command
  * sends or broadcasts passes, and `solana.ts#svmLanded`, every Solana one — hand each landed
@@ -23,12 +23,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Address, PublicClient } from "viem";
 
 import type { Sent } from "./chain.js";
-import { keepIntents } from "./intent-keep.js";
-import type { IntentRecord } from "./lifecycle.js";
 import type { PotStore } from "./pot-store.js";
 import { keepPots, type InnerInstructions } from "./pots.js";
 import type { SvmSent } from "./solana.js";
-import type { IntentStore } from "./store.js";
 
 /** A transaction that landed, as a store reads what it keeps of it. */
 export type Landed =
@@ -58,9 +55,6 @@ export type Landed =
 export interface LocalStores {
   /** Every Pot a transaction deploys. */
   readonly pots?: PotStore;
-  /** Every intent a transaction publishes, and what one does to an intent the store holds or
-   *  knows ({@link knowIntents}): filled, proving, claimed, refunded, cancelled. */
-  readonly intents?: IntentStore;
 }
 
 /** A scope: what it keeps, and where it says what it kept. */
@@ -85,26 +79,14 @@ export function sayKept(line: string): void {
   scopes.getStore()?.say(line);
 }
 
-/**
- * Tells the scope's intent store of intents the command or tool is acting on, which it may not
- * hold yet — named by a file, a record or a transaction — so a transaction that lands an event of
- * one records it (`store.ts#IntentStore.know`). Outside a scope that keeps intents, nothing.
- */
-export function knowIntents(records: readonly IntentRecord[]): void {
-  scopes.getStore()?.stores.intents?.know(records);
-}
-
 /** Hands `landed` to each store of the scope it runs in, which says what it kept. */
 export async function keepLanded(landed: Landed): Promise<void> {
   const scope = scopes.getStore();
   if (scope === undefined) return;
-  const { pots, intents } = scope.stores;
+  const { pots } = scope.stores;
   const parts: ReadonlyArray<
     readonly [string, () => readonly string[] | Promise<readonly string[]>]
-  > = [
-    ...(pots === undefined ? [] : [[pots.dir, () => keepPots(pots, landed)] as const]),
-    ...(intents === undefined ? [] : [[intents.dir, () => keepIntents(intents, landed)] as const]),
-  ];
+  > = pots === undefined ? [] : [[pots.dir, () => keepPots(pots, landed)] as const];
   for (const [dir, part] of parts) {
     try {
       for (const line of await part()) scope.say(line);

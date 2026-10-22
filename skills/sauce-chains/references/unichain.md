@@ -3,9 +3,9 @@
 # Unichain
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Unichain a program
-compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
-`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
 
 To request Unichain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Unichain%22) and add your
@@ -20,9 +20,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Name in a program | `Unichain` |
 | Native coin | not recorded |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [deployments.json](deployments.json) (`evm.intentPot`); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 10 |
 
 ## In a program

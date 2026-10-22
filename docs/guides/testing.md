@@ -261,17 +261,6 @@ An empty Solana needs no recording: `local({ chain: "solana" })` starts one with
 Kitchen, the runtime's own programs and wrapped SOL.
 [How Sauce runs on Solana](../concepts/solana-model.md) explains accounts and staging.
 
-## Test a program that opens an intent
-
-The kit runs cooks on one chain, and it refuses a program that opens a cross-chain intent: such a
-program needs an intent deadline and creator, which the kit does not take. Test the two halves
-instead:
-
-- the work the intent does on its destination, written as an ordinary program and run on a fork of
-  that chain, as above;
-- the whole fill, with `sauce intent fill`, which simulates a solver filling the intent on its
-  destination and sends nothing ([publish and follow intents](cli-intents.md)).
-
 ## Run the tests in CI
 
 A replay needs no endpoint and no secret, so CI runs the committed state files as they are. On

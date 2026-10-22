@@ -1,11 +1,6 @@
 {
   "$comment": "The suites that EXECUTE each docs/examples/*.sauce.ts on an engine, beyond docs:check's compile. docs:check (docs/scripts/example-programs.mjs) fails an example missing here, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. There is no compile-only list here: every example the manual ships runs.",
   "executed": {
-    "cross-chain-cascade.sauce.ts": ["sdk/test/routes-intent-chains.e2e.test.ts"],
-    "cross-chain-intent.sauce.ts": ["actions/tests/docs-examples.mainnet.test.ts"],
-    "ethereum-to-solana.sauce.ts": ["sdk/test/cli-intent-to-solana.e2e.test.ts"],
-    "nested-intent.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
-    "nested-swap.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
     "pay-list.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
     "pay.sauce.ts": [
       "sdk/test/cli-examples.e2e.test.ts",

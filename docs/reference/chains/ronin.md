@@ -9,9 +9,9 @@
 > here, and the `sauce` command sends nothing.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Ronin a program
-compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
-`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
@@ -24,9 +24,6 @@ naming the supported chains and how to request this one (the last section).
 | In TypeScript | `import { Ronin } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | not recorded |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [Deployments](../deployments.md#the-shared-intent-pot); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 
 ## Tokens
 

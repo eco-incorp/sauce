@@ -1,8 +1,8 @@
 /**
- * @eco-incorp/sauce/verify — intent/cook extraction coverage.
+ * @eco-incorp/sauce/verify — cook extraction coverage.
  *
- * `decodeSettleCall` / `extractEvmSettleFromIntent` sit on top of `validateSettleProgram`: a producer
- * hands you an intent whose `route.calls[]` batch carries the settle payload as ONE ingredient inside a
+ * `decodeSettleCall` / `extractEvmSettleFromCalls` sit on top of `validateSettleProgram`: a producer
+ * hands you calls whose batch carries the settle payload as ONE ingredient inside a
  * `Pot.cook(bytes[])` call, so these unwrap the cook calldata and hand the settle ingredient to the
  * decoder. Everything below builds real `cook(bytes[])` calldata with viem and asserts the params
  * round-trip, that a non-cook / non-settle call yields null, and that the settle cook is found by
@@ -18,7 +18,6 @@ import {
   decodeSettleCall,
   encodeSettleProgram,
   extractEvmSettleFromCalls,
-  extractEvmSettleFromIntent,
   SETTLE_PROGRAM,
   SETTLE_WIRE,
 } from "../src/verify/index";
@@ -103,7 +102,7 @@ describe("decodeSettleCall", () => {
   });
 });
 
-describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
+describe("extractEvmSettleFromCalls", () => {
   const calls = [
     {
       data: encodeFunctionData({
@@ -126,16 +125,10 @@ describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
     expect(BigInt(found!.recipient)).toBe(BigInt(RECIPIENT));
   });
 
-  it("extractEvmSettleFromIntent takes a duck-typed intent object", () => {
-    const found = extractEvmSettleFromIntent({ route: { calls } });
-    expect(found!.callIndex).toBe(2);
-    expect(found!.tokens.map((t) => BigInt(t))).toEqual([BigInt(TOKEN0), BigInt(TOKEN1)]);
-  });
-
-  // The pin is re-pinned when compiler codegen changes; every intent already on chain still carries
+  // The pin is re-pinned when compiler codegen changes; every payload already on chain still carries
   // the OLD program. Without an accepted-hash override those become unverifiable, which is the exact
   // failure this module exists to prevent.
-  it("accepts a caller-supplied hash set, so a re-pin does not orphan published intents", () => {
+  it("accepts a caller-supplied hash set, so a re-pin does not orphan published payloads", () => {
     const hypotheticalNewPin = ("0x" + "99".repeat(32)) as Hex;
 
     // pin rotated and the old hash NOT accepted -> the on-chain payload stops verifying
@@ -195,7 +188,7 @@ describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
   });
 
   // A decode failure means "this cook does not settle"; a malformed pin is a configuration bug and
-  // must not wear that costume, or a monitor built on this reports no settle for every intent.
+  // must not wear that costume, or a monitor built on this reports no settle for every batch.
   it("lets a malformed pin escape instead of reporting no settle", () => {
     const call = { data: cook([SETTLE_PAYLOAD]) };
 

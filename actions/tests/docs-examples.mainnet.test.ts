@@ -19,7 +19,6 @@ import {
   decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
-  erc20Abi,
   getAddress,
   getCreate2Address,
   hexToBytes,
@@ -59,9 +58,6 @@ const abi = {
   ]),
   factory: parseAbi(["function getPool(address, address, uint24) view returns (address)"]),
 };
-
-/** A universal (32-byte) address the SDK decodes as the 20-byte EVM address it holds. */
-const denormalize = (address: Hex) => getAddress(`0x${address.slice(-40)}`);
 
 /** `cook`'s eth_call returns `main`'s bytes as they are: here one word. */
 const word = (data: Hex): bigint => decodeAbiParameters([{ type: "uint256" }], data)[0];
@@ -452,15 +448,8 @@ function usageLine(file: string, command: string): string[] {
   return words.slice(1);
 }
 
-describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () => {
-  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  const ETHEREUM_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-  const CROSS_CHAIN = resolve(REPO_ROOT, "docs/examples/cross-chain-intent.sauce.ts");
-  const RECIPIENT = "0x000000000000000000000000000000000000c0DE";
-  const HELD = 12_345_678n;
-
+describe("venue-where-deployed on Base state", SUITE, () => {
   let env: Anvil;
-  let snapshot: Hex;
 
   before(async () => {
     env = await startAnvil({ mainnet: "docs-examples-base", chain: "base" });
@@ -468,78 +457,9 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
   after(async () => {
     await env?.stop();
   });
-  beforeEach(async () => {
-    snapshot = await env.testClient.snapshot();
-  });
-  afterEach(async () => {
-    await env.testClient.revert({ id: snapshot });
-  });
 
   it("as registry-names.ts compiles it for Base, venue-where-deployed returns PancakeSwap V3's USDC/WETH 0.05% pool", async () => {
     await assertVenuePool(env, "base", onBase.compiled.bytecode[0]!, "pancake");
-  });
-
-  /** cross-chain-intent's usage line, run as written from the Pot's owner, with `minAmount`. */
-  const run = (minAmount: bigint) =>
-    sauce(
-      usageLine(CROSS_CHAIN, "run").flatMap((word, i, words) => {
-        if (word === "cross-chain-intent.sauce.ts") return [CROSS_CHAIN];
-        // The replay is the endpoint, whichever the line names or leaves to the defaults.
-        if (word === "--config" || words[i - 1] === "--config") return [];
-        if (word === "<keystore>") return [OWNER_KEY];
-        if (word === "--keystore") return ["--private-key"];
-        if (word === "<unix seconds>" || word === "<unix") return ["2000000000"];
-        if (word === "seconds>") return [];
-        if (word === "<address>") return [env.account.address];
-        if (word === "<recipient>") return [RECIPIENT];
-        if (word === "<minAmount>") return [`${minAmount}`];
-        if (word === "--args") {
-          return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, "--json", "--args"];
-        }
-        return [word];
-      }),
-    );
-
-  it("cross-chain-intent's usage line publishes an intent paying `recipient` on Ethereum exactly what the Pot held", async () => {
-    await setBalance(env, USDC, { slot: 9n }, env.pot, HELD);
-    const ran = await run(1_000_000n);
-    assert.equal(ran.code, 0, `${ran.stderr}\n${ran.stdout}`);
-    const { cook } = JSON.parse(ran.stdout) as { cook: { hash: Hex; status: string } };
-    assert.equal(cook.status, "success");
-
-    const receipt = await env.publicClient.getTransactionReceipt({ hash: cook.hash });
-    const published = receipt.logs.flatMap((log) => {
-      const found = routes.intentFromPublished(log, 8453n);
-      return found === undefined ? [] : [{ ...found, portal: log.address }];
-    });
-    assert.equal(published.length, 1, "one intent published");
-    const [{ intent, portal }] = published as [(typeof published)[number]];
-    assert.equal(intent.destination, 1n, "to Ethereum");
-    // The reward: everything the Pot held, in Base's USDC, paid into the intent's vault.
-    assert.deepEqual(
-      intent.reward.tokens.map((t) => [denormalize(t.token), t.amount]),
-      [[getAddress(USDC), HELD]],
-    );
-    const vault = routes.predictIntentVault(intent, { portal });
-    assert.equal(await balanceOf(env, USDC, vault), HELD);
-    assert.equal(await balanceOf(env, USDC, env.pot), 0n);
-    // The body: Ethereum's USDC, transferred to the `recipient` given on the command line.
-    assert.deepEqual(
-      intent.route.calls.map((c) => [denormalize(c.target), c.data]),
-      [
-        [
-          getAddress(ETHEREUM_USDC),
-          encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [RECIPIENT, HELD] }),
-        ],
-      ],
-    );
-  });
-
-  it("below `minAmount` the whole transaction reverts and nothing is published", async () => {
-    await setBalance(env, USDC, { slot: 9n }, env.pot, HELD);
-    const ran = await run(HELD + 1n);
-    assert.notEqual(ran.code, 0, "the cook reverted");
-    assert.equal(await balanceOf(env, USDC, env.pot), HELD, "nothing moved");
   });
 });
 

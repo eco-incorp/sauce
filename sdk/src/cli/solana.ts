@@ -122,7 +122,6 @@ import {
   compileProgram,
   payloadOf,
   type ProgramInput,
-  refusePastDeadline,
   revertedFirst,
   unapproved,
 } from "./commands.js";
@@ -663,9 +662,9 @@ export async function svmLanded(
 }
 
 /**
- * Signs a plan's Solana transaction (`lifecycle-svm.ts`: base64, its fresh keys' signatures in, the
- * fee payer's out) with `signer`, the fee payer, rehearses it as signed and refuses it if it would
- * fail, then sends it and waits until it is confirmed.
+ * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
+ * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, rehearses it as
+ * signed and refuses it if it would fail, then sends it and waits until it is confirmed.
  */
 export async function sendPlannedSvm(
   url: string,
@@ -1558,7 +1557,6 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
-  refusePastDeadline(input);
   const via = input.via ?? "kitchen";
   // Compiled with every swap the plain one; a swap whose stop binds is compiled again, below, to
   // the Stopped form. The arguments are checked before anything is read.

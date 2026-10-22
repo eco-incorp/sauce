@@ -59,7 +59,7 @@ A missing symbol means the registry has no verified row under that name. Token v
 different symbols and addresses: Tether's migrated USDT is `USDT0` wherever Tether's own USDT0 list
 names its token (Arbitrum and Polygon among them), and those chains register no `USDT`, since the
 contract's `symbol()` answers `USD₮0` or `USDT0`. Optimism has both, as two contracts: the bridged
-`USDT` and Tether's `USDT0`. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens` can
+`USDT` and Tether's `USDT0`. `SauceCompileOptions.tokens` can
 override or add a chain-local mapping. Amounts are integer token units; the compiler does not
 apply decimal scaling.
 
@@ -85,10 +85,8 @@ scale, rounding down as `balanceOf` does.
 
 The SDK refuses what Arc cannot do before anything is signed: the actions `wrapETH` and `unwrapETH`,
 the native ETH stakes and a `nativeBalance` spent as a token amount, when a program's `chainId` is
-5042; the deposit builder's `weth` templates with Arc's `USDC` or a registry token as the target; and
-an intent reward that offers both native value and `USDC`. An intent to Arc uses the same Portal,
-Executor and derived Pot as every other chain; see
-[One Portal, one Pot](../guides/intents.md#one-portal-one-pot).
+5042; and the deposit builder's `weth` templates with Arc's `USDC` or a registry token as the
+target.
 
 ## Solana venues
 

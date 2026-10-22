@@ -186,12 +186,12 @@ export function encodePortalCalldataWithAccounts(
   return `0x${hexString(Uint8Array.from(encoded as ArrayLike<number>))}`;
 }
 
-// ── intent extraction ──
+// ── extraction from calls ──
 
-/** An intent call, duck-typed: only `data` (the Portal envelope) is required; `target` (the callee
- *  program) is carried through when present. Matches eco-solver's `Call` / persisted `IntentCall` (both
- *  carry `data` as viem `Hex`). */
-export interface SvmIntentCallLike {
+/** A call, duck-typed: only `data` (the Portal envelope) is required; `target` (the callee
+ *  program) is carried through when present. Matches eco-solver's `Call` (it carries `data` as viem
+ *  `Hex`). */
+export interface SvmCallLike {
   data: BytesInput;
   /** The callee, as a 32-byte universal address — `0x`-hex on the wire (what `buildSauceSvmCall` emits),
    *  raw bytes, or a base58 `Address`. NOT `BytesInput`: see `UniversalAddressInput`. */
@@ -205,11 +205,6 @@ export interface SvmIntentCallLike {
    * and let the decoy be reported as genuine.
    */
   pin?: BytesInput;
-}
-
-/** An intent, duck-typed to just the SVM route calls this reads. */
-export interface SvmIntentLike {
-  route: { calls: readonly SvmIntentCallLike[] };
 }
 
 export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
@@ -260,7 +255,7 @@ function resolveSettleTarget(input: UniversalAddressInput | undefined): SvmSettl
  * and inspect every other call. Kitchen cook envelopes are not handled here.
  */
 export function extractSvmSettleFromCalls(
-  calls: readonly SvmIntentCallLike[],
+  calls: readonly SvmCallLike[],
   options: ExtractSvmSettleOptions,
 ): ExtractedSvmSettle | null {
   const bytecode =
@@ -295,12 +290,4 @@ export function extractSvmSettleFromCalls(
     // so a genuine settle later in the batch is never masked by an earlier lookalike.
   }
   return null;
-}
-
-/** Inspect the route's calls with the same trust boundaries as extractSvmSettleFromCalls. */
-export function extractSvmSettleFromIntent(
-  intent: SvmIntentLike,
-  options: ExtractSvmSettleOptions,
-): ExtractedSvmSettle | null {
-  return extractSvmSettleFromCalls(intent.route.calls, options);
 }

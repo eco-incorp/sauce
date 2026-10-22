@@ -19,7 +19,6 @@ import {
 } from "./sdk.js";
 import {
   chainRef,
-  intentsKept,
   LIMITS,
   potsKept,
   refusable,
@@ -35,7 +34,7 @@ import {
 export const SEND_MOST = 32;
 export const SIGNED_MOST = 2 + 2 * 128 * 1024;
 
-/** The sending tools, in the order `tools/list` gives them (after the intent tools). */
+/** The sending tools, in the order `tools/list` gives them (after the building tools). */
 export const SEND_TOOL_NAMES = ["sauce_send"] as const;
 
 /** Broadcasts what the caller signed: what it spends is gone, and sending it twice changes nothing. */
@@ -54,8 +53,8 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
     {
       title: "Send signed transactions",
       description:
-        "Broadcasts transactions the caller has signed — the ones sauce_tx, sauce_pot, " +
-        "sauce_actions, sauce_intent_publish and the intent tools build unsigned, signed by any " +
+        "Broadcasts transactions the caller has signed — the ones sauce_tx, sauce_pot and " +
+        "sauce_actions build unsigned, signed by any " +
         "wallet or signer (a KMS, a hardware wallet, another wallet's tool) — waits for each to " +
         "land, and reports what it did. It takes no key and never signs. `transactions` are the " +
         "SIGNED bytes, in the order to send them: on an EVM chain the raw 0x… hex a signer " +
@@ -74,7 +73,6 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "(main's value, hex); and on a transaction that deployed a Pot, `pots`: each Pot as the " +
         "sauce command records it (chain, address, owner, salt, kind, Kitchen, the engine and " +
         `compiler release it was minted under, the deploying transaction), ${potsKept(context)}. ` +
-        intentsKept(context) +
         "A Solana transaction lands within about a minute of being built, " +
         "or never: one whose blockhash expired is refused, to build and sign again. A Solana " +
         "cook too large " +
