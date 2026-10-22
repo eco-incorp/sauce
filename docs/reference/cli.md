@@ -89,8 +89,8 @@ with --no-update-check (any command takes it, before the command too), and for a
 whose --config file says "updateCheck": false.
 
 Transactions are built and sent only on Ethereum, Base and Solana. Every other chain is a
-preview chain: programs compile there, and simulate, dry runs and reads work, but no transaction
-is built or sent. Ask for a chain:
+preview chain: programs compile there, and simulate and reads work, but no transaction is built
+or sent. Ask for a chain:
 https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
 
 A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain
@@ -1307,7 +1307,7 @@ Examples:
 ```text
 Serve the commands and the agent skills to coding agents over MCP.
 
-Usage: sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--store <dir>] [--no-stores]
+Usage: sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--no-stores]
        sauce mcp (--password-env <NAME> | --password-file <path> | --password-command <command>) [--wallets <dir>] [--config <file>]
        sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]
        sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]

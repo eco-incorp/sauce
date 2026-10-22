@@ -91,7 +91,7 @@ export interface SauceEvmCallParams {
  * An EVM call these builders return, in both of the shapes it is used in:
  *
  * - a transaction or `eth_call`, `{ to, data, value }` — the shape every other request the SDK builds
- *   has (`destinationExecutionFee()`), and what a wallet or `client.call` takes as it is;
+ *   has (`kitchenExecutionFee()`), and what a wallet or `client.call` takes as it is;
  * - a call record, `{ target, data, value }`.
  *
  * `to` and `target` name the same contract: `to` as its checksummed 20-byte address, `target` as

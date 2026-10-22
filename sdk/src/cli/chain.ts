@@ -33,7 +33,7 @@ import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
 import { v12Pot } from "../evm/engine.js";
-import { destinationExecutionFee } from "../evm/execution-fee.js";
+import { kitchenExecutionFee } from "../evm/execution-fee.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
@@ -275,7 +275,7 @@ export async function chainServedBy(url: string): Promise<CanonicalChain> {
 
 /** The released Kitchen's current execution fee on the connected chain. */
 export async function kitchenFee(client: PublicClient, chain: CanonicalChain): Promise<bigint> {
-  const fee = destinationExecutionFee();
+  const fee = kitchenExecutionFee();
   const answer = await request("the Kitchen's executionFee()", () =>
     client.call({ to: fee.to, data: fee.data }),
   );
@@ -315,7 +315,7 @@ export async function releasedContracts(client: PublicClient): Promise<Released>
   ]);
   let executionFee: bigint | undefined;
   if (kitchenThere) {
-    const fee = destinationExecutionFee(kitchen);
+    const fee = kitchenExecutionFee(kitchen);
     const answer = await request("the Kitchen's executionFee()", () =>
       client.call({ to: fee.to, data: fee.data }),
     );

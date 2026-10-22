@@ -6,7 +6,7 @@
 //   node cook.mts --owner <Pot owner> --recipient <address>
 import { existsSync, statSync } from "node:fs";
 
-import { destinationExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
+import { kitchenExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress, v12KitchenAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot, v12PotAbi } from "@eco-incorp/sauce/evm/engine";
 import { svmEngineArtifacts } from "@eco-incorp/sauce/svm/engine-artifacts";
@@ -46,7 +46,7 @@ const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(args)]);
 // 4. The cook, sent by the owner. Its value is the Kitchen's executionFee(), read at run time.
 const engine = getAddress(v12EngineAddress());
 const cook = { to: pot, data: v12Pot.encodeCook(engine, payload) };
-const feeRead = destinationExecutionFee(); // { to, data, decode }: an eth_call on the same chain
+const feeRead = kitchenExecutionFee(); // { to, data, decode }: an eth_call on the same chain
 const decoded = decodeFunctionData({ abi: v12PotAbi, data: cook.data });
 check(
   decoded.functionName === "cook" && decoded.args?.[1] === payload,

@@ -72,7 +72,7 @@ arguments. Save this as `cook.ts`:
 
 ```ts
 import { readFileSync } from "node:fs";
-import { destinationExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
+import { kitchenExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, concatHex, createPublicClient, getAddress, hexToString, http } from "viem";
@@ -98,7 +98,7 @@ const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), payload);
 
 // 4. The cook's value is the Kitchen's fee, read from Base.
 const client = createPublicClient({ chain: base, transport: http() });
-const feeRead = destinationExecutionFee();
+const feeRead = kitchenExecutionFee();
 const answer = await client.call({ to: feeRead.to, data: feeRead.data });
 const fee = feeRead.decode(answer.data ?? "0x");
 
@@ -150,7 +150,7 @@ Your gas figures may differ. Step by step:
   the types `main` declares. The program, then its arguments, is the payload.
 - `v12Pot.encodeCook` is the cook's calldata: the payload, and the engine that runs it.
   `v12EngineAddress()` is the Sauce release's engine, the same on every chain.
-- `destinationExecutionFee()` reads the Kitchen's fee, which every cook pays as its value.
+- `kitchenExecutionFee()` reads the Kitchen's fee, which every cook pays as its value.
 - `client.simulateCalls` is viem's: it runs the deployment, then the cook, on Base as it is now,
   and sends nothing. The Base endpoint is viem's default for the chain; the Sauce package has none
   of its own.

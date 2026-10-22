@@ -370,8 +370,10 @@ then calls this compiler. Its result keeps the bytecode, the entry encoding and
 schema, `main`'s parameters, and the SVM manifest; its `args` option binds `main`'s
 arguments into the program.
 
-`routes.compileSauceRoute()` compiles the same way without the chain's ambient
-`@sauce/token` functions, and returns the program in a compatibility shape beside
+`routes.compileSauceRoute()` compiles the same way with two differences: it supplies neither
+`chainId` nor `CHAIN_ID`, and not the `@sauce/token` functions with no import, so a program that
+reads either name or calls `transfer(...)` bare does not compile there unchanged. Pass `chainId` in
+`defines` and import `@sauce/token` instead. It returns the program in a compatibility shape beside
 one encoded cook call:
 
 ```ts

@@ -147,7 +147,7 @@ rules. The stablecoin itself is an ordinary ERC-20 to transfer.
 
 Each bridge has its own trust model and delay. Canonical rollup bridges (Arbitrum, Optimism,
 Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to
-Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
+Ethereum; bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
 settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the
 destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.
 

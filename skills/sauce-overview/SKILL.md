@@ -34,8 +34,8 @@ it is not a multicall, and it does not use a magic header. On Solana the Kitchen
 programs, the Pot is an account at the Kitchen's program address for the owner and salt, owned by
 the engine, and a cook is the Kitchen's `cook` instruction signed by the owner (`sauce-solana`).
 
-A cook runs on one chain, and a program does not open cross-chain intents; a program that moves
-tokens to another chain calls a bridge protocol (`sauce-protocols`).
+A cook runs on one chain, in one transaction; a program that moves tokens to another chain calls a
+bridge protocol (`sauce-protocols`).
 
 ## The protocol with a user
 
@@ -83,7 +83,7 @@ tokens to another chain calls a bridge protocol (`sauce-protocols`).
 
 Transactions are built and sent on **Ethereum, Base and Solana** (`ethereum`, `base`, `solana`)
 only. Every other chain the SDK knows is a **preview chain**: a program compiles for it, and
-simulations, dry runs and reads work there, but the `sauce` command and the MCP server build and
+simulations and reads work there, but the `sauce` command and the MCP server build and
 send no transaction on it. The refusal comes before any key or endpoint is read, names the
 supported chains, and links that chain's request; no flag lifts it. Each chain's file in
 `sauce-chains` says which it is, and `sauce-cli` lists which commands are refused.

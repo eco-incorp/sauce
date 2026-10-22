@@ -540,7 +540,7 @@ const CHOOSING = {
   bridge: [
     "Each bridge has its own trust model and delay. Canonical rollup bridges (Arbitrum, Optimism,",
     "Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to",
-    "Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)",
+    "Ethereum; bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)",
     "settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the",
     "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.",
   ],
@@ -1045,7 +1045,7 @@ function supportLines(chain, supported, site) {
 
   return [
     `**Preview chain.** Sauce supports transactions on ${names} only. On ${chain.name} a program`,
-    "compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`",
+    "compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`",
     "command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and",
     "`sauce pot --deploy` are refused,",
     `naming the supported chains and how to request this one${site === DOCS_SITE ? " (the last section)" : ""}.`,

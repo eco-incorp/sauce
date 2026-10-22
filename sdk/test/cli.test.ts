@@ -258,6 +258,36 @@ describe("sauce (no command)", () => {
     expect(help.stdout).not.toMatch(/^ {2}intent\b/m);
   });
 
+  it("names in every usage line only flags its command takes", async () => {
+    // A command takes exactly the flags its help's option sections list: both are `command.flags`
+    // (`run.ts`: `commandHelp` lists them, and `runCli` refuses any other). The usage lines are
+    // written by hand, so each flag they name is held to that list.
+    const named = (help: string, heading: RegExp): string[] => {
+      const lines = help.split("\n");
+      const start = lines.findIndex((line) => heading.test(line));
+      const end = lines.findIndex((line, i) => i > start && line === "");
+
+      return lines.slice(start + 1, end).flatMap((line) => /^ {2}(\w+) {2,}/.exec(line)?.[1] ?? []);
+    };
+    const commands = named((await sauce("--help")).stdout, /^Commands:$/);
+    const verbs = named((await sauce("wallet", "--help")).stdout, /^Verbs/);
+    expect(commands).toContain("mcp");
+    expect(verbs).toContain("new");
+    for (const argv of [...commands.map((c) => [c]), ...verbs.map((verb) => ["wallet", verb])]) {
+      const help = (await sauce(...argv, "--help")).stdout;
+      const from = help.indexOf("Usage:");
+      const usage = help.slice(from, help.indexOf("\n\n", from));
+      const taken = new Set([...help.matchAll(/^ {2}(?:-\w, | {4})--([\w-]+)/gm)].map((m) => m[1]));
+      const untaken = [...usage.matchAll(/--([a-z][\w-]*)/g)]
+        .map((m) => m[1])
+        .filter((flag) => !taken.has(flag));
+      expect({ command: argv.join(" "), untaken }).toEqual({
+        command: argv.join(" "),
+        untaken: [],
+      });
+    }
+  });
+
   it("prints its version for -v, -V and `version` too, and its help says so", async () => {
     for (const spelling of ["-v", "-V", "version"]) {
       const run = await sauce(spelling);
