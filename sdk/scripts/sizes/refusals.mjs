@@ -40,14 +40,7 @@ const cases = [
 const out = [];
 for (const [chain, source] of cases) {
   try {
-    const p = compileSauceProgram(chain, source, {
-      intents: {
-        executionFee: 1000n,
-        deadline: 2000000000n,
-        openedAt: 1900000000n,
-        salt: `0x${"5a".repeat(32)}`,
-      },
-    });
+    const p = compileSauceProgram(chain, source);
     out.push({
       chain,
       source,

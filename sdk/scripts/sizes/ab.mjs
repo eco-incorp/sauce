@@ -12,29 +12,14 @@ const trees = [
   [a.split("/").pop(), await load(a)],
   [b.split("/").pop(), await load(b)],
 ];
-const options = {
-  intents: {
-    executionFee: 1000n,
-    deadline: 2000000000n,
-    openedAt: 1900000000n,
-    salt: `0x${"5a".repeat(32)}`,
-  },
-};
 const trivial = "function main(): Uint256 { return 1; }";
-// A program the tree no longer has (the intent files of an earlier tree) is left out.
+// A program the tree does not have is left out.
 const file = (path) =>
   existsSync(join(b, path)) ? readFileSync(join(b, path), "utf8") : undefined;
 const cases = [
   ["trivial@base", "base", trivial],
   ["trivial@ethereum", "ethereum", trivial],
   ["trivial@solana", "solana", trivial],
-  ["cross-chain@base", "base", file("skills/sauce-intents/examples/cross-chain.sauce.ts")],
-  ["cross-chain@ethereum", "ethereum", file("skills/sauce-intents/examples/cross-chain.sauce.ts")],
-  [
-    "swap-on-base@ethereum",
-    "ethereum",
-    file("skills/sauce-intents/examples/swap-on-base.sauce.ts"),
-  ],
   ["router-route@ethereum", "ethereum", file("docs/examples/router-route.sauce.ts")],
   [
     "distributed-swap@base",
@@ -46,15 +31,15 @@ const median = (xs) => xs.sort((x, y) => x - y)[Math.floor(xs.length / 2)];
 const rows = [];
 for (const [name, chain, text] of cases) {
   const samples = trees.map(() => ({ cold: [], warm: [] }));
-  for (const [, compile] of trees) compile(chain, text, options);
+  for (const [, compile] of trees) compile(chain, text);
   for (let i = 0; i < Number(repeats); i++) {
     trees.forEach(([, compile], t) => {
       clearFunctionCache();
       let s = performance.now();
-      compile(chain, text, options);
+      compile(chain, text);
       samples[t].cold.push(performance.now() - s);
       s = performance.now();
-      compile(chain, text, options);
+      compile(chain, text);
       samples[t].warm.push(performance.now() - s);
     });
   }
