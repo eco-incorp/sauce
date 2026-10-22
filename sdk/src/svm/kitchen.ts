@@ -164,7 +164,7 @@ function data(discriminator: Uint8Array, ...parts: Uint8Array[]): Uint8Array {
 
 /**
  * A Pot: `["pot", owner, salt]`. The salt is what lets one owner hold many — it is raw bytes, not a
- * counter, so a caller with a natural 32-byte id (an intent hash, say) passes it directly.
+ * counter, so a caller with a natural 32-byte id (a hash, say) passes it directly.
  */
 export async function derivePotPda(
   kitchen: Address,

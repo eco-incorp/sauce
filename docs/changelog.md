@@ -100,10 +100,9 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 1.0.0. Same compiler
 and engines as 0.99.15, so each change here comes from the SDK.
 
-This release removes cross-chain intents from the SDK, the `sauce` command and the MCP server. They
-return later as `@sauce/hop`. Bridging is not an intent and does not change: the `acrossBridge`,
-`stargateBridge`, `cctpBridge` and `hyperlaneBridge` actions and the bridge and CCTP protocols in the
-registry stay.
+This release removes cross-chain intents from the SDK, the `sauce` command and the MCP server.
+Bridging is not an intent and does not change: the `acrossBridge`, `stargateBridge`, `cctpBridge`
+and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry stay.
 
 ### SauceScript
 

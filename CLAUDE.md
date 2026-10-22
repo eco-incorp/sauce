@@ -470,11 +470,9 @@ not add a `node:*` import or `Buffer` to shipped code: `svm/engine-artifacts` (f
 local LiteSVM harness) is the one Node-only module, on its own subpath and in no barrel. CI bundles
 every export for the browser and compiles in headless Chromium, so a regression fails there.
 
-**Cross-chain intents are not in this release.** They return as `@sauce/hop`
-(`<Chain>.hop({ send, receive, refundee }).then(() => { … })`) on the compiler that folds it.
-Until then the SDK has no intent surface — no Portal encoders, no `sauce intent`, no
-`sauce_intent_*` tools — and a chain export is a plain namespace object, so a program that calls
-one (`Base(() => …)`) fails to compile.
+**There is no cross-chain intent surface**: no Portal encoders, no intent commands, no intent tools.
+A chain export is a plain namespace object, so a program that calls one (`Base(() => …)`) fails to
+compile.
 
 **The authoritative description of that surface is the package's own typings**
 (`node_modules/sauce-compiler/node/sauce_wasm.d.ts`), which document each option in detail —
@@ -1441,8 +1439,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 - **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
-  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover (the
-  SDK has no intents); Sauce never described as a multicall; no pointer into the
+  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover; Sauce
+  never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol

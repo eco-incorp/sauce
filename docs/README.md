@@ -25,8 +25,6 @@ The manual has four parts, and every page says at its top which part it belongs 
 Sauce sends transactions on **Ethereum**, **Base** and **Solana**. Every other chain it knows is a
 preview chain, where programs compile and simulate but nothing is sent.
 
-Cross-chain intents are not in this release; see [what is coming next](concepts/what-is-sauce.md#coming-next-cross-chain-intents).
-
 ## Tutorials
 
 The learning path, in order. Each tutorial builds on the one before it.
