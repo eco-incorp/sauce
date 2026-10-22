@@ -93,7 +93,7 @@ returned, refuse it below a minimum you set, and pay out exactly that.
   engine and the Kitchen are already on chain, and your Pot is a standard account the Kitchen makes
   for you.
 - **Not one protocol.** Sauce is not a wrapper around one exchange or lender. A program calls any
-  of the 135 protocols Sauce knows, by name, and mixes them in one transaction.
+  of the 134 protocols Sauce knows, by name, and mixes them in one transaction.
 - **Not a bridge.** A program runs on one chain. To move tokens to another, it calls a bridge
   protocol by name, such as Across or Circle's CCTP, as it calls any other.
 - **Not a custodian.** Only your wallet can run programs on your Pot, and nobody else, Sauce
