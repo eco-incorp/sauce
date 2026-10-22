@@ -14,7 +14,7 @@ import { v12KitchenAddress, v12SvmEngineProgramId } from "../src/deployments/ind
 import {
   decodePortalCalldataWithAccounts,
   encodePortalCalldataWithAccounts,
-} from "../src/svm/intent.js";
+} from "../src/svm/calls.js";
 import {
   buildSauceEvmCall,
   buildSauceEvmCalls,

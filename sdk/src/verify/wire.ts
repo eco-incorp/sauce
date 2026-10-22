@@ -33,7 +33,7 @@ export const SETTLE_WIRE = {
    *
    *  0.5.0 → 0.7.0 moved these bytes: 391 → 370, with a different hash. A consumer on the newer
    *  compiler and the older pin has every settle it produces rejected on `PROGRAM_HASH`, which is why
-   *  the bump and the re-pin are one change. Intents published against the old hash still verify —
+   *  the bump and the re-pin are one change. Payloads published against the old hash still verify —
    *  pass it via `validateSettleProgram`'s accepted-hash set.
    *
    *  0.7.0 → 1.0.0 did NOT move them, despite carrying ABI type widths through both codec

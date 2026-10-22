@@ -1,10 +1,10 @@
-// @eco-incorp/sauce/verify — extract settle params from the CALLS an intent carries.
+// @eco-incorp/sauce/verify — extract settle params from a batch of CALLS.
 //
 // `decodeSettleProgram` / `validateSettleProgram` (decode.ts) turn a raw settle PAYLOAD's bytes back
 // into `(tokens, minOut, recipient)`. But a producer (eco-solver, the recipes API) never hands you the
-// bare payload — on EVM it hands you an intent whose `route.calls[]` batch ends with a `cook` call
+// bare payload — on EVM it hands you a route whose `calls[]` batch ends with a `cook` call
 // carrying the settle payload as its program. These helpers close that last gap: unwrap the cook
-// calldata and hand that program to the decoder, so a caller goes from an intent object to
+// calldata and hand that program to the decoder, so a caller goes from a list of calls to
 // `(tokens, minOut, recipient)` in one step. Two cook shapes are decoded — see `COOK_V12_ABI`.
 //
 // Same dependency contract as decode.ts: `viem` ONLY (no compiler, no node, no artifact resolution), so
@@ -18,10 +18,10 @@
 // only because the arguments left the program — so what these helpers return is now "the audited
 // settle, with these params", not "something settle-shaped, params unverified".
 //
-// The SVM analogue is `extractSvmSettleFromCalls` in `@eco-incorp/sauce/svm/verify`: an SVM intent
+// The SVM analogue is `extractSvmSettleFromCalls` in `@eco-incorp/sauce/svm/verify`: an SVM call
 // wraps its settle CPI one layer deeper (the Eco Portal `CalldataWithAccounts` Borsh envelope), so that
 // module decodes the envelope itself before handing the halves to `decodeSvmSettleExecution` /
-// `verifySvmSettleExecution` — same "one call from intent to params" story, on the SVM side. It reaches
+// `verifySvmSettleExecution` — same "one call from calls to params" story, on the SVM side. It reaches
 // its verdict by RECOMPILING, because an SVM settle's params are folded into its bytecode and no amount
 // of reading the calldata recovers them; this EVM path needs no compiler for the same verdict, which is
 // what keeps `/verify` viem-only.
@@ -120,8 +120,8 @@ export function decodeSettleCall(
   // ONLY ingredient 0. A v12 cook has exactly one program, so this is the whole call; a v1
   // `SauceRouter` executes EVERY ingredient, and scanning further there would report a payload the
   // caller did not ask about: given `cook([drainProgram, honestSettle])` a scan would skip the drain,
-  // validate the settle at index 1, and hand back the honest program's parameters for an intent that
-  // drains. `ingredientCount` is what makes the rest visible.
+  // validate the settle at index 1, and hand back the honest program's parameters for a batch
+  // that drains. `ingredientCount` is what makes the rest visible.
   if (ingredients.length === 0) return null;
   try {
     // An EMPTY list is forwarded, NOT swapped for the default. `validateSettleProgram([])` refuses,
@@ -136,7 +136,7 @@ export function decodeSettleCall(
     };
   } catch (error) {
     // Only a DECODE failure means "this cook does not settle". A malformed pin -- a `{ hash: null }`
-    // from config -- would otherwise be swallowed as that, and every intent would report no settle
+    // from config -- would otherwise be swallowed as that, and every batch would report no settle
     // while a monitor built on this went silently blind. Let a programmer error escape.
     if (!(error instanceof SettleDecodeError)) throw error;
 
@@ -144,9 +144,9 @@ export function decodeSettleCall(
   }
 }
 
-/** An intent call, duck-typed: only `data` (the cook calldata) is required; `target` (the Pot address)
+/** A call, duck-typed: only `data` (the cook calldata) is required; `target` (the Pot address)
  *  is carried through when present. Matches eco-solver's `Call` (`{ data, target, value }`). */
-export interface IntentCallLike {
+export interface CallLike {
   data: Hex;
   target?: `0x${string}`;
 }
@@ -159,17 +159,17 @@ export interface ExtractedEvmSettle extends DecodedSettleCall {
 }
 
 /**
- * Scans an intent's `route.calls[]` and returns the settle params from the first `cook` call carrying
+ * Scans a route's `calls[]` and returns the settle params from the first `cook` call carrying
  * the settle payload — the EVM settle in a batch is a `Pot.cook(settleBytecodes)` alongside a
  * `Pot.cook(swapBytecodes)`, so this finds it by CONTENT (which cook validates as settle), not by
  * position. `null` if no call carries one.
  *
- * LOCATES THE SETTLE; DOES NOT CLEAR THE INTENT. Unlike a cook's sibling ingredients — where only
- * ingredient 0 runs, so reading further would describe dead bytes — EVERY entry in `route.calls[]`
+ * LOCATES THE SETTLE; DOES NOT CLEAR THE BATCH. Unlike a cook's sibling ingredients — where only
+ * ingredient 0 runs, so reading further would describe dead bytes — EVERY entry in `calls[]`
  * executes. This returns the first entry that validates and leaves the others UNEXAMINED, so a
- * non-null result answers "this intent contains the audited settle, with these parameters" and NOT
- * "this intent does only that": in `[cook([drain]), cook([settle])]` the drain is real, executes
- * first, and is not reported. A caller deciding whether an intent is safe must check `callIndex`
+ * non-null result answers "this batch contains the audited settle, with these parameters" and NOT
+ * "this batch does only that": in `[cook([drain]), cook([settle])]` the drain is real, executes
+ * first, and is not reported. A caller deciding whether a batch is safe must check `callIndex`
  * against its own expectation and account for the remaining calls itself.
  *
  * AND IT MUST VALIDATE `target` AND `engine`. Matching is on a cook selector and the program bytes
@@ -192,7 +192,7 @@ export interface ExtractedEvmSettle extends DecodedSettleCall {
  * the caller knows which Pots and which interpreters it trusts.
  */
 export function extractEvmSettleFromCalls(
-  calls: readonly IntentCallLike[],
+  calls: readonly CallLike[],
   accepted?: readonly (Hex | ProgramPin)[],
 ): ExtractedEvmSettle | null {
   for (let i = 0; i < calls.length; i++) {

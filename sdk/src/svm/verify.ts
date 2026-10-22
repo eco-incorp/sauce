@@ -8,7 +8,7 @@ import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "./recipes/index
 
 // The call-level surface (unwrap the Portal envelope, extract the settle from calls) is re-exported
 // here so the whole partner-facing decode/verify story lives under `@eco-incorp/sauce/svm/verify`,
-// symmetric with the EVM `/verify` barrel re-exporting its own `intent.ts`.
+// symmetric with the EVM `/verify` barrel re-exporting its own `calls.ts`.
 export {
   decodePortalCalldataWithAccounts,
   encodePortalCalldataWithAccounts,
@@ -18,11 +18,11 @@ export {
   type PortalCalldataWithAccountsInput,
   type BytesInput,
   type UniversalAddressInput,
-  type SvmIntentCallLike,
+  type SvmCallLike,
   type ExtractSvmSettleOptions,
   type ExtractedSvmSettle,
   type SvmSettleTarget,
-} from "./intent.js";
+} from "./calls.js";
 
 // ── what a caller expects a settle program to enforce ──
 

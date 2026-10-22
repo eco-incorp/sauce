@@ -365,7 +365,7 @@ function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
 
 /** Decode whenever the shape is well-formed enough to name a full `(tokens, minOut, recipient)` —
  *  even when a check that does not block reading (a trailing-slack tail, a dirty address word, a
- *  zero recipient) would make `decodeSettleProgram` throw — so a rejected payload's decoded intent is
+ *  zero recipient) would make `decodeSettleProgram` throw — so a rejected payload's decoded values are
  *  still visible to a caller debugging the rejection.
  *
  *  DECLINES wherever the report would not match execution — the whole point being that on a hostile
@@ -428,7 +428,7 @@ export function decodeSettleProgram(
  * and whatever `decodeSettleProgram` would throw otherwise.
  *
  * `accepted` overrides the pin. The dependency is a caret range and `SETTLE_WIRE` documents that a
- * codegen change is answered by RE-PINNING — at which point every intent already on chain carries the
+ * codegen change is answered by RE-PINNING — at which point every payload already on chain carries the
  * OLD program, and a single hard-coded pin makes all of them unverifiable. Pass the pins you accept
  * (the current one plus any historical ones) to keep those payloads readable across a re-pin.
  *
@@ -448,7 +448,7 @@ export function validateSettleProgram(
 ): DecodedSettleProgram {
   // Compared case-insensitively: `programHash` is always viem's lowercase keccak, so a historical pin
   // supplied in any other spelling would silently fail to match and orphan exactly the payloads this
-  // parameter exists to keep readable -- surfacing through the intent path as a bare `null`.
+  // parameter exists to keep readable -- surfacing through the calls path as a bare `null`.
   const pins: ProgramPin[] = accepted.map((pin) =>
     typeof pin === "string"
       ? { hash: pin.toLowerCase() as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES }
@@ -466,7 +466,7 @@ export function validateSettleProgram(
   // ordering: each is an artefact of the candidate that produced it, and the FIRST supplied pin's is
   // the one reported -- so with several pins and no match at all, the code can still differ by pin
   // order (measured on v1's 588-byte payload: a 410-byte pin reports TOKENS_OFFSET, a 461-byte pin
-  // ARGS_TRUNCATED). Diagnostic only: through `intent.ts` every one of them collapses to `null`, and
+  // ARGS_TRUNCATED). Diagnostic only: through `calls.ts` every one of them collapses to `null`, and
   // with a single pin -- the default and common case -- there is no order to depend on.
   let hashMismatch: SettleDecodeError | null = null;
   let parseError: unknown = null;

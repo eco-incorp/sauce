@@ -1,7 +1,7 @@
 /**
- * @eco-incorp/sauce/svm/verify — SVM intent extraction (the partner-facing path).
+ * @eco-incorp/sauce/svm/verify — SVM settle extraction from calls (the partner-facing path).
  *
- * An external partner consuming an Eco intent has only this package. So the whole chain is exercised
+ * An external partner reading a batch of SVM calls has only this package. So the whole chain is exercised
  * here: decode the Portal CalldataWithAccounts envelope that wraps each SVM route call, then extract the
  * settle params + resolved account identities (optionally verifying against staged bytecode).
  *
@@ -85,7 +85,7 @@ function encodeEnvelope(
 }
 
 /** A legacy-format settle for `n` escrows, plus its Portal-envelope wrapping (full [buffer, ...user] list). */
-function buildIntentFixture(n: number, opts: { minOut?: bigint } = {}) {
+function buildSettleFixture(n: number, opts: { minOut?: bigint } = {}) {
   const { minOut = 555n } = opts;
   const expected = { minOut, splCount: 1n, wireFormat: "legacy-ungated" as const };
   const { bytecode } = compileSource(svmSettleSource(n), "svm", {
@@ -150,7 +150,7 @@ describe("decodePortalCalldataWithAccounts", () => {
   });
 
   it("accepts the same envelope as 0x-hex and as base64", () => {
-    const bytes = buildIntentFixture(1).envelope;
+    const bytes = buildSettleFixture(1).envelope;
     const hex = "0x" + Buffer.from(bytes).toString("hex");
     const b64 = Buffer.from(bytes).toString("base64");
     const fromBytes = decodePortalCalldataWithAccounts(bytes);
@@ -176,7 +176,7 @@ function decoyEnvelope(n: number, opts: { pin?: Uint8Array } = {}): Uint8Array {
 
 describe("extractSvmSettleFromCalls", () => {
   it("extracts + VERIFIES a genuine settle from calls with no partner bytecode (pin proof)", () => {
-    const fx = buildIntentFixture(2, { minOut: 4242n });
+    const fx = buildSettleFixture(2, { minOut: 4242n });
     const found = extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin }], fx.expected);
     expect(found).not.toBeNull();
     expect(found!.callIndex).toBe(0);
@@ -188,7 +188,7 @@ describe("extractSvmSettleFromCalls", () => {
   });
 
   it("additionally byte-matches when the staged bytecode is supplied", () => {
-    const fx = buildIntentFixture(2);
+    const fx = buildSettleFixture(2);
     const found = extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin }], {
       bytecode: fx.bytecode,
       ...fx.expected,
@@ -201,7 +201,7 @@ describe("extractSvmSettleFromCalls", () => {
   });
 
   it("finds the genuine settle call within a mixed batch", () => {
-    const settle = buildIntentFixture(1);
+    const settle = buildSettleFixture(1);
     const junk = encodeEnvelope(new Uint8Array([1, 2, 3, 4, 5]), [
       { address: makeAddr(9), role: AccountRole.READONLY },
       { address: makeAddr(10), role: AccountRole.READONLY },
@@ -231,7 +231,7 @@ describe("extractSvmSettleFromCalls", () => {
   });
 
   it("does not let a decoy earlier in the batch mask a genuine settle later (no masking)", () => {
-    const settle = buildIntentFixture(1);
+    const settle = buildSettleFixture(1);
     const calls = [
       { data: decoyEnvelope(1, { pin: new Uint8Array(32).fill(0x11) }) }, // shape-match, wrong pin
       { data: settle.envelope, pin: settle.pin }, // the real settle
@@ -245,7 +245,7 @@ describe("extractSvmSettleFromCalls", () => {
   // ── the callee ──
 
   it("surfaces the call target as base58, from either the 0x-hex or the base58 input form", () => {
-    const fx = buildIntentFixture(1);
+    const fx = buildSettleFixture(1);
     const fromHex = extractSvmSettleFromCalls(
       [{ data: fx.envelope, pin: fx.pin, target: universalAddress(PROGRAM) }],
       fx.expected,
@@ -269,7 +269,7 @@ describe("extractSvmSettleFromCalls", () => {
   // arbitrary program accepting the same discriminator. Pinned because the verdict is `genuine` here
   // while that program may ignore the pin entirely: `target` is the caller's check.
   it("reports a genuine settle sent to ANY target — validating it is the caller's job", () => {
-    const fx = buildIntentFixture(2);
+    const fx = buildSettleFixture(2);
     const attacker = makeAddr(0xfe);
     const found = extractSvmSettleFromCalls(
       [{ data: fx.envelope, pin: fx.pin, target: attacker }],
@@ -291,7 +291,7 @@ describe("extractSvmSettleFromCalls", () => {
   // tell which a caller meant. So the guard is the expect-error below: it fails
   // `tsc -p tsconfig.test.json` the moment the parameter widens back to a bare string.
   it("does not accept a bare string as a target — the base64/base58 split is enforced by the type", () => {
-    const fx = buildIntentFixture(1);
+    const fx = buildSettleFixture(1);
     const unvalidated: string = "CuHCniNMWLSkZWBQKon9tudGujZeXJRUwG2PCLDq4ipJ";
 
     // `@ts-expect-error` is anchored to the NEXT LINE, so this statement has to stay on one line:
@@ -310,7 +310,7 @@ describe("extractSvmSettleFromCalls", () => {
   });
 
   it("reports an unresolvable target as `unreadable` instead of aborting the scan", () => {
-    const fx = buildIntentFixture(1);
+    const fx = buildSettleFixture(1);
     const shortHex = extractSvmSettleFromCalls(
       [{ data: fx.envelope, pin: fx.pin, target: "0xdeadbeef" }],
       fx.expected,
@@ -343,8 +343,8 @@ describe("extractSvmSettleFromCalls", () => {
   });
 
   it("never reads the target of a call it rejects — a decoy's malformed target cannot abort the scan", () => {
-    const fx = buildIntentFixture(1);
-    const decoy = buildIntentFixture(1, { minOut: 1n }).envelope; // settle-shaped, wrong floor → not genuine
+    const fx = buildSettleFixture(1);
+    const decoy = buildSettleFixture(1, { minOut: 1n }).envelope; // settle-shaped, wrong floor → not genuine
     const found = extractSvmSettleFromCalls(
       [
         { data: decoy, target: "0xbeef" },

@@ -125,10 +125,10 @@ describe("extractEvmSettleFromCalls", () => {
     expect(BigInt(found!.recipient)).toBe(BigInt(RECIPIENT));
   });
 
-  // The pin is re-pinned when compiler codegen changes; every intent already on chain still carries
+  // The pin is re-pinned when compiler codegen changes; every payload already on chain still carries
   // the OLD program. Without an accepted-hash override those become unverifiable, which is the exact
   // failure this module exists to prevent.
-  it("accepts a caller-supplied hash set, so a re-pin does not orphan published intents", () => {
+  it("accepts a caller-supplied hash set, so a re-pin does not orphan published payloads", () => {
     const hypotheticalNewPin = ("0x" + "99".repeat(32)) as Hex;
 
     // pin rotated and the old hash NOT accepted -> the on-chain payload stops verifying
@@ -188,7 +188,7 @@ describe("extractEvmSettleFromCalls", () => {
   });
 
   // A decode failure means "this cook does not settle"; a malformed pin is a configuration bug and
-  // must not wear that costume, or a monitor built on this reports no settle for every intent.
+  // must not wear that costume, or a monitor built on this reports no settle for every batch.
   it("lets a malformed pin escape instead of reporting no settle", () => {
     const call = { data: cook([SETTLE_PAYLOAD]) };
 

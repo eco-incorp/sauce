@@ -17,7 +17,7 @@
  * anything** — see the "SVM STAGING IS A PREREQUISITE" section below. Given an already-staged
  * buffer address, it builds an `execute_from_account` instruction
  * (`../svm/instructions.js#buildExecuteFromAccountInstruction`, the `/svm/engine` kit surface) and
- * wraps it in the Portal `CalldataWithAccounts` Borsh envelope (`../svm/intent.js
+ * wraps it in the Portal `CalldataWithAccounts` Borsh envelope (`../svm/calls.js
  * #encodePortalCalldataWithAccounts`) — that envelope IS the SVM call's `data`.
  *
  * WHY THIS FILE IMPORTS `@solana/kit` BUT NEVER `@solana/web3.js`: `sdk/src/index.ts` re-exports
@@ -61,7 +61,7 @@ import { bytesToHex, getAddress, type Hex } from "viem";
 
 import { v12Kitchen, v12Pot } from "../evm/engine.js";
 import { v12KitchenAddress, v12SvmEngineProgramId } from "../deployments/index.js";
-import { encodePortalCalldataWithAccounts, type PortalAccountMeta } from "../svm/intent.js";
+import { encodePortalCalldataWithAccounts, type PortalAccountMeta } from "../svm/calls.js";
 import { assertNoExecutePin, buildExecuteFromAccountInstruction } from "../svm/instructions.js";
 import type { ResolvedAccountMeta } from "../svm/resolve.js";
 

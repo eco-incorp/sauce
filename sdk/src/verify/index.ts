@@ -26,7 +26,7 @@
 //     answer, from bytes alone, with no compiler. Prefer it; the structural tier exists for callers
 //     inspecting a payload they already know is not canonical.
 //
-// The `intent.js` exports (`decodeSettleCall`, `extractEvmSettleFromCalls`) go one wrapper further:
+// The `calls.js` exports (`decodeSettleCall`, `extractEvmSettleFromCalls`) go one wrapper further:
 // a producer hands you calls whose batch ends in a `Pot.cook(...)` call, not a bare
 // payload, so these unwrap the cook calldata and hand the settle program to `validateSettleProgram`
 // — same viem-only dependency closure, same strict decode, and identification by program hash.
@@ -57,5 +57,5 @@ export {
   extractEvmSettleFromCalls,
   type DecodedSettleCall,
   type ExtractedEvmSettle,
-  type IntentCallLike,
-} from "./intent.js";
+  type CallLike,
+} from "./calls.js";
