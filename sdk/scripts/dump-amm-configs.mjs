@@ -23,7 +23,7 @@
 // `pool-keys.ts`.
 //
 // The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
-// 1399811149, as in `dump-eco-routes-svm.mjs`: no default, no fallback, nothing read from the
+// 1399811149, as in `dump-svm-venues.mjs`: no default, no fallback, nothing read from the
 // environment, and no URL ever written to the fixture.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

@@ -44,8 +44,12 @@ import {
   startChain,
   type LocalChain,
 } from "../../sdk/test/cli-anvil.js";
-import { ecoRoutesSvm } from "../../sdk/test/svm/eco-routes-svm.js";
-import { solanaShim, type SolanaShim } from "../../sdk/test/svm/rpc-shim.js";
+import {
+  clusterBank,
+  solanaShim,
+  type LiteSVM,
+  type SolanaShim,
+} from "../../sdk/test/svm/rpc-shim.js";
 import { connect, endpointsFor, failed, ok, type Connected, walletsAt } from "./harness.js";
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
@@ -388,7 +392,7 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
 
 describe("the wallet tools, sending on Solana", () => {
   const SOLANA_URL = "http://127.0.0.1:65532/";
-  let svm: ReturnType<typeof ecoRoutesSvm>;
+  let svm: LiteSVM;
   let shim: SolanaShim;
   let dir: string;
   let mcp: Connected;
@@ -427,7 +431,7 @@ describe("the wallet tools, sending on Solana", () => {
   };
 
   before(async () => {
-    svm = ecoRoutesSvm(1_790_000_000n);
+    svm = clusterBank();
     shim = solanaShim(svm, SOLANA_URL);
     shim.install();
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-solana-"));

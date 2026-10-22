@@ -72,8 +72,6 @@ import * as debridgeAbis from "../protocols/debridge/abis.js";
 import { deployments as debridgeDeployments } from "../protocols/debridge/addresses.js";
 import * as dodoAbis from "../protocols/dodo/abis.js";
 import { deployments as dodoDeployments } from "../protocols/dodo/addresses.js";
-import * as ecoRoutesAbis from "../protocols/eco-routes/abis.js";
-import { deployments as ecoRoutesDeployments } from "../protocols/eco-routes/addresses.js";
 import * as eigenlayerAbis from "../protocols/eigenlayer/abis.js";
 import { deployments as eigenlayerDeployments } from "../protocols/eigenlayer/addresses.js";
 import * as ensAbis from "../protocols/ens/abis.js";
@@ -311,7 +309,6 @@ export const PROTOCOL_SOURCES = {
   "curve": { abis: curveAbis, deployments: curveDeployments },
   "debridge": { abis: debridgeAbis, deployments: debridgeDeployments },
   "dodo": { abis: dodoAbis, deployments: dodoDeployments },
-  "eco-routes": { abis: ecoRoutesAbis, deployments: ecoRoutesDeployments },
   "eigenlayer": { abis: eigenlayerAbis, deployments: eigenlayerDeployments },
   "ens": { abis: ensAbis, deployments: ensDeployments },
   "erc20": { abis: erc20Abis, deployments: erc20Deployments },
@@ -414,7 +411,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 316 contracts across 135 protocols. */
+/** One entry per contract: 313 contracts across 134 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -512,9 +509,6 @@ export const CONTRACT_LINKS = [
   { protocol: "debridge", contract: "DlnDestination", kind: "singleton", roleKey: "dlnDestination", abiExport: "DlnDestinationABI" },
   { protocol: "debridge", contract: "DlnSource", kind: "singleton", roleKey: "dlnSource", abiExport: "DlnSourceABI" },
   { protocol: "dodo", contract: "DODOV2Proxy", kind: "singleton", roleKey: "dodoV2Proxy", abiExport: "DODOV2ProxyABI" },
-  { protocol: "eco-routes", contract: "Portal", kind: "singleton", roleKey: "Portal", abiExport: "PortalABI" },
-  { protocol: "eco-routes", contract: "HyperProver", kind: "singleton", roleKey: "HyperProver", abiExport: "ProverABI" },
-  { protocol: "eco-routes", contract: "PolymerProver", kind: "singleton", roleKey: "PolymerProver", abiExport: "ProverABI", caveats: ["fetchFee(uint64,bytes,bytes) is not available on ethereum: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on optimism: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on unichain: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on polygon: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on monad: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on arc: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on base: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on plasma: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","fetchFee(uint64,bytes,bytes) is not available on arbitrum: a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee","error InsufficientFee(uint256) is not available on ethereum: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on optimism: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on unichain: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on polygon: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on monad: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on arc: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on base: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on plasma: a PolymerProver: it charges no fee, so it never reverts InsufficientFee","error InsufficientFee(uint256) is not available on arbitrum: a PolymerProver: it charges no fee, so it never reverts InsufficientFee"] },
   { protocol: "eigenlayer", contract: "DelegationManager", kind: "singleton", roleKey: "delegationManager", abiExport: "DelegationManagerABI" },
   { protocol: "eigenlayer", contract: "StETHStrategy", kind: "singleton", roleKey: "stETHStrategy", abiExport: "StrategyABI" },
   { protocol: "eigenlayer", contract: "RETHStrategy", kind: "singleton", roleKey: "rETHStrategy", abiExport: "StrategyABI" },
@@ -992,12 +986,6 @@ export interface DebridgeContracts {
 
 export interface DodoContracts {
   readonly DODOV2Proxy: Contract<typeof dodoAbis.DODOV2ProxyABI>;
-}
-
-export interface EcoRoutesContracts {
-  readonly Portal: Contract<typeof ecoRoutesAbis.PortalABI>;
-  readonly HyperProver: Contract<typeof ecoRoutesAbis.ProverABI>;
-  readonly PolymerProver: Contract<typeof ecoRoutesAbis.ProverABI>;
 }
 
 export interface EigenlayerContracts {
@@ -1667,7 +1655,6 @@ export interface ChainContracts {
   readonly Curve: CurveContracts;
   readonly Debridge: DebridgeContracts;
   readonly Dodo: DodoContracts;
-  readonly EcoRoutes: EcoRoutesContracts;
   readonly Eigenlayer: EigenlayerContracts;
   readonly Ens: EnsContracts;
   readonly Erc20: Erc20Contracts;
