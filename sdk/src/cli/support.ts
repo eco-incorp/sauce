@@ -11,12 +11,11 @@
  * for it to sign and sends none.
  *
  * {@link requireSupported} is the gate, called from the command functions both front ends call
- * (`txCommand`, `runCommand`, `potDeployCommand`, `publishCommand`, `fillCommand`, the lifecycle's
- * `build*`) and, where a front end reaches a network or a key before those, from the front end
- * too. Anything that leaves a transaction ready to sign — the unsigned JSON included — or sends one
- * is refused on a preview chain: the cook (`tx`, `run`), a Pot's deployment, publishing intents,
- * and every lifecycle step. A cook or a publish is refused by its own chain and each destination of
- * the intents it opens ({@link intentDestinations}); each lifecycle step by the chain it is sent on.
+ * (`txCommand`, `runCommand`, `potDeployCommand`, `fillCommand`, the lifecycle's `build*`) and,
+ * where a front end reaches a network or a key before those, from the front end too. Anything that
+ * leaves a transaction ready to sign — the unsigned JSON included — or sends one is refused on a
+ * preview chain: the cook (`tx`, `run`), a Pot's deployment, and every lifecycle step. A cook is
+ * refused by its own chain; each lifecycle step by the chain it is sent on.
  * Compiling, simulating, dry runs and reads are never refused.
  *
  * A developer who needs another chain asks for it with a GitHub issue on the repository, from the
@@ -33,7 +32,6 @@ import {
   type CanonicalChain,
   type ChainRef,
 } from "../chains/canonical.js";
-import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { CliError } from "./args.js";
 
 /** `supported`: the release builds and sends transactions there. `preview`: compile and simulate. */
@@ -308,13 +306,4 @@ export function previewRefusal(
 export function requireSupported(action: string, chains: readonly CanonicalChain[]): void {
   const refusal = previewRefusal(action, chains);
   if (refusal !== undefined) throw new PreviewChainError(refusal);
-}
-
-/**
- * The chain each of `intents` delivers to: what a cook or a publish that opens them is refused by,
- * beside its own. An intent its body opens on the destination in turn (a cascade) is not among
- * them: the lowering reports the intents a program opens itself, and no more.
- */
-export function intentDestinations(intents: readonly LoweredIntent[]): CanonicalChain[] {
-  return intents.map((intent) => intent.destination);
 }

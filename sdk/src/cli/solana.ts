@@ -122,7 +122,6 @@ import {
   compileProgram,
   payloadOf,
   type ProgramInput,
-  refusePastDeadline,
   revertedFirst,
   unapproved,
 } from "./commands.js";
@@ -1558,7 +1557,6 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
-  refusePastDeadline(input);
   const via = input.via ?? "kitchen";
   // Compiled with every swap the plain one; a swap whose stop binds is compiled again, below, to
   // the Stopped form. The arguments are checked before anything is read.

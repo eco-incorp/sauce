@@ -1,7 +1,6 @@
 /**
  * Where the `sauce` command asks its questions: a yes/no before a transaction it sends first, a
- * keystore's or a wallet's password, and a line of text (`sauce intent`'s picker and guided
- * creation, `sauce wallet export`'s confirmation).
+ * keystore's or a wallet's password, and a line of text (`sauce wallet export`'s confirmation).
  *
  * Stdin, while it is a terminal and nothing else has read it. Once a program came through stdin
  * (`sauce run -`), stdin is spent — at its end, or a pipe — so the questions go to the controlling

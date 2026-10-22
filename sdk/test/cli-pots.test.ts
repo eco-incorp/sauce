@@ -318,13 +318,13 @@ describe("the Pots a landed Solana transaction created", () => {
     }
   });
 
-  it("records a create_pot a program invoked, as the Portal creates its executor's Pot in a fill", async () => {
+  it("records a create_pot another program invoked", async () => {
     const { pot, create } = await createOf();
     // An instruction of another program that takes every account the Kitchen's create_pot does,
     // and invokes it: the node reports the Kitchen's instruction among the inner ones.
-    const portal = address("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    const caller = address("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
     const outer: Instruction = {
-      programAddress: portal,
+      programAddress: caller,
       accounts: [{ address: kitchen, role: AccountRole.READONLY }, ...create.accounts!],
       data: new Uint8Array([1]),
     };
