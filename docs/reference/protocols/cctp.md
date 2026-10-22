@@ -23,7 +23,7 @@ on this chain, Circle attests the burn, and a `receiveMessage` on the destinatio
 - Move USDC to another chain as native USDC, with Circle's attestation as the only trust.
 - Only the burn happens in the program's transaction. The mint is a separate transaction on the
   destination, sent by anyone with the attestation; to run code there too, open a Sauce intent
-  ([intents](../../guides/intents.md)).
+  (the `sauce-intents` agent skill).
 
 ## Pitfalls for a program
 

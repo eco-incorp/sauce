@@ -22,7 +22,6 @@ them.
 | In TypeScript | `import { Solana } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | not recorded |
 | Sauce | the engine and Kitchen programs, the same ids on every cluster: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `EcoowmRRrMyYtQCuh5fCvMDWcD6B9ZDZkpgedf2bWKXi` (key `0xca542f97103ea70daa48b4a15f9fd1c0a21a50bfac60a57717fc305f495f5245`) |
 
 ## In a program
 

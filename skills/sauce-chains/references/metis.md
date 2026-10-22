@@ -4,8 +4,8 @@
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Metis a program
 compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
-`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
 
 To request Metis, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Metis%22) and add your
@@ -20,7 +20,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Name in a program | `Metis` |
 | Native coin | METIS (METIS), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
-| Intents (eco-routes) | none recorded |
 
 ## In a program
 

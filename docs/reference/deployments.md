@@ -50,21 +50,6 @@ hash:
 `v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula
 and the hash, and `sauce pot --owner <address>` prints an owner's Pot.
 
-### The shared intent Pot
-
-An intent's program body cooks on the Pot of the destination's eco-routes Executor under salt
-zero. One Executor serves every EVM chain that takes intents, so one Pot does:
-
-| Fact | Value |
-| --- | --- |
-| Address | `0x6340080a1967a03cAAD490a170828d4C59EE5983`: `destinationPot(chain)` |
-| Owner, the eco-routes Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Salt | `0x0000000000000000000000000000000000000000000000000000000000000000`: `SAUCE_INTENT_POT_SALT` |
-
-The Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account.
-[The destination Pot](../guides/intents.md#the-destination-pot) says who deploys it and what a
-body may leave in it.
-
 ## Solana
 
 | Program | Program id | Key, the value a program holds | In TypeScript |
