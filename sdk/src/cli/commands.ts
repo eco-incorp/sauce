@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
 import {
   bytesToHex,
+  formatEther,
   getAddress,
   hexToBytes,
   type Address,
@@ -28,6 +29,7 @@ import {
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
+import { nativeSymbol } from "../evm/effects.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
@@ -691,8 +693,8 @@ export function valueOf(
 ): bigint {
   if (given !== undefined && fee !== undefined && given < fee) {
     throw new CliError(
-      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei: the ` +
-        "cook would revert with FeeNotPaid",
+      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei ` +
+        `(${formatEther(fee)} ${nativeSymbol(chain)}): the cook would revert with FeeNotPaid`,
     );
   }
   const value = given ?? fee;
@@ -1219,7 +1221,7 @@ function deploymentLines(
         `${kitchen.address} is ${there(kitchen.deployed)}` +
         (kitchen.executionFee === undefined
           ? ""
-          : `, its execution fee ${kitchen.executionFee} wei`) +
+          : `, its execution fee ${kitchen.executionFee} wei (${formatEther(kitchen.executionFee)} ${nativeSymbol(chain)})`) +
         `; the Pot ${pot} is ${there(state.deployed)}` +
         (state.owner === undefined ? "." : `, owned by ${state.owner}.`),
       ...(kitchen.deployed

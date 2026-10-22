@@ -132,4 +132,6 @@ export {
   requireChain,
   type CanonicalChain,
 } from "../../sdk/dist/chains/canonical.js";
+export { nativeErc20 } from "../../sdk/dist/chains/index.js";
+export { nativeSymbol } from "../../sdk/dist/evm/effects.js";
 export { forkSnapshot, type ForkSnapshot } from "../../sdk/dist/cli/svm-fork.js";

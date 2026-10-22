@@ -29,6 +29,8 @@ import { revertReason } from "../src/cli/chain.js";
 import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../src/evm/effects.js";
 import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import { assumedBalances } from "../src/cli/inputs.js";
+import { potBalances } from "../src/cli/simulate.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 
 const TOKEN = getAddress("0x1000000000000000000000000000000000000001");
@@ -469,6 +471,120 @@ describe("what the cook did, from its logs", () => {
     expect(effectLines(await effectsOf(metadata, base, [], true, new Map()))).toEqual([
       "It moved no tokens and logged nothing.",
     ]);
+  });
+
+  it("says each movement of Arc's native USDC once, however the node and the chain report it", async () => {
+    const arc = requireChain("arc");
+    const ARC_USDC = getAddress("0x3600000000000000000000000000000000000000");
+    // Arc logs every native movement itself, from EIP-7708's system address, in 18 decimals.
+    const CHAIN = getAddress("0xfffffffffffffffffffffffffffffffffffffffe");
+    const TRACED = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    const OWNER = getAddress("0x00000000000000000000000000000000000000d4");
+    const KITCHEN = getAddress("0x00000000000000000000000000000000000000e5");
+    const FEE = 10n ** 16n;
+    const labels = new Map([
+      [POT, "the Pot"],
+      [OWNER, "owner"],
+      [KITCHEN, "Kitchen"],
+    ]);
+    // What Arc's eth_simulateV1 answered for a cook paying the Kitchen's fee and sending 1 USDC
+    // through the ERC-20 (block 27322511): the value reported by the trace and by the chain, the
+    // transfer by the chain and by the token.
+    const simulated = [
+      log(TRACED, [TRANSFER, at(OWNER), at(POT)], FEE),
+      log(CHAIN, [TRANSFER, at(OWNER), at(POT)], FEE),
+      log(TRACED, [TRANSFER, at(POT), at(KITCHEN)], FEE),
+      log(CHAIN, [TRANSFER, at(POT), at(KITCHEN)], FEE),
+      log(CHAIN, [TRANSFER, at(POT), at(POOL)], 10n ** 18n),
+      log(ARC_USDC, [TRANSFER, at(POT), at(POOL)], 10n ** 6n),
+      log(
+        ARC_USDC,
+        [topic("Approval(address,address,uint256)"), at(POT), at(POOL)],
+        5n * 10n ** 6n,
+      ),
+    ];
+    const once = [
+      { token: "native", from: OWNER, to: POT, amount: FEE, kind: "transfer" },
+      { token: "native", from: POT, to: KITCHEN, amount: FEE, kind: "transfer" },
+      { token: "native", from: POT, to: POOL, amount: 10n ** 18n, kind: "transfer" },
+    ];
+    const effects = await effectsOf(metadata, arc, simulated, true, labels);
+    expect(effects.moves).toEqual(once);
+    expect(effects.native).toEqual(once);
+    expect(effects.transfers).toEqual([]);
+    expect(effects.other).toEqual([]);
+    expect(effects.changes).toEqual([
+      { address: OWNER, deltas: [{ token: "native", amount: -FEE }] },
+      { address: POT, deltas: [{ token: "native", amount: -(10n ** 18n) }] },
+      { address: KITCHEN, deltas: [{ token: "native", amount: FEE }] },
+      { address: POOL, deltas: [{ token: "native", amount: 10n ** 18n }] },
+    ]);
+    expect(effectLines(effects)).toEqual(
+      expect.arrayContaining([
+        `  ${POT} (the Pot): -1 USDC`,
+        `  ${POT} (the Pot) lets ${POOL} spend 5 USDC`,
+      ]),
+    );
+    // A receipt has no trace, and the chain's own logs report the native movements all the same.
+    const receipt = await effectsOf(
+      metadata,
+      arc,
+      simulated.filter((each) => each.address !== TRACED),
+      false,
+      labels,
+    );
+    expect(receipt.moves).toEqual(once);
+    expect(receipt.native).toEqual(once);
+    // Without the chain's logs, a transfer through the ERC-20 is the native movement it is.
+    const tokenOnly = await effectsOf(metadata, arc, [simulated[5]!], true, labels);
+    expect(tokenOnly.moves).toEqual([once[2]]);
+  });
+});
+
+describe("--assume-balance and a keyless --fund of Arc's USDC", () => {
+  const arc = requireChain("arc");
+  const ARC_USDC = getAddress("0x3600000000000000000000000000000000000000");
+  const POT = getAddress("0x00000000000000000000000000000000000000a1");
+  // The Pot holds 0.5 USDC. No token storage holds it, so nothing may search the ERC-20's.
+  const client = {
+    getBalance: async () => 5n * 10n ** 17n,
+    call: async () => {
+      throw new Error("no storage of Arc's USDC holds a balance");
+    },
+    readContract: async () => {
+      throw new Error("no storage of Arc's USDC holds a balance");
+    },
+  } as unknown as PublicClient;
+
+  it("is the Pot's native balance, in the native coin's 18 decimals", async () => {
+    const assumed = await potBalances(
+      client,
+      { chain: arc, assume: assumedBalances(["USDC:2"], arc) },
+      POT,
+      [],
+    );
+    expect(assumed.overrides).toEqual([{ address: POT, balance: 2n * 10n ** 18n }]);
+    expect(assumed.assumed).toEqual([
+      expect.objectContaining({
+        token: "native",
+        symbol: "USDC",
+        decimals: 18,
+        amount: 2n * 10n ** 18n,
+        because: "--assume-balance",
+      }),
+    ]);
+    // A keyless --fund credits what its pull would bring on top of what the Pot holds.
+    const credited = await potBalances(client, { chain: arc, assume: [] }, POT, [
+      { token: ARC_USDC, label: "USDC", amount: 1_500_000n },
+    ]);
+    expect(credited.overrides).toEqual([{ address: POT, balance: 2n * 10n ** 18n }]);
+  });
+
+  it("is one balance with the native coin, named once", () => {
+    expect(() => assumedBalances(["USDC:2", "native:1"], arc)).toThrow(
+      "--assume-balance names USDC twice: give it once",
+    );
+    expect(assumedBalances(["USDC:2", "ETH:1"], requireChain("base"))).toHaveLength(2);
   });
 });
 

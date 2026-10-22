@@ -10,6 +10,8 @@ import type { Address, Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import { nativeErc20 } from "../chains/index.js";
+import { nativeSymbol } from "../evm/effects.js";
 import { mainSignature } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import {
@@ -285,15 +287,23 @@ export function fundTransfers(raws: readonly string[], chain: CanonicalChain): F
   return requests;
 }
 
-/** `--assume-balance` values, `<TOKEN|address>:<amount>`, each named once. */
+/** `--assume-balance` values, `<TOKEN|address>:<amount>`, each named once. Where the native coin is
+ *  also an ERC-20 (Arc's USDC), the two are one balance, named once between them. */
 export function assumedBalances(raws: readonly string[], chain: CanonicalChain): FundRequest[] {
   const requests = raws.map((raw) => parseTokenAmount(raw, chain, "--assume-balance"));
+  const nativeToken = nativeErc20(chain.id)?.address.toLowerCase();
   const seen = new Set<string>();
   for (const request of requests) {
-    if (seen.has(request.token ?? "native")) {
-      throw new UsageError(`--assume-balance names ${request.label} twice: give it once`);
+    const key =
+      request.token === undefined || request.token.toLowerCase() === nativeToken
+        ? "native"
+        : request.token;
+    if (seen.has(key)) {
+      throw new UsageError(
+        `--assume-balance names ${key === "native" ? nativeSymbol(chain) : request.label} twice: give it once`,
+      );
     }
-    seen.add(request.token ?? "native");
+    seen.add(key);
   }
 
   return requests;
