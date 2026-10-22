@@ -1812,7 +1812,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(run.stdout + run.stderr).not.toContain("SECRETKEY123");
   }, 60_000);
 
-  it("refuses EVM keys, --pot and --value on Solana, and a publish from it", async () => {
+  it("refuses EVM keys, --pot and --value on Solana", async () => {
     const base = ["run", sweep, "--define", mintDefine, "--rpc-url", RPC_URL];
     expect((await sauce(...base, "--private-key", `0x${"11".repeat(32)}`)).stderr).toMatch(
       /--keystore and --private-key are EVM keys: on Solana, sign with --wallet <name> \(a Solana wallet\) or --keypair/,
@@ -1834,9 +1834,6 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         )
       ).stderr,
     ).toMatch(/--value is for EVM/);
-    expect((await sauce("intent", "publish", sweep)).stderr).toMatch(
-      /opens no intent — there is nothing to publish/,
-    );
     const bad = join(work, "bad.json");
     writeFileSync(bad, "[1, 2, 3]");
     const keypair = await sauce(...base, "--keypair", bad);

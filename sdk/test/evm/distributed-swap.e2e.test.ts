@@ -11,8 +11,8 @@
  * Uniswap's own `PoolManager` from `@uniswap/v4-core`, run at Base's PoolManager address (its one
  * immutable, the address it checks it runs at, set to that address), with liquidity added through
  * v4-core's own `PoolModifyLiquidityTest`, and read through `fixtures/StateView.sol` at Base's
- * StateView address: v4-periphery's `getSlot0`/`getLiquidity`, as `swap-on-base.e2e.test.ts` runs
- * them. The two tokens are `MockERC20` runtimes at Base's USDC and SPCXc addresses, so USDC is
+ * StateView address: v4-periphery's `getSlot0`/`getLiquidity`. The two tokens are `MockERC20`
+ * runtimes at Base's USDC and SPCXc addresses, so USDC is
  * token0, as on Base, and the program runs as it ships, naming both. On Base, SPCXc is a B20 token
  * built into the node, whose account holds the one byte `0xef` that anvil cannot run; CLAUDE.md
  * keeps every execution suite off it. That is about Base's own state, forked or live. This chain

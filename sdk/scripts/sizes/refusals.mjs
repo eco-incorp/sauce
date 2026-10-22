@@ -1,6 +1,6 @@
 // What each of a set of refused compiles says — a namespace used as a contract, on its chain and on
-// another, a contract a chain lacks, a `receive` token the destination lacks, a hop to Solana — or
-// the hash of what it compiles to, as JSON on stdout, for comparing two SDK builds:
+// another, a contract a chain lacks, a chain's `.hop(…)` — or the hash of what it compiles to, as
+// JSON on stdout, for comparing two SDK builds:
 //   node refusals.mjs <sdk-tree> > refusals.json
 // Two runs that must say the same thing are equal but for the compiler's offsets into the SDK's
 // generated modules, `(bytes N..M)`, which move with any change to a module.

@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getAddress, parseEther, type Address, type Hex } from "viem";
 
-import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import {
   describeEvm,
   fixture,
@@ -71,7 +71,7 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     const created = await sauce("wallet", "new", "agent", ...PASSWORD, "--json");
     expect(created.code).toBe(0);
     wallet = getAddress((JSON.parse(created.stdout) as { address: string }).address);
-    pot = v12PredictPot(wallet, SAUCE_INTENT_POT_SALT) as Address;
+    pot = v12PredictPot(wallet, DEFAULT_POT_SALT) as Address;
     await base.send(base.deployer, wallet, "0x", parseEther("1"));
     await base.mint(usdc, pot, 10_000_000n);
 
@@ -152,7 +152,7 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     const created = await sauce("wallet", "new", "builder", ...PASSWORD, "--json");
     expect(created.code).toBe(0);
     const builder = getAddress((JSON.parse(created.stdout) as { address: string }).address);
-    const builderPot = getAddress(v12PredictPot(builder, SAUCE_INTENT_POT_SALT) as Address);
+    const builderPot = getAddress(v12PredictPot(builder, DEFAULT_POT_SALT) as Address);
     await base.send(base.deployer, builder, "0x", parseEther("1"));
     await base.mint(usdc, builderPot, 1_000_000n);
     const policy = join(wallets, "builder.policy.json");

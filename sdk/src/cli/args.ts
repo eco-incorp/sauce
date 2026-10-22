@@ -7,11 +7,10 @@
  */
 import { parseArgs } from "node:util";
 import { getAddressEncoder, isAddress as isSolanaAddress } from "@solana/kit";
-import { bytesToBigInt, bytesToHex, getAddress, isAddress, type Address, type Hex } from "viem";
+import { bytesToBigInt, getAddress, isAddress, type Address, type Hex } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
-import { INTENT_FUND_VIA, type IntentFundVia } from "../routes/portal.js";
+import { potSalt, DEFAULT_POT_SALT } from "../deployments/pot.js";
 import type { CookVia } from "../svm/client.js";
 
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
@@ -203,29 +202,6 @@ export function parseAddress(flag: string, raw: string): Address {
   return getAddress(raw);
 }
 
-/** An intent's creator or prover, an account on its source `chain`: an EVM address, or on Solana
- *  a base58 key, as the 32 bytes an intent records. */
-export function parseIntentParty(flag: string, raw: string, chain: CanonicalChain): Hex {
-  if (chain.kind !== "svm") return parseAddress(flag, raw);
-  if (!isSolanaAddress(raw)) {
-    throw new UsageError(
-      `--${flag}: '${raw}' is not a Solana key (base58), as ${chain.slug} names one`,
-    );
-  }
-
-  return bytesToHex(new Uint8Array(getAddressEncoder().encode(raw)));
-}
-
-/** A fill's claimant, the account on the intent's source its reward pays: an EVM address or 32
- *  bytes of hex, or a Solana key (base58), as the 32 bytes a fill records for it. */
-export function parseClaimant(flag: string, raw: string): Hex {
-  if (/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(raw)) return raw as Hex;
-  if (isSolanaAddress(raw)) return bytesToHex(new Uint8Array(getAddressEncoder().encode(raw)));
-  throw new UsageError(
-    `--${flag}: '${raw}' is neither an address (20 bytes), 32 bytes of hex nor a Solana key`,
-  );
-}
-
 /** A non-negative integer amount in wei: decimal digits, or 0x-prefixed hex. */
 export function parseWei(flag: string, raw: string): bigint {
   if (!/^(?:\d+|0x[0-9a-fA-F]+)$/.test(raw)) {
@@ -288,34 +264,13 @@ export function parseSalt(label: string | undefined, hex: string | undefined): S
     return { salt: hex.toLowerCase() as Hex, flag: `--salt-hex ${hex.toLowerCase()}` };
   }
 
-  return { salt: SAUCE_INTENT_POT_SALT };
+  return { salt: DEFAULT_POT_SALT };
 }
 
 /** A Pot's salt, and the flag that chose it, to repeat in a hint. */
 export interface SaltChoice {
   readonly salt: Hex;
   readonly flag?: string;
-}
-
-/** How an intent's reward is funded — `routes/portal.ts#IntentFundVia`, spelled the same here. */
-export function parseFundVia(raw: string, from = "--intent-fund-via"): IntentFundVia {
-  if (!(INTENT_FUND_VIA as readonly string[]).includes(raw)) {
-    throw new UsageError(
-      `${from}: '${raw}' is not ${INTENT_FUND_VIA.join(" or ")} — transfer pays the reward into ` +
-        "the intent's vault and then publishes; publishAndFund approves the Portal, which pulls it",
-    );
-  }
-
-  return raw as IntentFundVia;
-}
-
-/** Absolute Unix seconds. */
-export function parseUnixSeconds(flag: string, raw: string): bigint {
-  if (!/^\d+$/.test(raw)) {
-    throw new UsageError(`--${flag}: '${raw}' is not a Unix time in seconds (e.g. 2000000000)`);
-  }
-
-  return BigInt(raw);
 }
 
 /** A compile-time value: one 256-bit word, or a boolean — what `SauceCompileOptions.defines`

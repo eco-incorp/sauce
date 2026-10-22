@@ -14,14 +14,12 @@ import {
   resolveTokenMap,
   SVM_TOKEN_REGISTRY,
 } from "../src/routes/token-registry.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const TO = "0x6666666666666666666666666666666666666666" as const;
 
 /** The same write, spelled as a direct `@sauce/token` call against a literal token address. */
@@ -32,19 +30,6 @@ function libraryProgram(token: string, write: string, args: string): number[] {
     { pot: POT, engine: ENGINE },
   );
   return Array.from(compiled.compiled.bytecode[0]!);
-}
-
-function evmOptions() {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base" as const,
-    creator: "0x3333333333333333333333333333333333333333" as const,
-    prover: "0x4444444444444444444444444444444444444444" as const,
-    rewardDeadline: 1000n,
-  };
 }
 
 describe("rewriteTokenMembers", () => {
@@ -148,27 +133,25 @@ describe("rewriteTokenMembers", () => {
   });
 });
 
-describe("openRoute: token member rewrite end to end", () => {
-  it("compiles USDC.transfer(...) with options.tokenDefines and produces one cook() call", () => {
-    const built = openRoute("ethereum", `USDC.transfer(${TO}, 5n);`, {
-      ...evmOptions(),
-      tokenDefines: { USDC },
-    }).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+describe("compileSauceRoute: token member rewrite end to end", () => {
+  it("compiles USDC.transfer(...) with options.tokens and produces one cook() call", () => {
+    const built = compileSauceRoute(
+      "ethereum",
+      `USDC.transfer(${TO}, 5n);`,
+      { pot: POT, engine: ENGINE },
+      { tokens: { USDC } },
+    );
+    expect(built.calls).toHaveLength(1);
   });
 
   it("an svm destination refuses a script's token write by name: its accounts go to main", () => {
     expect(() =>
-      openRoute("solana", `USDC.transfer(${TO}, 5n);`, {
-        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-        deadline: 2000n,
-        portal: PORTAL,
-        source: "base",
-        creator: "0x3333333333333333333333333333333333333333",
-        prover: "0x4444444444444444444444444444444444444444",
-        rewardDeadline: 1000n,
-        tokenDefines: { USDC },
-      }),
+      compileSauceRoute(
+        "solana",
+        `USDC.transfer(${TO}, 5n);`,
+        { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        { tokens: { USDC } },
+      ),
     ).toThrow(/`USDC.transfer\(…\)` on Solana: .* this program has no main/);
   });
 });
@@ -177,8 +160,11 @@ describe("openRoute: token member rewrite end to end", () => {
 
 describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with NO tokenDefines", () => {
   it("compiles via the registry default and produces exactly one cook() call", () => {
-    const built = openRoute("base", `USDC.transfer(${TO}, 5n);`, evmOptions()).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+    const built = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, {
+      pot: POT,
+      engine: ENGINE,
+    });
+    expect(built.calls).toHaveLength(1);
   });
 
   it("compileSauceRoute with NO options.tokens at all rewrites via the registry and matches the literal program", () => {

@@ -11,15 +11,14 @@
  * - `sendCalls` on the result: `{ chain, calls: [{ to, value, data }] }`, every transaction below
  *   it in order — the input of Coinbase's Wallet MCP tool `send_calls`, which runs them as one
  *   atomic batch after one approval (EIP-5792). {@link handoff} adds it, on the outermost object
- *   whose transactions are all on one chain that tool names, and only there; a result that spans
- *   chains carries one on each part that does not.
+ *   whose transactions are all on one chain that tool names, and only there.
  *
  * Solana transactions are left as they are: `transaction`, standard base64 with the fee payer's
  * signature empty and every other one present, is already what a wallet's Solana tool takes
  * (Phantom's `solana_send`).
  *
  * A result is read the way `wallet-send.ts#plannedTransactions` reads one — a transaction, a list,
- * `transactions`, `intents[].transactions`, `transaction` — so whatever `sauce_wallet_send` sends,
+ * `transactions`, `transaction` — so whatever `sauce_wallet_send` sends,
  * a wallet's tool can too. Nothing here reaches the network.
  */
 import { isAddress, type Address, type Hex } from "viem";
@@ -119,7 +118,7 @@ const chainIdOf = (raw: unknown, inherited: number | undefined): number | undefi
 };
 
 /** What `value` carries, read as `plannedTransactions` reads it, and whether it holds the
- *  transactions itself (a transaction, `transactions`, an intent, …): where a batch may sit. */
+ *  transactions itself (a transaction, `transactions`, …): where a batch may sit. */
 function carried(value: unknown, inherited: number | undefined): Carried & { holder: boolean } {
   if (Array.isArray(value)) {
     return { ...joined(value.map((each) => carried(each, inherited))), holder: false };
@@ -139,15 +138,6 @@ function carried(value: unknown, inherited: number | undefined): Carried & { hol
   if (Array.isArray(fields.transactions)) {
     return { ...carried(fields.transactions, chainId), holder: true };
   }
-  if (Array.isArray(fields.intents)) {
-    const parts = fields.intents.map((intent) =>
-      intent !== null && typeof intent === "object" && "transactions" in intent
-        ? carried(intent, chainId)
-        : NOTHING,
-    );
-
-    return { ...joined(parts), holder: true };
-  }
   if (fields.transaction !== null && typeof fields.transaction === "object") {
     return { ...carried(fields.transaction, chainId), holder: true };
   }
@@ -155,28 +145,15 @@ function carried(value: unknown, inherited: number | undefined): Carried & { hol
   return { ...NOTHING, holder: false };
 }
 
-/**
- * `sendCalls` on `value` when its transactions are one batch, else on each intent below it that
- * is: a result whose intents fill on two chains carries one batch per intent.
- */
+/** `sendCalls` on `value` when its transactions are one batch. */
 function placeBatches(value: unknown, inherited: number | undefined): unknown {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
   const fields = value as Record<string, unknown>;
   const found = carried(fields, inherited);
   if (!found.holder) return value;
   const batch = batchOf(found);
-  if (batch !== undefined) return { ...fields, sendCalls: batch };
-  if (!Array.isArray(fields.intents)) return value;
-  const chainId = chainIdOf(fields.chainId, inherited);
 
-  return {
-    ...fields,
-    intents: fields.intents.map((intent) =>
-      intent !== null && typeof intent === "object" && "transactions" in intent
-        ? placeBatches(intent, chainId)
-        : intent,
-    ),
-  };
+  return batch === undefined ? value : { ...fields, sendCalls: batch };
 }
 
 /** `sauce pot`'s reading of the chain, saying the Pot has code. */

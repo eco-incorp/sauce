@@ -53,34 +53,7 @@ describe("toolTerms", () => {
       "And 67 stock tokens: stocks lists them, and search <text> finds one",
     );
     assert.equal(toolTerms("sauce run would refuse it"), "a signed run would refuse it");
-    assert.equal(
-      toolTerms(
-        "swap.sauce.ts's intents go to base and optimism: --rpc-url names one endpoint, so give --config, which names each destination's",
-      ),
-      "swap.sauce.ts's intents go to base and optimism: rpcUrl names one endpoint, so give rpcUrls, which names each one",
-    );
-    for (const command of ["sauce fill", "sauce intent fill"]) {
-      assert.equal(
-        toolTerms(
-          `This simulates publishing on arbitrum only. \`${command}\` with the same file and flags, and the destination's endpoint, simulates that.`,
-        ),
-        "This simulates publishing on arbitrum only. sauce_intent_fill with the same inputs, and the destination's endpoint, simulates that.",
-      );
-    }
-    // An intent's commands, as main spells them and grouped under `sauce intent`.
-    for (const line of ["sauce publish --chain base", "sauce intent publish --dry-run"]) {
-      assert.equal(toolTerms(`run ${line} first`), "run sauce_intent_publish first");
-    }
-    assert.equal(toolTerms("then sauce intent claim --chain base"), "then sauce_intent_claim");
-    assert.equal(toolTerms("--intent-fund-via publishAndFund"), "intentFundVia publishAndFund");
-    assert.equal(
-      toolTerms("a claim needs arbitrum's endpoint (chain id 42161)"),
-      'a claim needs arbitrum\'s endpoint (chain id 42161): pass rpcUrls { "arbitrum": "<url>" } with the call',
-    );
-    assert.equal(
-      toolTerms("--intent-reward-deadline 1, --no-prove"),
-      "intentRewardDeadline 1, prove: false",
-    );
+    assert.equal(toolTerms("--salt-hex 0x01, --owner 0xabc"), "saltHex 0x01, owner 0xabc");
     assert.equal(
       toolTerms("run sauce pools --chain base --v4-key 50:1 first"),
       "run sauce_pools first",

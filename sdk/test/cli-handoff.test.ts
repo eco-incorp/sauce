@@ -9,8 +9,6 @@ import { plannedTransactions } from "../src/cli/wallet-send.js";
 
 const POT = "0xDAbdbbb26fbD62585c9aCC367e25146940d40417";
 const KITCHEN = "0x19845b22989150E6B09dE55a661295Dd9188506b";
-const PORTAL = "0x399Dbd5DF04f83103F77A58cBa2B7c4d3cdede97";
-const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 const cook = { to: POT, data: "0xb38dbf14", value: "0x4d2" };
 const deploy = { what: "Kitchen.deployPot", deploysPot: POT, to: KITCHEN, data: "0x5e3bd4b4" };
@@ -50,44 +48,6 @@ describe("handoff", () => {
     expect(plannedTransactions(out)).toEqual(plannedTransactions(plan));
   });
 
-  it("batches every intent's transactions together when they are one chain's", () => {
-    const published = {
-      chainId: 8453,
-      portal: PORTAL,
-      intents: [
-        {
-          intentHash: "0x01",
-          transactions: [{ what: "approve", to: USDC, data: "0x095e", value: "0x0" }],
-        },
-        {
-          intentHash: "0x02",
-          transactions: [{ what: "publish", to: PORTAL, data: "0x01", value: "0x7" }],
-        },
-      ],
-    };
-    const out = handoff(published);
-    expect(out.sendCalls?.calls.map((call) => [call.to, call.value])).toEqual([
-      [USDC, "0x0"],
-      [PORTAL, "0x7"],
-    ]);
-    expect(out.intents.every((intent) => !("sendCalls" in intent))).toBe(true);
-  });
-
-  it("gives an intent of a result that spans chains a batch of its own", () => {
-    const fills = {
-      from: POT,
-      intents: [
-        { intentHash: "0x01", transactions: [{ chainId: 8453, chain: "base", ...cook }] },
-        { intentHash: "0x02", transactions: [{ chainId: 1, chain: "ethereum", ...cook }] },
-      ],
-    };
-    const out = handoff(fills) as typeof fills & { sendCalls?: unknown };
-    expect(out.sendCalls).toBeUndefined();
-    expect(
-      out.intents.map((intent) => (intent as { sendCalls?: { chain: string } }).sendCalls?.chain),
-    ).toEqual(["base", "ethereum"]);
-  });
-
   it("reads a decimal value as one too", () => {
     expect(handoff({ chainId: 8453, ...cook, value: "1234" }).sendCalls?.calls[0]?.value).toBe(
       "0x4d2",
@@ -104,7 +64,7 @@ describe("handoff", () => {
           feePayer: POT,
           transaction: "AQID",
           value: "0",
-          what: "prove",
+          what: "cook",
         },
       ],
     };
@@ -114,7 +74,7 @@ describe("handoff", () => {
   it("batches nothing that is not to be sent: sent, simulated, not ready, or a Pot there already", () => {
     const sent = { transactions: [{ what: "cook", hash: "0xab", status: "success", ...cook }] };
     const simulated = { ok: true, transactions: [{ what: "cook", status: "success", ...cook }] };
-    const notReady = { intents: [{ intentHash: "0x01", ready: false, why: "not yet" }] };
+    const notReady = { ready: false, why: "not yet", transactions: [{ chainId: 8453, ...cook }] };
     const there = {
       chainId: 8453,
       pot: POT,

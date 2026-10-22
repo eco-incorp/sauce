@@ -6,28 +6,20 @@
  */
 import {
   decodeAbiParameters,
-  decodeEventLog,
   formatUnits,
-  getAbiItem,
   getAddress,
   hexToString,
   parseAbi,
-  toEventSelector,
   zeroAddress,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
 
-import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import type { CanonicalChain } from "../chains/canonical.js";
 import { chains } from "../chains/index.js";
-import { PortalABI } from "../protocols/eco-routes/abis.js";
-import { ecoRoutesDeployment } from "../protocols/eco-routes/lookup.js";
-import { denormalizeToEvm } from "../routes/encode.js";
-import { intentFromPublished, predictIntentVault } from "../routes/portal.js";
 import { sourceGlobals } from "../routes/source-globals.js";
-import { svmTokenRows, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import type { Intent } from "../routes/types.js";
+import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 
 /** A log as the node returned it. */
 export interface RawLog {
@@ -44,8 +36,6 @@ const DEPOSIT = "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc91
 const WITHDRAWAL = "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65";
 /** Where a node's `traceTransfers` reports native-currency transfers, as ERC-20 Transfer logs. */
 const NATIVE_EMITTER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-/** The Portal's `IntentFunded(bytes32 intentHash, address funder, bool complete)`. */
-const INTENT_FUNDED = toEventSelector(getAbiItem({ abi: PortalABI, name: "IntentFunded" }));
 
 /** A token, as the output names it. `undefined` decimals print base units. */
 export interface TokenInfo {
@@ -75,22 +65,6 @@ export interface BalanceChange {
   readonly deltas: ReadonlyArray<{ readonly token: Address | "native"; readonly amount: bigint }>;
 }
 
-/** An intent a Portal announced in the cook, read back from its `IntentPublished` log. */
-export interface IntentEffect {
-  readonly intentHash: Hex;
-  /** The Portal that announced it, where its reward is escrowed. */
-  readonly portal: Address;
-  /** The chain it goes to, as the SDK knows it; `undefined` for one it does not. */
-  readonly destination?: CanonicalChain;
-  readonly intent: Intent;
-  /** Its vault, where its reward is held: the Portal's derivation, for the chain's eco-routes
-   *  Portal; absent for an intent another contract announced. */
-  readonly vault?: Address;
-  /** Whether the cook's own logs say the Portal counted it funded (`IntentFunded`, complete). A
-   *  reward paid into the vault before a plain `publish` logs no such event. */
-  readonly funded: boolean;
-}
-
 export interface Effects {
   /** Every token and native movement, in the order the logs record them. */
   readonly moves: readonly Movement[];
@@ -99,8 +73,6 @@ export interface Effects {
   /** Native-currency transfers, or `undefined` when the node did not trace them. */
   readonly native?: readonly Movement[];
   readonly changes: readonly BalanceChange[];
-  /** The intents the cook published, from their Portal's `IntentPublished` and `IntentFunded`. */
-  readonly intents: readonly IntentEffect[];
   /** Every other log, undecoded. */
   readonly other: readonly RawLog[];
   readonly tokens: ReadonlyMap<string, TokenInfo>;
@@ -193,21 +165,12 @@ export async function effectsOf(
   const nativeMoves: Movement[] = [];
   const approvals: ApprovalEvent[] = [];
   const other: RawLog[] = [];
-  const published: Array<{ intent: Intent; intentHash: Hex; portal: Address }> = [];
-  const funded = new Set<string>();
   for (const log of logs) {
     const emitter = getAddress(log.address);
     const [topic0, one, two] = log.topics;
     const amount = amountOf(log.data);
     const topic = topic0?.toLowerCase();
-    const intent = portalIntent(log, chain);
-    const funding = topic === INTENT_FUNDED ? fundedIntent(log) : undefined;
-    if (intent !== undefined) {
-      published.push({ ...intent, portal: emitter });
-    } else if (funding !== undefined) {
-      // Only a complete funding counts: `complete` false is a reward short of what it offers.
-      if (funding.complete) funded.add(`${emitter}:${funding.intentHash}`);
-    } else if (topic === TRANSFER && log.topics.length === 3 && amount !== undefined) {
+    if (topic === TRANSFER && log.topics.length === 3 && amount !== undefined) {
       const parties = { from: topicAddress(one!), to: topicAddress(two!), amount };
       const move: Movement =
         emitter === NATIVE_EMITTER
@@ -272,80 +235,16 @@ export async function effectsOf(
     }))
     .filter((change) => change.deltas.length > 0);
 
-  // Each intent with its vault, which names the vault in what moved: the reward going into it.
-  const named = new Map(labels);
-  // A vault is derived for the chain's eco-routes Portal, whose vaults the SDK knows how to derive;
-  // another contract announcing an intent names none.
-  const registered = ecoRoutesDeployment(chain)?.Portal;
-  const intents = published.map(({ intent, intentHash, portal }): IntentEffect => {
-    const vault =
-      registered !== undefined && getAddress(registered) === portal
-        ? getAddress(predictIntentVault(intent, { portal }))
-        : undefined;
-    if (vault !== undefined && !named.has(vault)) {
-      named.set(vault, `the vault of intent ${shortHash(intentHash)}`);
-    }
-    const destination = CANONICAL_CHAINS.find((each) => BigInt(each.id) === intent.destination);
-
-    return {
-      intentHash,
-      portal,
-      ...(destination === undefined ? {} : { destination }),
-      intent,
-      ...(vault === undefined ? {} : { vault }),
-      funded: funded.has(`${portal}:${intentHash.toLowerCase()}`),
-    };
-  });
-
   return {
     moves,
     transfers,
     approvals,
     ...(traced ? { native: nativeMoves } : {}),
     changes,
-    intents,
     other,
     tokens,
-    labels: named,
+    labels,
   };
-}
-
-/** `0x1234…abcd`: a hash short enough to read in a line. */
-const shortHash = (hash: Hex): string => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
-
-/** The intent an `IntentPublished` log announces, rebuilt and checked against its hash; `undefined`
- *  for any other log, or one that does not rebuild. */
-function portalIntent(
-  log: RawLog,
-  chain: CanonicalChain,
-): { readonly intent: Intent; readonly intentHash: Hex } | undefined {
-  try {
-    return intentFromPublished(log, BigInt(chain.id));
-  } catch {
-    return undefined;
-  }
-}
-
-/** An `IntentFunded` log's intent and whether it was funded completely; `undefined` for a log
- *  that does not decode as one. */
-function fundedIntent(
-  log: RawLog,
-): { readonly intentHash: string; readonly complete: boolean } | undefined {
-  try {
-    const decoded = decodeEventLog({
-      abi: PortalABI,
-      eventName: "IntentFunded",
-      topics: log.topics as [Hex, ...Hex[]],
-      data: log.data,
-      strict: true,
-    });
-
-    return decoded.eventName === "IntentFunded"
-      ? { intentHash: decoded.args.intentHash.toLowerCase(), complete: decoded.args.complete }
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /** `amount` of `token` in whole units with its symbol, or in base units when its decimals are not
@@ -475,7 +374,6 @@ export function roleOf(
 function moveNote(move: Movement, from: string | undefined, to: string | undefined): string {
   if (move.kind === "wrap") return "wrapped";
   if (move.kind === "unwrap") return "unwrapped";
-  if (to?.startsWith("vault of intent ") === true) return "the intent's reward";
   if (move.token !== "native") return "";
   if (from === "wallet" && to === "Pot") return "the cook's value";
   if (to === "Kitchen") return "the Kitchen's fee";
@@ -561,10 +459,6 @@ export function effectLines(effects: Effects): string[] {
   if (effects.native === undefined) {
     lines.push("Native transfers: not reported (the endpoint did not trace them)");
   }
-  if (effects.intents.length > 0) {
-    lines.push("Intents published:");
-    for (const published of effects.intents) lines.push(...intentLines(effects, published));
-  }
   if (effects.other.length > 0) {
     const emitters = new Map<string, number>();
     for (const log of effects.other) {
@@ -580,63 +474,6 @@ export function effectLines(effects: Effects): string[] {
   if (lines.length === 0) lines.push("It moved no tokens and logged nothing.");
 
   return lines;
-}
-
-/** A token amount an intent names on `chainId` (a 32-byte key on Solana), with its registry
- *  symbol where the chain has one, else in base units. */
-function intentAmount(chainId: bigint, token: Hex, amount: bigint): string {
-  const chain = CANONICAL_CHAINS.find((each) => BigInt(each.id) === chainId);
-  if (chain?.kind === "svm") {
-    const row = svmTokenRows(chain).find(
-      (entry) => entry.address.toLowerCase() === token.toLowerCase(),
-    );
-
-    return row === undefined
-      ? `${amount} of ${token} (base units)`
-      : `${formatUnits(amount, row.decimals)} ${row.symbol}`;
-  }
-  let address: Address;
-  try {
-    address = getAddress(denormalizeToEvm(token));
-  } catch {
-    return `${amount} of ${token} (base units)`;
-  }
-  const row = (TOKEN_REGISTRY[Number(chainId)] ?? []).find(
-    (entry) => getAddress(entry.address) === address,
-  );
-
-  return row === undefined
-    ? `${amount} of ${address} (base units)`
-    : `${formatUnits(amount, row.decimals)} ${row.symbol}`;
-}
-
-/** One published intent, for a person: where it goes, what its route delivers and runs, its
- *  reward and its vault. */
-function intentLines(effects: Effects, published: IntentEffect): string[] {
-  const { intent } = published;
-  const to = published.destination?.slug ?? `chain ${intent.destination}`;
-  const delivered = intent.route.tokens.map((token) =>
-    intentAmount(intent.destination, token.token, token.amount),
-  );
-  const reward = [
-    ...intent.reward.tokens.map((token) =>
-      intentAmount(intent.sourceChainId, token.token, token.amount),
-    ),
-    ...(intent.reward.nativeAmount > 0n
-      ? [formatAmount(effects, "native", intent.reward.nativeAmount)]
-      : []),
-  ];
-  const calls = intent.route.calls.length;
-
-  return [
-    `  intent ${published.intentHash} to ${to}, through the Portal ${published.portal}`,
-    `    its route: ${calls} call${calls === 1 ? "" : "s"}` +
-      (delivered.length === 0 ? "" : `, the solver delivering ${delivered.join(" and ")}`),
-    `    its reward: ${reward.join(" and ") || "nothing"}, refundable from ` +
-      `${new Date(Number(intent.reward.deadline) * 1000).toISOString()} if no fill is proven` +
-      (published.vault === undefined ? "" : `, held in its vault ${published.vault}`) +
-      (published.funded ? " (funded)" : ""),
-  ];
 }
 
 const tokenJson = (effects: Effects, token: Address | "native") => {
@@ -750,24 +587,6 @@ export function effectsJson(effects: Effects): Record<string, unknown> {
         amount: delta.amount.toString(),
         ...units(effects, delta.token, delta.amount),
       })),
-    })),
-    intents: effects.intents.map((published) => ({
-      intentHash: published.intentHash,
-      portal: published.portal,
-      destination: published.destination?.slug ?? published.intent.destination.toString(),
-      ...(published.vault === undefined ? {} : { vault: published.vault }),
-      funded: published.funded,
-      routeCalls: published.intent.route.calls.length,
-      routeTokens: published.intent.route.tokens.map((token) => ({
-        token: token.token,
-        amount: token.amount.toString(),
-      })),
-      rewardTokens: published.intent.reward.tokens.map((token) => ({
-        token: token.token,
-        amount: token.amount.toString(),
-      })),
-      rewardNativeAmount: published.intent.reward.nativeAmount.toString(),
-      rewardDeadline: published.intent.reward.deadline.toString(),
     })),
     otherLogs: effects.other.map((log) => ({
       address: getAddress(log.address),

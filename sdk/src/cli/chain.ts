@@ -34,7 +34,6 @@ import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
 import { v12Pot } from "../evm/engine.js";
 import { destinationExecutionFee } from "../evm/execution-fee.js";
-import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
@@ -405,16 +404,14 @@ const ERC20_ERRORS = parseAbi([
   "error ERC20InvalidSpender(address spender)",
 ]);
 
-/** The errors a cook or a publish can revert with by name: the Pot's, the Kitchen's, the Pot's
- *  Router's (which `@sauce/router` swaps through), Permit2's (which `--fund` pulls through),
- *  whatever the registry's Portal and prover ABIs declare, and ERC-20's standard ones. */
+/** The errors a cook can revert with by name: the Pot's, the Kitchen's, the Pot's Router's (which
+ *  `@sauce/router` swaps through), Permit2's (which `--fund` pulls through), and ERC-20's standard
+ *  ones. */
 const ERRORS = [
   ...potArtifact.abi,
   ...kitchenArtifact.abi,
   ...routerArtifact.abi,
   ...Permit2ABI,
-  ...PortalABI,
-  ...ProverABI,
   ...ERC20_ERRORS,
 ].filter((item) => item.type === "error") as Abi;
 

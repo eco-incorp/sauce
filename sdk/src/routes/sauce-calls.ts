@@ -1,12 +1,10 @@
 /**
- * eco-routes Sauce-bytecode `route.calls[]` builders — E3.3.
+ * Sauce-bytecode call builders.
  *
- * Turns compiled Sauce bytecode (the compiler's output) into the `CallInput`(s) that slot straight
- * into a `RouteInput.calls` (E3.1's fluent builder) and flow unchanged through `normalizeRoute` /
- * `encodeRouteEvm` / `encodeRouteSvm` (E3.2). This module does not re-implement either of those —
- * it only decides WHAT the `target`/`data`/`value` of a Sauce-executing call are, forking on chain
+ * Turns compiled Sauce bytecode (the compiler's output) into the `CallInput`(s) that run it: this
+ * module only decides WHAT the `target`/`data`/`value` of a Sauce-executing call are, forking on chain
  * kind (`../chains/canonical.js` `isEvm`/`isSvm`, via `encode.js#kindOf` — bigint-aware, so a native
- * `Intent.destination` passes through with no silent evm mis-classification).
+ * chain id passes through with no silent evm mis-classification).
  *
  * EVM: `target = pot`, `data = v12Pot.encodeCook(engine, program)` (`../evm/engine.js`, reused verbatim
  * — no re-encoding), `value` defaults to `0n`. The Pot address is deliberately NOT defaulted: it is
@@ -20,7 +18,7 @@
  * buffer address, it builds an `execute_from_account` instruction
  * (`../svm/instructions.js#buildExecuteFromAccountInstruction`, the `/svm/engine` kit surface) and
  * wraps it in the Portal `CalldataWithAccounts` Borsh envelope (`../svm/intent.js
- * #encodePortalCalldataWithAccounts`) — that envelope IS the SVM route call's `data`.
+ * #encodePortalCalldataWithAccounts`) — that envelope IS the SVM call's `data`.
  *
  * WHY THIS FILE IMPORTS `@solana/kit` BUT NEVER `@solana/web3.js`: `sdk/src/index.ts` re-exports
  * `routes` from the main SDK barrel, and `@solana/web3.js` is not a dependency of this package at
@@ -93,9 +91,8 @@ export interface SauceEvmCallParams {
  * An EVM call these builders return, in both of the shapes it is used in:
  *
  * - a transaction or `eth_call`, `{ to, data, value }` — the shape every other request the SDK builds
- *   has (`destinationExecutionFee()`, `publishAndFundTx`, `approvalTxs`), and what a wallet or
- *   `client.call` takes as it is;
- * - a route call, `{ target, data, value }` — the Portal's `Call` struct, for `RouteInput.calls`.
+ *   has (`destinationExecutionFee()`), and what a wallet or `client.call` takes as it is;
+ * - a call record, `{ target, data, value }`.
  *
  * `to` and `target` name the same contract: `to` as its checksummed 20-byte address, `target` as
  * the route records it. `target` stays for route calls and every caller that already reads it.

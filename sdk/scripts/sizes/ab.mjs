@@ -1,7 +1,7 @@
 // Two SDK trees, one process, compiles interleaved so machine load falls on both alike: the median
 // of `repeats` cold (compiler's function cache cleared) and warm compiles of each program, in ms.
 //   node ab.mjs <tree-a> <tree-b> [repeats]  (both trees link the same compiler)
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { clearFunctionCache } from "sauce-compiler";
@@ -21,7 +21,9 @@ const options = {
   },
 };
 const trivial = "function main(): Uint256 { return 1; }";
-const file = (path) => readFileSync(join(b, path), "utf8");
+// A program the tree no longer has (the intent files of an earlier tree) is left out.
+const file = (path) =>
+  existsSync(join(b, path)) ? readFileSync(join(b, path), "utf8") : undefined;
 const cases = [
   ["trivial@base", "base", trivial],
   ["trivial@ethereum", "ethereum", trivial],
@@ -39,7 +41,7 @@ const cases = [
     "base",
     file("skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts"),
   ],
-];
+].filter(([, , text]) => text !== undefined);
 const median = (xs) => xs.sort((x, y) => x - y)[Math.floor(xs.length / 2)];
 const rows = [];
 for (const [name, chain, text] of cases) {

@@ -16,8 +16,7 @@
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
-import { getAddressDecoder, type Address as SvmAddress } from "@solana/kit";
-import { bytesToHex, hexToBytes } from "viem";
+import { bytesToHex } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
@@ -38,40 +37,10 @@ import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protoco
 import { rewriteAvailability } from "./available.js";
 import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
-import { encodeCompactArguments } from "../compact-arguments.js";
-import {
-  v12KitchenAddress,
-  v12SvmEngineProgramId,
-  v12SvmKitchenProgramId,
-} from "../deployments/index.js";
-import { resolveSvmAccountNameSync, type ResolvedSvmAccountName } from "../svm/account-names.js";
-import {
-  svmCookRoute,
-  svmIntentExecutor,
-  svmIntentPotOf,
-  svmTransferRoute,
-  type SvmIntentRoute,
-  type SvmRouteMint,
-} from "../svm/intent-route.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
-import { denormalizeToEvm } from "./encode.js";
-import { toUniversalAddress } from "./normalize.js";
-import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
-import { resolveIntentPot } from "./intent-pot.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
-import {
-  ecoRoutesPortal,
-  ecoRoutesProver,
-  type EcoRoutesSelector,
-} from "../protocols/eco-routes/lookup.js";
-import {
-  rewriteIntentSugar,
-  type IntentSugarContext,
-  type IntentSugarDefaults,
-  type LoweredIntent,
-} from "./intent-sugar.js";
 import { bindEntryArguments, mainParams, type EntryParam, type EntryValue } from "./entry.js";
-import type { AddressInput, CallInput, Hex } from "./types.js";
+import type { AddressInput, CallInput } from "./types.js";
 
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
@@ -89,10 +58,10 @@ export interface SauceCompileOptions {
   /**
    * Compile-time parameters, injected into every module as a module-scope `const` — a define
    * REPLACES the module's own `const` of that name and is constant-folded, so a given set of values
-   * yields fixed bytecode. This is how a standalone `.sauce.ts` asset (e.g.
-   * `recipes/cctp-split.sauce.ts`) is specialized for one intent. A value is one 256-bit word, so an
-   * array or a lookup table cannot be supplied this way — a program needing a variable-length list
-   * generates one declaration per element instead (see `svm/recipes/index.ts`).
+   * yields fixed bytecode. This is how a standalone `.sauce.ts` asset (e.g. a recipe's program) is
+   * specialized for one use. A value is one 256-bit word, so an array or a lookup table cannot be
+   * supplied this way — a program needing a variable-length list generates one declaration per
+   * element instead (see `svm/recipes/index.ts`).
    */
   defines?: Record<string, bigint | boolean | number>;
   /** Caller token symbol -> address OVERRIDES, merged per-key on top of `token-registry.ts`'s
@@ -115,18 +84,8 @@ export interface SauceCompileOptions {
    * always loses to user code — a name the module declares, imports or binds wins silently.
    */
   ambient?: string[];
-  /**
-   * Settings for `Chain(() => { ... }).reward({ ... })` written inside the program — creating an
-   * intent from a program, rather than compiling a program into one. Everything the SDK can look up
-   * it looks up; these are the fields it cannot, plus overrides. See `intent-sugar.ts`.
-   *
-   * Omitted entirely, the sugar still lowers if the source uses it — `deadline` and `creator` have
-   * no safe defaults and are reported by name when missing.
-   */
-  intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
-  /** Compile for compact-v1 entry arguments. Set by the intent lowering for a child program whose
-   *  captured values arrive at run time; a caller wanting entry arguments generally uses the raw
-   *  compiler. */
+  /** Compile for compact-v1 entry arguments; a caller wanting entry arguments generally uses the
+   *  raw compiler. */
   compactArgs?: boolean;
 }
 
@@ -154,8 +113,7 @@ export interface CompiledSauceRoute {
   readonly source: string;
 }
 
-/** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
- *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
+/** Accessor name -> chain, for every canonical chain: the chains `import { Base }` gives a caller. */
 let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
 export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
   chainAccessorCache ??= new Map(
@@ -171,60 +129,15 @@ type DefineValue = bigint | boolean | number;
 /**
  * The chain-scoped values a compile gets beyond the caller's options. Internal to the SDK — passed
  * beside the options rather than inside them, so the public option surface stays what
- * `compileSauceRoute` documents. `openRoute` supplies one for the program it compiles; every nested
- * level gets {@link NESTED_SCOPE}.
+ * `compileSauceRoute` documents. `compileSauceProgram` supplies one for the program it compiles.
  */
 export interface RouteScope {
   /**
    * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
    * token symbols (`ambient.ts#chainDefines`). A function rather than values because the values
-   * differ per chain, and a program names more than one chain as soon as it opens an intent.
+   * differ per chain.
    */
   readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
-}
-
-/** What a nested level resolves its chain-scoped names with: its own chain's registry values and
- *  nothing a caller supplied for another chain. */
-const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => sharedChainDefines(chain) };
-
-/**
- * The options and scope a level on `destination` gets, when a program compiled for `enclosing`
- * names it: an intent's body there, its delivery, and the program that body compiles to.
- *
- * NAMES ARE SCOPED PER CHAIN, the way protocol accessors already are (they fold in each chain's own
- * literal address). A token symbol, `chainId` or a protocol define means the chain its part runs on.
- * So everything the caller supplied under a chain-scoped name — a `defines` entry named like one of
- * the enclosing chain's values or the destination's, and every `tokens` override — belongs to the
- * program it was supplied for, and is dropped for the level on another chain. That level takes its
- * own chain's values instead. What the caller named that no chain uses (`RECIPIENT`) holds at every
- * depth.
- *
- * Name-based, not value-based: it does not matter whether a `USDC` define came from
- * `chainDefines(base)` or was chosen by hand. It was a Base name in either case. This is what closes
- * both ways Base's USDC reached an Arbitrum body: `openRoute` folding its chain's values into
- * `defines`, and a direct caller passing them there itself.
- *
- * A level on the SAME chain keeps the enclosing options: its names are the ones they were given for.
- */
-function levelOn(
-  enclosing: ChainRefResolved,
-  destination: ChainRefResolved,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-): { readonly options: SauceCompileOptions; readonly scope: RouteScope } {
-  if (destination.id === enclosing.id) return { options, scope };
-  const chainScoped = new Set([
-    ...Object.keys(scope.chainDefines?.(enclosing) ?? {}),
-    ...Object.keys(definesOf(enclosing, options.tokens)),
-    ...Object.keys(sharedChainDefines(destination)),
-  ]);
-  const defines =
-    options.defines === undefined
-      ? undefined
-      : Object.fromEntries(
-          Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
-        );
-  return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
 }
 
 /** A chain's defines with `tokens` over its registry's: the chain's own, built once, with none. */
@@ -258,220 +171,6 @@ function baseDefines(
   return merged;
 }
 
-/** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
- *  then its chain-scoped values when a scope supplies them, then the caller's own defines, with
- *  the caller winning — the same precedence the compiler applies. */
-function compileTimeValues(
-  chain: ChainRefResolved,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-): ReadonlyMap<string, bigint> {
-  const values = new Map<string, bigint>();
-  for (const [symbol, address] of resolveTokenMap(chain, options.tokens)) {
-    values.set(symbol, address);
-  }
-  for (const [name, value] of Object.entries({
-    ...scope.chainDefines?.(chain),
-    ...options.defines,
-  })) {
-    if (typeof value === "bigint") values.set(name, value);
-    else if (typeof value === "number") values.set(name, BigInt(Math.trunc(value)));
-    else values.set(name, value ? 1n : 0n);
-  }
-  return values;
-}
-
-/**
- * Compiles a closure body as a program for its own destination chain, and wraps it in the `cook`
- * the child's route will call.
- *
- * RE-ENTERS the route compile, which is what makes this general rather than a special case: the
- * child gets that chain's token and protocol rewrites, and the intent lowering runs again inside
- * it, so an intent opened within an intent is lowered by the same code at every depth. It is handed
- * the options and scope `levelOn` gives its chain, so its chain-scoped names are its own chain's.
- *
- * Captured values arrive as compact-v1 entry arguments at a DECLARED width. Minimal encoding would
- * move the payload's length with the values, leaving nothing at a fixed offset to splice; a
- * declared width keeps exactly one encoding per value and a constant length, which is the property
- * `compact-arguments.ts`'s `scalarWidth` exists for.
- */
-function compileIntentChild(
-  destination: ChainRefResolved,
-  childSource: string,
-  captures: readonly string[],
-  destinationPortal: AddressInput,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-): CompiledChild {
-  const intents = options.intents ?? {};
-  // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
-  // route call must cook as is the Executor of the Portal this child's route RECORDS, itself that
-  // Portal's second CREATE. Both ends are already in the SDK, so this needs no chain read and no
-  // caller input -- `intents.pot` remains as an override for a Pot the caller owns instead. Derived
-  // is not deployed: the Pot must exist before the child is fulfilled (`intent-pot.ts`).
-  const { pot, engine } = resolveIntentPot(destinationPortal, intents);
-  if (intents.executionFee === undefined) {
-    throw new Error(
-      `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
-        `chain's Kitchen fee — set \`intents.executionFee\`. This one is NOT derivable: the fee is ` +
-        `mutable on-chain and lives on the destination, which the source chain cannot read while it ` +
-        `executes. Read it before building with \`destinationExecutionFee()\` from ` +
-        `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
-    );
-  }
-  const compiled = compileScopedRoute(
-    destination,
-    childSource,
-    { pot, engine, value: intents.executionFee },
-    { ...options, compactArgs: captures.length > 0 },
-    scope,
-  );
-
-  let program: Hex = bytesToHex(compiled.compiled.bytecode[0]!);
-  const captureSentinels: bigint[] = [];
-  if (captures.length > 0) {
-    const schema = compiled.compiled.entrySchema;
-    if (schema === undefined) {
-      throw new Error(
-        "intent sugar: the child program takes captured values but the compiler returned no entry " +
-          "schema — its arguments cannot be encoded.",
-      );
-    }
-    captures.forEach((_, index) => captureSentinels.push(childCaptureSentinel(index)));
-    const args = encodeCompactArguments(schema, captureSentinels, { scalarWidth: 32 });
-    program = `${program}${bytesToHex(args).slice(2)}` as Hex;
-  }
-
-  const call = buildSauceEvmCall({
-    pot,
-    engine,
-    program,
-    value: intents.executionFee,
-  });
-
-  return {
-    call: {
-      target: denormalizeToEvm(toUniversalAddress(call.target)) as Hex,
-      data: call.data,
-      value: intents.executionFee,
-    },
-    captureSentinels,
-  };
-}
-
-/** A 32-byte word as the Solana key it is. */
-function svmKeyOfWord(value: bigint, what: string): SvmAddress {
-  if (value < 0n || value >= 1n << 256n) throw new Error(`${what} is not a 32-byte Solana key`);
-
-  return getAddressDecoder().decode(hexToBytes(`0x${value.toString(16).padStart(64, "0")}`));
-}
-
-/** A mint `chain` registers, with what a route moving it needs: its program and decimals. */
-function svmMintOf(chain: CanonicalChain, mint: bigint): SvmRouteMint {
-  const row = svmTokenRows(chain).find((candidate) => BigInt(candidate.address) === mint);
-  if (row === undefined) {
-    throw new Error(
-      `intent sugar: ${svmKeyOfWord(mint, "a mint")} is not a mint ${chain.slug} registers: a ` +
-        "route there moves a registered token (sauce globals --chain solana --tokens), whose " +
-        "program and decimals a transfer names",
-    );
-  }
-
-  return {
-    mint: getAddressDecoder().decode(hexToBytes(row.address)),
-    tokenProgram: row.tokenProgram as SvmAddress,
-    decimals: row.decimals,
-  };
-}
-
-/**
- * Compiles an intent's body for Solana, and builds the route that cooks it on the Pot the Portal's
- * executor owns (`svm/intent-route.ts#svmCookRoute`): the body's accounts, which the token methods
- * and account expressions add to its `main` with how each is derived, resolved for that cook — the
- * Pot its `self`, the executor its `owner` — before anything is read from the cluster. It re-enters
- * the route compile as `compileIntentChild` does, with the options and scope `levelOn` gives the
- * chain.
- */
-function compileSvmIntentChild(
-  destination: CanonicalChain,
-  childSource: string,
-  portalInput: AddressInput,
-  delivered: readonly { readonly token: bigint; readonly amount: bigint }[],
-  level: { readonly options: SauceCompileOptions; readonly scope: RouteScope },
-): SvmIntentRoute {
-  const state = level.options.intents?.svm ?? {};
-  const executionFee = state.executionFee ?? level.options.intents?.executionFee;
-  if (executionFee === undefined) {
-    throw new Error(
-      `intent sugar: the intent on ${destination.slug} runs a program, so its cook pays the ` +
-        "Kitchen's fee there, in lamports: set `intents.svm.executionFee`, read from the Kitchen's " +
-        "fee config on the cluster (the sauce command's --intent-execution-fee auto reads it).",
-    );
-  }
-  if (state.potExists === undefined) {
-    throw new Error(
-      `intent sugar: the intent on ${destination.slug} runs a program on the Pot the Portal's ` +
-        "executor owns, and whether that Pot exists decides the route: one that does not creates " +
-        "it (only a route can), and a route creating a Pot that exists can never be filled. Read " +
-        "it from the cluster and set `intents.svm.potExists` (the sauce command reads it).",
-    );
-  }
-  const portal = svmKeyOfWord(BigInt(toUniversalAddress(portalInput)), "the Portal");
-  const kitchen = v12SvmKitchenProgramId() as SvmAddress;
-  const { options } = level;
-  const program = compileForChain(
-    destination,
-    childSource,
-    { ...options, target: undefined, compactArgs: false },
-    level.scope,
-  );
-  const manifest = program.manifest ?? { accounts: [] };
-  const context = {
-    chain: destination,
-    owner: svmIntentExecutor(portal),
-    pot: svmIntentPotOf({ portal, kitchen }),
-    via: "kitchen" as const,
-  };
-  const accounts: Record<string, ResolvedSvmAccountName> = {};
-  for (const entry of manifest.accounts) {
-    if (entry.kind !== "slot") continue;
-    const derivation = program.derivedAccounts?.[entry.name];
-    if (derivation === undefined) {
-      throw new Error(
-        `intent sugar: the intent's body on ${destination.slug} takes the account ` +
-          `\`${entry.name}\`, which nothing derives: write it where it is used ` +
-          "(Solana.account(<key>), Solana.pda(...), USDC.accountOf(holder)), so the route can " +
-          "attach it",
-      );
-    }
-    try {
-      accounts[entry.name] = resolveSvmAccountNameSync(derivation, context);
-    } catch (error) {
-      throw new Error(
-        `intent sugar: the intent's account \`${entry.name}\` (${derivation}) on ` +
-          `${destination.slug}: ${(error as Error).message}`,
-        { cause: error },
-      );
-    }
-  }
-
-  return svmCookRoute({
-    portal,
-    kitchen,
-    engine: v12SvmEngineProgramId() as SvmAddress,
-    bytecode: program.compiled.bytecode[0]!,
-    manifest,
-    accounts,
-    executionFee,
-    delivered: delivered.map((token) => ({
-      ...svmMintOf(destination, token.token),
-      amount: token.amount,
-    })),
-    potExists: state.potExists,
-    existing: new Set(state.existing ?? []),
-  });
-}
-
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -495,8 +194,7 @@ export function compileSauceRoute(
 }
 
 /**
- * {@link compileSauceRoute} with a {@link RouteScope} — `openRoute`'s entry, and every nested
- * intent's. Not exported from the package.
+ * {@link compileSauceRoute} with a {@link RouteScope}. Not exported from the package.
  */
 export function compileScopedRoute(
   destination: ChainRef,
@@ -592,14 +290,6 @@ export interface CompiledSauceProgram {
    * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
    */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
-  /**
-   * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
-   * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
-   * Portal transactions that publish it, can be built without running the program. One that
-   * captures a local of the program holds a sentinel where the value will be, which only exists
-   * once the program runs.
-   */
-  readonly intents: readonly LoweredIntent[];
   /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
   readonly source: string;
 }
@@ -616,9 +306,8 @@ export interface DerivedValue {
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
    * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. How a
-   * wallet publishes the intents a program opens from values known before anything runs. Leave it
-   * out to compile `main` taking its arguments as it runs.
+   * unsigned integer, an address or a `bool`), and the program then takes none at run time. Leave
+   * it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
   /**
@@ -631,18 +320,14 @@ export interface SauceProgramOptions extends SauceCompileOptions {
 }
 
 /**
- * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
- * the destination half of an intent.
+ * Compiles a standalone program for `chain`: a program that runs directly on a Pot.
  *
- * It gets everything `openRoute` gives a route body except the intent around it: the chain's
- * ambient bundle (`chainId`, protocol addresses and token symbols as compile-time values scoped to
- * this chain, and the `@sauce/token` functions with no import), the token and protocol syntax, and
- * intents the program itself opens (`Arbitrum(() => { ... }).reward({ ... })`, which take their deadline and
- * creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
+ * It gets the chain's ambient bundle (`chainId`, protocol addresses and token symbols as
+ * compile-time values scoped to this chain, and the `@sauce/token` functions with no import) and
+ * the token and protocol syntax. So one source compiles, unchanged, for any chain whose names it
  * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them. Or `options.args` binds them into the program as
- * it compiles, as `sauce intent publish --args` does: then the intents it opens are fixed, and a
- * wallet can publish them (`intentSourceTxs`).
+ * it compiles.
  */
 export function compileSauceProgram(
   chain: ChainRef,
@@ -660,10 +345,9 @@ export function compileSauceProgram(
   }
   const compile: SauceCompileOptions =
     bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
-  // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
-  // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
-  // `defines`, so an intent the program opens on another chain gets that chain's own (`levelOn`),
-  // and `defines` stays exactly what the caller wrote.
+  // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
+  // NAMES travel as a scope for this program's chain, never in `defines`, so `defines` stays exactly
+  // what the caller wrote.
   const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
   const scope: RouteScope = {
     chainDefines: (on) => definesOf(on, compile.tokens),
@@ -700,93 +384,7 @@ export function compileSauceProgram(
     ...(derivedValues.length === 0 ? {} : { derivedValues }),
     ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
     ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
-    intents: program.intents,
     source: program.source,
-  };
-}
-
-/** What the intent sugar needs of a program compiled for `chain`, the intents' source. */
-function intentSugarContext(
-  chain: CanonicalChain,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-  publishOnly?: boolean,
-): IntentSugarContext {
-  return {
-    source: chain,
-    chains: chainAccessorNames(),
-    // This chain's values for this chain — the program's own names and the reward it funds — and
-    // each other chain's own for a body there: see `levelOn`.
-    definesFor: (destination) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileTimeValues(destination, level.options, level.scope);
-    },
-    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
-    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
-    defaults: options.intents ?? {},
-    compileChild: (destination, childSource, captures, destinationPortal) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileIntentChild(
-        destination,
-        childSource,
-        captures,
-        destinationPortal,
-        level.options,
-        level.scope,
-      );
-    },
-    svmTransfers: (destination, portal, transfers) =>
-      svmTransferRoute({
-        portal: svmKeyOfWord(BigInt(toUniversalAddress(portal)), "the Portal"),
-        transfers: transfers.map((transfer) => ({
-          ...svmMintOf(destination, transfer.mint),
-          recipient: svmKeyOfWord(transfer.recipient, "a transfer's recipient"),
-          amount: transfer.amount,
-        })),
-        existing: new Set(options.intents?.svm?.existing ?? []),
-      }),
-    svmProgram: (destination, childSource, portal, delivered) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileSvmIntentChild(destination, childSource, portal, delivered, level);
-    },
-    ...(publishOnly === true ? { publishOnly } : {}),
-  };
-}
-
-/**
- * The intents a program opens, as {@link compileSauceProgram} lowers them, without compiling the
- * program that would publish them: what a WALLET publishes. The only way to build an intent whose
- * source is Solana, whose Portal a wallet calls itself (`svm/portal-source.ts`): a program running
- * on Solana does not open one, and its compile says so.
- */
-export function lowerProgramIntents(
-  chain: ChainRef,
-  source: string,
-  options: SauceProgramOptions = {},
-): {
-  readonly chain: CanonicalChain;
-  readonly intents: readonly LoweredIntent[];
-  readonly entryParams: readonly EntryParam[];
-} {
-  const resolved = requireChain(chain);
-  const { args, ...given } = options;
-  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const compile: SauceCompileOptions =
-    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
-  const scope: RouteScope = { chainDefines: (on) => definesOf(on, compile.tokens) };
-  const text = bound?.source ?? source;
-  const available = rewriteAvailability(text, resolved, resolveTokenMap(resolved, compile.tokens));
-  const sugar = rewriteIntentSugar(
-    available.source,
-    intentSugarContext(resolved, compile, scope, true),
-  );
-
-  return {
-    chain: resolved,
-    intents: sugar.intents,
-    entryParams: mainParams(text).filter(
-      (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
-    ),
   };
 }
 
@@ -813,7 +411,6 @@ function compileForChain(
   readonly derivedValues?: Readonly<Record<string, string>>;
   readonly stoppable?: readonly string[];
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
-  readonly intents: readonly LoweredIntent[];
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -842,35 +439,24 @@ function compileForChain(
   let source = sauce;
 
   // `available(...)` FIRST: it removes the branches that name a contract or token this chain lacks,
-  // before any other pass resolves a name in them (see available.ts). A closure body is left for its
-  // own chain's compile.
+  // before any other pass resolves a name in them (see available.ts).
   source = rewriteAvailability(source, chain, tokenMap).source;
 
   // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
   // a `const` holding one) becomes the spelling that names the contract the result is
   // (`UniswapV3.Pool(<the call>).liquidity()`, a token's writes `Token(<the call>).transfer(...)`),
-  // which the token and accessor passes below lower as written. It runs before the intent sugar
-  // too, while the program is whole: an intent body calling a method on the program's own
-  // `const pool` is rewritten here, where `pool` is declared, and the body's own compile then finds
-  // the explicit spelling. It claims only calls, never `<result>.<Sym>`, the token pass's balance
-  // read. EVM only, as contract bindings are.
+  // which the token and accessor passes below lower as written. It claims only calls, never
+  // `<result>.<Sym>`, the token pass's balance read. EVM only, as contract bindings are.
   if (options.accessors !== false && chain.kind === "evm") {
     source = rewriteContractResults(source, chain).source;
   }
 
-  // The intent sugar runs next, on the source as written but for decided `available(...)`
-  // branches and the results rewritten above. It reads `USDC` and `RECIPIENT` as compile-time
-  // values itself, so a token rewrite that had already turned `USDC.transfer(...)` into
-  // `__sauce_transfer(USDC, ...)` would leave it nothing it recognises. What it leaves behind is
-  // ordinary `evm.call` statements, which every later pass is free to walk over.
-  const sugar = rewriteIntentSugar(source, intentSugarContext(chain, options, scope));
-  source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
   // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
-  // scoped values, when `openRoute` supplied a scope (ambient.ts#chainDefines resolves the SAME
-  // registry, so the token symbols agree), and the caller's own defines over both.
+  // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the
+  // SAME registry, so the token symbols agree), and the caller's own defines over both.
   const scoped = scope.chainDefines?.(chain);
   // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
   // over as they are when the caller adds none, so the compile adapter converts them once.
@@ -921,7 +507,7 @@ function compileForChain(
       svmTokenValues(tokenMap, options.defines),
       svmTokenRows(chain),
       // The caller's values, which a holder may name as a key: main's arguments bound into the
-      // program (`args`), an intent's body reading the enclosing program's.
+      // program (`args`).
       new Map(
         Object.entries(options.defines ?? {}).filter(
           (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
@@ -1004,7 +590,6 @@ function compileForChain(
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-  const { intents } = sugar;
 
   return {
     chain,
@@ -1016,7 +601,6 @@ function compileForChain(
     ...(derivedValues === undefined ? {} : { derivedValues }),
     ...(stoppable === undefined ? {} : { stoppable }),
     ...(stoppableRuns === undefined ? {} : { stoppableRuns }),
-    intents,
   };
 }
 

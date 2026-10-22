@@ -6,8 +6,8 @@
  * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable: it reads a
  * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
  * `sauce` command hands it (`McpServeOptions.publicRpcs`). Over stdio it keeps the `sauce`
- * command's stores in the directories the command names (`McpServeOptions.stores`: the Pot store,
- * the intent store and the wallet directory, by default), and serves the wallet tools: they sign
+ * command's stores in the directories the command names (`McpServeOptions.stores`: the Pot store
+ * and the wallet directory, by default), and serves the wallet tools: they sign
  * with the wallets of that directory alone, once enabled — by the password the `sauce` command read
  * at start from the source it was given, or by the source an agent names to `sauce_wallet_enable`,
  * which that command reads for it. Over HTTP it never signs and keeps nothing. A newer
@@ -22,7 +22,6 @@ import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "./config.js";
 import { createRpcGuard } from "./guard.js";
 import { DEFAULT_MAX_BODY, endpointUrl, isLoopback, serveHttp } from "./http.js";
 import {
-  IntentStore,
   keepsAny,
   PotStore,
   UsageError,
@@ -84,9 +83,6 @@ async function serve(options: McpServeOptions): Promise<void> {
     // The command's stores, kept as the command keeps them: its caller is the user of this machine.
     const stores: LocalStores = {
       ...(options.stores?.pots === undefined ? {} : { pots: new PotStore(options.stores.pots) }),
-      ...(options.stores?.intents === undefined
-        ? {}
-        : { intents: new IntentStore(options.stores.intents) }),
     };
     // Its caller's own files: a program may be named by path.
     await createSauceServer({
@@ -112,11 +108,6 @@ async function serve(options: McpServeOptions): Promise<void> {
     if (stores.pots !== undefined && options.stores?.named?.includes("pots") === true) {
       options.log(`sauce mcp: keeping the Pots its transactions deploy in ${stores.pots.dir}\n`);
     }
-    if (stores.intents !== undefined && options.stores?.named?.includes("intents") === true) {
-      options.log(
-        `sauce mcp: keeping the intents its transactions touch in ${stores.intents.dir}\n`,
-      );
-    }
 
     return;
   }
@@ -125,7 +116,7 @@ async function serve(options: McpServeOptions): Promise<void> {
     throw new UsageError("--wallets is for stdio: the HTTP server never signs");
   }
   if (options.stores !== undefined) {
-    throw new UsageError("--pots and --store are for stdio: the HTTP server keeps nothing");
+    throw new UsageError("--pots is for stdio: the HTTP server keeps nothing");
   }
   const port = wholeNumber("http", options.http, 0, 65_535);
   const host = options.host ?? "127.0.0.1";

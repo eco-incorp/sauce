@@ -33,7 +33,6 @@ describe("action ABI bindings", () => {
         `${name} could collide with a rewrite-synthesized I<Protocol>_<Contract>`,
       );
       assert.notEqual(name, "IERC20", "the route compiler injects its own IERC20 import");
-      assert.notEqual(name, "IPortal", "the route compiler layers its own IPortal binding");
     }
   });
 

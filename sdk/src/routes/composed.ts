@@ -1,8 +1,7 @@
 /**
- * The composed chain accessor -- `Base` as the SDK hands it out: a callable
- * forwarding to `origin.route`, plus `.chain`/`.route`, the lazy contract
- * namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens
- * (`Base.USDC`) and, for an `svm`-kind chain, the svm venue accessor tree.
+ * The composed chain accessor -- `Base` as the SDK hands it out: `.chain`, the lazy contract
+ * namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`Base.USDC`) and, for
+ * an `svm`-kind chain, the svm venue accessor tree.
  *
  * One shape, two delivery paths: the generated NAMED EXPORTS
  * (`./chain-exports.generated.ts`, what `import { Base }` resolves) and the
@@ -14,8 +13,7 @@
 import type { CanonicalChain } from "../chains/canonical.js";
 import { chainAccessors } from "./accessors.js";
 // Composes each chain accessor with its native contract accessor tree
-// (`Base.Uniswap.UniversalRouter.method(...)`) alongside the eco-routes DSL
-// (`Base.route(...)`) -- see composeChainGlobal below.
+// (`Base.Uniswap.UniversalRouter.method(...)`) -- see composeChainGlobal below.
 import { chainContracts } from "../descriptors/accessors.js";
 // The SVM twin of the above: composes the svm venue accessor tree
 // (`Solana.RaydiumCpSwap.swap(...)`) onto an `svm`-kind chain only --
@@ -26,11 +24,10 @@ import { venues as svmVenueAccessors } from "../svm/accessors.js";
 import { registryTokens } from "./token-registry.js";
 
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
-type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain; route: unknown };
+type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain };
 
-/** Function intrinsics a contract/venue namespace key must never collide with once composed onto a
- *  CALLABLE accessor -- unlike a plain object, landing on one of these would corrupt the callable
- *  itself, not merely shadow an inert property. */
+/** Names a contract/venue namespace key must never take: an object's own intrinsics, and the names
+ *  of functions, which an accessor once was and a reader may still expect it to answer. */
 const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
   "length",
   "name",
@@ -45,23 +42,17 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Composes one chain accessor: a FRESH callable forwarding to `origin.route`
- * (so it stays CALLABLE — a plain object would silently drop that), plus
- * `chain`/`route`, the lazy contract-namespace tree (`Uniswap`,
- * `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an
- * `svm`-kind chain only, the svm venue accessor tree (`RaydiumCpSwap`,
- * `MeteoraDammV2`, ...) — copied via
- * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's
- * memoising GETTERS stay lazy — spread would invoke every one of them
- * eagerly at composition time. `origin` itself is never mutated: this returns
- * a fresh function object. Throws on a name collision — a protocol, family,
- * token or venue name literally "route", "chain" or a function intrinsic like
- * "call"/"bind", or two of them sharing a name (a token symbol that is also a
- * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key
- * throw. The `kind === "svm"` gate is registry-derived (from
- * `../chains/canonical.js`'s own `CanonicalChain.kind`), not a hardcoded
- * chain name -- a second SVM chain added to `CANONICAL_CHAINS` gets the
- * venue namespaces automatically, and every EVM chain provably cannot.
+ * Composes one chain accessor: a FRESH object with `chain`, the lazy contract-namespace tree
+ * (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an `svm`-kind
+ * chain only, the svm venue accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
+ * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's memoising GETTERS stay lazy —
+ * spread would invoke every one of them eagerly at composition time. `origin` itself is never
+ * mutated. Throws on a name collision — a protocol, family, token or venue name literally "chain" or
+ * an intrinsic like "call"/"bind", or two of them sharing a name (a token symbol that is also a
+ * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The
+ * `kind === "svm"` gate is registry-derived (from `../chains/canonical.js`'s own
+ * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain added to
+ * `CANONICAL_CHAINS` gets the venue namespaces automatically, and every EVM chain provably cannot.
  */
 function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
@@ -79,25 +70,21 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
     sources.push(Object.getOwnPropertyDescriptors(svmVenues));
   }
 
-  const fn = ((...args: unknown[]) =>
-    (origin.route as (...a: unknown[]) => unknown)(...args)) as unknown as Record<string, unknown>;
   const merged: PropertyDescriptorMap = {
     chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
-    route: { value: origin.route, enumerable: true, configurable: false, writable: false },
   };
   for (const source of sources) {
     for (const key of Object.keys(source)) {
       if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
         throw new Error(
           `routes/composed: '${key}' collides with another name on the '${name}' accessor ` +
-            "(its route, chain, a function intrinsic, or a protocol, token or venue of the same name)",
+            "(its chain, an intrinsic, or a protocol, token or venue of the same name)",
         );
       }
     }
     Object.assign(merged, source);
   }
-  Object.defineProperties(fn, merged);
-  return fn;
+  return Object.defineProperties({}, merged);
 }
 
 const memo = new Map<string, object>();

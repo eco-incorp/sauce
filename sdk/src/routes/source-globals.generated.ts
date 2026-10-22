@@ -126,44 +126,6 @@ export interface SauceInterface<Methods> extends SauceBinding<Methods> {
  *  `.at(address)` to call another deployment of the same ABI. */
 export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
-/** A token and an amount in an intent a program opens: a token symbol (`USDC`), an address, or a
- *  value the program measured. */
-export interface SauceIntentTokenAmount {
-  readonly token: bigint | number;
-  readonly amount: bigint | number;
-}
-
-/** What the solver of an intent a program opens brings to its destination, for the body to run
- *  on: `Base(() => { … }, { tokens })`. A delivery names at least one token. */
-export interface SauceDelivery {
-  readonly tokens: readonly SauceIntentTokenAmount[];
-}
-
-/** An intent's reward, paid on the chain that opens it. The deadlines, the creator and the prover
- *  are the program's options, shared by every intent it opens. */
-export interface SauceReward {
-  readonly tokens?: readonly SauceIntentTokenAmount[];
-  readonly nativeAmount?: bigint | number;
-}
-
-/** An intent opened in compiled source, waiting for its reward: `Base(() => { … }).reward({ … })`.
- *  Not a host value: `.reward(...)` returns nothing. */
-export interface SauceIntent {
-  reward(reward: SauceReward): void;
-}
-
-/**
- * A chain in compiled source, opening an intent whose body runs there:
- * `Ethereum(() => { ... }, { tokens }).reward({ tokens })`. The one definition of that call: a
- * `.sauce.ts` file's chains (`sauce-script/index.d.ts`'s `SauceChain`) extend it, and each package
- * chain export carries it (`chain-exports.generated.ts`), so a typed closure inside
- * `Base(() => { ... })` opens one with the chain it imports. The body is never invoked: it is compiled
- * for that chain.
- */
-export interface SauceIntentChain {
-  (body: () => void, delivery?: SauceDelivery): SauceIntent;
-}
-
 export interface AaveV2LendingPoolMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
@@ -541,37 +503,6 @@ export interface DebridgeDlnSourceMethods {
 
 export interface DodoV2ProxyMethods {
   "dodoSwapV2TokenToToken"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (readonly (bigint)[] | SauceArray<bigint>), arg5: bigint, arg6: boolean, arg7: bigint): bigint;
-}
-
-export interface EcoRoutesPortalMethods {
-  "publish"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): [bigint, bigint] & { "intentHash": bigint; "vault": bigint };
-  "publishAndFund"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: boolean): [bigint, bigint] & { "intentHash": bigint; "vault": bigint };
-  "fund"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: boolean): bigint;
-  "fulfill"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint): SauceArray<SauceBytes>;
-  "getIntentHash"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): [bigint, bigint, bigint] & { "intentHash": bigint; "routeHash": bigint; "rewardHash": bigint };
-  "intentVaultAddress"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): bigint;
-  "isIntentFunded"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): boolean;
-  "getRewardStatus"(arg0: bigint): bigint;
-  "executor"(): bigint;
-  "claimants"(arg0: bigint): bigint;
-  "fulfillAndProve"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: (string | SauceBytes)): SauceArray<SauceBytes>;
-  "prove"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: (string | SauceBytes)): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): void;
-  "batchWithdraw"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly (bigint)[] | SauceArray<bigint>), arg2: (readonly ({ "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) })[] | SauceArray<{ "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }>)): void;
-  "refund"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): void;
-  "refundTo"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: bigint): void;
-  "cancel"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint): void;
-  "cancelAndProve"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes)): void;
-  "version"(): SauceBytes;
-}
-
-export interface EcoRoutesProverMethods {
-  "provenIntents"(arg0: bigint): { "claimant": bigint; "destination": bigint };
-  "getProofType"(): SauceBytes;
-  "version"(): SauceBytes;
-  "PORTAL"(): bigint;
-  "isWhitelisted"(arg0: bigint): boolean;
-  "fetchFee"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes)): bigint;
 }
 
 export interface EigenlayerDelegationManagerMethods {
@@ -1829,12 +1760,6 @@ export interface DodoSource extends DodoV2ProxyMethods {
   readonly DODOV2Proxy: SauceContract<DodoV2ProxyMethods>;
 }
 
-export interface EcoRoutesSource {
-  readonly Portal: SauceContract<EcoRoutesPortalMethods>;
-  readonly HyperProver: SauceContract<EcoRoutesProverMethods>;
-  readonly PolymerProver: SauceContract<EcoRoutesProverMethods>;
-}
-
 export interface EigenlayerSource {
   readonly DelegationManager: SauceContract<EigenlayerDelegationManagerMethods>;
   readonly StETHStrategy: SauceContract<EigenlayerStrategyMethods>;
@@ -2536,7 +2461,6 @@ declare global {
   const Curve: CurveSource;
   const Debridge: DebridgeSource;
   const Dodo: DodoSource;
-  const EcoRoutes: EcoRoutesSource;
   const Eigenlayer: EigenlayerSource;
   const Ens: EnsSource;
   const Erc20: Erc20Source;
@@ -4536,7 +4460,7 @@ declare global {
   const Crema: CremaSvmVenuesSource;
   const Phoenix: PhoenixSvmVenuesSource;
   const Meteora: MeteoraSvmVenuesSource;
-  /** Destination chain identity supplied by openRoute. */
+  /** The id of the chain the program is compiled for. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
   /**

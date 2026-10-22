@@ -20,8 +20,8 @@ export * as contracts from "./descriptors/index.js";
 export * as svmVenues from "./svm/accessors.js";
 
 // One named export per canonical chain: `import { Base, Solana } from "@eco-incorp/sauce"`,
-// each callable (`Base(body, opts).reward(...)`) and carrying `.chain`/`.route` plus the
-// lazy contract tree (`Base.Uniswap...`). Also `chain` and `Token`. Importing the SDK
+// each carrying `.chain` and the lazy contract tree (`Base.Uniswap...`). Also `chain` and
+// `Token`. Importing the SDK
 // installs NOTHING on `globalThis` -- see routes/globals.ts for the opt-in install.
 export * from "./routes/chain-exports.generated.js";
 // Compile-time names inside route bodies; this module installs no JavaScript values. The
@@ -36,8 +36,7 @@ import "./routes/builtins.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
 export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
-export { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
-export { destinationPot } from "./routes/intent-pot.js";
+export { potSalt, DEFAULT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
 export {
   MAX_SQRT_PRICE_X96,
   MIN_SQRT_PRICE_X96,

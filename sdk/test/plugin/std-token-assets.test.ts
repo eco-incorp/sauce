@@ -4,7 +4,7 @@
  * `src/std/token` is SauceScript plus its ABI — files `tsc` does not emit — so
  * `copy-verify-assets.mjs` copies them into `dist/std/token` from a HAND-ENUMERATED list, and
  * `dist/` is what a consumer installs. That enumeration is the hazard: add a file to
- * `src/std/token` and forget the entry, and every published consumer's `openRoute` throws
+ * `src/std/token` and forget the entry, and every published consumer's program compile throws
  * `failed to import module "@sauce/token"` — while CI stays green, because the in-repo suites
  * resolve `src/std` and never read `dist/` at all.
  *

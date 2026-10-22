@@ -3,17 +3,11 @@
  * command and the MCP server's tools both apply, held here independently of either front end.
  * And `sauce mcp`'s own flag rules, which the CLI checks before it loads the server at all.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { requireChain } from "../src/chains/canonical.js";
-import { potSalt, SAUCE_INTENT_POT_SALT } from "../src/deployments/pot.js";
+import { DEFAULT_POT_SALT, potSalt } from "../src/deployments/pot.js";
 import { UsageError } from "../src/cli/args.js";
-import type { ProgramInput } from "../src/cli/commands.js";
 import {
   assumedBalances,
-  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -81,7 +75,7 @@ describe("definesReach", () => {
 describe("potTarget", () => {
   it("takes the Pot by address, or by owner and salt, the default salt zero", () => {
     expect(potTarget({ pot: POT })).toEqual({ pot: POT });
-    expect(potTarget({ owner: OWNER })).toEqual({ owner: OWNER, salt: SAUCE_INTENT_POT_SALT });
+    expect(potTarget({ owner: OWNER })).toEqual({ owner: OWNER, salt: DEFAULT_POT_SALT });
     expect(potTarget({ owner: OWNER, salt: "vault" })).toMatchObject({ salt: potSalt("vault") });
     expect(potTarget({}, OWNER as `0x${string}`)).toMatchObject({ owner: OWNER });
   });
@@ -184,131 +178,6 @@ describe("sauce mcp, before the server loads", () => {
       const run = await sauce(...argv);
       expect(run.code).toBe(2);
       expect(run.stderr).toMatch(message);
-    }
-  });
-});
-
-describe("bindMainArguments: main's arguments, bound into the intents a wallet publishes", () => {
-  const RECIPIENT = "0x6666666666666666666666666666666666666666";
-  const BRIDGE = [
-    "function main(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool) {",
-    "  Base(() => {",
-    "    USDC.transfer(recipient, amount);",
-    "  }).reward({ tokens: [{ token: USDC, amount: reward }] });",
-    "}",
-    "",
-  ].join("\n");
-  const input = (text: string, defines: ProgramInput["defines"] = {}): ProgramInput => ({
-    file: "bridge.sauce.ts",
-    text,
-    chain: requireChain("ethereum"),
-    defines,
-    compactArgs: false,
-    intents: {},
-  });
-  const args = (...values: string[]) => ({ from: "--args" as const, values });
-
-  it("blanks main's parameter list in place and makes each argument its name's value", () => {
-    const bound = bindMainArguments(input(BRIDGE), args("1000000", "1010000", RECIPIENT, "true"));
-    expect(bound.defines).toEqual({
-      amount: 1_000_000n,
-      reward: 1_010_000n,
-      recipient: BigInt(RECIPIENT),
-      sweep: true,
-    });
-    expect(bound.addressDefines).toEqual(["recipient"]);
-    // Same length, same lines: the compiler's positions are still the file's.
-    expect(bound.text).toHaveLength(BRIDGE.length);
-    const list = "amount: Uint256, reward: Uint256, recipient: Address, sweep: bool";
-    expect(bound.text.split("\n")[0]).toBe(`function main(${" ".repeat(list.length)}) {`);
-    expect(bound.text.split("\n").slice(1)).toEqual(BRIDGE.split("\n").slice(1));
-  });
-
-  it("takes --args-json values as they are", () => {
-    const bound = bindMainArguments(input(BRIDGE), {
-      from: "--args-json",
-      values: [1_000_000, "1010000", RECIPIENT, false],
-    });
-    expect(bound.defines).toMatchObject({ amount: 1_000_000n, reward: 1_010_000n, sweep: false });
-  });
-
-  it("leaves a program whose main takes nothing as it is, and asks for the ones it takes", () => {
-    const fixed = input("Base(() => { USDC.transfer(0x1n, 1n); }).reward({ nativeAmount: 1n });");
-    expect(bindMainArguments(fixed, undefined)).toBe(fixed);
-    expect(() => bindMainArguments(input(BRIDGE), undefined)).toThrow(
-      /main\(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool\) takes 4 arguments: pass them after --args/,
-    );
-  });
-
-  it("refuses arguments for a file with no parameters, a wrong count, and a wrong value", () => {
-    expect(() => bindMainArguments(input("function main() {}"), args("1"))).toThrow(
-      /declares no `main` with parameters/,
-    );
-    expect(() => bindMainArguments(input(BRIDGE), args("1", "2"))).toThrow(
-      /takes 4 arguments, got 2/,
-    );
-    expect(() =>
-      bindMainArguments(input(BRIDGE), args("1", "2", "not an address", "true")),
-    ).toThrow(/argument 3 \(recipient: Address\).*is not an address/);
-  });
-
-  it("refuses a parameter no one word holds, and a --define of a parameter's name", () => {
-    const list = input("function main(path: Address[]) { }");
-    expect(() => bindMainArguments(list, args('["0x1"]'))).toThrow(
-      /argument 1 \(path: Address\[\]\): a wallet publishes .*\(sauce run\)/,
-    );
-    expect(() =>
-      bindMainArguments(
-        input(BRIDGE, { amount: 5n }),
-        args("1000000", "1010000", RECIPIENT, "true"),
-      ),
-    ).toThrow(/amount is main's parameter, given by --args; it cannot also be a --define/);
-  });
-
-  it("publishes the intent the same program would with each value written in", async () => {
-    const work = mkdtempSync(join(tmpdir(), "sauce-bind-"));
-    try {
-      const withParams = join(work, "params.sauce.ts");
-      writeFileSync(withParams, BRIDGE);
-      const literal = join(work, "literal.sauce.ts");
-      writeFileSync(
-        literal,
-        BRIDGE.replace(/main\([^)]*\)/, "main()")
-          .replace("recipient, amount", `${RECIPIENT}n, 1000000n`)
-          .replace("amount: reward", "amount: 1010000n"),
-      );
-      const publish = async (file: string, ...extra: string[]) => {
-        let stdout = "";
-        const io: CliIo = {
-          ...nodeIo(),
-          stdout: (text) => void (stdout += text),
-          stderr: () => {},
-        };
-        const code = await runCli(
-          [
-            ...["intent", "publish", file, "--chain", "ethereum", "--format", "json"],
-            ...["--from", OWNER, "--intent-deadline", "2000000000", "--intent-creator", OWNER],
-            ...extra,
-          ],
-          io,
-        );
-        expect(code).toBe(0);
-        return (JSON.parse(stdout) as { intents: Array<{ intentHash: string }> }).intents;
-      };
-      const viaArgs = await publish(withParams, "--args", "1000000", "1010000", RECIPIENT, "true");
-      expect(viaArgs).toHaveLength(1);
-      expect(viaArgs).toEqual(await publish(literal));
-      // The low-level spelling still works: each value a define named as the parameter.
-      const defined = join(work, "defined.sauce.ts");
-      writeFileSync(defined, BRIDGE.replace(/main\([^)]*\)/, "main()"));
-      const viaDefines = await publish(
-        defined,
-        ...["--define", "amount=1000000", "--define", "reward=1010000"],
-        ...["--define", `recipient=${RECIPIENT}`],
-      );
-      expect(viaDefines).toEqual(viaArgs);
-    } finally {
-      rmSync(work, { recursive: true, force: true });
     }
   });
 });

@@ -2,9 +2,8 @@
  * The generated half of the SauceScript declarations an editor loads for a program file
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
- * - every chain as the function that opens an intent there, with its namespaces
- *   (`Base(() => { … })`, `Base.UniswapV3.Factory`), and Solana with the accounts a program for it
- *   writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every chain as a namespace of its contracts (`Base.UniswapV3.Factory`), and Solana with the
+ *   accounts a program for it writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
  * - every token symbol and native coin as a holder's balance (`self.USDC`, `pot.ETH`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
@@ -221,12 +220,8 @@ export function sauceScriptDeclarations(): string {
     "  lib(address: SauceInt): B;",
     "}",
     "",
-    "/** Opening an intent on a chain, as a typed closure in a host file opens one too. */",
-    `type SauceOpensIntent = ${sources}.SauceIntentChain;`,
-    "",
-    "/** A chain: called, it opens an intent there (`Base(() => { … }).reward({ … })`); its",
-    " *  namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
-    "interface SauceChain extends SauceOpensIntent {",
+    "/** A chain: its namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
+    "interface SauceChain {",
     ...[...namespaces].sort().map((ns) => `  readonly ${ns}: ${sources}.${ns}Source;`),
     "}",
     "",

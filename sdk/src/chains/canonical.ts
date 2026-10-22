@@ -28,7 +28,7 @@ export type ChainKind = "evm" | "svm";
  * module doc comment above for why.
  */
 export interface CanonicalChain {
-  /** Numeric chain id. EVM chain id, or the eco-routes SVM id for Solana. */
+  /** Numeric chain id. EVM chain id, or Solana's id, 1399811149. */
   readonly id: number;
   /** Stable lowercase kebab-case key. */
   readonly slug: string;
@@ -83,7 +83,7 @@ export const CANONICAL_CHAINS = [
   { id: 2222, slug: "kava", name: "Kava", kind: "evm", aliases: ["kava-evm"] },
   { id: 5000, slug: "mantle", name: "Mantle", kind: "evm", aliases: [] },
   // Circle's Arc. The released engine, router and Kitchen from V12Deployments.json have code on Arc
-  // (measured 2026-09-28), but no intent Pot is deployed there yet.
+  // (measured 2026-09-28).
   { id: 5042, slug: "arc", name: "Arc", kind: "evm", aliases: ["arc-mainnet", "arc-network"] },
   { id: 7000, slug: "zetachain", name: "ZetaChain", kind: "evm", aliases: ["zeta"] },
   { id: 8217, slug: "klaytn", name: "Klaytn", kind: "evm", aliases: ["kaia"] },
@@ -157,14 +157,14 @@ export function chainByAlias(nameOrAlias: string): CanonicalChain | undefined {
   return byAlias.get(normalizeChainKey(nameOrAlias));
 }
 
-/** Anything resolvable to a chain: a numeric id, a native-`bigint` id (eco-routes uses these), a
+/** Anything resolvable to a chain: a numeric id, a native-`bigint` id, a
  *  slug/name/alias string, or an already-resolved `CanonicalChain`. */
 export type ChainRef = number | bigint | string | CanonicalChain;
 
 /** Unified front door: number/bigint -> chainById, string -> chainBySlug then chainByAlias, CanonicalChain -> identity. */
 export function resolveChain(ref: ChainRef): CanonicalChain | undefined {
   if (typeof ref === "number") return chainById(ref);
-  // eco-routes chain ids are natively bigint (e.g. Solana 1399811149n); accept
+  // A chain id may arrive as a bigint (e.g. Solana 1399811149n); accept
   // them here so an svm id resolves to its svm record instead of falling
   // through to the object case and silently mis-classifying as evm downstream.
   if (typeof ref === "bigint") {

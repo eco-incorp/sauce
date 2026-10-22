@@ -18,7 +18,6 @@ import {
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../../sdk/dist/deployments/index.js";
-import { destinationPot } from "../../sdk/dist/index.js";
 import { connect, ok, type Connected } from "./harness.js";
 
 const SKILL = "sauce-chains";
@@ -27,7 +26,7 @@ const URI = `sauce://skills/${SKILL}/${PATH}`;
 const shipped = readFileSync(join(PACKAGED_SKILLS, SKILL, PATH), "utf8");
 
 interface Deployments {
-  evm: Record<"engine" | "kitchen" | "router" | "intentPot", { address: string }>;
+  evm: Record<"engine" | "kitchen" | "router", { address: string }>;
   svm: Record<"engine" | "kitchen", { programId: string }>;
 }
 
@@ -45,7 +44,6 @@ describe("the deployments file", () => {
     assert.equal(evm.engine.address, v12EngineAddress());
     assert.equal(evm.kitchen.address, v12KitchenAddress());
     assert.equal(evm.router.address, v12RouterAddress());
-    assert.equal(evm.intentPot.address, destinationPot("base"));
     assert.equal(svm.engine.programId, v12SvmEngineProgramId());
     assert.equal(svm.kitchen.programId, v12SvmKitchenProgramId());
   });

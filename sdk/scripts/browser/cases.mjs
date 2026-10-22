@@ -44,9 +44,16 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's route example, verbatim: `Base(() => { USDC.approve(...) }, options).reward(...)`.
-  // Imported only now, because building the route compiles it.
-  const { built } = await import("./readme-route.mjs");
+  // A standalone program compiled for Base with `compileSauceProgram`, as an application does: the
+  // chain's names (`USDC`, `Uniswap`) are not imports. Once taking `amount` as it runs, once with
+  // `amount` bound through `args`.
+  const programText = [
+    "function main(amount: Uint256): void {",
+    "  USDC.approve(Uniswap.UniversalRouter, amount);",
+    "}",
+  ].join("\n");
+  const program = routes.compileSauceProgram("base", programText);
+  const bound = routes.compileSauceProgram("base", programText, { args: [1_000_000n] });
 
   // A raw compile with compact entry arguments, on both targets, round-tripped through the codec.
   const raw = {};
@@ -139,9 +146,13 @@ export async function run(source) {
   );
 
   return {
-    readme: {
-      bytecode: built.compiled.bytecode.map(hex),
-      intentHash: built.hash().intentHash,
+    program: {
+      bytecode: hex(program.bytecode),
+      entryEncoding: program.entryEncoding,
+      entryParams: program.entryParams.map((param) => `${param.name}:${param.type}`),
+      args: hex(routes.encodeEntryArguments(program, [1_000_000n])),
+      bound: hex(bound.bytecode),
+      boundParams: bound.entryParams.length,
     },
     raw,
     settle: hex(settle.bytecode),

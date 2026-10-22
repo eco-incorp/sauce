@@ -7,7 +7,7 @@
 //                                                                  with no import (no addresses)
 //   skills/sauce-chains/references/index.md, <chain>.md            per chain: whether the release
 //                                                                  supports it, ids, native coin,
-//                                                                  intents, tokens and every protocol
+//                                                                  tokens and every protocol
 //                                                                  with its addresses
 //   skills/sauce-chains/references/<chain>-stocks.md               a chain's tokenized stocks, with
 //                                                                  their addresses
@@ -43,7 +43,7 @@
 //
 // ONE SOURCE. Names come from `routes.sourceGlobals(chain)`, the function `sauce globals` prints;
 // protocols, their categories and deployments from `listProtocols()` and each `protocols/<slug>`
-// module; the Sauce release from `/deployments`; intents from the eco-routes registry; which chains
+// module; the Sauce release from `/deployments`; which chains
 // the `sauce` command supports, and how to request another, from the command's own
 // `cli/support.js` (the package exports none of it). Which ABI
 // export a deployment role speaks is the registry's own evidence map
@@ -75,9 +75,6 @@ const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
 
 const HEADER = "<!-- Generated from the SDK's registries. Do not edit. -->";
 
-/** The eco-routes namespace, which the globals index leaves to the intent syntax. */
-const INTENT_PROTOCOL = "eco-routes";
-
 /** Directories whose every `.md` file this generator owns (stale ones are removed). */
 export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/references/registry"];
 /** The same under the manual's reference, which is generated whole: a page written there by hand
@@ -91,11 +88,10 @@ export const SOLANA_DISTRIBUTED_SWAP_GUIDE = "../guides/solana-distributed-swap.
 // ---- The names a program uses: sauce globals ----------------------------------------------------
 
 /**
- * The index of globals as data. `sdk` is the package root module and `ecoRoutes` its
- * `protocols/eco-routes` module — passed in, so the skills checker can index the SDK it loaded
- * (an installed package, say) rather than this repository's build.
+ * The index of globals as data. `sdk` is the package root module — passed in, so the skills checker
+ * can index the SDK it loaded (an installed package, say) rather than this repository's build.
  */
-export function globalsIndex(sdk, ecoRoutes, support) {
+export function globalsIndex(sdk, support) {
   const { routes, CANONICAL_CHAINS, nativeErc20, getChain } = sdk;
   const { chainSupport } = support;
   const chains = [...CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
@@ -159,9 +155,6 @@ export function globalsIndex(sdk, ecoRoutes, support) {
   for (const { chain, globals } of listed) {
     for (const ns of globals.protocols) {
       for (const contract of ns.contracts) {
-        // The Portal and its provers are left to the intent syntax: a program opens an intent with
-        // `Arbitrum(() => { ... }).reward(...)` (`sauce-intents`), never by calling them by name.
-        if (contract.protocol === INTENT_PROTOCOL) continue;
         const name = `${ns.namespace}.${contract.name}`;
         if (ns.kind === "protocol") {
           const entry = contracts.get(name) ?? {
@@ -186,20 +179,10 @@ export function globalsIndex(sdk, ecoRoutes, support) {
   }
   const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 
-  const intents = (slug) => {
-    try {
-      ecoRoutes.ecoRoutesPortal(slug);
-
-      return true;
-    } catch {
-      return false;
-    }
-  };
   const chainNames = [...listed[0].globals.chains]
     .sort((a, b) => a.id - b.id)
     .map((chain) => ({
       ...chain,
-      intents: intents(chain.slug),
       support: chainSupport(chain.slug),
     }));
 
@@ -312,18 +295,18 @@ const functionText = (f) => {
 };
 
 /**
- * The data every generated file renders. `api` is `{ sdk, ecoRoutes, deployments, cctp, compiler,
+ * The data every generated file renders. `api` is `{ sdk, deployments, cctp, compiler,
  * support, loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
  * package's; `support` is the `sauce` command's `cli/support.js` — and `documented(slug)` says
  * whether the skill carries that protocol's document.
  */
 export async function skillsReferences(api, documented) {
-  const { sdk, ecoRoutes, deployments, cctp, compiler, support, loadProtocol } = api;
+  const { sdk, deployments, cctp, compiler, support, loadProtocol } = api;
   // An export a program can import: the compile serves `./protocols/<slug>/<Export>.json`.
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  const globals = globalsIndex(sdk, ecoRoutes, support);
+  const globals = globalsIndex(sdk, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
   const sourceGlobals = new Map(canonical.map((c) => [c.slug, sdk.routes.sourceGlobals(c.slug)]));
@@ -419,17 +402,6 @@ export async function skillsReferences(api, documented) {
   const tokensOf = new Map(globals.tokens.map((entry) => [entry.chain.slug, entry]));
   const chains = canonical.map((chain) => {
     const names = sourceGlobals.get(chain.slug);
-    let intents;
-    try {
-      const portal = ecoRoutes.ecoRoutesPortal(chain.slug);
-      let executor;
-      let pot;
-      try {
-        executor = ecoRoutes.ecoRoutesExecutor(chain.slug);
-        pot = sdk.destinationPot(chain.slug);
-      } catch {}
-      intents = { portal, executor, pot };
-    } catch {}
     const coin = sdk.getChain(chain.id)?.nativeCurrency;
     const tokens = tokensOf.get(chain.slug);
 
@@ -448,7 +420,6 @@ export async function skillsReferences(api, documented) {
       native: tokens?.native,
       tokens: tokens?.tokens ?? [],
       devnet: tokens?.devnet ?? [],
-      intents,
       cctp: cctp.CCTP_DOMAIN?.[chain.slug],
       protocols: protocols
         .filter((p) => p.chains.includes(chain.slug))
@@ -460,20 +431,7 @@ export async function skillsReferences(api, documented) {
 
   // The Sauce release: one address per contract on every EVM chain and one id per program on every
   // Solana cluster, so it is rendered once (deployments.json, deployments.md) and never per chain.
-  // The shared intent Pot is the Kitchen's Pot for the eco-routes Executor under salt zero: one
-  // Executor serves every chain that takes intents, so one Pot does, and a chain's file names its
-  // Executor.
   const release = deployments.v12DeployedAddresses();
-  const intentPots = new Map(
-    chains.filter((c) => c.intents?.executor).map((c) => [c.intents.pot, c.intents.executor]),
-  );
-  if (intentPots.size !== 1) {
-    throw new Error(
-      `eco-routes records ${intentPots.size} shared intent Pots (${[...intentPots.keys()].join(", ")}): ` +
-        "the deployments file gives one, so give it one per Executor and say so in each chain's file",
-    );
-  }
-  const [[intentPot, intentPotOwner]] = intentPots;
   const { contracts } = release.evm;
 
   return {
@@ -493,7 +451,6 @@ export async function skillsReferences(api, documented) {
         quoteRouter: contracts.quoteRouter.address,
         quoteRouterGeneration: contracts.quoteRouter.generation,
         potInitCodeHash: release.evm.pot.initCodeHash,
-        intentPot: { address: intentPot, owner: intentPotOwner, salt: sdk.SAUCE_INTENT_POT_SALT },
       },
       svm: {
         engine: release.svm.programs.engine.programId,
@@ -585,8 +542,7 @@ const CHOOSING = {
     "Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to",
     "Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)",
     "settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the",
-    "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a",
-    "program on another chain, not only move a token, open a Sauce intent (`sauce-intents`).",
+    "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.",
   ],
   "cross-chain": [
     "Messaging protocols (LayerZero, Wormhole, Axelar, Chainlink CCIP, Hyperlane) carry arbitrary",
@@ -639,8 +595,7 @@ const CHOOSING = {
   infrastructure: [
     "Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),",
     "ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,",
-    "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
-    "(`sauce-intents`).",
+    "ENS, Gelato automation and Instadapp flash-loan routing.",
   ],
 };
 
@@ -658,8 +613,8 @@ const CHAIN_NOTES = {
     "- `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei",
     "  reads as 0. Compare a native amount with a token amount only after converting one to the",
     "  other's scale.",
-    "- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a",
-    "  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.",
+    "- Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native",
+    "  value is 10^-12 USDC, not 1 USDC.",
     "- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped",
     "  silently: no error, and no receipt.",
     "- There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no",
@@ -668,9 +623,6 @@ const CHAIN_NOTES = {
     "  native coin are refused for Arc.",
     "- Native value sent to the zero address, to or from a blocklisted address, or to a",
     "  self-destructed account reverts, also when a contract forwards it.",
-    "- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one",
-    "  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is",
-    "  built. Fold the two into one amount.",
   ],
   base: [
     "Base's own documentation: `eth_call` and `eth_estimateGas` against the `pending` block tag see",
@@ -749,7 +701,6 @@ const DOCS_FOR_SKILL = {
     "the distributed swap on Solana",
     "guides/solana-distributed-swap.md",
   ],
-  "sauce-intents": ["intents", "guides/intents.md"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
   "sauce-actions": ["actions", "guides/actions.md"],
@@ -808,15 +759,12 @@ const DOCS_SITE = {
   /** What a reader of the manual also needs about the release's chains. */
   chainIndexNotes: [
     "On a preview chain the `sauce` command and the MCP server still simulate and read:",
-    "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
-    "every read. What they refuse there, before any endpoint is reached or any key is read, is",
-    "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",
-    "and [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. An intent",
-    "publishes only when its source and every destination it opens are supported; the later levels",
-    "of a cascade (an intent opened inside another's body) are not checked, so keep every level on a",
-    "supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a",
-    "proof or a cancellation by the destination, a claim or a refund by the source. Every refusal",
-    "names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.",
+    "`sauce simulate` and every read. What they refuse there, before any endpoint is reached or any",
+    "key is read, is building or sending a transaction;",
+    "[the command's](../guides/cli.md#supported-and-preview-chains) and",
+    "[the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. Every",
+    "refusal names the supported chains, and the MCP server's `sauce_chains` gives each chain's",
+    "support.",
     "",
     "The TypeScript SDK is not gated: its builders take every chain below and build its",
     "transactions, and an integrator who submits one on a preview chain does so at their own risk.",
@@ -947,9 +895,7 @@ function renderGlobals(data) {
     "",
     "# Chain globals",
     "",
-    "A chain name opens an intent from inside a program (`Ethereum(() => { ... }).reward({ ... })`) and",
-    "qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
-    "to take intents; each line says whether its chain does. Each line also says whether the initial",
+    "A chain name qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). Each line says whether the initial",
     "release supports the chain: a program compiles and simulates on every chain, and its transactions",
     "are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
     "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
@@ -959,7 +905,7 @@ function renderGlobals(data) {
   for (const chain of globals.chains) {
     chains.push(
       `- \`${chain.key}\`: \`${chain.slug}\`, ${chain.id}, ${chain.kind.toUpperCase()}, ` +
-        `${chain.intents ? "takes intents" : "no intents"}, ${chain.support}`,
+        `${chain.support}`,
     );
   }
   chains.push("");
@@ -1100,8 +1046,8 @@ function supportLines(chain, supported, site) {
   return [
     `**Preview chain.** Sauce supports transactions on ${names} only. On ${chain.name} a program`,
     "compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`",
-    "command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,",
-    "`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,",
+    "command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and",
+    "`sauce pot --deploy` are refused,",
     `naming the supported chains and how to request this one${site === DOCS_SITE ? " (the last section)" : ""}.`,
     "",
     ...(site === DOCS_SITE ? [] : requestLines(chain)),
@@ -1154,18 +1100,7 @@ function renderChain(chain, supported, site) {
     chain.kind === "evm"
       ? `| Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: ${deployments}${site === SKILLS_SITE ? " (`evm`)" : ""} |`
       : `| Sauce | the engine and Kitchen programs, the same ids on every cluster: ${deployments}${site === SKILLS_SITE ? " (`svm`)" : ""} |`,
-    `| Intents (eco-routes) | ${chain.intents ? `takes intents; Portal ${addressCode(chain.kind, chain.intents.portal)}` : "none recorded"} |`,
   );
-  if (chain.intents?.executor) {
-    const intentPot =
-      site === SKILLS_SITE
-        ? `${deployments} (\`evm.intentPot\`)`
-        : `[Deployments](${href(path, site.deployments)}#the-shared-intent-pot)`;
-    lines.push(
-      `| Intent Executor | ${addressCode(chain.kind, chain.intents.executor)} |`,
-      `| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: ${intentPot}; the Kitchen's \`deployPot(<Executor>, 0x0)\` creates it, from any account |`,
-    );
-  }
   if (chain.cctp !== undefined) lines.push(`| CCTP domain | ${chain.cctp} |`);
   lines.push("");
   if (CHAIN_NOTES[chain.slug]) lines.push("## Notes", "", ...CHAIN_NOTES[chain.slug], "");
@@ -1390,13 +1325,6 @@ function renderDeploymentsJson(data) {
         about:
           "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen.",
       },
-      intentPot: {
-        address: evm.intentPot.address,
-        owner: evm.intentPot.owner,
-        salt: evm.intentPot.salt,
-        about:
-          "The shared Pot an intent's program body cooks on, on every EVM chain that takes intents: the Pot of the eco-routes Executor (owner) under salt zero. The Kitchen's deployPot(owner, salt) creates it, from any account.",
-      },
     },
     svm: {
       engine: {
@@ -1468,21 +1396,6 @@ function renderDeploymentsPage(data) {
     "`v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula",
     "and the hash, and `sauce pot --owner <address>` prints an owner's Pot.",
     "",
-    "### The shared intent Pot",
-    "",
-    "An intent's program body cooks on the Pot of the destination's eco-routes Executor under salt",
-    "zero. One Executor serves every EVM chain that takes intents, so one Pot does:",
-    "",
-    "| Fact | Value |",
-    "| --- | --- |",
-    `| Address | \`${evm.intentPot.address}\`: \`destinationPot(chain)\` |`,
-    `| Owner, the eco-routes Executor | \`${evm.intentPot.owner}\` |`,
-    `| Salt | \`${evm.intentPot.salt}\`: \`SAUCE_INTENT_POT_SALT\` |`,
-    "",
-    "The Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account.",
-    "[The destination Pot](../guides/intents.md#the-destination-pot) says who deploys it and what a",
-    "body may leave in it.",
-    "",
     "## Solana",
     "",
     "| Program | Program id | Key, the value a program holds | In TypeScript |",
@@ -1510,11 +1423,11 @@ function renderChainIndex(data, site) {
     "",
   ];
   const table = [
-    "| Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| Chain | Slug | Id | Kind | Support | CCTP | Tokens | Protocols |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...data.chains.map(
       (chain) =>
-        `| [${chain.name}](${href(path, site.chain(chain.slug))}) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
+        `| [${chain.name}](${href(path, site.chain(chain.slug))}) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
     ),
     "",
   ];
@@ -1524,9 +1437,9 @@ function renderChainIndex(data, site) {
     "# Chains",
     "",
     `Every chain the SDK knows, with a ${site.noun} each: whether Sauce supports transactions on it, ids, native`,
-    "coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce",
+    "coin, its tokens and every protocol recorded there with its addresses. The Sauce",
     "contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:",
-    `[${site.label(site.deployments, "Deployments")}](${href(path, site.deployments)}) lists them once, with the shared intent Pot.`,
+    `[${site.label(site.deployments, "Deployments")}](${href(path, site.deployments)}) lists them once.`,
     "",
   ];
   // A skill states the policy before the table; the manual's reference gives the facts first.
@@ -2106,7 +2019,7 @@ function renderSkillGuide(source, skill, example, links, from) {
 
 /**
  * The manual's command reference: every command's `--help` as the built `sauce` prints it, so the
- * page is never behind the command. A command with verbs (`sauce intent`) is followed by each verb.
+ * page is never behind the command. A command with verbs (`sauce wallet`) is followed by each verb.
  * It opens on an index of them, each said in its help's first line: a command linked to its
  * heading, its verbs named under it (their headings follow the command's own), so the page keeps to
  * the manual's three links per hundred words.
@@ -2490,7 +2403,6 @@ function docsIntros(data) {
 export async function loadApi(importFrom) {
   return {
     sdk: await importFrom("index.js"),
-    ecoRoutes: await importFrom("protocols/eco-routes/index.js"),
     deployments: await importFrom("deployments/index.js"),
     cctp: await importFrom("protocols/cctp/index.js"),
     compiler: await importFrom("compiler.js"),
@@ -2512,7 +2424,7 @@ async function referenceData(dir, sdkRoot) {
 
 /**
  * Every command's `--help`, as the built `sauce` prints it: `sauce --help` first (`name` empty),
- * then each command it lists, each followed by the verbs its own help lists (`intent publish`).
+ * then each command it lists, each followed by the verbs its own help lists (`wallet new`).
  * Run in process; a help reads nothing and writes nothing, and the io refuses both.
  */
 async function commandHelp(runCli) {

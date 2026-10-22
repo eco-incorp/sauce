@@ -197,12 +197,12 @@ describe("available(): what it can name", () => {
     });
   });
 
-  it("a closure body is left for its own chain's compile", () => {
+  it("a function expression inside the program is left as written", () => {
     const base = requireChain("base");
     const source =
-      "Optimism(() => { if (available(PancakeswapV3.Factory)) { f(); } });\nconst a = available(PancakeswapV3.Factory);";
+      "g(() => { if (available(PancakeswapV3.Factory)) { f(); } });\nconst a = available(PancakeswapV3.Factory);";
     expect(rewriteAvailability(source, base, resolveTokenMap(base)).source).toBe(
-      "Optimism(() => { if (available(PancakeswapV3.Factory)) { f(); } });\nconst a = true;",
+      "g(() => { if (available(PancakeswapV3.Factory)) { f(); } });\nconst a = true;",
     );
   });
 });
