@@ -126,7 +126,7 @@ const call = routes.buildSauceEvmCall({
 
 Every builder here, and `sauceEvmDeployPotCall` below, returns `{ to, target, data, value }`.
 `{ to, data, value }` is the request a wallet sends or `client.call` takes, the same shape as
-`destinationExecutionFee()`; `to` is the contract's checksummed 20-byte address. `target` names the
+`kitchenExecutionFee()`; `to` is the contract's checksummed 20-byte address. `target` names the
 same contract as a call record does: from the cook builders, the Pot as a 32-byte, lowercase,
 left-padded address; from `sauceEvmDeployPotCall`, the Kitchen as you gave it (the released one's
 address when you gave none). `value` is a `bigint`.
@@ -161,7 +161,7 @@ A Pot is fixed by its owner and a salt, so its address is arithmetic you can do 
 | `routes.sauceEvmDeployPotCall({ owner, salt, kitchen? })` | `.`            | The Kitchen's `deployPot(owner, salt)` call, by default through the released Kitchen                |
 | `v12EngineAddress()`                                      | `/deployments` | The released engine's address                                                                       |
 | `v12KitchenAddress()`                                     | `/deployments` | The released Kitchen's address                                                                      |
-| `destinationExecutionFee(kitchen?)`                       | `.`            | A request and decoder for the Kitchen's `executionFee()`; it reads no chain                         |
+| `kitchenExecutionFee(kitchen?)`                           | `.`            | A request and decoder for the Kitchen's `executionFee()`; it reads no chain                         |
 
 An owner has one Pot per salt. The zero salt is the convention for the Pot an owner has by default,
 and a label names any other: `v12PredictPot(owner, potSalt("treasury"))`. To use an exact salt,

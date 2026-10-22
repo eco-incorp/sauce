@@ -22,16 +22,14 @@ export interface ExecutionFeeCall {
  * `Kitchen.executionFee()`, as a request plus its decoder.
  *
  * ```ts
- * const request = destinationExecutionFee();
+ * const request = kitchenExecutionFee();
  * const fee = request.decode(await client.call(request).then((r) => r.data!));
  * ```
  *
  * Read it shortly before building a cook: an increase between the read and the cook makes the cook
  * revert.
  */
-export function destinationExecutionFee(
-  kitchen: Hex = v12KitchenAddress() as Hex,
-): ExecutionFeeCall {
+export function kitchenExecutionFee(kitchen: Hex = v12KitchenAddress() as Hex): ExecutionFeeCall {
   return {
     to: kitchen,
     data: encodeFunctionData({ abi: v12KitchenAbi, functionName: "executionFee" }),

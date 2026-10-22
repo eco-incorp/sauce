@@ -127,6 +127,8 @@ and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry 
   `routes.compileSauceProgram` no longer takes an `intents` option.
 - `SAUCE_INTENT_POT_SALT` is renamed `DEFAULT_POT_SALT`, with no alias. It is every owner's default
   Pot salt, the zero bytes32.
+- `destinationExecutionFee` is renamed `kitchenExecutionFee`, with no alias. It builds the read of a
+  chain's Kitchen execution fee, which every cook pays.
 - `@eco-incorp/sauce/svm`: the Portal exports and the intent-route exports (`svmCookRoute`,
   `svmTransferRoute`, `SVM_INTENT_POT_SALT` and the rest) are removed.
 - `@eco-incorp/sauce/verify` and `/svm/verify`: `extractEvmSettleFromIntent`, `IntentLike`,
@@ -136,10 +138,10 @@ and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry 
   `plainTransferSource` and `CctpTransferParams` are removed. The settle recipe stays.
 - `@eco-incorp/sauce/protocols/eco-routes` is removed.
 - `@eco-incorp/sauce/actions`: `programIntent` and `ProgramIntentOptions` are removed.
-- The `sauce` command: `sauce intent` is removed with every verb (`publish`, `fill`, `prove`,
-  `claim`, `refund`, `cancel`, `status`, `list`, `show` and `import`), with every `--intent-*`
 - `@eco-incorp/sauce/sauce-script`: the `SauceDelivery`, `SauceReward` and `SauceIntent` types are
   removed.
+- The `sauce` command: `sauce intent` is removed with every verb (`publish`, `fill`, `prove`,
+  `claim`, `refund`, `cancel`, `status`, `list`, `show` and `import`), with every `--intent-*`
   flag, `--store` (on `run`, `send` and `mcp`) and the intent store under `~/.sauce/intents`.
   `inspect` no longer takes `--args` or `--args-json`, nor reports intents or Portal calls;
   `compile --json` no longer reports `intentPots`; `verify` no longer takes a Portal publish, and

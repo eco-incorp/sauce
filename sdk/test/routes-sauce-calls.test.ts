@@ -9,7 +9,7 @@ import { encodeFunctionData, getAddress } from "viem";
 import { address, getAddressEncoder } from "@solana/kit";
 
 import { v12Kitchen, v12PotAbi, v12KitchenAbi } from "../src/evm/engine.js";
-import { destinationExecutionFee } from "../src/evm/execution-fee.js";
+import { kitchenExecutionFee } from "../src/evm/execution-fee.js";
 import { v12KitchenAddress, v12SvmEngineProgramId } from "../src/deployments/index.js";
 import {
   decodePortalCalldataWithAccounts,
@@ -93,7 +93,7 @@ describe("sauceEvmDeployPotCall", () => {
 
 describe("the EVM call builders, as a transaction and as a route call", () => {
   // `{ to, data, value }` is the shape of every request the SDK builds for a wallet or an eth_call
-  // (`destinationExecutionFee()`); `target` is the call record's field.
+  // (`kitchenExecutionFee()`); `target` is the call record's field.
   it("name the contract as `to`, checksummed, beside the route call's `target`", () => {
     const deploy = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, kitchen: KITCHEN });
     expect(deploy).toEqual({
@@ -107,7 +107,7 @@ describe("the EVM call builders, as a transaction and as a route call", () => {
     expect(cook.target).toBe(("0x" + "00".repeat(12) + POT.slice(2)).toLowerCase());
     expect(cook.value).toBe(7n);
     // The same keys a fee read has, so either goes to a client as it is.
-    const fee = destinationExecutionFee(KITCHEN);
+    const fee = kitchenExecutionFee(KITCHEN);
     expect(Object.keys(fee).filter((key) => key in deploy)).toEqual(["to", "data"]);
   });
 });

@@ -5,7 +5,7 @@
  * Every piece is the SDK's own: `compileSauceProgram` compiles the file as a standalone program with
  * the chain's ambient names, `encodeEntryArguments` encodes `main`'s arguments, `buildSauceEvmCall`
  * (`v12Pot.encodeCook`) is the cook, `v12PredictPot`, `potSalt` and `sauceEvmDeployPotCall` are the
- * Pot, and `destinationExecutionFee` is the Kitchen's fee. Nothing is reimplemented here; `chain.ts`
+ * Pot, and `kitchenExecutionFee` is the Kitchen's fee. Nothing is reimplemented here; `chain.ts`
  * reads and sends, and `signer.ts` holds the key.
  */
 import { createRequire } from "node:module";
