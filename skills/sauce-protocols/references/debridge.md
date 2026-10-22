@@ -72,7 +72,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Intent/order-based architecture: users create orders specifying desired outcome, market makers compete to fill
+- Order-based architecture: users create orders specifying desired outcome, market makers compete to fill
 - Uses EVM chain IDs for destination (unlike LayerZero/Wormhole which use their own IDs)
 - Same DlnSource and DlnDestination addresses deployed across all supported chains
 - `takeAmount` should be set slightly below market rate to incentivize market makers

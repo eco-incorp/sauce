@@ -1,5 +1,5 @@
 // Settlement verification: is this payload THE settle program, and with what parameters? It does
-// not say the surrounding intent is safe; the Pot, engine, chain and every other call stay yours.
+// not say the surrounding cook is safe; the Pot, engine, chain and every other call stay yours.
 //
 //   node verify.mts --recipient <address>
 import { compile, resolveSdkModule } from "@eco-incorp/sauce/compiler";

@@ -18,7 +18,6 @@ a swap, `sauce-swaps`'s.
 | A protocol's deployments, contract names and ABI functions | yes  | one chain's every protocol: `sauce-chains`                            |
 | A protocol's pitfalls before calling it                    | yes  |                                                                       |
 | A swap                                                     |      | `sauce-swaps` (a program never swaps through a protocol's own router) |
-| Work on another chain                                      |      | `sauce-intents` (not a bridge call alone)                             |
 
 ## Core model
 
@@ -46,7 +45,6 @@ input. Namespace members (deployed contract, address only, interface) are `sauce
 | A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
 | An address-only factory      | discover the pool off chain and pass its address as a `main` input                                       |
 | A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`)                                                 |
-| Code on another chain        | an intent (`sauce-intents`)                                                                              |
 
 ## Calling a protocol
 

@@ -19,7 +19,6 @@ for the same order on Solana, on these rules, see `sauce-solana-distributed-swap
 | Work out `priceLimit`, `minTokens`, `maxAvgPrice` for any decimals       | yes  |                                 |
 | One swap at one pool                                                     |      | `sauce-swaps`                   |
 | The same order on Solana                                                 |      | `sauce-solana-distributed-swap` |
-| The order as the body of an intent on another chain                      |      | `sauce-intents`                 |
 
 ## Core model
 

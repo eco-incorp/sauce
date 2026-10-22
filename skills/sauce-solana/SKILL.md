@@ -21,7 +21,6 @@ is `sauce-solana-distributed-swap`'s.
 | A PDA, a CPI, an account read; `--account`                           | yes                                |                                                    |
 | A cook too large for one transaction; plans; rent left open          | yes                                |                                                    |
 | A swap at a Solana venue                                             |                                    | `sauce-swaps`                                      |
-| An intent to or from Solana                                          |                                    | `sauce-intents`                                    |
 
 ## Core model
 
@@ -33,12 +32,12 @@ is `sauce-solana-distributed-swap`'s.
 - **Every holder and seed must be known when the cook is built**: `ctx.self()`, an `Address`
   argument of `main`, a key written out, or a program account. One computed as the program runs is
   refused.
-- **Each derived account is checked on chain**, because a transaction built another way (a solver
-  filling the cook) could attach another account in its slot.
+- **Each derived account is checked on chain**, because a transaction built another way could
+  attach another account in its slot.
 - **A Solana key is base58 or its 32 bytes as 0x hex** wherever the command takes one: `--owner`,
   `--account` and every key in its names, `--lookup-table`, a mint in `--assume-balance` and
-  `sauce pools`, a wallet policy's `to` and `tokens`, and the MCP tools' `owner`, `from` and
-  `accounts`. The hex is how `sauce globals --chain solana --json` prints a token's `address`.
+  `sauce pools`, a wallet policy's `to` and `tokens`, and the MCP tools' `owner` and `accounts`.
+  The hex is how `sauce globals --chain solana --json` prints a token's `address`.
 - **The Pot** is the Kitchen's program address for `"pot"`, its owner and a 32-byte salt (zero
   unless `--salt` names another). `ctx.self()` alone is the engine's program id, which owns every
   Pot account, **not the Pot**; as a token's holder it is the Pot, as `self` is: `self.USDC` is
@@ -442,7 +441,7 @@ already past one transaction.
 
 ## Running
 
-Solana is a supported chain: its cooks, Pots and intent steps are built and sent.
+Solana is a supported chain: its cooks and Pots are built and sent.
 
 1. **The Pot** is the Kitchen's address for the owner and salt:
    `sauce pot --chain solana --owner <pubkey>` prints it. It needs no step of its own: a cook on a
@@ -574,8 +573,6 @@ only as they are now.
   `--account dest=<wallet>:USDC`, which `sauce run` creates where it is missing.
 - **An SPL derivation for a Token-2022 account.** An ATA derives under the mint's own token program.
 - **`--fund` on Solana.** It is EVM only: fund the Pot's token account by a transfer.
-- **An intent from Solana.** A wallet publishes it with `sauce intent publish --chain solana`
-  (`sauce-intents`, An intent from Solana).
 - **A program past 1,232 bytes sent by another tool unstaged.** Use `sauce run`, or the plan
   `sauce tx` prints.
 

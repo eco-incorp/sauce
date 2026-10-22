@@ -39,8 +39,8 @@ name. Where a name points on a given chain (its address, whether it exists there
     its issuer;
   - [references/protocols.md](references/protocols.md): every `Namespace.Contract`, interface and
     family alias;
-  - [references/chains.md](references/chains.md): every chain name, its id, whether it takes
-    intents and whether it is supported.
+  - [references/chains.md](references/chains.md): every chain name, its id and whether it is
+    supported.
 
 ## Tokens
 
@@ -229,8 +229,7 @@ function main(tokenA: Address, tokenB: Address) {
 
 ## Chain names and `chainId`
 
-- **A chain name** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) opens an
-  intent from inside a program, `Ethereum(() => { ... }).reward({ ... })` (`sauce-intents`), and
+- **A chain name** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md))
   qualifies another chain's contract address (`sauce-chains`).
 - **`chainId`** is the id of the chain the program is compiled for, a constant
   (`sauce-chains` says when it differs from `ctx.chainId()`).
