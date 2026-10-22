@@ -16,9 +16,9 @@ key, chaining amounts, and running it. Every action and field is in
 | An actions document, when                                         | A SauceScript program (`sauce-script`), when                               |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | the job is a fixed sequence of the operations the reference lists | it needs logic: conditions, loops, a price read and compared, a best venue |
-| the steps come from a service, a form or another language         | it opens an intent to another chain (`sauce-intents`)                      |
-| the document must be validated, stored or signed before it runs   | it calls a contract or a method no action covers                           |
-| every amount is fixed, an argument, or a balance read on chain    | it spends across several venues under one price (`sauce-distributed-swap`) |
+| the steps come from a service, a form or another language         | it calls a contract or a method no action covers                           |
+| the document must be validated, stored or signed before it runs   | it spends across several venues under one price (`sauce-distributed-swap`) |
+| every amount is fixed, an argument, or a balance read on chain    |                                                                            |
 
 ## Core model
 
@@ -149,7 +149,7 @@ declares them:
 ```sh
 sauce simulate swap.json --chain base --owner <address> \
   --assume-balance USDC:1000 --args 1000000000
-sauce tx swap.json --chain base --owner <address> --value 0 --args 1000000000
+sauce tx swap.json --chain base --owner <address> --args 1000000000
 sauce run swap.json --chain base --keystore <keystore> --args 1000000000
 ```
 
@@ -173,7 +173,7 @@ chain `refused` in its place.
 - **`amountOutMin` left loose.** It is fixed in the document: set it from a quote.
 - **A pool key on a venue that has none** (Curve, Balancer, DODO, WOOFi, Maverick): give the pool's
   address.
-- **Logic in a document** (a condition, a best venue, an intent): write SauceScript instead.
+- **Logic in a document** (a condition, a best venue): write SauceScript instead.
 
 ## Files
 

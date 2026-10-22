@@ -697,8 +697,7 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
 Rules and errors:
 
 - The block takes no parameter: "a `.catch()` handler parameter (the caught error is not supported)".
-- Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else in the language
-  (an intent opened from a program for a chain is not one: see the end of section 14).
+- Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else in the language.
 - A `return`, or a `break`/`continue` leaving the block, is not allowed in the statement form ("a `return` in a
   `.catch()` handler …").
 - The value form needs exactly `return <constant>;`:
@@ -741,11 +740,6 @@ Rules and errors:
 | computed object keys, object methods                             | plain named fields                                                                                                |
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
-
-One closure is not the compiler's: in a program compiled for a chain, `Base(() => { … }).reward(…)`
-opens a cross-chain intent whose body runs on that chain. The chain's body is taken out of the
-program and compiled on its own before the compiler sees the rest, so it is not an arrow function
-of the language; the raw compiler, given the same source, rejects it.
 
 ## 15. Limits
 

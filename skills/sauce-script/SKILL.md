@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: SauceScript, the language of a Sauce program (.sauce.ts), the checked TypeScript subset Sauce compiles to bytecode. The two program forms (function main(...) whose parameters are every input, intent files included; a script of top-level statements with none), the header every program opens with, inputs against module constants, values, the three ways to call a contract and who receives what a call produces, helpers, what compiles and what to write instead, require, throw and atomic failure, .catch on a failed call, ctx and the other builtins, gas, the editor and reading compile errors, with a complete reference of every type, operator, statement and builtin per target. Use when writing or editing any Sauce program, when a compile fails ("unsupported construct", "is not a declared variable", "does not return on every path", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: SauceScript, the language of a Sauce program (.sauce.ts), the checked TypeScript subset Sauce compiles to bytecode. The two program forms (function main(...) whose parameters are every input; a script of top-level statements with none), the header every program opens with, inputs against module constants, values, the three ways to call a contract and who receives what a call produces, helpers, what compiles and what to write instead, require, throw and atomic failure, .catch on a failed call, ctx and the other builtins, gas, the editor and reading compile errors, with a complete reference of every type, operator, statement and builtin per target. Use when writing or editing any Sauce program, when a compile fails ("unsupported construct", "is not a declared variable", "does not return on every path", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
 # SauceScript
@@ -23,8 +23,8 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 ## Core model
 
 - A program is a `.sauce.ts` file compiled **for a chain** (`--chain`). Compiling lowers the names
-  that chain supplies, the token syntax and the intents the file opens; everything else reaches
-  the compiler as written, annotations included.
+  that chain supplies and the token syntax; everything else reaches the compiler as written,
+  annotations included.
 - **A balance is `<holder>.<TOKEN>`, on any address or contract**: `self.USDC` is the Pot's USDC,
   `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`; the native coin
   too, `self.ETH` (`ctx.selfBalance()`) and `self.SOL`. Which holders each target takes, and the
@@ -43,10 +43,10 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 
 ## Program forms
 
-| Form                   | Inputs                                                    | Use for                                                                                        |
-| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **`function main(…)`** | `main`'s parameters, passed with `--args`                 | every program that takes an input (tokens, amounts, recipients, limits), intent files included |
-| **Top-level script**   | none: every value is written in the file or read on chain | a program with no inputs                                                                       |
+| Form                   | Inputs                                                    | Use for                                                                 |
+| ---------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **`function main(…)`** | `main`'s parameters, passed with `--args`                 | every program that takes an input (tokens, amounts, recipients, limits) |
+| **Top-level script**   | none: every value is written in the file or read on chain | a program with no inputs                                                |
 
 A `main` program may declare module constants, helpers and imports. (The `chain=…` after a fence
 here only says which chains the block is checked on; it is not part of the file.)
@@ -106,12 +106,11 @@ AaveV3.Pool.supply(USDC, supplied, ctx.msgSender(), 0);
 
 ## The header
 
-Every program, an intent file included, opens with a comment that says, in order:
+Every program opens with a comment that says, in order:
 
 1. what it does, in one line;
 2. the `sauce` command that runs it, with `--chain <chain>` (a program names no chain) and `--args`
-   naming every `main` parameter in order: `--args <tokenIn> <tokenOut> <amountIn>`; an intent
-   file adds its `--intent-…` flags (`sauce-intents`);
+   naming every `main` parameter in order: `--args <tokenIn> <tokenOut> <amountIn>`;
 3. one line per parameter, `name: Type`, its meaning and its units, in smallest units
    (`5000000000` is 5,000 USDC, which has 6 decimals); an array or a record is passed as JSON;
 4. one concrete run on a supported chain with real values: addresses from the registry
@@ -140,12 +139,11 @@ function main(recipients: Address[], amount: Uint256) {
 
 ## Inputs and fixed values
 
-| Value                                                        | Write it as                 | Arrives                                                                   |
-| ------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------- |
-| What the caller chooses per run: tokens, amounts, recipients | a **`main(...)` parameter** | with the transaction (`--args`)                                           |
-| The inputs of intents published from a wallet                | **`main(...)` parameters**  | fixed into the intents by `sauce intent publish --args` (`sauce-intents`) |
-| A value the program fixes: a fee, a pool's tier              | a **module constant**       | folded into the bytecode                                                  |
-| A value the chain supplies                                   | a name (`sauce-globals`)    | resolved when compiling for that chain                                    |
+| Value                                                        | Write it as                 | Arrives                                |
+| ------------------------------------------------------------ | --------------------------- | -------------------------------------- |
+| What the caller chooses per run: tokens, amounts, recipients | a **`main(...)` parameter** | with the transaction (`--args`)        |
+| A value the program fixes: a fee, a pool's tier              | a **module constant**       | folded into the bytecode               |
+| A value the chain supplies                                   | a name (`sauce-globals`)    | resolved when compiling for that chain |
 
 ## Values
 
@@ -254,8 +252,7 @@ Every call comes from the Pot. A call that credits its caller, or names `ctx.sel
 beneficiary, leaves the output in the Pot. A call that names a beneficiary (a lending market's
 `onBehalfOf`, a vault's `receiver`, a swap's `recipient`, a bridge's `to`) credits that address:
 make it a `main` parameter, the user's wallet or `ctx.self()` as the user chose (`sauce-overview`
-says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner; in an intent's body it
-is not (the body runs on the shared intent Pot), so there the wallet is always a parameter.
+says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner.
 
 ```sauce chain=base,ethereum
 // Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
@@ -326,15 +323,15 @@ Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...o
 `/` and `%`, helpers, `Math.mulDiv(a, b, c)`, `Math.sqrt(x)`. The full list, with each rejection's
 message, is section 14 of [references/builtins.md](references/builtins.md).
 
-| Rejected                                                                                                          | Write instead                                                                                |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                    | `if` chains, arrays, inline object types, plain functions                                    |
-| `try`/`catch`, `throw new Error(...)`                                                                             | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
-| arrow functions and nested functions, except the intent syntax `Chain(() => { ... })` and `.catch(() => { ... })` | top-level function declarations                                                              |
-| template literals, comparing bytes with `==`                                                                      | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
-| `as` casts, default parameters, spread, object destructuring                                                      | explicit values and field access                                                             |
-| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                        | `new Array(n)` and an index; `if`; `**`                                                      |
-| a method on a literal: ``hex`a9059cbb`.concat(d)``                                                                | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
+| Rejected                                                             | Write instead                                                                                |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`       | `if` chains, arrays, inline object types, plain functions                                    |
+| `try`/`catch`, `throw new Error(...)`                                | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
+| arrow functions and nested functions, except `.catch(() => { ... })` | top-level function declarations                                                              |
+| template literals, comparing bytes with `==`                         | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
+| `as` casts, default parameters, spread, object destructuring         | explicit values and field access                                                             |
+| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`           | `new Array(n)` and an index; `if`; `**`                                                      |
+| a method on a literal: ``hex`a9059cbb`.concat(d)``                   | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {
@@ -349,24 +346,28 @@ function main(x: Uint256): Uint256 {
 ## Failure and `.catch`
 
 `require(false)`, `require(cond, "reason")`, `throw "reason"`, a reverting call and every guard the
-package emits revert the **whole transaction**; for an intent, the whole fulfilment. Nothing
-half-happens, so every safety check belongs in the program.
+package emits revert the **whole transaction**. Nothing half-happens, so every safety check belongs
+in the program.
 
 The one way to survive a failure is on an external EVM call: `.catch(() => { ... })` runs instead
 when that call reverts, and the call's own effects are undone. The handler may assign locals of the
 enclosing function.
 
-```sauce chain=base
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
-
-function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256, recipient: Address) {
-  let filled = true;
-  ISauceRouter.at(ctx.self())
-    .swapV3(pool, WETH, WETH < USDC, amount, sqrtPriceLimitX96, recipient)
+```sauce chain=base,ethereum
+// A Uniswap V3 pool's sqrt price, or 0 when the pool refuses the read.
+function main(pool: Address): Uint256 {
+  require(ctx.codeSize(pool) > 0, "no contract at the pool address");
+  let answered = true;
+  let price = 0;
+  UniswapV3.Pool(pool)
+    .slot0()
     .catch(() => {
-      filled = false;
+      answered = false;
     });
-  require(filled, "the pool refused");
+  if (answered) {
+    price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
+  }
+  return price;
 }
 ```
 

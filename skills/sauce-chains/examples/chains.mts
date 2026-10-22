@@ -6,13 +6,14 @@
 // and a chain-qualified token is refused. Then payout-solana.sauce.ts: the accounts compiling adds
 // to main and how each is derived, its arguments, USDC an SPL Token mint moved by transfer and TSLAx
 // a Token-2022 mint moved by transferChecked with its decimals. Last, the Sauce deployment: references/deployments.json holds the addresses the SDK builds
-// every cook with, under the keys the skill's table names, and each chain's file points at it.
+// every cook with, under the keys the skill's table names, `evm.pot` gives an owner's default Pot
+// under the zero salt, and each chain's file points at it.
 // Offline: nothing is sent.
 //
 //   node chains.mts
 import { readFileSync } from "node:fs";
 
-import { SAUCE_INTENT_POT_SALT, destinationPot, routes } from "@eco-incorp/sauce";
+import { DEFAULT_POT_SALT, routes, v12PredictPot } from "@eco-incorp/sauce";
 import {
   v12EngineAddress,
   v12KitchenAddress,
@@ -24,6 +25,7 @@ import {
   v12SvmKitchenProgramId,
 } from "@eco-incorp/sauce/deployments";
 import { address, getAddressEncoder } from "@eco-incorp/sauce/svm";
+import { encodeAbiParameters, getCreate2Address, keccak256, type Hex } from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -219,10 +221,19 @@ check(
     evm.pot.initCodeHash === v12PotDerivation().initCodeHash,
   "deployments.json gives the EVM contracts the SDK builds cooks with",
 );
+// An owner's default Pot is its Pot under the zero salt, and `evm.pot` derives it: any owner
+// serves, here the engine's address.
+const owner = evm.engine.address as Hex;
 check(
-  evm.intentPot.salt === SAUCE_INTENT_POT_SALT &&
-    CHAINS.every((chain) => destinationPot(chain) === evm.intentPot.address),
-  "deployments.json gives the shared intent Pot of every chain",
+  DEFAULT_POT_SALT === `0x${"00".repeat(32)}` &&
+    getCreate2Address({
+      from: evm.kitchen.address,
+      bytecodeHash: evm.pot.initCodeHash,
+      salt: keccak256(
+        encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, DEFAULT_POT_SALT]),
+      ),
+    }) === v12PredictPot(owner),
+  "deployments.json's evm.pot gives an owner's default Pot, under the zero salt",
 );
 const svmKey = (programId: string) =>
   `0x${Buffer.from(getAddressEncoder().encode(address(programId))).toString("hex")}`;
