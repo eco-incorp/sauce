@@ -3,7 +3,7 @@
  * told `--wallet <name>`, each encrypted under a password the agent holds and never sees in its
  * context (`password.ts` reads it from the source it is told about).
  *
- * One file per wallet, `<dir>/<name>.json`, beside the intent store under `~/.sauce`:
+ * One file per wallet, `<dir>/<name>.json`, beside the Pot store under `~/.sauce`:
  *
  *  - an EVM wallet is a Web3 Secret Storage (v3) keystore exactly as geth and `cast wallet` write it
  *    (scrypt, AES-128-CTR, keccak-256 MAC; `signer.ts#encryptKeystore`), so `--keystore <file>`,

@@ -1,6 +1,5 @@
 /**
- * eco-routes Sauce-bytecode `route.calls[]` builders — E3.3. Pure data assertions, no compiler /
- * forge / network involved.
+ * Sauce-bytecode call builders. Pure data assertions, no compiler / forge / network involved.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -16,22 +15,14 @@ import {
   decodePortalCalldataWithAccounts,
   encodePortalCalldataWithAccounts,
 } from "../src/svm/intent.js";
-import { assembleIntent, hashIntent } from "../src/routes/index.js";
-import { requireChain } from "../src/chains/canonical.js";
 import {
   buildSauceEvmCall,
   buildSauceEvmCalls,
   buildSauceSvmCall,
   buildSauceSvmCalls,
-  decodeRouteEvm,
-  decodeRouteSvm,
-  encodeRouteEvm,
-  encodeRouteSvm,
   mergeSvmAccountFlags,
   sauceEvmDeployPotCall,
 } from "../src/routes/index.js";
-import { normalizeRoute } from "../src/routes/normalize.js";
-import type { CallInput, RouteInput } from "../src/routes/index.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -102,7 +93,7 @@ describe("sauceEvmDeployPotCall", () => {
 
 describe("the EVM call builders, as a transaction and as a route call", () => {
   // `{ to, data, value }` is the shape of every request the SDK builds for a wallet or an eth_call
-  // (`destinationExecutionFee()`, `publishAndFundTx`); `target` is the route `Call`'s field.
+  // (`destinationExecutionFee()`); `target` is the call record's field.
   it("name the contract as `to`, checksummed, beside the route call's `target`", () => {
     const deploy = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, kitchen: KITCHEN });
     expect(deploy).toEqual({
@@ -118,34 +109,6 @@ describe("the EVM call builders, as a transaction and as a route call", () => {
     // The same keys a fee read has, so either goes to a client as it is.
     const fee = destinationExecutionFee(KITCHEN);
     expect(Object.keys(fee).filter((key) => key in deploy)).toEqual(["to", "data"]);
-  });
-});
-
-describe("EVM composition with the fluent builder + E3.2 encode/decode round-trip", () => {
-  it("produced CallInput[] survives normalizeRoute -> encodeRouteEvm -> decodeRouteEvm verbatim", () => {
-    const calls = buildSauceEvmCalls({ pot: POT, engine: ENGINE, cooks: ["0xaa", "0xbb"] });
-    const route: RouteInput = {
-      deadline: 2000n,
-      portal: "0x5555555555555555555555555555555555555555",
-      calls,
-    };
-    const intent = assembleIntent(requireChain("base"), requireChain("optimism"), route, {
-      deadline: 1000n,
-      creator: OWNER,
-      prover: OWNER,
-    });
-    expect(intent.route.calls).toHaveLength(2);
-    expect(intent!.route.calls[0]!.data).toBe(calls[0]!.data);
-    expect(intent!.route.calls[1]!.data).toBe(calls[1]!.data);
-
-    const decoded = decodeRouteEvm(encodeRouteEvm(intent!.route));
-    expect(decoded.calls[0]!.data).toBe(calls[0]!.data);
-    expect(decoded.calls[1]!.data).toBe(calls[1]!.data);
-
-    // determinism
-    const h1 = hashIntent(intent!);
-    const h2 = hashIntent(intent!);
-    expect(h1).toEqual(h2);
   });
 });
 
@@ -322,27 +285,6 @@ describe("buildSauceSvmCalls (leg-wide flag merge)", () => {
       { accounts: [{ pubkey: SHARED, isSigner: true, isWritable: false }] },
     ]);
     expect(merged.get(String(SHARED))).toEqual({ isSigner: true, isWritable: true });
-  });
-});
-
-describe("SVM composition with the fluent builder + E3.2 encode/decode round-trip", () => {
-  it("produced CallInput[] survives normalizeRoute -> encodeRouteSvm -> decodeRouteSvm, data byte-identical", () => {
-    const calls: CallInput[] = buildSauceSvmCalls({
-      programId: PROGRAM,
-      executions: [
-        { code: BUFFER, accounts: [{ pubkey: A1, isSigner: false, isWritable: false }] },
-      ],
-    });
-    const route = normalizeRoute({
-      deadline: 2000n,
-      portal: `0x${"aa".repeat(32)}`,
-      calls,
-    });
-
-    const encoded = encodeRouteSvm(route);
-    const decoded = decodeRouteSvm(encoded);
-    expect(decoded.calls[0]!.data).toBe(calls[0]!.data);
-    expect(decoded.calls[0]!.value).toBe(0n);
   });
 });
 

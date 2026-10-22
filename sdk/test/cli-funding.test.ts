@@ -354,7 +354,7 @@ describe("the funding wrapper", () => {
     ["returns nothing", "function main() {\n  USDC.transfer(0x2n, 5n);\n  return;\n}\n", false],
     ["returns a value", "function main() {\n  return USDC;\n}\n", true],
     [
-      "returns only inside an intent's closure",
+      "returns only inside a closure",
       "function main() {\n  const f = () => {\n    return 1n;\n  };\n}\n",
       false,
     ],

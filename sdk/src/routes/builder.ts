@@ -1,20 +1,12 @@
 /**
- * Chain-global surface machinery: every canonical chain global is BOTH
- * callable (`Base(sauce, opts)`) and a namespace carrying `.chain` and
- * `.route` (the same callable, `Base.route === Base`'s own behavior).
+ * Chain-global surface machinery: every canonical chain export is a namespace carrying `.chain`
+ * (its registry record).
  *
- * `ChainRoute`/`ChainGlobal` are ONE interface hierarchy — `ChainGlobal
- * extends ChainRoute`, so the call signature and `.route` can never drift
- * apart (see `sdk/test/routes-globals-ambient-types.test.ts`'s type-level pin).
- *
- * `ChainRef`/`CanonicalChain` now come straight from `../chains/canonical.js`
- * (which additionally accepts `bigint`) rather than a narrower copy kept
- * here — re-exported below so the public name survives at this import path.
+ * `ChainRef`/`CanonicalChain` come straight from `../chains/canonical.js` (which additionally
+ * accepts `bigint`), re-exported below so the public name survives at this import path.
  */
 import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
 import { canonicalChains } from "../chains/canonical.js";
-import type { IntentOptions, PendingSauceRoute, SauceBody } from "./intent-dsl.js";
-import { openRoute } from "./intent-dsl.js";
 
 export type { ChainRef };
 
@@ -28,17 +20,10 @@ export type PascalOf<S extends string> = S extends `${infer H}-${infer T}`
   ? `${Capitalize<H>}${PascalOf<T>}`
   : Capitalize<S>;
 
-/** The call signature: `Chain(sauce, options)` -> a pending route awaiting `.reward(...)`. */
-export interface ChainRoute {
-  (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute;
-}
-
-/** A chain global: callable (the SAME behavior as `.route`), plus `.chain`/`.route`. */
-export interface ChainGlobal extends ChainRoute {
-  /** The registry record this global was generated from (or resolved via `chain(ref)`). */
+/** A chain export: `.chain`. */
+export interface ChainGlobal {
+  /** The registry record this export was generated from (or resolved via `chain(ref)`). */
   readonly chain: CanonicalChain;
-  /** The SAME interface as the call signature -- `Base.route === Base` in behavior, by construction. */
-  readonly route: ChainRoute;
 }
 
 /** One generated `ChainGlobal` per canonical chain slug, PascalCase-keyed. */
@@ -60,29 +45,16 @@ const FUNCTION_INTRINSICS: ReadonlySet<string> = new Set([
   "toString",
   "constructor",
   "chain",
-  "route",
 ]);
 
 /**
- * Builds the callable `ChainGlobal` for `chain` -- what a generated global
- * (`Base`) or `chain(ref)` returns. An ARROW function (no own `prototype` to
- * collide with) forwarding to `openRoute`, with `chain`/`route` defined onto
- * it as enumerable so `Object.keys(chainAccessors.Base)` stays exactly
- * `["chain","route"]`.
+ * Builds the `ChainGlobal` for `chain` -- what a generated export (`Base`) or `chain(ref)` returns:
+ * `chain`, enumerable, so `Object.keys(chainAccessors.Base)` is exactly `["chain"]`.
  */
 export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
-  const route: ChainRoute = (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
-    openRoute(chain, sauce, options);
-
-  const fn = ((sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
-    route(sauce, options)) as unknown as ChainGlobal;
-
-  Object.defineProperties(fn, {
+  return Object.defineProperties({} as ChainGlobal, {
     chain: { value: chain, enumerable: true, configurable: false, writable: false },
-    route: { value: route, enumerable: true, configurable: false, writable: false },
   });
-
-  return fn;
 }
 
 /**

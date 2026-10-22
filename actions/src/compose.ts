@@ -1,19 +1,13 @@
 /**
- * An action program, compiled standalone or opened as an Eco intent route.
+ * An action program, compiled standalone.
  *
- * STANDALONE (`compileProgram`). One compiled program; its `argument` actions are `main`
- * parameters, so the same bytecode serves every amount and the amounts travel as argument bytes
- * appended to it. ABI-v1 arguments are 32-byte words; compact-v1 arguments are smaller, and with a
- * declared `scalarWidth` each sits at a fixed offset (`argumentOffset`), which is what lets a caller
- * splice a number measured at runtime into an otherwise precompiled payload.
+ * `compileProgram`: one compiled program; its `argument` actions are `main` parameters, so the same
+ * bytecode serves every amount and the amounts travel as argument bytes appended to it. ABI-v1
+ * arguments are 32-byte words; compact-v1 arguments are smaller, and with a declared `scalarWidth`
+ * each sits at a fixed offset (`argumentOffset`), which is what lets a caller splice a number
+ * measured at runtime into an otherwise precompiled payload.
  *
- * INTENT (`programIntent`). The program is the route body on its chain: the SDK compiles it there,
- * puts its cook in the route, and `.reward(...)` / `.nest(...)` work on it like on any other. A
- * route body takes no runtime arguments, so an amount only known at execution comes from a
- * `balanceOf` action instead — which is also how a child of a dynamic `.nest()` spends exactly what
- * its parent delivered.
- *
- * THE CHAIN. Both compile for one chain: `options.chain`, else the document's `chainId`. The
+ * THE CHAIN. It compiles for one chain: `options.chain`, else the document's `chainId`. The
  * program's token symbols and namespace references are its globals, and that compile resolves them
  * there — the SDK's own program compile, `routes.compileSauceProgram`, with the chain's names — so
  * a document with no `chainId` compiles for any chain where its names exist. A name the chain lacks
@@ -27,20 +21,14 @@ import {
   type ChainRef,
 } from "../../sdk/dist/chains/canonical.js";
 import { encodeCompactArguments } from "../../sdk/dist/compact-arguments.js";
-import {
-  compileSauceProgram,
-  openRoute,
-  type IntentOptions,
-  type PendingSauceRoute,
-  type SauceCompileOptions,
-} from "../../sdk/dist/routes/index.js";
+import { compileSauceProgram } from "../../sdk/dist/routes/index.js";
 
 import type { ActionContracts } from "./abis.js";
 import { compileEvm } from "./compile.js";
 import { chainLabel, resolveNames, wrappedNativeIssues } from "./names.js";
 import { parseProgram } from "./program.js";
 import { ProgramError, programIssues } from "./semantics.js";
-import { lowerActions, renderProgram, renderRouteBody, type Lowered } from "./to-sauce.js";
+import { lowerActions, renderProgram, type Lowered } from "./to-sauce.js";
 import type { ActionProgram } from "./types.js";
 
 export interface CompileOptions {
@@ -90,7 +78,10 @@ export interface CompiledProgram {
   argumentOffset(name: string, encoding?: ArgumentEncoding): number;
 }
 
-/** An action program checked for one chain and lowered: what both compiles start from. */
+/**
+ * An action program checked for one chain and lowered: what `programSource` and `compileProgram`
+ * start from.
+ */
 export interface LoweredProgram {
   readonly chain: CanonicalChain;
   /** The program as parsed: canonical, every name as written. */
@@ -283,54 +274,4 @@ export function compiled(
       return bytecode.length + 4 + index * (1 + width) + 1;
     },
   };
-}
-
-/**
- * Merges the action bindings into `compile.contracts`, refusing a same-named binding with a
- * different ABI rather than letting one silently shadow the other.
- */
-function withContracts(
-  compile: SauceCompileOptions | undefined,
-  contracts: ActionContracts,
-): SauceCompileOptions {
-  const existing = compile?.contracts ?? {};
-  for (const [name, { abi }] of Object.entries(contracts)) {
-    const other = existing[name];
-    if (other !== undefined && JSON.stringify(other.abi) !== JSON.stringify(abi)) {
-      throw new Error(
-        `compile.contracts already binds '${name}' to a different ABI — an action program binds ` +
-          "its contracts under I-prefixed names such as this one; rename yours",
-      );
-    }
-  }
-
-  return {
-    ...compile,
-    contracts: { ...existing, ...contracts },
-  };
-}
-
-/** `programIntent`'s options: an intent's, and the chain its route runs on. */
-export type ProgramIntentOptions = IntentOptions & {
-  /** The route's chain, whose names the program resolves; defaults to the document's `chainId`. */
-  readonly chain?: ChainRef;
-};
-
-/**
- * An action program as an Eco intent route on its chain (`options.chain`, else its `chainId`):
- * `programIntent(program, options).reward(reward)` is `Base(body, options).reward(reward)` with the
- * program as the body. Moving value to another chain is a bridge action inside the program, or a
- * nested intent (`.nest(...)`) on the returned route.
- */
-export function programIntent(
-  program: ActionProgram,
-  options: ProgramIntentOptions,
-): PendingSauceRoute {
-  const { chain: given, ...intent } = options;
-  const { chain, lowered } = lowerProgram(program, given);
-
-  return openRoute(chain, renderRouteBody(lowered), {
-    ...intent,
-    compile: withContracts(intent.compile, lowered.contracts),
-  });
 }

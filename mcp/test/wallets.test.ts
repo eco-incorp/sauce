@@ -26,7 +26,6 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { decryptKeystoreBytes, encryptKeystore } from "../../sdk/dist/cli/signer.js";
 import { encodeCursor } from "../../sdk/dist/cli/svm-plan.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
-import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES, WALLET_UNSIGNED } from "../src/tools.js";
@@ -165,17 +164,11 @@ describe("a server with wallets", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("lists the wallet tools after the intent tools, none taking a key or a password", async () => {
+  it("lists the wallet tools after the sending tools, none taking a key or a password", async () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [
-        ...TOOL_NAMES,
-        ...INTENT_TOOL_NAMES,
-        ...SEND_TOOL_NAMES,
-        ...WALLET_TOOL_NAMES,
-        ...SKILL_TOOL_NAMES,
-      ],
+      [...TOOL_NAMES, ...SEND_TOOL_NAMES, ...WALLET_TOOL_NAMES, ...SKILL_TOOL_NAMES],
     );
     for (const tool of tools) {
       for (const field of fieldsOf(tool.inputSchema)) {
@@ -189,7 +182,7 @@ describe("a server with wallets", () => {
     assert.equal(byName.get("sauce_wallet_address")?.annotations?.readOnlyHint, true);
     assert.equal(byName.get("sauce_wallet_enable")?.annotations?.destructiveHint, false);
     // Every tool that builds a transaction says it can be sent from a wallet here.
-    for (const name of ["sauce_tx", "sauce_pot", "sauce_intent_fill", "sauce_intent_claim"]) {
+    for (const name of ["sauce_tx", "sauce_pot", "sauce_actions"]) {
       assert.ok(byName.get(name)?.description?.includes(WALLET_UNSIGNED), name);
     }
     const instructions = mcp.client.getInstructions() ?? "";

@@ -165,7 +165,7 @@ export interface MainSignatureText {
 
 /**
  * Whether the body whose `{` is at `brace` in blanked `code` returns a value: a `return` with an
- * operand, outside any arrow function's own block (an intent's closure) inside it.
+ * operand, outside any arrow function's own block inside it.
  */
 function bodyReturnsValue(code: string, brace: number): boolean {
   const token = /=>\s*\{|[{}]|(?<![.\w$])return\b(?!\s*[;}])/g;
@@ -545,8 +545,8 @@ export function entryConstant(
   if (parsed.kind !== "uint" && parsed.kind !== "address" && parsed.kind !== "bool") {
     return undefined;
   }
-  // A Solana key, in base58: an account an intent to Solana names, bound as the 32-byte word
-  // that is its key there. Never an address on an EVM chain, whose 20 bytes are hex.
+  // A Solana key, in base58: an account a program on Solana names, bound as the 32-byte word that
+  // is its key there. Never an address on an EVM chain, whose 20 bytes are hex.
   if (parsed.kind === "address" && typeof value === "string" && isSvmKey(value)) {
     return BigInt(bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(value)))));
   }
@@ -568,9 +568,8 @@ export interface BoundEntryArguments {
 
 /**
  * `source` with `main`'s arguments bound into it as constants: `main(amount: Uint256)` given
- * `[1000000n]` compiles as if its body read `amount` as `1000000`. How a wallet publishes the
- * intents a file opens from values known before anything runs, so they come out fixed. Each must be
- * one word: an unsigned integer, an address or a `bool`.
+ * `[1000000n]` compiles as if its body read `amount` as `1000000`, the program then taking none at
+ * run time. Each must be one word: an unsigned integer, an address or a `bool`.
  *
  * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
  * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.

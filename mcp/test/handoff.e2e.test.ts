@@ -34,7 +34,6 @@ import {
   fixture,
   OTHER_KEY,
   OWNER,
-  placePortal,
   potOwner,
   registered,
   RUNTIME_HEX_PATH,
@@ -56,12 +55,6 @@ const PAY = [
   "function main(recipient: Address, amount: Uint256) {",
   "  USDC.transfer(recipient, amount);",
   "}",
-  "",
-].join("\n");
-const INTENT = [
-  "Ethereum(() => {",
-  "  USDC.transfer(RECIPIENT, 5n);",
-  "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
   "",
 ].join("\n");
 
@@ -156,7 +149,6 @@ describe(
     before(async () => {
       base = await startChain("base");
       usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-      await placePortal(base);
       mcp = await connect(endpointsFor({ [String(base.chain.id)]: base.rpcUrl }));
     });
 
@@ -324,41 +316,6 @@ describe(
       const there = ok(await mcp.call("sauce_pot", { chain: "base", owner }));
       assert.equal(there.deployed, true);
       assert.equal(there.sendCalls, undefined);
-    });
-
-    it("an intent's publish: every intent's transactions as one batch, and none for a dry run", async () => {
-      const args = {
-        source: INTENT,
-        chain: "base",
-        defines: { RECIPIENT },
-        intentDeadline: 2_000_000_000,
-        intentCreator: OWNER.address,
-        from: OWNER.address,
-      };
-      const out = ok(await mcp.call("sauce_intent_publish", args)) as {
-        intents: Array<{ transactions: Tx[] }>;
-        sendCalls: Batch;
-      };
-      const transactions = out.intents.flatMap((intent) => intent.transactions);
-      assert.deepEqual(
-        transactions.map((tx) => tx.what?.split(" ")[0]),
-        ["transfer", "publish"],
-      );
-      transactions.forEach((each) => walletTakes(each, base.chain.id));
-      sameBatch(out.sendCalls, transactions, "base");
-      // A rehearsal reports what ran: nothing in it is to be sent.
-      const dry = ok(
-        await mcp.call("sauce_intent_publish", {
-          ...args,
-          dryRun: true,
-          assumeBalance: ["USDC:1"],
-        }),
-      );
-      assert.equal(dry.sendCalls, undefined);
-      assert.ok(
-        (dry.transactions as Array<Record<string, unknown>>).every((tx) => "status" in tx),
-        "each is what ran, with its status",
-      );
     });
   },
 );

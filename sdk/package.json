@@ -72,7 +72,6 @@
     "gen-skills-actions": "node scripts/gen-skills-actions.mjs",
     "gen-runtime-lock": "node scripts/gen-runtime-lock.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
-    "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs",
     "sync-stock-tokens": "node scripts/sync-stock-tokens.mjs"
   },
   "dependencies": {

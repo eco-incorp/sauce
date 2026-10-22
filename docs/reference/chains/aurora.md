@@ -10,8 +10,8 @@
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Aurora a program
 compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run`,
-`sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are refused,
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
@@ -24,7 +24,6 @@ naming the supported chains and how to request this one (the last section).
 | In TypeScript | `import { Aurora } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | none recorded |
 
 ## Tokens
 

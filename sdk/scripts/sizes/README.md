@@ -33,8 +33,8 @@ node diff.mjs baselines/rewrite61-5d9f38f3.json candidate.json   # exits 1 when 
 - `times.mjs <sdk-tree> [repeats]`: each program's median cold (function cache cleared) and warm
   compile, in ms, as JSON.
 - `ab.mjs <tree-a> <tree-b> [repeats]`: two SDK trees in one process, compiles interleaved so machine
-  load falls on both alike; a handful of programs that cover a chain's module, an intent and a
-  cascade. Skip timing while the load average is high.
+  load falls on both alike; a handful of programs that cover a chain's module, and an intent and a
+  cascade where the tree has them. Skip timing while the load average is high.
 - `profile.mjs <sdk-tree> <chain> <file | -e source> [repeats]`, with
   `SAUCE_COMPILER_PKG=./profiler` and `SAUCE_COMPILER_REAL=<pkg>`: where one compile spends its time — the SDK's own time, the
   compiler's, the host callbacks inside it, and the largest files `resolve` answered.

@@ -7,8 +7,8 @@
  * succeeded, on Solana the Kitchen's `create_pot` in a transaction that succeeded (`create_pot` is
  * not idempotent, so one that succeeded created the Pot). So the two places every send lands —
  * `chain.ts#landed` and `solana.ts#svmLanded` — find them, whatever sent the transaction: `sauce
- * pot --deploy`, a run that deploys its Pot first, `sauce send`, a fill that deploys an intent Pot,
- * a cook whose program calls the Kitchen.
+ * pot --deploy`, a run that deploys its Pot first, `sauce send`, a cook whose program calls the
+ * Kitchen.
  *
  * Which release minted an EVM Pot is told from its address: `CREATE2(kitchen, gate salt, hash)`
  * under each Kitchen and Pot init-code hash `deployments/releases.json` records, with the gate salt
@@ -393,8 +393,8 @@ export const clusterOf = (genesisHash: string): string => CLUSTERS[genesisHash] 
 
 /**
  * The Pots a landed Solana transaction created: one record per `create_pot` of the Kitchen in it —
- * an instruction of its own, or one a program invoked (`inner`, as the node reports them: the
- * Portal creating its executor's Pot in a fill) — its accounts (owner, engine program, Pot) read
+ * an instruction of its own, or one a program invoked (`inner`, as the node reports them) — its
+ * accounts (owner, engine program, Pot) read
  * through the message's static accounts and those its lookup tables loaded (`loaded`). None for
  * one that failed. `genesis` is asked for the cluster's genesis hash only when there is one, so a
  * devnet Pot is recorded as devnet's: the Kitchen's id, and so the Pot's address, is the same on
