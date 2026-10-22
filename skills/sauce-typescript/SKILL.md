@@ -37,17 +37,17 @@ simulate) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.
 - **The builders are not gated** by chain, but follow the supported-chains rule (`sauce-overview`):
   build and send a cook or a Pot's deployment only for a supported chain.
 
-| Need                                  | Import                                                                                          |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Compile for a chain, encode arguments | `routes` from `@eco-incorp/sauce`                                                               |
-| The Pot and its cook                  | `v12PredictPot`, `DEFAULT_POT_SALT`, `destinationExecutionFee` (root); `v12Pot` (`/evm/engine`) |
-| Release addresses                     | `@eco-incorp/sauce/deployments`                                                                 |
-| The raw compiler                      | `@eco-incorp/sauce/compiler`                                                                    |
-| The protocol registry                 | root (`getProtocol`, `contracts`), `@eco-incorp/sauce/protocols/<slug>`                         |
-| Action programs                       | `@eco-incorp/sauce/actions`                                                                     |
-| Verification                          | `@eco-incorp/sauce/verify`, `/svm/verify`                                                       |
-| Solana                                | `@eco-incorp/sauce/svm`; `/svm/engine-artifacts` (Node only)                                    |
-| Testing                               | `@eco-incorp/sauce/testing` (Node only)                                                         |
+| Need                                  | Import                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Compile for a chain, encode arguments | `routes` from `@eco-incorp/sauce`                                                           |
+| The Pot and its cook                  | `v12PredictPot`, `DEFAULT_POT_SALT`, `kitchenExecutionFee` (root); `v12Pot` (`/evm/engine`) |
+| Release addresses                     | `@eco-incorp/sauce/deployments`                                                             |
+| The raw compiler                      | `@eco-incorp/sauce/compiler`                                                                |
+| The protocol registry                 | root (`getProtocol`, `contracts`), `@eco-incorp/sauce/protocols/<slug>`                     |
+| Action programs                       | `@eco-incorp/sauce/actions`                                                                 |
+| Verification                          | `@eco-incorp/sauce/verify`, `/svm/verify`                                                   |
+| Solana                                | `@eco-incorp/sauce/svm`; `/svm/engine-artifacts` (Node only)                                |
+| Testing                               | `@eco-incorp/sauce/testing` (Node only)                                                     |
 
 ## Compile a program for a chain, and cook it
 
@@ -60,12 +60,7 @@ bytes32.
 
 ```ts
 import { readFileSync } from "node:fs";
-import {
-  DEFAULT_POT_SALT,
-  destinationExecutionFee,
-  routes,
-  v12PredictPot,
-} from "@eco-incorp/sauce";
+import { DEFAULT_POT_SALT, kitchenExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, concatHex, getAddress, type PublicClient } from "viem";
@@ -88,7 +83,7 @@ export async function cookTransactions(
   const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]);
   // The cook's value is the Kitchen's executionFee(), read just before sending: a cook paying
   // less reverts.
-  const fee = destinationExecutionFee();
+  const fee = kitchenExecutionFee();
   const { data: answer } = await client.call({ to: fee.to, data: fee.data });
   if (answer === undefined) throw new Error("the Kitchen did not answer executionFee()");
   const cook = {
@@ -102,7 +97,7 @@ export async function cookTransactions(
 }
 ```
 
-- `destinationExecutionFee()` builds the fee read (`{ to, data, decode }`) for the chain's Kitchen;
+- `kitchenExecutionFee()` builds the fee read (`{ to, data, decode }`) for the chain's Kitchen;
   send it as an `eth_call` just before the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction (and `target`, the same contract as `to`).

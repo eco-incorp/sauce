@@ -662,9 +662,9 @@ export async function svmLanded(
 }
 
 /**
- * Signs a plan's Solana transaction (`lifecycle-svm.ts`: base64, its fresh keys' signatures in, the
- * fee payer's out) with `signer`, the fee payer, rehearses it as signed and refuses it if it would
- * fail, then sends it and waits until it is confirmed.
+ * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
+ * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, rehearses it as
+ * signed and refuses it if it would fail, then sends it and waits until it is confirmed.
  */
 export async function sendPlannedSvm(
   url: string,

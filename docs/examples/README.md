@@ -99,7 +99,7 @@ program is also executed through the released engine. The RPC helpers are not li
 integration tests: they are the shape of the reads you make.
 
 A cook on an EVM chain carries the Kitchen's fee as its value: read the Kitchen's `executionFee()`
-(`destinationExecutionFee()` builds the read) shortly before sending, instead of a fixture. The cook
+(`kitchenExecutionFee()` builds the read) shortly before sending, instead of a fixture. The cook
 runs on your Pot, which must exist first. To check that it does, call `preparePot` from
 `prepare-pot.ts` with a client for the chain and your address. If it returns `ready: false`, send
 its deployment request with your signer, wait for a successful receipt, and call it again; `sauce

@@ -2,7 +2,7 @@
  * The release's chain gate (`src/cli/support.ts`) through the `sauce` command, in process: every
  * command that builds or sends a transaction is refused on a preview chain BEFORE any network call
  * — an endpoint that records each request it gets stays untouched — and names the supported chains
- * and the chain's request; compile, simulate, the dry runs and the reads still run there.
+ * and the chain's request; compile, simulate and the reads still run there.
  */
 import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

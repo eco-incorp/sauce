@@ -34,7 +34,7 @@ import "./routes/source-globals.generated.js";
 // nothing either.
 import "./routes/builtins.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
-export { destinationExecutionFee } from "./evm/execution-fee.js";
+export { kitchenExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
 export { potSalt, DEFAULT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
 export {

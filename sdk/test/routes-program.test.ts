@@ -1,6 +1,6 @@
 /**
- * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names and no
- * intent around it — and `encodeEntryArguments`, the values for its `main(...)`.
+ * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names — and
+ * `encodeEntryArguments`, the values for its `main(...)`.
  */
 import {
   bytesToHex,

@@ -470,11 +470,9 @@ not add a `node:*` import or `Buffer` to shipped code: `svm/engine-artifacts` (f
 local LiteSVM harness) is the one Node-only module, on its own subpath and in no barrel. CI bundles
 every export for the browser and compiles in headless Chromium, so a regression fails there.
 
-**Cross-chain intents are not in this release.** They return as `@sauce/hop`
-(`<Chain>.hop({ send, receive, refundee }).then(() => { … })`) on the compiler that folds it.
-Until then the SDK has no intent surface — no Portal encoders, no `sauce intent`, no
-`sauce_intent_*` tools — and a chain export is a plain namespace object, so a program that calls
-one (`Base(() => …)`) fails to compile.
+**There is no cross-chain intent surface**: no Portal encoders, no intent commands, no intent tools.
+A chain export is a plain namespace object, so a program that calls one (`Base(() => …)`) fails to
+compile.
 
 **The authoritative description of that surface is the package's own typings**
 (`node_modules/sauce-compiler/node/sauce_wasm.d.ts`), which document each option in detail —
@@ -1292,7 +1290,7 @@ generator and checker read the built `cli/support.js`. The gate is called from t
 functions both front ends share (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s
 deployment, the Solana cook and Pot creation) and again wherever `run.ts` or a tool
 reaches a network or a key first, so the refusal always comes before either. A cook is refused by
-its own chain. Compiling, simulating, dry runs and reads are never gated, and no flag lifts the gate. A
+its own chain. Compiling, simulating and reads are never gated, and no flag lifts the gate. A
 refusal is `PreviewChainError` with a `PreviewChainRefusal`: exit 1 from the command, `{ refused }`
 from a tool (`refusedResult`), whose output schema is `refusable(...)` — every field optional
 beside `refused`, because a client validates an error's structured content too. The issue form is
@@ -1445,14 +1443,14 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 - **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
-  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover (the
-  SDK has no intents); Sauce never described as a multicall; no pointer into the
+  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover; Sauce
+  never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
   documents are third-party facts and are exempt from the address, Portal and multicall rules only.
 - **Simulate, never rehearse, enforced.** What runs with no key and sends nothing —
-  `sauce simulate`, a dry run — is a simulation, in everything a user or
+  `sauce simulate` — is a simulation, in everything a user or
   an agent reads. `docs/scripts/simulate-wording.mjs` is the rule; `skills:check` applies it to every
   file of the skills, comments included, `docs:check` to the README, `docs/` and the examples, and
   `sdk/test/simulate-wording.test.ts` to every string literal in `sdk/src`, `mcp/src` and

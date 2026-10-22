@@ -116,8 +116,6 @@ Sauce sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**. Ever
 knows is a preview chain: programs compile and simulate there, but the `sauce` command sends
 nothing. [Chains](docs/reference/chains.md) lists them all, and how to ask for one.
 
-Cross-chain intents are not in this release; see [what is coming next](docs/concepts/what-is-sauce.md#coming-next-cross-chain-intents).
-
 ## From your application
 
 Install it in a project instead, and the same compiler and registries are a TypeScript library.

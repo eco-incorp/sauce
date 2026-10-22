@@ -11,12 +11,13 @@
  * transaction for it to sign and sends none.
  *
  * {@link requireSupported} is the gate, called from the command functions both front ends call
- * (`txCommand`, `runCommand`, `potDeployCommand`, `fillCommand`, the lifecycle's `build*`) and,
- * where a front end reaches a network or a key before those, from the front end too. Anything that
- * leaves a transaction ready to sign — the unsigned JSON included — or sends one is refused on a
- * preview chain: the cook (`tx`, `run`), a Pot's deployment, and every lifecycle step. A cook is
- * refused by its own chain; each lifecycle step by the chain it is sent on.
- * Compiling, simulating, dry runs and reads are never refused.
+ * (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s deployment, `sendCommand`,
+ * `reclaimCommand`, and on Solana `svmTxCommand`, `svmRunCommand` and `svmPotDeployCommand`), from
+ * a wallet's guard for every send it makes, and, where a front end reaches a network or a key
+ * before those, from the front end too. Anything that leaves a transaction ready to sign — the
+ * unsigned JSON included — or sends one is refused on a preview chain, each by its own chain: the
+ * cook (`tx`, `run`), a Pot's deployment, a raw send (`send`) and a reclaim. Compiling, simulating
+ * and reads are never refused.
  *
  * A developer who needs another chain asks for it with a GitHub issue on the repository, from the
  * issue form `.github/ISSUE_TEMPLATE/chain-support.yml`, or adds a use case to the request already
@@ -262,8 +263,8 @@ export const supportedChainNames = (): string => listed(supportedChains().map((c
 /** One sentence of what a preview chain still does, for a help text or a note. */
 export const previewChainsNote = (): string =>
   `Transactions are built and sent only on ${supportedChainNames()}. ` +
-  "Every other chain is a preview chain: programs compile there, and simulate, dry runs and " +
-  `reads work, but no transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
+  "Every other chain is a preview chain: programs compile there, and simulate and reads work, " +
+  `but no transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
 
 /** The refusal of `action` for the preview chains among `chains`; `undefined` when there is none. */
 export function previewRefusal(
@@ -285,7 +286,7 @@ export function previewRefusal(
     `${action} is refused: it involves ${named}, ${preview.length === 1 ? "a preview chain" : "preview chains"}. ` +
       `The sauce command and its MCP server build and send transactions ` +
       `only on ${supportedChainNames()}. On a preview chain a program still compiles, and ` +
-      "simulate and dry runs still run it.",
+      "simulate still runs it.",
     ...requests.map(
       ({ name, request }) =>
         `To ask for ${name}: add your use case to its request if there is one ` +

@@ -1,7 +1,6 @@
 /**
- * eco-routes chain-global surface — CONTRACT tests. Pure data assertions, no
- * compiler/forge/network involved beyond the trivial one-op SauceScript
- * programs compiled below.
+ * The chain accessors (`chainAccessors`, `chain(...)`) — CONTRACT tests. Pure data assertions, no
+ * compiler/forge/network involved beyond the trivial one-op SauceScript programs compiled below.
  */
 import { canonicalChains } from "../src/chains/canonical.js";
 import { chain, chainAccessors, pascalOfSlug } from "../src/routes/index.js";

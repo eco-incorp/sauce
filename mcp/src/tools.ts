@@ -83,7 +83,6 @@ import {
   pricedChain,
   priceGiven,
   programChain,
-  programChains,
   type ProgramInput,
   readPoolAt,
   reclaimCommand,
@@ -1789,7 +1788,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const refused =
         cook === undefined
           ? undefined
-          : previewRefusal("building the cook transaction", programChains(cook.input));
+          : previewRefusal("building the cook transaction", [cook.input.chain]);
       const building =
         cook === undefined || refused !== undefined
           ? undefined
@@ -1885,7 +1884,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     async (args, reach) => {
       const program = programFrom(args, local);
       // Before any endpoint: the chain.
-      requireSupported("building the cook transaction", programChains(program.input));
+      requireSupported("building the cook transaction", [program.input.chain]);
       const output = await cookTransaction(args, program, reach);
       if (program.input.chain.kind === "svm") {
         return {

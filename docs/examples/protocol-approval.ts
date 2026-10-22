@@ -6,7 +6,7 @@
 import {
   Base,
   DEFAULT_POT_SALT,
-  destinationExecutionFee,
+  kitchenExecutionFee,
   routes,
   v12PredictPot,
 } from "@eco-incorp/sauce";
@@ -41,10 +41,10 @@ const payload = concatHex([
 ]);
 
 // The cook, which the owner sends to their default Pot. Its value is the Kitchen's fee: read it with
-// `destinationExecutionFee()`, an eth_call to the Kitchen, shortly before sending.
+// `kitchenExecutionFee()`, an eth_call to the Kitchen, shortly before sending.
 const pot = v12PredictPot(owner, DEFAULT_POT_SALT);
 export const cook = { to: pot, data: v12Pot.encodeCook(getAddress(v12EngineAddress()), payload) };
-export const feeRead = destinationExecutionFee();
+export const feeRead = kitchenExecutionFee();
 
 console.log(`supply program: ${program.bytecode.length} bytes`);
 console.log(`cook to ${cook.to}: ${(cook.data.length - 2) / 2} bytes; fee read from ${feeRead.to}`);

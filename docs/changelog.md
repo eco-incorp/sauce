@@ -100,10 +100,9 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 1.0.0. Same compiler
 and engines as 0.99.15, so each change here comes from the SDK.
 
-This release removes cross-chain intents from the SDK, the `sauce` command and the MCP server. They
-return later as `@sauce/hop`. Bridging is not an intent and does not change: the `acrossBridge`,
-`stargateBridge`, `cctpBridge` and `hyperlaneBridge` actions and the bridge and CCTP protocols in the
-registry stay.
+This release removes cross-chain intents from the SDK, the `sauce` command and the MCP server.
+Bridging is not an intent and does not change: the `acrossBridge`, `stargateBridge`, `cctpBridge`
+and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry stay.
 
 Arc (chain 5042) is a supported chain, beside Ethereum, Base and Solana: the `sauce` command and the
 MCP server build and send its cooks and Pot deployments, where before they only compiled and
@@ -117,6 +116,9 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
 - **Removed** (EVM): The `EcoRoutes` namespace, with `EcoRoutes.Portal`, `EcoRoutes.HyperProver` and
   `EcoRoutes.PolymerProver`, is no longer a name. The registry has 134 protocols and 313 contracts,
   where it had 135 and 316.
+- **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
+  eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
+  an editor typed nothing on it.
 
 **Also breaking:**
 
@@ -129,6 +131,8 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
   `routes.compileSauceProgram` no longer takes an `intents` option.
 - `SAUCE_INTENT_POT_SALT` is renamed `DEFAULT_POT_SALT`, with no alias. It is every owner's default
   Pot salt, the zero bytes32.
+- `destinationExecutionFee` is renamed `kitchenExecutionFee`, with no alias. It builds the read of a
+  chain's Kitchen execution fee, which every cook pays.
 - `@eco-incorp/sauce/svm`: the Portal exports and the intent-route exports (`svmCookRoute`,
   `svmTransferRoute`, `SVM_INTENT_POT_SALT` and the rest) are removed.
 - `@eco-incorp/sauce/verify` and `/svm/verify`: `extractEvmSettleFromIntent`, `IntentLike`,
@@ -138,6 +142,8 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
   `plainTransferSource` and `CctpTransferParams` are removed. The settle recipe stays.
 - `@eco-incorp/sauce/protocols/eco-routes` is removed.
 - `@eco-incorp/sauce/actions`: `programIntent` and `ProgramIntentOptions` are removed.
+- `@eco-incorp/sauce/sauce-script`: the `SauceDelivery`, `SauceReward` and `SauceIntent` types are
+  removed.
 - The `sauce` command: `sauce intent` is removed with every verb (`publish`, `fill`, `prove`,
   `claim`, `refund`, `cancel`, `status`, `list`, `show` and `import`), with every `--intent-*`
   flag, `--store` (on `run`, `send` and `mcp`) and the intent store under `~/.sauce/intents`.

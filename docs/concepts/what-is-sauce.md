@@ -118,16 +118,6 @@ finds its address on each chain.
 
 The [glossary](glossary.md) puts every Sauce word next to one you already know.
 
-## Coming next: cross-chain intents
-
-Cross-chain intents are not in this release; they are coming back as `@sauce/hop`. A program will
-describe a hop to another chain and what runs when it arrives. The sketch below is a preview of the
-planned syntax: it is not available, and it may change.
-
-```text
-Ethereum.hop({ send: { token: USDC, amount: reward }, receive: { token: USDC, amount }, refundee: refundTo }).then(() => { USDC.transfer(recipient, amount) })
-```
-
 ## Next
 
 - Run a program for real: the [quick start](../guides/quick-start.md), the first tutorial.
