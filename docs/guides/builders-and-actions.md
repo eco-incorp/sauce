@@ -52,8 +52,9 @@ Only an `IERC20.at(address)` binding you write yourself is the raw, unchecked ca
 
 `token.Token` is the host builder for the same operations, for an application that wants the source
 text with its values written in: `token.Token.transfer({ token, to, amount }).toSauceScript("evm")`
-returns source that `routes.compileSauceProgram` compiles like any other. A literal amount is
-encoded into the calldata rather than appearing as a decimal in that source.
+returns an object whose `.source` field is a program `routes.compileSauceProgram` compiles like any
+other (its `imports` and `statement` are the same program in parts). A literal amount is encoded into
+the calldata rather than appearing as a decimal in that source.
 
 `TokenCall.toCall()` instead returns `{ target, data, value }` for a fixed EVM call. Values that require runtime state, such as `amount: "balance"` or balance owner `"self"`, must be compiled. `.statement(target)` emits a transfer/approval statement; `.expression(target)` emits a balance read. `Token.program(specs, { target })` combines several operations into one program.
 
