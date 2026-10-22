@@ -112,6 +112,9 @@ and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry 
 - **Removed** (EVM): The `EcoRoutes` namespace, with `EcoRoutes.Portal`, `EcoRoutes.HyperProver` and
   `EcoRoutes.PolymerProver`, is no longer a name. The registry has 134 protocols and 313 contracts,
   where it had 135 and 316.
+- **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
+  eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
+  an editor typed nothing on it.
 
 **Also breaking:**
 
@@ -135,6 +138,8 @@ and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry 
 - `@eco-incorp/sauce/actions`: `programIntent` and `ProgramIntentOptions` are removed.
 - The `sauce` command: `sauce intent` is removed with every verb (`publish`, `fill`, `prove`,
   `claim`, `refund`, `cancel`, `status`, `list`, `show` and `import`), with every `--intent-*`
+- `@eco-incorp/sauce/sauce-script`: the `SauceDelivery`, `SauceReward` and `SauceIntent` types are
+  removed.
   flag, `--store` (on `run`, `send` and `mcp`) and the intent store under `~/.sauce/intents`.
   `inspect` no longer takes `--args` or `--args-json`, nor reports intents or Portal calls;
   `compile --json` no longer reports `intentPots`; `verify` no longer takes a Portal publish, and
