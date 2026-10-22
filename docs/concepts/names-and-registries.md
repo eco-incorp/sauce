@@ -31,7 +31,7 @@ The SDK carries the address book in its **registries**, which ship inside the pa
 | --------- | ------------------------------------------------------------------------------------------- |
 | Chains    | The 41 chains a program can name, each with a slug (`base`), aliases (`eth`) and a chain id |
 | Tokens    | Each chain's token symbols with their addresses and decimals, tokenized stocks included     |
-| Protocols | 135 protocols, each with its contracts per chain and the ABI of each one                    |
+| Protocols | 134 protocols, each with its contracts per chain and the ABI of each one                    |
 
 Each registry row is checked, in the SDK's own tests, against the contract deployed at its address:
 a token's symbol and decimals, a protocol contract's functions. A token symbol is in the registry
