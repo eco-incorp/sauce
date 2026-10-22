@@ -1,11 +1,9 @@
 /**
  * The Sauce MCP server: the `sauce` command's read-only tools, `sauce_send` for what the caller
- * signed, the agent skills as resources, and two task prompts — and, over stdio, the wallet tools
+ * signed, the agent skills as resources, and a task prompt — and, over stdio, the wallet tools
  * (unless `--no-wallets`) and, with the command's stores (on by default), what keeps them: every
  * Pot a tool's transaction deploys is recorded, and `sauce_pot_list` and `sauce_pot_import` read
- * the store; every intent one publishes, and what one does to an intent, is recorded, and
- * `sauce_intent_list` and `sauce_intent_show` read that store, which every intent tool names an
- * intent from by hash. One server per connection — over stdio, one for the process; over
+ * the store. One server per connection — over stdio, one for the process; over
  * Streamable HTTP, one per request, stateless, and never with wallets or stores.
  */
 import { readFileSync } from "node:fs";
@@ -22,7 +20,6 @@ import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.
 import { registerSendTools } from "./send.js";
 import { registerSkillTools } from "./skilltools.js";
 import { COMMAND_TOOLS, flagInputLines } from "./terms.js";
-import { registerIntentTools } from "./intents.js";
 import {
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   supportedChainNames,
@@ -52,8 +49,8 @@ export function packageInfo(): { readonly name: string; readonly version: string
  */
 const SIGN_WITH_THE_USERS_WALLET = [
   "SIGN WITH THE USER'S OWN WALLET: its MCP server signs what these tools build, and the key",
-  "never leaves it. Build for that wallet's address (owner, or from), simulate, show the user,",
-  "then hand it over. Each EVM transaction a tool returns is itself what a send-transaction tool",
+  "never leaves it. Build for that wallet's address (owner), simulate, show the user, then",
+  "hand it over. Each EVM transaction a tool returns is itself what a send-transaction tool",
   "takes ({ chainId, to, data, value, gas }, amounts hex), and the result's `sendCalls` is every",
   "transaction in order, as one atomic batch, so nothing is converted:",
   "- Coinbase Wallet MCP (Base, Ethereum): send_calls with `sendCalls` as its input. The user",
@@ -117,33 +114,11 @@ export function instructions(
     "   sauce_send returns the next step, until it is done. sauce_reclaim closes the code",
     "   buffers and lookup tables a plan left open, returning their rent; it leaves open what",
     "   is in use, and the plans whose cursors it is given to keep.",
-    "   An intent fixed when it is built publishes from a wallet instead: sauce_intent_publish,",
-    "   and sauce_intent_fill with dryRun simulates a solver filling it on its destination.",
     "",
     "FROM THE sauce COMMAND TO THE TOOLS. A skill or a note may name a command line:",
     ...COMMAND_TOOLS,
     "Each flag is the input:",
     ...flagInputLines(),
-    "",
-    "An intent's life after it is published: sauce_intent_status says where it stands and what",
-    "can happen next (`can`); sauce_intent_fill (with the solver as from), sauce_intent_prove,",
-    "sauce_intent_claim, sauce_intent_refund and sauce_intent_cancel build each step unsigned;",
-    ...(stores.intents === undefined
-      ? [
-          "sauce_intent_import reads one back from its transaction. This server keeps no intents:",
-          "pass the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or",
-          "txHash and its source chain.",
-        ]
-      : [
-          "sauce_intent_import reads one back from its transaction and stores it.",
-          `THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE, in ${stores.intents.dir}, as the`,
-          "command does: every intent a transaction it sends publishes (sauce_send,",
-          "sauce_wallet_send) is stored, and what one does to an intent (filled, proving, claimed,",
-          "refunded, cancelled) is recorded, read from the Portal's own events. sauce_intent_list",
-          "lists them, sauce_intent_show shows one with its events, and every intent tool takes",
-          "intentHash for an intent the store holds, besides its `record` or txHash and its source",
-          "chain.",
-        ]),
     "",
     ...(stores.pots === undefined
       ? []
@@ -186,7 +161,7 @@ export function instructions(
                 "key file by its path.",
               ]),
           "Each returns the wallet's address, never its key. Build a transaction for the wallet's",
-          "address (owner, or from), simulate it (sauce_simulate), then pass the building tool's",
+          "address (owner), simulate it (sauce_simulate), then pass the building tool's",
           "whole result to sauce_wallet_send, which simulates it again, holds it to the wallet's",
           "policy, signs and sends it. Every other transaction still comes back unsigned: signed by",
           "any other signer, sauce_send sends it. These are hot wallets: keep small balances in",
@@ -196,16 +171,13 @@ export function instructions(
     "",
     `CHAINS. This release builds transactions only on ${supportedChainNames()}. Every other`,
     "chain is a preview chain (sauce_chains gives each chain's `support`): sauce_compile,",
-    "sauce_actions, sauce_simulate, sauce_inspect, sauce_globals, sauce_price, the dry runs",
-    "(sauce_intent_publish and sauce_intent_fill with dryRun) and the reads (sauce_pools,",
-    "sauce_pot's prediction, sauce_intent_status, sauce_intent_import) work on it, so you can",
-    "prototype any protocol on any chain. A tool that would return a transaction there —",
-    "sauce_tx, sauce_pot's deployment, sauce_actions' cook, sauce_intent_publish, and the intent",
-    "steps on the chain they are sent on — returns `refused` instead: the supported chains and,",
-    "for that chain, a search for an existing chain-support request on GitHub, a prefilled new",
-    "one, and the title, body and comment to post. Tell the user, and offer to find or open that",
-    "request (or to add their use case to it) with the text given; do not build the transaction",
-    "another way.",
+    "sauce_actions, sauce_simulate, sauce_inspect, sauce_globals, sauce_price and the reads",
+    "(sauce_pools, sauce_pot's prediction) work on it, so you can prototype any protocol on any",
+    "chain. A tool that would return a transaction there — sauce_tx, sauce_pot's deployment,",
+    "sauce_actions' cook — returns `refused` instead: the supported chains and, for that chain, a",
+    "search for an existing chain-support request on GitHub, a prefilled new one, and the title,",
+    "body and comment to post. Tell the user, and offer to find or open that request (or to add",
+    "their use case to it) with the text given; do not build the transaction another way.",
     `Requests: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`,
     "",
     "A tool that reads a chain takes rpcUrl, an endpoint for that call; it is never echoed.",
@@ -278,7 +250,6 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
     ...(options.stores === undefined ? {} : { stores: options.stores }),
   };
   registerTools(server, tools);
-  registerIntentTools(server, tools);
   registerSendTools(server, tools);
   if (wallets !== undefined) registerWalletTools(server, { ...tools, wallets });
   if (options.stores?.pots !== undefined) registerPotTools(server, tools, options.stores.pots);

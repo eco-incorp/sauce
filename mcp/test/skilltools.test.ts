@@ -144,7 +144,6 @@ describe("sauce_dev", () => {
   });
 
   it("finds a question's topics from its words, and every topic's documents ship", async () => {
-    assert.deepEqual(topicsFor("How do I open a cross-chain intent with a reward?"), ["intents"]);
     assert.deepEqual(topicsFor("compileSauceProgram with compact arguments"), ["compile"]);
     assert.deepEqual(topicsFor("the Solana SVM client and its accounts"), ["solana"]);
     assert.deepEqual(topicsFor("fork a chain on anvil in a test"), ["testing"]);

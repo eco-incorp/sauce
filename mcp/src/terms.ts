@@ -40,13 +40,6 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["pot"], input: "pot" },
   { flags: ["value"], input: "value" },
   { flags: ["account", "accounts"], input: "accounts" },
-  { flags: ["intent-deadline"], input: "intentDeadline" },
-  { flags: ["intent-creator"], input: "intentCreator" },
-  { flags: ["intent-execution-fee"], input: "intentExecutionFee" },
-  { flags: ["intent-fund-via"], input: "intentFundVia" },
-  { flags: ["intent-reward-deadline"], input: "intentRewardDeadline" },
-  { flags: ["intent-prover"], input: "intentProver" },
-  { flags: ["no-prove"], input: "prove: false" },
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
   { flags: ["lookup-table"], input: "lookupTables" },
   { flags: ["cursor"], input: "cursor" },
@@ -61,10 +54,6 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["target"], input: "target" },
   { flags: ["rpc-url"], input: "rpcUrl" },
   { flags: ["block"], input: "block" },
-  // A fill's solver is its `from`, as every other transaction's sender is.
-  { flags: ["from", "solver"], input: "from" },
-  { flags: ["claimant"], input: "claimant" },
-  { flags: ["dry-run"], input: "dryRun" },
   { flags: ["pin"], input: "pins" },
   { flags: ["engine"], input: "engines" },
   { flags: ["min-out"], input: "minOut" },
@@ -84,9 +73,9 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
 
 /** What the mapping does not show flag by flag: a command is its tool, and a file its text. */
 export const COMMAND_TOOLS = [
-  "`sauce <command>` is the tool sauce_<command> (`sauce intent status` is sauce_intent_status).",
+  "`sauce <command>` is the tool sauce_<command> (`sauce pools` is sauce_pools).",
   "A program file is `source`, its text (over stdio, `path` names the file instead); every result",
-  "is the command's --json; a tool that reads several chains takes `rpcUrls`, one per chain.",
+  "is the command's --json.",
 ] as const;
 
 /** {@link FLAG_INPUTS} but the low-level ones: the table the instructions and the guide print. */
@@ -121,29 +110,10 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     command("sauce run"),
     "a signed run (sign sauce_tx's transactions with any signer, then sauce_send them)",
   ],
-  // fill's: --rpc-url is one destination's endpoint; the call's rpcUrls names each.
-  [/so give --config, which names each destination's/g, "so give rpcUrls, which names each one"],
-  [
-    /`sauce (?:intent )?fill` with the same file and flags/g,
-    "sauce_intent_fill with the same inputs",
-  ],
-  // An intent's commands are its tools under sauce_intent_, spelt either way the command line has.
-  [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
-  [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],
   [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|pools)"), "sauce_$1"],
-  // `sauce intent show`'s, with no endpoint for the intent's chains: the call can give them.
-  [
-    /no endpoint given: --config with both chains' endpoints shows where it stands/g,
-    "no endpoint reached its chains: rpcUrls with both chains' endpoints shows where it stands",
-  ],
   // A wallet's commands are its tools; `wallet new` is sauce_wallet_create.
   [/`?sauce wallet new(?: [a-z0-9][a-z0-9_-]*)?`?/g, "sauce_wallet_create"],
   [/`?sauce wallet (list|address|import)`?/g, "sauce_wallet_$1"],
-  // The lifecycle core's refusal for a chain it has no endpoint of: the call can give one.
-  [
-    /needs ([\w-]+)'s endpoint \(chain id (\d+)\)/g,
-    'needs $1\'s endpoint (chain id $2): pass rpcUrls { "$1": "<url>" } with the call',
-  ],
   // A flag, as the input of the same meaning (FLAG_INPUTS). `--config` is the operator's, and stays.
   [/pass them after --args, in order, or as --args-json/g, "pass them as args, in order"],
   // The longer of an entry's flags first: `--args` would match the start of `--args-json`.
@@ -156,9 +126,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
 
 /** `text` in the tools' words. */
 export function toolTerms(text: string): string {
-  if (!text.includes("--") && !text.includes("sauce ") && !text.includes("endpoint (chain id")) {
-    return text;
-  }
+  if (!text.includes("--") && !text.includes("sauce ")) return text;
   let out = text;
   for (const [pattern, replacement] of STEPS) out = out.replace(pattern, replacement);
 
