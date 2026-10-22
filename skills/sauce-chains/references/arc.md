@@ -14,6 +14,7 @@ them.
 | Kind | EVM |
 | Name in a program | `Arc` |
 | Native coin | USDC (USDC), 18 decimals; also the ERC-20 `USDC` (6 decimals), one balance |
+| Minimum base fee | 20 gwei: a transaction with a lower `maxFeePerGas` is never included |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
 | CCTP domain | 26 |
 
@@ -32,8 +33,9 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
   other's scale.
 - Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native
   value is 10^-12 USDC, not 1 USDC.
-- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped
-  silently: no error, and no receipt.
+- A transaction whose `maxFeePerGas` is below the minimum base fee (the table above) is never
+  included: it can stay pending with no receipt, or be refused as underpriced. Arc's own
+  documentation asks for a `maxFeePerGas` of at least that fee, and a tip of 0 is accepted.
 - There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no
   `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that always
   reverts, so the ETH paths of its routers revert too. Wrapping, unwrapping and staking the

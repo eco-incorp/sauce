@@ -68,6 +68,13 @@ describe("sauce_pot on Arc", () => {
 
   it("names the Kitchen's fee and the Pot's native balance in USDC, and says they are one", async () => {
     const out = ok(await mcp.call("sauce_pot", { chain: "arc", owner: OWNER, rpcUrl: url }));
+    // Its unsigned deployment carries no fee fields: the signer is told Arc's floor.
+    assert.ok(
+      (out.notes as string[]).some((note) =>
+        note.includes("a maxFeePerGas (or gasPrice) of at least 20 gwei"),
+      ),
+      JSON.stringify(out.notes),
+    );
     assert.deepEqual(out.kitchenFee, {
       wei: "10000000000000000",
       native: "0.01",

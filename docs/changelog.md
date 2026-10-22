@@ -170,6 +170,11 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
   beside wei: `10000000000000000 wei (0.01 USDC)` on Arc. `sauce_pot` names the native coin of its
   `kitchenFee` and `balances.native` (`symbol`), and on Arc notes that `balances.native` and the
   `USDC` token are one balance, read twice.
+- **Added** (Arc): `sauce tx` and `sauce pot` (and `sauce_tx`, `sauce_pot`) say that Arc includes a
+  transaction only with a `maxFeePerGas` of at least 20 gwei, its minimum base fee, since the
+  unsigned transactions they print leave fees to the signer. `sauce send` and `sauce_send` refuse a
+  transaction signed with a lower fee cap before sending it. `@eco-incorp/sauce/chains` records the
+  floor as `minBaseFeePerGas` on Arc's chain.
 
 ## SDK 0.99.15 — 2026-10-21
 

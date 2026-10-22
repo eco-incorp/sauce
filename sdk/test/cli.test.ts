@@ -1476,6 +1476,27 @@ describe("sauce pot", () => {
     expect(byDefault.salt).toBe(DEFAULT_POT_SALT);
   });
 
+  it("tells a signer elsewhere Arc's minimum base fee, which its transactions carry no fee for", async () => {
+    const floor =
+      "On arc a transaction is included only with a maxFeePerGas (or gasPrice) of at least 20 " +
+      "gwei, the chain's minimum base fee";
+    const pot = await sauce("pot", "--owner", OWNER, "--chain", "arc");
+    expect(pot.code).toBe(0);
+    expect(pot.stderr).toContain(floor);
+    const program = file("arc-pay.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n");
+    const tx = await sauce(
+      ...["tx", program, "--chain", "arc", "--owner", OWNER, ...PAY_DEFINES],
+      ...["--value", "10000000000000000"],
+    );
+    expect(tx.code).toBe(0);
+    expect(tx.stderr).toContain(floor);
+    expect(JSON.parse(tx.stdout)).not.toHaveProperty("maxFeePerGas");
+    // A chain that sets no minimum says nothing of one.
+    expect((await sauce("pot", "--owner", OWNER, "--chain", "base")).stderr).not.toMatch(
+      /minimum base fee/,
+    );
+  });
+
   it("is the signer's own Pot with a signer and no --owner, unlocking nothing it need not", async () => {
     // A keystore that names its address: read, never decrypted (there is no password to give).
     const named = file(
