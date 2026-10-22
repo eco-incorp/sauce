@@ -107,35 +107,49 @@ registry stay.
 
 ### SauceScript
 
-- **Removed** (EVM): A program can no longer open a cross-chain intent. `Base(() => { … })` with
-  `.reward({ … })`, for any chain, no longer compiles, whether its body is token writes or a
-  program.
+- **Removed** (EVM): A program can no longer open a cross-chain intent. `Base(() => { … })`, with
+  `.reward({ … })` or `.nest()`, for any chain, no longer compiles, whether its body is token
+  writes or a program; the error is the compiler's own.
 - **Removed** (EVM): The `EcoRoutes` namespace, with `EcoRoutes.Portal`, `EcoRoutes.HyperProver` and
-  `EcoRoutes.PolymerProver`, is no longer a name.
+  `EcoRoutes.PolymerProver`, is no longer a name. The registry has 134 protocols and 313 contracts,
+  where it had 135 and 316.
 
 **Also breaking:**
 
-- `routes.openRoute`, with the `.reward()` and `.nest()` of the route it returns, and
-  `programIntent` from `@eco-incorp/sauce/actions` are removed.
-- The `sauce intent` command is removed with every verb (`publish`, `fill`, `prove`, `claim`,
-  `refund`, `cancel`, `status`, `list`, `show` and `import`), and the command no longer keeps an
-  intent store. Every `--intent-*` flag of the other commands is removed.
-- The MCP server's `sauce_intent_*` tools and its `sauce_open_intent` prompt are removed.
-- The Portal encoders, the vault and intent-hash helpers, the shared intent Pot helpers
-  (`destinationPot`), the Solana side of the Portal, the CCTP intent recipes and the `eco-routes`
-  registry protocol (`@eco-incorp/sauce/protocols/eco-routes`) are removed.
-- The chain exports (`Base`, `Solana` and the rest) are plain namespaces: they can no longer be
-  called.
-- Settle verification stays, without the entry points that take an intent:
-  `extractEvmSettleFromIntent`, `extractSvmSettleFromIntent`, `IntentLike` and `SvmIntentLike` are
-  removed, and `sauce verify` and MCP `sauce_verify` no longer take `Portal.publish` or
-  `Portal.publishAndFund` calldata.
+- The root and `routes`: the chain exports (`Base`, `Solana` and the rest) are plain namespaces,
+  and calling one, or its `.route`, is removed. `openRoute`, `assembleIntent`, `hashIntent`,
+  `routeHash`, `rewardHash`, the intent codecs, every Portal helper (`intentSourceTxs`,
+  `publishTx`, `fulfillTx`, `proveTx`, `withdrawTx`, `refundTx`, `cancelTx`,
+  `intentFromPublished`, `predictIntentVault`, `approvalTxs` and the rest), the vault helpers,
+  `destinationPot`, the nest and dynamic-child helpers and the intent types are removed.
+  `routes.compileSauceProgram` no longer takes an `intents` option.
 - `SAUCE_INTENT_POT_SALT` is renamed `DEFAULT_POT_SALT`, with no alias. It is every owner's default
   Pot salt, the zero bytes32.
-
-<!-- PENDING: exact removed/added interface list from the code branch is relayed by the main agent; replace this block -->
-
-**Interface list: to be completed.**
+- `@eco-incorp/sauce/svm`: the Portal exports and the intent-route exports (`svmCookRoute`,
+  `svmTransferRoute`, `SVM_INTENT_POT_SALT` and the rest) are removed.
+- `@eco-incorp/sauce/verify` and `/svm/verify`: `extractEvmSettleFromIntent`, `IntentLike`,
+  `extractSvmSettleFromIntent` and `SvmIntentLike` are removed. The settle codecs, the
+  `…FromCalls` extractors, the Solana envelope and `verifySvmSettleExecution` stay.
+- `@eco-incorp/sauce/recipes`: `buildCctpSplitTransfer`, `buildPlainTransfer`, `cctpSplitSource`,
+  `plainTransferSource` and `CctpTransferParams` are removed. The settle recipe stays.
+- `@eco-incorp/sauce/protocols/eco-routes` is removed.
+- `@eco-incorp/sauce/actions`: `programIntent` and `ProgramIntentOptions` are removed.
+- The `sauce` command: `sauce intent` is removed with every verb (`publish`, `fill`, `prove`,
+  `claim`, `refund`, `cancel`, `status`, `list`, `show` and `import`), with every `--intent-*`
+  flag, `--store` (on `run`, `send` and `mcp`) and the intent store under `~/.sauce/intents`.
+  `inspect` no longer takes `--args` or `--args-json`, nor reports intents or Portal calls;
+  `compile --json` no longer reports `intentPots`; `verify` no longer takes a Portal publish, and
+  its result no longer has `callIndex` or `target`. A cook on a preview chain is refused by its own
+  chain only.
+- The MCP server: the ten `sauce_intent_*` tools, the `sauce_open_intent` prompt, the `intent*`
+  inputs, `sauce_compile`'s `rpcUrls`, `sauce_inspect`'s `args` and `sauce_verify`'s Portal input
+  are removed. Its tools are `sauce_chains`, `sauce_globals`, `sauce_price`, `sauce_pools`,
+  `sauce_compile`, `sauce_actions`, `sauce_tx`, `sauce_pot`, `sauce_reclaim`, `sauce_simulate`,
+  `sauce_inspect`, `sauce_verify`, `sauce_send`, `sauce_skills`, `sauce_skill`, `sauce_dev` and
+  `sauce_install_skills`, and over stdio `sauce_wallet_enable`, `sauce_wallet_create`,
+  `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`, `sauce_wallet_send`,
+  `sauce_pot_list` and `sauce_pot_import`. Its one prompt is `sauce_write_program`.
+- The agent skills: `sauce-intents` is removed, so `sauce skills install` writes 13 skills.
 
 ## SDK 0.99.15 — 2026-10-21
 
