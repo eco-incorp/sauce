@@ -131,7 +131,7 @@ function expectRefused(
     `is refused: it involves ${chain.slug} (${chain.name}, chain id ${chain.id}), a preview chain.`,
   );
   if (action !== undefined) expect(run.stderr).toMatch(action);
-  expect(run.stderr).toContain("only on Ethereum, Base and Solana");
+  expect(run.stderr).toContain("only on Ethereum, Base, Arc and Solana");
   expect(run.stderr).toContain(chainSupportRequest(chain).newIssueUrl);
   expect(run.stderr).toContain(chainSupportRequest(chain).searchUrl);
 }
@@ -140,14 +140,15 @@ const PAY = "function main() {\n  USDC.transfer(RECIPIENT, 1000n);\n}\n";
 
 describe("the gate", () => {
   it("refuses only a preview chain, naming each one once with its request", () => {
-    const [ethereum, base, solana, arbitrum, optimism] = [
+    const [ethereum, base, arc, solana, arbitrum, optimism] = [
       "ethereum",
       "base",
+      "arc",
       "solana",
       "arbitrum",
       "optimism",
     ].map((slug) => requireChain(slug));
-    expect(previewRefusal("sending the cook", [ethereum!, base!, solana!])).toBeUndefined();
+    expect(previewRefusal("sending the cook", [ethereum!, base!, arc!, solana!])).toBeUndefined();
     expect(() => requireSupported("sending the cook", [base!])).not.toThrow();
     const refusal = previewRefusal("sending the cook", [base!, arbitrum!, optimism!, arbitrum!])!;
     expect(refusal.code).toBe("preview-chain");
@@ -155,6 +156,7 @@ describe("the gate", () => {
     expect(refusal.supportedChains).toEqual([
       { slug: "ethereum", id: 1, name: "Ethereum" },
       { slug: "base", id: 8453, name: "Base" },
+      { slug: "arc", id: 5042, name: "Arc" },
       { slug: "solana", id: 1399811149, name: "Solana" },
     ]);
     expect(refusal.previewChains.map((chain) => chain.slug)).toEqual(["arbitrum", "optimism"]);

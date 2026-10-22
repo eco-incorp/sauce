@@ -19,8 +19,8 @@ read a chain do so only when your application calls them.
 **Level** says how much you need to know first: Beginner after the quick start, Intermediate once
 you have written a program of your own, Advanced for code that reads a chain or builds programs
 with the raw compiler. **Chain** names the chains the example is written for, or where it runs.
-Only Ethereum, Base and Solana send transactions from the `sauce` command; every other chain is a
-preview chain.
+Only Ethereum, Base, Arc and Solana send transactions from the `sauce` command; every other chain
+is a preview chain.
 
 ## Start here
 

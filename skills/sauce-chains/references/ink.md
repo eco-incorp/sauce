@@ -2,7 +2,7 @@
 
 # Ink
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Ink a program
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Ink a program
 compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,

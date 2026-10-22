@@ -104,10 +104,10 @@ returned, refuse it below a minimum you set, and pay out exactly that.
 
 ## Where it runs
 
-The `sauce` command sends transactions on **Ethereum**, **Base** and **Solana**. Sauce knows 41
-chains in all. On the others, the **preview chains**, a program compiles and simulates, but nothing
-is sent. [Names and registries](names-and-registries.md) explains how a name such as `USDC` finds
-its address on each chain.
+The `sauce` command sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**. Sauce
+knows 41 chains in all. On the others, the **preview chains**, a program compiles and simulates, but
+nothing is sent. [Names and registries](names-and-registries.md) explains how a name such as `USDC`
+finds its address on each chain.
 
 ## Three ways to use it
 

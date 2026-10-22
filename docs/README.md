@@ -3,8 +3,8 @@
 > Sauce lets you write a short program in SauceScript, a subset of TypeScript. The program reads
 > live onchain state, chooses a path and composes contract calls in one transaction: swap, pay,
 > lend, bridge. Your program enforces the conditions you write, and an unhandled failure reverts
-> every step. It runs through your own Pot on Ethereum, Base or Solana, so you deploy no contract
-> for each program and look up no address.
+> every step. It runs through your own Pot on Ethereum, Base, Arc or Solana, so you deploy no
+> contract for each program and look up no address.
 
 **How to use this manual.** You need to know TypeScript and the basic ideas of a blockchain: a
 wallet, a transaction, a token. Nothing else. One language covers EVM chains and Solana, though

@@ -1,6 +1,6 @@
 /**
  * The chains the `sauce` command supports (`src/cli/support.ts`) and the chain-support request it
- * links to: the three supported chains, every other one a preview chain, the request's URLs held
+ * links to: the four supported chains, every other one a preview chain, the request's URLs held
  * to the issue form they open (`.github/ISSUE_TEMPLATE/chain-support.yml`), field by field — and
  * none of it in the package's API, which keeps every chain.
  */
@@ -49,9 +49,9 @@ const query = (url: string): Record<string, string> =>
   Object.fromEntries(new URL(url).searchParams.entries());
 
 describe("support levels", () => {
-  it("supports Ethereum, Base and Solana, and previews every other chain", () => {
-    expect([...SUPPORTED_CHAIN_SLUGS]).toEqual(["ethereum", "base", "solana"]);
-    expect(supportedChains().map((chain) => chain.id)).toEqual([1, 8453, 1399811149]);
+  it("supports Ethereum, Base, Arc and Solana, and previews every other chain", () => {
+    expect([...SUPPORTED_CHAIN_SLUGS]).toEqual(["ethereum", "base", "arc", "solana"]);
+    expect(supportedChains().map((chain) => chain.id)).toEqual([1, 8453, 5042, 1399811149]);
     for (const chain of canonicalChains) {
       const supported = (SUPPORTED_CHAIN_SLUGS as readonly string[]).includes(chain.slug);
       expect([chain.slug, chainSupport(chain)]).toEqual([
@@ -60,7 +60,7 @@ describe("support levels", () => {
       ]);
       expect(isSupportedChain(chain)).toBe(supported);
     }
-    expect(previewChains()).toHaveLength(canonicalChains.length - 3);
+    expect(previewChains()).toHaveLength(canonicalChains.length - 4);
     expect(previewChains().map((chain) => chain.id)).toEqual(
       canonicalChains
         .filter((chain) => !SUPPORTED_CHAIN_SLUGS.includes(chain.slug as never))
@@ -73,6 +73,7 @@ describe("support levels", () => {
     expect(chainSupport("mainnet")).toBe("supported");
     expect(chainSupport(8453)).toBe("supported");
     expect(chainSupport(1399811149n)).toBe("supported");
+    expect(chainSupport("arc-mainnet")).toBe("supported");
     expect(chainSupport("arb")).toBe("preview");
     expect(() => chainSupport("hyperliquid")).toThrow(/Unknown chain 'hyperliquid'/);
     expect(isSupportedChain("hyperliquid")).toBe(false);

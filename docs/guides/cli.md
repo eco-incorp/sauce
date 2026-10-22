@@ -109,10 +109,13 @@ npm install
 ## Pick a chain and an endpoint
 
 The command reads a chain through an **RPC endpoint**, the URL of a node that answers questions
-about the chain. It sends transactions on three chains: **Ethereum**, **Base** and **Solana**.
-Every other chain it knows is a **preview chain**. [Chains](../reference/chains.md) lists them all.
+about the chain. It sends transactions on four chains: **Ethereum**, **Base**, **Arc** and
+**Solana**. Every other chain it knows is a **preview chain**. [Chains](../reference/chains.md)
+lists them all.
 
 ### Supported and preview chains
+
+On Arc the native coin is USDC: gas, a cook's value and the Kitchen's fee are paid in it, not ETH.
 
 On a preview chain a program still compiles and simulates, and every read works, but the command
 builds and sends nothing:
@@ -127,7 +130,7 @@ A refusal comes before the command reaches an endpoint or reads a key. The comma
 says why, which chains are supported, and how to ask for the one it refused:
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate and dry runs still run it.
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana. On a preview chain a program still compiles, and simulate and dry runs still run it.
 To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10).
 ```
 

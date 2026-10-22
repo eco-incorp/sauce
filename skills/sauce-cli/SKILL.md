@@ -192,9 +192,10 @@ instructions call. It does not limit whom a program pays: a cook on an allowed P
 address, so a payee is held by the program itself (a recipient it fixes, a `require` on it).
 Deploying the wallet's own Pot counts as a transaction to that Pot, so a `to` naming the Pot lets a
 run deploy it first. `native` and each token count what leaves the wallet or the Pot a transaction
-cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. A send that
-breaks a limit is refused, naming it, and nothing is sent. With no policy, sends work, and each
-says no limits are set.
+cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
+native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
+and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is sent.
+With no policy, sends work, and each says no limits are set.
 
 ## The run, step by step
 
@@ -232,8 +233,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    nor a funded one: a Pot not deployed yet is deployed in the same simulation first, as
    `sauce run` deploys it. `--assume-balance TOKEN:amount` (repeatable; `ETH:<amount>` for the
    native currency) gives the Pot that balance for the simulation only; a token that keeps no stored
-   balance (rebasing, shares) is refused. On a local chain with Uniswap V3's own pools at 2,650 USDC
-   per WETH, it printed, addresses written as their roles:
+   balance (rebasing, shares) is refused. On Arc, `USDC:<amount>` sets the Pot's native balance (the
+   token is the native coin, which no token storage holds), and `ETH:<amount>` or
+   `native:<amount>` is native USDC there, not ether. On a local chain with Uniswap V3's own pools
+   at 2,650 USDC per WETH, it printed, addresses written as their roles:
 
    ```text
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>

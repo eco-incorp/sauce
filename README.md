@@ -12,8 +12,8 @@ transaction, a token) and have never used Sauce. You need nothing else to start.
 ## What Sauce is, and is not
 
 You write the program in a small, safe slice of TypeScript called SauceScript. Sauce turns it into
-one transaction on Ethereum, Base or Solana, and an engine already on chain runs every step of it
-inside that transaction. Here is a whole program, the one the quick start runs:
+one transaction on Ethereum, Base, Arc or Solana, and an engine already on chain runs every step of
+it inside that transaction. Here is a whole program, the one the quick start runs:
 
 ```js
 // Pays `amount` of USDC from your Pot to `to`, and stops if the Pot holds less.
@@ -112,9 +112,9 @@ creates it the first time it needs it.
 
 ## Supported chains
 
-Sauce sends transactions on **Ethereum**, **Base** and **Solana**. Every other chain it knows is a
-preview chain: programs compile and simulate there, but the `sauce` command sends nothing.
-[Chains](docs/reference/chains.md) lists them all, and how to ask for one.
+Sauce sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**. Every other chain it
+knows is a preview chain: programs compile and simulate there, but the `sauce` command sends
+nothing. [Chains](docs/reference/chains.md) lists them all, and how to ask for one.
 
 Cross-chain intents are not in this release; see [what is coming next](docs/concepts/what-is-sauce.md#coming-next-cross-chain-intents).
 

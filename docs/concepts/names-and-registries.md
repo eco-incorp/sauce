@@ -71,8 +71,9 @@ works on the chain as it is now. Simulate before you send.
 ## Supported and preview chains
 
 Every chain in the registry is one a program can be compiled and simulated for. The `sauce`
-command, and the MCP server built on it, sends transactions on three of them: **Ethereum**, **Base**
-and **Solana**. These are the **supported chains**. Every other chain is a **preview chain**:
+command, and the MCP server built on it, sends transactions on four of them: **Ethereum**,
+**Base**, **Arc** and **Solana**. These are the **supported chains**. Every other chain is a
+**preview chain**:
 
 - a program compiles and simulates there, and every lookup and read works;
 - the command builds nothing to sign and sends nothing, and says why: a cook is refused before

@@ -105,6 +105,10 @@ return later as `@sauce/hop`. Bridging is not an intent and does not change: the
 `stargateBridge`, `cctpBridge` and `hyperlaneBridge` actions and the bridge and CCTP protocols in the
 registry stay.
 
+Arc (chain 5042) is a supported chain, beside Ethereum, Base and Solana: the `sauce` command and the
+MCP server build and send its cooks and Pot deployments, where before they only compiled and
+simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
+
 ### SauceScript
 
 - **Removed** (EVM): A program can no longer open a cross-chain intent. `Base(() => { … })`, with
@@ -150,6 +154,22 @@ registry stay.
   `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`, `sauce_wallet_send`,
   `sauce_pot_list` and `sauce_pot_import`. Its one prompt is `sauce_write_program`.
 - The agent skills: `sauce-intents` is removed, so `sauce skills install` writes 13 skills.
+
+### The sauce command and the MCP server
+
+- **Fixed** (Arc): `sauce simulate` and `sauce run` report each movement of native USDC once, as
+  USDC. Arc logs every native transfer itself, so each was listed twice, once as an unknown token,
+  a transfer through the ERC-20 once more, and what the Pot was left holding was wrong.
+- **Fixed** (Arc): `sauce simulate --assume-balance USDC:<amount>`, a keyless `--fund USDC:<amount>`
+  and the MCP server's `assumeBalance` and `fund` set the Pot's native balance. They were refused,
+  because no storage of the ERC-20 holds it. `USDC` and the native coin are one balance, named once.
+- **Changed** (Arc): A wallet policy counts native USDC that leaves as value or through the ERC-20
+  against `native` and against the `USDC` token limit both. Each limit missed what left the other
+  way.
+- **Changed** (EVM): `sauce pot` and the `--value` refusal give the Kitchen's fee in the native coin
+  beside wei: `10000000000000000 wei (0.01 USDC)` on Arc. `sauce_pot` names the native coin of its
+  `kitchenFee` and `balances.native` (`symbol`), and on Arc notes that `balances.native` and the
+  `USDC` token are one balance, read twice.
 
 ## SDK 0.99.15 — 2026-10-21
 

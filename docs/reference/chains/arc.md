@@ -5,18 +5,15 @@
 **Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
 
 > Everything a program can name on Arc: its tokens, and every protocol deployed there with the name
-> a program writes for each contract. Arc is a preview chain: programs compile and simulate here,
-> and the `sauce` command sends nothing.
+> a program writes for each contract. The `sauce` command builds and sends transactions on Arc.
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Arc a program
-compiles and simulates (`sauce compile`, `sauce simulate`, the dry runs), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
-`sauce pot --deploy` are refused,
-naming the supported chains and how to request this one (the last section).
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Arc a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `arc`; also `arc-mainnet`, `arc-network` |
 | Chain id | 5042 |
 | Kind | EVM |
@@ -128,11 +125,6 @@ address.
 | [UnitFlow V3](../protocols/unitflow-v3.md) | quoter | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` | `UnitflowV3.Quoter` |
 | [UnitFlow V3](../protocols/unitflow-v3.md) | router | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` | `UnitflowV3.Router` |
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0xC8aD24fC6063c41cB5C12a8e3851AafC3b3CF027` | `Wormhole.CoreBridge` |
-
-## Requesting support
-
-To request Arc, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Arc%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Arc+%285042%29&chain=Arc&chain-id=5042) with the chain-support issue form.
 
 ## Next
 
