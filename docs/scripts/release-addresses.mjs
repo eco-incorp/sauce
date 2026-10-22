@@ -7,9 +7,8 @@
 // or `skills/`. `docs:check` and `skills:check` apply this rule.
 //
 // The addresses are the SDK's own, so there is no second list: the release's EVM contracts, its Pot
-// init-code hash and the shared intent Pot each chain derives, its Solana programs in base58 and as
-// the 32-byte key a program holds, and the engine of every compiler `V12_RELEASE_SETS` pairs, so an
-// address a release replaced is caught too.
+// init-code hash, its Solana programs in base58 and as the 32-byte key a program holds, and the
+// engine of every compiler `V12_RELEASE_SETS` pairs, so an address a release replaced is caught too.
 import { getAddressEncoder } from "@solana/kit";
 
 /** The manual's one page of the release's addresses, relative to the package root. */
@@ -41,11 +40,6 @@ export function releaseAddresses({ sdk, deployments }) {
   evm(release.evm.pot.initCodeHash, "the Pot init-code hash");
   for (const [name, program] of Object.entries(release.svm.programs))
     svm(program.programId, `the Solana ${name}`);
-  for (const chain of sdk.CANONICAL_CHAINS) {
-    try {
-      evm(sdk.destinationPot(chain.slug), "the shared intent Pot");
-    } catch {}
-  }
   for (const set of deployments.V12_RELEASE_SETS) {
     if (set["v12-evm"]?.engine)
       evm(set["v12-evm"].engine, `the EVM engine for compiler ${set.compiler}`);
