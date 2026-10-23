@@ -857,6 +857,48 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     300_000,
   );
 
+  // A walk held inside the furthest array: Raydium's SOL/USDC pool bought with USDC at 3% past its
+  // price, on its own slot, crosses more initialized ticks than one cook pays for. The command holds
+  // it a tick inside -21264, which lies in the furthest array, past the window's -21300, and its stop
+  // carries that array's deep tick, -21241, beside the held limit. The plain swap ends where the
+  // window holds it; the Stopped form walks on past the window and stops a tick inside its hold,
+  // buying more; the same stop with its deep bits cleared is held to the window again, exactly the
+  // plain swap.
+  it("RaydiumClmm: a stop held inside the furthest tick array walks on to it with its deep tick", async () => {
+    const base = await orderFor(VENUES.find((one) => one.venue === "RaydiumClmm")!);
+    const p = base.pool;
+    const paysA = key(USDC) < key(base.buy);
+    const order = {
+      ...base,
+      priceLimit: (allIn(p, paysA) * 10300n) / 10000n,
+      amountIn: 10_000_000_000n * 10n ** 6n,
+    };
+    const stop = stopOf(order);
+    expect([paysA, windowStop(p, paysA), stop.stopTick, stop.deepTick]).toEqual([
+      false,
+      -21300,
+      -21264,
+      -21241,
+    ]);
+    const plain = succeeded(await cook(compiled("raydiumClmm"), order));
+    expect([i32(poolData(p), 269), String(plain.received)]).toEqual([-21302, "1856011235642"]);
+    const held = succeeded(
+      await cook(compiled("raydiumClmmStopped"), { ...order, stop: stop.stop }),
+    );
+    expect([i32(poolData(p), 269), String(held.received)]).toEqual([-21266, "2688958699985"]);
+    const window = succeeded(
+      await cook(compiled("raydiumClmmStopped"), {
+        ...order,
+        stop: stop.stop & ((1n << 224n) - 1n),
+      }),
+    );
+    expect([i32(poolData(p), 269), String(window.received), String(window.price)]).toEqual([
+      -21302,
+      String(plain.received),
+      String(plain.price),
+    ]);
+  }, 300_000);
+
   // The deep tick read where the command read it: a place in its array that holds another tick means
   // the array is not laid out as the Stopped form reads it, and the cook reverts, naming it, rather
   // than walk on a guess; a tick no longer initialized there leaves the window where it was; and a
