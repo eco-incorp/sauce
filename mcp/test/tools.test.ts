@@ -791,6 +791,62 @@ describe("sauce_compile", () => {
     );
   });
 
+  it("keys each module from the directory of file, a ../ import included", async () => {
+    const source = [
+      'import { double } from "./lib/math.sauce.ts";',
+      "function main(): Uint256 {",
+      "  return double(21n);",
+      "}",
+      "",
+    ].join("\n");
+    // lib/math.sauce.ts imports ../fee.sauce.ts: beside the program, whatever directory it is in.
+    const math = [
+      'import { fee } from "../fee.sauce.ts";',
+      "export function double(x: Uint256): Uint256 {",
+      "  return x * 2n + fee(x);",
+      "}",
+      "",
+    ].join("\n");
+    const fee = "export function fee(x: Uint256): Uint256 {\n  return x / 100n;\n}\n";
+    const modules = { "lib/math.sauce.ts": math, "fee.sauce.ts": fee };
+    const inSrc = ok(
+      await mcp.call("sauce_compile", {
+        source,
+        file: "src/main.sauce.ts",
+        chain: "base",
+        modules,
+      }),
+    );
+    // The default file sits at the root; the same keys serve it.
+    const atRoot = ok(await mcp.call("sauce_compile", { source, chain: "base", modules }));
+    assert.match(atRoot.bytecode as string, /^0x[0-9a-f]+$/);
+    assert.equal(inSrc.bytecode, atRoot.bytecode);
+    // Keys from the root are not from the file's directory: they name src/src/....
+    assert.match(
+      failed(
+        await mcp.call("sauce_compile", {
+          source,
+          file: "src/main.sauce.ts",
+          chain: "base",
+          modules: { "src/lib/math.sauce.ts": math, "src/fee.sauce.ts": fee },
+        }),
+      ),
+      /math/,
+    );
+    // No import climbs above the file's directory, so no key may either.
+    assert.match(
+      failed(
+        await mcp.call("sauce_compile", {
+          source,
+          file: "src/main.sauce.ts",
+          chain: "base",
+          modules: { ...modules, "../x.ts": "" },
+        }),
+      ),
+      /not a relative path inside the program's tree/,
+    );
+  });
+
   it("fails with the line that does not compile, and says what each CLI flag is here", async () => {
     const message = failed(
       await mcp.call("sauce_compile", {

@@ -350,39 +350,23 @@ export const dexlab = makeSplTokenSwapForkAdapter(
 );
 
 /**
- * Saros — UN-GATED (2026-08-03; was gated, see git history for the original
- * `unresolvedGate` text). The original real-CPI probe against the live
- * mainnet binary (a real WSOL/USDC pool,
- * `Djxfn7zWFxFqYgwesXfq8BeAirfXwfhQmNcCousXh7G7`, dumped 2026-07-31) found
- * the same fee-MODEL divergence this comment used to describe: REALIZED
- * output across 14 independently-sampled real trades (27,995 to 6,089,579
- * raw units) implies an effective swap fee of a clean, reproducible ~4 bps —
- * NOT the 30 bps the pool's own on-chain `owner_trade_fee` field states
- * (`trade_fee` reads 0 bps). The account layout is confirmed correct up
- * through `pool_fee_account` (the swap only succeeds because that key check
- * passes) — this is a genuine fee-MODEL divergence, not a decode bug: Saros's
- * deployed program evidently does not compute the swap fee the vanilla
- * spl-token-swap way from the fields at these offsets, and no public source
- * was available to determine the real rule (the likely explanation, not
- * confirmed: the stored `owner_trade_fee` sizes how many LP tokens this fork
- * mints to `pool_fee_account` — confirmed growing consistent with invariant
- * growth on every sampled trade — while the amount actually deducted from
- * the trader's output is governed by a separate, unrecovered constant).
+ * Saros — an spl-token-swap fork whose deployed program does not charge the
+ * fee its pool accounts state. Measured against the live mainnet binary (a
+ * WSOL/USDC pool, `Djxfn7zWFxFqYgwesXfq8BeAirfXwfhQmNcCousXh7G7`): realized
+ * output across 14 sampled trades (27,995 to 6,089,579 raw units) implies an
+ * effective swap fee of about 4 bps, not the 30 bps the pool's on-chain
+ * `owner_trade_fee` field states (`trade_fee` reads 0 bps). The account layout
+ * is correct up through `pool_fee_account` (the swap succeeds only because
+ * that key check passes), so this is a fee-model difference, not a decode
+ * bug; no public source gives the program's exact rule.
  *
- * Rather than continue gating on an unresolved exact rule, this adapter
- * deliberately keeps the generic `makeSplTokenSwapForkAdapter` formula
- * (the STORED, higher trade+owner fee rates as the netIn deduction) as a
- * MEASURED, DELIBERATE safety margin: across all 14 sampled trades this
- * model's predicted output was strictly <= the real realized output every
- * time (margins of ~0.05%-0.26% of the trade) — never an over-promise, so
- * quoting it is safe for election (a worse model never wins a share it
- * doesn't deserve), the same closed-source-fork trade-off `gamma`'s
- * dynamic-fee ceiling already makes. Proven end-to-end against the real
- * deployed binary in LiteSVM at 2 and 4 rungs plus three additional sizes
- * (`predicted <= realized` at every sampled size, never `===`, unlike the
- * `orca-legacy-token-swap`/`token-swap-v1`/etc. siblings this fork's math was
- * cloned from) — see the consuming app realcpi e2e test's `saros`
- * describeWith block in sauce-recipes.
+ * This adapter keeps the generic `makeSplTokenSwapForkAdapter` formula (the
+ * stored, higher trade+owner fee rates as the netIn deduction) as a safety
+ * margin: across all 14 sampled trades its predicted output was at or below
+ * the realized output (by ~0.05%-0.26% of the trade), never above, so a quote
+ * never over-promises — the same closed-source-fork trade-off `gamma`'s
+ * dynamic-fee ceiling makes. Run against the deployed binary in LiteSVM, the
+ * prediction stays below the realized output at every sampled size.
  */
 export const SAROS_PROGRAM_ID = "SSwapUtytfBdBn1b9NUGG6foMVPtcWgpRU32HToDUZr" as Address;
 export const saros = makeSplTokenSwapForkAdapter("saros", SAROS_PROGRAM_ID);

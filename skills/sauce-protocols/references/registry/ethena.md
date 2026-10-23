@@ -28,7 +28,7 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | susde | `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497` | `Ethena.Susde` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | usde | `0x4c9EDD5852cd905f086C759E8383e09bff1e68b3` | `Ethena.USDe` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | usde | `0x4c9EDD5852cd905f086C759E8383e09bff1E68B3` | `Ethena.USDe` |
 
 ## ABI
 

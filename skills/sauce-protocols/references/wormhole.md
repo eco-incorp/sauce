@@ -1,6 +1,6 @@
 # Wormhole
 
-Generic cross-chain messaging protocol with guardian-based attestation. Supports token bridging and arbitrary message passing across 30+ chains.
+Generic cross-chain messaging protocol with guardian-based attestation. Supports token bridging and arbitrary message passing.
 
 ## Category
 

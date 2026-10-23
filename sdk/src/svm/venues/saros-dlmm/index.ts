@@ -444,7 +444,7 @@ export async function fetchSarosDlmmConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
+/** The Saros DLMM venue: a liquidity book of discrete price bins. */
 export const sarosDlmm = {
   slug: SLUG,
   programId: SAROS_DLMM_PROGRAM_ID,

@@ -2,7 +2,7 @@
 
 # Benqi (`benqi`)
 
-Leading lending and borrowing protocol on Avalanche. Compound V2 fork with additional liquid staking (sAVAX) functionality.
+Lending and borrowing protocol on Avalanche. Compound V2 fork with additional liquid staking (sAVAX) functionality.
 
 | Fact | Value |
 | --- | --- |

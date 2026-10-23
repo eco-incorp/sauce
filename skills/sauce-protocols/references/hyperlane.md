@@ -1,6 +1,6 @@
 # Hyperlane
 
-Permissionless interchain messaging protocol. Supports modular security with ISMs (Interchain Security Modules) across 150+ chains.
+Permissionless interchain messaging protocol. Supports modular security with ISMs (Interchain Security Modules).
 
 ## Category
 

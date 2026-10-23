@@ -407,7 +407,7 @@ export async function fetchTesseraVConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — not in the v1 registry). */
+/** The TesseraV venue: a closed-source proprietary AMM. */
 export const tesserav = {
   slug: SLUG,
   programId: TESSERAV_PROGRAM_ID,

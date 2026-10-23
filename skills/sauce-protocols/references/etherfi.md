@@ -50,7 +50,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- TVL: $5.8B+. Largest liquid restaking protocol
+- TVL: $5.8B+. Liquid restaking protocol
 - eETH rebases like stETH. Use weETH for DeFi (Aave, Pendle, etc.)
 - deposit() is payable - send ETH as msg.value
 - Approve eETH to weETH contract before wrapping

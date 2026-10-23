@@ -142,7 +142,7 @@ StateView (v4-periphery `src/lens/StateView.sol`) reads the PoolManager's pool s
 - `zeroForOne`: true = swap currency0 for currency1; false = swap currency1 for currency0
 - `amountSpecified`: negative = exact input; positive = exact output (the reverse of Uniswap V3's pool `swap`)
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
-- Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
+- Commands/inputs for the UniversalRouter must be constructed off-chain
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
 - From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, with no UniversalRouter or approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first), with `fee`, `tickSpacing` and `hooks`. Pass positive `amountIn`; the helper handles the signed exact-input convention and returns output. The `uniswapV4Swap` action is the same call.
 - On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance

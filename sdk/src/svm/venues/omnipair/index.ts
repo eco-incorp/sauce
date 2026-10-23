@@ -242,7 +242,7 @@ export async function fetchOmnipairPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like orca-whirlpool/raydium-clmm/defituna). */
+/** The Omnipair venue: constant-product pairs whose reserves include the liquidity lent out. */
 export const omnipair = {
   slug: SLUG,
   programId: OMNIPAIR_PROGRAM_ID,

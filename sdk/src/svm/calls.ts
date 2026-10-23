@@ -63,14 +63,14 @@ const calldataWithAccountsDecoder = getStructDecoder([
   ["accounts", getArrayDecoder(accountMetaDecoder, { size: getU32Decoder() })],
 ]);
 
-/** An opaque byte payload: `Uint8Array` as-is; a `0x`-prefixed hex string (the viem `Hex` form
- *  `route.calls[].data` uses); or a base64 string (the Solana convention) for anything not 0x-prefixed.
+/** An opaque byte payload: `Uint8Array` as-is; a `0x`-prefixed hex string (the viem `Hex` form a
+ *  call's `data` takes); or a base64 string (the Solana convention) for anything not 0x-prefixed.
  *  A BARE STRING IS BASE64 HERE. For an address, use `UniversalAddressInput` — same three carriage
  *  forms, but a bare string there is base58, and the two must never be handed to the same reader. */
 export type BytesInput = Uint8Array | string;
 
 /** A 32-byte universal address, in the forms one arrives in: raw bytes, `0x`-hex (what
- *  `buildSauceSvmCall` emits into `route.calls[].target`), or the base58 program id itself. Deliberately
+ *  `buildSauceSvmCall` emits as a call's `target`), or the base58 program id itself. Deliberately
  *  NOT `BytesInput`, whose bare-string form is base64 — only a branded `Address` may be spent as the
  *  base58 form, so an unvalidated `string` does not typecheck and the two encodings cannot be confused
  *  at a call site. */

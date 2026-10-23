@@ -358,8 +358,9 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   (`svmEnginePath(cluster, path)`, `svmKitchenPath(path)`, `svmKitchenIdlPath(path)`) and otherwise
   returns the packaged binary; `sdk/test/svm/engine-harness.ts` and `dev-tools/test/svm-local.test.ts`
   read CI's `SAUCE_*` paths and pass them in. Shipped code reads no environment — but for the `sauce`
-  command's one deliberate read, of the variable `--password-env <NAME>` names (see "Agent
-  wallets" below): configuration is passed by the developer, and a browser has no `process.env`. **Nothing about the engine is
+  command's one deliberate read, of the variable `--password-env <NAME>` or the MCP server's
+  `sauce_wallet_enable { env }` names (see "Agent wallets" below): configuration is passed by the
+  developer, and a browser has no `process.env`. **Nothing about the engine is
   source-controlled.**
   There used to be a vendored `artifacts/svm/engine.so` — a `release/beta` build predating every
   v12-svm release, with no `JUMP`/`JUMP_I` — and it was the DEFAULT, so anything with control flow was
@@ -729,14 +730,21 @@ per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
 the recipient received; plus a `try` form of each that returns `0n` having moved nothing, while a
 swap that ran returns at least 1, so a `0n` ALWAYS means nothing moved (sauce-recipes' EcoSwap
-executor drops a venue that returns 0 and re-offers its input). Three mechanisms: a check before
-anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
+executor drops a venue that returns 0 and re-offers its input). Every `try` form first skips a
+pool, Vault or PoolManager with no code (`ctx.codeSize`): a call to no code succeeds with empty
+data, which a catch does not see, so without it Curve's fails its own `out > 0` check, Balancer's
+decode reverts outside the catch, and V2's and LB's views revert. Then three mechanisms: a check
+before anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
 `querySellBase`/`querySellQuote`, `tryWoofi` WooPPV2's `query` — never its `tryQuery`, which prices
-past the reserve), a caught pool call that resets its approval (`tryCurve`, `tryBalancerV2`), or a
-caught Router call (`tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
-`tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
-afterwards to `minOut` and at least 1 and reverts below it (an input the pool keeps as its fee
-cannot be undone), except that one that moved nothing either way — the Router's `amountInUsed` and
+past the reserve; DODO's and WOOFi's views are caught, V2's and LB's return several words and are
+read uncaught, so a contract with code that is no pair reverts those two), a caught pool call that
+resets its approval (`tryCurve`, `tryBalancerV2`), or a caught Router call (`tryUniswapV3`,
+`tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`, `tryInfinityBin`). A `try` form still reverts on
+arguments that contradict each other, as its plain function does (a pay-first venue's same token in
+and out, DODO/LB tokens other than the named pair). The generation-4 Router takes no floor, so a
+caught Router call that ran is held afterwards to `minOut` and at least 1 and reverts below it (an
+input the pool keeps as its fee cannot be undone), except that one that moved nothing either way —
+the Router's `amountInUsed` and
 the recipient's `tokenOut` gain both 0, a pool with no liquidity in range — returns `0n`. The
 compiler carries only a scalar through `.catch()`, so the try forms call the Router through
 `sauce-router-paid.abi.json`, its methods declaring `amountInUsed` alone. An empty pool with no
@@ -1145,7 +1153,8 @@ decoder: the cook is
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
-names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
+(or, in `sauce mcp`, `sauce_wallet_enable`'s `env`) names, reaches a network only through
+`--rpc-url`, a `--config` file's entry for the chain, or
 else the built-in public endpoints (none with `--offline`) — and the npm registry, its one other
 network access, named and read in `npm-registry.ts` alone, by `sauce update` when it runs and by
 the update check, and npm itself, with the user's npm configuration, where the command runs it
@@ -1238,7 +1247,9 @@ call over (`keep.ts`), saying what it kept in the call's notes. So a Pot a `sauc
 `createSauceServer` refuses stores beside a guard (`pots.e2e.test.ts`, `transports.test.ts`).
 
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
-input that looks like one, nested fields included), and the server reads no environment. It signs
+input that looks like one, nested fields included), and the server reads the environment only
+through the CLI's one read: over stdio, the variable `--password-env` or `sauce_wallet_enable`'s
+`env` names; over HTTP, none. It signs
 only over stdio, where it serves the wallet tools by default (`--no-wallets` turns them off, and
 `--no-stores` with the other stores: the directory is `McpStores.wallets`), and
 only once the wallets are enabled (`mcp/src/wallets.ts`, see "Agent wallets"); over HTTP it never
@@ -1272,18 +1283,25 @@ CI). A
 Solana wallet is the same envelope around the keypair's 64 bytes, marked `"kind": "solana"`, which
 `--keystore` refuses. The address is in the clear, so `list`, `address` and `signerAddress` need no
 password. `export` writes the key to `/dev/tty` itself (`terminal.ts#writeToTerminal`), past
-stdout and the scrubbing, after the user types the wallet's name; there is no MCP twin.
+stdout and the scrubbing, after the user types the wallet's name; there is no MCP twin. That keeps
+it out of pipes and logs only: a program that runs `export` in a pseudo-terminal answers the prompt
+and reads the key.
 
 A password comes from exactly one source (`password.ts`): `--password-env <NAME>`,
 `--password-file` (refused when its mode lets group or others in: `chmod 600`), `--password-command`
 (run through the shell with no stdin; a failure reports its exit status, never its output), else
 the prompt (asked twice for a new wallet; 8 characters at least). `--keystore` takes the same
 sources, so a password file a test passes must be 0600 (`cli-anvil.ts#KEYSTORE_PASSWORD_FILE` copies
-the committed fixture). There is no `--password <value>`. `--password-env` is THE COMMAND'S ONE READ
-OF THE ENVIRONMENT, `nodeIo().readEnv`, and `no-embedded-rpc.test.ts` allows exactly that line
-(`DELIBERATE_ENV_READ`) and no other; do not add a second.
+the committed fixture). There is no `--password <value>`. `nodeIo().readEnv` is THE COMMAND'S ONE
+READ OF THE ENVIRONMENT, and `no-embedded-rpc.test.ts` allows exactly that line
+(`DELIBERATE_ENV_READ`) and no other; do not add a second. Two things name its variable:
+`--password-env <NAME>`, and over stdio an agent's `sauce_wallet_enable { env }` (below), which may
+name any variable the server's environment holds; the value is used only as a password.
 
-A wallet unlocked is GUARDED (`policy.ts#guardWallet`, by address): `chain.ts#sendAndWait` and
+A wallet unlocked is GUARDED (`policy.ts#guardWallet`, by address, called only from
+`wallet-commands.ts#openWallet`: `--wallet` and the MCP server's wallet tools; `--keystore`,
+`--private-key` and `--keypair` register no guard, even on a wallet's own file, so no policy applies
+to them): `chain.ts#sendAndWait` and
 `solana.ts`'s `sendAndConfirm` — the two places every send of the command passes — consult
 `guardOf(sender)` before sending. The guard calls the release gate (`requireSupported("sending from
 a wallet", …)`) and, when `<name>.policy.json` exists, MEASURES what the transaction moves out of the
@@ -1303,7 +1321,8 @@ CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the
 be started with, is the default; `--no-wallets` serves none), always REGISTERED rather than added
 when enabled (not every client handles `tools/list_changed`): `sauce_wallet_enable`,
 `sauce_wallet_create`, `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`,
-`sauce_wallet_send` (`create` is `sauce wallet new`'s twin; the names predate the parity). List and
+`sauce_wallet_send` and `sauce_sign` (`create` is `sauce wallet new`'s twin; the names predate the
+parity). List and
 address need no password. Create, import and send need the wallets ENABLED, else they refuse naming
 `sauce_wallet_enable` and its four sources. A password flag at start (`--password-env|-file|
 -command`, no longer needing `--wallets`) enables them: `sdk/src/cli/mcp.ts` reads it once, before

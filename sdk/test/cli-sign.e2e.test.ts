@@ -238,12 +238,13 @@ describeEvm("sauce sign, submitted by another account", () => {
     expect(stranger.stderr).toContain(`does not own Pot ${pot}`);
     expect(await cookNonceUsed(base.publicClient, pot, 42n)).toBe(false);
 
-    const cancelled = jsonOf(
-      await sauce(
-        ...["sign", "--cancel", "42", "--chain", "base", "--private-key", OWNER_KEY],
-        ...["--rpc-url", base.rpcUrl, "--json"],
-      ),
-    ) as {
+    const sentCancel = await sauce(
+      ...["sign", "--cancel", "42", "--chain", "base", "--private-key", OWNER_KEY],
+      ...["--rpc-url", base.rpcUrl, "--json"],
+    );
+    // --json changes what a sent cancellation prints: its JSON, where the text is its receipt.
+    expect(sentCancel.stdout.trimStart().startsWith("{")).toBe(true);
+    const cancelled = jsonOf(sentCancel) as {
       pot: Address;
       from: Address;
       sent: Array<{ status: string; word: string; mask: string; hash: Hex }>;
@@ -266,5 +267,15 @@ describeEvm("sauce sign, submitted by another account", () => {
     expect(event!.args).toEqual({ word: 0n, mask: 1n << 42n });
     expect(await cookNonceUsed(base.publicClient, pot, 42n)).toBe(true);
     await expect(refused(signed.cook!, OTHER.address)).rejects.toThrow(/NonceUsed/);
+
+    // Without --json a sent cancellation prints its receipt, one line per transaction, not JSON.
+    const receiptText = await sauce(
+      ...["sign", "--cancel", "43", "--chain", "base", "--private-key", OWNER_KEY],
+      ...["--rpc-url", base.rpcUrl],
+    );
+    expect(receiptText.code).toBe(0);
+    expect(receiptText.stdout.trimStart().startsWith("{")).toBe(false);
+    expect(receiptText.stdout).toMatch(/: 0x[0-9a-f]{64} success, gas used \d+, block \d+/);
+    expect(await cookNonceUsed(base.publicClient, pot, 43n)).toBe(true);
   }, 120_000);
 });

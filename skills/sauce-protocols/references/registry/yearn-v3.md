@@ -18,7 +18,7 @@ On Ethereum, `YearnV3` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
 function main() {
-  // Ethereum's vaultFactory, `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F`.
+  // Ethereum's vaultFactory, `0x770D0d1fB036483eD4ABB6D53C1C89FB277d812F`.
   require(YearnV3.VaultFactory != 0);
 }
 ```
@@ -27,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F` | `YearnV3.VaultFactory` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | vaultFactory | `0x770D0d1fB036483eD4ABB6D53C1C89FB277d812F` | `YearnV3.VaultFactory` |
 
 ## ABI
 

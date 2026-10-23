@@ -8,7 +8,7 @@
 > deployed on, the name a program writes for each of its contracts, and the functions a program can
 > call.
 
-The most trusted multi-signature smart contract wallet, securing billions in digital assets. Supports programmable account abstraction and modular security.
+Multi-signature smart contract wallet. Supports programmable account abstraction and modular security.
 
 | Fact | Value |
 | --- | --- |
@@ -24,7 +24,6 @@ The most trusted multi-signature smart contract wallet, securing billions in dig
 
 ## Notes
 
-- Secures $100B+ in assets across DeFi
 - safeV141 is for Ethereum L1; safeL2V130 is the L2-optimized version (emits events for cheaper indexing)
 - operation: 0 = CALL (normal), 1 = DELEGATECALL (execute in Safe context)
 - signatures are sorted by owner address, packed as 65 bytes each (r, s, v)

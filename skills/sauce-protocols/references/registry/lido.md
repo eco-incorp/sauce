@@ -2,7 +2,7 @@
 
 # Lido (`lido`)
 
-The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a liquid staking token that accrues staking rewards.
+Liquid staking protocol for Ethereum. Stake ETH and receive stETH, a liquid staking token that accrues staking rewards.
 
 | Fact | Value |
 | --- | --- |

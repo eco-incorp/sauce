@@ -2,7 +2,7 @@
 
 # LayerBank (`layerbank`)
 
-Leading lending protocol on Scroll. Compound V2 fork optimized for L2 rollups with low gas costs.
+Lending protocol on Scroll. Compound V2 fork adapted for L2 rollups.
 
 | Fact | Value |
 | --- | --- |

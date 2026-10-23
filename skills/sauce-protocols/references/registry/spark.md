@@ -2,7 +2,7 @@
 
 # Spark (`spark`)
 
-Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers competitive rates on DAI/USDS borrowing backed by the Maker protocol.
+Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers DAI/USDS borrowing backed by the Maker protocol.
 
 | Fact | Value |
 | --- | --- |

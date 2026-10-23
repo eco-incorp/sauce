@@ -8,7 +8,7 @@
 > This page lists the chains it is deployed on, the name a program writes for each of its contracts,
 > and the functions a program can call.
 
-The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a rebasing liquid staking token. wstETH is the non-rebasing wrapped version for DeFi composability.
+Liquid staking protocol for Ethereum. Stake ETH and receive stETH, a rebasing liquid staking token. wstETH is the non-rebasing wrapped version for DeFi composability.
 
 | Fact | Value |
 | --- | --- |
@@ -25,7 +25,7 @@ The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a
 
 ## Notes
 
-- TVL: $27.5B+. Largest DeFi protocol by TVL
+- TVL: $27.5B+
 - stETH rebases daily (balance increases). wstETH does not rebase (exchange rate increases instead)
 - Always use wstETH for DeFi integrations (Aave, Uniswap, etc.) since rebasing tokens cause issues
 - submit() requires ETH sent as msg.value. The referral parameter can be zero address

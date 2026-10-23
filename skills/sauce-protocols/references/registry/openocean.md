@@ -2,7 +2,7 @@
 
 # OpenOcean (`openocean`)
 
-Cross-chain DEX aggregator providing optimal swap routing across multiple DEXes and chains.
+Cross-chain DEX aggregator routing swaps across multiple DEXes and chains.
 
 | Fact | Value |
 | --- | --- |

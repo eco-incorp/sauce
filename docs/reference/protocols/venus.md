@@ -8,7 +8,7 @@
 > lists the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-Leading lending and borrowing protocol on BNB Chain. Fork of Compound V2 with additional features including VAI stablecoin minting.
+Lending and borrowing protocol on BNB Chain. Fork of Compound V2 with additional features including VAI stablecoin minting.
 
 | Fact | Value |
 | --- | --- |

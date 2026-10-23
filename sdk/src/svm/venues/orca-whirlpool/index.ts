@@ -384,10 +384,7 @@ export async function fetchOrcaWhirlpoolConfig(
   };
 }
 
-/**
- * Family facade for the recipe orchestrator (this venue is ladder-only — it
- * has no v1 SvmVenueAdapter and is not in the v1 registry).
- */
+/** The Orca Whirlpools venue: a concentrated-liquidity AMM. */
 export const orcaWhirlpool = {
   slug: SLUG,
   programId: ORCA_WHIRLPOOL_PROGRAM_ID,

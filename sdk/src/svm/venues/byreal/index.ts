@@ -360,7 +360,7 @@ export async function fetchByrealPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like raydium-clmm — no v1 adapter). */
+/** The Byreal venue: a concentrated-liquidity AMM, a Raydium CLMM clone under its own program id. */
 export const byreal = {
   slug: SLUG,
   programId: BYREAL_PROGRAM_ID,

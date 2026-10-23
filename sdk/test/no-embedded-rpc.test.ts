@@ -99,10 +99,12 @@ const IMPORTING_ROOTS = [...["sdk/src", "actions/src", "dev-tools/src"], "mcp/sr
 /** Shipped files the environment scan must include, so a move cannot take the command out of it. */
 const SHIPPED_REQUIRED = ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts", "sdk/src/cli/commands.ts"];
 /**
- * The `sauce` command's ONE deliberate read of the environment: `--password-env <NAME>`, which
- * reads the variable the user names and nothing else (`cli/password.ts`), so an agent's password
- * reaches the process from its `.env` or secret store without ever being an argument. Exactly this
- * line, in exactly this file: a second read, or this one moved or widened, fails the scan.
+ * The `sauce` command's ONE deliberate read of the environment: the variable the user or agent
+ * names, and nothing else (`cli/password.ts`), so a password reaches the process from its `.env` or
+ * secret store without ever being an argument. Two things name it, and both go through this one
+ * line: `--password-env <NAME>`, and in `sauce mcp` over stdio an agent's
+ * `sauce_wallet_enable { env }`. Exactly this line, in exactly this file: a second read, or this
+ * one moved or widened, fails the scan.
  */
 const DELIBERATE_ENV_READ = {
   file: "sdk/src/cli/run.ts",
