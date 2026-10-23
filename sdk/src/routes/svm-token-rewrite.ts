@@ -532,10 +532,11 @@ function collectTokenMethods(l: SvmLowering): void {
       }
       if (isAccountValue(l, object)) {
         // An account's lamports, by its key: the account expression in it is lowered on its own.
+        // The member's own ends, not the receiver's, so parentheses around it go with it.
         l.site(n, () => {
           l.requirePlaced(n, spelled, "a balance of the native coin");
           l.splices.push(
-            { start: object.start, end: object.start, replacement: "ctx.balance(" },
+            { start: n.start, end: object.start, replacement: "ctx.balance(" },
             { start: object.end, end: n.end, replacement: ".address)" },
           );
         });

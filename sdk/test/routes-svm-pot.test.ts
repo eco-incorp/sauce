@@ -264,6 +264,20 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       /^`holder\.USDC` on Solana: the holder must be known when the transaction is built, to attach its token account — `pot`, /,
     );
   });
+
+  it("an account's .balance through parentheses keeps them matched", () => {
+    for (const receiver of ["(vault)", "((vault))"]) {
+      expect(
+        compile(`function main(vault: Account): Uint256 {\n  return ${receiver}.balance;\n}\n`)
+          .source,
+      ).toBe("function main(vault: Account): Uint256 {\n  return ctx.balance(vault.address);\n}\n");
+    }
+    // The account expression inside is lowered on its own.
+    const pda = compile(
+      'function main(): Uint256 {\n  return (Solana.pda(Solana.systemProgram, ["a"])).balance;\n}\n',
+    );
+    expect(pda.source).toContain("return ctx.balance(aPda.address);");
+  });
 });
 
 describe("the retired spellings, refused naming what to write", () => {
