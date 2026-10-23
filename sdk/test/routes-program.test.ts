@@ -15,8 +15,8 @@ import {
 import {
   decodeEntryArguments,
   encodeEntryArguments,
-  mainParams,
-  mainReturnType,
+  entryReturnType,
+  type EntryValue,
   mainSignature,
 } from "../src/routes/entry.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
@@ -112,13 +112,23 @@ describe("main's signature", () => {
     ]);
   });
 
-  it("reads main's parameters, an unannotated one a Uint256", () => {
-    expect(mainParams("function main(a, b: bool, c: Uint256[]) {}")).toEqual([
-      { name: "a", type: "Uint256" },
-      { name: "b", type: "bool" },
-      { name: "c", type: "Uint256[]" },
-    ]);
-    expect(mainParams("USDC.transfer(x, 1n);")).toEqual([]);
+  it("reports main's signature, an unannotated parameter a Uint256, compiled for its arguments too", () => {
+    const signature = (source: string, args?: readonly EntryValue[]) =>
+      compileSauceProgram("ethereum", source, args === undefined ? {} : { args }).entrySignature;
+    const params = [
+      { name: "a", type: "Uint256", abi: { name: "a", type: "uint256" } },
+      { name: "b", type: "bool", abi: { name: "b", type: "bool" } },
+    ];
+    expect(signature("function main(a, b: bool): Uint256 { return b ? a : 0; }")).toEqual({
+      params,
+      returns: "Uint256",
+    });
+    // The compiler's `entryParams` is empty for a program compiled for its arguments; its
+    // signature is not.
+    expect(
+      signature("function main(a, b: bool): Uint256 { return b ? a : 0; }", [5n, true]),
+    ).toEqual({ params, returns: "Uint256" });
+    expect(signature("USDC.transfer(0x1, 1);")).toEqual({ params: [], returns: "void" });
   });
 
   it("spells out a record an interface names, so a value for it can be encoded", () => {
@@ -149,7 +159,7 @@ describe("main's signature", () => {
     expect(encoded.length).toBeGreaterThan(0);
   });
 
-  it("reads the module's own main: not one nested in a function or bodyless, and past type parameters", () => {
+  it("reads the module's own main as the --fund wrapper does: not one nested in a function or bodyless, and past type parameters", () => {
     const nested =
       "function helper(): Uint256 {\n  function main(z: Address): Uint256 {\n    return 1;\n  }\n  return 2;\n}\n";
     const overload = "function main(a: Address): Address;\n";
@@ -163,12 +173,17 @@ describe("main's signature", () => {
       `export ${own}`,
       `// function main(z: Address) {}\n${own}`,
     ]) {
-      expect(mainParams(source)).toEqual([{ name: "b", type: "Uint256" }]);
       expect(mainSignature(source)?.names).toEqual(["b"]);
-      expect(mainReturnType(source)).toBe("Uint256");
+      expect(mainSignature(source)?.returnsValue).toBe(true);
     }
     expect(mainSignature(nested)).toBeUndefined();
-    expect(mainParams(`${overload}const x: Uint256 = 1;\n`)).toEqual([]);
+    expect(mainSignature(`${overload}const x: Uint256 = 1;\n`)).toBeUndefined();
+    // What the compiler takes of them, it reports as written.
+    for (const source of [`export ${own}`, `// function main(z: Address) {}\n${own}`]) {
+      const program = compileSauceProgram("base", source, {});
+      expect(program.entryParams).toEqual([{ name: "b", type: "Uint256" }]);
+      expect(entryReturnType(program.entrySignature)).toBe("Uint256");
+    }
   });
 
   it("reads each parameter's name and type, and the return type, past comments in the signature", () => {
@@ -184,12 +199,11 @@ describe("main's signature", () => {
       { name: "to", type: "Address" },
       { name: "amount", type: "Uint256" },
     ];
-    expect(mainParams(source)).toEqual(params);
     expect(mainSignature(source)?.names).toEqual(["to", "amount"]);
-    expect(mainReturnType(source)).toBe("Uint256");
     expect(mainSignature("function main(): /* nothing */ void {}")?.returnsValue).toBe(false);
     const program = compileSauceProgram("base", source, {});
     expect(program.entryParams).toEqual(params);
+    expect(entryReturnType(program.entrySignature)).toBe("Uint256");
     expect(bytesToHex(encodeEntryArguments(program, [RECIPIENT, 5n]))).toBe(
       encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [RECIPIENT, 5n]),
     );
@@ -201,7 +215,7 @@ describe("main's signature", () => {
 });
 
 describe("main's arguments bound by args", () => {
-  it("refuses one the module declares too, which the bound define would replace outside main", () => {
+  it("binds one the module declares too as main's alone, leaving the module's outside main", () => {
     // `owed` reads the module's `fee`; `main`'s parameter shadows it in `main` alone.
     const fee = [
       "const fee: Uint256 = 30;",
@@ -212,9 +226,8 @@ describe("main's arguments bound by args", () => {
       "  return owed(amount) + fee;",
       "}",
     ].join("\n");
-    expect(() => compileSauceProgram("base", fee)).not.toThrow();
-    expect(() => compileSauceProgram("base", fee, { args: [10000n, 5n] })).toThrow(
-      "argument 2 (fee: Uint256): the module declares fee too",
+    expect(compileSauceProgram("base", fee, { args: [10000n, 5n] }).bytecode).toEqual(
+      compileSauceProgram("base", "function main(): Uint256 {\n  return 35;\n}\n").bytecode,
     );
     const payee = [
       `const payee: Address = ${CREATOR};`,
@@ -225,10 +238,9 @@ describe("main's arguments bound by args", () => {
       "  return owner();",
       "}",
     ].join("\n");
-    expect(() => compileSauceProgram("base", payee, { args: [RECIPIENT] })).toThrow(
-      "argument 1 (payee: Address): the module declares payee too",
+    expect(compileSauceProgram("base", payee, { args: [RECIPIENT] }).bytecode).toEqual(
+      compileSauceProgram("base", `function main(): Address {\n  return ${CREATOR};\n}\n`).bytecode,
     );
-    // A signed argument is a `let` of `main`'s own, which shadows the module's in `main` alone.
     const signed = [
       "const delta: Int256 = 30;",
       "function start(): Int256 {",
@@ -243,30 +255,37 @@ describe("main's arguments bound by args", () => {
     );
   });
 
-  it("refuses one named like a value of the chain, which the bound define would replace outside main", () => {
+  it("binds one named like a value of the chain as main's alone, leaving the chain's outside main", () => {
     // `paid` reads the chain's USDC; `main`'s parameter shadows it in `main` alone.
     const paid = "function paid(): Address {\n  return USDC;\n}\n";
-    expect(() =>
+    const chainUsdc = compileSauceProgram(
+      "base",
+      "function main(): Address {\n  return USDC;\n}\n",
+    ).bytecode;
+    expect(
       compileSauceProgram(
         "base",
         `${paid}function main(USDC: Address): Address {\n  return paid();\n}\n`,
-        {
-          args: [RECIPIENT],
-        },
-      ),
-    ).toThrow("USDC is main's parameter, given in args; it is not also a define (USDC on base)");
-    expect(() =>
+        { args: [RECIPIENT] },
+      ).bytecode,
+    ).toEqual(chainUsdc);
+    expect(
       compileSauceProgram(
         "base",
-        "function main(chainId: Uint256): Uint256 {\n  return chainId;\n}\n",
-        {
-          args: [5n],
-        },
-      ),
-    ).toThrow(
-      "chainId is main's parameter, given in args; it is not also a define (chainId on base)",
+        `${paid}function main(USDC: Int256): Address {\n  return paid();\n}\n`,
+        { args: [-5n] },
+      ).bytecode,
+    ).toEqual(chainUsdc);
+    expect(
+      compileSauceProgram(
+        "base",
+        "function c(): Uint256 {\n  return chainId;\n}\nfunction main(chainId: Uint256): Uint256 {\n  return c() + chainId;\n}\n",
+        { args: [5n] },
+      ).bytecode,
+    ).toEqual(
+      compileSauceProgram("base", "function main(): Uint256 {\n  return 8458;\n}\n").bytecode,
     );
-    expect(() =>
+    expect(
       compileSauceProgram(
         "base",
         "function main(Asset: Address): Address {\n  return Asset;\n}\n",
@@ -274,28 +293,21 @@ describe("main's arguments bound by args", () => {
           args: [RECIPIENT],
           tokens: { Asset: CREATOR },
         },
-      ),
-    ).toThrow("Asset is main's parameter, given in args; it is not also a define (Asset on base)");
-    expect(() =>
+      ).bytecode,
+    ).toEqual(
+      compileSauceProgram("base", `function main(): Address {\n  return ${RECIPIENT};\n}\n`)
+        .bytecode,
+    );
+    expect(
       compileSauceProgram(
         "solana",
         "function main(USDC: Uint256): Uint256 {\n  return USDC;\n}\n",
         {
           args: [5n],
         },
-      ),
-    ).toThrow("USDC is main's parameter, given in args; it is not also a define (USDC on solana)");
-    // A signed argument is a `let` of `main`'s own, which leaves the chain's USDC to `paid`.
-    expect(
-      compileSauceProgram(
-        "base",
-        `${paid}function main(USDC: Int256): Address {\n  return paid();\n}\n`,
-        {
-          args: [-5n],
-        },
       ).bytecode,
     ).toEqual(
-      compileSauceProgram("base", "function main(): Address {\n  return USDC;\n}\n").bytecode,
+      compileSauceProgram("solana", "function main(): Uint256 {\n  return 5;\n}\n").bytecode,
     );
   });
 });
@@ -405,9 +417,11 @@ describe("encodeEntryArguments", () => {
       "base",
       "function main(legs: { amount: Uint256; to: Address }[]) {}",
     );
+    // The compiler reports the parameter's type, whichever separator the source wrote.
     expect(semicolon.entryParams).toEqual([
-      { name: "legs", type: "{ amount: Uint256; to: Address }[]" },
+      { name: "legs", type: "{ amount: Uint256, to: Address }[]" },
     ]);
+    expect(semicolon.entryParams).toEqual(comma.entryParams);
     const legs = [[{ amount: 5n, to: PROVER }]];
     expect(encodeEntryArguments(semicolon, legs)).toEqual(encodeEntryArguments(comma, legs));
   });

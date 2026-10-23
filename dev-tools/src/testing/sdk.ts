@@ -16,7 +16,7 @@ export {
 } from "../../../sdk/dist/routes/sauce-route.js";
 export {
   encodeEntryArguments,
-  mainReturnType,
+  entryReturnType,
   parseEntryType,
   type EntryType,
   type EntryValue,

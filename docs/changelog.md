@@ -189,17 +189,19 @@ remain available and explicitly report that deployment availability has not been
 - **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
   eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
   an editor typed nothing on it.
-- **Fixed**: A compiled program's `entryParams`, and `main`'s parameters as the `sauce` command
-  reads them, are read past comments in `main`'s signature. A comment in the parameter list became
-  part of a parameter's name or type, or a parameter of its own, so `encodeEntryArguments` and
-  `--args` refused the right values; a comment before the return type was read as part of it. The
-  module's own top-level `main` is the one read, not one nested in a function, a bodyless overload
-  or a `declare`, and a `main` with type parameters is found.
-- **Now refused**: `routes.compileSauceProgram` with `args` refuses a bound `Uint256`, `Address` or
-  `bool` parameter whose name the module also declares, or that names one of the chain's values (a
-  token symbol, `chainId` or a protocol address). Bound, it replaced that value everywhere in the
-  program, so a helper outside `main` read the argument instead. A bound `Int256` is a local of
-  `main` and is not refused.
+- **Changed**: `main`'s signature, arguments and return type come from the compiler. A compiled
+  program's `entryParams` is the compiler's ABI signature in SauceScript's spelling, and its new
+  `entrySignature` adds each parameter's ABI entry, the parameters bound with `args`, Solana's
+  `Account` slots and the declared return type, which `sauce compile`, `simulate` and `run` read
+  the cook's return data with. A comment in `main`'s signature is no longer read as part of a
+  parameter's name or type, so `encodeEntryArguments` and `--args` take the right values. Where the
+  `sauce` command still reads `main`'s text (the `--fund` wrapper), it reads the module's own
+  top-level `main`, past comments.
+- **Fixed**: `routes.compileSauceProgram`'s `args` are the compiler's own: a bound argument is a
+  constant of `main` alone, as the parameter was. One named like something the module declares, or
+  like one of the chain's values (a token symbol, `chainId`), now leaves that value as it is outside
+  `main`; bound as a define, it replaced the value everywhere, so a helper outside `main` read the
+  argument instead. A define named like a parameter given in `args` is still refused.
 - **Fixed**: The Ambient protocol document had the swap direction backwards. `isBuy: true` pays
   base and receives quote, and `inBaseQty` names the side `qty` counts, as Ambient defines them and
   as the `ambientSwap` action already sends them.
