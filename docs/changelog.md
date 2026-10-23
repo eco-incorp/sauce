@@ -112,8 +112,11 @@ MCP server build and send its cooks and Pot deployments, where before they only 
 simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
 
 Wallet policies on Solana measure the actual Pot named by each cook, including non-canonical
-Pot addresses and accounts loaded through lookup tables, so SOL and token limits cannot miss
-those outflows.
+Pot addresses, accounts loaded through lookup tables and cooks a program the transaction calls
+makes, so SOL and token limits cannot miss those outflows. A transaction whose lookup tables or
+calls to the Kitchen the endpoint does not report readably is refused where a limit applies.
+On Solana a policy counts balance changes only: a delegate approval (SPL Token `Approve` or
+`ApproveChecked`) is not limited. See [wallets](guides/cli-wallets.md).
 
 Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
 deployments instead of reporting success on an address with no code. Offline unsigned builders
