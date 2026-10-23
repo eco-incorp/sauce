@@ -949,9 +949,11 @@ export async function measureSvm(
   // account of a layout this does not read, that names one of those keys and loses lamports, may
   // have been the wallet's to command: what it loses counts as sent unless it arrives in the set.
   // The wallet or a Pot that the transaction gives to another program (System's Assign) leaves
-  // the set with all it holds: from then on that program, not the key, moves its lamports. (A Pot
-  // the Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot,
-  // still in the set.)
+  // the set with all it holds: from then on that program, not the key, moves its lamports. So does
+  // one the transaction turns into an account whose layout names another key over its lamports (a
+  // durable nonce account, still the System program's, with an outside authority). (A Pot the
+  // Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot, still
+  // in the set.)
   const keys = [...ours];
   const engine = v12SvmEngineProgramId();
   const held = (
@@ -961,9 +963,12 @@ export async function measureSvm(
   ): bigint => {
     if (state === null) return 0n;
     if (ours.has(account)) {
-      return program === undefined ||
-        state.owner === program ||
-        (account !== wallet && state.owner === engine)
+      const commanded = lamportKeys(state)?.every((key) => ours.has(key)) ?? true;
+
+      return commanded &&
+        (program === undefined ||
+          state.owner === program ||
+          (account !== wallet && state.owner === engine))
         ? state.lamports
         : 0n;
     }

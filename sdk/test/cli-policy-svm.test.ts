@@ -1617,6 +1617,35 @@ describeSvm(
       expect(keyAt(mint, 170)).toBe(other);
     });
 
+    it("counts the wallet's whole balance against native when the transaction makes it a nonce account another key commands", async () => {
+      // Still the System program's, but a durable nonce account now: its authority, a key outside,
+      // withdraws its lamports from then on, not the wallet's key.
+      const transaction = await signed([
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [{ address: wallet, role: AccountRole.WRITABLE_SIGNER }],
+          data: Uint8Array.of(...u32(8), ...u64(80n)),
+        },
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [
+            writable(wallet),
+            readonly(address("SysvarRecentB1ockHashes11111111111111111111")),
+            readonly(address("SysvarRent111111111111111111111111111111111")),
+          ],
+          data: Uint8Array.of(...u32(6), ...keyBytes(randomAddress())),
+        },
+      ]);
+      const balance = harness.svm.getBalance(wallet)!;
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(balance),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
     it("counts the wallet's whole balance against native when the transaction gives the wallet to another program", async () => {
       // System's Assign: from then on the program, not the wallet's key, moves its lamports.
       const transaction = await signed([
