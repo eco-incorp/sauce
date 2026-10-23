@@ -190,6 +190,52 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     expect(build("base", "const USDT = 5;\nreturn USDT;")).toBe(build("base", "return 5;"));
   });
 
+  it("a block's declaration is its own only in the block, and from the declaration on", () => {
+    // Base registers no USDT, so after the block `USDT` is the chain's zero: a return of it would
+    // be the zero address. The compiler scopes each binding to its block, loop or clause, and reads
+    // a name before a local declaration of it as the outer one.
+    const after = (block: string) =>
+      `function main(flag: Uint256): Address {\n  ${block}\n  return USDT;\n}`;
+    for (const block of [
+      "if (flag == 1) { const USDT = 1; require(USDT != 0); }",
+      "if (flag == 1) { if (flag == 2) { const USDT = 1; require(USDT != 0); } }",
+      "try { require(flag == 1); } catch (USDT) { }",
+      "for (const USDT of [1, 2]) { require(USDT != 0); }",
+      "for (let USDT = 0; USDT < 2; USDT++) { require(flag != USDT); }",
+    ]) {
+      const message = refusal("base", after(block));
+      expect(message).toMatch(/`USDT` is not a token on base/);
+      expect(message).toMatch(/--> main\.js:3:10/);
+    }
+    expect(
+      refusal(
+        "base",
+        "function main(): Address {\n  const early = USDT;\n  const USDT = 1;\n  return early;\n}",
+      ),
+    ).toMatch(/`USDT` is not a token on base[\s\S]*--> main\.js:2:17/);
+    // A namespace the same way: Linea has no Uniswap V3 factory.
+    expect(
+      refusal(
+        "linea",
+        "function main(flag: Uint256, a: Address, b: Address): Address {\n  if (flag == 1) { const UniswapV3 = 1; require(UniswapV3 != 0); }\n  return UniswapV3.Factory.getPool(a, b, 500);\n}",
+      ),
+    ).toMatch(/`UniswapV3\.Factory` is not deployed on linea[\s\S]*--> main\.js:3:10/);
+    // Inside its block, loop or clause the binding is the program's.
+    expect(
+      hex(
+        "base",
+        "function main(flag: Uint256): Address { if (flag == 1) { const USDT = 1; return USDT; } return 0; }",
+      ),
+    ).toBe(hex("base", "function main(flag: Uint256): Address { if (flag == 1) { return 1; } return 0; }"));
+    expect(() =>
+      hex("base", "function main(): Uint256 { let s = 0; for (const USDT of [1, 2]) { s = s + USDT; } return s; }"),
+    ).not.toThrow();
+    // A function's own `const`, before the use, holds for the rest of the function, past a block.
+    expect(build("base", "const USDT = 5;\nif (USDT == 5) { const x = 1; require(x != 0); }\nreturn USDT;")).toBe(
+      build("base", "const USDT = 5;\nif (USDT == 5) { const x = 1; require(x != 0); }\nreturn 5;"),
+    );
+  });
+
   it("a module the program imports is read the same way", () => {
     const helper = `export function owed(): Address { return USDT; }`;
     const spender = `export function spend(): Uint256 { USDC.approve(PancakeswapV3.Factory, 1); return 0; }`;

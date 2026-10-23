@@ -24,9 +24,9 @@
  *
  * The same read refuses what no chain can have: a contract a namespace does not have, an interface
  * used as a deployment, a family alias's contract more than one member has, a protocol used as a
- * contract, and `available(X)`, which is removed. A name the program declares is its own, in the
- * scope it is declared in: a function's parameters and declarations shadow a registry name in that
- * function only.
+ * contract, and `available(X)`, which is removed. A name the program declares is its own where the
+ * compiler reads it so, and nowhere else (`Scope`): a block's `const` hides a registry name only in
+ * that block and from its declaration on, so a use of the name after the block is the registry's.
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import type { AccessorTarget } from "./protocol-rewrite.js";
@@ -73,16 +73,41 @@ type Node = AstNode & Record<string, unknown>;
 const prop = <T = Node>(node: AstNode, key: string): T => (node as Node)[key] as T;
 const nameOf = (node: AstNode): string => prop<string>(node, "name");
 
-/** A scope: the names one function, or the module, declares. */
+/**
+ * A scope, and where each name it declares starts to hide a registry name. The module's names and a
+ * function's parameters hide one everywhere in it: the compiler reads a module's declarations in any
+ * order. A `let` or `const` of a block (a function's body, a branch, a loop's) hides one from the end
+ * of its declarator to the end of the block, and a loop's or a `catch` clause's binding only in the
+ * loop or the clause: the compiler scopes each to its block and reads a name before its local
+ * declaration as the outer one (and refuses `var`).
+ */
 interface Scope {
-  readonly names: ReadonlySet<string>;
+  readonly names: ReadonlyMap<string, number>;
   readonly parent?: Scope;
 }
 
-const shadowed = (scope: Scope | undefined, name: string): boolean => {
-  for (let s = scope; s !== undefined; s = s.parent) if (s.names.has(name)) return true;
+/** Whether `name`, read at `position`, is a name the program declares there. */
+const shadowed = (scope: Scope | undefined, name: string, position: number): boolean => {
+  for (let s = scope; s !== undefined; s = s.parent) {
+    const from = s.names.get(name);
+    if (from !== undefined && from <= position) return true;
+  }
   return false;
 };
+
+/** A scope of `bindings`, each a pattern and the position it hides its names from. */
+function scopeOf(
+  bindings: readonly (readonly [AstNode | null | undefined, number])[],
+  parent: Scope | undefined,
+): Scope {
+  const names = new Map<string, number>();
+  for (const [pattern, from] of bindings) {
+    const bound = new Set<string>();
+    collectPatternNames(pattern, bound);
+    for (const name of bound) names.set(name, Math.min(from, names.get(name) ?? from));
+  }
+  return { names, parent };
+}
 
 const isFunction = (node: AstNode): boolean =>
   node.type === "FunctionDeclaration" ||
@@ -106,43 +131,59 @@ function childrenOf(node: AstNode): AstNode[] {
   return out.sort((a, b) => a.start - b.start);
 }
 
-/** The names `root` (a function or the program) declares, not counting a nested function's own. */
-function declaredIn(root: AstNode): Set<string> {
-  const names = new Set<string>();
-  if (isFunction(root)) {
-    if (root.type === "FunctionExpression") collectPatternNames(prop(root, "id"), names);
-    for (const param of prop<AstNode[]>(root, "params") ?? []) collectPatternNames(param, names);
-  }
-  const visit = (node: AstNode): void => {
-    switch (node.type) {
-      case "VariableDeclarator":
-        collectPatternNames(prop(node, "id"), names);
-        break;
-      case "FunctionDeclaration":
-      case "ClassDeclaration":
-        collectPatternNames(prop(node, "id"), names);
-        return;
-      case "CatchClause":
-        collectPatternNames(prop(node, "param"), names);
-        break;
-      case "ImportSpecifier":
-      case "ImportDefaultSpecifier":
-      case "ImportNamespaceSpecifier":
-        collectPatternNames(prop(node, "local"), names);
-        return;
-      default:
-        if (isFunction(node)) return;
+/** The module's scope: everything it declares at its top level, everywhere in it. */
+function moduleScope(program: AstNode): Scope {
+  const bindings: [AstNode | null | undefined, number][] = [];
+  for (const statement of prop<AstNode[]>(program, "body")) {
+    const declaration =
+      (statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportDefaultDeclaration") &&
+      prop<AstNode | null>(statement, "declaration")
+        ? prop<AstNode>(statement, "declaration")
+        : statement;
+    if (declaration.type === "VariableDeclaration") {
+      for (const declarator of prop<AstNode[]>(declaration, "declarations")) {
+        bindings.push([prop(declarator, "id"), 0]);
+      }
+    } else if (
+      declaration.type === "FunctionDeclaration" ||
+      declaration.type === "ClassDeclaration"
+    ) {
+      bindings.push([prop(declaration, "id"), 0]);
+    } else if (declaration.type === "ImportDeclaration") {
+      for (const specifier of prop<AstNode[]>(declaration, "specifiers")) {
+        bindings.push([prop(specifier, "local"), 0]);
+      }
     }
-    for (const child of childrenOf(node)) visit(child);
-  };
-  const body = isFunction(root) ? prop<AstNode>(root, "body") : root;
-  if (body.type === "Program" || body.type === "BlockStatement") {
-    for (const child of childrenOf(body)) visit(child);
-  } else {
-    visit(body);
   }
+  return scopeOf(bindings, undefined);
+}
 
-  return names;
+/** A function's scope: its parameters, and a function expression's own name, everywhere in it. */
+function functionScope(fn: AstNode, parent: Scope | undefined): Scope {
+  return scopeOf(
+    [
+      ...(fn.type === "FunctionExpression" ? [[prop<AstNode>(fn, "id"), 0] as const] : []),
+      ...(prop<AstNode[]>(fn, "params") ?? []).map((param) => [param, 0] as const),
+    ],
+    parent,
+  );
+}
+
+/** A statement list's scope: each `let`/`const` from the end of its declarator, a function or class
+ *  everywhere in the list. */
+function blockScope(list: readonly AstNode[], parent: Scope | undefined): Scope {
+  const bindings: [AstNode | null | undefined, number][] = [];
+  for (const statement of list) {
+    if (statement.type === "VariableDeclaration") {
+      for (const declarator of prop<AstNode[]>(statement, "declarations")) {
+        bindings.push([prop(declarator, "id"), declarator.end]);
+      }
+    } else if (statement.type === "FunctionDeclaration" || statement.type === "ClassDeclaration") {
+      bindings.push([prop(statement, "id"), 0]);
+    }
+  }
+  return scopeOf(bindings, parent);
 }
 
 /** `0` or `0n`, as written. */
@@ -230,14 +271,19 @@ export function checkNames(
       .map(([name]) => name)
       .join(", ");
 
-  /** The namespace `key` names in `scope`, when it is a registry namespace there. */
-  const namespaceOf = (key: string, at: Scope | undefined): NamespaceEntry | undefined =>
-    shadowed(at, key) || defined.has(key) ? undefined : names.namespaces.get(key);
+  /** The namespace `node`, an identifier, names in `at`, when it is a registry namespace there. */
+  const namespaceOf = (node: AstNode, at: Scope | undefined): NamespaceEntry | undefined => {
+    const key = nameOf(node);
+    return shadowed(at, key, node.start) || defined.has(key)
+      ? undefined
+      : names.namespaces.get(key);
+  };
 
-  /** The chain `key` names in `scope`, when it is a chain key there. On a Solana chain, its own
-   *  name (`Solana.pda(…)`) is the Solana lowering's. */
-  const chainKeyOf = (key: string, at: Scope | undefined): CanonicalChain | undefined => {
-    if (shadowed(at, key) || defined.has(key)) return undefined;
+  /** The chain `node`, an identifier, names in `at`, when it is a chain key there. On a Solana
+   *  chain, its own name (`Solana.pda(…)`) is the Solana lowering's. */
+  const chainKeyOf = (node: AstNode, at: Scope | undefined): CanonicalChain | undefined => {
+    const key = nameOf(node);
+    if (shadowed(at, key, node.start) || defined.has(key)) return undefined;
     const on = chainOfKey(key);
     return on !== undefined && chain.kind === "svm" && on.kind === "svm" ? undefined : on;
   };
@@ -348,7 +394,7 @@ export function checkNames(
     const target = unwrap(node);
     if (target.type === "Identifier") {
       const name = nameOf(target);
-      if (shadowed(at, name) || defined.has(name)) return undefined;
+      if (shadowed(at, name, target.start) || defined.has(name)) return undefined;
       if (names.namespaces.has(name) && !role.startsWith(".")) {
         const namespace = names.namespaces.get(name)!;
         fail(
@@ -357,7 +403,7 @@ export function checkNames(
             `\`${name}.<Contract>\` (it has ${contractsOf(namespace)}).`,
         );
       }
-      if (chainKeyOf(name, at) !== undefined && !role.startsWith(".")) {
+      if (chainKeyOf(target, at) !== undefined && !role.startsWith(".")) {
         fail(
           target,
           `\`${name}\` is a chain: name a contract on it, \`${name}.<Protocol>.<Contract>\`.`,
@@ -382,7 +428,7 @@ export function checkNames(
       if (chain.kind === "svm" && `${nameOf(object)}.${name}` in SVM_VENUE_NAMESPACES) {
         return undefined;
       }
-      const namespace = namespaceOf(nameOf(object), at);
+      const namespace = namespaceOf(object, at);
       if (namespace !== undefined) {
         return member(
           target,
@@ -393,7 +439,7 @@ export function checkNames(
           role,
         );
       }
-      const on = chainKeyOf(nameOf(object), at);
+      const on = chainKeyOf(object, at);
       if (on !== undefined) {
         named(on, object);
         if (!role.startsWith(".")) {
@@ -413,7 +459,7 @@ export function checkNames(
       const head = unwrap(prop(object, "object"));
       const middle = prop<AstNode>(object, "property");
       if (head.type !== "Identifier" || middle.type !== "Identifier") return undefined;
-      const on = chainKeyOf(nameOf(head), at);
+      const on = chainKeyOf(head, at);
       if (on === undefined) return undefined;
       named(on, head);
       const namespace = chainNamespaces(on).get(nameOf(middle));
@@ -531,7 +577,9 @@ export function checkNames(
     if (node === null || node === undefined) return false;
     if (node.type === "ReturnStatement" || node.type === "ThrowStatement") return true;
     if (node.type === "BlockStatement") {
-      return prop<AstNode[]>(node, "body").some((statement) => exits(statement, at));
+      const list = prop<AstNode[]>(node, "body");
+      const inner = blockScope(list, at);
+      return list.some((statement) => exits(statement, inner));
     }
     if (node.type === "IfStatement") {
       const taken = valueOf(prop(node, "test"), at);
@@ -594,8 +642,10 @@ export function checkNames(
     }
   };
 
-  /** Visits the statements of a list, skipping the rest after a decided `if` that always exits. */
-  const statements = (list: readonly AstNode[], at: Scope | undefined): void => {
+  /** Visits the statements of a list in its own scope, skipping the rest after a decided `if` that
+   *  always exits. */
+  const statements = (list: readonly AstNode[], outer: Scope | undefined): void => {
+    const at = blockScope(list, outer);
     let dead = false;
     for (const statement of list) {
       if (dead) {
@@ -619,7 +669,7 @@ export function checkNames(
     if (isTypeDeclaration(node.type)) return;
 
     if (isFunction(node)) {
-      const inner: Scope = { names: declaredIn(node), parent: at };
+      const inner = functionScope(node, at);
       for (const param of prop<AstNode[]>(node, "params") ?? []) defaults(param, inner);
       const body = prop<AstNode>(node, "body");
       if (body.type === "BlockStatement") statements(prop(body, "body"), inner);
@@ -689,14 +739,42 @@ export function checkNames(
         visit(prop(node, "test"), "test", "value", at);
         visit(prop(node, "body"), "value", "value", at);
         return;
-      case "ForStatement":
+      case "ForStatement": {
+        // A `let`/`const` of the loop's head is the loop's, from its declarator on.
+        const init = prop<AstNode | null>(node, "init");
+        const loop = init?.type === "VariableDeclaration" ? blockScope([init], at) : at;
         for (const key of ["init", "update"]) {
           const part = prop<AstNode | null>(node, key);
-          if (part) visit(part, "value", "value", at);
+          if (part) visit(part, "value", "value", loop);
         }
-        if (prop<AstNode | null>(node, "test")) visit(prop(node, "test"), "test", "value", at);
-        visit(prop(node, "body"), "value", "value", at);
+        if (prop<AstNode | null>(node, "test")) visit(prop(node, "test"), "test", "value", loop);
+        visit(prop(node, "body"), "value", "value", loop);
         return;
+      }
+      case "ForOfStatement":
+      case "ForInStatement": {
+        // Its binding is the body's: what it iterates is read outside it.
+        const left = prop<AstNode>(node, "left");
+        const loop =
+          left.type === "VariableDeclaration"
+            ? scopeOf(
+                prop<AstNode[]>(left, "declarations").map(
+                  (declarator) => [prop<AstNode>(declarator, "id"), 0] as const,
+                ),
+                at,
+              )
+            : at;
+        visit(left, "value", "value", at);
+        visit(prop(node, "right"), "value", "value", at);
+        visit(prop(node, "body"), "value", "value", loop);
+        return;
+      }
+      case "CatchClause": {
+        const param = prop<AstNode | null>(node, "param");
+        defaults(param, at);
+        visit(prop(node, "body"), "value", "value", scopeOf([[param, 0]], at));
+        return;
+      }
       case "UnaryExpression":
         visit(
           prop(node, "argument"),
@@ -747,7 +825,7 @@ export function checkNames(
         if (
           target.type === "Identifier" &&
           nameOf(target) === AVAILABLE &&
-          !shadowed(at, AVAILABLE) &&
+          !shadowed(at, AVAILABLE, target.start) &&
           !defined.has(AVAILABLE)
         ) {
           fail(node, "`available(X)` is removed: test the name itself, `if (X)`.");
@@ -757,7 +835,7 @@ export function checkNames(
         const absent =
           target.type === "Identifier" &&
           nameOf(target) === "require" &&
-          !shadowed(at, "require") &&
+          !shadowed(at, "require", target.start) &&
           condition !== undefined &&
           valueOf(condition, at) === false
             ? absentIn(condition, at)
@@ -854,7 +932,7 @@ export function checkNames(
     }
   };
 
-  const module: Scope = { names: declaredIn(program) };
+  const module = moduleScope(program);
   visit(program, "value", "value", module);
 
   return { chainKeys: [...chainKeys.values()] };
