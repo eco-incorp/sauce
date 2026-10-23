@@ -49,7 +49,12 @@ const USDC = getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913");
 const PERMIT2 = getAddress("0x000000000022D473030F116dDEE9F6B43aC78BA3");
 const OTHER_TOKEN = getAddress("0x1111111111111111111111111111111111111112");
 const RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
-const POT = getAddress("0x7777777777777777777777777777777777777777");
+const WALLET = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
+/** The wallet's own Pot, at its default salt, which the client below answers for as a Pot does. */
+const POT = getAddress(v12PredictPot(WALLET) as Address);
+/** Another owner's Pot, as genuine as the wallet's: RECIPIENT's. */
+const OTHERS_POT = getAddress(v12PredictPot(RECIPIENT) as Address);
+const POT_OWNERS: Record<Address, Address> = { [POT]: WALLET, [OTHERS_POT]: RECIPIENT };
 const NATIVE = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
@@ -78,16 +83,20 @@ function client(logs: Log[] | null, decimals = 18): PublicClient {
 
       return [{ calls: blocks[0]!.calls.map(() => ({ status: "success", logs, data: "0x" })) }];
     },
-    readContract: async ({ functionName }: { functionName: string }) => {
+    readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
       if (functionName === "decimals") return decimals;
-      throw new Error("no symbol");
+      // A Pot answers for itself: its owner, its salt (the default) and its Kitchen.
+      const owner = POT_OWNERS[getAddress(address)];
+      if (owner !== undefined && functionName === "owner") return owner;
+      if (owner !== undefined && functionName === "userSalt") return pad("0x00", { size: 32 });
+      if (owner !== undefined && functionName === "kitchen") return getAddress(v12KitchenAddress());
+      throw new Error(`no ${functionName}`);
     },
   } as unknown as PublicClient;
 }
 
 let dir: string;
 let wallet: WalletInfo;
-const WALLET = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sauce-policy-"));
@@ -295,6 +304,61 @@ describe("the guard", () => {
     expect((await refused(guard.evm(untraced, cook))).message).toMatch(
       /native is limited, and the endpoint does not trace native transfers/,
     );
+  });
+
+  it("counts what the wallet pays a contract that is not its own Pot, whatever its calldata says", async () => {
+    const guard = guarded({
+      native: { perTransaction: "0.01" },
+      tokens: { USDC: { perTransaction: "1.5" } },
+    });
+    const value = parseUnits("0.02", 18);
+    const cookShaped = (to: Address, signed: boolean, paid: bigint) => ({
+      to,
+      data: signed
+        ? encodeFunctionData({
+            abi: v12PotAbi,
+            functionName: "cookSigned",
+            args: [RECIPIENT, "0x", 0n, 0n, 0n, WALLET, "0x"],
+          })
+        : encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: paid,
+    });
+    // A contract that is no Pot, sent a cook's calldata, and another owner's genuine Pot sent a
+    // signed cook: the native coin and the USDC the wallet pays either leave the wallet. (The node
+    // traces native transfers: a zero-value one beside the USDC says so.)
+    const verdicts = [];
+    for (const [to, signed] of [
+      [RECIPIENT, false],
+      [OTHERS_POT, true],
+    ] as const) {
+      for (const [moved, paid] of [
+        [client([transfer(NATIVE, WALLET, to, value)]), value],
+        [
+          client([
+            transfer(NATIVE, WALLET, to, 0n),
+            transfer(USDC, WALLET, to, parseUnits("2", 6)),
+          ]),
+          0n,
+        ],
+      ] as const) {
+        verdicts.push(
+          await guard.evm(moved, cookShaped(to, signed, paid)).then(
+            () => "let through",
+            (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+          ),
+        );
+      }
+    }
+    expect(verdicts).toEqual([
+      "native.perTransaction",
+      "tokens.USDC.perTransaction",
+      "native.perTransaction",
+      "tokens.USDC.perTransaction",
+    ]);
+    // The wallet's own Pot is its own: what it pays in stays the wallet's.
+    await expect(
+      guard.evm(client([transfer(NATIVE, WALLET, POT, value)]), cookShaped(POT, false, value)),
+    ).resolves.toBeDefined();
   });
 
   describe("on Arc, whose native USDC is also its ERC-20", () => {

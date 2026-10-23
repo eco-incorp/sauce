@@ -104,6 +104,7 @@ import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
+import { evmPotRelease } from "./pots.js";
 import {
   accountsNow,
   approvesOn,
@@ -533,10 +534,40 @@ export async function measureEvm(
 ): Promise<Measured[]> {
   const results = rehearsed ?? (await rehearsePlan(client, wallet, calls));
   const measured: Measured[] = [];
+  // The wallet's own Pots: one an earlier call of these deploys for it, or one the chain shows is,
+  // its owner the wallet and its address its (owner, salt) under a Kitchen a release records. A
+  // cook's calldata sent anywhere else makes no Pot of it: what the wallet pays there leaves it.
+  const deployed = new Set<string>();
+  const owned = new Map<string, Promise<boolean>>();
+  const ownPot = (to: Address): Promise<boolean> => {
+    if (deployed.has(to)) return Promise.resolve(true);
+    const known = owned.get(to);
+    if (known !== undefined) return known;
+    const read = <T>(functionName: "owner" | "userSalt" | "kitchen") =>
+      client.readContract({ address: to, abi: v12PotAbi, functionName }) as Promise<T>;
+    const found = Promise.all([
+      read<Address>("owner"),
+      read<Hex>("userSalt"),
+      read<Address>("kitchen"),
+    ])
+      .then(
+        ([owner, salt, kitchen]) =>
+          getAddress(owner) === getAddress(wallet) &&
+          evmPotRelease({ kitchen, owner, salt, pot: to }) !== undefined,
+      )
+      .catch(() => false);
+    owned.set(to, found);
+
+    return found;
+  };
   for (const [index, call] of calls.entries()) {
-    const cook = COOKS.has(call.data.slice(0, 10).toLowerCase()) ? getAddress(call.to) : undefined;
+    const cook =
+      COOKS.has(call.data.slice(0, 10).toLowerCase()) && (await ownPot(getAddress(call.to)))
+        ? getAddress(call.to)
+        : undefined;
     const ours = new Set<string>([getAddress(wallet), ...(cook === undefined ? [] : [cook])]);
     const deploysPot = ownPotDeployed(call, wallet);
+    if (deploysPot !== undefined) deployed.add(deploysPot);
     const base = {
       chain,
       to: [(deploysPot ?? call.to).toLowerCase()],
