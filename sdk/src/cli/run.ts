@@ -2120,7 +2120,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       json: {
         type: "boolean",
-        help: "Changes nothing: the JSON is on stdout and the notes on stderr either way",
+        help: "Signing a cook prints its JSON either way; a sent --cancel prints JSON, not its receipt",
       },
       ...HELP,
       ...ARGS,
