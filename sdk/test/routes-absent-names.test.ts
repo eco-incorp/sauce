@@ -153,11 +153,11 @@ describe("a name the chain lacks is zero: one program, the venue only where the 
         "if (!PancakeswapV3.Factory || PancakeswapV3.Factory.getPool(USDC, WETH, 500) == 0) { return 1; }\nreturn 0;",
       ),
     ).toBe(build("optimism", "return 1;"));
-    // The value of `X || Y` is `X` where the chain has it, else `Y`.
+    // The first of two contracts the chain has is `X ? X : Y`.
     expect(
       build(
         "optimism",
-        "const either: Address = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn either;",
+        "const either: Address = PancakeswapV3.Factory ? PancakeswapV3.Factory : UniswapV3.Factory;\nreturn either;",
       ),
     ).toBe(build("optimism", "const either: Address = UniswapV3.Factory;\nreturn either;"));
   });
@@ -186,26 +186,45 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
       "the other arm of its test",
       "if (PancakeswapV3.Factory) { return 1; }\nreturn PancakeswapV3.Factory.getPool(USDC, WETH, 500);",
     ],
-    [
-      "the value of `X && …`, which is `X` where the chain lacks it",
-      "const both = PancakeswapV3.Factory && UniswapV3.Factory;\nreturn both;",
-    ],
-    [
-      "the value of `X || Y` where the chain lacks both",
-      "const either: Address = Curve.ThreePool || PancakeswapV3.Factory;\nreturn either;",
-    ],
-    [
-      "the value of `Y && X` given as a binding's address",
-      "return UniswapV3.Factory.at(UniswapV3.Factory && PancakeswapV3.Factory).getPool(USDC, WETH, 500);",
-    ],
-    [
-      "the value of `!Y || X` given as an argument",
-      "USDC.approve(!UniswapV3.Factory || PancakeswapV3.Factory, 1);",
-    ],
   ])("%s", (_what, body) => {
     const message = refusal("optimism", `function main() {\n${body}\n}`);
     expect(message).toMatch(/`PancakeswapV3\.Factory` is not deployed on optimism/);
     expect(message).toMatch(/--> main\.js:\d+:\d+/);
+  });
+
+  it("`X || Y` and `X && Y` give true or false, so a contract under them is only a test: as a value it is refused on every chain", () => {
+    for (const [body, expression] of [
+      [
+        "const either: Address = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn either;",
+        "PancakeswapV3.Factory || UniswapV3.Factory",
+      ],
+      ["const either: Address = 0 || UniswapV3.Factory;\nreturn either;", "0 || UniswapV3.Factory"],
+      [
+        "const both = PancakeswapV3.Factory && UniswapV3.Factory;\nreturn both;",
+        "PancakeswapV3.Factory && UniswapV3.Factory",
+      ],
+      [
+        "return UniswapV3.Factory.at(UniswapV3.Factory && PancakeswapV3.Factory).getPool(USDC, WETH, 500);",
+        "UniswapV3.Factory && PancakeswapV3.Factory",
+      ],
+      [
+        "USDC.approve(!UniswapV3.Factory || PancakeswapV3.Factory, 1);",
+        "!UniswapV3.Factory || PancakeswapV3.Factory",
+      ],
+    ] as const) {
+      for (const chain of ["optimism", "base"]) {
+        const message = refusal(chain, `function main() {\n${body}\n}`);
+        expect(message).toMatch(
+          new RegExp(`\`${expression.replace(/[.|&!]/g, "\\$&")}\` is a value here`),
+        );
+        expect(message).toMatch(/gives true or false, never one of its sides/);
+        expect(message).toMatch(new RegExp(`--> main\\.js:2:${body.indexOf(expression) + 1}`));
+      }
+    }
+    // A test of either is a test: `if`, `?:`, `!`, a comparison with zero.
+    expect(() =>
+      build("optimism", "if (PancakeswapV3.Factory || UniswapV3.Factory) { return 1; }\nreturn 0;"),
+    ).not.toThrow();
   });
 
   it("a token the chain lacks, used: a transfer, a balance, an argument", () => {
@@ -687,8 +706,8 @@ const SPELLINGS: Record<string, (source: string) => string> = {
 describe("a test of the name compiles to the bytes available(X) did", () => {
   const cases = BEFORE.flatMap((entry) =>
     Object.entries(SPELLINGS)
-      // A decision held as a value is a comparison: `USDT && …` is `USDT` where the chain lacks
-      // it, a value a chain without it may not use.
+      // A decision held as a value is a comparison: `&&` gives true or false, so a contract under
+      // it, where the whole is a value, is refused.
       .filter(([spelling]) => spelling !== "if (X)" || !entry.available.includes("const both"))
       .map(
         ([spelling, spell]) =>

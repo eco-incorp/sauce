@@ -773,20 +773,37 @@ export function checkNames(
           visit(right, "value", "value", at);
           return;
         }
-        // Where the left side decides the whole, the right side is not compiled, and the whole is
-        // the left side (`X || y` with `X` present is `X`; `X && y` with `X` lacking is `X`): a test
-        // only tests it, while a value is it, which a name the chain lacks must not be. Where it
-        // does not, the left side is only tested, and the whole is the right side.
-        const decided = valueOf(left, at);
-        if (decided === undefined) {
-          visit(left, mode, "value", at);
-          visit(right, mode, "value", at);
-          return;
+        // `&&` and `||` give true or false, never one of their sides, so each side is a test. But
+        // the compiler gives a contract's binding back as the whole (`0 || UniswapV3.Factory` is
+        // its address): a contract under them, where the whole is a value, is refused on every
+        // chain, naming the `?:` that says which side is meant.
+        if (mode === "value") {
+          const contract = [left, right].find(
+            (side) => quietReference(side, at)?.kind === "contract",
+          );
+          if (contract !== undefined) {
+            const [l, r] = [left, right].map((side) => source.slice(side.start, side.end));
+            fail(
+              node,
+              `\`${source.slice(node.start, node.end)}\` is a value here, and \`${operator}\` gives ` +
+                "true or false, never one of its sides: a contract under it is only a test. " +
+                (operator === "||"
+                  ? `For the first the chain has, write \`${l} ? ${l} : ${r}\`; for whether it ` +
+                    `has either, \`${l} != 0 || ${r} != 0\`.`
+                  : `For the second where the chain has the first, write \`${l} ? ${r} : 0\`; for ` +
+                    `whether it has both, \`${l} != 0 && ${r} != 0\`.`),
+            );
+          }
         }
-        const shortCircuits = decided === (operator === "||");
-        visit(left, shortCircuits ? mode : "test", "value", at);
-        if (!shortCircuits) visit(right, mode, "value", at);
-        else dead.push({ start: right.start, end: right.end, kind: "expression" });
+        // Where the left side decides the whole, the right side is not compiled. A side that is
+        // itself `&&` or `||` is read as the whole is, so a contract under it is refused too.
+        const sideMode = (side: AstNode): Mode =>
+          mode === "value" && unwrap(side).type === "LogicalExpression" ? "value" : "test";
+        const decided = valueOf(left, at);
+        visit(left, sideMode(left), "value", at);
+        if (decided === undefined || decided !== (operator === "||")) {
+          visit(right, sideMode(right), "value", at);
+        } else dead.push({ start: right.start, end: right.end, kind: "expression" });
         return;
       }
       case "BinaryExpression": {
