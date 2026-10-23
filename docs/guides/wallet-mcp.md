@@ -186,6 +186,27 @@ that would fail, sends them in order, and stops at the first that does not succe
   `main` returned. Its blockhash expires in about a minute: one signed later is refused, to build
   and sign again.
 
+## A cook someone else sends
+
+A [signed cook](signed-cooks.md) splits the cook in two: the Pot's owner signs it as typed data,
+and another account sends it and pays the gas. On Base or Ethereum:
+
+```text
+sauce_signed_cook { source, chain: "base", owner: "0xYou", args: [...] }
+  → { pot, typedData, digest, nonce, deadline, maxExecutionFee, … }
+           the owner's wallet signs typedData (eth_signTypedData_v4)
+sauce_signed_cook { …the same inputs, nonce, deadline, maxExecutionFee, signature }
+  → { …, signature, cook: { chainId, to, data, value } }
+           any account sends cook, with exactly its value
+```
+
+Give the second call the `nonce`, `deadline` and `maxExecutionFee` the first returned, so it
+checks the signature over the same cook. `cook` is an ordinary transaction for whichever wallet
+sends it, `evm_send` included, and a signer's signed bytes go to `sauce_send`. While the Pot has no
+code, `deployPot` comes first, for any account to send. On a local server with wallets,
+`sauce_sign` signs with one of them, and `sauce_wallet_send` sends `cook` from any wallet
+([What a local server keeps](mcp-local.md#signed-cooks)).
+
 ## A Solana cook of several transactions
 
 Some Solana cooks need more than one transaction: a program too large for one, staged in a Kitchen

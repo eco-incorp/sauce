@@ -146,6 +146,16 @@ adds what its receipt shows: `moves`, in order and by role, `leftInPot`, and `su
 
 Wallet sends hold to the [supported chains](mcp-tools.md#supported-and-preview-chains) too.
 
+### Signed cooks
+
+`sauce_sign` `{ wallet, source, chain, args, … }` signs a cook with a wallet, as the Pot's owner,
+for another account to send: it is `sauce sign --wallet`, and returns the signature and `cook`
+([Signed cooks](signed-cooks.md)). `sauce_wallet_send` takes that result, or `cook` alone, and sends
+it from whichever wallet you name, with exactly its value. A wallet whose policy sets a `native` or
+`tokens` limit refuses to sign one: a signed cook runs when someone else sends it, on what the chain
+holds then, so nothing the wallet simulates when it signs bounds what it moves. `chains` and `to`
+still apply, the Pot as the address.
+
 ## The Pots
 
 Over stdio the server is the `sauce` command for an agent that has no shell, so it keeps what the

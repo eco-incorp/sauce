@@ -45,6 +45,7 @@ import {
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { getChain } from "../chains/index.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { v12PotAbi } from "../evm/engine.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
@@ -301,8 +302,12 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
 // An EVM chain
 // ---------------------------------------------------------------------------------------------
 
-/** `cook(address,bytes)` and `deployPot(address,bytes32)`, which a send names. */
+/** `cook(address,bytes)`, a signed cook's `cookSigned(…)` and `deployPot(address,bytes32)`, which a
+ *  send names. */
 const COOK = toFunctionSelector("function cook(address engine, bytes program)");
+const COOK_SIGNED = toFunctionSelector(
+  v12PotAbi.find((item) => item.type === "function" && item.name === "cookSigned")!,
+);
 const DEPLOY_POT = toFunctionSelector("function deployPot(address owner, bytes32 salt)");
 
 interface SignedEvm {
@@ -356,6 +361,7 @@ async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
 const evmWhat = (tx: SignedEvm, index: number): string => {
   const selector = tx.data.slice(0, 10).toLowerCase();
   if (selector === COOK) return `cook on Pot ${tx.to}`;
+  if (selector === COOK_SIGNED) return `signed cook on Pot ${tx.to}`;
   if (selector === DEPLOY_POT) return `Kitchen.deployPot at ${tx.to}`;
 
   return `transaction ${index + 1} to ${tx.to}`;
@@ -533,7 +539,7 @@ async function evmEntry(
   const cook =
     result.status === "success" &&
     result.receipt !== undefined &&
-    tx.data.toLowerCase().startsWith(COOK)
+    [COOK, COOK_SIGNED].some((selector) => tx.data.toLowerCase().startsWith(selector))
       ? // What was sent stands whatever reading its receipt back does.
         await cookReport(client, chain, result.receipt, {
           sender: tx.from,

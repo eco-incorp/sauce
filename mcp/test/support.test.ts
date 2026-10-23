@@ -116,6 +116,26 @@ describe("refused on a preview chain, before the call's endpoint", () => {
     assert.equal(refusal.action, "building the cook transaction");
     assert.deepEqual(methods, []);
   });
+
+  it("sauce_signed_cook, for the program's chain and for a cancellation", async () => {
+    const pay = { source: PAY, owner: OWNER, args: [RECIPIENT, "1"], rpcUrl: url };
+    const signing = refused(
+      await mcp.call("sauce_signed_cook", { ...pay, chain: "optimism" }),
+      "optimism",
+    );
+    assert.equal(signing.action, "signing a cook");
+    const cancelling = refused(
+      await mcp.call("sauce_signed_cook", {
+        chain: "arbitrum",
+        owner: OWNER,
+        cancel: ["1"],
+        rpcUrl: url,
+      }),
+      "arbitrum",
+    );
+    assert.equal(cancelling.action, "cancelling signed cooks");
+    assert.deepEqual(methods, []);
+  });
 });
 
 describe("sauce_send, refused by the chain its transactions are signed for", () => {

@@ -1,0 +1,101 @@
+{
+  "source": "sdk/test/evm/fixtures/OldPotDeployer.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "router_",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "executionFee_",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "initCode",
+          "type": "bytes"
+        },
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "salt",
+          "type": "bytes32"
+        }
+      ],
+      "name": "deploy",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "pot",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "executionFee",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "potParameters",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "router",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "creationCode": "0x60c0604052348015600e575f5ffd5b50604051610352380380610352833981016040819052602b916040565b6001600160a01b0390911660805260a0526075565b5f5f604083850312156050575f5ffd5b82516001600160a01b03811681146065575f5ffd5b6020939093015192949293505050565b60805160a0516102be6100945f395f605301525f60e501526102be5ff3fe608060405234801561000f575f5ffd5b506004361061004a575f3560e01c806340e9903b1461004e57806381fee50914610088578063947453db146100b5578063f887ea40146100e0575b5f5ffd5b6100757f000000000000000000000000000000000000000000000000000000000000000081565b6040519081526020015b60405180910390f35b5f8054600154604080516001600160a01b039093168352602083019190915281019190915260600161007f565b6100c86100c33660046101f8565b610107565b6040516001600160a01b03909116815260200161007f565b6100c87f000000000000000000000000000000000000000000000000000000000000000081565b5f80546001600160a01b0319166001600160a01b0384161781556001829055604080516020601f8701819004810282018101909252858152829187908790819084018382808284375f920182905250604080516001600160a01b038b166020820152908101899052949550936060019250610180915050565b604051602081830303815290604052805190602001209050808251602084015ff592506001600160a01b0383166101ee5760405162461bcd60e51b815260206004820152600e60248201526d18dc99585d194c8819985a5b195960921b604482015260640160405180910390fd5b5050949350505050565b5f5f5f5f6060858703121561020b575f5ffd5b843567ffffffffffffffff811115610221575f5ffd5b8501601f81018713610231575f5ffd5b803567ffffffffffffffff811115610247575f5ffd5b876020828401011115610258575f5ffd5b6020918201955093508501356001600160a01b0381168114610278575f5ffd5b939692955092936040013592505056fea2646970667358221220684841f4c42fa73b33c440b47d32af8a66d1311cf8438697a62aef2e3abd810f64736f6c63430008240033"
+}

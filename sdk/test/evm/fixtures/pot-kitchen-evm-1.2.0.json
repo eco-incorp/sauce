@@ -1,0 +1,233 @@
+{
+  "$comment": [
+    "The Pot kitchen-evm 1.2.0 mints: a Pot from before signed cooks, which has no cookSigned. creationCode is contracts.Pot.bytecode of that release's abis.json (GitHub Packages @eco-incorp/kitchen-evm@1.2.0, commit ce49eef5f00e6349124b1b2fd81591ce0bcde81d), copied verbatim.",
+    "Pinned by its hash: keccak256(creationCode) is the potInitCodeHash the kitchen-evm 1.2.0 pin of sdk/src/deployments/releases.json commits (the compiler 2.5.0 row), and test/evm/signed-cook.e2e.test.ts asserts it. The release's abis.json itself is pinned there by sha256 dce996640a90420ae21fcf8b6447cc856af1bde4d5587ed29a149a18779510cd."
+  ],
+  "package": "kitchen-evm",
+  "version": "1.2.0",
+  "commit": "ce49eef5f00e6349124b1b2fd81591ce0bcde81d",
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "fallback",
+      "stateMutability": "payable"
+    },
+    {
+      "type": "receive",
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "cook",
+      "inputs": [
+        {
+          "name": "engine",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "program",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "eval",
+      "inputs": [
+        {
+          "name": "program",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "gateSalt",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "inFlightEngine",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "kitchen",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "router",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "setRouter",
+      "inputs": [
+        {
+          "name": "newRouter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "userSalt",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "RouterSet",
+      "inputs": [
+        {
+          "name": "router",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "EmptyProgram",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "EngineHasNoCode",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "FeeNotPaid",
+      "inputs": [
+        {
+          "name": "required",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "provided",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "FeeTransferFailed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotInFlightEngine",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotOwner",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RouterFixed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RouterHasNoCode",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RouterUnset",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SharedRouterNotFixed",
+      "inputs": []
+    }
+  ],
+  "creationCode": "0x6101208060405234610203576381fee50960e01b8152606081600481335afa801561020f575f905f925f9161021a575b506040516303e21fa960e61b815291602083600481335afa92831561020f575f936101cf575b506001600160a01b0383169384156101c0576001600160a01b038216918215806101b8575b6101a9576080528060a052825f14610182576040519060208201928352604082015260016060820152606081526100b260808261026d565b5190205b60c0523360e052801561017c57815b6101005215610154575b50604051907fc6b438e6a8a59579ce6a4406cbd203b740e0d47b458aae6596339bcd40c40d155f80a261089a90816102b98239608051818181610101015281816101ed015261035e015260a0518160bb015260c05181610502015260e0518181816102e901526106820152610100518181816103300152818161053701526107fd0152f35b7f5dcf1afeb37fe4804d4db2aa42e07f76a76c328b0f50beb6b52ea4daec1f5f00555f6100cf565b5f6100c5565b60405190602082019283526040820152604081526101a160608261026d565b5190206100b6565b631c48ccbb60e01b5f5260045ffd5b50831561007a565b632fab13c360e11b5f5260045ffd5b9092506020813d602011610207575b816101eb6020938361026d565b81010312610203576101fc906102a4565b915f610055565b5f80fd5b3d91506101de565b6040513d5f823e3d90fd5b925050506060813d606011610265575b816102376060938361026d565b8101031261020357610248816102a4565b90604060208201519101519182151583036102035790915f61002f565b3d915061022a565b601f909101601f19168101906001600160401b0382119082101761029057604052565b634e487b7160e01b5f52604160045260245ffd5b51906001600160a01b03821682036102035756fe60806040526004361015610015575b366107fb57005b5f3560e01c80630ef44173146100a45780638da5cb5b1461009f5780639fd004e11461009a578063b38dbf1414610095578063ba0909dd14610090578063c0d786551461008b578063c767f36f14610086578063eb77129b146100815763f887ea400361000e57610525565b6104eb565b610444565b61030d565b6102ca565b6101ae565b610125565b6100e2565b346100de575f3660031901126100de5760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b5f80fd5b346100de575f3660031901126100de5760206040516001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000168152f35b346100de575f3660031901126100de5760207f7c91ed1b23322ca95c55b40eff2165c9dcfb53d485908a5b1ec1f1b76692ef865c6001600160a01b0360405191168152f35b600435906001600160a01b03821682036100de57565b9181601f840112156100de5782359167ffffffffffffffff83116100de57602083818601950101116100de57565b60403660031901126100de576101c261016a565b60243567ffffffffffffffff81116100de576101e2903690600401610180565b916001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000168033141590816102bf575b816102b5575b5061028d57803b1561026557821561023d5761023861065a565b61077a565b7f277b9f2b000000000000000000000000000000000000000000000000000000005f5260045ffd5b7fc6118f89000000000000000000000000000000000000000000000000000000005f5260045ffd5b7f30cd7471000000000000000000000000000000000000000000000000000000005f5260045ffd5b905015155f61021e565b333014159150610218565b346100de575f3660031901126100de5760206040516001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000168152f35b346100de5760203660031901126100de5761032661016a565b6001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001661041c576001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001633141580610412575b61028d57803b156103ea57806103c36001600160a01b03927f5dcf1afeb37fe4804d4db2aa42e07f76a76c328b0f50beb6b52ea4daec1f5f0055565b167fc6b438e6a8a59579ce6a4406cbd203b740e0d47b458aae6596339bcd40c40d155f80a2005b7f449fd517000000000000000000000000000000000000000000000000000000005f5260045ffd5b5030331415610387565b7f28da8477000000000000000000000000000000000000000000000000000000005f5260045ffd5b346100de5760203660031901126100de5760043567ffffffffffffffff81116100de57610475903690600401610180565b906001600160a01b037f7c91ed1b23322ca95c55b40eff2165c9dcfb53d485908a5b1ec1f1b76692ef865c1633036104c357815f928392833781335af43d5f803e156104bf573d5ff35b3d5ffd5b7f058dd99c000000000000000000000000000000000000000000000000000000005f5260045ffd5b346100de575f3660031901126100de5760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100de575f3660031901126100de577f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0381161561057a576020905b6001600160a01b0360405191168152f35b5060206001600160a01b037f5dcf1afeb37fe4804d4db2aa42e07f76a76c328b0f50beb6b52ea4daec1f5f005416610569565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b90601f8019910116810190811067ffffffffffffffff8211176105fc57604052565b6105ad565b908160209103126100de575190565b6040513d5f823e3d90fd5b3d15610655573d9067ffffffffffffffff82116105fc576040519161064a601f8201601f1916602001846105da565b82523d5f602084013e565b606090565b6040517f40e9903b0000000000000000000000000000000000000000000000000000000081527f00000000000000000000000000000000000000000000000000000000000000006020826004816001600160a01b0385165afa918215610775575f92610744575b5081156107405781341061070f575f80809381935af16106df61061b565b50156106e757565b7f4033e4e3000000000000000000000000000000000000000000000000000000005f5260045ffd5b7f98260caf000000000000000000000000000000000000000000000000000000005f5260048290523460245260445ffd5b5050565b61076791925060203d60201161076e575b61075f81836105da565b810190610601565b905f6106c1565b503d610755565b610610565b5f9192828092827f7c91ed1b23322ca95c55b40eff2165c9dcfb53d485908a5b1ec1f1b76692ef865c96827f7c91ed1b23322ca95c55b40eff2165c9dcfb53d485908a5b1ec1f1b76692ef865d83375af4903d5f803e7f7c91ed1b23322ca95c55b40eff2165c9dcfb53d485908a5b1ec1f1b76692ef865d156104bf573d5ff35b7f0000000000000000000000000000000000000000000000000000000000000000801561083c575b5f8091368280378136915af43d5f803e156104bf573d5ff35b507f5dcf1afeb37fe4804d4db2aa42e07f76a76c328b0f50beb6b52ea4daec1f5f005461082356fea2646970667358221220cdfed603e5c8f17528d26c7ad7dd18b547d50e87cb6820570db0539b1109cb4a64736f6c634300081b0033"
+}

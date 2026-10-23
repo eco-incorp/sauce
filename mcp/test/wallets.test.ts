@@ -20,10 +20,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { bytesToHex } from "viem";
+import { bytesToHex, getAddress, recoverTypedDataAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { decryptKeystoreBytes, encryptKeystore } from "../../sdk/dist/cli/signer.js";
+import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
+import { signedCookTypedData } from "../../sdk/dist/evm/engine.js";
 import { encodeCursor } from "../../sdk/dist/cli/svm-plan.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
@@ -66,6 +68,9 @@ describe("a server without wallets", () => {
   it("has no wallet tool, and says nothing here signs", async () => {
     const { tools } = await mcp.client.listTools();
     assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
+    // Nor does it sign a cook: it builds one for the user's own wallet to sign.
+    assert.ok(!tools.some((tool) => tool.name === "sauce_sign"));
+    assert.ok(tools.some((tool) => tool.name === "sauce_signed_cook"));
     assert.match(mcp.client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
     assert.ok(tools.every((tool) => !(tool.description ?? "").includes("sauce_wallet_send")));
   });
@@ -181,6 +186,11 @@ describe("a server with wallets", () => {
     assert.equal(byName.get("sauce_wallet_create")?.annotations?.destructiveHint, false);
     assert.equal(byName.get("sauce_wallet_address")?.annotations?.readOnlyHint, true);
     assert.equal(byName.get("sauce_wallet_enable")?.annotations?.destructiveHint, false);
+    // sauce_sign signs a cook for anyone to submit: the signature is an authorization, spent when
+    // submitted. It takes the inputs sauce_signed_cook does, but a signature: it makes its own.
+    assert.equal(byName.get("sauce_sign")?.annotations?.destructiveHint, true);
+    assert.ok(!("signature" in (byName.get("sauce_sign")?.inputSchema.properties ?? {})));
+    assert.ok("signature" in (byName.get("sauce_signed_cook")?.inputSchema.properties ?? {}));
     // Every tool that builds a transaction says it can be sent from a wallet here.
     for (const name of ["sauce_tx", "sauce_pot", "sauce_actions"]) {
       assert.ok(byName.get(name)?.description?.includes(WALLET_UNSIGNED), name);
@@ -325,6 +335,114 @@ describe("a server with wallets", () => {
       ((compiled.notes as string[] | undefined) ?? []).every(
         (note) => !/sauce_wallet_send/.test(note),
       ),
+    );
+  });
+});
+
+describe("sauce_sign, a cook signed by a wallet of this server's", () => {
+  let dir: string;
+  let mcp: Connected;
+  const password = throwaway("sign");
+  const PAY =
+    "function main(recipient: Address, amount: Uint256): void {\n  USDC.transfer(recipient, amount);\n}\n";
+  const call = {
+    wallet: "owner",
+    source: PAY,
+    chain: "base",
+    maxExecutionFee: "1",
+    nonce: "9",
+    deadline: "2000000000",
+    args: [OWNER, "1"],
+  };
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-mcp-sign-"));
+    mcp = await connect(undefined, undefined, walletsAt(join(dir, "wallets"), { start: password }));
+  });
+  after(async () => {
+    await mcp.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("signs as the Pot's owner, and holds the signature to the wallet's policy", async () => {
+    const address = getAddress(
+      ok(await mcp.call("sauce_wallet_create", { name: "owner" })).address as string,
+    );
+    const pot = getAddress(v12PredictPot(address));
+    const signed = ok(await mcp.call("sauce_sign", call)) as {
+      pot: Address;
+      owner: Address;
+      engine: Address;
+      program: Hex;
+      signature: Hex;
+      cook: { to: Address; data: Hex; value: string };
+      notes: string[];
+    };
+    assert.deepEqual([signed.pot, signed.owner, signed.cook.to], [pot, address, pot]);
+    const execution = {
+      chainId: 8453,
+      pot,
+      engine: signed.engine,
+      program: signed.program,
+      maxExecutionFee: 1n,
+      nonce: 9n,
+      deadline: 2_000_000_000n,
+    };
+    assert.equal(
+      await recoverTypedDataAddress({
+        ...signedCookTypedData(execution),
+        signature: signed.signature,
+      }),
+      address,
+    );
+    for (const said of [
+      /wallet owner has no policy/,
+      /sauce_wallet_send \{ wallet, transaction: <this result> \}/,
+      /hot wallet/,
+    ]) {
+      assert.ok(
+        signed.notes.some((note) => said.test(note)),
+        `${said}: ${JSON.stringify(signed.notes)}`,
+      );
+    }
+    // Another wallet of this server's can submit it whole.
+    assert.ok(mcp.received.every((text) => !text.includes(password)));
+
+    // A policy that limits what leaves the wallet or its Pot cannot bound a signed cook: refused.
+    const policy = join(dir, "wallets", "owner.policy.json");
+    writeFileSync(policy, JSON.stringify({ tokens: { USDC: { perDay: "1" } } }), { mode: 0o600 });
+    assert.match(
+      failed(await mcp.call("sauce_sign", call)),
+      /refused by the policy of wallet owner .*tokens\.USDC is limited, and a signed cook runs when its submitter sends it/,
+    );
+    // One that names only its chains and the Pot signs.
+    writeFileSync(policy, JSON.stringify({ chains: ["base"], to: [pot.toLowerCase()] }));
+    assert.match(String(ok(await mcp.call("sauce_sign", call)).signature), /^0x[0-9a-f]{130}$/);
+    writeFileSync(policy, JSON.stringify({ to: [OWNER.toLowerCase()] }));
+    assert.match(
+      failed(await mcp.call("sauce_sign", call)),
+      new RegExp(`to allows 1 address\\(es\\), and this cook runs on Pot ${pot}`),
+    );
+    rmSync(policy);
+  });
+
+  it("refuses a Solana wallet, another owner's Pot, and a preview chain before unlocking", async () => {
+    ok(await mcp.call("sauce_wallet_create", { name: "sol", kind: "solana" }));
+    assert.match(
+      failed(await mcp.call("sauce_sign", { ...call, wallet: "sol" })),
+      /wallet sol is a Solana wallet: a signed cook is an EVM Pot's/,
+    );
+    assert.match(
+      failed(await mcp.call("sauce_sign", { ...call, owner: OWNER })),
+      new RegExp(`does not own the Pot: only its owner, ${OWNER}, signs`),
+    );
+    const preview = await mcp.call("sauce_sign", { ...call, chain: "optimism" });
+    assert.equal(preview.isError, true);
+    const refused = (preview.structuredContent as { refused?: Record<string, unknown> }).refused;
+    assert.equal(refused?.action, "signing a cook");
+    // A cancellation is sent from the wallet, which needs the chain's endpoint.
+    assert.match(
+      failed(await mcp.call("sauce_sign", { wallet: "owner", chain: "base", cancel: ["9"] })),
+      /Sending the cancellation needs an RPC endpoint for base/,
     );
   });
 });

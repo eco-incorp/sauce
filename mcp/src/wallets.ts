@@ -37,6 +37,7 @@ import {
   looksLikeKey,
   noPolicyNote,
   openWallet,
+  parseAddress,
   parseChain,
   planChain,
   plannedCursor,
@@ -54,8 +55,19 @@ import {
   WalletStore,
   type McpWallets,
   type PasswordSource,
+  type SendGuard,
 } from "./sdk.js";
-import { chainRef, LIMITS, potsKept, refusable, toolRegistrar, type ToolContext } from "./tools.js";
+import {
+  chainRef,
+  LIMITS,
+  potsKept,
+  refusable,
+  SIGNED_COOK_OUTPUT,
+  signedCookCall,
+  signedCookInputs,
+  toolRegistrar,
+  type ToolContext,
+} from "./tools.js";
 
 /** The wallet tools, in the order `tools/list` gives them. */
 export const WALLET_TOOL_NAMES = [
@@ -65,6 +77,7 @@ export const WALLET_TOOL_NAMES = [
   "sauce_wallet_list",
   "sauce_wallet_address",
   "sauce_wallet_send",
+  "sauce_sign",
 ] as const;
 
 /** The `.env` entry `sauce_wallet_enable { dotenv }` reads when told no other: the docs' name. */
@@ -705,6 +718,75 @@ export function registerWalletTools(
       const sent = await sendPlan({ wallet: unlocked, guard, chain, transactions, rpcUrl });
 
       return { json: sent.json, notes: sent.notes };
+    },
+  );
+
+  tool(
+    "sauce_sign",
+    {
+      title: "Sign a cook with a wallet, for another account to submit",
+      description:
+        "Signs, with one of this server's EVM wallets as the Pot's owner, a cook another account " +
+        "submits with the Pot's own cookSigned — what sauce_signed_cook builds, signed here: " +
+        "the same inputs (but signature), the Pot the wallet's own unless owner or pot says " +
+        "(the wallet must own it). Returns `typedData`, `digest`, `signature` and `cook`, { " +
+        "chainId, to: the Pot, data: cookSigned(…), value }, which the submitter sends with " +
+        "exactly `value` and pays gas for — another of this server's wallets through " +
+        "sauce_wallet_send, or any account — and `deployPot` first when the Pot has no code " +
+        "yet. The Pot pays the Kitchen's fee itself, from its balance. Whoever holds the " +
+        "signature may submit it until the deadline, once. Needs the wallets enabled " +
+        "(sauce_wallet_enable). The wallet's policy applies: its chains and to (the Pot) are " +
+        "held to, and a policy that limits native or tokens refuses to sign, naming the limit, " +
+        "since what a signed cook moves is known only when it is submitted. With `cancel` " +
+        "(nonces) instead of a program it SENDS the owner's invalidateNonces from the wallet, " +
+        "so those signatures never run. It signs only on " +
+        `${supportedChainNames()}, the chains this release supports, and never on Solana; on ` +
+        "a preview chain it is refused before any endpoint is reached, with `refused`.",
+      input: { wallet: WALLET, ...signedCookInputs(context.local === true) },
+      output: refusable(SIGNED_COOK_OUTPUT),
+      annotations: SENDS,
+    },
+    async (args, reach) => {
+      const { store } = session;
+      const name = walletName(args.wallet);
+      const info = store.info(name);
+      if (info.kind !== "evm") {
+        throw new UsageError(
+          `wallet ${name} is a Solana wallet: a signed cook is an EVM Pot's, signed by an EVM wallet`,
+        );
+      }
+      let guard: SendGuard | undefined;
+      const output = await signedCookCall(args, context.local === true, reach, {
+        address: parseAddress("wallet", info.address),
+        unlock: async () => {
+          const opened = await openWallet(store, name, session.password("Signing"));
+          if (opened.unlocked.kind !== "evm") {
+            throw new Error("internal: an EVM wallet unlocked as a Solana one");
+          }
+          guard = opened.guard;
+
+          return opened.unlocked.account;
+        },
+      });
+
+      return {
+        json: output.json,
+        notes: [
+          ...(guard === undefined
+            ? []
+            : guard.policy === undefined
+              ? [noPolicyNote(info)]
+              : guard.policy.notes),
+          ...(output.notes ?? []),
+          ...(output.json.cook === undefined
+            ? []
+            : [
+                "To submit it from another of this server's wallets: sauce_wallet_send { wallet, " +
+                  "transaction: <this result> } (it sends deployPot first, when there is one).",
+              ]),
+          HOT_WALLET,
+        ],
+      };
     },
   );
 }

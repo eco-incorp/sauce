@@ -174,9 +174,10 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
 5. **Keep old funds on their old pairing until you move them.** New EVM Pots have new addresses;
    the new engine refuses old Pots. Use the earlier SDK/compiler/engine to manage an old Pot,
    and review the destination before moving funds. An upgrade never migrates balances.
-   Signed cooks are new: only newly created Pots support the exposed `cookSigned` and
-   `invalidateNonces` ABI methods; old Pots do not acquire them. There is no high-level SDK
-   signed-cook helper. See [signed cooks](../concepts/kitchen-pot-cook.md#signed-cooks).
+   Signed cooks are new, and only newly created Pots take them; old Pots do not acquire them.
+   The owner signs with `sauce sign`, `sauce_sign` or `signedCookTypedData` from
+   `@eco-incorp/sauce/evm/engine`, and any account sends the result
+   ([Signed cooks](signed-cooks.md)).
    For Router comparisons use `v12RouterAddress()`; `v12RouterGeneration()` is removed.
    The quote Router remains separate.
 6. **Rebuild Solana cooks with the new SDK.** The engine program id and Kitchen instruction
