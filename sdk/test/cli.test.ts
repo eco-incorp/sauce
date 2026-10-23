@@ -689,20 +689,32 @@ describe("sauce compile", () => {
       {
         name: "source",
         requires: "writable",
-        forms: ["pot:<token>", "owner:<token>", "@<argument>:<token>", "<address>"],
+        forms: [
+          "pot:<token>",
+          "owner:<token>",
+          "authority:<token>",
+          "@<argument>:<token>",
+          "<address>",
+        ],
       },
       {
         name: "dest",
         requires: "writable",
-        forms: ["pot:<token>", "owner:<token>", "@<argument>:<token>", "<address>"],
+        forms: [
+          "pot:<token>",
+          "owner:<token>",
+          "authority:<token>",
+          "@<argument>:<token>",
+          "<address>",
+        ],
       },
-      { name: "authority", requires: "readonly_signer", forms: ["pot", "owner"] },
+      { name: "authority", requires: "readonly_signer", forms: ["pot", "owner", "authority"] },
     ]);
     // Cooked directly, nothing signs for a Pot, and no Pot holds a token account.
     const direct = json(
       await sauce("compile", program, "--chain", "solana", "--json", "--via", "engine"),
     ).accountsToGive as { name: string; forms: string[] }[];
-    expect(direct.find((slot) => slot.name === "authority")!.forms).toEqual(["owner"]);
+    expect(direct.find((slot) => slot.name === "authority")!.forms).toEqual(["owner", "authority"]);
     expect(direct.find((slot) => slot.name === "source")!.forms[0]).toBe("owner:<token>");
 
     // A cook is refused for them before any endpoint is read, with the file to fill in.

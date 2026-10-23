@@ -145,15 +145,19 @@ describe("compileSauceRoute: token member rewrite end to end", () => {
     expect(built.calls).toHaveLength(1);
   });
 
-  it("an svm destination refuses a script's token write by name: its accounts go to main", () => {
+  it("an svm destination gives a script's token write the main its accounts go to", () => {
+    const key = `0x${"66".repeat(32)}`;
+    // A route takes no accounts a cook derives, so the refusal names the main the script was given.
     expect(() =>
       compileSauceRoute(
         "solana",
-        `USDC.transfer(${TO}, 5n);`,
+        `USDC.transfer(${key}, 5n);`,
         { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { tokens: { USDC } },
       ),
-    ).toThrow(/`USDC.transfer\(…\)` on Solana: .* this program has no main/);
+    ).toThrow(/add accounts to main \(.*\) that a cook derives/);
+    const compiled = compileSauceProgram("solana", `USDC.transfer(${key}, 5n);`);
+    expect(compiled.derivedAccounts).toMatchObject({ potUSDC: "authority:USDC", pot: "authority" });
   });
 });
 
@@ -913,7 +917,7 @@ describe("svm: the token syntax on a route, whose accounts are the caller's", ()
     );
   });
 
-  it("a script's token write is refused by name: its accounts go to main, which it has not", () => {
+  it("a script's token write gets a main, and a 20-byte recipient is still refused by name", () => {
     expect(() =>
       compileSauceRoute(
         "solana",
@@ -921,6 +925,10 @@ describe("svm: the token syntax on a route, whose accounts are the caller's", ()
         { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { tokens: { USDC } },
       ),
-    ).toThrow(/`USDC.transfer\(…\)` on Solana: .* this program has no main/);
+    ).toThrow(
+      /`USDC.transfer\(…\)` on Solana: the recipient must be known when the transaction is built/,
+    );
+    const script = compileSauceProgram("solana", "require(pot.USDC >= 5);");
+    expect(script.derivedAccounts).toMatchObject({ potUSDC: "pot:USDC", pot: "pot" });
   });
 });
