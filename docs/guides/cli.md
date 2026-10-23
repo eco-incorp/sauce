@@ -94,6 +94,7 @@ npm install
 | `sauce wallet`   | Make, list and import the wallets `--wallet` signs with              | [Wallets and signing](cli-wallets.md)     |
 | `sauce tx`       | Print the transaction unsigned, for another wallet to sign           | [Wallets and signing](cli-wallets.md)     |
 | `sauce send`     | Send transactions signed elsewhere, and report what they did         | [Wallets and signing](cli-wallets.md)     |
+| `sauce sign`     | Sign a cook for another account to send, or cancel one               | [Signed cooks](signed-cooks.md)           |
 | `sauce reclaim`  | Close the upload buffers and lookup tables a Solana owner left open  | [Solana](cli-solana.md)                   |
 | `sauce globals`  | The tokens, protocols and other names a program can use on a chain   | [Look things up](cli-lookup.md)           |
 | `sauce price`    | Turn a price into the numbers a swap program takes                   | [Look things up](cli-lookup.md)           |
@@ -124,7 +125,7 @@ builds and sends nothing:
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `compile`, `actions`, `simulate`, `globals`, `price`, `pools`, `inspect`, `verify` | What it does everywhere                                                        |
 | `pot`                                                                              | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
-| `tx`, `run`, `pot --deploy`, `pot --format cast`                                   | Refused                                                                        |
+| `tx`, `run`, `sign`, `pot --deploy`, `pot --format cast`                           | Refused                                                                        |
 
 A refusal comes before the command reaches an endpoint or reads a key. The command exits 1 and
 says why, which chains are supported, and how to ask for the one it refused:

@@ -36,6 +36,10 @@
  * native transfers are not traced, or a Solana lookup table that cannot be read — is refused
  * wherever a limit would need it.
  *
+ * Signing a cook for anyone to submit (`sauce sign`, {@link SendGuard.authorizeSignedCook}) is held
+ * to `chains` and `to` (the Pot) as written, and refused outright by a policy that sets `native` or
+ * any `tokens` limit: what a signed cook moves is known only when its submitter sends it.
+ *
  * Every wallet unlocked is GUARDED, policy or not: {@link guardWallet} registers it by address, and
  * the two places every send of this command passes — `chain.ts#sendAndWait` on an EVM chain,
  * `solana.ts`'s `sendAndConfirm` on Solana — ask {@link guardOf} for the sender's guard before
@@ -381,8 +385,14 @@ export function ownPotDeployed(call: TxRequest, wallet: Address): Address | unde
   }
 }
 
-const COOK = toFunctionSelector(
-  v12PotAbi.find((item) => item.type === "function" && item.name === "cook")!,
+/** `cook` and `cookSigned`: each runs a program on the Pot it is sent to, whose outflows a
+ *  measure counts as the transaction's own. */
+const COOKS = new Set<string>(
+  v12PotAbi
+    .filter(
+      (item) => item.type === "function" && (item.name === "cook" || item.name === "cookSigned"),
+    )
+    .map((item) => toFunctionSelector(item)),
 );
 
 /** A log as `eth_simulateV1` returns it. */
@@ -472,7 +482,7 @@ export async function measureEvm(
   const results = rehearsed ?? (await rehearsePlan(client, wallet, calls));
   const measured: Measured[] = [];
   for (const [index, call] of calls.entries()) {
-    const cook = call.data.slice(0, 10).toLowerCase() === COOK ? getAddress(call.to) : undefined;
+    const cook = COOKS.has(call.data.slice(0, 10).toLowerCase()) ? getAddress(call.to) : undefined;
     const ours = new Set<string>([getAddress(wallet), ...(cook === undefined ? [] : [cook])]);
     const deploysPot = ownPotDeployed(call, wallet);
     const base = {
@@ -923,6 +933,16 @@ function permit2Of(chain: CanonicalChain): string | undefined {
   return descriptor === undefined ? undefined : addressOn(descriptor, chain)?.toLowerCase();
 }
 
+/** A refusal by `wallet`'s `policy` of the limit it names, saying why. */
+const refuseBy =
+  (wallet: string, policy: Policy) =>
+  (limit: string, why: string): never => {
+    throw new PolicyRefusal(
+      limit,
+      `refused by the policy of wallet ${wallet} (${policy.path}): ${why}`,
+    );
+  };
+
 /** What `measured` counts against each of `policy`'s limits; a refusal naming the first it breaks. */
 function spendOf(
   wallet: string,
@@ -930,12 +950,7 @@ function spendOf(
   measured: Measured,
   totals: ReadonlyMap<string, bigint>,
 ): Record<string, { amount: string; decimals: number }> {
-  const refuse = (limit: string, why: string): never => {
-    throw new PolicyRefusal(
-      limit,
-      `refused by the policy of wallet ${wallet} (${policy.path}): ${why}`,
-    );
-  };
+  const refuse = refuseBy(wallet, policy);
   const { chain } = measured;
   if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
     refuse(
@@ -1113,6 +1128,41 @@ export class SendGuard {
           close({ v: 1, id, state: "released", time: new Date().toISOString(), why }),
       };
     });
+  }
+
+  /**
+   * Authorizes this wallet to SIGN a cook on `pot`, on `chain`, for anyone to submit (`sauce sign`,
+   * `sauce_sign`): the release's gate, then the policy's `chains` and `to` (the Pot), checked as
+   * written. A policy that sets `native` or any `tokens` limit refuses it, naming the limit.
+   *
+   * Why refuse rather than measure: a signed cook runs when, and as, its submitter sends it — at any
+   * time up to its deadline, on the chain's state at that moment. A rehearsal at signing bounds
+   * nothing (a program that sweeps the Pot moves whatever is there when it lands), and the ledger
+   * cannot count it against a day it may never land in. The policy's own rule is that what cannot
+   * be measured is refused wherever a limit needs it. A wallet with no policy signs.
+   */
+  authorizeSignedCook(chain: CanonicalChain, pot: Address): void {
+    this.gate(chain);
+    const policy = this.policy;
+    if (policy === undefined) return;
+    const refuse = refuseBy(this.wallet.name, policy);
+    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
+      refuse(
+        "chains",
+        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this cook is on ${chain.slug}`,
+      );
+    }
+    if (policy.to !== undefined && !policy.to.includes(pot.toLowerCase())) {
+      refuse("to", `to allows ${policy.to.length} address(es), and this cook runs on Pot ${pot}`);
+    }
+    const unbounded =
+      "a signed cook runs when its submitter sends it, any time up to its deadline, on the " +
+      "chain's state then: what it moves cannot be measured when it is signed, nor counted in a " +
+      "day's total. Sign with a wallet whose policy limits only chains and to";
+    if (policy.native !== undefined) refuse("native", `native is limited, and ${unbounded}`);
+    const [token] = policy.tokens.keys();
+    if (token !== undefined)
+      refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
   }
 
   /** Measures and reserves one EVM transaction, just before it is sent. */

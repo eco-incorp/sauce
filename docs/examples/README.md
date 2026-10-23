@@ -46,12 +46,13 @@ is a preview chain.
 
 ## Compiling, reading a chain and signing
 
-| Example                                          | Level        | Chain                  | Shows                                                                                                                                                                                       |
-| ------------------------------------------------ | ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [compile-program.ts](compile-program.ts)         | Intermediate | Any                    | Direct compilation, ABI-v1 entry arguments, and argument encoding and decoding                                                                                                              |
-| [prepare-pot.ts](prepare-pot.ts)                 | Advanced     | Any EVM chain          | Your Pot before your first cook: the Kitchen and engine checked, the Pot predicted from your address and salt, its deployment or its owner and Router checked, and the Kitchen's fee        |
-| [pot-router.ts](pot-router.ts)                   | Advanced     | Any EVM chain          | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                                                                                          |
-| [mcp-external-signer.ts](mcp-external-signer.ts) | Advanced     | Ethereum, Base, Solana | The MCP server with a signer it never sees: `sauce_tx` builds, your signer (a KMS, a hardware wallet) signs, `sauce_send` broadcasts and reports, a Solana plan's every step, by its cursor |
+| Example                                          | Level        | Chain                  | Shows                                                                                                                                                                                                  |
+| ------------------------------------------------ | ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [compile-program.ts](compile-program.ts)         | Intermediate | Any                    | Direct compilation, ABI-v1 entry arguments, and argument encoding and decoding                                                                                                                         |
+| [prepare-pot.ts](prepare-pot.ts)                 | Advanced     | Any EVM chain          | Your Pot before your first cook: the Kitchen and engine checked, the Pot predicted from your address and salt, its deployment or its owner and Router checked, and the Kitchen's fee                   |
+| [pot-router.ts](pot-router.ts)                   | Advanced     | Any EVM chain          | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                                                                                                     |
+| [signed-cook.ts](signed-cook.ts)                 | Advanced     | Base                   | A cook the owner signs and another account sends: `pay.sauce.ts` signed as EIP-712 typed data with a throwaway key, verified, encoded as `cookSigned`, and the `invalidateNonces` call that cancels it |
+| [mcp-external-signer.ts](mcp-external-signer.ts) | Advanced     | Ethereum, Base, Solana | The MCP server with a signer it never sees: `sauce_tx` builds, your signer (a KMS, a hardware wallet) signs, `sauce_send` broadcasts and reports, a Solana plan's every step, by its cursor            |
 
 ## Run an example in your project
 

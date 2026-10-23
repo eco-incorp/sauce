@@ -1,7 +1,7 @@
 /**
- * `sauce inspect`: a cook transaction, a Kitchen call, a program, or a program file, taken back
- * apart into what a SauceScript author wrote — the Pot and engine a cook names, and the program
- * and the arguments it carries.
+ * `sauce inspect`: a cook transaction (`Pot.cook`, or a signed cook's `Pot.cookSigned`), a Kitchen
+ * call, a program, or a program file, taken back apart into what a SauceScript author wrote — the
+ * Pot and engine a cook names, and the program and the arguments it carries.
  *
  * Everything is read at the level a program is written at. There is no opcode listing and no
  * disassembly: a program is reported by its size, its hash and — given the source it was compiled
@@ -14,20 +14,22 @@ import {
   getAddress,
   hexToBytes,
   keccak256,
+  zeroAddress,
   type Address,
   type Hex,
+  type PublicClient,
 } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12DeployedAddresses, v12EngineAddress } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
-import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
+import { v12KitchenAbi, v12PotAbi, verifySignedCook } from "../evm/engine.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { decodeEntryArguments, type EntryValue } from "../routes/entry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
-import { connect, receiptOf } from "./chain.js";
+import { connect, potState, receiptOf } from "./chain.js";
 import { manifestJson, type CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
@@ -171,26 +173,101 @@ function engineName(engine: Address): string {
   return `the released v12 engine ${version}`;
 }
 
-/** `Pot.cook(engine, program)`, or `undefined` when `data` is not one. */
+/** `Pot.cook(engine, program)` or `Pot.cookSigned(…)`, or `undefined` when `data` is neither. */
 function cookCall(data: Hex, context: InspectContext): Part | undefined {
-  let engine: Address;
-  let program: Hex;
+  let decoded;
   try {
-    const decoded = decodeFunctionData({ abi: v12PotAbi, data });
-    if (decoded.functionName !== "cook") return undefined;
-    [engine, program] = decoded.args as readonly [Address, Hex];
+    decoded = decodeFunctionData({ abi: v12PotAbi, data });
   } catch {
     return undefined;
   }
+  if (decoded.functionName !== "cook" && decoded.functionName !== "cookSigned") return undefined;
+  const [engine, program] = decoded.args as readonly [Address, Hex];
   const described = programPart(hexToBytes(program), context);
+  const named = { address: engine, released: engineName(engine) !== "not the released engine" };
+  if (decoded.functionName === "cook") {
+    return {
+      json: { call: "Pot.cook", engine: named, program: described.json },
+      lines: [`Pot.cook on engine ${engine} (${engineName(engine)})`, ...indent(described.lines)],
+    };
+  }
+  const [, , maxExecutionFee, nonce, deadline, submitter, signature] = decoded.args;
 
   return {
     json: {
-      call: "Pot.cook",
-      engine: { address: engine, released: engineName(engine) !== "not the released engine" },
+      call: "Pot.cookSigned",
+      engine: named,
       program: described.json,
+      maxExecutionFee: maxExecutionFee.toString(),
+      nonce: nonce.toString(),
+      deadline: deadline.toString(),
+      submitter: getAddress(submitter),
+      signature,
     },
-    lines: [`Pot.cook on engine ${engine} (${engineName(engine)})`, ...indent(described.lines)],
+    lines: [
+      `Pot.cookSigned on engine ${engine} (${engineName(engine)})`,
+      `  submitted by ${submitter === zeroAddress ? "anyone" : getAddress(submitter)} until ` +
+        `${deadline} (unix seconds), once (nonce ${nonce}); the Pot pays at most ` +
+        `${maxExecutionFee} wei of the Kitchen's fee`,
+      ...indent(described.lines),
+    ],
+  };
+}
+
+/**
+ * Whether a signed cook's signature is its Pot's owner's, as the Pot checks it: over the cook's
+ * fields, the value it was sent with, the Pot and the chain — what only a transaction carries
+ * whole. An owner with code (a contract wallet) is asked through ERC-1271.
+ */
+async function signedByOwner(
+  client: PublicClient,
+  chain: CanonicalChain,
+  pot: Address,
+  value: bigint,
+  data: Hex,
+): Promise<Part> {
+  const decoded = decodeFunctionData({ abi: v12PotAbi, data });
+  if (decoded.functionName !== "cookSigned") throw new Error("internal: not a signed cook");
+  const [engine, program, maxExecutionFee, nonce, deadline, submitter, signature] = decoded.args;
+  const { owner } = await potState(client, pot);
+  if (owner === undefined) {
+    return {
+      json: { signedByOwner: null },
+      lines: [`the signature is not checked: ${pot} has no code now, so it names no owner`],
+    };
+  }
+  let valid: boolean;
+  try {
+    valid = await verifySignedCook(
+      {
+        chainId: chain.id,
+        pot,
+        engine,
+        program,
+        value,
+        maxExecutionFee,
+        nonce,
+        deadline,
+        submitter,
+        signature,
+        owner,
+      },
+      client,
+    );
+  } catch (error) {
+    return {
+      json: { owner, signedByOwner: null },
+      lines: [`the signature is not checked: ${(error as Error).message}`],
+    };
+  }
+
+  return {
+    json: { owner, signedByOwner: valid },
+    lines: [
+      valid
+        ? `the signature is the Pot's owner's, ${owner}`
+        : `the signature is NOT the Pot's owner's (${owner}): the Pot refuses it with BadSignature`,
+    ],
   };
 }
 
@@ -272,8 +349,19 @@ export interface InspectInput extends InspectContext {
 export async function inspectCommand(input: InspectInput): Promise<CommandOutput> {
   if (input.rpcUrl === undefined) {
     const part = describeData(input.hex, input);
+    // The digest covers the Pot, the chain and the value sent, which calldata alone does not carry.
+    const unchecked =
+      part.json.call === "Pot.cookSigned"
+        ? [
+            "  the signature is not checked: calldata names neither the Pot nor the value it is " +
+              "sent with. Inspect the transaction by its hash, with --chain, to check it",
+          ]
+        : [];
 
-    return { text: part.lines.join("\n"), json: part.json };
+    return {
+      text: [...part.lines, ...unchecked].join("\n"),
+      json: unchecked.length === 0 ? part.json : { ...part.json, signedByOwner: null },
+    };
   }
   if (input.chain === undefined) throw new CliError("inspect: a transaction hash needs its chain");
   const client = await connect(input.rpcUrl, input.chain);
@@ -289,6 +377,10 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
   const from = getAddress(transaction.from);
   const to = transaction.to === null ? null : getAddress(transaction.to);
   const part = describeData(transaction.input, input);
+  const signed =
+    part.json.call === "Pot.cookSigned" && to !== null
+      ? await signedByOwner(client, input.chain, to, transaction.value, transaction.input)
+      : undefined;
   const status = receipt === undefined ? "pending" : receipt.status;
   // A landed transaction: what it cost, and what its logs record.
   const cost = receipt === undefined ? undefined : costOf(receipt, transaction.value);
@@ -312,6 +404,7 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
       ...linkLines(txLinks(input.chain, input.hex)),
       ...(cost === undefined ? [] : [`  ${costLine(cost, input.chain, "what it carried")}`]),
       ...indent(part.lines),
+      ...indent(signed?.lines ?? [], "    "),
       ...indent(effects?.lines ?? []),
     ].join("\n"),
     json: {
@@ -328,6 +421,7 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
       value: transaction.value.toString(),
       ...(cost === undefined ? {} : { cost: costJson(cost) }),
       ...part.json,
+      ...(signed === undefined ? {} : signed.json),
       ...(effects === undefined ? {} : { effects: effects.json }),
     },
   };
