@@ -177,15 +177,16 @@ function entryOn(
   allowWidened: boolean,
 ): NameEntry {
   if (descriptor.kind === "interface") return { kind: "interface", descriptor };
+  // The address as the registry records it (`AccessorTarget.address`); the module writes it in
+  // lowercase.
   const address = chain.kind === "evm" ? addressOn(descriptor, chain) : undefined;
   if (address === undefined) return { kind: "absent", descriptor };
-  const at = address.toLowerCase() as `0x${string}`;
-  if (descriptor.kind === "address-only") return { kind: "address", descriptor, address: at };
+  if (descriptor.kind === "address-only") return { kind: "address", descriptor, address };
   if (descriptor.coverage.typeFidelity === "widened" && !allowWidened) {
     return { kind: "refused", descriptor, reason: widened(descriptor) };
   }
 
-  return { kind: "deployed", descriptor, address: at };
+  return { kind: "deployed", descriptor, address };
 }
 
 /** Every namespace on `chain`. */
@@ -241,9 +242,9 @@ function namespaceLiteral(
         binding = `ABI_${imports.size}`;
         imports.set(path, binding);
       }
-      fields.push(`${name}: ${binding}.at(${entry.address})`);
+      fields.push(`${name}: ${binding}.at(${entry.address.toLowerCase()})`);
     } else if (entry.kind === "address") {
-      fields.push(`${name}: ${entry.address}`);
+      fields.push(`${name}: ${entry.address.toLowerCase()}`);
     } else if (entry.kind === "absent" || entry.kind === "refused") {
       fields.push(`${name}: 0`);
     }
