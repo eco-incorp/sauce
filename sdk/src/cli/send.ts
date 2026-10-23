@@ -56,7 +56,7 @@ import { guardOf, type Reservation } from "./policy.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import {
   failureReason,
-  programsCalled,
+  transactionAddresses,
   requireReleased,
   sendAndConfirm,
   svmLanded,
@@ -686,7 +686,7 @@ async function sendSvm(
     await requireReleased(
       rpc,
       input.rpcUrl,
-      releasedProgramsCalled(programsCalled(tx.transaction)),
+      releasedProgramsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction)),
     );
   }
   const read = svmReader(input.rpcUrl);

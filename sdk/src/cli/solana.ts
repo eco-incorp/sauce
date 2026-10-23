@@ -56,6 +56,7 @@ import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import {
+  instructionAddresses,
   releasedProgramsCalled,
   requireSolanaRelease,
   type ProgramName,
@@ -213,16 +214,29 @@ export async function requireReleased(
   shownReleased.set(rpc, shown);
 }
 
-/** The programs a compiled transaction calls (a program is never one a lookup table loads). */
-export function programsCalled(transaction: Pick<Transaction, "messageBytes">): string[] {
+/**
+ * Every address a compiled transaction references: its own accounts, which hold each program it
+ * calls, and those it loads from lookup tables (read from `rpc`). A program it passes as an account
+ * is among them — a Kitchen cook passes the engine, which it reaches by CPI — so the release check
+ * sees what a transaction runs, not only what it calls at the top.
+ */
+export async function transactionAddresses(
+  rpc: Rpc,
+  url: string,
+  transaction: Transaction,
+): Promise<string[]> {
   const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
-    staticAccounts: readonly string[];
-    instructions: readonly { programAddressIndex: number }[];
+    addressTableLookups?: readonly { lookupTableAddress: Address }[];
   };
+  const tables: AddressesByLookupTableAddress = {};
+  for (const { lookupTableAddress } of message.addressTableLookups ?? []) {
+    Object.assign(
+      tables,
+      await ask(url, `lookup table ${lookupTableAddress}`, () => fetchAlt(rpc, lookupTableAddress)),
+    );
+  }
 
-  return message.instructions.map(
-    (instruction) => message.staticAccounts[instruction.programAddressIndex]!,
-  );
+  return messageAccounts(transaction, tables);
 }
 
 /**
@@ -774,7 +788,11 @@ export async function sendPlannedSvm(
   }
   const rpc = createSolanaRpc(url);
   // The cluster it goes to, checked now: a plan made against one endpoint can be sent to another.
-  await requireReleased(rpc, url, releasedProgramsCalled(programsCalled(decoded)));
+  await requireReleased(
+    rpc,
+    url,
+    releasedProgramsCalled(await transactionAddresses(rpc, url, decoded)),
+  );
   await rehearsed(rpc, url, decoded, tx.what, false);
 
   return sendAndConfirm(rpc, url, decoded, () => signTransaction([signer.keyPair], decoded));
@@ -2768,7 +2786,7 @@ export async function sendPlanTx(
   await requireReleased(
     ctx.rpc,
     ctx.url,
-    releasedProgramsCalled(tx.instructions.map((instruction) => instruction.programAddress)),
+    releasedProgramsCalled(instructionAddresses(tx.instructions)),
   );
   const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),

@@ -99,7 +99,11 @@ import {
 import { CliError, UsageError } from "./args.js";
 import { failureReason, requireReleased, svmTokenAccountsToCreate } from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
-import { releasedProgramsCalled, type ProgramName } from "./solana-release.js";
+import {
+  instructionAddresses,
+  releasedProgramsCalled,
+  type ProgramName,
+} from "./solana-release.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -1708,9 +1712,7 @@ export async function signableTransactions(
   await requireReleased(
     ctx.rpc,
     ctx.url,
-    releasedProgramsCalled(
-      txs.flatMap((tx) => tx.instructions.map((instruction) => instruction.programAddress)),
-    ),
+    releasedProgramsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions))),
   );
   const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),

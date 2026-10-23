@@ -784,6 +784,40 @@ describeSvm("sauce send: a staged Solana cook as a plan of steps, signed elsewhe
     expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
   }, 300_000);
 
+  it("checks the engine a signed cook reaches through the Kitchen: an engine not the release's gets nothing sent", async () => {
+    const first = await planFor("resumed-engine");
+    const setup = await send(first.cursor!, ...(await signAll(first)));
+    expect(setup.next.step).toBe("cook");
+    const [cook] = await signAll(setup.next);
+    // The Kitchen is the release's; the engine it calls is another build, its bytes not the release's.
+    const { address: engineData } = await deriveProgramDataPda(harness.programId);
+    const original = harness.svm.getAccount(engineData);
+    if (!original.exists) throw new Error("no engine programdata");
+    const data = new Uint8Array(original.data);
+    data[data.length - 1] ^= 0xff;
+    harness.svm.setAccount({ ...original, address: engineData, data });
+    const refusal = `the released engine ${v12SvmEngineProgramId()} is not deployed on solana`;
+    try {
+      const sentBefore = shim.sent.length;
+      const signed = await sauce(
+        ...["send", cook!, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(signed.code).toBe(1);
+      expect(signed.stderr).toContain(refusal);
+      const alone = await sauce(
+        ...["send", "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(alone.code).toBe(1);
+      expect(alone.stderr).toContain(refusal);
+      expect(alone.stdout).not.toContain('"transactions"');
+      expect(shim.sent.length).toBe(sentBefore);
+    } finally {
+      harness.svm.setAccount({ ...original, address: engineData });
+    }
+    const cooked = await send(setup.next.cursor!, cook!);
+    expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
+  }, 300_000);
+
   it("splits a setup past one step's transactions into steps", async () => {
     const big = join(work, "big.sauce.ts");
     writeFileSync(

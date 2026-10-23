@@ -711,6 +711,46 @@ describe(
       }
     });
 
+    it("checks the engine a wallet's cook reaches through the Kitchen: an engine not the release's signs nothing", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-engine", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 4;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; cursor: string };
+      // The Kitchen is the release's; the engine it calls is another build.
+      const { address: engineData } = await deriveProgramDataPda(harness.programId);
+      const original = harness.svm.getAccount(engineData);
+      assert.ok(original.exists);
+      const data = new Uint8Array(original.data);
+      data[data.length - 1] ^= 0xff;
+      harness.svm.setAccount({ ...original, address: engineData, data });
+      const before = shim.sent.length;
+      try {
+        // The serialized cook as handed out.
+        assert.match(
+          failed(
+            await wallets.call("sauce_wallet_send", {
+              wallet: "sol-engine",
+              transaction: { transaction: planned.transaction, what: "the cook", feePayer: wallet },
+              rpcUrl: SOLANA_URL,
+            }),
+          ),
+          new RegExp(`the released engine ${v12SvmEngineProgramId()} is not deployed on solana`),
+        );
+        assert.equal(shim.sent.length, before);
+      } finally {
+        harness.svm.setAccount({ ...original, address: engineData });
+      }
+    });
+
     it("keeps the cook a wallet sent and could not confirm, and learns it landed rather than send it again", async () => {
       const created = ok(
         await wallets.call("sauce_wallet_create", { name: "sol-lost", kind: "solana" }),

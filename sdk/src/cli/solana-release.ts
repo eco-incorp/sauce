@@ -126,7 +126,24 @@ export function packagedRelease(): ReleasedPrograms {
   };
 }
 
-/** Which of the release's programs `programs` — the ones a transaction calls — are. */
+/**
+ * The addresses of every program an instruction list reaches: each instruction's program and every
+ * account it names. A Kitchen cook reaches the engine by CPI and names it only as an account, so
+ * the program ids alone would leave it unchecked.
+ */
+export function instructionAddresses(
+  instructions: readonly {
+    programAddress: string;
+    accounts?: readonly { address: string }[];
+  }[],
+): string[] {
+  return instructions.flatMap((instruction) => [
+    instruction.programAddress,
+    ...(instruction.accounts ?? []).map((account) => account.address),
+  ]);
+}
+
+/** Which of the release's programs appear among `programs` — a transaction's programs and accounts. */
 export function releasedProgramsCalled(programs: Iterable<string>): ProgramName[] {
   const called = new Set(programs);
 
