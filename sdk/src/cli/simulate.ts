@@ -17,6 +17,7 @@ import {
   type StateOverride,
 } from "viem";
 
+import { nativeErc20 } from "../chains/index.js";
 import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
 import { mainReturnType } from "../routes/entry.js";
@@ -83,11 +84,13 @@ const amountText = (balance: Assumed): string =>
 /**
  * The balances `--assume-balance` and a keyless `--fund` give the Pot, as state overrides. An
  * assumed token balance is the Pot's balance outright; a keyless `--fund` adds what its pull would
- * bring — to the assumed balance, or else to the Pot's balance as it stands.
+ * bring — to the assumed balance, or else to the Pot's balance as it stands. Where the native coin
+ * is also an ERC-20 (Arc's USDC), that token's balance is the native one, which no token storage
+ * holds: its amounts go to the Pot's native balance, in the native decimals.
  */
-async function potBalances(
+export async function potBalances(
   client: PublicClient,
-  input: SimulateInput,
+  input: Pick<SimulateInput, "assume" | "chain">,
   pot: Address,
   credit: NonNullable<Funding["credit"]>,
 ): Promise<{
@@ -98,27 +101,52 @@ async function potBalances(
   const assumed: Assumed[] = [];
   const overrides: StateOverride[number][] = [];
   const notes: string[] = [];
+  const erc20 = nativeErc20(input.chain.id);
+  // The key a balance is wanted under, and what scales its amount to that key's decimals.
+  const keyOf = (token: Address | undefined): { key: string; scale: bigint } =>
+    token === undefined
+      ? { key: "native", scale: 1n }
+      : erc20 !== undefined && getAddress(token) === getAddress(erc20.address)
+        ? { key: "native", scale: 10n ** BigInt(18 - erc20.decimals) }
+        : { key: token, scale: 1n };
   const wanted = new Map<string, { request?: FundRequest; amount?: bigint; credit: bigint }>();
   for (const request of input.assume) {
     const { amount, note } = await baseUnits(client, request);
     if (note !== undefined) notes.push(note);
-    wanted.set(request.token ?? "native", { request, amount, credit: 0n });
+    const { key, scale } = keyOf(request.token);
+    wanted.set(key, { request, amount: amount * scale, credit: 0n });
   }
   for (const funded of credit) {
-    const before = wanted.get(funded.token);
-    wanted.set(funded.token, { ...before, credit: (before?.credit ?? 0n) + funded.amount });
+    const { key, scale } = keyOf(funded.token);
+    const before = wanted.get(key);
+    wanted.set(key, { ...before, credit: (before?.credit ?? 0n) + funded.amount * scale });
   }
   for (const [key, want] of wanted) {
+    const because =
+      want.credit === 0n
+        ? "--assume-balance"
+        : want.amount === undefined
+          ? "what --fund would pull, credited (no key to sign the pull)"
+          : "--assume-balance, plus what --fund would pull (no key to sign the pull)";
     if (key === "native") {
-      overrides.push({ address: pot, balance: want.amount! });
+      const start =
+        want.amount ??
+        (await client.getBalance({ address: pot }).catch((error: unknown) => {
+          throw new CliError(
+            `reading the Pot's ${nativeSymbol(input.chain)} balance failed: ` +
+              ((error as { shortMessage?: string }).shortMessage ?? "the request failed"),
+          );
+        }));
+      const amount = start + want.credit;
+      overrides.push({ address: pot, balance: amount });
       assumed.push({
         holder: pot,
         role: "the Pot",
         token: "native",
         symbol: nativeSymbol(input.chain),
         decimals: 18,
-        amount: want.amount!,
-        because: "--assume-balance",
+        amount,
+        because,
       });
       continue;
     }
@@ -146,12 +174,7 @@ async function potBalances(
       ...(info.decimals === undefined ? {} : { decimals: info.decimals }),
       amount,
       slot: { slot: found.slot, layout: found.layout },
-      because:
-        want.credit === 0n
-          ? "--assume-balance"
-          : want.amount === undefined
-            ? "what --fund would pull, credited (no key to sign the pull)"
-            : "--assume-balance, plus what --fund would pull (no key to sign the pull)",
+      because,
     });
   }
 

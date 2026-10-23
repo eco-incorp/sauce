@@ -115,7 +115,9 @@ which block.
 `--assume-balance <TOKEN|address>:<amount>` takes the amount in whole tokens, as `--fund` does. The
 command finds where the token keeps balances by asking it, then confirms the result with
 `balanceOf`. A token whose balance is computed rather than stored (rebasing tokens, shares) is
-refused.
+refused. On Arc, `USDC:<amount>` sets the Pot's native balance, since that token is the native coin
+and no token storage holds it, and `ETH:<amount>` (or `native:<amount>`) is native USDC there, not
+ether.
 
 ### Check that a guard fires
 

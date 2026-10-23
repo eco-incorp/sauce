@@ -2,23 +2,19 @@
 
 # Arc
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Arc a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
-`sauce pot --deploy` are refused,
-naming the supported chains and how to request this one.
-
-To request Arc, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Arc%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Arc+%285042%29&chain=Arc&chain-id=5042) with the chain-support issue form.
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Arc a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `arc`; also `arc-mainnet`, `arc-network` |
 | Chain id | 5042 |
 | Kind | EVM |
 | Name in a program | `Arc` |
 | Native coin | USDC (USDC), 18 decimals; also the ERC-20 `USDC` (6 decimals), one balance |
+| Minimum base fee | 20 gwei: a transaction with a lower `maxFeePerGas` is never included |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
 | CCTP domain | 26 |
 
@@ -37,8 +33,9 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
   other's scale.
 - Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native
   value is 10^-12 USDC, not 1 USDC.
-- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped
-  silently: no error, and no receipt.
+- A transaction whose `maxFeePerGas` is below the minimum base fee (the table above) is never
+  included: it can stay pending with no receipt, or be refused as underpriced. Arc's own
+  documentation asks for a `maxFeePerGas` of at least that fee, and a tip of 0 is accepted.
 - There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no
   `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that always
   reverts, so the ETH paths of its routers revert too. Wrapping, unwrapping and staking the

@@ -58,6 +58,8 @@ import {
   kitchenFee,
   type LocalStores,
   MAX_V4_KEYS,
+  nativeErc20,
+  nativeSymbol,
   parseAccounts,
   parseAddress,
   parseChain,
@@ -1991,6 +1993,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
       const held =
         reading && client !== undefined ? await registeredBalances(client, chain, pot) : undefined;
+      const native = nativeSymbol(chain);
+      // Where the native coin is also an ERC-20 (Arc's USDC), its balance is read twice.
+      const nativeToken = nativeErc20(chain.id);
 
       return {
         json: {
@@ -1998,12 +2003,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           deployed,
           ...(fee === undefined
             ? {}
-            : { kitchenFee: { wei: fee.toString(), native: formatUnits(fee, 18) } }),
+            : {
+                kitchenFee: { wei: fee.toString(), native: formatUnits(fee, 18), symbol: native },
+              }),
           ...(held === undefined
             ? {}
             : {
                 balances: {
-                  native: { wei: held.native.toString(), formatted: formatUnits(held.native, 18) },
+                  native: {
+                    symbol: native,
+                    wei: held.native.toString(),
+                    formatted: formatUnits(held.native, 18),
+                  },
                   tokens: held.tokens.map((token) => ({
                     symbol: token.symbol,
                     address: token.address,
@@ -2017,6 +2028,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         notes: [
           ...(output.notes ?? []),
           ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+          ...(held === undefined || nativeToken === undefined
+            ? []
+            : [
+                `On ${chain.name} the native coin is ${native}, and the token at ` +
+                  `${nativeToken.address} is the same balance: balances.native (18 decimals) and ` +
+                  `that token's entry (${nativeToken.decimals}) read it twice, so do not add them.`,
+              ]),
         ],
       };
     },

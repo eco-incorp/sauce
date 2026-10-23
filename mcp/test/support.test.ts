@@ -96,7 +96,7 @@ function refused(result: CallToolResult, slug: string): Refusal {
   assert.equal(refusal.code, "preview-chain");
   assert.deepEqual(
     refusal.supportedChains.map((chain) => chain.slug),
-    ["ethereum", "base", "solana"],
+    ["ethereum", "base", "arc", "solana"],
   );
   const chain = requireChain(slug);
   assert.deepEqual(
@@ -178,7 +178,7 @@ describe("still runs on a preview chain", () => {
       supported: string[];
       requestChain: string;
     };
-    assert.deepEqual(supported, ["ethereum", "base", "solana"]);
+    assert.deepEqual(supported, ["ethereum", "base", "arc", "solana"]);
     for (const chain of chains) {
       assert.equal(chain.support, supported.includes(chain.slug) ? "supported" : "preview");
     }
@@ -187,12 +187,12 @@ describe("still runs on a preview chain", () => {
       "https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml",
     );
     const instructions = mcp.client.getInstructions() ?? "";
-    assert.match(instructions, /builds transactions only on Ethereum, Base and Solana/);
+    assert.match(instructions, /builds transactions only on Ethereum, Base, Arc and Solana/);
     assert.match(instructions, /returns `refused` instead/);
     const { tools } = await mcp.client.listTools();
     for (const name of ["sauce_tx", "sauce_pot", "sauce_actions"]) {
       const tool = tools.find((each) => each.name === name);
-      assert.match(tool?.description ?? "", /only on Ethereum, Base and Solana/, name);
+      assert.match(tool?.description ?? "", /only on Ethereum, Base, Arc and Solana/, name);
     }
   });
 

@@ -12,6 +12,8 @@ import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
 import {
   bytesToHex,
+  formatEther,
+  formatGwei,
   getAddress,
   hexToBytes,
   type Address,
@@ -21,6 +23,7 @@ import {
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
+import { getChain } from "../chains/index.js";
 import {
   v12DeployedAddresses,
   v12EngineAddress,
@@ -28,6 +31,7 @@ import {
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
+import { nativeSymbol } from "../evm/effects.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
@@ -673,6 +677,23 @@ function deployHint(chain: CanonicalChain, target: PotInput): string {
     : `sauce pot --deploy --chain ${chain.slug} --keystore <its owner's keystore>`;
 }
 
+/**
+ * What a signer outside the command must know of a chain whose protocol sets a minimum base fee
+ * (Arc's): the transactions a command hands out carry no fee fields, and one signed with a lower fee
+ * cap is never included. Nothing for a chain that sets none.
+ */
+function feeFloorNotes(chain: CanonicalChain): string[] {
+  const floor = getChain(chain.id)?.minBaseFeePerGas;
+
+  return floor === undefined
+    ? []
+    : [
+        `On ${chain.slug} a transaction is included only with a maxFeePerGas (or gasPrice) of at ` +
+          `least ${formatGwei(floor)} gwei, the chain's minimum base fee: sign each with a fee cap ` +
+          "at or above it, or it is never mined.",
+      ];
+}
+
 /** The cook's value: as given, or the Kitchen's fee — refusing a given one below the fee. */
 export function valueOf(
   given: bigint | undefined,
@@ -681,8 +702,8 @@ export function valueOf(
 ): bigint {
   if (given !== undefined && fee !== undefined && given < fee) {
     throw new CliError(
-      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei: the ` +
-        "cook would revert with FeeNotPaid",
+      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei ` +
+        `(${formatEther(fee)} ${nativeSymbol(chain)}): the cook would revert with FeeNotPaid`,
     );
   }
   const value = given ?? fee;
@@ -926,6 +947,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(funds?.notes ?? []),
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
+        ...feeFloorNotes(input.chain),
       ],
     };
   }
@@ -939,6 +961,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         : `It is NOT deployed, and --pot does not say whose it is: deploy it first ` +
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
+    ...feeFloorNotes(input.chain),
   ];
   const json = {
     chainId: input.chain.id,
@@ -1174,6 +1197,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
     notes: [
       `This is Kitchen.deployPot on the released Kitchen. Any account may send it: the Pot is ` +
         `${input.owner}'s either way, and it deploys once.`,
+      ...feeFloorNotes(input.chain),
     ],
   };
 }
@@ -1209,7 +1233,7 @@ function deploymentLines(
         `${kitchen.address} is ${there(kitchen.deployed)}` +
         (kitchen.executionFee === undefined
           ? ""
-          : `, its execution fee ${kitchen.executionFee} wei`) +
+          : `, its execution fee ${kitchen.executionFee} wei (${formatEther(kitchen.executionFee)} ${nativeSymbol(chain)})`) +
         `; the Pot ${pot} is ${there(state.deployed)}` +
         (state.owner === undefined ? "." : `, owned by ${state.owner}.`),
       ...(kitchen.deployed

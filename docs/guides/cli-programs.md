@@ -120,7 +120,7 @@ A name the chain does not have is refused the same way, naming the chain: a prog
 ## Choose the chain
 
 `--chain` takes a slug, an alias or a chain id: `base`, `eth`, `8453`, `solana`. Every chain Sauce
-knows compiles and simulates; the `sauce` command sends only on Ethereum, Base and Solana, and
+knows compiles and simulates; the `sauce` command sends only on Ethereum, Base, Arc and Solana, and
 refuses the rest ([Supported and preview chains](cli.md#supported-and-preview-chains)).
 
 `--target evm|svm` is a check against the chain: a program meant for Solana fails fast when

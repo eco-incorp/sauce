@@ -402,7 +402,8 @@ export async function skillsReferences(api, documented) {
   const tokensOf = new Map(globals.tokens.map((entry) => [entry.chain.slug, entry]));
   const chains = canonical.map((chain) => {
     const names = sourceGlobals.get(chain.slug);
-    const coin = sdk.getChain(chain.id)?.nativeCurrency;
+    const record = sdk.getChain(chain.id);
+    const coin = record?.nativeCurrency;
     const tokens = tokensOf.get(chain.slug);
 
     return {
@@ -417,6 +418,7 @@ export async function skillsReferences(api, documented) {
       exported: sdk[names.chain.key] !== undefined,
       aliases: chain.aliases ?? [],
       coin,
+      minBaseFeePerGas: record?.minBaseFeePerGas,
       native: tokens?.native,
       tokens: tokens?.tokens ?? [],
       devnet: tokens?.devnet ?? [],
@@ -615,8 +617,9 @@ const CHAIN_NOTES = {
     "  other's scale.",
     "- Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native",
     "  value is 10^-12 USDC, not 1 USDC.",
-    "- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped",
-    "  silently: no error, and no receipt.",
+    "- A transaction whose `maxFeePerGas` is below the minimum base fee (the table above) is never",
+    "  included: it can stay pending with no receipt, or be refused as underpriced. Arc's own",
+    "  documentation asks for a `maxFeePerGas` of at least that fee, and a tip of 0 is accepted.",
     "- There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no",
     "  `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that always",
     "  reverts, so the ETH paths of its routers revert too. Wrapping, unwrapping and staking the",
@@ -1094,6 +1097,11 @@ function renderChain(chain, supported, site) {
         : ""
     } |`,
   );
+  if (chain.minBaseFeePerGas !== undefined) {
+    lines.push(
+      `| Minimum base fee | ${Number(chain.minBaseFeePerGas) / 1e9} gwei: a transaction with a lower \`maxFeePerGas\` is never included |`,
+    );
+  }
   // The release is the same on every chain, so a chain's file points at the one place it is listed.
   const deployments = `[${site.label(site.deployments, "Deployments")}](${href(path, site.deployments)})`;
   lines.push(

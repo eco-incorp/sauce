@@ -7,7 +7,7 @@ coin, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
 [deployments.json](deployments.json) lists them once.
 
-Sauce supports transactions on Ethereum, Base and Solana (`ethereum`, `base`, `solana`). Every other chain is a preview chain:
+Sauce supports transactions on Ethereum, Base, Arc and Solana (`ethereum`, `base`, `arc`, `solana`). Every other chain is a preview chain:
 a program compiles and simulates there, but the `sauce` command and the MCP server build and
 send no transaction, and say so with the supported chains and how to request that chain. To
 request one, look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to
@@ -39,7 +39,7 @@ preview chain's file links its own.
 | [Ronin](ronin.md) | `ronin` | 2020 | EVM | preview | — | 0 | 0 |
 | [Kava](kava.md) | `kava` | 2222 | EVM | preview | — | 0 | 0 |
 | [Mantle](mantle.md) | `mantle` | 5000 | EVM | preview | — | 1 | 0 |
-| [Arc](arc.md) | `arc` | 5042 | EVM | preview | 26 | 4 | 23 |
+| [Arc](arc.md) | `arc` | 5042 | EVM | supported | 26 | 4 | 23 |
 | [ZetaChain](zetachain.md) | `zetachain` | 7000 | EVM | preview | — | 0 | 0 |
 | [Klaytn](klaytn.md) | `klaytn` | 8217 | EVM | preview | — | 0 | 0 |
 | [Base](base.md) | `base` | 8453 | EVM | supported | 6 | 69 | 47 |

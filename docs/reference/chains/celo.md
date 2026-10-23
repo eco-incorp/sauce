@@ -8,7 +8,7 @@
 > a program writes for each contract. Celo is a preview chain: programs compile and simulate here,
 > and the `sauce` command sends nothing.
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Celo a program
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Celo a program
 compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
@@ -53,6 +53,8 @@ address.
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0xAfE208a311B21f13EF87E33A90049fC17A7acDEc` | `UniswapV3.Factory` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0x3d79EdAaBC0EaB6F08ED885C05Fc0B014290D95A` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | quoterV2 | `0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | swapRouter02 | `0x5615CDAb10dc425a742d643d949a7F474C01abc4` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x288dc841A52FCA2707c6947B3A777c5E56cd87BC` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0xbc21f8720babf4b20d195ee5c6e99c52b76f2bfb` | `UniswapV4.StateView` |

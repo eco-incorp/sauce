@@ -107,6 +107,10 @@ gas estimate or a simulation before sending. A cheaper caught-failure path no lo
 budget. The result's `gasUsed` remains the gas actually consumed, not the budget; unused gas is
 not charged. See the [testing kit](api/testing-kit.md#cookresult).
 
+Arc (chain 5042) is a supported chain, beside Ethereum, Base and Solana: the `sauce` command and the
+MCP server build and send its cooks and Pot deployments, where before they only compiled and
+simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
+
 ### SauceScript
 
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
@@ -165,6 +169,12 @@ not charged. See the [testing kit](api/testing-kit.md#cookresult).
 - **Removed** (EVM): The `EcoRoutes` namespace, with `EcoRoutes.Portal`, `EcoRoutes.HyperProver` and
   `EcoRoutes.PolymerProver`, is no longer a name. The registry has 134 protocols and 313 contracts,
   where it had 135 and 316.
+- **Fixed** (EVM): `UniswapV3.QuoterV2` is a name on every chain where the registry has Uniswap V3:
+  Base, Arbitrum, Optimism, Polygon, BSC, Avalanche and Celo join Ethereum, Monad and Arc. It used to
+  fail on Base with "Contract 'QuoterV2' (uniswap-v3) is not deployed on 'base'", so a program had
+  to take the quoter's address as an argument. `UniswapV3.SwapRouter02` is a name on Arbitrum,
+  Optimism and Polygon too, and `UniswapV3.NonfungiblePositionManager` on BSC, Avalanche and Celo.
+  Each address is Uniswap's own, checked on chain.
 - **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
   eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
   an editor typed nothing on it.
@@ -209,6 +219,27 @@ not charged. See the [testing kit](api/testing-kit.md#cookresult).
   `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`, `sauce_wallet_send`,
   `sauce_pot_list` and `sauce_pot_import`. Its one prompt is `sauce_write_program`.
 - The agent skills: `sauce-intents` is removed, so `sauce skills install` writes 13 skills.
+
+### The sauce command and the MCP server
+
+- **Fixed** (Arc): `sauce simulate` and `sauce run` report each movement of native USDC once, as
+  USDC. Arc logs every native transfer itself, so each was listed twice, once as an unknown token,
+  a transfer through the ERC-20 once more, and what the Pot was left holding was wrong.
+- **Fixed** (Arc): `sauce simulate --assume-balance USDC:<amount>`, a keyless `--fund USDC:<amount>`
+  and the MCP server's `assumeBalance` and `fund` set the Pot's native balance. They were refused,
+  because no storage of the ERC-20 holds it. `USDC` and the native coin are one balance, named once.
+- **Changed** (Arc): A wallet policy counts native USDC that leaves as value or through the ERC-20
+  against `native` and against the `USDC` token limit both. Each limit missed what left the other
+  way.
+- **Changed** (EVM): `sauce pot` and the `--value` refusal give the Kitchen's fee in the native coin
+  beside wei: `10000000000000000 wei (0.01 USDC)` on Arc. `sauce_pot` names the native coin of its
+  `kitchenFee` and `balances.native` (`symbol`), and on Arc notes that `balances.native` and the
+  `USDC` token are one balance, read twice.
+- **Added** (Arc): `sauce tx` and `sauce pot` (and `sauce_tx`, `sauce_pot`) say that Arc includes a
+  transaction only with a `maxFeePerGas` of at least 20 gwei, its minimum base fee, since the
+  unsigned transactions they print leave fees to the signer. `sauce send` and `sauce_send` refuse a
+  transaction signed with a lower fee cap before sending it. `@eco-incorp/sauce/chains` records the
+  floor as `minBaseFeePerGas` on Arc's chain.
 
 ## SDK 0.99.15 — 2026-10-21
 

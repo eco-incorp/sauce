@@ -2,7 +2,7 @@
 
 # Arbitrum One
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Arbitrum One a program
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Arbitrum One a program
 compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
@@ -142,7 +142,9 @@ address.
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0xd88f38f930b7952f2db2432cb002e7abbf3dd869` | `UniswapV4.PositionManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` | `UniswapV4.StateView` |

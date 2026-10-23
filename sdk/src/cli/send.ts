@@ -30,6 +30,7 @@ import {
 } from "@solana/kit";
 import {
   bytesToHex,
+  formatGwei,
   getAddress,
   keccak256,
   parseTransaction,
@@ -42,6 +43,7 @@ import {
 } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { getChain } from "../chains/index.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
@@ -311,6 +313,8 @@ interface SignedEvm {
   readonly data: Hex;
   readonly value: bigint;
   readonly gas?: bigint;
+  /** The most it pays per gas: an EIP-1559 `maxFeePerGas`, or a legacy `gasPrice`. */
+  readonly feeCap?: bigint;
 }
 
 async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
@@ -342,6 +346,9 @@ async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
     data: parsed.data ?? "0x",
     value: parsed.value ?? 0n,
     ...(parsed.gas === undefined ? {} : { gas: parsed.gas }),
+    ...((parsed.maxFeePerGas ?? parsed.gasPrice) === undefined
+      ? {}
+      : { feeCap: parsed.maxFeePerGas ?? parsed.gasPrice }),
   };
 }
 
@@ -419,6 +426,19 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
   const signed = await Promise.all(
     input.transactions.map((raw, index) => signedEvm(raw, `transaction ${index + 1}`)),
   );
+  // A fee cap under the chain's minimum base fee (Arc's) is never included: refused before
+  // anything is sent, rather than waited for until it is found gone.
+  const floor = getChain(input.chain.id)?.minBaseFeePerGas;
+  for (const [index, tx] of signed.entries()) {
+    if (floor !== undefined && tx.feeCap !== undefined && tx.feeCap < floor) {
+      throw new UsageError(
+        `transaction ${index + 1} is signed with a fee cap of ${formatGwei(tx.feeCap)} gwei, below ` +
+          `${input.chain.slug}'s minimum base fee of ${formatGwei(floor)} gwei, so it would never be ` +
+          `included: sign it again with a maxFeePerGas of at least ${formatGwei(floor)} gwei. ` +
+          "Nothing was sent",
+      );
+    }
+  }
   const client = await connect(input.rpcUrl, input.chain);
   const sent: SentEntry[] = [];
   for (const [index, tx] of signed.entries()) {

@@ -1,11 +1,13 @@
 /**
  * What a rehearsed cook did, read back from the logs `eth_simulateV1` returns: the ERC-20
  * transfers and approvals (by registry symbol, in whole units), the native-currency transfers the
- * node traced (`traceTransfers`), and each address's net change. Nothing here reaches past the logs
- * except to name a token the registry does not: its own `symbol()` and `decimals()`.
+ * node traced (`traceTransfers`) or the chain logged itself, and each address's net change.
+ * Nothing here reaches past the logs except to name a token the registry does not: its own
+ * `symbol()` and `decimals()`.
  */
 import {
   decodeAbiParameters,
+  encodeAbiParameters,
   formatUnits,
   getAddress,
   hexToString,
@@ -17,7 +19,7 @@ import {
 } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { chains } from "../chains/index.js";
+import { chains, nativeErc20 } from "../chains/index.js";
 import { sourceGlobals } from "../routes/source-globals.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 
@@ -36,6 +38,57 @@ const DEPOSIT = "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc91
 const WITHDRAWAL = "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65";
 /** Where a node's `traceTransfers` reports native-currency transfers, as ERC-20 Transfer logs. */
 const NATIVE_EMITTER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+/**
+ * Where a chain that logs its own native-currency transfers logs them, as ERC-20 Transfer logs of
+ * the native amount: EIP-7708's system address. Arc logs every movement of its native USDC there,
+ * a transaction's value, a call's and a `transfer` through its ERC-20 alike, in a receipt and in a
+ * simulation.
+ */
+const CHAIN_NATIVE_EMITTER = "0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE";
+
+/**
+ * `logs` with each native-currency movement in them said once, as a Transfer from the address a
+ * trace reports one from, however the node said it; `logged` when the chain logged its own. Such
+ * a chain logs every one, so a trace's are the same movements again, and are dropped. Where the
+ * native coin is also an ERC-20 (Arc's USDC), that token's Transfer logs are native movements in
+ * its own decimals: repeats where the chain logged them, and rescaled into native ones where it
+ * did not. The token's Approval logs are its own, and stay.
+ */
+export function nativeOnce(
+  chain: CanonicalChain,
+  logs: readonly RawLog[],
+): { readonly logs: RawLog[]; readonly logged: boolean } {
+  const isTransfer = (log: RawLog): boolean =>
+    log.topics.length === 3 &&
+    log.topics[0]?.toLowerCase() === TRANSFER &&
+    amountOf(log.data) !== undefined;
+  const logged = logs.some(
+    (log) => isTransfer(log) && getAddress(log.address) === CHAIN_NATIVE_EMITTER,
+  );
+  const erc20 = nativeErc20(chain.id);
+  const token = erc20 === undefined ? undefined : getAddress(erc20.address);
+
+  return {
+    logs: logs.flatMap((log): RawLog[] => {
+      if (!isTransfer(log)) return [log];
+      const emitter = getAddress(log.address);
+      if (emitter === CHAIN_NATIVE_EMITTER) return [{ ...log, address: NATIVE_EMITTER }];
+      if (emitter === NATIVE_EMITTER) return logged ? [] : [log];
+      if (emitter !== token) return [log];
+      if (logged) return [];
+      const scale = 10n ** BigInt(chains[chain.id]!.nativeCurrency.decimals - erc20!.decimals);
+
+      return [
+        {
+          ...log,
+          address: NATIVE_EMITTER,
+          data: encodeAbiParameters([{ type: "uint256" }], [amountOf(log.data)! * scale]),
+        },
+      ];
+    }),
+    logged,
+  };
+}
 
 /** A token, as the output names it. `undefined` decimals print base units. */
 export interface TokenInfo {
@@ -146,14 +199,16 @@ export async function tokenInfo(
   };
 }
 
-/** The cook's logs, decoded. `traced` says whether the node reported native transfers. */
+/** The cook's logs, decoded. `traced` says whether the node reported native transfers; a chain
+ *  that logs its own reports them either way ({@link nativeOnce}). */
 export async function effectsOf(
   client: PublicClient,
   chain: CanonicalChain,
-  logs: readonly RawLog[],
+  raw: readonly RawLog[],
   traced: boolean,
   labels: ReadonlyMap<string, string>,
 ): Promise<Effects> {
+  const { logs, logged } = nativeOnce(chain, raw);
   const native = nativeSymbol(chain);
   const wrapped = new Set(
     (TOKEN_REGISTRY[chain.id] ?? [])
@@ -239,7 +294,7 @@ export async function effectsOf(
     moves,
     transfers,
     approvals,
-    ...(traced ? { native: nativeMoves } : {}),
+    ...(traced || logged ? { native: nativeMoves } : {}),
     changes,
     other,
     tokens,

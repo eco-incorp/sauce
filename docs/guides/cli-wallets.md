@@ -19,7 +19,7 @@ wallet's own MCP server sign ([Sign with your wallet's MCP server](wallet-mcp.md
 ## Make a wallet
 
 ```sh
-sauce wallet new me                 # an Ethereum-style wallet, for Ethereum and Base
+sauce wallet new me                 # an Ethereum-style wallet, for Ethereum, Base and Arc
 sauce wallet new me-solana --solana # a Solana wallet
 sauce wallet list                   # every wallet, with its address
 sauce wallet address me             # one wallet's address
@@ -30,8 +30,8 @@ address and file. The key is stored encrypted in `~/.sauce/wallets`, and `list` 
 no password. A name is up to 64 lowercase letters, digits, `-` and `_`. A wallet is never
 overwritten: pick another name for a second one.
 
-Send the wallet's address a little of the chain's coin (ETH on Ethereum and Base, SOL on Solana)
-before its first run: it pays the gas and the Kitchen's fee.
+Send the wallet's address a little of the chain's coin (ETH on Ethereum and Base, USDC on Arc, SOL
+on Solana) before its first run: it pays the gas and the Kitchen's fee.
 
 ### Import a key you have
 
@@ -110,7 +110,8 @@ could loosen it.
   Pot counts as a transaction to that Pot, so a policy that lets the wallet cook on its Pot lets a
   command create the Pot first.
 - `native` counts the chain's coin leaving the wallet or the Pot the transaction cooks on. On
-  Solana the fee and any rent are included.
+  Solana the fee and any rent are included. On Arc, whose native coin is also the `USDC` token (one
+  balance), what leaves as either counts against `native` and the `USDC` limit both.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
   leaves the wallet or its Pot. An approval above what the limit leaves room for is refused, an
   approval of Permit2 aside, which moves nothing without a later signature. A token the policy does

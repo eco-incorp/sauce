@@ -5,10 +5,10 @@
  * package exports none of it; the MCP server imports it from here (`mcp/src/sdk.ts`), and the
  * skills' generator and checker read the built module.
  *
- * For the initial release the command supports transactions on three chains: Ethereum, Base and
- * Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a program
- * for it compiles, and the command simulates, rehearses and reads there, but builds no transaction
- * for it to sign and sends none.
+ * For the initial release the command supports transactions on four chains: Ethereum, Base, Arc
+ * and Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
+ * program for it compiles, and the command simulates, rehearses and reads there, but builds no
+ * transaction for it to sign and sends none.
  *
  * {@link requireSupported} is the gate, called from the command functions both front ends call
  * (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s deployment, `sendCommand`,
@@ -39,7 +39,7 @@ import { CliError } from "./args.js";
 export type ChainSupport = "supported" | "preview";
 
 /** The chains the release supports, by slug, in the order the docs name them. */
-export const SUPPORTED_CHAIN_SLUGS = ["ethereum", "base", "solana"] as const;
+export const SUPPORTED_CHAIN_SLUGS = ["ethereum", "base", "arc", "solana"] as const;
 
 const SUPPORTED = new Set<number>(
   SUPPORTED_CHAIN_SLUGS.map((slug) => {
@@ -257,7 +257,7 @@ const summary = (chain: CanonicalChain): ChainSummary => ({
 const listed = (words: readonly string[]): string =>
   words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 
-/** The supported chains by name, as every message says them: "Ethereum, Base and Solana". */
+/** The supported chains by name, as every message says them: "Ethereum, Base, Arc and Solana". */
 export const supportedChainNames = (): string => listed(supportedChains().map((c) => c.name));
 
 /** One sentence of what a preview chain still does, for a help text or a note. */

@@ -297,6 +297,87 @@ describe("the guard", () => {
     );
   });
 
+  describe("on Arc, whose native USDC is also its ERC-20", () => {
+    const ARC_USDC = getAddress("0x3600000000000000000000000000000000000000");
+    // Arc logs every native movement itself, from EIP-7708's system address, in 18 decimals.
+    const CHAIN = getAddress("0xfffffffffffffffffffffffffffffffffffffffe");
+    const onArc = (logs: Log[]): PublicClient =>
+      ({ ...client(logs), getChainId: async () => requireChain("arc").id }) as PublicClient;
+    // `usdc` sent as value: the trace and the chain both report it.
+    const asValue = (usdc: string) => {
+      const wei = parseUnits(usdc, 18);
+
+      return {
+        moved: onArc([
+          transfer(NATIVE, WALLET, RECIPIENT, wei),
+          transfer(CHAIN, WALLET, RECIPIENT, wei),
+        ]),
+        call: { to: RECIPIENT, data: "0x" as Hex, value: wei },
+      };
+    };
+    // `usdc` sent through the ERC-20: the chain and the token both report it.
+    const asToken = (usdc: string) => ({
+      moved: onArc([
+        transfer(CHAIN, WALLET, RECIPIENT, parseUnits(usdc, 18)),
+        transfer(ARC_USDC, WALLET, RECIPIENT, parseUnits(usdc, 6)),
+      ]),
+      call: pay,
+    });
+
+    it("holds USDC to the native limit and the USDC limit, however it leaves", async () => {
+      const byToken = guarded({ tokens: { USDC: { perTransaction: "1.5" } } });
+      for (const { moved, call } of [asValue("2"), asToken("2")]) {
+        expect((await refused(byToken.evm(moved, call))).message).toMatch(
+          /tokens.USDC.perTransaction is 1.5 USDC, and this transaction sends 2 USDC/,
+        );
+      }
+      const byNative = guarded({ native: { perTransaction: "1.5" } });
+      for (const { moved, call } of [asValue("2"), asToken("2")]) {
+        expect((await refused(byNative.evm(moved, call))).message).toMatch(
+          /native.perTransaction is 1.5 USDC, and this transaction sends 2 USDC/,
+        );
+      }
+      // Each movement counts once: 2 USDC, not the 4 its two reports add up to.
+      const roomy = guarded({
+        native: { perTransaction: "3" },
+        tokens: { USDC: { perTransaction: "3" } },
+      });
+      for (const { moved, call } of [asValue("2"), asToken("2")]) {
+        await expect(roomy.evm(moved, call)).resolves.toBeDefined();
+      }
+    });
+
+    it("reads a USDC limit in base units as the token's, for transfers and approvals", async () => {
+      const guard = guarded({ tokens: { USDC: { perTransaction: "1500000n" } } });
+      for (const { moved, call } of [asValue("2"), asToken("2")]) {
+        expect((await refused(guard.evm(moved, call))).message).toMatch(
+          /tokens.USDC.perTransaction is 1.5 USDC, and this transaction sends 2 USDC/,
+        );
+      }
+      for (const { moved, call } of [asValue("1"), asToken("1")]) {
+        await expect(guard.evm(moved, call)).resolves.toBeDefined();
+      }
+      const approves = (usdc: string) =>
+        onArc([approval(ARC_USDC, WALLET, RECIPIENT, parseUnits(usdc, 6))]);
+      expect((await refused(guard.evm(approves("2"), pay))).message).toMatch(
+        /approves .* for 2 USDC, more than the 1.5 USDC tokens.USDC leaves room for/,
+      );
+      await expect(guard.evm(approves("1"), pay)).resolves.toBeDefined();
+    });
+
+    it("counts a day's USDC with every other chain's", async () => {
+      const guard = guarded({ tokens: { USDC: { perDay: "5" } } });
+      (await guard.evm(client([transfer(USDC, WALLET, RECIPIENT, parseUnits("2", 6))]), pay)).sent(
+        "0xaa",
+      );
+      const value = asValue("2");
+      (await guard.evm(value.moved, value.call)).sent("0xbb");
+      expect((await refused(guard.evm(value.moved, value.call))).message).toMatch(
+        /tokens.USDC.perDay is 5 USDC; 4 USDC went in the last 24 hours, and this transaction sends 2 USDC/,
+      );
+    });
+  });
+
   it("refuses an approval above the limit, but not one to Permit2", async () => {
     const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
     const unlimited = client([approval(USDC, WALLET, RECIPIENT, maxUint256)]);
