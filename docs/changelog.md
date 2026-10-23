@@ -317,6 +317,15 @@ remain available and explicitly report that deployment availability has not been
   every other `try` form skipped it. A contract that has code but is not a V2 or LB pair still
   reverts `tryUniswapV2` and `tryTraderJoeLB`, which read the pair's view uncaught.
 
+### The agent skills and the manual
+
+- **Added**: ten of the protocols' own Solidity examples, ported to Sauce (Uniswap V3's swap,
+  flash and liquidity examples, Uniswap V4's swap guide, Balancer V2's batch and flash swaps, Aave
+  V3 credit delegation, Compound III, Morpho Blue and Pendle), each beside the file it ports, in
+  `sauce-swaps` and `sauce-protocols` and in [From Solidity examples to Sauce](guides/solidity-examples.md).
+  The swaps, the liquidity examples and the flash swaps execute on Ethereum's state at a fixed
+  block; the PairFlash port runs once a trade has moved one of its two pools.
+
 ### The registry
 
 - **Fixed**: every EVM address in the protocol registry is written EIP-55 checksummed. Fifteen were
