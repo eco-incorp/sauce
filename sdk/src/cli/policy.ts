@@ -880,11 +880,22 @@ export async function measureSvm(
     }
     // An account it closes gives nothing more away: its balance is counted as it leaves.
     if (is === undefined || !ours.has((was ?? is).owner)) return;
+    // An allowance is approved when its delegate is new, or it grew. It may also have grown and been
+    // spent in the same transaction, ending below where it began: the delegate can take only what
+    // its allowance allowed, so where the allowance moved and what it allows now plus what left the
+    // account is more than it allowed before, it was raised. (Conservative: an owner's spend beside
+    // a delegate's reads as one too, and counts the allowance left as approved again.)
+    const raised =
+      was !== undefined &&
+      is.delegate === was.delegate &&
+      (is.delegatedAmount > was.delegatedAmount ||
+        (is.delegatedAmount !== was.delegatedAmount &&
+          is.delegatedAmount + was.amount - is.amount > was.delegatedAmount));
     if (
       is.delegate !== undefined &&
       !ours.has(is.delegate) &&
       is.delegatedAmount > 0n &&
-      (is.delegate !== was?.delegate || is.delegatedAmount > (was?.delegatedAmount ?? 0n))
+      (is.delegate !== was?.delegate || raised)
     ) {
       approved.push({ token: is.mint, spender: is.delegate, amount: is.delegatedAmount });
     }

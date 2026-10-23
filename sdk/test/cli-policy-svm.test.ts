@@ -1636,6 +1636,36 @@ describeSvm(
       });
     });
 
+    it("counts what is left of an allowance raised and partly spent in one transaction", async () => {
+      // An allowance of 500 tokens stands; the transaction raises it to 1000, then the delegate
+      // spends 600 of it: 600 left the account, and 400 more the delegate may still take.
+      const mint = mints.spl;
+      const delegate = await generateKeyPairSigner();
+      const source = delegatedAccount(wallet, mint, AMOUNT, delegate.address, 500_000n);
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const transaction = await signed([
+        approve(source, delegate.address, AMOUNT),
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(source), readonly(mint), writable(elsewhere), signing(delegate)],
+          data: transferCheckedData(600_000n, DECIMALS),
+        },
+      ]);
+      const policy = { tokens: { [mint]: { perTransaction: "700" } } };
+      const tokens = (await measure(transaction)).tokens.map(({ amount, delegated, ...rest }) => ({
+        ...rest,
+        amount: String(amount),
+        delegated: String(delegated),
+      }));
+
+      expect({ tokens, ...(await guarded(policy, transaction)) }).toEqual({
+        tokens: [{ token: mint, amount: "1000000", decimals: DECIMALS, delegated: "400000" }],
+        ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1000 ${mint}`),
+      });
+      expectOk(sendSigned(harness, transaction));
+      expect(String(tokenAmount(harness, elsewhere))).toBe("600000");
+    });
+
     it("counts what the wallet moves out of a Pot's account it is the delegate of, with no cook", async () => {
       // A Pot's account, the wallet its delegate for all of it (an approval that gave no outside
       // key anything); then the wallet alone spends from it, no cook naming the Pot.
