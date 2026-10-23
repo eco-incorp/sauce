@@ -108,6 +108,7 @@ import {
   mintFacts,
   movedBy,
   namesAnyOf,
+  permanentDelegateOf,
   tokenTransition,
   writableAccounts,
 } from "./svm-effects.js";
@@ -387,6 +388,15 @@ export interface Measured {
    * decimals could not be read, which a limit naming one of them cannot hold.
    */
   readonly undecided?: readonly string[];
+  /**
+   * Solana: the Token-2022 mints whose permanent delegate goes from the wallet (or a Pot it cooks
+   * on) to another key, which then moves any account's tokens of the mint with no approval.
+   */
+  readonly permanentDelegates?: readonly {
+    readonly token: string;
+    readonly symbol?: string;
+    readonly delegate: string;
+  }[];
   /** Why native or token movements could not be measured, when they could not. */
   readonly unmeasured: { readonly native?: string; readonly tokens?: string };
 }
@@ -822,7 +832,20 @@ export async function measureSvm(
   const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
   // Wrapped SOL a delegate may move is native coin another key may take.
   let delegatedLamports = 0n;
+  // A Token-2022 mint whose permanent delegate goes from one of those keys to another key: that key
+  // then moves any account's tokens of the mint, the wallet's included, with no approval.
+  const delegating: Array<{ token: SvmAddress; delegate: SvmAddress }> = [];
   tracked.forEach((account, index) => {
+    const delegateBefore = permanentDelegateOf(before[index] ?? null);
+    const delegateAfter = permanentDelegateOf(after[index] ?? null);
+    if (
+      delegateBefore !== undefined &&
+      ours.has(delegateBefore) &&
+      delegateAfter !== undefined &&
+      !ours.has(delegateAfter)
+    ) {
+      delegating.push({ token: account, delegate: delegateAfter });
+    }
     // An account made again at its address for another asset is a new one: the old one's balance
     // is counted as it leaves.
     const { was, is } = tokenTransition(before[index] ?? null, after[index] ?? null);
@@ -855,6 +878,7 @@ export async function measureSvm(
       ...approved.map((each) => each.token),
       ...handedOff.keys(),
       ...closable.map((each) => each.token),
+      ...delegating.map((each) => each.token),
     ],
     new Map(tracked.map((account, index) => [account, after[index] ?? null])),
   );
@@ -933,6 +957,11 @@ export async function measureSvm(
       .map(([token, out]) => ({ token, ...out })),
     approvals: approved.map((each) => ({ ...each, ...facts.get(each.token) })),
     closers: closable.map((each) => {
+      const symbol = facts.get(each.token)?.symbol;
+
+      return symbol === undefined ? each : { ...each, symbol };
+    }),
+    permanentDelegates: delegating.map((each) => {
       const symbol = facts.get(each.token)?.symbol;
 
       return symbol === undefined ? each : { ...each, symbol };
@@ -1186,6 +1215,15 @@ function spendOf(
             `more than the ${whole(cap > 0n ? cap : 0n)} ${approval.symbol ?? approval.token} tokens.${key} leaves room for`,
         );
       }
+    }
+    // A permanent delegate moves any account's tokens of its mint: no amount bounds what it takes.
+    for (const handed of (measured.permanentDelegates ?? []).filter((each) => names(key, each))) {
+      refuse(
+        `tokens.${key}`,
+        `this transaction makes ${handed.delegate} the permanent delegate of ${handed.token}, ` +
+          `which moves any account's ${handed.symbol ?? handed.token} with no approval, and ` +
+          `tokens.${key} limits it`,
+      );
     }
     // A token account another key may close holds no amount a limit can weigh: refused outright.
     for (const handed of (measured.closers ?? []).filter((each) => names(key, each))) {

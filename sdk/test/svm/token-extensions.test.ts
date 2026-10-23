@@ -8,6 +8,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { getAddressDecoder } from "@solana/kit";
 import {
   calcTransferFee,
   getEpochFee,
@@ -206,6 +208,16 @@ describe("parseMintExtensions — advisories (present-but-routable) do NOT block
     const ext = parseMintExtensions(t22MintWith(tlvEntry(12, new Uint8Array(32))));
     expect(ext.blocking).toEqual([]);
     expect(ext.advisories.some((r) => r.startsWith("PermanentDelegate"))).toBe(true);
+  });
+
+  it("reads the permanent delegate's key, and none from an all-zero one", () => {
+    const key = new Uint8Array(32).fill(7);
+    expect(parseMintExtensions(t22MintWith(tlvEntry(12, key))).permanentDelegate).toBe(
+      getAddressDecoder().decode(key),
+    );
+    expect(
+      parseMintExtensions(t22MintWith(tlvEntry(12, new Uint8Array(32)))).permanentDelegate,
+    ).toBeUndefined();
   });
 
   it("ConfidentialTransferMint is an advisory, not blocking", () => {

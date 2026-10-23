@@ -1434,6 +1434,49 @@ describeSvm(
       });
     });
 
+    it("refuses a transaction that hands the permanent delegate of a limited Token-2022 mint to another key", async () => {
+      // A Token-2022 mint whose PermanentDelegate (extension 12) is the wallet: the base 82 bytes
+      // padded to 165, the mint's account-type byte, then the extension's type, length and key.
+      const data = new Uint8Array(166 + 4 + 32);
+      data[44] = DECIMALS;
+      data[45] = 1;
+      data[165] = 1;
+      data.set([12, 0, 32, 0], 166);
+      data.set(keyBytes(wallet), 170);
+      const mint = randomAddress();
+      harness.svm.setAccount({
+        address: mint,
+        data,
+        executable: false,
+        lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+        programAddress: TOKEN_2022_PROGRAM,
+        space: BigInt(data.length),
+      });
+      const other = randomAddress();
+      // SetAuthority of the mint's PermanentDelegate (authority type 8), signed by the wallet.
+      const transaction = await signed([
+        {
+          programAddress: TOKEN_2022_PROGRAM,
+          accounts: [writable(mint), signer(wallet)],
+          data: Uint8Array.of(6, 8, 1, ...keyBytes(other)),
+        },
+      ]);
+
+      expect({
+        limited: await guarded(limited(mint), transaction),
+        another: (await guarded(limited(mints.spl), transaction)).refusal,
+      }).toEqual({
+        limited: refused(
+          `tokens.${mint}`,
+          `this transaction makes ${other} the permanent delegate of ${mint}`,
+        ),
+        another: "none: the guard let it through",
+      });
+      // And it does: from then on the other key moves any account's tokens of the mint.
+      expectOk(sendSigned(harness, transaction));
+      expect(keyAt(mint, 170)).toBe(other);
+    });
+
     it("counts the wallet's whole balance against native when the transaction gives the wallet to another program", async () => {
       // System's Assign: from then on the program, not the wallet's key, moves its lamports.
       const transaction = await signed([

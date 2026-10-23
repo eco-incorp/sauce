@@ -111,6 +111,11 @@ export interface MintExtensions {
   /** Present iff a TransferHook extension with a non-nil program is set. */
   transferHook?: TransferHookInfo;
   /**
+   * The PermanentDelegate extension's key, where it names one: a key that moves or burns any
+   * account's tokens of the mint with no approval from the account's owner.
+   */
+  permanentDelegate?: Address;
+  /**
    * HARD un-routable reasons: a plain `transferChecked` into a fresh recipient
    * ATA genuinely fails or the received amount is unusable. Empty for a routable
    * mint. Only NonTransferable, DefaultAccountState=frozen and a paused
@@ -217,6 +222,10 @@ export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
         // NOT blocking: a clawback/compliance authority, not a transfer gate.
         // PYUSD/USDG both carry it and trade normally everywhere.
         result.advisories.push("PermanentDelegate (a delegate authority can move/burn balances)");
+        // Its value is the delegate, an OptionalNonZeroPubkey: all zero is none.
+        if (length >= 32 && !isAllZero(mintData, value, 32)) {
+          result.permanentDelegate = addressDecoder.decode(mintData.subarray(value, value + 32));
+        }
         break;
       case EXT_CONFIDENTIAL_TRANSFER_MINT:
         // NOT blocking: confidential transfers are OPT-IN per account; plain

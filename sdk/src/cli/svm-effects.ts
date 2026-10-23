@@ -21,14 +21,17 @@ import { bytesToHex, formatUnits } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { sourceGlobals } from "../routes/source-globals.js";
 import type { SimulatedAccount } from "../svm/index.js";
+import { parseMintExtensions } from "../svm/token-extensions.js";
 import { POT_HOLDS } from "../evm/effects.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
+/** Token-2022, whose mints may carry a permanent delegate. */
+const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 /** SPL Token and Token-2022: the programs whose accounts hold a token balance. */
 const TOKEN_PROGRAMS = new Set<string>([
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  TOKEN_2022_PROGRAM,
 ]);
 /**
  * An SPL token account's base layout, which a Token-2022 account shares at its start, 165 bytes in
@@ -287,6 +290,16 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
     ...(closeAuthority === undefined ? {} : { closeAuthority }),
     isNative: view.getUint32(IS_NATIVE_AT, true) === 1,
   };
+}
+
+/**
+ * The permanent delegate of `account` where it is a Token-2022 mint whose PermanentDelegate
+ * extension names one: a key that moves any account's tokens of the mint with no approval.
+ */
+export function permanentDelegateOf(account: SimulatedAccount | null): Address | undefined {
+  return account === null || account.owner !== TOKEN_2022_PROGRAM
+    ? undefined
+    : parseMintExtensions(account.data).permanentDelegate;
 }
 
 /**
