@@ -830,6 +830,20 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
       hex(main("return 5 + ctx.selfBalance();")),
     );
   });
+
+  it.each(["pot", "self"])("on Solana, a define of `%s` is what it reads", (name) => {
+    const key = BigInt(`0x${"06".repeat(32)}`);
+    const solana = (source: string, defines: Record<string, bigint> = {}) => {
+      const compiled = compileSauceProgram("solana", source, { defines });
+      return {
+        bytecode: Buffer.from(compiled.bytecode).toString("hex"),
+        manifest: compiled.manifest,
+      };
+    };
+    expect(solana(`function main(): Address { return ${name}; }`, { [name]: key })).toEqual(
+      solana(`function main(): Address { return ${key}; }`),
+    );
+  });
 });
 
 // --- `.balance` keeps every meaning it had --------------------------------------------------------

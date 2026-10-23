@@ -605,6 +605,7 @@ function compileForChain(
       ),
       native,
       new Set(stops),
+      bound,
     );
     if (lowered.rewrote) {
       source = lowered.source;
