@@ -338,6 +338,20 @@ export function compileSauceProgram(
   if (taken !== undefined) {
     throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
   }
+  // Every bound argument but a signed one reaches the compiler as a define, and a define is
+  // program-wide: one named like a value of the chain (a token symbol, `chainId`, a protocol's
+  // address) would replace that value outside `main` too, where the parameter only shadowed it in
+  // `main`. A signed argument is a `let` in `main`'s body, which shadows it there alone.
+  const chainValues = bound === undefined ? {} : definesOf(resolved, given.tokens);
+  const shadowed = Object.keys(bound?.constants ?? {}).find((name) =>
+    Object.hasOwn(chainValues, name),
+  );
+  if (shadowed !== undefined) {
+    throw new RangeError(
+      `${shadowed} is main's parameter, given in args; it is not also a define ` +
+        `(${shadowed} on ${resolved.slug})`,
+    );
+  }
   const compile: SauceCompileOptions =
     bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
   // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
