@@ -667,6 +667,20 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
     }
   });
 
+  it("shape G follows the binding in scope at the read, never a same-named one elsewhere", () => {
+    // `tag`'s `a` is a bool, and an inner block's `a` is the block's: neither is main's alias.
+    for (const source of [
+      "function tag(a: bool): bytes { const b = a; return b.toBytesBe(1); }\nfunction main(): bytes { const a = AaveV3.Pool; const c = a; return c.toBytesBe(32).concat(tag(true)); }",
+      "function main(flag: bool): bytes { const a = AaveV3.Pool; if (flag) { const a = true; const b = a; return b.toBytesBe(1); } const b = a; return b.toBytesBe(32); }",
+    ]) {
+      const out = rewriteProtocolAccessors(source, BASE).source;
+      expect(out).toContain("b.toBytesBe(1)");
+      expect(out).not.toContain("b.address.toBytesBe(1)");
+      expect(out).toMatch(/[bc]\.address\.toBytesBe\(32\)/);
+      expect(() => compileSauceProgram("base", source)).not.toThrow();
+    }
+  });
+
   it("tells onContract each contract a program uses: as written, with its chain and address -- and not a test of one", () => {
     const heard: Array<[string, string, string, string]> = [];
     compileSauceProgram(

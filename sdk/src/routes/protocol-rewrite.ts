@@ -36,6 +36,7 @@ import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
 import { walk, collectDeclaredNames, collectPatternBinders, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
+import { lexicalBindings } from "./lexical-bindings.js";
 import {
   chainSlugForKey,
   isChainKey,
@@ -239,8 +240,9 @@ const SCALAR_METHODS: ReadonlySet<string> = new Set(["toBytesBe", "toBytesLe"]);
  * Shape G: `.address` before a scalar method whose receiver is a contract the names module binds
  * (`AaveV3.Pool.toBytesBe(32)`, `Base.UniswapV3.Factory.toBytesBe(32)`) or a local initialized to
  * one, directly or through other such locals (`const a = AaveV3.Pool; const b = a;
- * b.toBytesBe(32)`). On the EVM `.address` is the address itself on any scalar, so a local of that
- * name holding a number elsewhere compiles as written.
+ * b.toBytesBe(32)`), each name resolved to the declaration in scope where it is read
+ * (`lexical-bindings.ts`), so a same-named local or parameter elsewhere is never taken for it. On
+ * the EVM `.address` is the address itself on any scalar.
  */
 function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): Splice[] {
   const nameOf = (node: AstNode): string => (node as unknown as { name: string }).name;
@@ -251,26 +253,19 @@ function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): S
     if (shadowed.has(decomposed.head)) return false;
     return namedContractKind(decomposed.head, decomposed.path) === "singleton";
   };
-  const locals = new Set<string>();
-  const holds = (node: AstNode | null | undefined): boolean =>
-    isBinding(node) || (node?.type === "Identifier" && locals.has(nameOf(node)));
-  const declarators: AstNode[] = [];
-  walk(program, (n) => {
-    if (n.type === "VariableDeclarator" && (n as { id?: AstNode }).id?.type === "Identifier") {
-      declarators.push(n);
-    }
-  });
-  // Each pass adds the locals initialized to one found before; none left to add is the fixpoint.
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const n of declarators) {
-      const name = nameOf((n as { id?: AstNode }).id!);
-      if (!locals.has(name) && holds((n as { init?: AstNode | null }).init)) {
-        locals.add(name);
-        grew = true;
-      }
-    }
-  }
+  const bindings = lexicalBindings(program);
+  /** Whether `node` holds a bound contract: one itself, or a local whose declaration in scope is
+   *  initialized to one, followed through each alias (a cycle holds none). */
+  const holds = (
+    node: AstNode | null | undefined,
+    seen: ReadonlySet<AstNode> = new Set(),
+  ): boolean => {
+    if (isBinding(node)) return true;
+    if (node?.type !== "Identifier") return false;
+    const declaration = bindings.declarationOf(node);
+    if (declaration?.type !== "VariableDeclarator" || seen.has(declaration)) return false;
+    return holds(declaration.init as AstNode | null, new Set([...seen, declaration]));
+  };
   const out: Splice[] = [];
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
