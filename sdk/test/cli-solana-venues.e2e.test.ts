@@ -266,14 +266,14 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
       "poolTicks0=slot:@pool:USDC.ticks0",
       "poolTicks1=slot:@pool:USDC.ticks1",
       "poolTicks2=slot:@pool:USDC.ticks2",
-      "pot=self",
-      "potUSDC=self:USDC",
+      "pot=authority",
+      "potUSDC=authority:USDC",
       "mintUSDC=mint:USDC",
       "mintWSOL=mint:WSOL",
       `tokenProgram=${TOKEN}`,
       "token2022Program=TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       "memoProgram=MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
-      "potWSOL=self:WSOL",
+      "potWSOL=authority:WSOL",
     ]);
   });
 

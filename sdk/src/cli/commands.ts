@@ -375,8 +375,8 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
 
 /**
  * The program's account manifest as `--json` prints it: each slot with how it is derived, where the
- * SDK added it to the program (`derive`, an `--account` value: `self:USDC`, `@to:USDC`), so a
- * reader sees which accounts a cook fills by itself and which it must be given.
+ * SDK added it to the program (`derive`, an `--account` value: `pot:USDC`, `authority:USDC`,
+ * `@to:USDC`), so a reader sees which accounts a cook fills by itself and which it must be given.
  */
 export function manifestJson(program: CompiledSauceProgram): unknown {
   const manifest = program.manifest!;

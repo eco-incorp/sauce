@@ -718,8 +718,8 @@ describe("sauce_compile", () => {
       manifest.accounts.map((entry) => [entry.name, entry.derive]),
       [
         ["tokenProgram", "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"],
-        ["pot", "self"],
-        ["potUSDC", "self:USDC"],
+        ["pot", "authority"],
+        ["potUSDC", "authority:USDC"],
         ["toUSDC", "@to:USDC"],
       ],
     );

@@ -514,7 +514,10 @@ describe("the balance shorthand on any address, and the native coin", () => {
     ["return holders[0].balance;", "return ctx.balance(holders[0]);"],
     ["return p.to.balance;", "return ctx.balance(p.to);"],
     ["const pot = who; return pot.balance;", "const pot = who; return ctx.balance(pot);"],
-    ["const balance = 7; return pot.balance + balance;", "const balance = 7; return ctx.selfBalance() + balance;"],
+    [
+      "const balance = 7; return pot.balance + balance;",
+      "const balance = 7; return ctx.selfBalance() + balance;",
+    ],
     ["return USDC.WETH;", "return WETH.balanceOf(USDC);"],
     ["return WETH.balance;", "return ctx.balance(WETH);"],
   ];

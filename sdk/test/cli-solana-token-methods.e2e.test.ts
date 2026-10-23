@@ -1,5 +1,5 @@
 /**
- * The token methods on Solana, EXECUTED: `USDC.transfer(to, amount)`, `self.USDC`,
+ * The token methods on Solana, EXECUTED: `USDC.transfer(to, amount)`, `pot.USDC`,
  * `USDC.balanceOf(who)`, `approve`, `transferFrom` and `Token(mint)` compiled for Solana and run
  * through the `sauce` command with no `--account` at all — every account the lowering added to
  * `main` derived by the command from the owner, the Pot and main's arguments — against the released
@@ -428,8 +428,8 @@ describeSvm("the token methods on Solana: every account derived by the command",
     );
     expect((out.manifest as { accounts: unknown[] }).accounts).toEqual([
       { kind: "slot", index: 0, name: "tokenProgram", requires: "readonly", derive: TOKEN_PROGRAM },
-      { kind: "slot", index: 1, name: "pot", requires: "readonly_signer", derive: "self" },
-      { kind: "slot", index: 2, name: "potUSDC", requires: "writable", derive: "self:USDC" },
+      { kind: "slot", index: 1, name: "pot", requires: "readonly_signer", derive: "authority" },
+      { kind: "slot", index: 2, name: "potUSDC", requires: "writable", derive: "authority:USDC" },
       { kind: "slot", index: 3, name: "toUSDC", requires: "writable", derive: "@to:USDC" },
     ]);
     expect(out.entryParams).toEqual([
@@ -502,10 +502,10 @@ describeSvm("the token methods on Solana: every account derived by the command",
     expect(tokenAmount(harness, toUsdc)).toBe(5n);
   }, 120_000);
 
-  it("reads self.USDC and USDC.balanceOf(who), each account bound to its holder", async () => {
+  it("reads pot.USDC and USDC.balanceOf(who), each account bound to its holder", async () => {
     const file = program(
       "balances",
-      "function main(who: Address): Uint256 {\n  return self.USDC * 1000000 + USDC.balanceOf(who);\n}\n",
+      "function main(who: Address): Uint256 {\n  return pot.USDC * 1000000 + USDC.balanceOf(who);\n}\n",
     );
     const who = randomAddress();
     await account(usdc, who, 77n, TOKEN_PROGRAM, 6);
@@ -813,9 +813,9 @@ describeSvm("the token methods on Solana: every account derived by the command",
         "  const dest = Solana.pda(Solana.associatedTokenProgram, [to, Solana.tokenProgram, USDC]).writable();\n" +
         "  let data = hex`03`;\n" +
         "  svm.call(USDC.tokenProgram, [\n" +
-        "    USDC.accountOf(ctx.self()).writable(),\n" +
+        "    USDC.accountOf(pot).writable(),\n" +
         "    dest,\n" +
-        "    Solana.self.signer(),\n" +
+        "    pot.signer(),\n" +
         "  ], data.concat(amount.toBytesLe(8)));\n" +
         "  return svm.sload(dest, 64, 8).toLe();\n" +
         "}\n",
@@ -833,8 +833,8 @@ describeSvm("the token methods on Solana: every account derived by the command",
     ).toEqual({
       destPda: `pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:@to,${TOKEN_PROGRAM},mint:USDC`,
       tokenProgram: TOKEN_PROGRAM,
-      potUSDC: "self:USDC",
-      pot: "self",
+      potUSDC: "pot:USDC",
+      pot: "pot",
     });
 
     // The simulation reads back what arrived; the run moves it.
@@ -854,10 +854,10 @@ describeSvm("the token methods on Solana: every account derived by the command",
       "function main(to: Address, amount: Uint256) {\n" +
         "  let data = hex`0c`;\n" +
         "  svm.call(PYUSD.tokenProgram, [\n" +
-        "    PYUSD.accountOf(ctx.self()).writable(),\n" +
+        "    PYUSD.accountOf(pot).writable(),\n" +
         "    PYUSD.mint,\n" +
         "    PYUSD.accountOf(to).writable(),\n" +
-        "    Solana.self.signer(),\n" +
+        "    pot.signer(),\n" +
         "  ], data.concat(amount.toBytesLe(8)).concat(hex`06`));\n" +
         "}\n",
     );
@@ -914,7 +914,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
       "accounts-pda",
       "function main(kitchen: Address, salt: Uint256): Uint256 {\n" +
         '  const found = Solana.pda(kitchen, ["pot", Solana.owner, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
-        '  require(found.address == Solana.self.address, "not the Pot");\n' +
+        '  require(found.address == pot, "not the Pot");\n' +
         "  return found.dataLen;\n" +
         "}\n",
     );
@@ -932,4 +932,76 @@ describeSvm("the token methods on Solana: every account derived by the command",
       reason: 'the program threw "wrong program-derived address"',
     });
   }, 120_000);
+
+  describe("pot where the program stands: a script, a top-level function, a value", () => {
+    // Each simulated in the command's local copy (LiteSVM): `--assume-balance` gives the Pot's USDC
+    // account the balance named, 5 USDC, whatever the cluster holds.
+    const assumed = ["--assume-balance", "USDC:5"];
+
+    it("a script's pot.USDC: the main it runs as takes the Pot's accounts", async () => {
+      const holds = program("script-holds", 'require(pot.USDC == 5000000, "not 5 USDC");\n');
+      expect(json(await simulate(holds, ...assumed))).toMatchObject({ ok: true });
+      const short = program("script-short", 'require(pot.USDC > 5000000, "5 USDC or less");\n');
+      const refused = await simulate(short, ...assumed);
+      expect(refused.code).toBe(1);
+      expect(JSON.parse(refused.stdout)).toMatchObject({
+        ok: false,
+        reason: 'the program threw "5 USDC or less"',
+      });
+    }, 120_000);
+
+    it("pot.USDC in a top-level function and one it calls: each given the Pot's accounts", async () => {
+      const file = program(
+        "helpers",
+        "function held(): Uint256 {\n  return pot.USDC;\n}\n" +
+          "function twice(): Uint256 {\n  return held() + held();\n}\n" +
+          "function main(who: Address): Uint256 {\n  return twice() + USDC.balanceOf(who);\n}\n",
+      );
+      const who = randomAddress();
+      await account(usdc, who, 77n, TOKEN_PROGRAM, 6);
+      expect(json(await simulate(file, "--args", who, ...assumed))).toMatchObject({
+        ok: true,
+        returned: String(2n * 5_000_000n + 77n),
+      });
+    }, 120_000);
+
+    it("bare pot is the Pot's key: the address the Kitchen derives, and the one pot.balance reads", async () => {
+      const file = program("pot-key", "function main(): Address {\n  return pot;\n}\n");
+      expect(json(await simulate(file, ...assumed))).toMatchObject({ ok: true, returned: pot });
+      const lamports = program(
+        "pot-lamports",
+        'function main(): Uint256 {\n  require(ctx.balance(pot) == pot.balance, "two balances");\n  return pot.balance;\n}\n',
+      );
+      const held = harness.svm.getBalance(pot)!;
+      expect(json(await simulate(lamports, ...assumed))).toMatchObject({
+        ok: true,
+        returned: String(held),
+      });
+    }, 120_000);
+
+    it("--via engine refuses a program that uses the Pot: there is none cooked directly", async () => {
+      const file = program("pot-engine", "function main(): Uint256 {\n  return pot.USDC;\n}\n");
+      const refused = await simulate(file, "--via", "engine");
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toContain(
+        "the program uses the Pot (potUSDC: pot:USDC, pot: pot), and --via engine cooks with " +
+          "no Pot, so there is no Pot to attach: cook through the Kitchen",
+      );
+      // Whatever --account gives in the Pot's place: the program still names the Pot.
+      const overridden = await simulate(
+        program("pot-engine-key", "function main(): Address {\n  return pot;\n}\n"),
+        ...["--via", "engine", "--account", "pot=owner"],
+      );
+      expect(overridden.code).toBe(2);
+      expect(overridden.stderr).toContain(
+        "the program uses the Pot (pot: pot), and --via engine cooks with no Pot",
+      );
+      // A given `self` is refused too, naming what to write.
+      const self = await simulate(file, "--account", "potUSDC=self:USDC");
+      expect(self.code).toBe(2);
+      expect(self.stderr).toContain(
+        "'self:USDC' names no account: self is retired. Write 'pot:USDC' (the Pot)",
+      );
+    }, 120_000);
+  });
 });

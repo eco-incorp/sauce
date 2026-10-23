@@ -45,8 +45,8 @@ describe("Solana's venue namespaces", () => {
     expect(program.derivedAccounts).toMatchObject({
       poolProgram: "slot:@pool:USDC.program",
       poolTicks2: "slot:@pool:USDC.ticks2",
-      potUSDC: "self:USDC",
-      potWSOL: "self:WSOL",
+      potUSDC: "authority:USDC",
+      potWSOL: "authority:WSOL",
       memoProgram: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
     });
     // The roles the router's swap needs: the pool, its vaults, extra and tick arrays writable.
@@ -120,7 +120,7 @@ describe("Solana's venue namespaces", () => {
     expect(program.derivedAccounts).toMatchObject({
       pool1Program: `slot:${base58}:USDC.program`,
       mintAccount: "mint:@mint",
-      potMint: "self:@mint",
+      potMint: "authority:@mint",
     });
   });
 
@@ -160,14 +160,16 @@ describe("Solana's venue namespaces", () => {
       ).toThrow("pays and buys the same token, USDC");
     });
 
-    it("a swap in a helper: its accounts are main's", () => {
+    it("a swap in a helper whose pool is the helper's own parameter: a value only the program has", () => {
       expect(() =>
         compile(
           "function buy(pool: Address): Uint256 {\n  return Byreal.CLMM.swap(pool, USDC, WSOL, 1, 1, 1);\n}\n" +
             "function main(pool: Address): Uint256 {\n  return buy(pool);\n}\n",
         ),
       ).toThrow(
-        "`Byreal.CLMM.swap(…)` on Solana stands in `buy`: the accounts a venue's swap moves through",
+        "the pool `pool` on Solana must be known when the transaction is built, to read its " +
+          "accounts from it: Byreal.CLMM.pool(…), a parameter of main declared `Address`, or a " +
+          "32-byte key.",
       );
     });
   });
@@ -183,7 +185,7 @@ describe("Solana's venue namespaces", () => {
       orcaWhirlpool4Account: "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.pool",
       orcaWhirlpool4Ticks2: "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.ticks2",
       raydiumClmm400Account: "slot:Raydium.CLMM(WSOL,USDC,400):USDC.pool",
-      potUSDC: "self:USDC",
+      potUSDC: "authority:USDC",
     });
     // No pool argument: the pools are the program's own.
     expect(program.entryParams.map((param) => param.name)).toEqual(["amountIn", "priceLimit"]);
@@ -210,7 +212,7 @@ describe("Solana's venue namespaces", () => {
       "function main(priceLimit: Uint256): Uint256 {\n" +
         "  let bought = 0;\n" +
         "  for (const spacing of [1, 4, 64]) {\n" +
-        "    bought += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, spacing), USDC, WSOL, self.USDC, priceLimit, 0);\n" +
+        "    bought += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, spacing), USDC, WSOL, pot.USDC, priceLimit, 0);\n" +
         "  }\n" +
         "  return bought;\n}\n",
     );

@@ -115,7 +115,7 @@ Options:
       --target <evm|svm>        Checked against the chain; svm alone means solana
       --source-dir <dir>        Resolve the program's relative imports here (default: beside it; from stdin, .)
       --args-json <json|file>   main's arguments as a JSON array, inline or in a file
-      --account NAME=<address>  Solana: an account main takes (an address, pot, owner, self, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
+      --account NAME=<address>  Solana: an account main takes (an address, pot, owner, authority, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
       --via <kitchen|engine>    Solana: size the Kitchen's cook (default) or the engine's direct one
       --rpc-url <url>           Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>           Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
@@ -226,7 +226,7 @@ EVM chains only:
       --private-key <hex>    Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --account NAME=<address>        An account main takes, by name: an address, pot, owner, self, system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
+      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
       --accounts <json|file>          The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file
       --via <kitchen|engine>          The Kitchen's cook on the Pot (default), or the engine's own, with no Pot
       --max-execution-fee <lamports>  Refuse a cook whose execution fee is above this
@@ -270,10 +270,11 @@ the accounts a checked write takes. An account the cluster does not have is name
 note. Where main declares a return type, what it
 returned is read as that type. A Pot the Kitchen has not created is created first, in the
 same transaction. --via engine simulates the engine's own paid cook instead: no Kitchen and
-no Pot (so no pot or pot:<token> account), --owner signing as the program's authority and
-paying the fee. Either way the cook pays the Kitchen's execution fee, read from the cluster
-and printed; --max-execution-fee refuses one above it. Prints the compute units and what the
-cook moved — each token account's balance change and each account's lamports, read from the
+no Pot (so no pot or pot:<token> account, and no program that uses pot), --owner signing as
+the program's authority and paying the fee. Either way the cook pays the Kitchen's execution
+fee, read from the cluster and printed; --max-execution-fee refuses one above it. Prints the
+compute units and what the cook moved — each token account's balance change and each
+account's lamports, read from the
 accounts the transaction writes before it and as the simulation leaves them — or the reason
 (a program's revert message decoded) and the program logs. Solana's simulateTransaction
 takes no account overrides, so the owner must hold the Pot's rent and the fees there.
@@ -347,7 +348,7 @@ EVM chains only:
       --sweep                Return what is left of each funded token afterwards
 
 Solana only:
-      --account NAME=<address>        An account main takes, by name: an address, pot, owner, self, system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
+      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
       --accounts <json|file>          The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file
       --via <kitchen|engine>          The Kitchen's cook on the Pot (default), or the engine's own, with no Pot
       --max-execution-fee <lamports>  Refuse a cook whose execution fee is above this
@@ -612,7 +613,7 @@ EVM chains only:
       --fund <TOKEN:amount>  Transfer tokens from the owner into the Pot before the cook: USDC:1.5 (whole tokens); ETH:0.01 rides as its value
 
 Solana only:
-      --account NAME=<address>        An account main takes, by name: an address, pot, owner, self, system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
+      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
       --accounts <json|file>          The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file
       --via <kitchen|engine>          The Kitchen's cook on the Pot (default), or the engine's own, with no Pot
       --max-execution-fee <lamports>  Refuse a cook whose execution fee is above this
