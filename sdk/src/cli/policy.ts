@@ -87,16 +87,23 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
+import {
+  fetchAlt,
+  KITCHEN_DISCRIMINATORS,
+  svmPublicKey,
+  type SimulatedAccount,
+} from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
 import {
   accountsNow,
+  lamportKeys,
   messageAccounts,
   mintFacts,
   movedBy,
+  namesAnyOf,
   tokenTransition,
   writableAccounts,
 } from "./svm-effects.js";
@@ -809,7 +816,8 @@ export async function measureSvm(
   const approved: Array<{ token: SvmAddress; spender: SvmAddress; amount: bigint }> = [];
   const handedOff = new Map<SvmAddress, bigint>();
   const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
-  let closableLamports = 0n;
+  // Wrapped SOL a delegate may move is native coin another key may take.
+  let delegatedLamports = 0n;
   tracked.forEach((account, index) => {
     // An account made again at its address for another asset is a new one: the old one's balance
     // is counted as it leaves.
@@ -823,6 +831,7 @@ export async function measureSvm(
       (is.delegate !== was?.delegate || is.delegatedAmount > (was?.delegatedAmount ?? 0n))
     ) {
       approved.push({ token: is.mint, spender: is.delegate, amount: is.delegatedAmount });
+      if (is.isNative) delegatedLamports += is.delegatedAmount;
     }
     if (!ours.has(is.owner) && is.amount > 0n) {
       handedOff.set(is.mint, (handedOff.get(is.mint) ?? 0n) + is.amount);
@@ -833,8 +842,6 @@ export async function measureSvm(
       is.closeAuthority !== was?.closeAuthority
     ) {
       closable.push({ token: is.mint, account, closer: is.closeAuthority });
-      // Closing wrapped SOL pays out its lamports: what it wraps, and its rent.
-      if (is.isNative) closableLamports += after[index]!.lamports;
     }
   });
   const facts = await mintFacts(
@@ -852,10 +859,28 @@ export async function measureSvm(
   const undecided = [
     ...new Set([...approved.map((each) => each.token), ...handedOff.keys()]),
   ].filter((mint) => facts.get(mint)?.decimals === undefined);
-  const lamports =
-    moved.lamports
-      .filter((change) => ours.has(change.account))
-      .reduce((sum, change) => sum + change.before - change.after, 0n) + closableLamports;
+  // The native coin the wallet controls is more than its own account's: the lamports of the Pots it
+  // cooks on, and of every account whose layout gives them to one of those keys alone (a token
+  // account owned by one, wrapped SOL among them, with no closer outside; a durable nonce account
+  // or a stake account whose authority is one). What leaves that set counts, net of what enters it,
+  // so wrapping SOL into the wallet's own account and unwrapping it move nothing, and closing,
+  // handing over or withdrawing from such an account to another key is a send. An account of a
+  // layout this does not read, that names one of those keys and loses lamports, may have been the
+  // wallet's to command: what it loses counts as sent unless it arrives in the set.
+  const keys = [...ours];
+  const controlled = (account: SvmAddress, state: SimulatedAccount | null): boolean =>
+    state !== null &&
+    (ours.has(account) || (lamportKeys(state)?.every((key) => ours.has(key)) ?? false));
+  let lamports = delegatedLamports;
+  tracked.forEach((account, index) => {
+    const was = before[index] ?? null;
+    const is = after[index] ?? null;
+    if (controlled(account, was)) lamports += was!.lamports;
+    else if (was !== null && namesAnyOf(was, keys) && (is?.lamports ?? 0n) < was.lamports) {
+      lamports += was.lamports - (is?.lamports ?? 0n);
+    }
+    if (controlled(account, is)) lamports -= is!.lamports;
+  });
   const byMint = new Map<
     string,
     { amount: bigint; symbol?: string; decimals?: number; delegated?: bigint }

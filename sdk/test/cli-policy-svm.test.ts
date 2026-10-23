@@ -875,6 +875,35 @@ describe("measuring token accounts from a simulation's account images", () => {
       });
     },
   );
+
+  /** An account of PROGRAM's, a layout this command does not read, that names the wallet. */
+  const vault = (lamports: bigint): Image => {
+    const data = new Uint8Array(72);
+    data.set(getAddressEncoder().encode(WALLET), 8);
+
+    return { lamports, owner: PROGRAM, data };
+  };
+  const wallet = (lamports: bigint): Image => ({
+    lamports,
+    owner: address("11111111111111111111111111111111"),
+    data: new Uint8Array(),
+  });
+
+  it.each([
+    ["to another key", 1_000_000_000n, "1000000000"],
+    ["to the wallet", 2_000_000_000n, "0"],
+  ] as const)(
+    "counts lamports leaving an account that names the wallet, under a layout it does not read, %s",
+    async (_, walletAfter, sent) => {
+      const { rpc, transaction } = simulated(
+        { [WALLET]: wallet(1_000_000_000n), [ACCOUNT]: vault(1_002_000_000n) },
+        { [WALLET]: wallet(walletAfter), [ACCOUNT]: vault(2_000_000n) },
+      );
+      const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+      expect(String(measured.native.amount)).toBe(sent);
+    },
+  );
 });
 
 // What a token account lets another key do once a transaction lands: spend from it as its delegate,
@@ -890,6 +919,13 @@ describeSvm(
     const DECIMALS = 3;
     const AMOUNT = 1_000_000n;
     const NATIVE_MINT = address("So11111111111111111111111111111111111111112");
+    const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
+    const u32 = (value: number) => {
+      const bytes = new Uint8Array(4);
+      new DataView(bytes.buffer).setUint32(0, value, true);
+
+      return bytes;
+    };
     const PROGRAMS = { spl: TOKEN_PROGRAM, token2022: TOKEN_2022_PROGRAM } as const;
     type Kind = keyof typeof PROGRAMS;
     /** The Pot programs that approve a delegate: `@sauce/token`'s checked write on both token
@@ -1293,6 +1329,134 @@ describeSvm(
       expect(await guarded(limited(mint), transaction)).toEqual(
         refused(`tokens.${mint}`, `this transaction lets ${closer} close ${source}`),
       );
+    });
+
+    /** What the guard and the measurement say of `transaction` under a native limit of `limit`. */
+    const nativeVerdict = async (limit: string, transaction: Transaction) => {
+      const measured = await measure(transaction);
+      const { refusal, ledger } = await guarded({ native: { perTransaction: limit } }, transaction);
+
+      return {
+        unmeasured: measured.unmeasured,
+        native: String(measured.native.amount),
+        refusal,
+        spend: ledger === "" ? undefined : (JSON.parse(ledger) as { spend: unknown }).spend,
+      };
+    };
+    const ALLOWED = "none: the guard let it through";
+    const FEE = 5_000n;
+    const nativeRefusal = {
+      limit: "native.perTransaction",
+      message: expect.stringContaining("native.perTransaction is ") as unknown,
+    };
+    const closeAccount = (account: Address, destination: Address): Instruction => ({
+      programAddress: TOKEN_PROGRAM,
+      accounts: [writable(account), writable(destination), signer(wallet)],
+      data: Uint8Array.of(9),
+    });
+    /** A durable nonce account whose authority is `authority`, holding `amount` above its rent. */
+    const nonceAccount = (authority: Address, amount: bigint): Address => {
+      const data = new Uint8Array(80);
+      const view = new DataView(data.buffer);
+      view.setUint32(0, 1, true); // Versions::Current
+      view.setUint32(4, 1, true); // State::Initialized
+      data.set(keyBytes(authority), 8);
+      data.set(keyBytes(randomAddress()), 40); // the durable nonce
+      view.setBigUint64(72, 5_000n, true); // lamports per signature
+      const account = randomAddress();
+      harness.svm.setAccount({
+        address: account,
+        data,
+        executable: false,
+        lamports: lamports(harness.svm.minimumBalanceForRentExemption(80n) + amount),
+        programAddress: SYSTEM_PROGRAM,
+        space: 80n,
+      });
+
+      return account;
+    };
+
+    it("counts the wallet's wrapped SOL closed to another key against native", async () => {
+      const { account, held } = wrappedSol(wallet, 2_000_000_000n);
+      const transaction = await signed([closeAccount(account, randomAddress())]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(held + FEE),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
+    it.each(["withdraws from it", "hands it to another key"] as const)(
+      "counts what the wallet's durable nonce account loses against native, when the transaction %s",
+      async (what) => {
+        const nonce = nonceAccount(wallet, 2_000_000_000n);
+        const held = harness.svm.getBalance(nonce)!;
+        const transaction = await signed([
+          what === "withdraws from it"
+            ? {
+                programAddress: SYSTEM_PROGRAM,
+                accounts: [
+                  writable(nonce),
+                  writable(randomAddress()),
+                  readonly(address("SysvarRecentB1ockHashes11111111111111111111")),
+                  readonly(address("SysvarRent111111111111111111111111111111111")),
+                  signer(wallet),
+                ],
+                data: Uint8Array.of(...u32(5), ...u64(1_500_000_000n)),
+              }
+            : {
+                programAddress: SYSTEM_PROGRAM,
+                accounts: [writable(nonce), signer(wallet)],
+                data: Uint8Array.of(...u32(7), ...keyBytes(randomAddress())),
+              },
+        ]);
+
+        expect(await nativeVerdict("1", transaction)).toEqual({
+          unmeasured: {},
+          native: String((what === "withdraws from it" ? 1_500_000_000n : held) + FEE),
+          refusal: nativeRefusal,
+          spend: undefined,
+        });
+      },
+    );
+
+    it("counts wrapped SOL the wallet approves another key to move against native", async () => {
+      const { account } = wrappedSol(wallet, 2_000_000_000n);
+      const transaction = await signed([approve(account, randomAddress(), 2_000_000_000n)]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(2_000_000_000n + FEE),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
+    it("counts only the fee when the wallet wraps SOL into its own account and unwraps it again", async () => {
+      const { account } = wrappedSol(wallet, 0n);
+      const wrap = await signed([
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [{ address: wallet, role: AccountRole.WRITABLE_SIGNER }, writable(account)],
+          data: Uint8Array.of(...u32(2), ...u64(1_000_000_000n)),
+        },
+        // SyncNative: the account's amount catches up with its lamports.
+        { programAddress: TOKEN_PROGRAM, accounts: [writable(account)], data: Uint8Array.of(17) },
+      ]);
+      const wrapped = await nativeVerdict("0.5", wrap);
+      expectOk(sendSigned(harness, wrap));
+      const unwrap = await signed([closeAccount(account, wallet)]);
+      const unwrapped = await nativeVerdict("0.5", unwrap);
+
+      const fee = {
+        unmeasured: {},
+        native: String(FEE),
+        refusal: ALLOWED,
+        spend: { native: { amount: String(FEE), decimals: 9 } },
+      };
+      expect({ wrapped, unwrapped }).toEqual({ wrapped: fee, unwrapped: fee });
     });
 
     it("counts the lamports of the wallet's wrapped SOL against native, when another key may close it", async () => {

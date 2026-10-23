@@ -6,6 +6,7 @@
  * an SPL transfer logs nothing a client can decode, so the accounts themselves are the record.
  */
 import {
+  address,
   getAddressDecoder,
   getAddressEncoder,
   getBase64Encoder,
@@ -44,6 +45,21 @@ const CLOSE_AUTHORITY_AT = 129;
 const ACCOUNT_TYPE_TOKEN = 2;
 /** A mint's decimals: after its optional authority (4 + 32 bytes) and its supply (8). */
 const MINT_DECIMALS_AT = 44;
+/** The System program, which owns wallets and durable nonce accounts. */
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+/**
+ * A durable nonce account (the System program's, 80 bytes): its version (u32), its state (u32, 1
+ * once initialized), then its authority, the key that may withdraw from it or name another.
+ */
+const NONCE_ACCOUNT_SIZE = 80;
+const NONCE_INITIALIZED = 1;
+const NONCE_AUTHORITY_AT = 8;
+/**
+ * A stake account (the Stake program's): its state (u32: 1 initialized, 2 delegated), its rent
+ * reserve (u64), its staker, then its withdrawer, the key that may withdraw from it or name another.
+ */
+const STAKE_PROGRAM = "Stake11111111111111111111111111111111111111";
+const STAKE_WITHDRAWER_AT = 44;
 
 export interface LamportChange {
   readonly account: Address;
@@ -271,6 +287,57 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
     ...(closeAuthority === undefined ? {} : { closeAuthority }),
     isNative: view.getUint32(IS_NATIVE_AT, true) === 1,
   };
+}
+
+/**
+ * The keys that may take `account`'s lamports, where its layout names them: a token account's
+ * owner, and its close authority where it has one (closing it pays them out); a durable nonce
+ * account's authority; a stake account's withdrawer. `undefined` for an account of any other
+ * layout, whose lamports only its own program knows who may move.
+ */
+export function lamportKeys(account: SimulatedAccount | null): readonly Address[] | undefined {
+  if (account === null) return undefined;
+  const token = tokenAccount(account);
+  if (token !== undefined) {
+    return token.closeAuthority === undefined ? [token.owner] : [token.owner, token.closeAuthority];
+  }
+  const { data } = account;
+  const view = new DataView(data.buffer, data.byteOffset, data.length);
+  const keyAt = (at: number) => getAddressDecoder().decode(data.subarray(at, at + 32));
+  if (
+    account.owner === SYSTEM_PROGRAM &&
+    data.length === NONCE_ACCOUNT_SIZE &&
+    view.getUint32(4, true) === NONCE_INITIALIZED
+  ) {
+    return [keyAt(NONCE_AUTHORITY_AT)];
+  }
+  if (account.owner === STAKE_PROGRAM && data.length >= STAKE_WITHDRAWER_AT + 32) {
+    const state = view.getUint32(0, true);
+    if (state === 1 || state === 2) return [keyAt(STAKE_WITHDRAWER_AT)];
+  }
+
+  return undefined;
+}
+
+/**
+ * Whether `account` is held under a layout {@link lamportKeys} does not read, by a program other
+ * than the System program (which moves a data-less account's lamports only on its own signature),
+ * and names one of `keys` anywhere in its data: an account whose lamports one of them might command.
+ */
+export function namesAnyOf(account: SimulatedAccount, keys: readonly string[]): boolean {
+  if (account.owner === SYSTEM_PROGRAM || lamportKeys(account) !== undefined) return false;
+  const { data } = account;
+  const encoder = getAddressEncoder();
+
+  return keys.some((key) => {
+    const bytes = encoder.encode(address(key));
+    for (let at = data.indexOf(bytes[0]!); at !== -1 && at + 32 <= data.length;) {
+      if (bytes.every((byte, offset) => data[at + offset] === byte)) return true;
+      at = data.indexOf(bytes[0]!, at + 1);
+    }
+
+    return false;
+  });
 }
 
 /** The registry's row for `mint` among `tokens`, matched by base58 or by its 32 bytes in hex. */
