@@ -397,7 +397,7 @@ addresses as placeholders:
 
 ```text
 The cook succeeds from <owner>: 519966 compute units, returns <the same three words, in hex>
-main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
+main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 34 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
   the <program-bytes>-byte program staged into a code buffer in <transactions> transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
