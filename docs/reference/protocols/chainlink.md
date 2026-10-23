@@ -17,35 +17,13 @@ Industry-standard decentralized oracle network providing price feeds, VRF random
 | Namespace | `Chainlink` on ethereum, arc |
 | Chains | ethereum, arc |
 
-## Key Operations
+## What it offers
 
 - **getLatestPrice**: Read latest price from a Chainlink price feed aggregator
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Get latest price from feed
-import { AggregatorV3ABI as IAggregatorV3 } from "./abis";
-function main(feedAddress: Address): {
-  roundId: Uint256;
-  answer: Int256;
-  startedAt: Uint256;
-  updatedAt: Uint256;
-  answeredInRound: Uint256;
-} {
-  const feed = IAggregatorV3.at(feedAddress);
-  return feed.latestRoundData();
-}
-```
-
 ## Notes
 
-- Price feeds return `answer` as `Int256` (ABI `int256`), with feed-specific decimals (usually 8 for USD pairs); keep it signed for arithmetic and comparisons. Round IDs and timestamps remain `Uint256`
+- Price feeds return answer in int256 with feed-specific decimals (usually 8 for USD pairs)
 - Always check updatedAt timestamp for staleness - stale prices can cause issues
 - Feed Registry is Ethereum-only; on L2s, use individual feed addresses directly
 - VRF provides verifiable randomness for on-chain applications
@@ -86,3 +64,9 @@ function main() {
 
 - `latestRoundData(address base, address quote) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
 - `getFeed(address base, address quote) view returns (address aggregator)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

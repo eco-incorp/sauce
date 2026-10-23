@@ -8,14 +8,11 @@
 > name a program writes for each contract. Mantle is a preview chain: programs compile and simulate
 > here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Mantle a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Mantle, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Mantle%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Mantle+%285000%29&chain=Mantle&chain-id=5000) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Mantle a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -27,7 +24,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | In TypeScript | `import { Mantle } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | MNT (MNT), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | none recorded |
 
 ## In a program
 
@@ -53,3 +49,14 @@ function main() {
 ## Protocols
 
 The registry records no protocol deployment on this chain.
+
+## Requesting support
+
+To request Mantle, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Mantle%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Mantle+%285000%29&chain=Mantle&chain-id=5000) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

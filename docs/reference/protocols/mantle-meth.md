@@ -17,26 +17,9 @@ Mantle's liquid staking token for Ethereum. Stake ETH and receive mETH, a non-re
 | Namespace | `MantleMeth` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **stake**: Stake ETH for mETH with minimum output check
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Stake ETH for mETH
-import { METHStakingABI as IStaking } from "./abis";
-function main(stakingAddress: Address, minMETHAmount: Uint256): Uint256 {
-  const staking = IStaking.at(stakingAddress);
-  staking.stake(minMETHAmount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -81,3 +64,9 @@ function main() {
 - `stake(uint256 minMETHAmount) payable`
 - `mETHToETH(uint256 mETHAmount) view returns (uint256)`
 - `ethToMETH(uint256 ethAmount) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

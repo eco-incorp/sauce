@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Generalized AMM with weighted pools, single Vault architecture, and flash loans. Supports custom pool types (weighted, stable, linear, composable stable) and multi-token pools with up to 8 tokens per pool.
 
@@ -19,113 +19,11 @@ Generalized AMM with weighted pools, single Vault architecture, and flash loans.
 | Namespace | `BalancerV2` on ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
 
-## Key Operations
+## What it offers
 
 - **swap**: Execute a single swap through the Vault specifying pool ID and assets
 - **addLiquidity**: Join a pool by depositing tokens via the Vault
 - **removeLiquidity**: Exit a pool by withdrawing tokens via the Vault
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { BalancerV2VaultABI as IVault } from "./abis";
-
-function main(
-  vaultAddress: Address,
-  poolId: Uint256,
-  assetIn: Address,
-  assetOut: Address,
-  amount: Uint256,
-  limit: Uint256,
-  sender: Address,
-  recipient: Address,
-): Uint256 {
-  const vault = IVault.at(vaultAddress);
-  return vault.swap(
-    {
-      poolId: poolId,
-      kind: 0,
-      assetIn: assetIn,
-      assetOut: assetOut,
-      amount: amount,
-      userData: 0x00,
-    },
-    { sender: sender, fromInternalBalance: false, recipient: recipient, toInternalBalance: false },
-    limit,
-    99999999999,
-  );
-}
-```
-
-- `vaultAddress`: The Balancer V2 Vault (same address on ALL chains: `0xBA12222222228d8Ba445958a75a0704d566BF2C8`)
-- `poolId`: bytes32 identifier for the specific pool (encodes pool address + pool type + nonce)
-- `assetIn` / `assetOut`: Token addresses to swap between
-- `amount`: Input amount when `kind=0` (GIVEN_IN) or output amount when `kind=1` (GIVEN_OUT)
-- `limit`: Maximum input (GIVEN_OUT) or minimum output (GIVEN_IN) for slippage protection
-- `sender`: Address providing the input tokens (must have approved the Vault)
-- `recipient`: Address receiving the output tokens
-- `userData`: Extra data for the pool (usually `0x00` for swaps)
-- `fromInternalBalance` / `toInternalBalance`: Use Vault internal balances (set false for standard swaps)
-
-### addLiquidity
-
-```typescript
-import { BalancerV2VaultABI as IVault } from "./abis";
-
-function main(
-  vaultAddress: Address,
-  poolId: Uint256,
-  sender: Address,
-  recipient: Address,
-  userData: bytes,
-): Uint256 {
-  const vault = IVault.at(vaultAddress);
-  vault.joinPool(poolId, sender, recipient, {
-    assets: [],
-    maxAmountsIn: [],
-    userData: userData,
-    fromInternalBalance: false,
-  });
-  return 1;
-}
-```
-
-- `userData`: ABI-encoded join type and amounts. Join types vary by pool kind (e.g., EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT)
-- `assets`: Array of token addresses in the pool (must match pool composition order)
-- `maxAmountsIn`: Maximum amounts to deposit per token (slippage protection)
-
-### removeLiquidity
-
-```typescript
-import { BalancerV2VaultABI as IVault } from "./abis";
-
-function main(
-  vaultAddress: Address,
-  poolId: Uint256,
-  sender: Address,
-  recipient: Address,
-  userData: bytes,
-): Uint256 {
-  const vault = IVault.at(vaultAddress);
-  vault.exitPool(poolId, sender, recipient, {
-    assets: [],
-    minAmountsOut: [],
-    userData: userData,
-    toInternalBalance: false,
-  });
-  return 1;
-}
-```
-
-- `userData`: ABI-encoded exit type and amounts. Exit types: EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT
-- `minAmountsOut`: Minimum amounts to receive per token (slippage protection)
 
 ## Notes
 
@@ -176,3 +74,9 @@ function main() {
 - `exitPool(bytes32 poolId, address sender, address recipient, (address[] assets, uint256[] minAmountsOut, bytes userData, bool toInternalBalance) request)`
 - `flashLoan(address recipient, address[] tokens, uint256[] amounts, bytes userData)`
 - `getPoolTokens(bytes32 poolId) view returns (address[] tokens, uint256[] balances, uint256 lastChangeBlock)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

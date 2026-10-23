@@ -59,6 +59,6 @@ sauce run <file.sauce.ts> --chain <chain id> --rpc-url http://127.0.0.1:8545 \
 ```
 
 The fork's tokens are the forked chain's: give the first account some by impersonating a holder
-(`cast rpc anvil_impersonateAccount <holder>`, then `cast send … --unlocked`), or rehearse with
+(`cast rpc anvil_impersonateAccount <holder>`, then `cast send … --unlocked`), or simulate with
 `sauce simulate --assume-balance`. `pnpm --filter './dev-tools' sync-price <pool>` copies a Uniswap V3
 pool's current price and balances from the forked chain onto the fork.

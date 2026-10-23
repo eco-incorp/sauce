@@ -17,38 +17,6 @@ Universal cross-chain communication protocol with decentralized validator set. S
 | Namespace | `Axelar` on ethereum, optimism, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, polygon, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### sendToken
-
-Send tokens cross-chain via the Axelar Gateway.
-
-```typescript
-import { AxelarGatewayABI as IGateway } from "./abis";
-
-function main(
-  gatewayAddress: Address,
-  destinationChain: string,
-  destinationAddress: string,
-  symbol: string,
-  amount: Uint256,
-): Uint256 {
-  const gateway = IGateway.at(gatewayAddress);
-  gateway.sendToken(destinationChain, destinationAddress, symbol, amount);
-  return 1;
-}
-```
-
-- `destinationChain`: Chain name as string (e.g. "ethereum", "arbitrum", "base")
-- `destinationAddress`: Recipient address as string
-- `symbol`: Token symbol as string (e.g. "axlUSDC", "WETH")
-- Requires ERC-20 approval to the Gateway
-
 ## Notes
 
 - Uses chain name strings for destination (e.g. "ethereum", "arbitrum", "Polygon") -- NOT chain IDs
@@ -111,3 +79,9 @@ function main() {
 `import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its.
 
 - `interchainTransfer(bytes32 tokenId, string destinationChain, bytes destinationAddress, uint256 amount, bytes metadata, uint256 gasValue) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

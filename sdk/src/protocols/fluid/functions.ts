@@ -21,7 +21,7 @@ import { FluidVaultABI as IFluidVault } from "./abis";
 
 function main(vaultAddress: Address, nftId: Uint256, amount: Uint256, to: Address): Uint256 {
   const vault = IFluidVault.at(vaultAddress);
-  vault.operate(nftId, 0, amount, to);
+  vault.operate(nftId, 0, Int256(amount), to);
   return 1;
 }
 `;

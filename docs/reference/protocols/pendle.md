@@ -8,7 +8,7 @@
 > is deployed on, the name a program writes for each of its contracts, and the functions a program
 > can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Yield trading protocol that tokenizes future yield. Split yield-bearing assets into principal tokens (PT) and yield tokens (YT) for trading. PT = discounted principal (fixed yield), YT = future variable yield.
 
@@ -49,111 +49,12 @@ function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint25
 }
 ```
 
-## Key Operations
+## What it offers
 
 - **swapExactTokenForPt**: Buy PT (principal token) - lock in fixed yield
 - **swapExactTokenForYt**: Buy YT (yield token) - speculate on variable yield
 - **addLiquiditySingleToken**: Add single-sided liquidity to a Pendle market
 - **removeLiquiditySingleToken**: Remove liquidity and receive single token
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Buy PT (fixed yield)
-import { PendleRouterABI as IPendleRouter } from "./abis";
-function main(
-  routerAddress: Address,
-  receiver: Address,
-  market: Address,
-  minPtOut: Uint256,
-  guessMin: Uint256,
-  guessMax: Uint256,
-  guessOffchain: Uint256,
-  maxIteration: Uint256,
-  eps: Uint256,
-  tokenIn: Address,
-  netTokenIn: Uint256,
-  tokenMintSy: Address,
-): { netPtOut: Uint256; netSyFee: Uint256; netSyInterm: Uint256 } {
-  const router = IPendleRouter.at(routerAddress);
-  const result = router.swapExactTokenForPt(
-    receiver,
-    market,
-    minPtOut,
-    {
-      guessMin: guessMin,
-      guessMax: guessMax,
-      guessOffchain: guessOffchain,
-      maxIteration: maxIteration,
-      eps: eps,
-    },
-    {
-      tokenIn: tokenIn,
-      netTokenIn: netTokenIn,
-      tokenMintSy: tokenMintSy,
-      pendleSwap: 0x0000000000000000000000000000000000000000,
-      swapData: {
-        swapType: 0,
-        extRouter: 0x0000000000000000000000000000000000000000,
-        extCalldata: 0x00,
-        needScale: false,
-      },
-    },
-    {
-      limitRouter: 0x0000000000000000000000000000000000000000,
-      epsSkipMarket: 0,
-      normalFills: [],
-      flashFills: [],
-      optData: 0x00,
-    },
-  );
-  return result;
-}
-
-// Remove liquidity
-import { PendleRouterABI as IPendleRouter } from "./abis";
-function main(
-  routerAddress: Address,
-  receiver: Address,
-  market: Address,
-  netLpToRemove: Uint256,
-  tokenOut: Address,
-  minTokenOut: Uint256,
-  tokenRedeemSy: Address,
-): { netTokenOut: Uint256; netSyFee: Uint256; netSyInterm: Uint256 } {
-  const router = IPendleRouter.at(routerAddress);
-  const result = router.removeLiquiditySingleToken(
-    receiver,
-    market,
-    netLpToRemove,
-    {
-      tokenOut: tokenOut,
-      minTokenOut: minTokenOut,
-      tokenRedeemSy: tokenRedeemSy,
-      pendleSwap: 0x0000000000000000000000000000000000000000,
-      swapData: {
-        swapType: 0,
-        extRouter: 0x0000000000000000000000000000000000000000,
-        extCalldata: 0x00,
-        needScale: false,
-      },
-    },
-    {
-      limitRouter: 0x0000000000000000000000000000000000000000,
-      epsSkipMarket: 0,
-      normalFills: [],
-      flashFills: [],
-      optData: 0x00,
-    },
-  );
-  return result;
-}
-```
 
 ## Notes
 
@@ -198,3 +99,9 @@ function main() {
 - `removeLiquiditySingleToken(address receiver, address market, uint256 netLpToRemove, (address tokenOut, uint256 minTokenOut, address tokenRedeemSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) output, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netTokenOut, uint256 netSyFee, uint256 netSyInterm)`
 - `swapExactTokenForPt(address receiver, address market, uint256 minPtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtOut, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) payable returns (uint256 netPtOut, uint256 netSyFee, uint256 netSyInterm)`
 - `swapExactTokenForYt(address receiver, address market, uint256 minYtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessYtOut, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) payable returns (uint256 netYtOut, uint256 netSyFee, uint256 netSyInterm)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

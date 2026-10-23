@@ -17,48 +17,6 @@ Token bridge for rollups using bonders for fast withdrawals. Supports ETH, USDC,
 | Namespace | `Hop` on ethereum, optimism, polygon, base, arbitrum |
 | Chains | ethereum, optimism, polygon, base, arbitrum |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridgeFromL1
-
-Send tokens from Ethereum L1 to an L2 via the Hop L1Bridge.
-
-```typescript
-import { HopL1BridgeABI as IL1Bridge } from "./abis";
-
-function main(
-  bridgeAddress: Address,
-  chainId: Uint256,
-  recipient: Address,
-  amount: Uint256,
-  amountOutMin: Uint256,
-): Uint256 {
-  const bridge = IL1Bridge.at(bridgeAddress);
-  bridge.sendToL2(
-    chainId,
-    recipient,
-    amount,
-    amountOutMin,
-    99999999999,
-    0x0000000000000000000000000000000000000000,
-    0,
-  );
-  return 1;
-}
-```
-
-- `bridgeAddress`: Token-specific L1Bridge (e.g. l1EthBridge for ETH, l1UsdcBridge for USDC)
-- `chainId`: EVM chain ID of destination L2
-- `amountOutMin`: Minimum tokens to receive after AMM swap on L2 (slippage protection)
-- `deadline`: Set to far future (99999999999) to avoid expiry
-- `relayer`/`relayerFee`: Set to zero for standard transfers
-- Requires ERC-20 approval to the L1Bridge for ERC-20 tokens, or send ETH as msg.value
-
 ## Notes
 
 - L1-to-L2: Uses `sendToL2` on token-specific L1Bridge contracts
@@ -104,3 +62,9 @@ function main() {
 `import HopL2AmmWrapperABI from "./protocols/hop/HopL2AmmWrapperABI.json";` Speaks for: l2AmmWrapper.
 
 - `swapAndSend(uint256 chainId, address recipient, uint256 amount, uint256 bonderFee, uint256 amountOutMin, uint256 deadline, uint256 destinationAmountOutMin, uint256 destinationDeadline) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

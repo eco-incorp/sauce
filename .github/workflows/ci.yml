@@ -100,9 +100,9 @@ jobs:
       - name: Agent skills and the manual's reference — the committed generated files are current
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md)" ]; then
-            git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md
-            git diff -- skills docs/reference docs/guides/distributed-swap.md
+          if [ -n "$(git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md docs/guides/solana-distributed-swap.md)" ]; then
+            git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md docs/guides/solana-distributed-swap.md
+            git diff -- skills docs/reference docs/guides/distributed-swap.md docs/guides/solana-distributed-swap.md
             echo "::error::the SDK build changed skills/ or the manual's generated pages: rebuild the SDK and commit the regenerated files"
             exit 1
           fi
@@ -230,7 +230,7 @@ jobs:
 
       # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
       # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
-      # the README's route example, a raw compact compile, the settle recipe, two builders and an
+      # the README's route example, a raw ABI-entry compile, the settle recipe, two builders and an
       # actions program run in headless Chromium and must produce the bytes Node does. The packed
       # check at the end repeats both against the installed tarball.
       - name: Browser — no Node in any browser-facing export

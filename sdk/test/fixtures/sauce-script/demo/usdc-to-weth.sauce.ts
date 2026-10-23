@@ -88,7 +88,7 @@ function swapOnV4(fee: Uint256, tickSpacing: Uint256, amount: Uint256, limit: Ui
     currency0: USDC < WETH ? USDC : WETH,
     currency1: USDC < WETH ? WETH : USDC,
     fee: fee,
-    tickSpacing: Int256(tickSpacing),
+    tickSpacing: tickSpacing,
     hooks: 0n,
   };
   const before = USDC.balanceOf(self);

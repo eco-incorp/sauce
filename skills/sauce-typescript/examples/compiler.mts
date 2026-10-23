@@ -1,14 +1,7 @@
-// The raw compiler: one reusable program, arguments encoded separately (ABI-v1 or compact-v1), the
+// The raw compiler: one reusable program, ABI-v1 arguments encoded separately, the
 // SDK's own modules served from memory, and the one `ready()` a browser needs.
-import {
-  compile,
-  decodeCompactArguments,
-  encodeCompactArguments,
-  ready,
-  resolveSdkModule,
-  resolveSdkPackage,
-} from "@eco-incorp/sauce/compiler";
-import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem";
+import { compile, ready, resolveSdkModule, resolveSdkPackage } from "@eco-incorp/sauce/compiler";
+import { bytesToHex, decodeAbiParameters, encodeAbiParameters, hexToBytes } from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -35,19 +28,9 @@ const abiArgs = hexToBytes(
 );
 const abiPayload = new Uint8Array([...abi.bytecode, ...abiArgs]); // the `program` of Pot.cook
 
-// compact-v1: pair the bytecode with ITS schema, never another artifact's.
-const compact = compile({ target: "evm", entry: "main.ts", resolve, compactArgs: true });
-if (compact.entryEncoding !== "compact-v1" || compact.entrySchema === undefined)
-  throw new Error("no schema");
-const schema = compact.entrySchema;
-const small = encodeCompactArguments(schema, [[25n, 75n], 100n]);
-check(small.length < abiArgs.length, "compact is smaller");
-// A fixed scalar width makes the payload length value-independent, so a number can be spliced later.
-const w1 = encodeCompactArguments(schema, [[1n, 2n], 3n], { scalarWidth: 32 });
-const w2 = encodeCompactArguments(schema, [[10n ** 30n, 2n], 3n], { scalarWidth: 32 });
-check(w1.length === w2.length, "scalarWidth fixes offsets");
-const back = decodeCompactArguments(schema, w2, { scalarWidth: 32 });
-check(Array.isArray(back) && Array.isArray(back[0]) && back[0][0] === 10n ** 30n, "round trip");
+// Every entry uses ABI-v1. This signature has no indirect top-level tuple parameters.
+const back = decodeAbiParameters(abi.entryParams, bytesToHex(abiArgs));
+check(Array.isArray(back[0]) && back[0][0] === 25n && back[1] === 100n, "ABI round trip");
 
 // `@sauce/token` and every protocol ABI twin are served by the SDK: fall back to its resolvers.
 const withToken = new TextEncoder().encode(`
@@ -64,6 +47,6 @@ const tokenRead = compile({
 });
 
 console.log(
-  `isa ${abi.isaRevision}; abi payload ${abiPayload.length} bytes; compact args ${small.length} vs ${abiArgs.length}`,
+  `isa ${abi.isaRevision}; ABI payload ${abiPayload.length} bytes; arguments ${abiArgs.length} bytes`,
 );
 console.log(`@sauce/token balanceOf program ${bytesToHex(tokenRead.bytecode).slice(0, 18)}…`);

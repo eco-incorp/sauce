@@ -152,10 +152,9 @@ rules. The stablecoin itself is an ordinary ERC-20 to transfer.
 
 Each bridge has its own trust model and delay. Canonical rollup bridges (Arbitrum, Optimism,
 Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to
-Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
+Ethereum; bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
 settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the
-destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a
-program on another chain, not only move a token, open a Sauce intent ([intents](../guides/intents.md)).
+destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -342,18 +341,16 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](protocols/seaport.md) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (9)
+## Infrastructure and standards (8)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
-ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-([intents](../guides/intents.md)).
+ENS, Gelato automation and Instadapp flash-loan routing.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Eco Routes](protocols/eco-routes.md) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](protocols/ens.md) | — | `Ens`: ethereum | ethereum |
 | [ERC20](protocols/erc20.md) | — | — | none recorded |
 | [ERC-3156](protocols/erc3156.md) | — | — | none recorded |
@@ -423,14 +420,14 @@ ambiguous, and a program names the versioned namespace instead.
 | `Synthra.NonfungiblePositionManager` | `SynthraV3.NonfungiblePositionManager` | arc |
 | `Synthra.QuoterV2` | `SynthraV3.QuoterV2` | arc |
 | `Synthra.SwapRouter02` | `SynthraV3.SwapRouter02` | arc |
-| `Uniswap.NonfungiblePositionManager` | `UniswapV3.NonfungiblePositionManager` | ethereum, optimism, polygon, monad, arc, base, arbitrum |
+| `Uniswap.NonfungiblePositionManager` | `UniswapV3.NonfungiblePositionManager` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
 | `Uniswap.PoolManager` | `UniswapV4.PoolManager` | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
 | `Uniswap.PositionManager` | `UniswapV4.PositionManager` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
-| `Uniswap.QuoterV2` | `UniswapV3.QuoterV2` | ethereum, monad, arc |
+| `Uniswap.QuoterV2` | `UniswapV3.QuoterV2` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
 | `Uniswap.Router` | `UniswapV2.Router` | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
 | `Uniswap.StateView` | `UniswapV4.StateView` | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
 | `Uniswap.SwapRouter` | `UniswapV3.SwapRouter` | ethereum, optimism, polygon, arbitrum |
-| `Uniswap.SwapRouter02` | `UniswapV3.SwapRouter02` | ethereum, bsc, monad, arc, base, celo, avalanche |
+| `Uniswap.SwapRouter02` | `UniswapV3.SwapRouter02` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
 | `Uniswap.UniversalRouter` | `UniswapV4.UniversalRouter` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
 | `Unitflow.Factory` | `UnitflowV3.Factory` | arc |
 | `Unitflow.Quoter` | `UnitflowV3.Quoter` | arc |
@@ -485,3 +482,10 @@ returned.
 | `Velodrome.Pool(<address>)` | [`velodrome`](protocols/velodrome.md) |
 | `Venus.VToken(<address>)` | [`venus`](protocols/venus.md) |
 | `YearnV3.Vault(<address>)` | [`yearn-v3`](protocols/yearn-v3.md) |
+
+## Next
+
+- [Swap by name](../guides/swap-by-name.md): a first program that calls a protocol by name.
+- [Protocols and tokens](../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Names and registries](../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

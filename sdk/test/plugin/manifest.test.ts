@@ -17,7 +17,7 @@ const REVERT_OP = 0xb6;
 
 describe("plugin manifest (Layer C)", () => {
   // `@sauce/token` is the default ambient MODULE: `chainAmbient()` (routes/ambient.ts) hands this
-  // list to EVERY `openRoute` compile, and it resolves because `embedded/resolve.ts` serves the
+  // list to EVERY program compile, and it resolves because `embedded/resolve.ts` serves the
   // SDK's own embedded copy whatever the caller's `resolve` does.
   // An entry that is NOT resolvable on the route path (e.g. an npm package a consumer may not have
   // installed) would make every route throw `failed to import module "..."`, so this list must only

@@ -17,35 +17,10 @@ Decentralised Ethereum liquid staking protocol. Stake ETH and receive rETH, a no
 | Namespace | `RocketPool` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Stake ETH and receive rETH
 - **burn**: Burn rETH to redeem ETH (subject to pool liquidity)
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit ETH for rETH
-import { RocketDepositPoolABI as IRocketDepositPool } from "./abis";
-function main(depositPoolAddress: Address): Uint256 {
-  const pool = IRocketDepositPool.at(depositPoolAddress);
-  pool.deposit();
-  return 1;
-}
-
-// Burn rETH back to ETH
-import { RETHABI as IRETH } from "./abis";
-function main(rethAddress: Address, amount: Uint256): Uint256 {
-  const reth = IRETH.at(rethAddress);
-  reth.burn(amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -90,3 +65,9 @@ function main() {
 `import RocketDepositPoolABI from "./protocols/rocket-pool/RocketDepositPoolABI.json";` Speaks for: rocketDepositPool.
 
 - `deposit() payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -6,7 +6,8 @@
 
 > SauceScript is the language programs are written in: a small, strict TypeScript. This page is its
 > dictionary: every type, statement and built-in function, and which chains allow each. Learning the
-> language? Start with [Writing SauceScript](../concepts/saucescript.md).
+> language? Start with [Write your first program](../guides/write-your-first-program.md);
+> [SauceScript](../concepts/saucescript.md) explains why it is shaped this way.
 
 SauceScript is the checked subset of TypeScript that Sauce programs are written in. You compile a program for
 one of two targets:
@@ -17,9 +18,9 @@ one of two targets:
 Every entry below says where it works: **Both**, **EVM** or **SVM**. Using something on the wrong target is a
 compile error, never a silent difference.
 
-Every example compiles on each target it names, and every error message is quoted as the compiler prints it,
-with `N` for a number and `…` where text is elided. The machine-readable list of every documented builtin, with one
-example program each, is `builtins.json`.
+Examples state their supported targets. Diagnostic wording is illustrative; applications should
+use structured diagnostic locations and codes rather than matching text. `builtins.json` lists
+documented builtins with one example program per target.
 
 **Contents**
 
@@ -46,7 +47,8 @@ example program each, is `builtins.json`.
 - `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account, and not only
   Pot accounts),
   `ctx.msgSender()` the first signer among the accounts the engine receives, and
-  `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract` and `isEOA` do not exist.
+  `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract`, `isEOA` and the block and
+  transaction reads (`txOrigin`, `baseFee`, `blockHash`, …) do not exist.
 - `log` takes no topics (§5).
 - `abi`, `evm` and contract bindings with `.catch()` (§9, §10, §13) are EVM only: a call to another
   program is `svm.call`.
@@ -59,8 +61,7 @@ example program each, is `builtins.json`.
 
 - `Uint256`, `Address`, `number`, `bigint`: A **number**: one unsigned 256-bit integer. An address
   is a number.
-- `Int256`: A **signed number**: one signed 256-bit integer, from −2²⁵⁵ to 2²⁵⁵ − 1 (see Signed
-  integers below).
+- `Int256`: A signed integer from −2²⁵⁵ through 2²⁵⁵ − 1. Negative literals infer this type.
 - `bool`, `boolean`: A **bool**: true or false. It is kept apart from numbers, so `flag + 1` is an
   error. Comparisons produce bools.
 - `bytes`, `string`: A **bytes value**. A `"text"` literal is its UTF-8 bytes.
@@ -73,14 +74,18 @@ example program each, is `builtins.json`.
   alone".
 - `void`: No value (return type only)
 
-- A parameter without an annotation is a number (`Uint256`). So is the result of a function without a return annotation,
+- A parameter without an annotation is a number. So is the result of a function without a return annotation,
   even one that returns a comparison or `true`: it comes back as 1 or 0. `if`, `while`, `&&` and `!` take that,
   but a `: bool` function cannot return it: "a return value: expected a bool, found a number". Give a helper
   that answers yes or no a `: bool` return type.
+- A signed helper result needs `: Int256`; an unannotated helper defaults to `Uint256`.
+- `Uint256` and `Int256` are reserved type names, not names for locals, parameters, constants,
+  imports or functions. A negative literal cannot initialize a `Uint256`; use
+  `const delta: Int256 = -10`.
 - An unknown type name is rejected with a list of the valid ones, as in "`uint256` is not a type — write
-  `Uint256`, `Address`, `Account`, `bool`, `bytes` or `string`, an array `T[]`, an inline object type `{ a: Uint256 }`
+  `Uint256`, `Int256`, `Address`, `Account`, `bool`, `bytes` or `string`, an array `T[]`, an inline object type `{ a: Uint256 }`
   for a tuple …". Union types, `Array<T>` and `[A, B]` tuple types are rejected the same way.
-- In this reference, **scalar** means a number, signed or not, or a bool.
+- In this reference, **scalar** means a number or a bool.
 
 Common type errors:
 
@@ -94,38 +99,11 @@ Common type errors:
 A builtin that does not exist on your target fails as "`<name>` is not available on the `<evm|svm>` target",
 usually followed by what to use instead.
 
-### Signed integers
-
-An `Int256` is a signed 256-bit integer. These values are `Int256`; every other integer is a `Uint256`:
-
-- an ABI `intN` value from a contract (`int24`, `int128`, `int256`, …): a return value, a record field or
-  an array element;
-- a negative literal, `-1`, and a constant expression given an `: Int256` annotation;
-- what `Math.signExtend` returns, and the result of an operator on `Int256` values.
-
-Rules, which hold on both targets:
-
-- **Arithmetic does not mix kinds.** An `Int256` and a `Uint256` cannot be added, subtracted or combined
-  in any arithmetic or bitwise operator (§3). Convert one operand with `Int256(x)` or `Uint256(x)`.
-- **Comparisons do mix.** `<`, `>=`, `==` and the rest between the two compare their values: a negative
-  number is below every `Uint256` and equal to none.
-- **Conversions keep the value or revert.** `Int256(x)` reverts for a `Uint256` above 2²⁵⁵ − 1, and
-  `Uint256(x)` for a negative `Int256`. A parameter, return or local annotated with the other kind
-  converts the same way, so an `Int256` returned from a `: Uint256` function reverts when it is negative.
-  A constant that does not fit is a compile error: "constant Int256 value is outside Uint256's range; …".
-- **`fromBits` keeps the bits.** `Int256.fromBits(word)` reads a `Uint256` word as signed (the all-ones
-  word is −1), and `Uint256.fromBits(x)` gives an `Int256` its two's-complement word. Neither checks
-  anything; use them where the word really is a bit pattern (§8).
-- **A `Uint256` given to an `intN` parameter of a contract is converted with that check.** A
-  two's-complement word for a negative amount is above 2²⁵⁵ − 1: it compiles and reverts when the call is
-  made, so pass an `Int256` (§13).
-
 ## 2. Literals
 
 | Literal                            | Meaning                                                                | Example                                    |
 | ---------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
-| integers: `1`, `0xff`, `1_000_000` | numbers (`Uint256`)                                                    | `const ONE_TOKEN = 1000000000000000000;`   |
-| a negative integer: `-1`           | an `Int256`                                                            | `const delta = -1;`                        |
+| integers: `1`, `0xff`, `1_000_000` | numbers                                                                | `const ONE_TOKEN = 1000000000000000000;`   |
 | `true`, `false`                    | bools                                                                  | `let filled = true;`                       |
 | `"text"`                           | bytes (UTF-8)                                                          | `throw "below floor";`                     |
 | `` hex`…` ``                       | raw bytes: an even number of hex digits, optional `0x`, spaces ignored | ``const selector = hex`a9059cbb`;``        |
@@ -133,8 +111,7 @@ Rules, which hold on both targets:
 | `{ a: 1, b }`                      | a record; shorthand fields work                                        | `const order = { amount, recipient: to };` |
 
 Write integers plainly. Each is read from its text as a 256-bit integer, so one past 2^53 is
-exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the same integer. A negative
-literal is an `Int256`, from −2²⁵⁵ up.
+exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the same integer.
 
 **Not literals:**
 
@@ -142,43 +119,41 @@ literal is an `Int256`, from −2²⁵⁵ up.
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | `1e18`                      | "not a valid integer literal"                                                                                 | `10 ** 18` or `1000000000000000000`     |
 | `1.5`                       | "`1.5` is not a valid 256-bit literal"                                                                        | integers in the smallest unit           |
-| `null`, `undefined`         | rejected                                                                                                      | `0` or a flag                           |
+| `null`                      | has no supported runtime value                                                                                | `0` or a flag                           |
 | `` `text` ``, `` `a${b}` `` | rejected, with or without `${}`                                                                               | `"text"`, or bytes built with `.concat` |
 | a bad `hex`                 | "`hex`…`` is not a valid hex literal (expected an even number of `[0-9a-fA-F]` digits, optional `0x` prefix)" |                                         |
-| `[]` with no declared type  | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
 | `[1, true]`                 | "every element of an array literal must have the same type — …"                                               |                                         |
+
+`undefined` can represent a missing compile-time member or an unused value, but cannot be returned,
+encoded or otherwise consumed at runtime. An empty static array `[]` is accepted; annotate a runtime
+array's element type when the program needs one.
 
 ## 3. Operators
 
-- `+ - * / % **`, on numbers → number, on `Int256` values → `Int256`
-  - **Checked.** Overflow, underflow and division by zero revert, and so does a result outside the
-    operands' kind: below 0 for a `Uint256`, outside −2²⁵⁵ to 2²⁵⁵ − 1 for an `Int256`. With constant
-    operands they are compile errors: "constant `+` expression overflows 256 bits", "constant
-    subtraction underflows Uint256; …", "constant `/` expression divides by zero".
-  - **Both operands are one kind:** "cannot combine Int256 and Uint256 in this expression; …". A
-    literal that fits takes the other operand's kind (`delta + 1`, `delta + -1`), and a literal
-    expression takes the kind its annotation gives it: `const d: Int256 = 1 - 2;` is −1, where `1 - 2`
-    beside a `Uint256` is an underflow.
-  - On an `Int256`, `/` rounds toward zero, `%` takes the dividend's sign, and the smallest value
-    divided by −1 reverts.
-- `-x`, on an `Int256` → `Int256`
-  - Checked negation: only the smallest value, which has no negative, reverts. **Use an `Int256` for a
-    negative amount:** a negative literal, `-5`, or `-Int256(x)` for a value you hold as a `Uint256`.
-- `-x`, on a number → number
-  - Checked too: 0 for 0, and a revert for any other value, because no `Uint256` is the negative of
-    another. It never gives a two's-complement word. For the word of a negative amount, write
-    `Uint256.fromBits(-Int256(x))`.
-- `~x`, on a number → number
-  - bitwise NOT. `~0` is the maximum value. On an `Int256`, `~x` is `-x - 1`.
-- `& | ^ << >>`, on numbers → number
-  - Bitwise, on two operands of one kind. `>>` fills with zeros on a `Uint256` and copies the sign bit
-    on an `Int256`, so `-8 >> 1` is −4.
+- `+ - * / % **`, on integers → the operands' integer kind
+  - **Checked.** Overflow, underflow and division by zero revert. Signed division also rejects
+    `Int256`'s minimum divided by `-1`; division truncates toward zero and remainder keeps the
+    dividend's sign. Known invalid constant expressions fail compilation.
+  - Unsigned is the default: `1 - 2` underflows. `const delta: Int256 = 1 - 2` is signed `-1`.
+    Fitting literals take context; an existing variable keeps its kind. Mixed signed/unsigned
+    arithmetic needs an explicit conversion.
+- `-x`, on an integer → the same integer kind
+  - Checked negation. Negating a nonzero `Uint256` fails; write `-Int256(amount)`. Negating the
+    signed minimum overflows. A negative literal such as `-1` is an `Int256`, not the unsigned maximum.
+- `Int256(value)`, `Uint256(value)`: checked numeric conversions
+  - Signed conversion rejects values above 2²⁵⁵ − 1; unsigned conversion rejects negatives.
+    An annotation or scalar parameter/return conversion applies the same checks.
+  - `Int256.fromBits(word)` and `Uint256.fromBits(value)` instead preserve the 256-bit pattern.
+    Use these only when reinterpreting bits is intended.
+- `~x`, on an integer → the same integer kind
+  - Bitwise NOT. `~0` is the unsigned maximum.
+- `& | ^ << >>`, on integers
+  - `>>` is arithmetic on `Int256`, zero-filling on `Uint256`. A negative shift count is rejected.
 - `< <= > >=`, on scalars → bool
-  - By value, also between an `Int256` and a `Uint256`: a negative number is below every `Uint256`. To
-    compare a `Uint256` word as two's complement, read it as signed first: `Int256.fromBits(word) < 0`.
+  - Integer comparisons are mathematical, including across kinds: a negative signed value sorts
+    below every unsigned value. Use `Int256.fromBits(raw)` to compare a raw word as signed.
 - `== === != !==`, on scalars, or two accounts → bool
-  - A negative `Int256` equals no `Uint256`. Bytes cannot be compared: "a comparison operator
-    requires a scalar value". Compare
+  - Bytes cannot be compared: "a comparison operator requires a scalar value". Compare
     `crypto.keccak256(a) == crypto.keccak256(b)` instead.
 - `!x`, on a scalar → bool
 - `a && b`, `a || b`, on scalars → bool
@@ -218,18 +193,13 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 - Declare functions at the top level. They may call each other and recurse.
 - A function other than `main` that returns bytes, an array or a record needs a return type: "returning a bytes
   value from a function other than `main` needs a return-type annotation — …".
-- Every path must return ("`f` does not return on every path"). A bare `return;` is allowed only in a `: void`
-  function.
-- A function other than `main` that returns a signed value declares it, `: Int256`: "a helper returning a
-  signed integer needs an explicit `: Int256` return annotation". `main` may leave its return type out.
+- Every reachable runtime path must return. Known conditions may remove paths while compiling;
+  a helper that can still fall through is rejected. Bare `return;` is only for `: void`.
 - A `: void` function's result is not a value: "a call to a `: void` function produces no value, so its result
   can't be used as one — call it as a statement instead".
 - `main` is the entry point and cannot be called from your code.
-- A function other than `main` has a fixed budget for its parameters and the values its body keeps live at
-  once: about sixteen. Seventeen parameters still compile when the body reads each one once. Past the
-  budget — sixteen parameters with a local held beside them, or seventeen with the first one read again — the
-  compile fails with "f keeps too many values in use at once — …". Pass a record or an array instead of a long list of numbers. `main`'s
-  parameters are the program's arguments and are not limited this way.
+- A large helper may fail with "f keeps too many values in use at once — …". Pass related inputs
+  as a record/array and shorten the helper. `main`'s input list does not have that helper limit.
 - **Arrays and records are passed by reference.** A helper that writes `xs[i] = v` or `r.amount = v` changes
   the caller's array or record, so a helper can fill an array it is given. Numbers, bools and bytes are passed
   by value. A helper cannot replace an array parameter with a new array: "`<name>` cannot be reassigned a value
@@ -238,8 +208,9 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 **`main`'s arguments**
 
 - `main`'s parameters are the program's runtime inputs. One compiled program serves every argument value.
-- By default the arguments are ABI-encoded. With the compile option `compactArgs: true` they use the smaller
-  compact encoding; encode them with `encodeCompactArguments` and the schema the compile returns.
+- Arguments are ABI-encoded on both targets. Compact entry arguments and `entrySchema` were removed
+  in compiler 2.6. Use `routes.encodeEntryArguments` for an SDK program, or the raw compiler's
+  `entryParams` ABI, honoring `indirect` tuple parameters.
 - Parameters may be any combination of scalars, bytes, arrays and records, with at most 4 levels of nested
   arrays.
 - On **SVM**, `Account` parameters are not encoded arguments: they are the accounts attached to the transaction,
@@ -251,17 +222,42 @@ a module-level constant with functions, or to return a value.
 
 **Module constants and defines**
 
-- A top-level `const` must be a literal or a constant expression over other `const`s.
-- A top-level `const` array, `const FEES = [100, 500];`, is a lookup table: it is read only at a literal index,
-  `FEES[0]`. A loop over it, `.length` or a write gives "a module-scope lookup table `<name>` can only be read
-  by a literal index or a field name …", and a computed index "a module-scope lookup table can only be indexed by
-  a non-negative integer literal or a `const` bound to one …". Declare an array you loop over or index at run
-  time inside a function.
+- A top-level `const` may hold literals, constant expressions, static objects/arrays, or contract
+  bindings. Static members resolve while compiling; a branch whose condition is known compiles only
+  its taken arm. A module lookup table is indexed by a known value, not a runtime index.
+- A local object/array literal can keep known fields alongside runtime values. Runtime indexing and
+  iteration need a plain-data array; an array of contract bindings keeps its interfaces and must be
+  indexed with a known value. `undefined` may mark a missing static member, but has no runtime value.
+- Helpers called with known deciding arguments may specialize; this also works when optimization is
+  disabled. The same source must remain valid regardless of that option.
 - A top-level `let` is scratch space, reset on every run. It is not persistent storage.
-- A top-level `let` starts as a number, address or boolean literal, nothing else: "a module-scope `let <name>`
-  must be initialized with a literal — a number, address or boolean literal. …". An array, bytes, a record, an
-  expression or a call goes inside a function. A negative literal is a literal, and makes the `let` an `Int256`.
+- A top-level `let` starts from a scalar literal, including a negative integer. Computed values,
+  arrays, bytes and records belong inside functions; mutable module state resets every run.
 - The compile option `defines` replaces a `const` of the same name.
+
+**Program closures**
+
+`program((fee) => { … }, feeValue)` compiles its inline arrow as a separate program and returns
+`{ code, args }`. Run it read-only with `eval(parcel.code.concat(parcel.args))`, or pass the payload
+to a consumer that executes programs. One argument follows per arrow parameter; an optional last
+literal `{ chain: "...", target: "evm" | "svm" }` chooses its compilation target/profile.
+
+Known captures fold into code. Runtime integers, addresses and bools, and statically shaped
+scalar records/arrays, become explicit captured arguments. Runtime bytes and dynamic-size arrays
+cannot be captured. Captured names/arrow parameters and values reachable through them are read-only,
+including aliases and helper writes. Names/imports are resolved in the closure's lexical module;
+this does not capture host JavaScript variables or allow arbitrary arrow-function values.
+
+A host can also compile a single function-expression string with raw `entryKind: "closure"`:
+its parameters/body become the entry without wrapping or executing JavaScript. This is distinct
+from arbitrary first-class function values inside a `.sauce.ts` module.
+
+```sauce chain=base,solana
+function main(amount: Uint256): bytes {
+  const parcel = program((fee: Uint256): Uint256 => amount + fee, 2);
+  return eval(parcel.code.concat(parcel.args));
+}
+```
 
 **Imports**
 
@@ -312,9 +308,9 @@ builtin and cannot be a function name").
     scalar value".
   - Example: `const result = eval(program, amount);`
 
-**Failure is atomic.** `require`, `revert`, `throw`, a failing call and every checked operation revert the whole
-transaction; nothing that ran before them survives. The only failure a program can survive is a failed
-external call on EVM, with `.catch()` (§13).
+**Uncaught failure is atomic.** `require`, `revert`, `throw`, a failing call and every checked operation
+revert the whole transaction unless caught. EVM supports an atomic `try` block or a single external
+call's `.catch()` (§13); their rollback boundaries differ. SVM supports neither.
 
 ## 6. `ctx`: context reads
 
@@ -382,12 +378,58 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
   - On EVM: true if `address` has no code
   - On SVM: not available
   - Example: `require(ctx.isEOA(ctx.msgSender()));`
+- `ctx.txOrigin()` → number, **EVM**
+  - On EVM: the account that signed the transaction (`tx.origin`). It is not the program's caller
+    whenever a contract stands between them, such as a smart wallet or a relayer. Authorize on
+    `ctx.msgSender()`: a check of the origin passes for any contract the signer calls.
+  - On SVM: not available
+  - Example: `const signer = ctx.txOrigin();`
+- `ctx.coinbase()` → number, **EVM**
+  - On EVM: the block's fee recipient (`block.coinbase`)
+  - On SVM: not available
+  - Example: `const recipient = ctx.coinbase();`
+- `ctx.prevrandao()` → number, **EVM**
+  - On EVM: the block's randomness value (`block.prevrandao`). Whoever produces the block can bias
+    it: do not decide anything they would profit from choosing with it.
+  - On SVM: not available
+  - Example: `const seed = ctx.prevrandao();`
+- `ctx.blockGasLimit()` → number, **EVM**
+  - On EVM: the block's gas limit (`block.gaslimit`), not the transaction's; `ctx.gasLeft()` is
+    what the program has left
+  - On SVM: not available
+  - Example: `const limit = ctx.blockGasLimit();`
+- `ctx.baseFee()` → number, **EVM**
+  - On EVM: the block's base fee per gas, in wei (`block.basefee`)
+  - On SVM: not available
+  - Example: `require(ctx.baseFee() <= maxBaseFee);`
+- `ctx.gasPrice()` → number, **EVM**
+  - On EVM: the price per gas the transaction pays, in wei (`tx.gasprice`): the base fee plus the
+    priority fee, not the fee cap
+  - On SVM: not available
+  - Example: `const price = ctx.gasPrice();`
+- `ctx.blockHash(n)` → number, **EVM**
+  - On EVM: the hash of block `n`, for the 256 blocks before the current one. It is 0 for the
+    current block, a later one or an older one, and never reverts.
+  - On SVM: not available
+  - Example: `const previous = ctx.blockHash(ctx.blockNumber() - 1);`
+- `ctx.blobHash(i)` → number, **EVM**
+  - On EVM: the versioned hash of the transaction's blob `i`. It is 0 past the last blob, and for
+    every index of a transaction that carries none.
+  - On SVM: not available
+  - Example: `const first = ctx.blobHash(0);`
+- `ctx.blobBaseFee()` → number, **EVM**
+  - On EVM: the block's base fee per unit of blob gas, in wei (`block.blobbasefee`). Not every
+    chain has it: on Arbitrum and Polygon, a cook that reaches the read halts, using up its gas and
+    returning no revert data. It still compiles for those chains, so read it only where the chain
+    has it.
+  - On SVM: not available
+  - Example: `const blobFee = ctx.blobBaseFee();`
 
 - A wrong argument count gives "`ctx.timestamp` takes 0 argument(s), but this call passes 1".
-- An unknown name gives "`ctx.origin` is not a context builtin".
-- A bare `gasLeft()` gives "… is called but never declared; write `ctx.gasLeft()` instead".
-- There is no read for the transaction origin, the block hash, the base fee or the gas price. Pass such a value
-  in as a `main` argument.
+- An unknown name gives "`ctx.origin` is not a context builtin"; the origin is `ctx.txOrigin()`.
+- A bare `gasLeft()` gives "… is called but never declared; write `ctx.gasLeft()` instead". A bare
+  `blockHash(n)`, `blobHash(i)` or `blobBaseFee()` is pointed to its `ctx` spelling the same way,
+  and so are `origin()` and `gasLimit()`, to `ctx.txOrigin()` and `ctx.blockGasLimit()`.
 
 ## 7. `crypto`
 
@@ -409,6 +451,13 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
     `const [address, bump] = crypto.findPDA(programId, seeds)`". `[a]` and `[, bump]` are fine.
     Seeds must be a `bytes[]` ("`crypto.findPDA`'s seeds argument must be a `bytes[]`, got …"). **At
     most 15 seeds;** more compile but fail when run.
+  - When the compiler knows the program id and every seed, it derives the address at compile time
+    at **every optimization level**, including `optimize: false` / `--no-optimize`. This can
+    increase SVM program size; it is not a promise of smaller bytecode.
+  - Runtime PDA derivation has target-specific limits: EVM can fail to derive an address that SVM
+    can derive from the same inputs. Known inputs derived at compile time need no runtime
+    derivation. Successful compile-time evaluation does not predict gas or compute-unit use, or
+    guarantee that evaluating the original expression at runtime would fit the target's resources.
   - Example: ``const [vault, bump] = crypto.findPDA(PROGRAM, [hex`01`, "vault"]);``
 
 An unknown name gives "`crypto.sha256` is not a crypto intrinsic".
@@ -418,15 +467,10 @@ An unknown name gives "`crypto.sha256` is not a crypto intrinsic".
 These are SauceScript's integer functions, on **Both** targets. They are not JavaScript's `Math`: `Math.min`,
 `max`, `abs`, `pow`, `floor` and the rest give "`Math.min` is not a Math intrinsic".
 
-- Every argument is an integer: a `Uint256` or an `Int256`. `sqrt`, `mulDiv`, `addMod` and `mulMod` take
-  unsigned values, so an `Int256` argument is converted with a check, and a negative one reverts.
-  `signExtend` reads its argument as the 256-bit word it is.
-- `Math.sqrt`, `mulDiv`, `addMod` and `mulMod` give a **number**; `Math.signExtend` gives an `Int256`.
-- Signed division, remainder, arithmetic shift and comparison are the operators on `Int256` values:
-  `/ % >> < <= > >=` (§3). For a `Uint256` word that holds signed bits, read it with
-  `Int256.fromBits(word)` first. `Math.sDiv`, `sMod`, `sShr`, `sLt`, `sGt`, `sLte` and `sGte` are not
-  intrinsics: each gives an error naming its operator, such as "`Math.sDiv` was removed; use `/` on
-  `Int256` values …".
+- `sqrt`, `mulDiv`, `addMod` and `mulMod` operate on unsigned integers and return `Uint256`.
+  A negative `Int256` argument is rejected.
+- `signExtend` returns `Int256`. Signed arithmetic and comparisons use ordinary operators on
+  `Int256`; the old `Math.sDiv`, `sMod`, `sShr`, `sLt`, `sGt`, `sLte` and `sGte` are removed.
 
 - `Math.sqrt(x)`: the integer square root
   - Reverts when: never
@@ -440,41 +484,15 @@ These are SauceScript's integer functions, on **Both** targets. They are not Jav
 - `Math.mulMod(a, b, n)`: (a · b) mod n
   - Reverts when: `n` is 0
   - Example: `Math.mulMod(a, b, P)`
-- `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte; gives an
-  `Int256`
-  - Reverts when: never
-  - Example: `Math.signExtend(raw, 2)` for an int24
-
-A comparison returns a **bool**, `Int256` values included: `if (a < b) { … }` works, and so does returning
-one from a `: bool` function. Returning one from a `: Uint256` function fails with "a return value:
-expected a number, found a bool".
+- `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte
+  - Returns `Int256`; sign extension itself never reverts. Converting a negative result to
+    `Uint256` is checked and reverts: `Uint256(Math.signExtend(0xff, 0))` cannot represent `-1`.
+  - Example: `const tick = Math.signExtend(raw, 2);` for an int24
 
 A wrong argument count gives "`Math.sqrt` takes 1 argument(s), but this call passes 2".
 
-### Integer conversions
-
-These move a value between `Uint256` and `Int256`: `Int256(value)` and `Uint256(value)` keep the value and
-revert when it does not fit; `fromBits` keeps the 256 bits and never reverts. Each takes one argument.
-
-- `Int256(value)`: `(number or Int256) → Int256`, **Both**
-  - Keeps the value. A `Uint256` above 2²⁵⁵ − 1 reverts; a constant that does not fit is a compile
-    error: "constant Uint256 value is outside Int256's range; …".
-  - Reverts when: `value` is above 2²⁵⁵ − 1
-  - Example: `const delta = -Int256(amount);`
-- `Uint256(value)`: `(Int256 or number) → Uint256`, **Both**
-  - Keeps the value. A negative `Int256` reverts.
-  - Reverts when: `value` is negative
-  - Example: `const owed = Uint256(delta);`
-- `Int256.fromBits(word)`: `(Uint256) → Int256`, **Both**
-  - Reads the 256 bits as a signed number: bit 255 is the sign, so the all-ones word is −1. No check
-    and no cost. Use it where the word really is a two's-complement bit pattern, such as bytes read
-    from account data. It takes a `Uint256`: an `Int256` argument is a compile error.
-  - Reverts when: never
-  - Example: `const delta = Int256.fromBits(word);`
-- `Uint256.fromBits(value)`: `(Int256) → Uint256`, **Both**
-  - Gives a negative value its two's-complement word: −1 becomes 2²⁵⁶ − 1. It takes an `Int256`.
-  - Reverts when: never
-  - Example: `const word = Uint256.fromBits(-Int256(amount));`
+Migration diagnostic: "`Math.sLt` was removed; use `<` on `Int256` values". Each removed helper
+similarly names its replacement.
 
 ## 9. `abi` (EVM)
 
@@ -485,13 +503,15 @@ work on SVM; they are decoded separately.
   - Types: 1 to 255 values of any type except accounts; returns bytes
   - Standard Solidity ABI encoding of the values as one argument list. A single record argument is
     encoded as its fields. "abi.encode requires at least one value to encode"; "abi.encode takes at most 255 arguments, got 256"
+  - Deeply nested values can exceed execution limits; keep encoded structures shallow and simulate
+    the largest supported input.
   - Example: `return abi.encode(total, recipient);`
 - `abi.decode(data, ["Shape", …])`
   - Types: `data`: bytes. The shapes must be written in place as an array of strings. Returns a
     record with unnamed fields.
   - Read fields by position or by destructuring. Field types use SauceScript names: `"Uint256"`,
-    `"Int256"`, `"Address"`, `"bool"`, `"bytes"`, `"string"`, `"number"`, `"bigint"`, `"boolean"`, any of
-    them followed by `[]`, and records `"{Uint256, bool}"`. Solidity spellings are rejected: "`uint256`
+    `"Int256"`, `"Address"`, `"bool"`, `"bytes"`, `"string"`, `"number"`, `"bigint"`, `"boolean"`, any of them
+    followed by `[]`, and records `"{Uint256, bool}"`. Solidity spellings are rejected: "`uint256`
     is not an abi.decode field type — …". Errors: "abi.decode takes exactly 2 arguments (data,
     shape), got N"; "abi.decode's first argument must be bytes"; shapes held in a variable give
     "abi.decode's second argument must be an array literal of shape strings, e.g. ["Uint256",
@@ -499,26 +519,31 @@ work on SVM; they are decoded separately.
     resolves against nothing — read a field by position instead (`t[0]`)".
   - Example: `const [amount, to] = abi.decode(data, ["Uint256", "Address"]);`
 
-A `"bool"` field decodes as a bool, an `"Address"` field keeps only the address-sized low 20 bytes, an
-`"Int256"` field decodes as a signed number (the all-ones word is −1), and every other single-value field
-decodes as an unsigned number.
+A `"bool"` field decodes as bool, an `"Address"` keeps the address-sized low 20 bytes,
+and `"Int256"` decodes a signed word. Other single-value fields decode as unsigned numbers.
 
 ## 10. `evm` (EVM)
 
 On SVM every function here gives "`evm.<name>` is not available on the svm target", with a pointer to the `svm`
 equivalent.
 
-- `evm.call(address, value, data)`: `(scalar, scalar, bytes) → bytes`
-  - A call with native `value`; returns the raw return data. **This is the only way to send value
-    with a call.** "`evm.call()` expects 3 argument(s), but this call passes 2"; "`evm.call()`'s
-    calldata argument must be bytes"
+- `evm.call(address, value, data, gas?)`: returns raw bytes
+  - Sends native `value`; the only bound-call alternative that sends value.
   - Example: ``evm.call(WETH, amount, hex`d0e30db0`);``
-- `evm.static(address, data)`: `(scalar, bytes) → bytes`
-  - A read-only call (staticcall)
+  - Missing input: "`evm.call()` expects 3 argument(s), or 4 with a gas cap, but this call passes 2".
+    Non-bytes input: "`evm.call()`'s calldata argument must be bytes".
+- `evm.static(address, data, gas?)`: a read-only call (staticcall), returning bytes
   - Example: `const reply = evm.static(pool, query);`
-- `evm.delegate(address, data)`: `(scalar, bytes) → bytes`
-  - A delegatecall
+- `evm.delegate(address, data, gas?)`: a delegatecall, returning bytes
   - Example: `evm.delegate(library, data);`
+- Optional `gas` is the amount forwarded, not the transaction limit; omitted forwards what the EVM
+  allows. Zero forwards no gas. A bound call uses `.gas(n)`; `.gas(n)` and `.catch(...)` compose
+  in either order with the same behavior.
+- Unread answers are not copied. A read bound output still requires its whole declared decode.
+  Raw `evm.call`, `evm.static` and `evm.delegate` bytes can avoid copying an unread tail: a
+  fixed-size `abi.decode` shape, a comparison of `.length` with a constant, or `.slice(0, n)`
+  with a known `n` can read only what that operation needs. This is not partial decoding of
+  bound ABI results. A caught error copies at most 256 bytes only if its handler reads it.
 - `evm.sload(slot)`: `(scalar) → number`
   - Reads the executing contract's storage
   - Example: `const count = evm.sload(0);`
@@ -535,9 +560,28 @@ equivalent.
 
 - Storage belongs to the executing contract, the Pot.
 - `evm.create(initcode, value?)`, `evm.create2(initcode, salt, value?)`, and
-  `evm.create3(initcode, salt, value?)` deploy from the Pot and return the address. Init code must
-  be bytes: "evm.create's init code requires a bytes value". CREATE/CREATE2 return zero on failure;
-  CREATE3 reverts. These are EVM-only.
+  `evm.create3(initcode, salt, value?)` deploy from the Pot and return the address. Init code is
+  creation bytecode, not the deployed code, and must be bytes: "evm.create's init code requires a
+  bytes value". An omitted `value` sends none, and the Pot pays any `value` given. CREATE/CREATE2
+  return zero on failure; CREATE3 reverts.
+- Three builtins predict where those land, each returning an address:
+  - `evm.createAddress(deployer, nonce)`: where `evm.create` from `deployer` at `nonce` lands.
+  - `evm.create2Address(deployer, salt, initCodeHash)`: where `evm.create2` from `deployer` lands;
+    `initCodeHash` is `crypto.keccak256(initcode)`.
+  - `evm.create3Address(salt)`: where `evm.create3` run by the Pot lands. It takes no deployer,
+    because the deployer is always the Pot running the program: the address depends on the Pot and
+    the salt, not on the init code.
+- All six are EVM-only. A program that deploys and checks the address:
+
+```sauce chain=base
+function main(initcode: bytes, salt: Uint256): Address {
+  const expected = evm.create2Address(ctx.self(), salt, crypto.keccak256(initcode));
+  const deployed = evm.create2(initcode, salt);
+  require(deployed == expected, "create2");
+  require(evm.create3Address(salt + 1) != expected, "create3");
+  return deployed;
+}
+```
 
 ## 11. `svm` (SVM)
 
@@ -564,13 +608,17 @@ On EVM every function here gives "`svm.<name>` is not available on the evm targe
     transaction.**
   - Example: `svm.call(tokenProgram, [source, destination, owner], instruction);`
 - `svm.remainingAccount(i)`: `(number) → Account`
-  - The `i`-th account attached after the ones `main` declares. **Only inside `main`.**
+  - The `i`-th account attached after the ones `main` declares. Available inside any function.
     "`svm.remainingAccount` takes one index, got N"
   - Example: `const extra = svm.remainingAccount(0);`
 - `const rest = svm.remainingAccounts()`: `() → Account[]`
-  - Every account attached after the declared ones. **Only as a `let`/`const` initializer, and only
-    inside `main`:** "svm.remainingAccounts() can only initialize a let/const — bind it first (const rest = svm.remainingAccounts();), then use the binding".
+  - Every account attached after the declared ones. Available inside any function, **only as a
+    `let`/`const` initializer:** "svm.remainingAccounts() can only initialize a let/const — bind it first (const rest = svm.remainingAccounts();), then use the binding".
+    Reverts if the transaction supplies fewer accounts than `main` declares.
   - Example: `const rest = svm.remainingAccounts(); svm.call(router, rest, data);`
+
+A reachable use of either remaining-account builtin adds a remaining-accounts tail to the SVM
+manifest, including when the use is inside a called helper. An unused helper alone does not.
 
 An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved namespace root".
 
@@ -612,8 +660,8 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
     ("`length` is not a field of this tuple — …"). It cannot be assigned.
   - Example: `for (let i = 0; i < amounts.length; i++) { … }`
 
-**Call methods on a variable, not on a literal.** ``hex`a9`.concat(d)`` and `"ab".concat(d)` are rejected
-("calling anything other than a plain function name …"). Write ``const selector = hex`a9059cbb`; selector.concat(d)``.
+Bytes methods work on variables, expressions and bytes literals; for example, ``hex`a9`.concat(d)``
+is supported. Bind an intermediate value when it improves readability.
 
 ### Account properties
 
@@ -657,24 +705,33 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   - A method with one output returns that output.
   - A method with several outputs returns a record named after the ABI's outputs: read `.amountOut` or `[0]`,
     or destructure it with `const [a, b] = …`.
-- **Every single-value output is typed as a number, `bool` and `address` included**, except an `intN`,
-  which is an `Int256`. Write `ERC20.at(t).transfer(to, x) == 1` if you need a bool. A `: bool` function
-  cannot return the call directly ("a return value: expected a bool, found a number"). An `Int256`
-  output assigned to a `Uint256` is converted with a check, so a negative value reverts.
-- **An `intN` argument takes an `Int256`.** A `Uint256` given to an `intN` parameter is converted with the
-  same check: a small value arrives as itself, and a two's-complement word, which is above 2²⁵⁵ − 1,
-  compiles and reverts when the call is made. Pass the `Int256`, or `Int256.fromBits(word)` for such a
-  word. A narrow parameter also takes only its own range: an `int24` reaches −2²³ to 2²³ − 1.
-- **Struct arguments** can be object literals with the fields in any order; they are matched to the ABI by name.
-- **No value.** A bound call never sends value. Use `evm.call(address, value, data)` (§10) when you need to.
-- **Token transfers.** For ERC-20 `transfer` and `approve`, prefer `@sauce/token` (`import { transfer, approve }
-from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A bound call decodes exactly
-  what the ABI declares.
+- **Integer outputs keep signedness.** An ABI `intN` output becomes `Int256`; `uintN`, `address`
+  and the ABI's low-level `bool` word remain unsigned numbers. Read integer outputs are range-checked
+  recursively against their declared widths, not masked. Scalar input conversions also check widths;
+  signed/unsigned array and tuple elements must already have matching kinds.
+  Use signed values for signed ABI inputs: pass `-1` to `int256`, not the unsigned word `~0`.
+  A `Uint256[]` cannot stand in for `intN[]`, nor an `Int256[]` for `uintN[]`; tuple fields
+  follow the same rule. Use checked scalar conversions, or `.fromBits` for an intentional bit
+  reinterpretation, when constructing a container of the required kind.
+- **Unread results skip all decoding and output checks**, even when assigned to an unused variable,
+  at every optimization level. Empty, short or malformed successful replies then pass; a call to an
+  address with no code can succeed. Check `ctx.isContract(address)` where code must exist.
+  Reading any part retains the **whole** declared decode, including siblings and nested fields.
+  Destructuring counts as a read even when its names are unused; explicit `abi.decode` still decodes.
+- **Struct arguments** can be object literals with fields in any order; ABI names match the fields.
+- **No value.** A bound call never sends value; use `evm.call` (§10).
+- **Token transfers.** Prefer `@sauce/token`, or the SDK's `USDC.transfer` and `Token(address)`
+  syntax: these enforce SafeERC20's empty-or-true result rule. Ignoring a raw bound `transfer` result
+  does not check a returned `false`, even though it now tolerates a USDT-style empty reply.
 - **Errors.**
   - "`ERC20` has no method named `totalSupply`".
   - "`ERC20.transfer()` expects 2 argument(s), but this call passes 1".
   - "`.at()` (a contract binding) takes exactly 1 argument (the address)".
   - Overloaded methods with the same argument count are not supported.
+  - A function whose ABI has a fixed-size array of 256 or more elements, as a parameter or an
+    output, cannot be called: "the ABI type `uint256[256]` is a fixed-size array of more than 255
+    elements, which SauceScript cannot encode or decode". An ABI may still declare one; only the
+    call is refused.
   - On SVM: "`Contract.at` is not available on the svm target; invoke another program with svm.call(program,
     accounts, calldata), or import a library's SVM arm (@sauce/token)".
 
@@ -691,70 +748,128 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
     stands in for ("a `.catch()` fallback: expected a bytes value, found a number"); test a raw
     read with the statement form, then read again only when it worked.
   - Example: `const balance = ERC20.at(t).balanceOf(who).catch(() => { return 0; });`
-- A call to an address with no code does not revert: it succeeds with no return data, so
-  `.catch()` never runs, and decoding that nothing reverts the cook. Check
-  `ctx.codeSize(address) > 0` first when the address may have no code.
+- A call to an address with no code succeeds with empty data. An unread result skips decoding;
+  a read result's decoding may revert **outside** the single-call catch. Check `ctx.isContract`
+  first when the target must have code.
 
 Rules and errors:
 
-- The block takes no parameter: "a `.catch()` handler parameter (the caught error is not supported)".
-- Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else.
+- `catch (e)` or `.catch((e) => { … })` binds raw revert bytes, capped at 256 bytes. No annotation.
+  An unused error binding copies nothing. Check its length/shape before decoding: callee data is
+  untrusted and may be truncated, and a failure in the handler is not caught by that same handler.
+- Statement handlers take at most one plain parameter: "a `.catch()` handler with more than one parameter (it takes the revert data)".
+  Captured-result handlers take no parameter and keep the constant-only fallback rule.
+- Use a `{ … }` block, not `() => value`. Other arrows are allowed only in `program(...)`.
 - A `return`, or a `break`/`continue` leaving the block, is not allowed in the statement form ("a `return` in a
   `.catch()` handler …").
 - The value form needs exactly `return <constant>;`:
   - "a captured `.catch()` requires exactly `return <constant scalar>;` in its handler";
   - "the `.catch()` fallback must be a constant scalar that fits the declared ABI result width".
-- A long block can be too large ("a .catch() handler compiles to N bytes, over the 255-byte limit — shorten the handler"). Move the work into a
-  function and call it.
+- An oversized handler fails compilation with `CatchHandlerTooLarge`; keep the handler short and
+  move substantial recovery work into a helper.
 - On anything other than an external EVM call, the compiler rejects it ("a `.catch()` on something other than an
   external contract call …"). On SVM: "`.catch()` is not available on the svm target".
 
+### `try { … } catch (error) { … }`: an atomic block (EVM)
+
+```sauce chain=base
+function main(recipient: Address, amount: Uint256, floor: Uint256): void {
+  try {
+    USDC.transfer(recipient, amount);
+    require(self.USDC >= floor, "keep the reserve");
+  } catch (error) {
+    // A failed reserve check undoes the transfer too; nothing in this try was committed.
+    log(error);
+  }
+}
+```
+
+- A multi-statement block is atomic as the same Pot: failure undoes its calls, storage writes,
+  array/record mutations and assignments together. Earlier work outside remains. Success makes its
+  changes visible afterwards, including through aliases. Unlike JavaScript, assignments before a
+  throw are rolled back, so the handler sees their old values.
+- A `try` containing only one external call is that call's `.catch()` form. It catches the call's
+  failure, not argument evaluation or successful-return decoding. To catch a decode or checked
+  expression, put it inside a multi-statement block.
+- `catch { … }` discards the error; `catch (error)` receives at most the first 256 raw revert bytes.
+  Empty data cannot distinguish a bare revert from many arithmetic guards. A handler's own failure
+  propagates unless an enclosing catch handles it. There is no `finally`.
+- `return`, `break` and `continue` may leave a `try` or handler. An oversized handler is a compile
+  error (`CatchHandlerTooLarge`); move substantial handling into a helper.
+- SVM rejects both forms. Multi-statement blocks require execution as an account (normally a Pot
+  cook), not a bare call to the engine. Read-only `eval` stays read-only; a caught attempt to write
+  there may consume nearly all gas available to the block.
+
+Only decode a handler's data after checking its shape. For example, this handler inspects a selector
+without assuming the payload is a Solidity string or a complete custom error:
+
+```sauce chain=base
+function main(target: Address, query: bytes): Uint256 {
+  require(ctx.isContract(target), "no contract");
+  let selector = 0;
+  try {
+    evm.static(target, query);
+  } catch (error) {
+    if (error.length >= 4) {
+      selector = error.slice(0, 4).toBe();
+    }
+  }
+  return selector;
+}
+```
+
 ## 14. Not supported, and what to write instead
 
-| Not supported                                                    | Write instead                                                                                                     |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `switch`                                                         | `if` / `else if` chains                                                                                           |
-| `do { } while (…)`                                               | `while (true) { …; if (!cond) { break; } }`                                                                       |
-| `for (k in obj)`, `for await`                                    | an index loop or `for (const x of array)`                                                                         |
-| `try { } catch { }`, `throw new Error(…)`                        | `require(cond, "reason")`, `throw "reason"`; `.catch()` for a failing EVM call                                    |
-| arrow functions, function expressions, nested functions          | top-level `function` declarations (`.catch(() => { … })` is the one exception)                                    |
-| `class`, `enum`, `type` aliases, generics, `namespace`           | records, `interface`, constants                                                                                   |
-| `async function`, `await`                                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
-| default parameters, rest parameters, destructuring parameters    | plain parameters                                                                                                  |
-| object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
-| spread `[...xs]`, `f(...xs)`                                     | explicit elements, or a loop                                                                                      |
-| `?.`, `??`, `x!`, `as`, `satisfies`                              | explicit checks; annotations                                                                                      |
-| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `>>` on an `Int256`, or plain values                                                                              |
-| `>>>=`, `\|\|=`, `&&=`, `??=`                                    | `x = …`                                                                                                           |
-| `a[i] += v`, `t.f += v`, `a[i]++`                                | `a[i] = a[i] + v`                                                                                                 |
-| `i++` used as a value                                            | `i += 1` on its own line                                                                                          |
-| `t[0] = v` on a record                                           | `t.field = v`                                                                                                     |
-| template strings                                                 | `"text"`, or bytes built with `.concat`                                                                           |
-| `1e18`, `1.5`, `null`, `undefined`                               | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
-| `xs.push(v)`, `console.log`, any JavaScript library              | `new Array(n)` with an index; `log(…)`                                                                            |
-| `Math.min`, `max`, `abs`, `pow`                                  | `if` or a ternary; `**`                                                                                           |
-| comparing bytes with `==`                                        | compare `crypto.keccak256` of each                                                                                |
-| `export default`, `export { … }`, `import * as X`                | `export function` / `export const`; named imports                                                                 |
-| a method on a literal (``hex`…`.concat(d)``)                     | bind the literal to a `const` first                                                                               |
-| sending value through a bound call                               | `evm.call(address, value, data)`                                                                                  |
-| labeled statements, labeled `break`/`continue`                   | a flag variable                                                                                                   |
-| computed object keys, object methods                             | plain named fields                                                                                                |
+| Not supported                                                     | Write instead                                                                                                     |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `switch`                                                          | `if` / `else if` chains                                                                                           |
+| `do { } while (…)`                                                | `while (true) { …; if (!cond) { break; } }`                                                                       |
+| `for (k in obj)`, `for await`                                     | an index loop or `for (const x of array)`                                                                         |
+| `finally`, `throw new Error(…)`                                   | `try`/`catch` on EVM; `require(cond, "reason")` or `throw "reason"` on either target                              |
+| arbitrary arrow functions, function expressions, nested functions | top-level declarations; arrows only in `.catch(...)` and `program(...)`                                           |
+| `class`, `enum`, `type` aliases, generics, `namespace`            | records, `interface`, constants                                                                                   |
+| `async function`, `await`                                         | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
+| default parameters, rest parameters, destructuring parameters     | plain parameters                                                                                                  |
+| object destructuring `const { a } = t`                            | `const a = t.a;`                                                                                                  |
+| spread `[...xs]`, `f(...xs)`                                      | explicit elements, or a loop                                                                                      |
+| `?.`, `??`, `x!`, `as`, `satisfies`                               | explicit checks; annotations                                                                                      |
+| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+`  | `>>` on `Uint256` for zero-fill, `>>` on `Int256` for sign-fill, or plain values                                  |
+| `>>>=`, `\|\|=`, `&&=`, `??=`                                     | `x = …`                                                                                                           |
+| `a[i] += v`, `t.f += v`, `a[i]++`                                 | `a[i] = a[i] + v`                                                                                                 |
+| `i++` used as a value                                             | `i += 1` on its own line                                                                                          |
+| `t[0] = v` on a record                                            | `t.field = v`                                                                                                     |
+| template strings                                                  | `"text"`, or bytes built with `.concat`                                                                           |
+| `1e18`, `1.5`, `null`                                             | plain integers, smallest units, `0` or a flag                                                                     |
+| `xs.push(v)`, `console.log`, any JavaScript library               | `new Array(n)` with an index; `log(…)`                                                                            |
+| `Math.min`, `max`, `abs`, `pow`                                   | `if` or a ternary; `**`                                                                                           |
+| comparing bytes with `==`                                         | compare `crypto.keccak256` of each                                                                                |
+| `export default`, `export { … }`, `import * as X`                 | `export function` / `export const`; named imports                                                                 |
+| sending value through a bound call                                | `evm.call(address, value, data)`                                                                                  |
+| labeled statements, labeled `break`/`continue`                    | a flag variable                                                                                                   |
+| computed object keys, object methods                              | plain named fields                                                                                                |
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
 
 ## 15. Limits
 
-| Limit                                                                                   | Value                                            |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Parameters of a function other than `main`, plus the values its body keeps live at once | about 16 (§4)                                    |
-| `log` topics                                                                            | 4 on EVM; none on SVM                            |
-| `eval` arguments                                                                        | 16                                               |
-| `abi.encode` values, record fields encoded, `abi.decode` fields                         | 255                                              |
-| Elements in an array literal                                                            | 65,535                                           |
-| Bytes in a string or `hex` literal                                                      | 65,535                                           |
-| `.catch()` block                                                                        | about 255 bytes of compiled code                 |
-| `crypto.findPDA` seeds                                                                  | 15 (checked when run)                            |
-| Nested arrays in a `main` parameter                                                     | 4 levels                                         |
-| One caller-supplied collection in `main`'s arguments                                    | 16 KiB                                           |
-| Working memory on SVM                                                                   | 64 KiB per run                                   |
-| One Solana transaction: the program, its arguments and the cook                         | 1,232 bytes; `sauce run` stages a larger program |
+| Limit                                                                 | Value                                                                  |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Large helper parameter/local combinations                             | Compiler-dependent; simplify the helper (§4)                           |
+| `log` topics                                                          | 4 on EVM; none on SVM                                                  |
+| `eval` arguments                                                      | 16                                                                     |
+| `abi.encode` values, record fields encoded, `abi.decode` fields       | 255                                                                    |
+| Elements in a fixed-size array (`T[N]`) of a function a program calls | 255                                                                    |
+| Elements in an array literal                                          | 65,535                                                                 |
+| Bytes in a string or `hex` literal                                    | 65,535                                                                 |
+| `.catch()` / `catch` handler                                          | `CatchHandlerTooLarge` if oversized; keep it short or extract a helper |
+| `crypto.findPDA` seeds                                                | 15 (checked when run)                                                  |
+| Nested arrays in a `main` parameter                                   | 4 levels                                                               |
+| One caller-supplied collection in `main`'s arguments                  | 16 KiB                                                                 |
+| Working memory on SVM                                                 | 64 KiB per run                                                         |
+| One Solana transaction: the program, its arguments and the cook       | 1,232 bytes; `sauce run` stages a larger program                       |
+
+## Next
+
+- [Write your first program](../guides/write-your-first-program.md): the language, by example.
+- [SauceScript](../concepts/saucescript.md): why the language is shaped this way.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

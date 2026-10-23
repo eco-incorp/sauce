@@ -1,6 +1,6 @@
 ---
 name: sauce-overview
-description: Start here for any Sauce task, before any other Sauce skill. What Sauce is (SauceScript programs, .sauce.ts files, run atomically inside one transaction on EVM chains and Solana), the Pot, the cook, the Kitchen and the engine, the protocol for working with a user (write the program yourself, ask where its results end, show the program, its arguments and its simulation before anything is sent, report the links after), the rules every program keeps, which chains take transactions (Ethereum, Base and Solana; the rest are preview chains) and how to request another, the path from a file to a transaction, and the skill map that names the one skill owning each topic. Use when the user mentions Sauce, SauceScript, a .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to do something atomically on chain, and whenever it is unclear which Sauce skill covers a topic.
+description: Start here for any Sauce task, before any other Sauce skill. What Sauce is (SauceScript programs, .sauce.ts files, run atomically inside one transaction on EVM chains and Solana), the Pot, the cook, the Kitchen and the engine, the protocol for working with a user (write the program yourself, ask where its results end, show the program, its arguments and its simulation before anything is sent, report the links after), the rules every program keeps, which chains take transactions (Ethereum, Base, Arc and Solana; the rest are preview chains) and how to request another, the path from a file to a transaction, and the skill map that names the one skill owning each topic. Use when the user mentions Sauce, SauceScript, a .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, or asks to do something atomically on chain, and whenever it is unclear which Sauce skill covers a topic.
 ---
 
 # Sauce
@@ -21,20 +21,21 @@ and the map of the other skills. Every other fact has one owner in the map: load
 
 ## Core model
 
-| Term              | What it is                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Program           | A `.sauce.ts` file. It names no chain: it is compiled for one (`--chain`), which decides what every name in it means, into bytecode. Its inputs are `main`'s parameters.                                                                                                                                                                                                  |
-| Pot               | The owner's account on chain, a small contract the Kitchen creates. It holds what a program spends, and every call a program makes comes from it. Only its owner cooks on it. Its address follows from the owner and a salt (zero unless `--salt` names another), so it is known before it exists. It has no withdraw function: what it holds leaves only through a cook. |
-| Cook              | The one transaction that runs a program: the owner calls the Pot's `cook(engine, program)`, `main`'s arguments appended to the program, the Kitchen's fee as its value. Every step lands or none does: a failed `require` reverts the whole cook, the fee with it.                                                                                                        |
-| Kitchen           | Creates Pots (anyone may deploy an owner's Pot; it is the owner's whoever sends it), sets the flat fee every cook pays in the native coin, and the Router new Pots start on. It cannot change an existing Pot or move what it holds.                                                                                                                                      |
-| Engine            | The interpreter that runs the bytecode as the Pot. On an EVM chain it runs only inside a Pot the Kitchen created; the `sauce` command names the released one.                                                                                                                                                                                                             |
-| Intent            | An offer: run this on another chain, and the reward escrowed here is yours. A solver decides whether to fill it (`sauce-intents`).                                                                                                                                                                                                                                        |
-| Shared intent Pot | The one Pot per destination chain that every intent's program body cooks on, driven by solvers. A leftover there belongs to the next intent (`sauce-intents`).                                                                                                                                                                                                            |
+| Term    | What it is                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Program | A `.sauce.ts` file. It names no chain: it is compiled for one (`--chain`), which decides what every name in it means, into bytecode. Its inputs are `main`'s parameters.                                                                                                                                                                                                                           |
+| Pot     | The owner's account on chain, a small contract the Kitchen creates. It holds what a program spends, and every call a program makes comes from it. Every cook needs its owner's authorization. Its address is known before it exists, for the selected Kitchen release, owner and salt (zero unless `--salt` names another). It has no withdraw function: what it holds leaves only through a cook. |
+| Cook    | The transaction that runs a program: normally the owner calls `cook(engine, program)`, with `main`'s arguments appended and the Kitchen's fee as value. New EVM Pots also accept an owner-signed `cookSigned` submitted by another account. An uncaught failure reverts the whole cook, fee included.                                                                                              |
+| Kitchen | Creates Pots (anyone may deploy an owner's Pot; it is the owner's whoever sends it), sets the flat fee every cook pays in the native coin, and the Router new Pots start on. It cannot change an existing Pot or move what it holds.                                                                                                                                                               |
+| Engine  | The interpreter that runs the bytecode as the Pot. On an EVM chain it runs only inside a Pot the Kitchen created; the `sauce` command names the released one.                                                                                                                                                                                                                                      |
 
 A program has control flow, reads and checks, and the engine runs it as written:
 it is not a multicall, and it does not use a magic header. On Solana the Kitchen and the engine are
-programs, the Pot is the Kitchen's account for the owner and salt, and a cook is the Kitchen's
-`cook` instruction signed by the owner (`sauce-solana`).
+programs, the Pot is an account at the Kitchen's program address for the owner and salt, owned by
+the engine, and a cook is the Kitchen's `cook` instruction signed by the owner (`sauce-solana`).
+
+A cook runs on one chain, in one transaction; a program that moves tokens to another chain calls a
+bridge protocol (`sauce-protocols`).
 
 ## The protocol with a user
 
@@ -68,27 +69,26 @@ programs, the Pot is the Kitchen's account for the owner and salt, and a cook is
    the user chose, return unspent input, and approve exactly what the next call spends.
 2. **A swap leg never strands input.** Exact input, a minimum output it `require`s, and what a
    price limit leaves unspent returned (`sauce-swaps`).
-3. **Every check is in the program.** A failed `require` reverts the whole transaction; that
-   atomicity is the safety mechanism.
-4. **An intent is an offer.** Say it is offered, never that it will execute.
-5. **No endpoint, key or password in a program or a committed file.** The package reads no
+3. **Every check is in the program.** An uncaught failed `require` reverts the transaction. On EVM,
+   an atomic `try` rolls back its own work and may recover; catch only failures the user intends to tolerate.
+4. **No endpoint, key or password in a program or a committed file.** The package reads no
    environment variable but the one a `--password-env` flag names (`sauce-cli`).
-6. **Every address comes from the registry or the user**, never invented: write the name
+5. **Every address comes from the registry or the user**, never invented: write the name
    (`sauce-globals`), or take the address as a `main` parameter.
-7. **Every program opens with its header**: what it does, the command that runs it, each `main`
+6. **Every program opens with its header**: what it does, the command that runs it, each `main`
    parameter with its units, one real run (`sauce-script` owns the format).
-8. **Transactions go to supported chains only** (below).
+7. **Transactions go to supported chains only** (below).
 
 ## Supported and preview chains
 
-Transactions are built and sent on **Ethereum, Base and Solana** (`ethereum`, `base`, `solana`)
-only. Every other chain the SDK knows is a **preview chain**: a program compiles for it, and
-simulations, dry runs and reads work there, but the `sauce` command and the MCP server build and
-send no transaction on it. The refusal comes before any key or endpoint is read, names the
-supported chains, and links that chain's request; no flag lifts it. An intent publishes only when
-its source and every destination it opens are supported; a cascade's later levels are not checked,
-so keep every level on a supported chain. Each chain's file in `sauce-chains` says which it is, and
-`sauce-cli` lists which commands are refused.
+Transactions are built and sent on **Ethereum, Base, Arc and Solana** (`ethereum`, `base`, `arc`,
+`solana`) only. Every other chain the SDK knows is a **preview chain**: a program compiles for it,
+and simulations and reads work there, but the `sauce` command and the MCP server build
+and send no transaction on it. The refusal comes before any key or endpoint is read, names the
+supported chains, and links that chain's request; no flag lifts it. Each chain's file in
+`sauce-chains` says which it is, and `sauce-cli` lists which commands are refused. On Arc the
+native coin is USDC: gas, a cook's value and the Kitchen's fee are paid in it (its file in
+`sauce-chains` has the details).
 
 When a command refuses a chain, tell the user and offer the request, never another way to send:
 add the use case to that chain's request among the
@@ -142,15 +142,15 @@ chain, token and protocol); `examples/` hold programs (`.sauce.ts`), actions doc
 runners (`.mts`) that pin what the skill says. Each topic has exactly one owner; a skill points at
 the owner rather than repeat it.
 
-| Layer   | Skills                                                                     | The question it answers                                     |
-| ------- | -------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Start   | `sauce-overview`                                                           | What is Sauce, how do I work with the user, what next?      |
-| Write   | `sauce-script`, `sauce-globals`, `sauce-chains`, `sauce-actions`           | How do I write the program, and what can it name where?     |
-| Build   | `sauce-protocols`, `sauce-swaps`                                           | How does a program call a protocol, or swap?                |
-| Compose | `sauce-distributed-swap`, `sauce-solana-distributed-swap`, `sauce-intents` | How do I build a limit order, or continue on another chain? |
-| Target  | `sauce-solana`                                                             | What changes on Solana?                                     |
-| Run     | `sauce-cli`, `sauce-typescript`                                            | How do I compile, simulate, send and read back?             |
-| Index   | `sauce-examples`                                                           | Where is a complete program for this idiom?                 |
+| Layer   | Skills                                                           | The question it answers                                 |
+| ------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| Start   | `sauce-overview`                                                 | What is Sauce, how do I work with the user, what next?  |
+| Write   | `sauce-script`, `sauce-globals`, `sauce-chains`, `sauce-actions` | How do I write the program, and what can it name where? |
+| Build   | `sauce-protocols`, `sauce-swaps`                                 | How does a program call a protocol, or swap?            |
+| Compose | `sauce-distributed-swap`, `sauce-solana-distributed-swap`        | How do I build a limit order across several pools?      |
+| Target  | `sauce-solana`                                                   | What changes on Solana?                                 |
+| Run     | `sauce-cli`, `sauce-typescript`                                  | How do I compile, simulate, send and read back?         |
+| Index   | `sauce-examples`                                                 | Where is a complete program for this idiom?             |
 
 ### `sauce-overview`
 
@@ -180,8 +180,8 @@ the owner rather than repeat it.
 - **Owns**: what each chain makes of the names. One file compiled for several chains, a name a
   chain lacks, another chain's names, `chainId` against `ctx.chainId()`, each chain's facts, and
   the Sauce deployment.
-- **Holds**: a generated file per chain (support, ids, native coin, intents, tokens with addresses,
-  every protocol deployment) and `references/deployments.json`, the release's addresses.
+- **Holds**: a generated file per chain (support, ids, native coin, tokens with addresses, every
+  protocol deployment) and `references/deployments.json`, the release's addresses.
 - **Load**: for an address, what one chain offers, or one program for several chains.
 
 ### `sauce-actions`
@@ -190,8 +190,8 @@ the owner rather than repeat it.
   amounts, running it.
 - **Holds**: [references/actions.md](../sauce-actions/references/actions.md), every action and
   field, generated from the schema.
-- **Load**: when the steps are fixed, or produced as data by a service. A condition, a loop, a best
-  venue or an intent needs SauceScript.
+- **Load**: when the steps are fixed, or produced as data by a service. A condition, a loop or a
+  best venue needs SauceScript.
 
 ### `sauce-protocols`
 
@@ -222,13 +222,6 @@ the owner rather than repeat it.
   choosing the keys with `sauce pools`, what fits in one cook, running it.
 - **Load**: for a split or limit order on Solana, with `sauce-solana`.
 
-### `sauce-intents`
-
-- **Owns**: work continued on another chain: the intent file, the lifecycle (publish, fund, fill,
-  prove, claim, refund, cancel, each a `sauce intent` command), bodies, on which chain each name
-  resolves, cascades, the destination side, simulating both sides.
-- **Load**: whenever the work crosses chains.
-
 ### `sauce-solana`
 
 - **Owns**: everything Solana changes: accounts and their roles, the accounts compiling derives,
@@ -247,7 +240,7 @@ the owner rather than repeat it.
 ### `sauce-typescript`
 
 - **Owns**: the package from application code: compiling for a chain, encoding arguments, the Pot
-  and its cook, the raw compiler, the registry, actions, verification, Solana, intents, testing.
+  and its cook, the raw compiler, the registry, actions, verification, Solana, testing.
 - **Load**: when code, not a person at a terminal, builds the transactions.
 
 ### `sauce-examples`
@@ -258,21 +251,20 @@ the owner rather than repeat it.
 
 ## Routes by need
 
-| You need                                                | Load, in order                                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| A token's symbol, or whether a name exists on a chain   | `sauce-globals`                                                           |
-| An address, or what a chain offers                      | `sauce-chains`                                                            |
-| A program that does not compile                         | `sauce-script` (Compile errors) → `sauce-globals` → `sauce-chains`        |
-| A protocol call (lend, stake, bridge)                   | `sauce-protocols` → `sauce-script` (Calling a contract)                   |
-| One swap, or swap then use the output                   | `sauce-swaps` → `sauce-protocols` for the next step                       |
-| Buy up to a price across pools (EVM)                    | `sauce-globals` → `sauce-distributed-swap` → `sauce-cli`                  |
-| Buy up to a price across pools (Solana)                 | `sauce-solana` → `sauce-solana-distributed-swap` → `sauce-cli`            |
-| Move a token or a tokenized stock on Solana             | `sauce-globals` (Tokenized stocks) → `sauce-solana` → `sauce-cli`         |
-| Work on another chain                                   | `sauce-intents` → `sauce-chains` (both chains take intents) → `sauce-cli` |
-| Steps that arrive as JSON from a service                | `sauce-actions` → `sauce-cli`                                             |
-| Compile, simulate, send, read back; a wallet; a refusal | `sauce-cli`                                                               |
-| Sign through the user's wallet MCP server               | `sauce-cli` (Signing through a wallet's MCP server)                       |
-| The same from Node or a browser                         | `sauce-typescript`, with `sauce-script` for the program                   |
+| You need                                                | Load, in order                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| A token's symbol, or whether a name exists on a chain   | `sauce-globals`                                                    |
+| An address, or what a chain offers                      | `sauce-chains`                                                     |
+| A program that does not compile                         | `sauce-script` (Compile errors) → `sauce-globals` → `sauce-chains` |
+| A protocol call (lend, stake, bridge)                   | `sauce-protocols` → `sauce-script` (Calling a contract)            |
+| One swap, or swap then use the output                   | `sauce-swaps` → `sauce-protocols` for the next step                |
+| Buy up to a price across pools (EVM)                    | `sauce-globals` → `sauce-distributed-swap` → `sauce-cli`           |
+| Buy up to a price across pools (Solana)                 | `sauce-solana` → `sauce-solana-distributed-swap` → `sauce-cli`     |
+| Move a token or a tokenized stock on Solana             | `sauce-globals` (Tokenized stocks) → `sauce-solana` → `sauce-cli`  |
+| Steps that arrive as JSON from a service                | `sauce-actions` → `sauce-cli`                                      |
+| Compile, simulate, send, read back; a wallet; a refusal | `sauce-cli`                                                        |
+| Sign through the user's wallet MCP server               | `sauce-cli` (Signing through a wallet's MCP server)                |
+| The same from Node or a browser                         | `sauce-typescript`, with `sauce-script` for the program            |
 
 ## Reading the skills over MCP
 
@@ -297,7 +289,6 @@ An agent with no skill files reads the same files from the Sauce MCP server (`sa
 - **Sending before the user has seen the program, its arguments and the simulation.** Never.
 - **Fetching the explorer or trace link.** Give both to the user; report what the command printed.
 - **Working around a preview-chain refusal.** Offer the chain-support request instead.
-- **Promising an intent will be filled.** It is offered.
 - **Inventing an address.** Write the registry's name, or take the address from the user.
 
 ## Files

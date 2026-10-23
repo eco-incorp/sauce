@@ -9,11 +9,6 @@
  * The same module runs in Node and in a browser (`wasm-compiler.ts`). In a browser, `await ready()`
  * once before the first compile; in Node `compile` works on import.
  */
-export {
-  encodeCompactArguments,
-  decodeCompactArguments,
-  type CompactValue,
-} from "./compact-arguments.js";
 export { resolveSdkModule, resolveSdkPackage } from "./embedded/resolve.js";
 export { compile, ready, type WasmSource } from "./wasm-compiler.js";
 

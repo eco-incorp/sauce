@@ -8,14 +8,11 @@
 > name a program writes for each contract. Monad is a preview chain: programs compile and simulate
 > here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Monad a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Monad, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Monad%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Monad+%28143%29&chain=Monad&chain-id=143) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Monad a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -27,9 +24,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | In TypeScript | `import { Monad } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | not recorded |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [Deployments](../deployments.md#the-shared-intent-pot); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 15 |
 
 ## In a program
@@ -83,3 +77,14 @@ address.
 | [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016` | `UniswapV4.PositionManager` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x77395f3b2e73ae90843717371294fa97cc419d64` | `UniswapV4.StateView` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | universalRouter | `0x0d97dc33264bfc1c226207428a79b26757fb9dc3` | `UniswapV4.UniversalRouter` |
+
+## Requesting support
+
+To request Monad, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Monad%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Monad+%28143%29&chain=Monad&chain-id=143) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

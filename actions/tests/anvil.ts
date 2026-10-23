@@ -126,7 +126,7 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
     creation,
   );
 
-  // Generation 4 executes swaps; the separately pinned generation 3 service quotes them.
+  // Execution and quoting use separate release-pinned Routers.
   const quoteArtifact = JSON.parse(
     readFileSync(resolve(REPO_ROOT, "sdk/src/artifacts/V12QuoteRouter.json"), "utf8"),
   ) as { bytecode: Hex; address: Address };

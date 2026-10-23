@@ -39,7 +39,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 - Pull-based oracle: users must call updatePriceFeeds before reading prices
 - Sub-second latency from institutional market data providers
-- `price` (ABI `int64`) and `expo` (ABI `int32`) are `Int256`; preserve their mathematical signs in arithmetic and comparisons. `conf` and `publishTime` remain `Uint256`
 - Actual price = price * 10^expo (e.g. price=12345, expo=-2 means $123.45)
 - Price feed IDs are bytes32 - see Pyth docs for specific feed IDs per asset
 - updatePriceFeeds requires sending ETH to pay the update fee (use getUpdateFee to check)

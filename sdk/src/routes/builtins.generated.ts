@@ -7,13 +7,25 @@
    builtin that shares a host name merges into the host's declaration of it, which takes the
    host's forms: Node types `require` in its `NodeJS` namespace and `crypto` in `webcrypto`,
    and an interface that only extends `SauceCrypto` is how `crypto`'s builtins join each. */
-import type { SauceBytes } from "./source-globals.generated.js";
+import type { SauceBytes, SauceCall } from "./source-globals.generated.js";
 
 /** A bytes argument: a text literal, `hex`…``, or a bytes value. */
 export type SauceBytesLike = string | SauceBytes;
 
 /** A scalar argument: a number, an address or a bool. */
 export type SauceScalar = bigint | number | boolean;
+
+/** The result of compiling a closure, with its captured run-time values. */
+export interface SauceClosureProgram {
+  readonly code: SauceBytes;
+  readonly args: SauceBytes;
+}
+
+/** Overrides for the chain profile and target of a closure's program. */
+export interface SauceClosureProgramOptions {
+  readonly chain?: string;
+  readonly target?: "evm" | "svm";
+}
 
 /** A field of `abi.decode`'s result, typed from its shape string. */
 export type SauceDecoded<Shape> = Shape extends "bool" | "boolean"
@@ -64,6 +76,24 @@ export interface SauceContext {
   isContract(address: bigint): boolean;
   /** `ctx.isEOA(address: Uint256): bool` — EVM only. */
   isEOA(address: bigint): boolean;
+  /** `ctx.txOrigin(): Address` — EVM only. */
+  txOrigin(): bigint;
+  /** `ctx.coinbase(): Address` — EVM only. */
+  coinbase(): bigint;
+  /** `ctx.prevrandao(): Uint256` — EVM only. */
+  prevrandao(): bigint;
+  /** `ctx.blockGasLimit(): Uint256` — EVM only. */
+  blockGasLimit(): bigint;
+  /** `ctx.baseFee(): Uint256` — EVM only. */
+  baseFee(): bigint;
+  /** `ctx.gasPrice(): Uint256` — EVM only. */
+  gasPrice(): bigint;
+  /** `ctx.blockHash(n: Uint256): Uint256` — EVM only. */
+  blockHash(n: bigint): bigint;
+  /** `ctx.blobHash(i: Uint256): Uint256` — EVM only. */
+  blobHash(i: bigint): bigint;
+  /** `ctx.blobBaseFee(): Uint256` — EVM only. */
+  blobBaseFee(): bigint;
 }
 
 /** `abi`: Solidity ABI encoding. */
@@ -76,12 +106,12 @@ export interface SauceAbi {
 
 /** `evm`: raw calls and storage on the EVM. */
 export interface SauceEvm {
-  /** `evm.call(address: Uint256, value: Uint256, data: bytes): bytes` — EVM only. */
-  call(address: bigint, value: bigint, data: SauceBytesLike): SauceBytes;
-  /** `evm.static(address: Uint256, data: bytes): bytes` — EVM only. */
-  static(address: bigint, data: SauceBytesLike): SauceBytes;
-  /** `evm.delegate(address: Uint256, data: bytes): bytes` — EVM only. */
-  delegate(address: bigint, data: SauceBytesLike): SauceBytes;
+  /** `evm.call(address: Uint256, value: Uint256, data: bytes, gas?: Uint256): bytes` — EVM only. */
+  call(address: bigint, value: bigint, data: SauceBytesLike, gas?: bigint): SauceCall<SauceBytes>;
+  /** `evm.static(address: Uint256, data: bytes, gas?: Uint256): bytes` — EVM only. */
+  static(address: bigint, data: SauceBytesLike, gas?: bigint): SauceCall<SauceBytes>;
+  /** `evm.delegate(address: Uint256, data: bytes, gas?: Uint256): bytes` — EVM only. */
+  delegate(address: bigint, data: SauceBytesLike, gas?: bigint): SauceCall<SauceBytes>;
   /** `evm.sload(slot: Uint256): Uint256` — EVM only. */
   sload(slot: bigint): bigint;
   /** `evm.sstore(slot: Uint256, value: Uint256): void` — EVM only. */
@@ -90,6 +120,18 @@ export interface SauceEvm {
   tload(key: bigint): bigint;
   /** `evm.tstore(key: Uint256, value: Uint256): void` — EVM only. */
   tstore(key: bigint, value: bigint): void;
+  /** `evm.create(initcode: bytes, value?: Uint256): Address` — EVM only. */
+  create(initcode: SauceBytesLike, value?: bigint): bigint;
+  /** `evm.create2(initcode: bytes, salt: Uint256, value?: Uint256): Address` — EVM only. */
+  create2(initcode: SauceBytesLike, salt: bigint, value?: bigint): bigint;
+  /** `evm.create3(initcode: bytes, salt: Uint256, value?: Uint256): Address` — EVM only. */
+  create3(initcode: SauceBytesLike, salt: bigint, value?: bigint): bigint;
+  /** `evm.createAddress(deployer: Address, nonce: Uint256): Address` — EVM only. */
+  createAddress(deployer: bigint, nonce: bigint): bigint;
+  /** `evm.create2Address(deployer: Address, salt: Uint256, initCodeHash: Uint256): Address` — EVM only. */
+  create2Address(deployer: bigint, salt: bigint, initCodeHash: bigint): bigint;
+  /** `evm.create3Address(salt: Uint256): Address` — EVM only. */
+  create3Address(salt: bigint): bigint;
 }
 
 /** `svm`: accounts and cross-program calls on the SVM. */
@@ -144,6 +186,19 @@ declare global {
   const abi: SauceAbi;
   const evm: SauceEvm;
   const svm: SauceSvm;
+  /** SauceScript integer annotations, represented by JavaScript bigints in a host closure. */
+  type Uint256 = bigint;
+  type Int256 = bigint;
+
+  namespace Int256 {
+    /** `Int256.fromBits(value: Uint256): Int256` — EVM and SVM. */
+    function fromBits(value: bigint): bigint;
+  }
+  namespace Uint256 {
+    /** `Uint256.fromBits(value: Int256): Uint256` — EVM and SVM. */
+    function fromBits(value: bigint): bigint;
+  }
+
 
   /** The DOM's `crypto`. The host declares the variable: the DOM, a worker or Node. Declaring it
    *  here too would clash with Node's own declaration of it. */
@@ -159,7 +214,7 @@ declare global {
     addMod(a: bigint, b: bigint, n: bigint): bigint;
     /** `Math.mulMod(a: Uint256, b: Uint256, n: Uint256): Uint256` — EVM and SVM. */
     mulMod(a: bigint, b: bigint, n: bigint): bigint;
-    /** `Math.signExtend(value: integer, byte: integer): Int256` — EVM and SVM. */
+    /** `Math.signExtend(value: integer, byte: Uint256): Int256` — EVM and SVM. */
     signExtend(value: bigint, byte: bigint): bigint;
   }
 
@@ -186,16 +241,8 @@ declare global {
   function log(data: SauceBytesLike, ...topics: SauceScalar[]): void;
   /** `eval(program: bytes, ...args: scalar[]): bytes` — EVM and SVM. */
   function eval(program: SauceBytesLike, ...args: SauceScalar[]): SauceBytes;
-  namespace Int256 {
-    /** `Int256.fromBits(value: Uint256): Int256` — EVM and SVM. */
-    function fromBits(value: bigint): bigint;
-  }
-
-  namespace Uint256 {
-    /** `Uint256.fromBits(value: Int256): Uint256` — EVM and SVM. */
-    function fromBits(value: bigint): bigint;
-  }
-
+  /** `program(closure: function, ...args: value[]): { code: bytes, args: bytes }` — EVM and SVM. */
+  function program<Args extends unknown[]>(closure: (...args: Args) => unknown, ...args: Args | [...Args, SauceClosureProgramOptions]): SauceClosureProgram;
   /** `hex`digits`: bytes` — EVM and SVM. */
   function hex(strings: TemplateStringsArray): SauceBytes;
 

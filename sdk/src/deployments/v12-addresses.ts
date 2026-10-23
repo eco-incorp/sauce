@@ -16,13 +16,15 @@ import deployments from "../artifacts/V12Deployments.json" with { type: "json" }
 /** One EVM contract as the release records it: the address plus its CREATE3 derivation metadata. */
 export interface V12EvmContractRef {
   address: string;
+  addressing?: "content";
+  initCodeHash?: string;
   saltName?: string;
   rawSalt?: string;
   guardedSalt?: string;
   derivation?: string;
   /** Present on the Kitchen — it is a UUPS proxy. */
   proxyKind?: string;
-  /** The Kitchen proxy's and the Router's fixed-address generation. */
+  /** Fixed-address generation, where the release uses a named salt (Kitchen and quote Router). */
   generation?: number;
   note?: string;
 }
@@ -100,27 +102,9 @@ export const v12EngineAddress = (): string => v12DeployedAddresses().evm.contrac
 /** The current EVM Router address. */
 export const v12RouterAddress = (): string => v12DeployedAddresses().evm.contracts.router.address;
 
-/** Generation-3 quote service; generation 4's execution Router has no quote entry point. */
+/** Generation-3 quote service, independent of the content-addressed execution Router. */
 export const v12QuoteRouterAddress = (): string =>
   v12DeployedAddresses().evm.contracts.quoteRouter.address;
-
-/**
- * The pinned Kitchen's Router generation — the Router every Pot minted from it starts on.
- *
- * A Pot minted earlier keeps its own Router until its owner moves it, so this is a Pot's generation
- * only once `potRouterUpdate(client, pot)` returns nothing. This SDK's callback-venue swaps require
- * generation 4's exact-input ABI; generation 3 remains available only for quoting.
- */
-export function v12RouterGeneration(): number {
-  const { generation } = v12DeployedAddresses().evm.contracts.router;
-  if (generation === undefined) {
-    throw new Error(
-      "V12Deployments.json records no Router generation — re-run `sync-engine-artifacts`",
-    );
-  }
-
-  return generation;
-}
 
 /** The current EVM Kitchen (UUPS proxy) address — mints Pots and gates every cook. */
 export const v12KitchenAddress = (): string => v12DeployedAddresses().evm.contracts.kitchen.address;

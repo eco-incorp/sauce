@@ -751,7 +751,8 @@ describeSvm("sauce send: a staged Solana cook as a plan of steps, signed elsewhe
       [
         "function main(): Uint256 {",
         `  const blob = hex\`${"cd".repeat(31_000)}\`;`,
-        "  require(blob.length == 31000);",
+        "  const at = ctx.timestamp() % 31000;",
+        "  require(blob.slice(at, at + 1).toBe() == 205);",
         "  return 9;",
         "}",
         "",

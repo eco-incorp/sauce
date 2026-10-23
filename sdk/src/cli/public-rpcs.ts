@@ -222,7 +222,7 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
     { url: "https://mainnet.aurora.dev", simulateV1: false },
     { url: "https://1rpc.io/aurora", simulateV1: false },
   ],
-  // Solana (mainnet-beta), under the eco-routes chain id
+  // Solana (mainnet-beta), under the chain id the SDK gives it
   1399811149: [
     { url: "https://api.mainnet-beta.solana.com", programAccounts: true },
     { url: "https://solana-rpc.publicnode.com", programAccounts: false },

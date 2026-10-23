@@ -17,33 +17,10 @@ Coinbase's liquid staking token for Ethereum. cbETH represents staked ETH plus a
 | Namespace | `Cbeth` on ethereum, base |
 | Chains | ethereum, base |
 
-## Key Operations
+## What it offers
 
 - **transfer**: Transfer cbETH tokens
 - **approve**: Approve spender for cbETH
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Transfer cbETH
-import { transfer } from "@sauce/token";
-function main(cbethAddress: Address, to: Address, amount: Uint256): Uint256 {
-  transfer(cbethAddress, to, amount);
-  return 1;
-}
-
-// Approve cbETH
-import { approve } from "@sauce/token";
-function main(cbethAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  approve(cbethAddress, spender, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -81,3 +58,9 @@ function main() {
 - `balanceOf(address account) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
 - `transfer(address to, uint256 amount) returns (bool)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

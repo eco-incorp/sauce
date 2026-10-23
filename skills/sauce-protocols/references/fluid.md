@@ -57,14 +57,13 @@ import { FluidVaultABI as IFluidVault } from "./abis";
 
 function main(vaultAddress: Address, nftId: Uint256, amount: Uint256, to: Address): Uint256 {
   const vault = IFluidVault.at(vaultAddress);
-  vault.operate(nftId, 0, amount, to);
+  vault.operate(nftId, 0, Int256(amount), to);
   return 1;
 }
 ```
 
 - `nftId`: the position NFT (0 opens a new position)
 - The position must hold enough collateral (a positive `newCol` delta deposits it)
-- `amount`: the amount to borrow, a nonnegative `Uint256`. `operate`'s `newDebt` is an ABI `int256`, so the amount reaches it through a checked numeric conversion: a value above `2**255 - 1` reverts instead of becoming a negative delta, which would repay
 
 ### repay
 
@@ -85,8 +84,7 @@ function main(
 }
 ```
 
-- `negativeDebtDelta`: the signed change to the position's debt, an `Int256` holding the mathematical negative of the repayment (`-1000000` repays 1000000 base units of the debt token). It reaches `operate`'s ABI `int256` `newDebt` unchanged: pass the signed value itself, never an unsigned `2**256 - amount` word
-- A positive value borrows instead of repaying, so a program that means to repay checks `negativeDebtDelta < 0` first
+- `negativeDebtDelta`: repayment as a negative `Int256`, for example `-1000000`, not an unsigned two's-complement word. From an unsigned amount, write `-Int256(amount)`.
 - Requires ERC-20 approval of the debt token to the Vault
 
 ## Deployments and ABI

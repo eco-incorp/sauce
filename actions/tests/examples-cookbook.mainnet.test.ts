@@ -7,8 +7,7 @@
  *
  * Every result is held to something the program did not compute: each swap to Uniswap's own
  * QuoterV2 at the same price limit, each price to the pools, pair and feed read directly, the
- * Aave V3 position to the pool's own account data, each payment to the recipients' balances, and
- * the cross-chain cascade to what the Portals record on both chains and what each fill moves.
+ * Aave V3 position to the pool's own account data, and each payment to the recipients' balances.
  * `skills:check` compiles the programs and holds their headers; this runs them.
  *
  * The Solana program, `pay-stock`, runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
@@ -18,22 +17,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  createWalletClient,
-  getAddress,
-  http,
-  parseAbi,
-  toHex,
-  type Address,
-  type Hex,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { getAddress, parseAbi, toHex, type Address, type Hex } from "viem";
 
 import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
-import { ecoRoutesExecutor } from "../../sdk/dist/protocols/eco-routes/index.js";
-import type { LocalChain } from "../../sdk/test/cli-anvil.js";
-import { plantPortal } from "../../sdk/test/eco-routes-anvil.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import type { ChainName } from "./mainnet.js";
@@ -78,11 +65,10 @@ const abi = {
   aave: parseAbi([
     "function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
     "function getReserveAToken(address asset) view returns (address)",
-    "function getReserveVariableDebtToken(address asset) view returns (address)",
   ]),
 };
 
-/** Recipients, refund addresses and borrowers: anvil's dev accounts past the owner's. */
+/** Recipients and refund addresses: anvil's dev accounts past the owner's. */
 const PEOPLE: readonly Address[] = [
   "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
   "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
@@ -758,188 +744,6 @@ describe(
           string | boolean
         >;
         assert.equal(BigInt(within.amountIn as string), 0n);
-      });
-    });
-
-    describe("repay-on-base: a cascade, Ethereum to Base and back, each hop filled", () => {
-      /** Anvil's fourth and fifth dev accounts: a solver on both chains, and the borrower. */
-      const SOLVER_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
-      const BORROWER_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a";
-      const solver = privateKeyToAccount(SOLVER_KEY);
-      const borrower = privateKeyToAccount(BORROWER_KEY);
-      const SENT = 1_000_000_000n; // the Ethereum Pot's USDC: 1,000
-      const DEBT = 300_000_000n; // the borrower's USDC debt on Base: 300
-      const SOLVER_BPS = 10n;
-      const work = mkdtempSync(join(tmpdir(), "sauce-cookbook-cascade-"));
-      after(() => rmSync(work, { recursive: true, force: true }));
-
-      const debtToken = (): Promise<Address> =>
-        base.env.publicClient.readContract({
-          address: named("base", "AaveV3_Pool"),
-          abi: abi.aave,
-          functionName: "getReserveVariableDebtToken",
-          args: [BASE.USDC],
-        });
-
-      /** The borrower's position on Base: 1 WETH supplied, DEBT USDC borrowed, from its own wallet. */
-      async function borrowOnBase(): Promise<void> {
-        const wallet = createWalletClient({
-          account: borrower,
-          chain: base.env.chain,
-          transport: http(base.env.rpc),
-        });
-        const pool = named("base", "AaveV3_Pool");
-        await fund(base, "WETH", borrower.address, 10n ** 18n);
-        const calls = [
-          {
-            address: BASE.WETH,
-            abi: parseAbi(["function approve(address, uint256) returns (bool)"]),
-            functionName: "approve",
-            args: [pool, 10n ** 18n],
-          },
-          {
-            address: pool,
-            abi: parseAbi(["function supply(address, uint256, address, uint16)"]),
-            functionName: "supply",
-            args: [BASE.WETH, 10n ** 18n, borrower.address, 0],
-          },
-          {
-            address: pool,
-            abi: parseAbi(["function borrow(address, uint256, uint256, uint16, address)"]),
-            functionName: "borrow",
-            args: [BASE.USDC, DEBT, 2n, 0, borrower.address],
-          },
-        ] as const;
-        for (const call of calls) {
-          const hash = await wallet.writeContract({ ...call, gas: 2_000_000n } as never);
-          const receipt = await base.env.publicClient.waitForTransactionReceipt({ hash });
-          assert.equal(receipt.status, "success", call.functionName);
-        }
-      }
-
-      /**
-       * eco-routes' Portal on Ethereum postdates the pinned block, so its own code (the v2.12.0
-       * fixture, as `cli-lifecycle.e2e.test.ts` runs it) is put at the address the SDK records,
-       * with its Executor and vault implementation (`eco-routes-anvil.ts`). Base's is the one
-       * deployed there.
-       */
-      async function plantEthereumPortal(): Promise<void> {
-        const { env } = ethereum;
-        await plantPortal({
-          chain: requireChain("ethereum"),
-          publicClient: env.publicClient,
-          testClient: env.testClient,
-          plant: async (creationCode: Hex) => {
-            const hash = await env.walletClient.sendTransaction({
-              account: env.account,
-              chain: env.chain,
-              data: creationCode,
-              gas: 30_000_000n,
-            });
-
-            return (await env.publicClient.waitForTransactionReceipt({ hash })).contractAddress!;
-          },
-        } as unknown as LocalChain);
-      }
-
-      /** `sauce intent import` of the intents a transaction published: their hashes. */
-      async function imported(tx: Hex, chain: ChainName, config: string, store: string) {
-        const { code, stdout, stderr } = await sauce([
-          ...["intent", "import", tx, "--chain", chain, "--config", config],
-          ...["--store", store, "--json"],
-        ]);
-        assert.equal(code, 0, stderr);
-
-        return (
-          JSON.parse(stdout) as { intents: Array<{ record: { intentHash: Hex } }> }
-        ).intents.map((one) => one.record.intentHash);
-      }
-
-      /** `sauce intent fill --send --no-prove` by the solver: the fill's transaction. */
-      async function fill(hash: Hex, config: string, store: string): Promise<Hex> {
-        const { code, stdout, stderr } = await sauce([
-          ...["intent", "fill", hash, "--config", config, "--store", store, "--send"],
-          ...["--no-prove", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
-        ]);
-        assert.equal(code, 0, `${stderr}\n${stdout}`);
-        const [sent] = (
-          JSON.parse(stdout) as {
-            intents: Array<{ transactions: Array<{ kind: string; hash: Hex }> }>;
-          }
-        ).intents;
-
-        return sent!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
-      }
-
-      it("repays the debt on Base from Ethereum's USDC, and the change reaches Ethereum", async () => {
-        const config = join(work, "sauce.config.json");
-        writeFileSync(
-          config,
-          JSON.stringify({ rpcUrls: { "1": ethereum.env.rpc, "8453": base.env.rpc } }),
-        );
-        const store = mkdtempSync(join(work, "store-"));
-        await plantEthereumPortal();
-        await borrowOnBase();
-        const owedBefore = await balanceOf(base.env, await debtToken(), borrower.address);
-        assert.ok(owedBefore >= DEBT);
-        // A deadline past both chains' pinned clocks and the wall clock, which the command checks
-        // it against: fixed, so every run builds the same intents.
-        const deadline = "4000000000";
-
-        // Ethereum: the owner's Pot opens the first intent with what it holds.
-        await fund(ethereum, "USDC", ethereum.env.pot, SENT);
-        const opened = await sauce([
-          ...["run", example("repay-on-base"), "--chain", "ethereum", "--config", config],
-          ...["--private-key", OWNER_KEY, "--salt-hex", POT_SALT, "--json"],
-          ...["--intent-deadline", deadline, "--intent-creator", PEOPLE[0]!],
-          ...["--intent-execution-fee", "auto"],
-          ...["--args", borrower.address, String(SOLVER_BPS)],
-        ]);
-        assert.equal(opened.code, 0, `${opened.stderr}\n${opened.stdout}`);
-        const cookTx = (JSON.parse(opened.stdout) as { cook: { hash: Hex } }).cook.hash;
-        assert.equal(await balanceOf(ethereum.env, ETH.USDC, ethereum.env.pot), 0n);
-        const [first] = await imported(cookTx, "ethereum", config, store);
-        assert.ok(first, "the cook published the first intent");
-
-        // Base: the shared intent Pot exists before any fill; the solver delivers and fills.
-        const deployed = await sauce([
-          ...["pot", "--chain", "base", "--owner", ecoRoutesExecutor("base")],
-          ...["--deploy", "--config", config, "--private-key", SOLVER_KEY],
-        ]);
-        assert.equal(deployed.code, 0, deployed.stderr);
-        const delivered = SENT - (SENT * SOLVER_BPS) / 10_000n;
-        await fund(base, "USDC", solver.address, delivered);
-        const baseFill = await fill(first!, config, store);
-        const owedAfter = await balanceOf(base.env, await debtToken(), borrower.address);
-        assert.equal(owedAfter, 0n, "the whole debt was repaid");
-        assert.equal(await balanceOf(base.env, BASE.USDC, solver.address), 0n);
-
-        // The Base step measured the change and opened the second intent with it.
-        const [second] = await imported(baseFill, "base", config, store);
-        assert.ok(second, "the Base step published the second intent");
-        const shown = JSON.parse(
-          (
-            await sauce([
-              ...["intent", "show", second!, "--config", config, "--store", store, "--json"],
-            ])
-          ).stdout,
-        ) as {
-          record: { reward: { tokens: Array<{ amount: string }> } };
-          status: { state: string };
-        };
-        assert.equal(shown.status.state, "funded");
-        const change = BigInt(shown.record.reward.tokens[0]!.amount);
-        // What arrived, less what the debt took at the moment it was repaid.
-        assert.ok(
-          change > delivered - owedBefore - 1_000n && change <= delivered - DEBT,
-          `${change}`,
-        );
-
-        // Ethereum: the second solver pays the borrower the change, less its share.
-        const paid = change - (change * SOLVER_BPS) / 10_000n;
-        await fund(ethereum, "USDC", solver.address, paid);
-        await fill(second!, config, store);
-        assert.equal(await balanceOf(ethereum.env, ETH.USDC, borrower.address), paid);
       });
     });
   },

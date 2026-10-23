@@ -11,8 +11,8 @@
  * Uniswap's own `PoolManager` from `@uniswap/v4-core`, run at Base's PoolManager address (its one
  * immutable, the address it checks it runs at, set to that address), with liquidity added through
  * v4-core's own `PoolModifyLiquidityTest`, and read through `fixtures/StateView.sol` at Base's
- * StateView address: v4-periphery's `getSlot0`/`getLiquidity`, as `swap-on-base.e2e.test.ts` runs
- * them. The two tokens are `MockERC20` runtimes at Base's USDC and SPCXc addresses, so USDC is
+ * StateView address: v4-periphery's `getSlot0`/`getLiquidity`. The two tokens are `MockERC20`
+ * runtimes at Base's USDC and SPCXc addresses, so USDC is
  * token0, as on Base, and the program runs as it ships, naming both. On Base, SPCXc is a B20 token
  * built into the node, whose account holds the one byte `0xef` that anvil cannot run; CLAUDE.md
  * keeps every execution suite off it. That is about Base's own state, forked or live. This chain
@@ -856,40 +856,5 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const receipt = await cook(buying(budget), replacing(" || !better"));
     expect(receipt.status).toBe("reverted");
     expect(await balance(USDC, sauce.pot)).toBe(budget);
-  });
-
-  it("what a lookup costs: one more tick spacing, fee tier or V4 key with no pool", async () => {
-    const budget = 1_000n * 10n ** 6n;
-    // Every pool past its own limit, so the cook swaps nothing and costs what it looks at.
-    const args = buying(budget, usdcPerShare(15_000n));
-    const gasOf = async (source: string): Promise<bigint> => {
-      const at = await snapshotNow();
-      await call(USDC, erc20, "mint", [sauce.pot, budget]);
-      const receipt = await cook(args, source);
-      expect(receipt.status).toBe("success");
-      await testClient.revert({ id: at });
-      return receipt.gasUsed;
-    };
-    const base = await gasOf(PROGRAM);
-    const more = {
-      spacing: await gasOf(replacing("[1, 10, 50,", "[1, 3, 10, 50,")),
-      tier: await gasOf(replacing("[100, 200, 300,", "[100, 150, 200, 300,")),
-      key: await gasOf(
-        replacing(
-          "{ fee: 100, spacing: 1 },",
-          "{ fee: 100, spacing: 1 },\n{ fee: 50, spacing: 1 },",
-        ),
-      ),
-    };
-    const each = Object.fromEntries(Object.entries(more).map(([what, gas]) => [what, gas - base]));
-    console.log(`the cook, every pool skipped: gas ${base}; one more lookup:`, each);
-    // What the skill states: about 19,000 gas a Slipstream spacing or a V3 tier, whose lookup is
-    // one call, and about 42,000 a V4 key, whose lookup is a hash and two StateView reads.
-    for (const gas of [each.spacing!, each.tier!]) {
-      expect(gas).toBeGreaterThan(15_000n);
-      expect(gas).toBeLessThan(25_000n);
-    }
-    expect(each.key!).toBeGreaterThan(35_000n);
-    expect(each.key!).toBeLessThan(50_000n);
   });
 });

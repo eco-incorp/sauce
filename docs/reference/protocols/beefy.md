@@ -17,53 +17,12 @@ Multi-chain yield optimizer. Auto-compounds rewards from LP tokens and other yie
 | Namespace | `Beefy` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Deposit want tokens into Beefy vault
 - **depositAll**: Deposit entire balance of want token
 - **withdraw**: Withdraw by specifying share amount
 - **withdrawAll**: Withdraw entire position
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit into Beefy vault
-import { BeefyVaultABI as IBeefyVault } from "./abis";
-function main(vaultAddress: Address, amount: Uint256): Uint256 {
-  const vault = IBeefyVault.at(vaultAddress);
-  vault.deposit(amount);
-  return 1;
-}
-
-// Deposit entire balance
-import { BeefyVaultABI as IBeefyVault } from "./abis";
-function main(vaultAddress: Address): Uint256 {
-  const vault = IBeefyVault.at(vaultAddress);
-  vault.depositAll();
-  return 1;
-}
-
-// Withdraw shares
-import { BeefyVaultABI as IBeefyVault } from "./abis";
-function main(vaultAddress: Address, shares: Uint256): Uint256 {
-  const vault = IBeefyVault.at(vaultAddress);
-  vault.withdraw(shares);
-  return 1;
-}
-
-// Withdraw all
-import { BeefyVaultABI as IBeefyVault } from "./abis";
-function main(vaultAddress: Address): Uint256 {
-  const vault = IBeefyVault.at(vaultAddress);
-  vault.withdrawAll();
-  return 1;
-}
-```
 
 ## Notes
 
@@ -115,3 +74,9 @@ functions, and its writes are SafeERC20.
 - `balance() view returns (uint256)`
 - `balanceOf(address account) view returns (uint256)`
 - `want() view returns (address)`: the address is a token
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

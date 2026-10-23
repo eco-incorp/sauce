@@ -40,7 +40,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Price feeds return `answer` as `Int256` (ABI `int256`), with feed-specific decimals (usually 8 for USD pairs); keep it signed for arithmetic and comparisons. Round IDs and timestamps remain `Uint256`
+- Price feeds return answer in int256 with feed-specific decimals (usually 8 for USD pairs)
 - Always check updatedAt timestamp for staleness - stale prices can cause issues
 - Feed Registry is Ethereum-only; on L2s, use individual feed addresses directly
 - VRF provides verifiable randomness for on-chain applications

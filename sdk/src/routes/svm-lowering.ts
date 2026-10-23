@@ -212,8 +212,8 @@ const UINT256 = 1n << 256n;
 /**
  * A literal's integer as the compiler reads it, from its text: a non-negative decimal (with no
  * leading zero) or hexadecimal integer, `n` or not, below 2^256. Undefined for anything else, a
- * negative number included (`-1` is a signed `Int256` literal, not a counter this counts), whose
- * loop is left uncounted rather than read some other way.
+ * negative number included (the compiler's `-1` is 2^256 - 1), whose loop is left uncounted rather
+ * than read some other way.
  */
 function integerOf(node: AstNode | null | undefined): bigint | undefined {
   if (node?.type !== "Literal") return undefined;
@@ -388,7 +388,8 @@ export class SvmLowering {
     readonly tokens: ReadonlyMap<string, bigint>,
     rows: readonly SvmTokenRow[],
     /** Compile-time values a holder may name, by name: a key bound before the program compiles —
-     *  main's `Address` argument, bound into an intent's body — which the cook attaches by value. */
+     *  main's `Address` argument, bound into the program (`args`) — which the cook attaches by
+     *  value. */
     private readonly keys: ReadonlyMap<string, bigint> = new Map(),
     /** The chain's native coin, SOL, whose balance `<holder>.SOL` reads as a token's is read. */
     readonly native?: string,

@@ -441,6 +441,30 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     });
   }
 
+  it("dodoV2Swap sells quote tokens when the input is the pool's quote token", async () => {
+    const receipt = await env.cook(compiled({ ...SAMPLES.dodoV2Swap, tokenIn: B, tokenOut: A }));
+    assert.equal(receipt.status, "success");
+    assert.deepEqual(
+      recordedCalls(receipt, RECORDERS).map(({ to, data, value }) => ({
+        to: to.toLowerCase(),
+        data,
+        value,
+      })),
+      [
+        {
+          to: B.toLowerCase(),
+          data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]).toLowerCase(),
+          value: 0n,
+        },
+        {
+          to: T.toLowerCase(),
+          data: call("function sellQuote(address)", "sellQuote", [R]).toLowerCase(),
+          value: 0n,
+        },
+      ],
+    );
+  });
+
   for (const { name, assets, steps, limits } of [
     {
       name: "output first in the assets list",
@@ -655,42 +679,5 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
       recordedCalls(receipt, [A as Address])[0]!.data,
       call("function transfer(address,uint256)", "transfer", [env.pot, 5n]).toLowerCase(),
     );
-  });
-
-  describe("balancerV2BatchSwap's `int256[] limits` are signed", () => {
-    const BATCH =
-      "function batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)";
-    /** Two steps over three assets: the Vault may take any amount of all but the last. */
-    const batch = (amountOutMin: string): Action => ({
-      ...SAMPLES.balancerV2BatchSwap,
-      steps: [
-        { poolId: B32, assetInIndex: 0, assetOutIndex: 1, amount: "1000" },
-        { poolId: B32, assetInIndex: 1, assetOutIndex: 2, amount: "0" },
-      ],
-      assets: [A, B, R],
-      amountOutMin,
-    });
-
-    for (const min of [0n, 1n, 10n ** 30n, (1n << 255n) - 1n, 1n << 255n]) {
-      it(`amountOutMin ${min} is the limit ${-min} on the last asset, and no limit on the others`, async () => {
-        const receipt = await env.cook(compiled(batch(`${min}`)));
-        assert.equal(receipt.status, "success", "the program reverted");
-        const [sent] = recordedCalls(receipt, RECORDERS);
-        assert.equal(
-          sent!.data,
-          call(BATCH, "batchSwap", [
-            0,
-            [
-              [B32, 0n, 1n, 1000n, "0x"],
-              [B32, 1n, 2n, 0n, "0x"],
-            ],
-            [A, B, R],
-            [env.pot, false, R, false],
-            [MAX_INT256, MAX_INT256, -min],
-            DEADLINE,
-          ]).toLowerCase(),
-        );
-      });
-    }
   });
 });

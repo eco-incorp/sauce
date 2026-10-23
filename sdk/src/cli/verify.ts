@@ -1,29 +1,24 @@
 /**
- * `sauce verify`: whether a payload, a cook, an intent or a transaction runs the audited settle
- * program, and with which `(tokens, minOut, recipient)` — `validateSettleProgram` and
- * `extractEvmSettleFromCalls` from the command line.
+ * `sauce verify`: whether a payload, a cook or a transaction runs the audited settle program, and
+ * with which `(tokens, minOut, recipient)` — `validateSettleProgram` from the command line.
  *
- * A rejection exits 1 and names the SDK's `SettleFailureCode`. Two more checks are the CLI's own,
- * because `/verify` leaves them to its caller and a command line has no caller to leave them to:
- * the engine a cook names must be the released one (or one named with `--engine`) — `UNKNOWN_ENGINE`
- * — and an intent must carry a settle cook at all — `NO_SETTLE`. A transaction hash is refused
- * when the transaction reverted (`TX_FAILED`) or has no receipt yet (`TX_PENDING`): it settled
- * nothing, whatever its calldata carries.
+ * A rejection exits 1 and names the SDK's `SettleFailureCode`. One more check is the CLI's own,
+ * because `/verify` leaves it to its caller and a command line has no caller to leave it to: the
+ * engine a cook names must be the released one (or one named with `--engine`) — `UNKNOWN_ENGINE`.
+ * A transaction hash is refused when the transaction reverted (`TX_FAILED`) or has no receipt yet
+ * (`TX_PENDING`): it settled nothing, whatever its calldata carries.
  */
 import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
 
-import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
+import type { CanonicalChain } from "../chains/canonical.js";
 import { v12DeployedAddresses, v12EngineAddress } from "../deployments/index.js";
 import { v12PotAbi } from "../evm/engine.js";
-import { PortalABI } from "../protocols/eco-routes/abis.js";
-import { decodeRoute, denormalizeToEvm } from "../routes/encode.js";
 import {
   SettleDecodeError,
   validateSettleProgram,
   type DecodedSettleProgram,
   type ProgramPin,
 } from "../verify/decode.js";
-import { extractEvmSettleFromCalls } from "../verify/intent.js";
 import { SETTLE_WIRE } from "../verify/wire.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, receiptOf } from "./chain.js";
@@ -43,8 +38,7 @@ export function parsePin(raw: string): ProgramPin {
 }
 
 export interface VerifyInput {
-  /** A settle payload, `Pot.cook` calldata, `Portal.publish[AndFund]` calldata, or a transaction
-   *  hash with `rpcUrl`. */
+  /** A settle payload, `Pot.cook` calldata, or a transaction hash with `rpcUrl`. */
   readonly hex: Hex;
   /** Historical pins accepted besides the current one. */
   readonly pins: readonly ProgramPin[];
@@ -58,8 +52,6 @@ export interface VerifyInput {
 interface Found {
   readonly settle: DecodedSettleProgram;
   readonly engine?: Address;
-  readonly callIndex?: number;
-  readonly target?: Address;
 }
 
 class Rejected extends Error {
@@ -71,7 +63,7 @@ class Rejected extends Error {
   }
 }
 
-/** The settle in `data`: a cook's program, an intent's settle cook, or `data` as a payload. */
+/** The settle in `data`: a cook's program, or `data` as a payload. */
 function findSettle(data: Hex, accepted: readonly ProgramPin[]): Found {
   const validate = (payload: Hex): DecodedSettleProgram => {
     try {
@@ -91,48 +83,6 @@ function findSettle(data: Hex, accepted: readonly ProgramPin[]): Found {
   } catch (error) {
     if (error instanceof Rejected) throw error;
     // Not a cook.
-  }
-  try {
-    const portal = decodeFunctionData({ abi: PortalABI, data });
-    if (portal.functionName === "publish" || portal.functionName === "publishAndFund") {
-      const [destination, routeBytes] = portal.args as unknown as [bigint, Hex];
-      const kind = resolveChain(destination)?.kind === "svm" ? "svm" : "evm";
-      if (kind === "svm") {
-        throw new Rejected(
-          "NO_SETTLE",
-          "an intent to Solana carries an SVM settle: verify it with --chain solana",
-        );
-      }
-      const calls = decodeRoute(routeBytes, kind).calls.map((call) => ({
-        data: call.data,
-        target: denormalizeToEvm(call.target),
-      }));
-      const found = extractEvmSettleFromCalls(calls, accepted);
-      if (found === null) {
-        throw new Rejected(
-          "NO_SETTLE",
-          `none of the intent's ${calls.length} route calls is a cook of the audited settle program`,
-        );
-      }
-      const {
-        callIndex,
-        target,
-        engine,
-        ingredientIndex: _i,
-        ingredientCount: _c,
-        ...settle
-      } = found;
-
-      return {
-        settle,
-        ...(engine === undefined ? {} : { engine: getAddress(engine) }),
-        callIndex,
-        ...(target === undefined ? {} : { target: getAddress(target) }),
-      };
-    }
-  } catch (error) {
-    if (error instanceof Rejected) throw error;
-    // Not a Portal call.
   }
 
   return { settle: validate(data) };
@@ -208,9 +158,6 @@ export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> 
         `  minOut     ${settle.minOut}`,
         `  recipient  ${settle.recipient}`,
         ...engineNote,
-        ...(found.callIndex === undefined
-          ? []
-          : [`  in route call ${found.callIndex}, to ${found.target ?? "(no target)"}`]),
         `  program    ${settle.programHash}`,
       ].join("\n"),
       json: {
@@ -222,8 +169,6 @@ export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> 
         recipient: settle.recipient,
         programHash: settle.programHash,
         ...(found.engine === undefined ? {} : { engine: found.engine }),
-        ...(found.callIndex === undefined ? {} : { callIndex: found.callIndex }),
-        ...(found.target === undefined ? {} : { target: found.target }),
       },
     };
   } catch (error) {

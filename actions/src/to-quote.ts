@@ -98,7 +98,7 @@ export interface QuoteOptions {
   /**
    * The generation-3 quote service for `uniswapV3Swap` and `uniswapV4Swap`, which needs no tokens.
    * Use `v12QuoteRouterAddress()` from `@eco-incorp/sauce/deployments`.
-   * The generation-4 execution Router (`v12RouterAddress()`) has no `quote` method.
+   * The execution Router (`v12RouterAddress()`) has no `quote` method.
    */
   readonly router?: Address;
   /** The MaverickV2Quoter, for `maverickV2Swap`. */
@@ -234,24 +234,19 @@ const arrayLast: Extract = (emit, decoded) => {
   return { stmts: [...decoded.stmts, ...arr.stmts], expr: `${arr.expr}[${arr.expr}.length - 1]` };
 };
 
-/**
- * Pick Ambient's negative (output) flow from its `(int128 baseFlow, int128 quoteFlow, uint128
- * finalPrice)` return, decoded signed. The output is the flow's magnitude: negate the negative one
- * and convert it, checked, to the unsigned amount every quote returns; neither flow negative is no
- * output, as the host `decode` reads it.
- */
+/** Pick the negative flows (tokens leaving the pool), then return their unsigned magnitude. */
 const ambientFlow: Extract = (emit, decoded) => {
   const base = bindConst(emit, "qbase", `${decoded.expr}[0]`);
   const quote = bindConst(emit, "qquote", `${decoded.expr}[1]`);
-  const out = bindConst(
+  const sum = bindConst(
     emit,
-    "qout",
-    `${base.expr} < 0 ? -${base.expr} : (${quote.expr} < 0 ? -${quote.expr} : 0)`,
+    "qsum",
+    `(${base.expr} < 0 ? ${base.expr} : Int256(0)) + (${quote.expr} < 0 ? ${quote.expr} : Int256(0))`,
   );
 
   return {
-    stmts: [...decoded.stmts, ...base.stmts, ...quote.stmts, ...out.stmts],
-    expr: `Uint256(${out.expr})`,
+    stmts: [...decoded.stmts, ...base.stmts, ...quote.stmts, ...sum.stmts],
+    expr: `Uint256(-${sum.expr})`,
   };
 };
 
@@ -870,7 +865,7 @@ function quoteThroughRouter(
   router: Address,
 ): QuoteCall {
   if (router.toLowerCase() === v12RouterAddress().toLowerCase()) {
-    throw new Error("Router generation 4 has no quote method; use v12QuoteRouterAddress()");
+    throw new Error("The execution Router has no quote method; use v12QuoteRouterAddress()");
   }
   const v4 = action.type === "uniswapV4Swap";
   const [c0, c1] =

@@ -17,41 +17,6 @@ Multi-chain bridging protocol using SGN (State Guardian Network) for cross-chain
 | Namespace | `Celer` on ethereum, optimism, bsc, polygon, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Send ERC-20 tokens cross-chain via cBridge.
-
-```typescript
-import { CelerBridgeABI as IBridge } from "./abis";
-
-function main(
-  bridgeAddress: Address,
-  receiver: Address,
-  token: Address,
-  amount: Uint256,
-  dstChainId: Uint256,
-  maxSlippage: Uint256,
-): Uint256 {
-  const bridge = IBridge.at(bridgeAddress);
-  bridge.send(receiver, token, amount, dstChainId, 0, maxSlippage);
-  return 1;
-}
-```
-
-- `receiver`: Address to receive tokens on destination chain
-- `token`: ERC-20 token to bridge
-- `dstChainId`: Destination EVM chain ID (as uint64)
-- `nonce`: Set to 0 (auto-generated)
-- `maxSlippage`: Maximum slippage in basis points (e.g. 500 = 5%). Applied during pool-based bridging
-- Requires ERC-20 approval to the Bridge
-
 ## Notes
 
 - `send` for ERC-20 tokens, `sendNative` for native tokens (ETH, BNB, AVAX, etc.)
@@ -92,3 +57,9 @@ function main() {
 
 - `send(address _receiver, address _token, uint256 _amount, uint64 _dstChainId, uint64 _nonce, uint32 _maxSlippage)`
 - `sendNative(address _receiver, uint256 _amount, uint64 _dstChainId, uint64 _nonce, uint32 _maxSlippage) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

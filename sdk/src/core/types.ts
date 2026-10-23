@@ -98,4 +98,9 @@ export interface Chain {
   };
   blockExplorerUrls: string[];
   testnet: boolean;
+  /**
+   * The protocol's floor on the base fee, in wei, where the chain enforces one (Arc's 20 gwei): a
+   * transaction whose `maxFeePerGas` (or legacy `gasPrice`) is below it is never included.
+   */
+  minBaseFeePerGas?: bigint;
 }

@@ -3,8 +3,8 @@
  * released engine — OpenZeppelin `SafeERC20` semantics, which the SDK's `token/safe` lowering gives
  * every Sauce token write:
  *
- * - a token that returns NOTHING (USDT) succeeds; compiler 2.3.0 decodes a binding's declared
- *   `bool` even when the program discards it, so the same approve through a binding reverts;
+ * - a token that returns NOTHING (USDT) succeeds; a raw binding whose `bool` the program reads
+ *   rejects the same empty return data, while an unread result requires no decode;
  * - a token that returns `false` reverts the program, as does a "token" with no code;
  * - approving over a standing non-zero allowance succeeds, because the allowance is reset first —
  *   the change USDT refuses, and the one a shared Pot meets.
@@ -155,11 +155,11 @@ describe("ERC-20 writes, checked like SafeERC20", { skip, timeout: 120_000 }, ()
     assert.equal(status, "reverted");
   });
 
-  it("control: the same approve through a `bool`-declaring binding reverts on USDT", async () => {
+  it("reading a bool-declaring approve result reverts on USDT and undoes its allowance", async () => {
     const IERC20 = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
     const other = "0x4000000000000000000000000000000000000002";
     const program = compileEvm(
-      `function main(): void {\n  IErc20Bool.at(${usdt}n).approve(${other}n, 5n);\n}\n`,
+      `function main(): void {\n  require(IErc20Bool.at(${usdt}n).approve(${other}n, 5n) != 0);\n}\n`,
       { IErc20Bool: { abi: JSON.parse(JSON.stringify(IERC20)) } },
     ).bytecode;
     const receipt = await env.cook(program);

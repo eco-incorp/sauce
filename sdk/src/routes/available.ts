@@ -24,8 +24,7 @@
  * `false`. A branch reached only through a runtime value (`const has = available(X); if (has) ...`)
  * is NOT removed: it is live code.
  *
- * A closure body inside the program (`Arbitrum(() => { ... })`) is left alone: it is compiled for
- * its own chain, and this pass runs again there with that chain's registry.
+ * A function expression inside the program is left as written.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";

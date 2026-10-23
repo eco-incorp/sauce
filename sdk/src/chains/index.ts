@@ -264,6 +264,11 @@ export const chains: Record<number, Chain> = {
     },
     blockExplorerUrls: ["https://explorer.arc.io"],
     testnet: false,
+    // "Minimum base fee | 20 Gwei | Floor enforced by the protocol", and "Set maxFeePerGas to at
+    // least 20 Gwei" (docs.arc.io/arc/references/gas-and-fees). Measured 2026-10-22: the base fee of
+    // all 1025 blocks to 27326543 was 20 gwei, and an eth_call with maxFeePerGas 19 gwei is refused
+    // "max fee per gas less than block base fee".
+    minBaseFeePerGas: 20_000_000_000n,
   },
 };
 

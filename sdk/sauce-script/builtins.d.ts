@@ -34,8 +34,19 @@ type SauceTokenSource = import("../routes/source-globals.generated.js").SauceTok
 
 /** One unsigned 256-bit integer. */
 type Uint256 = bigint;
-/** One signed 256-bit integer: an ABI `intN` value, a negative literal, what the signed `Math` helpers return. */
+/** One signed 256-bit integer, from -2**255 through 2**255 - 1. */
 type Int256 = bigint;
+
+/** Checked numeric conversions; `fromBits` preserves all 256 bits instead. */
+declare function Int256(value: SauceInt): Int256;
+declare namespace Int256 {
+  function fromBits(value: Uint256 | number): Int256;
+}
+declare function Uint256(value: SauceInt): Uint256;
+declare namespace Uint256 {
+  function fromBits(value: Int256 | number): Uint256;
+}
+
 /** An address: a number, on the EVM 20 bytes, on Solana a 32-byte key. */
 type Address = bigint;
 /** A bool. */
@@ -81,16 +92,6 @@ interface SauceBinding {
   readonly [method: string]: (...args: any[]) => any;
 }
 
-/** An intent's route: what the solver delivers to the destination for the body to run on. The one
- *  definition is the generated namespace types', which a typed closure in a host file uses too. */
-type SauceDelivery = import("../routes/source-globals.generated.js").SauceDelivery;
-
-/** An intent's reward, paid on the chain that opens it. */
-type SauceReward = import("../routes/source-globals.generated.js").SauceReward;
-
-/** An intent opened in a program: `Base(() => { … }).reward({ … })`. */
-type SauceIntent = import("../routes/source-globals.generated.js").SauceIntent;
-
 /** Context reads: who called, where, when. */
 declare const ctx: {
   /** The account that called: the Pot's owner, on a cook. */
@@ -116,6 +117,24 @@ declare const ctx: {
   isContract(address: SauceInt): boolean;
   /** EVM. */
   isEOA(address: SauceInt): boolean;
+  /** EVM: the account that signed the transaction. Authorize on `msgSender()`, not on this. */
+  txOrigin(): bigint;
+  /** EVM: the block's fee recipient. */
+  coinbase(): bigint;
+  /** EVM: the block's randomness value, which its producer can bias. */
+  prevrandao(): bigint;
+  /** EVM: the block's gas limit. */
+  blockGasLimit(): bigint;
+  /** EVM: the block's base fee per gas. */
+  baseFee(): bigint;
+  /** EVM: the price per gas the transaction pays. */
+  gasPrice(): bigint;
+  /** EVM: the hash of block `n`; 0 outside the 256 blocks before this one. */
+  blockHash(n: SauceInt): bigint;
+  /** EVM: the versioned hash of the transaction's blob `i`; 0 past its last blob. */
+  blobHash(i: SauceInt): bigint;
+  /** EVM: the block's blob base fee. Halts the cook on a chain without one. */
+  blobBaseFee(): bigint;
 };
 
 declare const crypto: {
@@ -135,21 +154,8 @@ interface Math {
   mulDiv(x: SauceInt, y: SauceInt, d: SauceInt): bigint;
   addMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
   mulMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
-  /** Sign-extends `value` from byte `byte` (0 is the lowest), reading it as a raw word. */
+  /** Interprets the low `byte + 1` bytes as a signed integer (byte 0 is least significant). */
   signExtend(value: SauceInt, byte: SauceInt): Int256;
-}
-
-/** `Int256(value)`: the value as a signed integer; one above 2^255 - 1 is rejected. */
-declare function Int256(value: SauceInt): Int256;
-declare namespace Int256 {
-  /** Reads an unsigned word's bits as signed: bit 255 becomes the sign. */
-  function fromBits(value: SauceInt): Int256;
-}
-/** `Uint256(value)`: the value as an unsigned integer; a negative one is rejected. */
-declare function Uint256(value: SauceInt): Uint256;
-declare namespace Uint256 {
-  /** Reads a signed value as the unsigned word of its bits: -1 becomes 2^256 - 1. */
-  function fromBits(value: SauceInt): Uint256;
 }
 
 /** EVM: ABI encoding. */
@@ -159,15 +165,21 @@ declare const abi: {
   decode(data: SauceData, shapes: readonly string[]): any;
 };
 
-/** EVM: calls and storage. */
+/** EVM: calls, storage and contract creation. */
 declare const evm: {
-  call(address: SauceInt, value: SauceInt, data: SauceData): SauceBytes;
-  static(address: SauceInt, data: SauceData): SauceBytes;
-  delegate(address: SauceInt, data: SauceData): SauceBytes;
+  call(address: SauceInt, value: SauceInt, data: SauceData, gas?: SauceInt): SauceCall<SauceBytes>;
+  static(address: SauceInt, data: SauceData, gas?: SauceInt): SauceCall<SauceBytes>;
+  delegate(address: SauceInt, data: SauceData, gas?: SauceInt): SauceCall<SauceBytes>;
   sload(slot: SauceInt): bigint;
   sstore(slot: SauceInt, value: SauceInt): void;
   tload(key: SauceInt): bigint;
   tstore(key: SauceInt, value: SauceInt): void;
+  create(initcode: SauceData, value?: SauceInt): bigint;
+  create2(initcode: SauceData, salt: SauceInt, value?: SauceInt): bigint;
+  create3(initcode: SauceData, salt: SauceInt, value?: SauceInt): bigint;
+  createAddress(deployer: SauceInt, nonce: SauceInt): bigint;
+  create2Address(deployer: SauceInt, salt: SauceInt, initCodeHash: SauceInt): bigint;
+  create3Address(salt: SauceInt): bigint;
 };
 
 /** Solana: account data and cross-program calls. */
@@ -187,6 +199,25 @@ declare function revert(data?: SauceData): never;
 declare function log(data: SauceData, ...topics: SauceInt[]): void;
 /** Runs another program, with arguments. */
 declare function eval(program: SauceData, ...args: SauceInt[]): SauceBytes;
+
+/** A closure compiled as its own program, plus its captured run-time values. */
+interface SauceClosureProgram {
+  readonly code: SauceBytes;
+  readonly args: SauceBytes;
+}
+interface SauceClosureProgramOptions {
+  readonly chain?: string;
+  readonly target?: "evm" | "svm";
+}
+type SauceClosureArguments<Args extends unknown[]> = {
+  [K in keyof Args]: Args[K] extends bigint ? SauceInt : Args[K];
+};
+/** The inline arrow's arguments, then optional chain/target options. */
+declare function program<Args extends unknown[]>(
+  closure: (...args: Args) => unknown,
+  ...args:
+    SauceClosureArguments<Args> | [...SauceClosureArguments<Args>, SauceClosureProgramOptions]
+): SauceClosureProgram;
 /** Bytes from hex digits: hex`a9059cbb`. */
 declare function hex(strings: TemplateStringsArray): SauceBytes;
 
@@ -195,8 +226,6 @@ interface BigInt {
   toBytesBe(width: SauceInt): SauceBytes;
   /** The value as `width` little-endian bytes. */
   toBytesLe(width: SauceInt): SauceBytes;
-  /** An external call's result — or, when the call fails, what the handler returns. */
-  catch(handler: () => unknown): bigint;
 }
 
 interface ArrayConstructor {

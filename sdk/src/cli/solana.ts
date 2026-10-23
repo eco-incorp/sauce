@@ -122,7 +122,6 @@ import {
   compileProgram,
   payloadOf,
   type ProgramInput,
-  refusePastDeadline,
   revertedFirst,
   unapproved,
 } from "./commands.js";
@@ -663,9 +662,9 @@ export async function svmLanded(
 }
 
 /**
- * Signs a plan's Solana transaction (`lifecycle-svm.ts`: base64, its fresh keys' signatures in, the
- * fee payer's out) with `signer`, the fee payer, rehearses it as signed and refuses it if it would
- * fail, then sends it and waits until it is confirmed.
+ * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
+ * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, rehearses it as
+ * signed and refuses it if it would fail, then sends it and waits until it is confirmed.
  */
 export async function sendPlannedSvm(
   url: string,
@@ -803,9 +802,9 @@ const mintProgramOn =
     });
 
 /**
- * main's `Address` arguments, by name, as keys, and its integers (`Uint256`, `Int256`) as integers:
- * what an account derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before
- * the arguments are given. A negative `Int256` is kept as it is: a seed refuses it by name.
+ * main's `Address` arguments, by name, as keys, and its `Uint256` ones as integers: what an account
+ * derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before the arguments are
+ * given.
  */
 export function svmKeyArguments(
   program: CompiledSauceProgram,
@@ -823,11 +822,9 @@ export function svmKeyArguments(
   }
   program.entryParams.forEach((param, index) => {
     const value = values[index];
-    if (param.type === "Uint256" || param.type === "Int256") {
-      const spelled =
-        param.type === "Int256" ? /^(0x[0-9a-fA-F]+|-?\d+)$/ : /^(0x[0-9a-fA-F]+|\d+)$/;
+    if (param.type === "Uint256") {
       if (
-        (typeof value === "string" && spelled.test(value)) ||
+        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) ||
         typeof value === "number" ||
         typeof value === "bigint"
       ) {
@@ -1383,12 +1380,6 @@ export function svmPayload(
     );
   }
   const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
-  if (keyed && program.entryEncoding === "compact-v1") {
-    throw new UsageError(
-      "--compact-args: an Address argument on Solana is encoded as an ABI-v1 word only; compile " +
-        "without --compact-args, or take the key as an Account parameter",
-    );
-  }
 
   return hexToBytes(
     payloadOf(
@@ -1560,7 +1551,6 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
-  refusePastDeadline(input);
   const via = input.via ?? "kitchen";
   // Compiled with every swap the plain one; a swap whose stop binds is compiled again, below, to
   // the Stopped form. The arguments are checked before anything is read.

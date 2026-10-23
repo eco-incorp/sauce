@@ -2,11 +2,11 @@
 
 # Sonic
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Sonic a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Sonic a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one.
 
 To request Sonic, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Sonic%22) and add your
 use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Sonic+%28146%29&chain=Sonic&chain-id=146) with the chain-support issue form.
@@ -20,7 +20,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Name in a program | `Sonic` |
 | Native coin | not recorded |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
-| Intents (eco-routes) | none recorded |
 | CCTP domain | 13 |
 
 ## In a program

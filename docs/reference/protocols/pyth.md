@@ -17,34 +17,14 @@ High-fidelity oracle network providing low-latency price feeds from institutiona
 | Namespace | `Pyth` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **getPrice**: Read price from Pyth oracle by price feed ID
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Get price by feed ID
-import { PythOracleABI as IPythOracle } from "./abis";
-function main(
-  oracleAddress: Address,
-  priceId: Uint256,
-): { price: Int256; conf: Uint256; expo: Int256; publishTime: Uint256 } {
-  const oracle = IPythOracle.at(oracleAddress);
-  return oracle.getPrice(priceId);
-}
-```
 
 ## Notes
 
 - Pull-based oracle: users must call updatePriceFeeds before reading prices
 - Sub-second latency from institutional market data providers
-- `price` (ABI `int64`) and `expo` (ABI `int32`) are `Int256`; preserve their mathematical signs in arithmetic and comparisons. `conf` and `publishTime` remain `Uint256`
 - Actual price = price * 10^expo (e.g. price=12345, expo=-2 means $123.45)
 - Price feed IDs are bytes32 - see Pyth docs for specific feed IDs per asset
 - updatePriceFeeds requires sending ETH to pay the update fee (use getUpdateFee to check)
@@ -76,3 +56,9 @@ function main() {
 - `updatePriceFeeds(bytes[] updateData) payable`
 - `getPrice(bytes32 id) view returns ((int64 price, uint64 conf, int32 expo, uint256 publishTime) price)`
 - `getUpdateFee(bytes[] updateData) view returns (uint256 feeAmount)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

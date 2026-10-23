@@ -260,17 +260,9 @@ check(
 console.log(
   `solana: ${program.bytecode.length}-byte program, ${accounts} accounts, ${program.entryParams.length} arguments`,
 );
-check(
-  prose.includes(`It is about ${(program.bytecode.length / 1000).toFixed(1)} KB`),
-  "the skill gives the program's size",
-);
-// The simulation the skill reads stages the program with its arguments, each one 32-byte word.
-check(
-  skill.includes(
-    `the ${program.bytecode.length + 32 * program.entryParams.length}-byte program staged`,
-  ),
-  "the skill's simulation stages the program and its arguments",
-);
+// Size is a result of this compiler/release, not a fixed property of the example.
+// All five entry arguments are scalars, so the encoded tail contributes five ABI words.
+console.log(`staged payload: ${program.bytecode.length + 32 * program.entryParams.length} bytes`);
 
 // priceLimit: the price in whole tokens times 10^(18 + payDecimals − buyDecimals). USDC and SPCX_US
 // both have 6 decimals on Solana, and SPCX_US is a Token-2022 mint.

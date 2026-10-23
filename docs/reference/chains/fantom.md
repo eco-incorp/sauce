@@ -8,14 +8,11 @@
 > name a program writes for each contract. Fantom is a preview chain: programs compile and simulate
 > here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Fantom a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Fantom, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Fantom%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Fantom+%28250%29&chain=Fantom&chain-id=250) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Fantom a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -27,7 +24,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | In TypeScript | `import { Fantom } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | FTM (FTM), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | none recorded |
 
 ## In a program
 
@@ -64,3 +60,14 @@ address.
 | [SpookySwap](../protocols/spookyswap.md) | v2Router | `0xF491e7B69E4244ad4002BC14e878a34207E38c29` | `Spookyswap.V2Router` |
 | [SushiSwap V2](../protocols/sushiswap-v2.md) | factory | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../protocols/sushiswap-v2.md) | router | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` | `SushiswapV2.Router` |
+
+## Requesting support
+
+To request Fantom, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Fantom%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Fantom+%28250%29&chain=Fantom&chain-id=250) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

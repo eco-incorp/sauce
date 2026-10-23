@@ -77,7 +77,7 @@ function main(
     amount,
     0,
     onBehalf,
-    0x00,
+    hex``,
   );
   return 1;
 }
@@ -86,7 +86,7 @@ function main(
 - All 5 marketParams fields (loanToken, collateralToken, oracle, irm, lltv) identify the market
 - `amount`: Supply by assets (set shares param to 0)
 - `onBehalf`: Address that receives the supply position
-- `data`: Callback data, use `0x00` for no callback
+- `data`: Callback data, use ` hex`` ` for no callback
 - Requires ERC-20 approval of loanToken to the Morpho address
 
 ### withdraw
@@ -194,7 +194,7 @@ function main(
     amount,
     0,
     onBehalf,
-    0x00,
+    hex``,
   );
   return 1;
 }

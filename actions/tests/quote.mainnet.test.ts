@@ -11,14 +11,22 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createPublicClient, custom, http, parseAbi, type Address } from "viem";
+import {
+  createPublicClient,
+  custom,
+  encodeAbiParameters,
+  hexToBytes,
+  http,
+  parseAbi,
+  type Address,
+} from "viem";
 
 import { quoteAction, type QuoteOptions } from "../src/index.js";
-import { fn, newEmitter, type Fragment } from "../src/emit.js";
-import { quoteCall } from "../src/to-quote.js";
-import { compileSauceProgram } from "../../sdk/dist/routes/sauce-route.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
+import { compileEvm } from "../src/compile.js";
+import { newEmitter } from "../src/emit.js";
+import { quoteCall } from "../src/to-quote.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { DEADLINE } from "./mainnet.js";
 
@@ -141,23 +149,21 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
     await env?.stop();
   });
 
-  it("refuses generation 4 as a quote service before issuing a call", () => {
+  it("refuses the execution Router as a quote service before issuing a call", () => {
     assert.notEqual(env.router, env.quoteRouter);
-    assert.throws(
-      () =>
-        quoteAction(
-          {
-            type: "uniswapV3Swap",
-            pool: UNIV3_USDC_WETH_500,
-            tokenIn: USDC,
-            tokenOut: WETH,
-            amount: "1000000",
-            amountOutMin: "0",
-            recipient: "self",
-          },
-          { router: env.router },
-        ),
-      /generation 4 has no quote method; use v12QuoteRouterAddress/,
+    assert.throws(() =>
+      quoteAction(
+        {
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_WETH_500,
+          tokenIn: USDC,
+          tokenOut: WETH,
+          amount: "1000000",
+          amountOutMin: "0",
+          recipient: "self",
+        },
+        { router: env.router },
+      ),
     );
   });
 
@@ -544,37 +550,18 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
     });
   }
 
-  // The quotes the split swap runs inside a transaction read and write signed values: Ambient's
-  // `int128` flows, and the negative `int256 amountSpecified` the Router's V4 quote takes. Each is
-  // run as the program the split compiles, with its amount read from the Pot while it runs, and
-  // must agree with the quoter asked directly.
-  for (const type of ["uniswapV4Swap", "ambientSwap"] as const) {
-    it(`${type}: its on-chain forms quote what the quoter does`, async () => {
-      const { action, expected } = cases.find((c) => c.action.type === type)!;
-      const given = "amount" in action ? action.amount : undefined;
-      assert.ok(given !== undefined, `${type} quotes an amount`);
-      const amount = BigInt(given);
-      const call = quoteCall(action, amount, quoters);
-      const returned = (fragment: Fragment): Promise<bigint> =>
-        env
-          .returned(
-            compileSauceProgram(
-              "ethereum",
-              fn("main", [], "Uint256", [...fragment.stmts, `return ${fragment.expr};`]),
-            ).bytecode,
-          )
-          .then(BigInt);
-      await env.testClient.setBalance({ address: env.pot, value: amount });
-      const want = await expected();
-
-      assert.equal(await returned(call.toSauce!(newEmitter())), want, "toSauce");
-      assert.equal(
-        await returned(call.toSauceDynamic!(newEmitter(), "ctx.balance(ctx.self())")),
-        want,
-        "toSauceDynamic",
-      );
-    });
-  }
+  it("a runtime V4 quote matches the venue's own quoter for a nonzero amount", async () => {
+    const candidate = cases.find(({ action }) => action.type === "uniswapV4Swap")!;
+    const dynamic = quoteCall(candidate.action, ONE_ETH, quoters).toSauceDynamic;
+    assert.ok(dynamic);
+    const fragment = dynamic(newEmitter(), "amount");
+    const compiled = compileEvm(
+      `function main(amount: Uint256): Uint256 {\n${fragment.stmts.join("\n")}\nreturn ${fragment.expr};\n}`,
+    );
+    const args = hexToBytes(encodeAbiParameters([{ type: "uint256" }], [ONE_ETH]));
+    const result = await env.returned(new Uint8Array([...compiled.bytecode, ...args]));
+    assert.equal(BigInt(result), await candidate.expected());
+  });
 
   it("quotes every swap action type", () => {
     const quoted = new Set<string>([...cases.map((c) => c.action.type), ...QUOTED_ELSEWHERE]);

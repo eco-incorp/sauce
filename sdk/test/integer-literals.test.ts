@@ -64,14 +64,17 @@ const PROGRAMS: ReadonlyArray<readonly [string, string, ReadonlyArray<"evm" | "s
     "signed math",
     "function main(a: Uint256): Int256 { return Int256.fromBits(a) / -2$ + Int256(Math.mulDiv(a, 30$, 10000$)); }",
   ],
-  ["a signed constant", "function main(): Int256 { const d: Int256 = 1$ - 2$; return d; }"],
   [
-    "the smallest signed integer",
-    "function main(): Int256 { return -57896044618658097711785492504343953926634992332820282019728792003956564819968$; }",
+    "signed remainder and arithmetic shift",
+    "function main(a: Int256): Int256 { return (a % 3$) >> 1$; }",
   ],
   [
-    "a signed conversion",
-    "function main(a: Uint256): Uint256 { return Uint256.fromBits(Int256.fromBits(a) + -1$); }",
+    "checked integer conversions",
+    "function main(a: Uint256): Uint256 { return Uint256(Int256(a) + 1$); }",
+  ],
+  [
+    "signed bit roundtrip",
+    "function main(): Uint256 { return Uint256.fromBits(Int256.fromBits(~0$) / 2$); }",
   ],
   ["a script", "let total: Uint256 = 0$;\ntotal = total + 5$;"],
   [
@@ -106,4 +109,32 @@ describe("a plain integer literal compiles as its `n` spelling does", () => {
 
     expect(bytecode("evm", one, true)).not.toBe(bytecode("evm", other, true));
   });
+});
+
+describe("signed integer semantics", () => {
+  for (const target of BOTH) {
+    it.each([
+      ["division rounds toward zero", "Int256", "-7 / 2", "-3"],
+      ["remainder keeps the dividend's sign", "Int256", "-7 % 3", "-1"],
+      ["right shift extends the sign", "Int256", "-7 >> 1", "-4"],
+      ["unsigned bits become signed", "Int256", "Int256.fromBits(~0)", "-1"],
+      ["signed bits become unsigned", "Uint256", "Uint256.fromBits(-1)", "~0"],
+      ["negative values sort below unsigned values", "bool", "-1 < 0", "true"],
+    ])("%s, " + target, (_name, type, expression, expected) => {
+      expect(bytecode(target, `function main(): ${type} { return ${expression}; }`, true)).toBe(
+        bytecode(target, `function main(): ${type} { return ${expected}; }`, true),
+      );
+    });
+
+    it.each(["Int256(~0)", "Uint256(-1)"])(
+      "rejects an out-of-range checked conversion %s, " + target,
+      (expression) => {
+        for (const optimize of [true, false]) {
+          expect(() =>
+            bytecode(target, `function main() { return ${expression}; }`, optimize),
+          ).toThrow(/outside .*range/);
+        }
+      },
+    );
+  }
 });

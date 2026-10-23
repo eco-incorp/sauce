@@ -694,7 +694,7 @@ function swap(
     uint128 limitPrice,    // worst acceptable price as Q64.64 sqrt price
     uint128 minOut,        // minimum output tokens; reverts if not met
     uint8 reserveFlags     // 0x1 = use surplus for base, 0x2 = use surplus for quote
-) public payable returns (int128 baseFlow, int128 quoteFlow);
+) external payable returns (int128 baseFlow, int128 quoteFlow);
 ```
 
 #### userCmd (recommended method)
@@ -818,7 +818,7 @@ function exactInputSingle(
     bool tokenAIn,               // true = tokenA is input
     uint256 amountIn,            // exact input amount
     uint256 amountOutMinimum     // minimum output (slippage protection)
-) public payable returns (uint256 amountOut);
+) external payable returns (uint256 amountOut);
 ```
 
 #### exactInputMultiHop
@@ -973,7 +973,18 @@ When using `swapInWithCallback` or `swapOutWithCallback`, the pool sends output 
 
 #### Structs
 
+These view structures come from Fluid's
+[`IFluidDexT1` interface](https://github.com/instadapp/fluid-contracts-public/blob/main/contracts/protocols/dex/interfaces/iDexT1.sol).
+
 ```solidity
+struct Implementations {
+    address shift;
+    address admin;
+    address colOperations;
+    address debtOperations;
+    address perfectOperationsAndSwapOut;
+}
+
 struct ConstantViews {
     uint256 dexId;
     address liquidity;

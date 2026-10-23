@@ -8,14 +8,11 @@
 > with the name a program writes for each contract. Avalanche C-Chain is a preview chain: programs
 > compile and simulate here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Avalanche C-Chain a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Avalanche C-Chain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Avalanche+C-Chain%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Avalanche+C-Chain+%2843114%29&chain=Avalanche+C-Chain&chain-id=43114) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Avalanche C-Chain a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -27,7 +24,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | In TypeScript | `import { Avalanche } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | AVAX (AVAX), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | none recorded |
 | CCTP domain | 1 |
 
 ## In a program
@@ -101,6 +97,8 @@ address.
 | [Uniswap V2](../protocols/uniswap-v2.md) | factory | `0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C` | `UniswapV2.Factory` |
 | [Uniswap V2](../protocols/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD` | `UniswapV3.Factory` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0x655C406EBFa14EE2006250925e54ec43AD184f8B` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | quoterV2 | `0xbe0F5544EC67e9B3b2D979aaA43f18Fd87E6257F` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | swapRouter02 | `0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x06380c0e0912312b5150364b9dc4542ba0dbbc85` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd` | `UniswapV4.PositionManager` |
@@ -109,3 +107,14 @@ address.
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0x54a8e5f9c4CbA08F9943965859F6c34eAF03E26c` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x0e082F06FF657D94310cB8cE8B0D9a04541d8052` | `Wormhole.TokenBridge` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+
+## Requesting support
+
+To request Avalanche C-Chain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Avalanche+C-Chain%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Avalanche+C-Chain+%2843114%29&chain=Avalanche+C-Chain&chain-id=43114) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

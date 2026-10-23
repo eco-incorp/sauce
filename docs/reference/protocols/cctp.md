@@ -22,8 +22,7 @@ on this chain, Circle attests the burn, and a `receiveMessage` on the destinatio
 
 - Move USDC to another chain as native USDC, with Circle's attestation as the only trust.
 - Only the burn happens in the program's transaction. The mint is a separate transaction on the
-  destination, sent by anyone with the attestation; to run code there too, open a Sauce intent
-  ([intents](../../guides/intents.md)).
+  destination, sent by anyone with the attestation.
 
 ## Pitfalls for a program
 
@@ -85,3 +84,9 @@ function main() {
 `import TokenMessengerABI from "./protocols/cctp/TokenMessengerABI.json";` Speaks for: tokenMessenger.
 
 - `depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

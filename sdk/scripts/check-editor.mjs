@@ -14,7 +14,8 @@
 //
 // `checkRepositoryEditor`, in this repository's own checkout: every program it tracks belongs to the
 // root tsconfig.json, with the declarations of the build and the plugin of the SDK workspace, and
-// shows no error; a real mistake still shows; the TypeScript beside the programs keeps its project.
+// shows no error; a real mistake still shows; the TypeScript beside the programs keeps its project;
+// and the declarations the build ships compile on their own with `skipLibCheck` off.
 //
 // `check-packed-package.mjs` runs the first against the installed tarball, `pnpm docs:check` the
 // second; `node check-editor.mjs <project> <tsserver.js> <program.sauce.ts>…` runs the first on its
@@ -22,7 +23,8 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { createRequire } from "node:module";
+import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** A tsserver session: `request(command, args)` resolves with the response's body. */
@@ -114,6 +116,41 @@ const assertMistakeShows = (shown) =>
     `a misspelled builtin still shows:\n${shown.join("\n")}`,
   );
 
+/**
+ * The SauceScript declarations the build ships (`sdk/dist/sauce-script/index.d.ts`, the
+ * `builtins.d.ts` it references and the routes declarations both import), compiled with a
+ * `programs/` project's options but `skipLibCheck` off. A project skips a declaration file's own
+ * errors, so a name one of them imports that no longer exists types as nothing there, silently;
+ * here it is an error.
+ */
+async function assertDeclarationsCompile(root, tsserverPath) {
+  const ts = createRequire(tsserverPath)("./typescript.js");
+  const { sauceScriptTsconfig } = await import(
+    pathToFileURL(join(root, "sdk/dist/cli/skills.js")).href
+  );
+  const index = join(root, "sdk/dist/sauce-script/index.d.ts");
+  // The plugin is the editor's; the compiler loads none.
+  const config = { ...sauceScriptTsconfig("@eco-incorp/sauce").compilerOptions };
+  delete config.plugins;
+  const { options, errors } = ts.convertCompilerOptionsFromJson(
+    { ...config, types: [], skipLibCheck: false },
+    dirname(index),
+  );
+  assert.deepEqual(errors, [], "a programs/ project's options convert");
+  const program = ts.createProgram([index], options);
+  const shipped = program
+    .getSourceFiles()
+    .filter((file) => file.fileName.startsWith(join(root, "sdk/dist/")));
+  assert.ok(shipped.length >= 3, "index.d.ts reaches builtins.d.ts and the routes declarations");
+  const shown = ts.getPreEmitDiagnostics(program).map((d) => {
+    const at = d.file === undefined ? "" : relative(root, d.file.fileName);
+    const line = d.file === undefined ? 0 : d.file.getLineAndCharacterOfPosition(d.start ?? 0).line;
+
+    return `${at}:${line + 1} TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`;
+  });
+  assert.deepEqual(shown, [], "the shipped SauceScript declarations compile with skipLibCheck off");
+}
+
 export async function checkEditor({ project, tsserverPath, programs }) {
   const dir = join(project, "programs");
   mkdirSync(dir, { recursive: true });
@@ -166,6 +203,7 @@ export async function checkEditor({ project, tsserverPath, programs }) {
  * tsconfig.json's project, with no error. A program reopened as a bigint index beside a number
  * still shows none — the plugin loaded — and reopened as a misspelled builtin shows it. A
  * skill's runner, a docs example's TypeScript and the SDK's own source each keep their project.
+ * The declarations those programs are typed by compile with `skipLibCheck` off.
  * Returns how many programs it checked.
  */
 export async function checkRepositoryEditor({ root, tsserverPath }) {
@@ -181,6 +219,7 @@ export async function checkRepositoryEditor({ root, tsserverPath }) {
   const example = tracked("docs/examples/*.ts").find((path) => !path.endsWith(".sauce.ts"));
   const source = join(root, "sdk/src/index.ts");
 
+  await assertDeclarationsCompile(root, tsserverPath);
   const server = tsserver(tsserverPath, root);
   try {
     for (const file of [...programs, runner, example, source]) server.notify("open", { file });

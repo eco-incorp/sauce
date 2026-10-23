@@ -3,12 +3,8 @@
 // does, so what runs is the package's public `exports`. Kept free of anything environment-specific:
 // the same text is the Node run and the browser run.
 import { ready, routes, deposit } from "@eco-incorp/sauce";
-import {
-  compile,
-  decodeCompactArguments,
-  encodeCompactArguments,
-  resolveSdkModule,
-} from "@eco-incorp/sauce/compiler";
+import { compile, resolveSdkModule } from "@eco-incorp/sauce/compiler";
+import { decodeAbiParameters, encodeAbiParameters, hexToBytes } from "viem";
 import { settleSource } from "@eco-incorp/sauce/recipes";
 import { compileProgram, parseProgram } from "@eco-incorp/sauce/actions";
 
@@ -44,22 +40,30 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's route example, verbatim: `Base(() => { USDC.approve(...) }, options).reward(...)`.
-  // Imported only now, because building the route compiles it.
-  const { built } = await import("./readme-route.mjs");
+  // A standalone program compiled for Base with `compileSauceProgram`, as an application does: the
+  // chain's names (`USDC`, `Uniswap`) are not imports. Once taking `amount` as it runs, once with
+  // `amount` bound through `args`.
+  const programText = [
+    "function main(amount: Uint256): void {",
+    "  USDC.approve(Uniswap.UniversalRouter, amount);",
+    "}",
+  ].join("\n");
+  const program = routes.compileSauceProgram("base", programText);
+  const bound = routes.compileSauceProgram("base", programText, { args: [1_000_000n] });
 
-  // A raw compile with compact entry arguments, on both targets, round-tripped through the codec.
+  // A raw compile with ABI entry arguments, on both targets, round-tripped through the codec.
   const raw = {};
   const entry = utf8("function main(x: Uint256, y: Uint256): Uint256 { return x * y + 1n; }");
   for (const target of ["evm", "svm"]) {
-    const artifact = compile({ target, compactArgs: true, resolve: () => entry });
-    const payload = encodeCompactArguments(artifact.entrySchema, [6n, 7n]);
+    const artifact = compile({ target, resolve: () => entry });
+    const params = [{ type: "uint256" }, { type: "uint256" }];
+    const encoded = encodeAbiParameters(params, [6n, 7n]);
+    const payload = hexToBytes(encoded);
     raw[target] = {
       bytecode: hex(artifact.bytecode),
       entryEncoding: artifact.entryEncoding,
-      entrySchema: hex(artifact.entrySchema),
       payload: hex(payload),
-      decoded: decodeCompactArguments(artifact.entrySchema, payload).map(String),
+      decoded: decodeAbiParameters(params, encoded).map(String),
       manifest: artifact.manifest ?? null,
     };
   }
@@ -139,9 +143,13 @@ export async function run(source) {
   );
 
   return {
-    readme: {
-      bytecode: built.compiled.bytecode.map(hex),
-      intentHash: built.hash().intentHash,
+    program: {
+      bytecode: hex(program.bytecode),
+      entryEncoding: program.entryEncoding,
+      entryParams: program.entryParams.map((param) => `${param.name}:${param.type}`),
+      args: hex(routes.encodeEntryArguments(program, [1_000_000n])),
+      bound: hex(bound.bytecode),
+      boundParams: bound.entryParams.length,
     },
     raw,
     settle: hex(settle.bytecode),

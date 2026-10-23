@@ -17,49 +17,10 @@ Decentralized perpetual exchange with risk-tranched liquidity pools. Senior (low
 | Namespace | `LevelFinance` on bsc, arbitrum |
 | Chains | bsc, arbitrum |
 
-## Key Operations
+## What it offers
 
 - **addLiquidity**: Add liquidity to a specific risk tranche
 - **removeLiquidity**: Remove liquidity from a tranche
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Add liquidity to tranche
-import { LiquidityPoolABI as ILiquidityPool } from "./abis";
-function main(
-  poolAddress: Address,
-  tranche: Address,
-  token: Address,
-  amountIn: Uint256,
-  minLpAmount: Uint256,
-  to: Address,
-): Uint256 {
-  const pool = ILiquidityPool.at(poolAddress);
-  pool.addLiquidity(tranche, token, amountIn, minLpAmount, to);
-  return 1;
-}
-
-// Remove liquidity from tranche
-import { LiquidityPoolABI as ILiquidityPool } from "./abis";
-function main(
-  poolAddress: Address,
-  tranche: Address,
-  tokenOut: Address,
-  lpAmount: Uint256,
-  minOut: Uint256,
-  to: Address,
-): Uint256 {
-  const pool = ILiquidityPool.at(poolAddress);
-  pool.removeLiquidity(tranche, tokenOut, lpAmount, minOut, to);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -95,3 +56,9 @@ function main() {
 - `addLiquidity(address tranche, address token, uint256 amountIn, uint256 minLpAmount, address to)`
 - `removeLiquidity(address tranche, address tokenOut, uint256 lpAmount, uint256 minOut, address to)`
 - `swap(address tokenIn, address tokenOut, uint256 minOut, address to, bytes extradata)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

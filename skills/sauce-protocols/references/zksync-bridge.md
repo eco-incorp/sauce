@@ -25,7 +25,7 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
   return proxy.requestL2Transaction(
     recipient,
     ctx.msgValue(),
-    0x00,
+    hex``,
     l2GasLimit,
     800,
     [],
@@ -36,7 +36,7 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
 
 - `recipient`: Address to receive ETH on zkSync L2 (also the contract to call if `_calldata` is provided)
 - `_l2Value`: Amount of ETH to send to the recipient on L2 (use `msg.value`)
-- `_calldata`: Optional calldata to execute on L2. `0x00` for simple ETH deposits
+- `_calldata`: Optional calldata to execute on L2. ` hex`` ` for simple ETH deposits
 - `_l2GasLimit`: Gas limit for L2 execution (e.g. 300000)
 - `_l2GasPerPubdataByteLimit`: Gas per pubdata byte limit (800 is the standard value)
 - `_factoryDeps`: Array of contract bytecodes to deploy on L2. Empty `[]` for standard operations

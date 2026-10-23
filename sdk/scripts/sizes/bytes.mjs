@@ -1,5 +1,5 @@
-// A sha256 of every example and recipe program an SDK tree compiles, of each intent body, and of
-// what a refused compile says, by file and chain, as JSON on stdout. Usage:
+// A sha256 of every example and recipe program an SDK tree compiles, and of what a refused
+// compile says, by file and chain, as JSON on stdout. Usage:
 //   SAUCE_COMPILER_PKG=<compiler>/crates/sauce-wasm/pkg \
 //     node --import ./register.mjs bytes.mjs <sdk-tree> > bytes.json
 // <sdk-tree> is an eco-incorp/sauce checkout whose SDK is built (`pnpm build`). Without
@@ -25,14 +25,6 @@ const files = dirs
       .filter((name) => name.endsWith(".sauce.ts"))
       .map((name) => join(dir, name)),
   );
-const options = {
-  intents: {
-    executionFee: 1000n,
-    deadline: 2000000000n,
-    openedAt: 1900000000n,
-    salt: `0x${"5a".repeat(32)}`,
-  },
-};
 const hashes = {};
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 const said = (error) =>
@@ -48,7 +40,7 @@ for (const file of files) {
   };
   for (const chain of ["base", "ethereum", "solana"]) {
     try {
-      const program = compileSauceProgram(chain, text, { ...options, resolve });
+      const program = compileSauceProgram(chain, text, { resolve });
       hashes[`${file.slice(root.length + 1)}@${chain}`] = [
         sha(program.bytecode),
         ...(program.bodies ?? []).map((body) => sha(body.bytecode)),

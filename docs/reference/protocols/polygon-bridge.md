@@ -17,55 +17,6 @@ Official Polygon PoS bridge via RootChainManager. Supports ETH, ERC-20, ERC-721,
 | Namespace | `PolygonBridge` on ethereum, polygon |
 | Chains | ethereum, polygon |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### depositETH
-
-Deposit ETH from Ethereum to Polygon (received as WETH on Polygon).
-
-```typescript
-import { PolygonRootChainManagerABI as IRootChainManager } from "./abis";
-
-function main(rootChainManagerAddress: Address, recipient: Address): Uint256 {
-  const manager = IRootChainManager.at(rootChainManagerAddress);
-  manager.depositEtherFor(recipient);
-  return 1;
-}
-```
-
-- `recipient`: Address to receive WETH on Polygon
-- ETH amount is sent as `msg.value`
-- ETH is received as WETH on Polygon (Polygon uses WMATIC as native token)
-
-### depositERC20
-
-Deposit ERC-20 tokens from Ethereum to Polygon.
-
-```typescript
-import { PolygonRootChainManagerABI as IRootChainManager } from "./abis";
-
-function main(
-  rootChainManagerAddress: Address,
-  recipient: Address,
-  rootToken: Address,
-  depositData: bytes,
-): Uint256 {
-  const manager = IRootChainManager.at(rootChainManagerAddress);
-  manager.depositFor(recipient, rootToken, depositData);
-  return 1;
-}
-```
-
-- `recipient`: Address to receive tokens on Polygon
-- `rootToken`: L1 (Ethereum) ERC-20 token address
-- `depositData`: ABI-encoded amount as bytes. Encode via `abi.encode(uint256 amount)`
-- Requires ERC-20 approval to the **ERC20Predicate** contract (NOT the RootChainManager)
-
 ## Notes
 
 - **L1 to L2** deposits via RootChainManager. **L2 to L1** withdrawals require burning tokens on Polygon, then calling `exit()` on L1 with the burn proof
@@ -107,3 +58,9 @@ function main() {
 - `depositEtherFor(address user) payable`
 - `depositFor(address user, address rootToken, bytes depositData)`
 - `exit(bytes inputData)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

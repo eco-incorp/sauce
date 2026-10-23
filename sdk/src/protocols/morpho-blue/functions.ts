@@ -3,7 +3,7 @@ import { MorphoABI as IMorpho } from "./abis";
 
 function main(morphoAddress: Address, loanToken: Address, collateralToken: Address, oracle: Address, irm: Address, lltv: Uint256, amount: Uint256, onBehalf: Address): Uint256 {
   const morpho = IMorpho.at(morphoAddress);
-  morpho.supply({loanToken: loanToken, collateralToken: collateralToken, oracle: oracle, irm: irm, lltv: lltv}, amount, 0, onBehalf, "");
+  morpho.supply({loanToken: loanToken, collateralToken: collateralToken, oracle: oracle, irm: irm, lltv: lltv}, amount, 0, onBehalf, hex\`\`);
   return 1;
 }
 `;
@@ -33,7 +33,7 @@ import { MorphoABI as IMorpho } from "./abis";
 
 function main(morphoAddress: Address, loanToken: Address, collateralToken: Address, oracle: Address, irm: Address, lltv: Uint256, amount: Uint256, onBehalf: Address): Uint256 {
   const morpho = IMorpho.at(morphoAddress);
-  morpho.repay({loanToken: loanToken, collateralToken: collateralToken, oracle: oracle, irm: irm, lltv: lltv}, amount, 0, onBehalf, "");
+  morpho.repay({loanToken: loanToken, collateralToken: collateralToken, oracle: oracle, irm: irm, lltv: lltv}, amount, 0, onBehalf, hex\`\`);
   return 1;
 }
 `;

@@ -13,11 +13,10 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 
 - `supply` pulls the asset with `transferFrom`: approve the Pool for exactly the amount first.
 - `onBehalfOf` receives the aTokens, and with them the position. Every call comes from the Pot,
-  so `ctx.self()` there keeps the position in the Pot, not in the user's wallet; ask the user
-  which they want, and pass their wallet as a `main` parameter to give it to them. A position in
-  the wallet is the wallet's: `withdraw` burns the caller's aTokens, so a later cook withdraws it
-  only once they are back in the Pot, and borrows against it only with the wallet's credit
-  delegation.
+  so `ctx.self()` there keeps the position in the Pot, not in the user's wallet; choose which, and
+  pass the wallet as a `main` parameter to give it to the user. A position in the wallet is the
+  wallet's: `withdraw` burns the caller's aTokens, so a later cook withdraws it only once they are
+  back in the Pot, and borrows against it only with the wallet's credit delegation.
 - The aToken minted to `onBehalfOf` is rebasing: its balance grows with interest, so measure it
   as a delta, not as the amount supplied.
 - A reserve can be frozen, paused or at its supply cap, and then `supply` reverts.

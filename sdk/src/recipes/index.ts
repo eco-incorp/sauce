@@ -75,27 +75,3 @@ import { recipeSource } from "../embedded/recipes.js";
 export function settleSource(): string {
   return recipeSource("recipes/settle.sauce.ts");
 }
-
-/**
- * The CCTP transfer demo — a BUILDER that constructs V2 `Intent`s via the cross-chain intent DSL,
- * distinct in kind from the source-shipped `settle` recipe above but built the SAME way underneath:
- * its two route PROGRAMS are standalone `.sauce.ts` assets (`cctp-split.sauce.ts`,
- * `plain-transfer.sauce.ts`) whose module-level consts are replaced with each intent's values via
- * `defines` — `CCTP_*` for the split (`cctp-transfer.ts:107`), `XFER_*` for the baseline (`:128`). That is the compile-time channel, and it
- * is a DIFFERENT mechanism from `settle.sauce.ts`, whose `main` takes its values as runtime entry
- * arguments and so compiles to one invariant program.
- *
- * A Base→Arbitrum USDC transfer "with interop/CCTP and without": `buildCctpSplitTransfer` splits the
- * amount into N sub-`perMessageLimit` `depositForBurn` chunks burned in ONE atomic cook (all-or-revert
- * on the source chain); `buildPlainTransfer` is the no-bridge baseline. Both programs read `USDC` and
- * `Cctp.TokenMessenger` from the DSL registries — no hardcoded ABIs or addresses. `cctpSplitSource()` /
- * `plainTransferSource()` return the raw program text, the same way `settleSource()` does. See
- * `cctp-transfer.ts`.
- */
-export {
-  buildCctpSplitTransfer,
-  buildPlainTransfer,
-  cctpSplitSource,
-  plainTransferSource,
-  type CctpTransferParams,
-} from "./cctp-transfer.js";

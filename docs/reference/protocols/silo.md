@@ -17,81 +17,6 @@ Permissionless lending protocol with isolated risk markets (Silos). Each Silo is
 | Namespace | `Silo` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### deposit
-
-Deposit assets into a Silo.
-
-```typescript
-import { SiloABI as ISilo } from "./abis";
-
-function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
-  const silo = ISilo.at(siloAddress);
-  silo.deposit(asset, amount, false);
-  return 1;
-}
-```
-
-- `siloAddress`: The specific Silo contract (use SiloRepository.getSilo to find it)
-- `asset`: Token to deposit
-- `collateralOnly`: `false` = standard deposit (can be borrowed by others), `true` = collateral-only (higher LTV but cannot be lent out)
-- Requires ERC-20 approval to the Silo
-
-### withdraw
-
-Withdraw deposited assets.
-
-```typescript
-import { SiloABI as ISilo } from "./abis";
-
-function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
-  const silo = ISilo.at(siloAddress);
-  const result = silo.withdraw(asset, amount, false);
-  return result.withdrawnAmount;
-}
-```
-
-- `collateralOnly`: Must match the deposit type
-- Returns actual amount withdrawn
-
-### borrow
-
-Borrow assets from a Silo against deposited collateral.
-
-```typescript
-import { SiloABI as ISilo } from "./abis";
-
-function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
-  const silo = ISilo.at(siloAddress);
-  silo.borrow(asset, amount);
-  return 1;
-}
-```
-
-- Must have collateral deposited in the same Silo first
-
-### repay
-
-Repay borrowed assets.
-
-```typescript
-import { SiloABI as ISilo } from "./abis";
-
-function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
-  const silo = ISilo.at(siloAddress);
-  silo.repay(asset, amount);
-  return 1;
-}
-```
-
-- Requires ERC-20 approval to the Silo
-
 ## Notes
 
 - Each Silo is an isolated two-asset market -- risk from one market cannot spread to others
@@ -135,3 +60,9 @@ function main() {
 `import SiloRepositoryABI from "./protocols/silo/SiloRepositoryABI.json";` Speaks for: siloRepository.
 
 - `getSilo(address asset) view returns (address silo)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -7,12 +7,10 @@
  *
  * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program: ABI-v1
  * (`abi.encode` of the parameters in order, no selector, except that a tuple parameter is always
- * behind an offset — `encodeAbiEntry`) by default, compact-v1 under `compactArgs`.
+ * behind an offset — `encodeAbiEntry`).
  * `encodeEntryArguments` checks each value against the type the program declares and encodes it in
  * the encoding the program was compiled for. Only annotations are types here: a parameter without
- * one is a `Uint256`, as the compiler reads it. An integer is a `Uint256` (0 to 2^256 - 1) or an
- * `Int256` (-2^255 to 2^255 - 1, the ABI's `int256`: a negative value travels as its
- * two's-complement word and is read back signed).
+ * one is a `Uint256`, as the compiler reads it.
  */
 import { address as svmAddress, getAddressEncoder, isAddress as isSvmKey } from "@solana/kit";
 import {
@@ -32,12 +30,7 @@ import {
   type Hex,
 } from "viem";
 
-import {
-  decodeCompactArguments,
-  encodeCompactArguments,
-  type CompactValue,
-} from "../compact-arguments.js";
-import { collectPatternNames, isTypeDeclaration, TYPE_KEYS, type AstNode } from "./ast-walk.js";
+import type { AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
@@ -45,15 +38,14 @@ import type { CompiledSauceProgram } from "./sauce-route.js";
 /** One of `main`'s runtime parameters, as the program declares it. */
 export interface EntryParam {
   readonly name: string;
-  /** The declared type as written (`Address`, `Uint256[]`, `Int256`, `{ amount: Uint256 }`);
-   *  `Uint256` when the parameter has no annotation. */
+  /** The declared type as written (`Address`, `Uint256[]`, `{ amount: Uint256 }`); `Uint256` when
+   *  the parameter has no annotation. */
   readonly type: string;
 }
 
-/** A value for an entry parameter: a `Uint256` as a bigint, safe-integer number or digit string; an
- *  `Int256` the same, a negative one included (`-5n`, `-5`, `"-5"`); an address as hex, a `bool` as
- *  a boolean, `bytes` as a `Uint8Array` or hex, an array as an array, and a tuple as an array of
- *  its fields in order or an object naming them. */
+/** A value for an entry parameter: a scalar as a bigint, safe-integer number or integer string, an
+ *  address as hex, a `bool` as a boolean, `bytes` as a `Uint8Array` or hex, an array as an array,
+ *  and a tuple as an array of its fields in order or an object naming them. */
 export type EntryValue =
   | bigint
   | number
@@ -64,15 +56,13 @@ export type EntryValue =
   | { readonly [field: string]: EntryValue };
 
 /** What `encodeEntryArguments` reads of a compiled program. */
-type ProgramEntry = Pick<CompiledSauceProgram, "entryEncoding" | "entrySchema" | "entryParams">;
+type ProgramEntry = Pick<CompiledSauceProgram, "entryEncoding" | "entryParams">;
 
 // ---------------------------------------------------------------------------------------------
 // Finding `main`'s signature
 // ---------------------------------------------------------------------------------------------
 
 interface MainSignature {
-  readonly program: AstNode;
-  readonly node: AstNode;
   /** Index of the `(` opening the parameter list, and of the `)` closing it. */
   readonly open: number;
   readonly close: number;
@@ -80,69 +70,49 @@ interface MainSignature {
   readonly returnEnd: number;
 }
 
-/** Parse only the signature here: body syntax errors belong to the compile diagnostic phase.
- *  Blanking the prefix keeps every parameter and annotation at its original source offset. */
-function signatureSource(source: string): string {
-  const code = blankLiterals(source);
-  const found = /(^|[^.\w$])function\s+main\s*(?:<[^()]*>)?\s*\(/.exec(code);
-  if (found === null) return "";
-  const start = found.index + found[1]!.length;
-  const open = found.index + found[0].length - 1;
-  let depth = 1;
-  let close = open;
-  while (++close < code.length) {
-    if (code[close] === "(") depth++;
-    else if (code[close] === ")" && --depth === 0) break;
-  }
-  if (close === code.length) return "";
-  const colon = /^\s*:/.exec(code.slice(close + 1));
-  let end = close + 1;
-  if (colon !== null) {
-    let started = false;
-    for (end += colon[0].length; end < code.length; end++) {
-      const ch = code[end]!;
-      if (ch === "{" && depth === 0 && started) break;
-      if (ch === "<" || ch === "{" || ch === "[" || ch === "(") depth++;
-      else if (ch === ">" || ch === "}" || ch === "]" || ch === ")") depth--;
-      if (!/\s/.test(ch)) started = true;
-    }
+const MAIN = /(^|[^.\w$])function\s+main\s*\(/;
+
+/** The end of the type starting at `from` in blanked `code`: at the body's `{` or end of input. */
+function endOfType(code: string, from: number): number {
+  let depth = 0;
+  let started = false;
+  for (let i = from; i < code.length; i++) {
+    const ch = code[i]!;
+    if (ch === "{" && depth === 0 && started) return i;
+    if (ch === "<" || ch === "{" || ch === "[" || ch === "(") depth++;
+    else if (ch === ">" || ch === "}" || ch === "]" || ch === ")") depth--;
+    if (!/\s/.test(ch)) started = true;
   }
 
-  return source.slice(0, start).replace(/[^\r\n]/g, " ") + source.slice(start, end) + "\n{}";
+  return code.length;
 }
 
 function locateMain(source: string): MainSignature | undefined {
-  const program = parseSauce(source);
-  for (const statement of program.body as AstNode[]) {
-    const node =
-      statement.type === "ExportNamedDeclaration"
-        ? (statement.declaration as AstNode | null)
-        : statement;
-    if (node?.type !== "FunctionDeclaration" || (node.id as AstNode | null)?.name !== "main") {
-      continue;
-    }
-    const code = blankLiterals(source);
-    const id = node.id as AstNode;
-    const typeParameters = node.typeParameters as AstNode | undefined;
-    const returnType = node.returnType as AstNode | undefined;
-    const body = node.body as AstNode;
-    const open = code.indexOf("(", typeParameters?.end ?? id.end);
-    const close = code.lastIndexOf(")", (returnType?.start ?? body.start) - 1);
+  const code = blankLiterals(source);
+  const found = MAIN.exec(code);
+  if (found === null) return undefined;
 
-    return { program, node, open, close, returnEnd: returnType?.end ?? close + 1 };
-  }
-
-  return undefined;
+  return signatureAt(code, found.index + found[0].length - 1);
 }
 
-/** Parameter identities and annotations come from the parser, never from comments in their text. */
-function declaredParams(main: MainSignature): AstNode[] {
-  const params = main.node.params as AstNode[];
-  if (params.some((param) => param.type !== "Identifier")) {
-    throw new TypeError("main parameters must be named identifiers");
+/** The signature whose parameter list opens at `open` in blanked `code`. */
+function signatureAt(code: string, open: number): MainSignature | undefined {
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === "(") depth++;
+    else if (code[i] === ")" && --depth === 0) {
+      close = i;
+      break;
+    }
   }
+  if (close < 0) return undefined;
+  const colon = /^\s*:/.exec(code.slice(close + 1));
+  let returnEnd = colon === null ? close + 1 : endOfType(code, close + 1 + colon[0].length);
+  // The annotation ends with its type, not with the space before the body's brace.
+  while (returnEnd > close + 1 && /\s/.test(code[returnEnd - 1]!)) returnEnd--;
 
-  return params;
+  return { open, close, returnEnd };
 }
 
 /** `text` split at its top-level commas (or other `separators`) — not those inside `<>`, `{}`, `[]`
@@ -190,7 +160,7 @@ export interface MainSignatureText {
 
 /**
  * Whether the body whose `{` is at `brace` in blanked `code` returns a value: a `return` with an
- * operand, outside any arrow function's own block (an intent's closure) inside it.
+ * operand, outside any arrow function's own block inside it.
  */
 function bodyReturnsValue(code: string, brace: number): boolean {
   const token = /=>\s*\{|[{}]|(?<![.\w$])return\b(?!\s*[;}])/g;
@@ -215,7 +185,7 @@ function bodyReturnsValue(code: string, brace: number): boolean {
 
 /** `main`'s signature as `source` writes it; `undefined` with no `main`. */
 export function mainSignature(source: string): MainSignatureText | undefined {
-  const main = locateMain(signatureSource(source));
+  const main = locateMain(source);
   if (main === undefined) return undefined;
   const params = source.slice(main.open + 1, main.close);
   const returns = source.slice(main.close + 1, main.returnEnd);
@@ -227,7 +197,7 @@ export function mainSignature(source: string): MainSignatureText | undefined {
     close: main.close,
     params,
     returns,
-    names: declaredParams(main).map((param) => param.name as string),
+    names: splitTopLevel(params).map((param) => splitParam(param).name),
     returnsValue:
       returns.trim() === ""
         ? brace >= 0 && bodyReturnsValue(code, brace)
@@ -241,30 +211,15 @@ export function mainSignature(source: string): MainSignatureText | undefined {
  * since that is what a value for it is encoded against.
  */
 export function mainParams(source: string): EntryParam[] {
-  const main = locateMain(signatureSource(source));
+  const main = locateMain(source);
   if (main === undefined) return [];
+  const params = splitTopLevel(source.slice(main.open + 1, main.close)).map(splitParam);
+  const records = params.some((param) => param.type !== undefined) ? interfaces(source) : new Map();
 
-  return entryParams(source, main);
-}
-
-function entryParams(source: string, main: MainSignature, program?: AstNode): EntryParam[] {
-  const params = declaredParams(main);
-  const records = params.some((param) => param.typeAnnotation !== undefined)
-    ? interfaces(source, program)
-    : new Map<string, string>();
-
-  return params.map((param) => {
-    const annotation = (param.typeAnnotation as { typeAnnotation: AstNode } | undefined)
-      ?.typeAnnotation;
-
-    return {
-      name: param.name as string,
-      type:
-        annotation === undefined
-          ? "Uint256"
-          : inlineRecords(source.slice(annotation.start, annotation.end), records),
-    };
-  });
+  return params.map(({ name, type }) => ({
+    name,
+    type: type === undefined ? "Uint256" : inlineRecords(type, records),
+  }));
 }
 
 /**
@@ -273,7 +228,7 @@ function entryParams(source: string, main: MainSignature, program?: AstNode): En
  * or `void`, or there is no `main`.
  */
 export function mainReturnType(source: string): string | undefined {
-  const main = locateMain(signatureSource(source));
+  const main = locateMain(source);
   if (main === undefined) return undefined;
   const annotation = source
     .slice(main.close + 1, main.returnEnd)
@@ -285,9 +240,9 @@ export function mainReturnType(source: string): string | undefined {
 }
 
 /** Each `interface` the module declares, as the inline object type it names. */
-function interfaces(source: string, program = parseSauce(source)): ReadonlyMap<string, string> {
+function interfaces(source: string): ReadonlyMap<string, string> {
   const records = new Map<string, string>();
-  for (const node of program.body as AstNode[]) {
+  for (const node of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
     const declaration =
       node.type === "ExportNamedDeclaration" ? (node.declaration as AstNode | null) : node;
     if (declaration?.type !== "TSInterfaceDeclaration") continue;
@@ -357,8 +312,8 @@ export function parseEntryType(text: string): EntryType {
   const scalar = SCALARS[type.replace(/<[^]*>$/, "")];
   if (scalar === undefined) {
     throw new TypeError(
-      `'${type}' is not a type an entry argument can be encoded for: Uint256, Int256, Address, ` +
-        "Account, bool, bytes, string, T[] or an inline { field: T } tuple",
+      `'${type}' is not a type an entry argument can be encoded for: Uint256, Int256, Address, Account, ` +
+        "bool, bytes, string, T[] or an inline { field: T } tuple",
     );
   }
 
@@ -402,50 +357,32 @@ const shown = (value: unknown): string =>
         ? "a byte array"
         : (JSON.stringify(value) ?? String(value));
 
-const INT256_MIN = -(1n << 255n);
-const INT256_MAX = (1n << 255n) - 1n;
-
-/** The integer a value for an `Int256` spells: a bigint, a safe-integer number, or digits (decimal,
- *  or `0x` hex for the magnitude) with an optional minus. `undefined` for anything else; the range
- *  is the caller's. */
-function signedInteger(value: EntryValue): bigint | undefined {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number") return Number.isSafeInteger(value) ? BigInt(value) : undefined;
-  const spelled = typeof value === "string" ? /^(-?)(\d+|0x[0-9a-fA-F]+)$/.exec(value) : null;
-  if (spelled === null) return undefined;
-  const magnitude = BigInt(spelled[2]!);
-
-  return spelled[1] === "-" ? -magnitude : magnitude;
-}
-
-/** Normalized for both encoders: scalars as bigint, addresses and bytes as hex, tuples as arrays. */
+/** Normalized for ABI encoding: scalars as bigint, addresses and bytes as hex, tuples as arrays. */
 type Normalized = bigint | boolean | string | Uint8Array | Normalized[];
 
-function normalize(type: EntryType, value: EntryValue, at: string, compact: boolean): Normalized {
+function normalize(type: EntryType, value: EntryValue, at: string): Normalized {
   const fail = (what: string): never => {
     throw new TypeError(`${at}: ${shown(value)} is not ${what}`);
   };
   switch (type.kind) {
-    case "uint": {
+    case "uint":
+    case "int": {
       const word =
         typeof value === "bigint"
           ? value
           : typeof value === "number" && Number.isSafeInteger(value)
             ? BigInt(value)
-            : typeof value === "string" && /^(?:\d+|0x[0-9a-fA-F]+)$/.test(value)
+            : typeof value === "string" && /^(?:-?\d+|0x[0-9a-fA-F]+)$/.test(value)
               ? BigInt(value)
               : undefined;
-      if (word === undefined || word < 0n || word >= 1n << 256n) {
-        return fail("an unsigned integer below 2^256 (a bigint, a safe integer, or its digits)");
-      }
-
-      return word;
-    }
-    case "int": {
-      const word = signedInteger(value);
-      if (word === undefined || word < INT256_MIN || word > INT256_MAX) {
+      const signed = type.kind === "int";
+      const min = signed ? -(1n << 255n) : 0n;
+      const max = signed ? 1n << 255n : 1n << 256n;
+      if (word === undefined || word < min || word >= max) {
         return fail(
-          "a signed integer from -2^255 to 2^255 - 1 (a bigint, a safe integer, or its digits)",
+          signed
+            ? "a signed integer from -2^255 through 2^255 - 1 (a bigint, a safe integer, or its digits)"
+            : "an unsigned integer below 2^256 (a bigint, a safe integer, or its digits)",
         );
       }
 
@@ -463,21 +400,15 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
           ? value === "true"
           : fail("a bool: true or false");
     case "bytes":
-      if (value instanceof Uint8Array) return compact ? value : bytesToHex(value);
+      if (value instanceof Uint8Array) return bytesToHex(value);
       return typeof value === "string" && isHex(value) && value.length % 2 === 0
-        ? compact
-          ? hexToBytes(value as Hex)
-          : value
+        ? value
         : fail("bytes: a Uint8Array or even-length 0x-prefixed hex");
     case "string":
-      return typeof value === "string"
-        ? compact
-          ? new TextEncoder().encode(value)
-          : value
-        : fail("a string");
+      return typeof value === "string" ? value : fail("a string");
     case "array":
       return Array.isArray(value)
-        ? value.map((item, index) => normalize(type.of, item, `${at}[${index}]`, compact))
+        ? value.map((item, index) => normalize(type.of, item, `${at}[${index}]`))
         : fail("an array");
     case "tuple": {
       const { fields } = type;
@@ -489,7 +420,7 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
         }
 
         return fields.map((field, index) =>
-          normalize(field.type, value[index]!, `${at}.${field.name}`, compact),
+          normalize(field.type, value[index]!, `${at}.${field.name}`),
         );
       }
       if (value === null || typeof value !== "object" || value instanceof Uint8Array) {
@@ -504,7 +435,7 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
       }
 
       return fields.map((field) =>
-        normalize(field.type, record[field.name]!, `${at}.${field.name}`, compact),
+        normalize(field.type, record[field.name]!, `${at}.${field.name}`),
       );
     }
   }
@@ -600,10 +531,10 @@ function decodeAbiEntry(
 }
 
 /**
- * One of `main`'s arguments as the single word a compile-time value is: an integer (a `Int256` may be
- * negative) or an address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any
- * other type (bytes, a string, an array, a record, an `Account`), which no one word holds. Throws,
- * naming `at`, on a value that is not of the declared type, as `encodeEntryArguments` does.
+ * One of `main`'s arguments as a single compile-time value: a signed or unsigned integer or an
+ * address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any other type (bytes,
+ * a string, an array, a record, an `Account`), which no one word holds. Throws, naming `at`, on a
+ * value that is not of the declared type, as `encodeEntryArguments` does.
  */
 export function entryConstant(
   type: string,
@@ -619,144 +550,41 @@ export function entryConstant(
   ) {
     return undefined;
   }
-  // A Solana key, in base58: an account an intent to Solana names, bound as the 32-byte word
-  // that is its key there. Never an address on an EVM chain, whose 20 bytes are hex.
+  // A Solana key, in base58: an account a program on Solana names, bound as the 32-byte word that
+  // is its key there. Never an address on an EVM chain, whose 20 bytes are hex.
   if (parsed.kind === "address" && typeof value === "string" && isSvmKey(value)) {
     return BigInt(bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(value)))));
   }
-  const normalized = normalize(parsed, value, at, false);
+  const normalized = normalize(parsed, value, at);
 
   return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
 }
 
-/** Value bindings declared directly in a module or block, not in nested scopes. */
-function declarationNames(statements: readonly AstNode[]): Set<string> {
-  const names = new Set<string>();
-  for (const statement of statements) {
-    const node =
-      statement.type === "ExportNamedDeclaration"
-        ? (statement.declaration as AstNode | null)
-        : statement;
-    if (!node) continue;
-    if (node.type === "VariableDeclaration") {
-      for (const declarator of node.declarations as AstNode[]) {
-        collectPatternNames(declarator.id, names);
-      }
-    } else if (node.type === "FunctionDeclaration" || node.type === "ClassDeclaration") {
-      collectPatternNames(node.id, names);
-    } else if (node.type === "ImportDeclaration") {
-      for (const specifier of node.specifiers as AstNode[]) {
-        collectPatternNames(specifier.local, names);
-      }
-    }
-  }
-
-  return names;
-}
-
-/** Never silently change an assignment to a bound value or duplicate a signed module constant. */
-function rejectBoundAssignments(
-  main: MainSignature,
-  names: readonly string[],
-  declared: readonly string[],
-): void {
-  const bound = new Set(names);
-  const moduleNames = declarationNames(main.program.body as AstNode[]);
-  for (const name of declared) {
-    if (moduleNames.has(name)) {
-      throw new TypeError(`${name} is bound by args and the module already declares it`);
-    }
-  }
-  const visit = (value: unknown, shadowed: ReadonlySet<string>): void => {
-    if (value === null || typeof value !== "object") return;
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item, shadowed);
-      return;
-    }
-    const node = value as AstNode;
-    if (typeof node.type !== "string" || isTypeDeclaration(node.type)) return;
-    let locals: Set<string> | undefined;
-    switch (node.type) {
-      case "BlockStatement":
-        locals = declarationNames(node.body as AstNode[]);
-        break;
-      case "ForStatement":
-      case "ForOfStatement":
-      case "ForInStatement": {
-        const declaration = (node.init ?? node.left) as AstNode | undefined;
-        if (declaration) locals = declarationNames([declaration]);
-        break;
-      }
-      case "FunctionDeclaration":
-      case "FunctionExpression":
-      case "ArrowFunctionExpression":
-        locals = new Set<string>();
-        collectPatternNames(node.id, locals);
-        for (const param of node.params as AstNode[]) collectPatternNames(param, locals);
-        break;
-      case "CatchClause":
-        locals = new Set<string>();
-        collectPatternNames(node.param, locals);
-        break;
-      default:
-        break;
-    }
-    const scope = locals?.size ? new Set([...shadowed, ...locals]) : shadowed;
-    if (
-      node.type === "AssignmentExpression" ||
-      node.type === "UpdateExpression" ||
-      node.type === "ForOfStatement" ||
-      node.type === "ForInStatement"
-    ) {
-      const assigned = new Set<string>();
-      collectPatternNames(node.type === "UpdateExpression" ? node.argument : node.left, assigned);
-      for (const name of assigned) {
-        if (bound.has(name) && !scope.has(name)) {
-          throw new TypeError(`${name} is bound by args and main assigns it`);
-        }
-      }
-    }
-    for (const key of Object.keys(node)) {
-      if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range") {
-        continue;
-      }
-      if (!TYPE_KEYS.has(key)) visit(node[key], scope);
-    }
-  };
-  visit(main.node.body, new Set());
-}
-
 /** {@link bindEntryArguments}'s result. */
 export interface BoundEntryArguments {
-  /** The source with `main`'s parameter list blanked, preserving its offsets and line breaks.
-   *  Only signed arguments are appended as typed module constants. */
+  /** The source with bound parameters removed; signed constants retain their declared type in
+   *  main's body instead of travelling through the unsigned defines API. */
   readonly source: string;
-  /** Unsigned integers, addresses as bigints, and booleans passed as compiler defines. */
-  readonly constants: Record<string, bigint | boolean>;
-  /** The bound Address parameter names, for chain-specific address derivation. */
-  readonly addresses: string[];
-  /** Signed bound parameters, in declaration order. A compiler define of any of these names would
-   *  replace the typed declaration, so none may be given. */
-  readonly declared: readonly string[];
+  /** Unsigned, address and bool parameter values, passed through the compiler's defines API. */
+  readonly constants: Readonly<Record<string, bigint | boolean>>;
+  /** The parameters declared `Address`. */
+  readonly addresses: readonly string[];
 }
 
 /**
- * `source` with `main`'s arguments bound before execution: unsigned integers, addresses and booleans
- * remain compiler defines. Signed arguments become typed module constants: `main(delta: Int256)`
- * given `[-5n]` becomes `main()` with `const delta: Int256 = -5;` after the source. Positive signed
- * values keep their type too. How a wallet publishes the intents a file opens from values known
- * before anything runs, so they come out fixed. Each must be one word: an integer, address or bool.
+ * `source` with `main`'s arguments bound into it as constants: `main(amount: Uint256)` given
+ * `[1000000n]` compiles as if its body read `amount` as `1000000`, the program then taking none at
+ * run time. Each must be one word: a signed or unsigned integer, an address or a `bool`.
  *
  * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
- * `TypeError` naming the parameter for a value of the wrong type, a parameter no one word holds,
- * an assignment to a bound parameter, or a module declaration conflicting with a signed argument.
+ * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.
  */
 export function bindEntryArguments(
   source: string,
   values: readonly EntryValue[],
 ): BoundEntryArguments {
   const signature = locateMain(source);
-  const params = signature === undefined ? [] : entryParams(source, signature, signature.program);
+  const params = mainParams(source);
   if (signature === undefined || params.length === 0) {
     throw new RangeError("the program declares no `main` with parameters to bind arguments to");
   }
@@ -769,8 +597,7 @@ export function bindEntryArguments(
   }
   const constants: Record<string, bigint | boolean> = {};
   const addresses: string[] = [];
-  const declared: string[] = [];
-  const declarations: string[] = [];
+  const signed: string[] = [];
   params.forEach((param, index) => {
     const at = `argument ${index + 1} (${param.name}: ${param.type})`;
     const value = entryConstant(param.type, values[index]!, at);
@@ -779,32 +606,23 @@ export function bindEntryArguments(
         `${at}: only one word binds as a constant: an integer, an address or a bool`,
       );
     }
-
     const kind = parseEntryType(param.type).kind;
-    if (kind === "int") {
-      declared.push(param.name);
-      declarations.push(`const ${param.name}: ${param.type} = ${value};`);
-    } else {
-      constants[param.name] = value;
-      if (kind === "address") addresses.push(param.name);
-    }
+    if (kind === "int") signed.push(`let ${param.name}: Int256 = ${value};`);
+    else constants[param.name] = value;
+    if (kind === "address") addresses.push(param.name);
   });
-  rejectBoundAssignments(
-    signature,
-    params.map((param) => param.name),
-    declared,
-  );
   const list = source.slice(signature.open + 1, signature.close);
-  const blanked =
-    source.slice(0, signature.open + 1) +
-    list.replace(/[^\r\n]/g, " ") +
-    source.slice(signature.close);
+  const sourceTail = source.slice(signature.close);
+  const body = blankLiterals(source).indexOf("{", signature.returnEnd) - signature.close;
+  const tail =
+    signed.length === 0
+      ? sourceTail
+      : sourceTail.slice(0, body + 1) + signed.join(" ") + sourceTail.slice(body + 1);
 
   return {
-    source: declarations.length === 0 ? blanked : `${blanked}\n${declarations.join("\n")}\n`,
+    source: source.slice(0, signature.open + 1) + list.replace(/[^\r\n]/g, " ") + tail,
     constants,
     addresses,
-    declared,
   };
 }
 
@@ -827,23 +645,14 @@ export function encodeEntryArguments(
       `main takes ${params.length} argument${params.length === 1 ? "" : "s"} (${signature}), got ${values.length}`,
     );
   }
-  const compact = program.entryEncoding === "compact-v1";
   const types = params.map((param) => parseEntryType(param.type));
   const normalized = params.map((param, index) =>
     normalize(
       types[index]!,
       values[index]!,
       `argument ${index + 1} (${param.name}: ${param.type})`,
-      compact,
     ),
   );
-  if (compact) {
-    if (program.entrySchema === undefined) {
-      throw new Error("encodeEntryArguments: a compact-v1 program carries its entrySchema");
-    }
-
-    return encodeCompactArguments(program.entrySchema, normalized as CompactValue);
-  }
   if (params.length === 0) return new Uint8Array();
 
   return hexToBytes(
@@ -860,10 +669,8 @@ export function encodeEntryArguments(
 function typed(type: EntryType, value: unknown): EntryValue {
   switch (type.kind) {
     case "uint":
-      return value as bigint;
     case "int":
-      // ABI-v1 reads a signed word already; compact-v1 reads every scalar as an unsigned one.
-      return BigInt.asIntN(256, value as bigint);
+      return value as bigint;
     case "address":
     case "account":
       return getAddress(
@@ -899,20 +706,11 @@ function typed(type: EntryType, value: unknown): EntryValue {
 export function decodeEntryArguments(program: ProgramEntry, encoded: Uint8Array): EntryValue[] {
   const params = program.entryParams;
   const types = params.map((param) => parseEntryType(param.type));
-  let raw: readonly unknown[];
-  if (program.entryEncoding === "compact-v1") {
-    if (program.entrySchema === undefined) {
-      throw new Error("decodeEntryArguments: a compact-v1 program carries its entrySchema");
-    }
-    // Strict already: minimal scalars, canonical booleans, no trailing bytes.
-    raw = decodeCompactArguments(program.entrySchema, encoded) as readonly unknown[];
-  } else {
-    raw = decodeAbiEntry(
-      types.map((type, index) => abiParam(type, params[index]!.name)),
-      types,
-      encoded,
-    );
-  }
+  const raw = decodeAbiEntry(
+    types.map((type, index) => abiParam(type, params[index]!.name)),
+    types,
+    encoded,
+  );
   const values = types.map((type, index) => typed(type, raw[index]));
   const again = encodeEntryArguments(program, values);
   if (again.length !== encoded.length || again.some((byte, index) => byte !== encoded[index])) {

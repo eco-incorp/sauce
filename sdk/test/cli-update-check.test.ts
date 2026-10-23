@@ -466,7 +466,7 @@ describe("the notice in the command", () => {
     const help = await sauce(undefined, "--help");
     const names = [...help.stdout.matchAll(/^ {2}([a-z]+) {2,}/gm)].map((match) => match[1]!);
     expect(names).toEqual(expect.arrayContaining(["compile", "run", "mcp", "update"]));
-    for (const name of [...names, "intent fill", "wallet new"]) {
+    for (const name of [...names, "pot list", "wallet new"]) {
       const own = await sauce(undefined, ...name.split(" "), "--help");
       expect([name, own.stdout]).toEqual([name, expect.stringContaining("--no-update-check")]);
     }

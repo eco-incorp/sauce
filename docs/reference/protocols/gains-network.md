@@ -17,44 +17,11 @@ Decentralized leveraged trading platform (gTrade) supporting crypto, forex, and 
 | Namespace | `GainsNetwork` on polygon, arbitrum |
 | Chains | polygon, arbitrum |
 
-## Key Operations
+## What it offers
 
 - **closeTradeMarket**: Close an open trade at market price
 - **updateStopLoss**: Update stop loss on an open trade
 - **updateTakeProfit**: Update take profit on an open trade
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Close trade at market price
-import { DiamondABI as IDiamond } from "./abis";
-function main(diamondAddress: Address, index: Uint256, expectedPrice: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  diamond.closeTradeMarket(index, expectedPrice);
-  return 1;
-}
-
-// Update stop loss
-import { DiamondABI as IDiamond } from "./abis";
-function main(diamondAddress: Address, index: Uint256, newSl: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  diamond.updateSl(index, newSl);
-  return 1;
-}
-
-// Update take profit
-import { DiamondABI as IDiamond } from "./abis";
-function main(diamondAddress: Address, index: Uint256, newTp: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  diamond.updateTp(index, newTp);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -94,3 +61,9 @@ function main() {
 - `closeTradeMarket(uint32 index, uint64 expectedPrice)`
 - `updateSl(uint32 index, uint64 newSl)`
 - `updateTp(uint32 index, uint64 newTp)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

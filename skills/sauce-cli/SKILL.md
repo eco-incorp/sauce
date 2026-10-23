@@ -13,16 +13,16 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
 
 ## When to use
 
-| Task                                                                | Here                | Elsewhere                               |
-| ------------------------------------------------------------------- | ------------------- | --------------------------------------- |
-| Compile, simulate, send, read back a program or an actions document | yes                 |                                         |
-| Deploy, fund or list a Pot                                          | yes                 |                                         |
-| Hand a transaction to another wallet, then broadcast what it signed | yes                 | a Solana plan of steps: `sauce-solana`  |
-| Sign through a wallet's MCP server (Coinbase, Phantom)              | yes                 |                                         |
-| Create or use an agent wallet; a policy refusal                     | yes                 |                                         |
-| A command refuses a preview chain                                   | yes, which commands | the policy: `sauce-overview`            |
-| Publish, fill, prove, claim, refund or cancel an intent             |                     | `sauce-intents` (`sauce intent <verb>`) |
-| Writing the program                                                 |                     | `sauce-script`                          |
+| Task                                                                | Here                | Elsewhere                              |
+| ------------------------------------------------------------------- | ------------------- | -------------------------------------- |
+| Compile, simulate, send, read back a program or an actions document | yes                 |                                        |
+| Deploy, fund or list a Pot                                          | yes                 |                                        |
+| Hand a transaction to another wallet, then broadcast what it signed | yes                 | a Solana plan of steps: `sauce-solana` |
+| Sign through a wallet's MCP server (Coinbase, Phantom)              | yes                 |                                        |
+| Create or use an agent wallet; a policy refusal                     | yes                 |                                        |
+| A command stops with a message                                      | yes                 |                                        |
+| A command refuses a preview chain                                   | yes, which commands | the policy: `sauce-overview`           |
+| Writing the program                                                 |                     | `sauce-script`                         |
 
 ## Core model
 
@@ -68,7 +68,6 @@ fetches and runs npm's unrelated `sauce` package.
 | `sauce send`     | Broadcasts transactions signed elsewhere, waits for them, reports what they did   |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
-| `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
 | `sauce reclaim`  | Lists the code buffers and lookup tables a Solana owner left open; closes them    |
 
@@ -96,9 +95,9 @@ The safer signer is a wallet whose key stays with its provider, reached through 
 MCP server: the key never reaches the agent or this machine, and the wallet applies its own
 approvals and limits. On Base and Ethereum that is Coinbase Wallet MCP, the user's own wallet, whose
 one batch deploys the Pot and cooks; on Solana, Phantom MCP, which signs on Base and Ethereum too.
-Build for the wallet's address (`--owner`, or `--from`), simulate, show the user, then hand the
-result over. Every command and tool that prints unsigned transactions writes what these servers
-take, beside its own fields, so nothing is converted:
+Build for the wallet's address (`--owner`), simulate, show the user, then hand the result over.
+Every command and tool that prints unsigned transactions writes what these servers take, beside
+its own fields, so nothing is converted:
 
 - **Each EVM transaction**, as it is: `{ chainId, to, data, value, gas }`, `value` and `gas` hex
   quantities (`gas` only where the plan gives one), beside labels such as `what` that a wallet's
@@ -134,11 +133,6 @@ take, beside its own fields, so nothing is converted:
   a minute of being built or never: when the user takes longer, build it again
   (`sauce send --cursor <cursor>` alone, or the command that printed it) and hand over the new one.
   Always pass back the signatures of what landed: the plan builds again only what did not.
-- **A Solana transaction with `signedBy`** (a proof, signed already by the fresh keys of the
-  accounts it creates) must be signed as it is. A wallet that rebuilds a transaction before signing
-  it (a fresh blockhash or fee payer) drops those signatures, and the cluster refuses it: when the
-  wallet's send fails that way, send that step with a signer that signs as given
-  (`sauce intent prove --keypair <keypair>`), or sign it with any key and `sauce send` it.
 - **Any other signer** (a KMS, a hardware wallet, another wallet's tool) signs the same fields; what
   it signed but does not send, `sauce send` broadcasts (below).
 
@@ -166,9 +160,8 @@ sauce wallet address agent
 ```
 
 - `new` prints the wallet's name, kind and address, never its key. Fund the address, then sign with
-  `--wallet <name>` and the same password source wherever a key signs (`run`, `pot --deploy`,
-  `simulate --fund`, `sauce intent publish`, `sauce intent fill --send` and the steps after). An EVM
-  wallet signs on an EVM chain, a Solana one on Solana.
+  `--wallet <name>` and the same password source wherever a key signs (`run`, `pot --deploy` and
+  `simulate --fund`). An EVM wallet signs on an EVM chain, a Solana one on Solana.
 - `sauce wallet import <name> <file>` keeps a key the user has (a private key, a keystore or a
   Solana keypair file), read from the file or from stdin with `-`, never from the command line. An
   EVM wallet's file is a standard keystore, so `--keystore` reads it too.
@@ -193,11 +186,16 @@ send. Every field is optional; amounts are strings in whole tokens (`"100"` is 1
 }
 ```
 
-`chains` and `to` (a list of addresses) allow only those; deploying the wallet's own Pot counts as a
-transaction to that Pot, so a `to` naming the Pot lets a run deploy it first. `native` and each
-token count what leaves the wallet or the Pot a transaction cooks on, measured by simulating it;
-`perDay` is the last 24 hours on every chain. A send that breaks a limit is refused, naming it, and
-nothing is sent. With no policy, sends work, and each says no limits are set.
+`chains` and `to` (a list of addresses) allow only those. `to` limits the transaction's own target:
+on an EVM chain the contract the wallet calls, usually its Pot, and on Solana the programs its
+instructions call. It does not limit whom a program pays: a cook on an allowed Pot can pay any
+address, so a payee is held by the program itself (a recipient it fixes, a `require` on it).
+Deploying the wallet's own Pot counts as a transaction to that Pot, so a `to` naming the Pot lets a
+run deploy it first. `native` and each token count what leaves the wallet or the Pot a transaction
+cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
+native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
+and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is sent.
+With no policy, sends work, and each says no limits are set.
 
 ## The run, step by step
 
@@ -235,8 +233,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    nor a funded one: a Pot not deployed yet is deployed in the same simulation first, as
    `sauce run` deploys it. `--assume-balance TOKEN:amount` (repeatable; `ETH:<amount>` for the
    native currency) gives the Pot that balance for the simulation only; a token that keeps no stored
-   balance (rebasing, shares) is refused. On a local chain with Uniswap V3's own pools at 2,650 USDC
-   per WETH, it printed, addresses written as their roles:
+   balance (rebasing, shares) is refused. On Arc, `USDC:<amount>` sets the Pot's native balance (the
+   token is the native coin, which no token storage holds), and `ETH:<amount>` or
+   `native:<amount>` is native USDC there, not ether. On a local chain with Uniswap V3's own pools
+   at 2,650 USDC per WETH, it printed, addresses written as their roles:
 
    ```text
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
@@ -318,6 +318,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys it by hand.
    `--salt <label>` names another Pot of the same owner
    (`--salt-hex <bytes32>` for an exact salt); use the same salt in every later command.
+   Deploying the Pot is a transaction of its own, which costs gas once, on top of the cook's. How
+   much varies with the chain and its gas price, and the command estimates it: `run`'s question
+   says about how much gas and what it costs, the simulation's first step gives the deployment's
+   gas used, and `sauce tx` gives the deployment its `gas`.
 
    Every Pot a command deploys (`pot --deploy`, a run that deploys it first, `sauce send` of a
    signed deployment) is recorded on this machine once the chain shows it deployed, in `.sauce/pots`
@@ -330,7 +334,9 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 
 5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
    pass `--fund USDC:100` (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer
-   into the Pot in the same cook; `--sweep` returns what is left. `--fund-mode` picks how:
+   into the Pot in the same cook; `--sweep` sends the Pot's whole balance of each funded token back
+   to the signer (and of the native coin, when native is funded), not only what this run brought,
+   so a balance the Pot already held of a funded token goes too. `--fund-mode` picks how:
 
    | Mode                    | How                                                                                                                                                                                   |
    | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -385,8 +391,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
      `--value <wei>` when the program also spends native currency.
 
 7. **Check** what was sent: `sauce inspect <tx hash> --chain base --source buy.sauce.ts` reads the
-   transaction back: the Pot, the engine, the arguments the program got, what moved, and the route
-   and reward of every intent it opens:
+   transaction back: the Pot, the engine, the arguments the program got and what moved:
 
    ```text
    transaction <tx hash> on base: success, block <block>, gas used 273670
@@ -406,8 +411,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    ```
 
    A cook sent with `--fund` runs the program with the pulls around it, and `--source` says it is
-   not the file's program. `inspect` also reads calldata, and a file (its intents, with every value
-   measured at run time named).
+   not the file's program. `inspect` also reads calldata, and compiles a file and reports it.
 
 ## For another signer: `sauce tx` and `sauce send`
 
@@ -467,14 +471,11 @@ The cook reverts: the program threw "the weights do not add up to 10000"
 - `--args-json '[…]'` (or a file) gives all of them as one JSON array; write an address or a value
   past 2^53 as a JSON string.
 - Every value is checked against its declared type before anything is sent: `Address`, `Uint256`,
-  `Int256` (from -2^255 to 2^255 - 1; a negative value is a word of its own, `--args -5`, which is
-  no flag), `bool`, `bytes`, `string`, `T[]` and `{ field: T }`. A parameter with no annotation is
-  a `Uint256`. An `Int256` that `main` returns is read back signed (`main returns Int256: -6`).
+  `bool`, `bytes`, `string`, `T[]` and `{ field: T }`. A parameter with no annotation is a
+  `Uint256`.
 - An actions document's `argument` actions are its `main`'s parameters, in the order the document
   declares them (`sauce-actions`): `compile`, `simulate`, `tx` and `run` take a document wherever they
   take a file.
-- A file that opens intents also takes `--intent-deadline`, `--intent-creator` and, for a program
-  body, `--intent-execution-fee` (`sauce-intents`).
 
 ## A program file as a command
 
@@ -500,13 +501,11 @@ line numbers in its errors.
 ## What a preview chain refuses
 
 On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `simulate`, `inspect`,
-`verify`, `price`, `pools`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`,
-`sauce intent status` and `sauce intent import` work, and `sauce pot` predicts the Pot (and reads
-it) but leaves its deployment out. Everything that leaves a transaction ready to sign, unsigned JSON
-included, or sends one is refused before anything is read or signed: `tx`, `run`, `pot --deploy`,
-`pot --format cast`, `sauce intent publish` and the intent steps sent there
-(`sauce intent fill --send`, `prove`, `claim`, `refund`, `cancel`). No flag overrides it. The refusal exits 1 and names
-the supported chains and the chain's request:
+`verify`, `price` and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its
+deployment out. Everything that leaves a transaction ready to sign, unsigned JSON included, or
+sends one is refused before anything is read or signed: `tx`, `run`, `pot --deploy` and
+`pot --format cast`. No flag overrides it. The refusal exits 1 and names the supported chains and
+the chain's request:
 
 ```
 sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. …
@@ -515,11 +514,95 @@ To ask for Optimism: add your use case to its request if there is one (https://g
 
 Offer the user that request; the command's own help ends with the same note.
 
+## When a command stops
+
+A command that stops prints one message on stderr, after its own name and a colon. It exits 2 when
+the invocation is wrong (a flag missing or mistyped) and 1 for any other refusal or failure. A
+message saying `nothing was sent` means the transaction it names was not broadcast. A run that
+sends several transactions, such as a Solana cook with its setup, may already have landed the
+earlier ones: read the hashes the command printed before the message, and check the Pot and the
+token accounts, before running it again. Each message below is quoted by its first words, which
+name the cause, with `…` for the rest: the values and, often, the flag that fixes it. A question
+put at a terminal (a password, a yes or no) is not here: pass the flags that answer it.
+
+- **No endpoint** (exit 2). `missing --rpc-url <url> (or --config <file>)…`: the command reads the
+  chain and has no endpoint for it; a few chains have no built-in public one. Pass
+  `--rpc-url <url>`, or `--config <file>` naming the chain's id (one of the two, not both).
+  `--offline reads no chain…`: the command reads the chain, which `--offline` forbids; drop it.
+  `missing --value <wei>…`: with no endpoint the Kitchen's fee could not be read; pass
+  `--value <wei>`, or an endpoint.
+- **The endpoint is another chain's** (exit 1). `the RPC endpoint serves chain …`: use the chain's
+  own endpoint, or a `--config` file with each chain's under its id.
+- **No signer** (exit 2). `missing a signer…`: the command sends and was given no key. Pass
+  `--wallet <name>` (a Solana wallet on Solana), `--keystore <path>` or, on Solana,
+  `--keypair <path>`, with a password source; or build the transaction with `sauce tx` for another
+  signer.
+- **The wrong kind of wallet** (exit 2). `wallet <name> is a Solana wallet…`: an EVM transaction is
+  signed by an EVM wallet. `wallet <name> is an EVM wallet…`: on Solana, sign with a Solana wallet
+  (`sauce wallet new <name> --solana`) or `--keypair <path>`. `--keypair is a Solana keypair…`: an
+  EVM transaction takes `--wallet`, `--keystore` or `--private-key`.
+- **An approval is needed** (exit 1). `nothing was sent: this run needs an approval…` (or
+  approvals): before its cook the run must send something, such as the Pot's deployment or an
+  approval for `--fund`, and it cannot ask: there is no terminal, or `--json` asks nothing. The
+  message lists each one. Show the user the list; once they agree, run it again with `--yes`
+  (`-y`) and a password source that needs no prompt.
+- **A policy refusal** (exit 1). `refused by the policy of wallet <name> (<policy file>)…`, then the
+  limit: `chains allows …`; `to allows <n> address(es), and this transaction …` (a target outside
+  `to`, or the wallet's own Pot, deployed first, missing from it: add the Pot to `to`);
+  `<limit>.perTransaction is …`; `<limit>.perDay is …`;
+  `this transaction approves …` (an approval above what a token's limit leaves); or
+  `native is limited, and …` (`tokens.<symbol> is limited, and …`), when what the transaction
+  moves could not be measured: on an EVM chain, give an endpoint that runs `eth_simulateV1`. Tell
+  the user which limit; the policy is theirs to change. `<policy file> can be written by others…`:
+  the user runs `chmod 600` on it.
+- **The cook reverts** (exit 1). `sauce simulate` prints `The cook reverts: …` first (with
+  `--json`, `reverted: true` and `error` lead the JSON), and a send simulated first and refused
+  prints `not sent — it would revert: …`. The reason, by its first words:
+  - `the program threw "…`: the program's own `require` or `throw`; its text says which.
+  - `The cook reverts: ERC20InsufficientBalance(…`, or Uniswap's
+    `"STF" (a token's transferFrom failed…` and `"ST" (a token's transfer failed…`: the payer
+    holds, or has approved, less of the token than the transfer moves, most often a Pot short of
+    what the program spends. Send the Pot the token, add `--fund USDC:<amount>` to `run`, or give
+    a simulation `--assume-balance USDC:<amount>`; amounts in `--args` are base units.
+  - `"SPL" (a V3-style pool's price-limit check…`: the swap's price limit is on the wrong side of
+    the pool's price, or past a bound. Work it out again with `sauce price` or `sauce pools`, and
+    simulate on the block they read (`--block`).
+  - `"Too little received" (…`: the swap's output is below its minimum, which is above what the
+    pool pays at that price.
+  - `revert data …`, then the raw data: an error the command has no name for, the called
+    contract's own; read it against that contract's ABI.
+
+  `sauce simulate --expect-revert "<text>"` exits 0 only when the cook reverts with that text. From
+  a wallet with a policy, `transaction <n> of <m> would revert in the simulation…` stops a plan at
+  the transaction that would revert; `sauce simulate` shows why.
+
+- **Solana's size, compute and rent** (exit 1).
+  - `the cook names <n> accounts, more than one lookup table holds…`, or
+    `the staged cook is a <n>-byte transaction even with every account it names in a lookup table…`:
+    staged in a code buffer and through a lookup table, the cook still does not fit one transaction
+    (1232 bytes, and a lookup table holds 256 accounts). Make it smaller: fewer pools or accounts,
+    or two programs. `sauce compile --json` reports the cook's size against the limit before a run.
+  - `the staged cook is a <n>-byte transaction even through the lookup tables given…`: the lookup
+    table given with `--lookup-table` does not hold every account the cook names. Pass one that
+    does, or leave the flag out and the run creates one.
+  - `The cook runs out of compute units…`: with every pool's stop worked out again, the swaps still
+    need more than a transaction's compute budget. Offer fewer pools, or a tighter `priceLimit`,
+    and simulate again.
+  - `<owner> holds <n> lamports, and the cook takes …`, or a failure that names an account the
+    transaction would leave below its rent-exempt minimum: the owner pays, in SOL, the rent of the
+    Pot, the token accounts and the code buffer a run creates, the Kitchen's fee and the
+    transaction's, and holds too little. Send it more SOL. `sauce reclaim` closes the code buffers
+    and lookup tables an earlier run left open and returns their rent.
+  - `the engine refused: ExecutionFeeExceedsMaximum…`: the Kitchen's fee rose after the cook read
+    it; run it again.
+  - `<transaction> would fail, so nothing was sent…`: the cluster's simulation of the transaction
+    failed; the reason follows, then the program's logs.
+
 ## Over MCP: the tools
 
 The same commands are tools of the Sauce MCP server (`sauce mcp`), by one rule: each
-`sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is `sauce_intent_publish`),
-its flags are the tool's inputs in camelCase, the program goes in as `source` (with any ABI file it
+`sauce <command>` is the tool `sauce_<command>` (`sauce pot list` is `sauce_pot_list`), its flags
+are the tool's inputs in camelCase, the program goes in as `source` (with any ABI file it
 imports in `modules`), and an endpoint of the user's own, optional, is the call's `rpcUrl`. Each
 tool's own description gives its inputs. `sauce_simulate` returns `leftInPot` first after `ok`, and
 a note when the cook leaves anything in the Pot: tell the user.
@@ -540,10 +623,12 @@ a note when the cook leaves anything in the Pot: tell the user.
   `sauce_wallet_send` simulates what another tool returned, holds it to the wallet's policy, signs
   and sends it: `sauce run` from a wallet. Each transaction it sent comes back with its hash,
   `explorer` and `trace` to give the user, and a cook with `moves`, `leftInPot` and `summary`.
+  Whether an agent can sign is settled when the server starts: `sauce mcp --no-wallets` serves no
+  wallet tool, and `--no-stores` keeps none of the command's stores, the wallet directory included,
+  so with either nothing signs. Without them the agent can enable the wallets itself with
+  `sauce_wallet_enable`: start the server with one of the two when an agent must not sign.
 - **It keeps the command's stores**: a Pot a send through it deploys is recorded as `sauce` records
-  one (`pots` on each transaction of the result; `sauce_pot_list` and `sauce_pot_import`), and what a
-  send does to an intent is recorded too (every intent tool takes `intentHash`; `sauce_intent_list`,
-  `sauce_intent_show` and `sauce_intent_import`).
+  one (`pots` on each transaction of the result; `sauce_pot_list` and `sauce_pot_import`).
 - **Over HTTP**, nothing signs and nothing is kept.
 
 ## Pitfalls
@@ -556,8 +641,7 @@ a note when the cook leaves anything in the Pot: tell the user.
 - **`--yes`, or a Pot deployed, without the user's go-ahead.** Deploying costs gas, and with `--fund`
   it also approves Permit2 (or the Pot) to move the user's tokens.
 - **Sending before simulating, or before the user has seen the program, its arguments and the
-  simulation.** Simulate with `sauce simulate` (or `sauce intent publish --dry-run`, and
-  `sauce intent fill` for an intent's body) first.
+  simulation.** Simulate with `sauce simulate` first.
 - **A `sauce tx` cook signed with the wallet's own gas estimate while the Pot has no code.** Use the
   `gas` the plan gives, or send `sendCalls` as one batch.
 - **Converting a result by hand for a wallet's tool.** Pass `sendCalls`, or each transaction, whole:
@@ -566,6 +650,10 @@ a note when the cook leaves anything in the Pot: tell the user.
   no longer land: build it again and hand over the new one.
 - **Fetching the explorer or trace link.** Give both to the user.
 - **Looking for another way to send on a preview chain.** Offer the chain-support request.
+- **Compiled output or a `sauce tx` result kept across `sauce update`.** Compiler output pairs with
+  the engines by exact version: after an update, compile again and rebuild every unsigned
+  transaction printed before it. `sauce compile --json` and `sauce pot list` name the compiler and
+  engine a result pairs with.
 
 ## Files
 

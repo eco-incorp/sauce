@@ -24,9 +24,12 @@ import {
   type ReadonlyUint8Array,
   type Transaction,
 } from "@solana/kit";
-import { FailedTransactionMetadata, type LiteSVM } from "litesvm";
+import { FailedTransactionMetadata, FeatureSet, LiteSVM } from "litesvm";
 
 import { FIELDLESS } from "../../src/cli/svm-fork.js";
+
+/** The bank a shim answers from, named for suites whose package does not depend on LiteSVM. */
+export type { LiteSVM };
 
 const b64 = (bytes: ReadonlyUint8Array): string => getBase64Decoder().decode(bytes);
 
@@ -94,6 +97,19 @@ interface Landed {
 
 /** The genesis hash the shim answers: its own, a local bank's, which names no public cluster. */
 export const SHIM_GENESIS_HASH = "LocaLSVMgenesis1111111111111111111111111111";
+
+/**
+ * A bank to answer from, as a cluster runs: every feature, the builtins, precompiles and sysvars,
+ * and LiteSVM's default programs (SPL Token, Token-2022, the Associated Token Account program).
+ */
+export function clusterBank(): LiteSVM {
+  return new LiteSVM()
+    .withFeatureSet(FeatureSet.allEnabled())
+    .withBuiltins()
+    .withPrecompiles()
+    .withSysvars()
+    .withDefaultPrograms();
+}
 
 export interface SolanaShim {
   readonly url: string;

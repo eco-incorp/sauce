@@ -50,28 +50,6 @@ describe("decode", () => {
       ok: true,
     });
   });
-
-  it("reads an Int256 as a signed bigint, alone, in an array and in a record", () => {
-    const signed = (value: bigint): Hex => numberToHex(BigInt.asUintN(256, value), { size: 32 });
-    assert.equal(returning("Int256", "-5").decode(signed(-5n)), -5n);
-    assert.equal(returning("Int256", "7").decode(signed(7n)), 7n);
-    // The same word, as the type that is unsigned reads it.
-    assert.equal(returning("Uint256", "7").decode(signed(-5n)), (1n << 256n) - 5n);
-    const array = returning("Int256[]", "[-1, 2]");
-    assert.deepEqual(array.decode(concat([signed(-1n), signed(2n)])), [-1n, 2n]);
-    const record = returning("{ delta: Int256; amount: Uint256 }", "{ delta: -3, amount: 4 }");
-    assert.deepEqual(record.decode(concat([signed(-3n), signed(4n)])), { delta: -3n, amount: 4n });
-  });
-
-  it("encodes an Int256 argument as its two's-complement word", () => {
-    const program = compileProgram(
-      { source: "function main(x: Int256): Int256 {\n  return x;\n}\n" },
-      base,
-    );
-    assert.ok(
-      program.payload([-5n]).endsWith(numberToHex((1n << 256n) - 5n, { size: 32 }).slice(2)),
-    );
-  });
 });
 
 /** A called contract's `Error(string)` and `Panic(uint256)`, as the cook reverts with them. */

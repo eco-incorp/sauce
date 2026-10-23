@@ -28,11 +28,10 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 
 - `supply` pulls the asset with `transferFrom`: approve the Pool for exactly the amount first.
 - `onBehalfOf` receives the aTokens, and with them the position. Every call comes from the Pot,
-  so `ctx.self()` there keeps the position in the Pot, not in the user's wallet; ask the user
-  which they want, and pass their wallet as a `main` parameter to give it to them. A position in
-  the wallet is the wallet's: `withdraw` burns the caller's aTokens, so a later cook withdraws it
-  only once they are back in the Pot, and borrows against it only with the wallet's credit
-  delegation.
+  so `ctx.self()` there keeps the position in the Pot, not in the user's wallet; choose which, and
+  pass the wallet as a `main` parameter to give it to the user. A position in the wallet is the
+  wallet's: `withdraw` burns the caller's aTokens, so a later cook withdraws it only once they are
+  back in the Pot, and borrows against it only with the wallet's credit delegation.
 - The aToken minted to `onBehalfOf` is rebasing: its balance grows with interest, so measure it
   as a delta, not as the amount supplied.
 - A reserve can be frozen, paused or at its supply cap, and then `supply` reverts.
@@ -55,95 +54,6 @@ function main(onBehalfOf: Address, amount: Uint256) {
   require(account.totalCollateralBase > 0, "nothing supplied");
 }
 ```
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### supply
-
-Supply assets to earn interest. Mints aTokens to the supplier.
-
-```typescript
-import { PoolABI as IPool } from "./abis";
-
-function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf: Address): Uint256 {
-  const pool = IPool.at(poolAddress);
-  pool.supply(asset, amount, onBehalfOf, 0);
-  return 1;
-}
-```
-
-- `poolAddress`: Pool contract for the target chain
-- `asset`: ERC-20 token address to supply
-- `amount`: Amount in token's native decimals. Use `type(uint256).max` for entire balance
-- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
-- Requires ERC-20 approval to the Pool before calling
-
-### withdraw
-
-Withdraw supplied assets by burning aTokens.
-
-```typescript
-import { PoolABI as IPool } from "./abis";
-
-function main(poolAddress: Address, asset: Address, amount: Uint256, to: Address): Uint256 {
-  const pool = IPool.at(poolAddress);
-  return pool.withdraw(asset, amount, to);
-}
-```
-
-- `amount`: Use `type(uint256).max` to withdraw entire balance
-- Returns the actual withdrawn amount
-
-### borrow
-
-Borrow assets against supplied collateral.
-
-```typescript
-import { PoolABI as IPool } from "./abis";
-
-function main(
-  poolAddress: Address,
-  asset: Address,
-  amount: Uint256,
-  interestRateMode: Uint256,
-  onBehalfOf: Address,
-): Uint256 {
-  const pool = IPool.at(poolAddress);
-  pool.borrow(asset, amount, interestRateMode, 0, onBehalfOf);
-  return 1;
-}
-```
-
-- `interestRateMode`: 1 = stable (being phased out), 2 = variable. Use 2 for variable rate
-- Must have sufficient collateral supplied first
-
-### repay
-
-Repay borrowed assets to reduce debt.
-
-```typescript
-import { PoolABI as IPool } from "./abis";
-
-function main(
-  poolAddress: Address,
-  asset: Address,
-  amount: Uint256,
-  interestRateMode: Uint256,
-  onBehalfOf: Address,
-): Uint256 {
-  const pool = IPool.at(poolAddress);
-  return pool.repay(asset, amount, interestRateMode, onBehalfOf);
-}
-```
-
-- `interestRateMode`: Must match the debt type (1 = stable, 2 = variable)
-- `amount`: Use `type(uint256).max` to repay entire debt
-- Requires ERC-20 approval to the Pool
 
 ## Notes
 
@@ -202,3 +112,9 @@ function main() {
 - `flashLoanSimple(address receiverAddress, address asset, uint256 amount, bytes params, uint16 referralCode)`
 - `liquidationCall(address collateralAsset, address debtAsset, address user, uint256 debtToCover, bool receiveAToken)`
 - `getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

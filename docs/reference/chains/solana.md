@@ -8,9 +8,9 @@
 > name a program writes for each contract. The `sauce` command builds and sends transactions on
 > Solana.
 
-**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
-Solana a program compiles and simulates, and the `sauce` command and the MCP server build
-its transactions and send them.
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Solana a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
@@ -22,7 +22,6 @@ its transactions and send them.
 | In TypeScript | `import { Solana } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | not recorded |
 | Sauce | the engine and Kitchen programs, the same ids on every cluster: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `EcoowmRRrMyYtQCuh5fCvMDWcD6B9ZDZkpgedf2bWKXi` (key `0xca542f97103ea70daa48b4a15f9fd1c0a21a50bfac60a57717fc305f495f5245`) |
 
 ## In a program
 
@@ -64,7 +63,7 @@ program: at a price, `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, pri
 minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts below
 `minOut`. Its pool is found by key, `Orca.Whirlpool.pool(USDC, WSOL, 4)`, where the venue finds
 pools by one: a key with no pool there is skipped. The pool's accounts, and the
-Pot's, are derived when the cook is built ([the `@sauce/router` reference](../../api/router.md)).
+Pot's, are derived when the cook is built ([`@sauce/router` on Solana](../../api/router-solana.md)).
 
 | Namespace | Venue | Program | Pool by key |
 | --- | --- | --- | --- |
@@ -107,3 +106,9 @@ the account it names. Each is read-only unless `.writable()` or `.signer()` give
 ## Protocols
 
 The registry records no protocol deployment on this chain.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

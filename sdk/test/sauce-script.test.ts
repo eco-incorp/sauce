@@ -1,7 +1,7 @@
 /**
  * The SauceScript declarations an editor loads for a program file, and the plugin beside them,
  * through a real TypeScript language service set up as `sauce init`'s `programs/tsconfig.json`
- * sets it up: every program in the repository — those the package ships, the three an agent wrote
+ * sets it up: every program in the repository — those the package ships, the two an agent wrote
  * in a project of its own (copied unchanged into `fixtures/sauce-script/demo`), the fixtures — as
  * the repository's tsconfig.json lists them, checks with no error at all, and a real mistake in one
  * still does not.
@@ -53,7 +53,7 @@ const programs = (dir: string): string[] =>
   });
 
 /** Every program in the repository, as its tsconfig.json — the project an editor opens them in —
- *  lists them: those the package ships (skills, docs, recipes), the agent's three, the fixtures. */
+ *  lists them: those the package ships (skills, docs, recipes), the agent's two, the fixtures. */
 const CORPUS = ts
   .getParsedCommandLineOfConfigFile(
     join(ROOT, "tsconfig.json"),
@@ -142,7 +142,7 @@ describe("SauceScript in an editor", () => {
     }
   });
 
-  it("checks every program in the repository, the agent's three among them, with no error", () => {
+  it("checks every program in the repository, the agent's two among them, with no error", () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(14);
     const checked = service(textOf(CORPUS));
     expect(CORPUS.flatMap((file) => report(checked, file))).toEqual([]);
@@ -218,6 +218,27 @@ describe("SauceScript in an editor", () => {
     expect(shown).toEqual([]);
   });
 
+  it("types signed integers, bit reinterpretation and a nested program with plain arguments", () => {
+    const { shown } = plain(
+      "signed",
+      "function main(word: Uint256): Int256 {\n" +
+        "  const delta: Int256 = Int256.fromBits(word);\n" +
+        "  const signed = Math.signExtend(word, 2);\n" +
+        '  const nested = program((divisor: Int256): Int256 => delta / divisor, 2, { target: "evm" });\n' +
+        "  require(eval(nested.code.concat(nested.args)).length > 0);\n" +
+        "  const bits: Uint256 = Uint256.fromBits(signed);\n" +
+        "  const magnitude = Uint256(Int256(bits));\n" +
+        "  evm.static(ctx.self(), hex``).gas(50000).catch((error) => { require(error.length <= 256); });\n" +
+        "  return (delta % 3) >> 1;\n}\n",
+    );
+    expect(shown).toEqual([]);
+  });
+
+  it("retains signed ABI results in the generated editor declarations", () => {
+    expect(sauceScriptDeclarations()).toContain("readonly answer: Int256");
+    expect(sauceScriptDeclarations()).toContain("SauceCall<Int256>");
+  });
+
   it("checks every builtin's example in the SauceScript reference with no error", () => {
     const reference = JSON.parse(
       readFileSync(join(ROOT, "skills/sauce-script/references/builtins.json"), "utf8"),
@@ -272,6 +293,9 @@ describe("SauceScript in an editor", () => {
     const cases: Array<[string, string, readonly number[]]> = [
       ["slef", "function main() { const me = ctx.slef(); }\n", missing],
       ["mulDiv", "function main() { const x = Math.mulDiv(1n, 2n); }\n", [2554]],
+      ["integerCast", "function main() { return Int256(); }\n", [2554]],
+      ["integerBits", "function main() { return Uint256.fromBits(true); }\n", [2345]],
+      ["integerMember", "function main() { return Int256.fromBit(1); }\n", missing],
       ["getPol", "function main() { UniswapV3.Factory.getPol(1n, 2n, 3n); }\n", missing],
       [
         "swapV9",
@@ -292,7 +316,6 @@ describe("SauceScript in an editor", () => {
         'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
         [2305, 2724],
       ],
-      ["reward", "Base(() => {}).rewards({ tokens: [] });\n", missing],
       // Solana's accounts, and a token's, as a program for it writes them.
       ["systemProgram", "function main() { const p = Solana.systemProgramm; }\n", missing],
       ["pda", "function main() { const p = Solana.pda(ctx.self()); }\n", [2554]],

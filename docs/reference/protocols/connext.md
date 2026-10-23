@@ -17,52 +17,6 @@ Cross-chain liquidity protocol rebranded as Everclear. Uses intents and a cleari
 | Namespace | `Connext` on ethereum, optimism, base, arbitrum |
 | Chains | ethereum, optimism, base, arbitrum |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Create a new cross-chain intent via EverclearSpoke.
-
-```typescript
-import { EverclearSpokeABI as IEverclearSpoke } from "./abis";
-
-function main(
-  spokeAddress: Address,
-  destinations: Uint256[],
-  recipient: Address,
-  inputAsset: Address,
-  outputAsset: Address,
-  amount: Uint256,
-  amountOutMin: Uint256,
-): Uint256 {
-  const spoke = IEverclearSpoke.at(spokeAddress);
-  const created = spoke.newIntent(
-    destinations,
-    recipient,
-    inputAsset,
-    outputAsset,
-    amount,
-    amountOutMin,
-    86400,
-    "",
-  );
-  return created.intentId;
-}
-```
-
-- `destinations`: Array of destination domain IDs (uint32[]) -- can specify multiple possible destinations
-- `recipient`: Address to receive tokens on destination
-- `inputAsset`: Token to send on source chain
-- `outputAsset`: Token to receive on destination chain (can differ from input for cross-chain swaps)
-- `amountOutMin`: Minimum amount the recipient must receive
-- `ttl`: Time-to-live in seconds (86400 = 24 hours). Intent expires if unfilled
-- Requires ERC-20 approval to the EverclearSpoke
-
 ## Notes
 
 - Intent-based architecture: users express desired outcome, solvers compete to fill
@@ -102,3 +56,9 @@ function main() {
 `import EverclearSpokeABI from "./protocols/connext/EverclearSpokeABI.json";` Speaks for: everclearSpoke.
 
 - `newIntent(uint32[] destinations, address receiver, address inputAsset, address outputAsset, uint256 amount, uint256 amountOutMin, uint48 ttl, bytes data) returns (bytes32 intentId, (bytes32 initiator, bytes32 receiver, bytes32 inputAsset, bytes32 outputAsset, uint32 origin, uint64 nonce, uint48 timestamp, uint48 ttl, uint256 amount, uint256 amountOutMin, uint32[] destinations, bytes data) intent)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.
