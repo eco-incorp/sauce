@@ -130,6 +130,14 @@ accounts it writes reported. A limit that cannot be measured on the endpoint (on
 `eth_simulateV1`, for one) refuses the send. Every wallet send also holds to the
 [supported chains](cli.md#supported-and-preview-chains).
 
+### Know what a policy does to a signed cook
+
+`sauce sign` signs a cook that another account sends later, on what the chain holds then, so a
+simulation when you sign cannot measure what it will move. A wallet whose policy sets `native` or
+any `tokens` limit therefore refuses to sign one, naming the limit. `chains` and `to` still apply:
+the cook's chain, and its Pot as the address. Sign from a wallet without those limits, or from the
+key elsewhere ([Signed cooks](signed-cooks.md#wallet-spending-limits)).
+
 ## Passwords without a prompt
 
 A script, a CI job or a coding agent cannot type a password. Name where it comes from instead, with
@@ -263,6 +271,13 @@ no key.
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users. The line leaves the endpoint and the signer
 as `<RPC_URL>` and `<PRIVATE_KEY>` placeholders: the command never fills in either.
+
+## Let another account send it: `sauce sign`
+
+`sauce sign` signs a cook without sending it, for a relayer or another account of yours to send
+and pay the gas. It prints the signed cook and the transaction that sends it; anyone holding that
+output may send it until its deadline, once. `sauce sign --cancel <nonce>` cancels one.
+[Signed cooks](signed-cooks.md) walks through it.
 
 ## Other signers
 

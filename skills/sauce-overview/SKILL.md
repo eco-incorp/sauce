@@ -234,13 +234,14 @@ the owner rather than repeat it.
 
 - **Owns**: the `sauce` command: getting it, endpoints, signers, signing through a wallet's MCP
   server, wallets and their policies, the run in order (look up, compile, simulate, Pot, fund, run,
-  check), unsigned transactions and `sauce send`, arguments to `main`, and each command's MCP tool.
+  check), unsigned transactions and `sauce send`, signed cooks another account sends
+  (`sauce sign`), arguments to `main`, and each command's MCP tool.
 - **Load**: to compile, simulate, send or read back, or when a command refuses.
 
 ### `sauce-typescript`
 
 - **Owns**: the package from application code: compiling for a chain, encoding arguments, the Pot
-  and its cook, the raw compiler, the registry, actions, verification, Solana, testing.
+  and its cook, signed cooks, the raw compiler, the registry, actions, verification, Solana, testing.
 - **Load**: when code, not a person at a terminal, builds the transactions.
 
 ### `sauce-examples`
@@ -262,6 +263,7 @@ the owner rather than repeat it.
 | Buy up to a price across pools (Solana)                 | `sauce-solana` → `sauce-solana-distributed-swap` → `sauce-cli`     |
 | Move a token or a tokenized stock on Solana             | `sauce-globals` (Tokenized stocks) → `sauce-solana` → `sauce-cli`  |
 | Steps that arrive as JSON from a service                | `sauce-actions` → `sauce-cli`                                      |
+| A cook the owner signs for another account to send      | `sauce-cli` (`sauce sign`), or `sauce-typescript` from code        |
 | Compile, simulate, send, read back; a wallet; a refusal | `sauce-cli`                                                        |
 | Sign through the user's wallet MCP server               | `sauce-cli` (Signing through a wallet's MCP server)                |
 | The same from Node or a browser                         | `sauce-typescript`, with `sauce-script` for the program            |

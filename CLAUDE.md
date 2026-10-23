@@ -1279,6 +1279,27 @@ the Pot one batch deploys and cooks on, and each transaction as eth_sendTransact
 released stack. Phantom's server registers its tools by command path (`evm_send`, `solana_send`):
 the `send_*_transaction` names its documentation uses are not what it lists.
 
+**Signed cooks.** kitchen-evm 1.3.0's Pot takes `cookSigned(engine, program, maxExecutionFee,
+nonce, deadline, submitter, signature)`: the owner signs an EIP-712 `Cook` (domain `Sauce Pot` /
+`1` / chain id / the Pot) and any account submits it with exactly the signed value; the Pot pays
+the Kitchen's fee from its balance, up to `maxExecutionFee`. These are the Pot's own methods: the
+old #134's `@sauce/signed` handlers, Router fallback and `--signed-salt` are gone and must not come
+back. The helpers are the block between `v12Pot` and `v12Kitchen` in `sdk/src/evm/engine.ts`
+(`signedCookTypedData`/`Json`/`Digest`, `encodeCookSigned`, `encodeInvalidateNonces`, the nonce
+helpers, `verifySignedCook` with the Pot's ecrecover rules and ERC-1271 through a client, and
+`checkSignedCookPot`, which reads a pre-1.3.0 Pot off the pinned init-code hash). `sauce sign`
+(`sdk/src/cli/sign.ts`) signs with a signer or prints the typed data for one (`--signature`
+verifies and builds `cook`), and `--cancel <nonce>` sends or prints `invalidateNonces`; it is
+gated as "signing a cook" and refuses Solana. **A wallet whose policy sets `native` or `tokens`
+limits refuses to sign** (`chains` and `to`, the Pot, are checked statically): a signed cook runs
+when and as its submitter sends it, on that moment's state, so a simulation at signing bounds
+nothing and the ledger cannot count a cook that may never land; the policy's own rule is to refuse
+what it cannot measure. MCP: `sauce_signed_cook` (pure, stdio and HTTP) and the wallet tool
+`sauce_sign`; `sauce_wallet_send` accepts their `cook` and cancellations. Tests:
+`sdk/test/evm/signed-cook*.test.ts` (the helpers against the released Pot on anvil) and
+`sdk/test/cli-sign*.test.ts`; the manual's guide is `docs/guides/signed-cooks.md`, and
+`docs/examples/signed-cook.ts` signs and encodes one offline.
+
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command

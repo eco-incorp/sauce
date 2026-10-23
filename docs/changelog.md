@@ -149,12 +149,12 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
   if older payloads must remain valid. See [historical pins](guides/verification.md#compiler-upgrades-and-historical-pins).
 - **EVM engine and Kitchen 1.2.0 → 1.3.0:** pair with compiler 2.6.0. New Pots have different
   addresses and old Pots do not run on the new engine. Existing funds stay at the old Pot; keep
-  its earlier SDK/compiler/engine pairing to manage them. The Pot ABI adds `cookSigned` and
-  `invalidateNonces`, the `SignedCook`/`NoncesInvalidated` events and signed-cook errors. Only Pots
-  created under the new release support these calls; old Pots do not gain them. The SDK exposes
-  the ABI, not a high-level signed-cook helper. The execution Router is now content-addressed,
-  not generation-numbered; use `v12RouterAddress()`, not the removed `v12RouterGeneration()`.
-  The separate quote Router is unchanged.
+  its earlier SDK/compiler/engine pairing to manage them. The Pot adds signed cooks (`cookSigned`,
+  `invalidateNonces`, the `SignedCook`/`NoncesInvalidated` events and their errors), which only
+  Pots created under the new release take; old Pots do not gain them. The SDK builds them (below).
+  The execution Router is now content-addressed, not generation-numbered; use
+  `v12RouterAddress()`, not the removed `v12RouterGeneration()`. The separate quote Router is
+  unchanged.
 - **SVM engine 1.3.0 → 1.4.0 and Kitchen 1.0.0 → 1.1.0:** pair with compiler 2.6.0. The engine
   program id and Kitchen transaction format change; rebuild cooks/staged-cook instructions with
   this SDK rather than reusing serialized transactions. Existing high-level builder calls need no
@@ -213,15 +213,27 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
 - The MCP server: the ten `sauce_intent_*` tools, the `sauce_open_intent` prompt, the `intent*`
   inputs, `sauce_compile`'s `rpcUrls`, `sauce_inspect`'s `args` and `sauce_verify`'s Portal input
   are removed. Its tools are `sauce_chains`, `sauce_globals`, `sauce_price`, `sauce_pools`,
-  `sauce_compile`, `sauce_actions`, `sauce_tx`, `sauce_pot`, `sauce_reclaim`, `sauce_simulate`,
-  `sauce_inspect`, `sauce_verify`, `sauce_send`, `sauce_skills`, `sauce_skill`, `sauce_dev` and
-  `sauce_install_skills`, and over stdio `sauce_wallet_enable`, `sauce_wallet_create`,
-  `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`, `sauce_wallet_send`,
-  `sauce_pot_list` and `sauce_pot_import`. Its one prompt is `sauce_write_program`.
+  `sauce_compile`, `sauce_actions`, `sauce_tx`, `sauce_signed_cook`, `sauce_pot`, `sauce_reclaim`,
+  `sauce_simulate`, `sauce_inspect`, `sauce_verify`, `sauce_send`, `sauce_skills`, `sauce_skill`,
+  `sauce_dev` and `sauce_install_skills`, and over stdio `sauce_wallet_enable`,
+  `sauce_wallet_create`, `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`,
+  `sauce_wallet_send`, `sauce_sign`, `sauce_pot_list` and `sauce_pot_import`. Its one prompt is
+  `sauce_write_program`.
 - The agent skills: `sauce-intents` is removed, so `sauce skills install` writes 13 skills.
 
 ### The sauce command and the MCP server
 
+- **Added** (EVM): signed cooks. A Pot's owner signs a cook as EIP-712 typed data, and any account
+  sends it with the Pot's `cookSigned`, paying the gas; the Pot pays the Kitchen's fee, up to the
+  signed ceiling. `sauce sign` signs one (with a wallet, or as typed data for any wallet, checking
+  a signature made elsewhere with `--signature`) and prints the `cook` transaction, and
+  `sauce sign --cancel <nonce>` cancels one. The MCP server adds `sauce_signed_cook`, which signs
+  nothing, and over stdio `sauce_sign`, which signs with a wallet; `sauce_wallet_send` sends
+  either's `cook`. `@eco-incorp/sauce/evm/engine` adds `signedCookTypedData`,
+  `signedCookTypedDataJson`, `signedCookDigest`, `encodeCookSigned`, `encodeInvalidateNonces`,
+  `verifySignedCook`, `checkSignedCookPot` and the nonce helpers. A wallet whose policy sets a
+  `native` or `tokens` limit refuses to sign one: what a signed cook moves is decided when someone
+  else sends it, so it cannot be measured when it is signed. See [Signed cooks](guides/signed-cooks.md).
 - **Fixed** (Arc): `sauce simulate` and `sauce run` report each movement of native USDC once, as
   USDC. Arc logs every native transfer itself, so each was listed twice, once as an unknown token,
   a transfer through the ERC-20 once more, and what the Pot was left holding was wrong.

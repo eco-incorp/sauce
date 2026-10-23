@@ -89,17 +89,58 @@ explains it.
 
 ## Signed cooks
 
-Pots created with EVM Kitchen **1.3.0** add `cookSigned(engine, program, maxExecutionFee, nonce,
-deadline, submitter, signature)`: an owner can authorize a cook for submission by another
-account. They also expose `invalidateNonces(word, mask)` to let the owner cancel authorizations.
-The public `v12PotAbi` export from `@eco-incorp/sauce/evm/engine` includes these methods,
-`SignedCook` and `NoncesInvalidated` events, and `BadSignature`, `Expired`, `NonceUsed` and
-`WrongSubmitter` errors. The SDK has **no high-level helper** to create or submit signed cooks;
-these are low-level ABI methods.
+An owner can sign a cook off-chain, and any account can then submit it. A relayer can pay the gas, a
+solver can deliver funds and run the owner's program in one transaction, a keeper can send it later.
+The Pot runs it exactly as it runs the owner's own `cook`, if and only if the owner signed that
+engine, that program with its arguments, that value, that fee ceiling, that nonce, that deadline and
+that submitter, for that Pot, on that chain. The submitter calls `cookSigned(engine, program,
+maxExecutionFee, nonce, deadline, submitter, signature)` on the Pot.
 
-An old Pot never acquires these methods by upgrading the SDK. Keep its earlier
-SDK/compiler/engine pairing to manage its existing funds, or explicitly move funds to a new Pot.
-An SDK upgrade neither changes the old Pot nor transfers its balances.
+**What is signed.** The owner signs an EIP-712 `Cook` under the domain `{ name: "Sauce Pot", version:
+"1", chainId, verifyingContract: the Pot }`, so one signature is good for one Pot on one chain, and a
+chain whose id later changes (a fork) runs none. Each field binds one thing:
+
+| Field             | What it binds                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `engine`          | The engine the Pot delegatecalls. It runs with the Pot's whole authority, so it is signed.                                     |
+| `program`         | The bytecode with `main`'s arguments appended: exactly what the engine runs.                                                   |
+| `value`           | What the submitter's `msg.value` must be. The Pot hashes what it was sent, so any other amount is `BadSignature`.              |
+| `maxExecutionFee` | The most of the Kitchen's fee the Pot pays for this cook.                                                                      |
+| `nonce`           | Which authorization this is: each nonce runs once.                                                                             |
+| `deadline`        | The last block timestamp at which it runs, inclusive.                                                                          |
+| `submitter`       | The only account that may submit it, or zero for anyone. It is the Pot's immediate caller: through a forwarder, that contract. |
+
+Not signed: who submits when `submitter` is zero, when (up to the deadline), the gas, and the
+transaction's position in its block. The program sees the submitter as its caller, so it can pay
+whoever landed it.
+
+**The fee.** A signed cook pays the Kitchen's fee once, as a cook does, but the **Pot** pays it out of
+its balance, which includes the call's value, and never more than `maxExecutionFee`: the Kitchen's
+owner sets the fee and may raise it after you sign. The submitter sends exactly the signed value and
+pays the gas. A Pot that holds no native coin needs a signed value that covers the fee. A fee above
+the smaller of the balance and the ceiling reverts with `FeeNotPaid`.
+
+**Nonces and cancelling.** Nonces are unordered: bit `nonce & 255` of word `nonce >> 8` in the Pot's
+storage is set when a nonce is used, in any order, and the bit is set before the program runs. A
+cook that fails reverts everything, nonce included, so the same signature can be submitted again
+until its deadline. The owner cancels nonces with `invalidateNonces(word, mask)`, which the Pot
+itself may also call, so a signed cook can cancel others without the owner paying gas.
+`SignedCook(nonce, submitter)` and `NoncesInvalidated(word, mask)` are the events.
+
+**Whose signature counts.** The Pot's owner's, by `ecrecover` of a 65-byte signature, or by the
+owner's ERC-1271 `isValidSignature` when the owner has code: a Safe or an EIP-7702 account signs
+this way too.
+
+**Which Pots take it.** Private Pots created with EVM Kitchen **1.3.0** or later, a fixed Router or
+not. A Pot created before that keeps its code and has no `cookSigned`: a call to it goes to its
+Router and reverts. A Shared Pot has no owner to have signed and refuses every signed cook. An old
+Pot never acquires the method by upgrading the SDK: keep its earlier SDK/compiler/engine pairing to
+manage its funds, or move them to a new Pot and sign for that one.
+
+The SDK builds all of it: `signedCookTypedData`, `encodeCookSigned`, `encodeInvalidateNonces`,
+`verifySignedCook` and `checkSignedCookPot` in `@eco-incorp/sauce/evm/engine`, `sauce sign` on the
+command line, and `sauce_signed_cook` and `sauce_sign` in the MCP server.
+[Signed cooks](../guides/signed-cooks.md) shows each, and what to watch for.
 
 ## Where a program's results end
 
@@ -119,12 +160,12 @@ and what to read in it.
 
 ## Who can do what
 
-|                     | Can                                              | Cannot                                                                 |
-| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| The Pot's owner     | Cook any program on it; change an unfixed Router | Hand it to another owner: the owner is fixed when the Pot is created   |
-| Anyone else         | Deploy a Pot for any owner; send a Pot tokens    | Cook on it, or move anything it holds                                  |
-| The Kitchen's owner | Set the fee; choose the Router new Pots start on | Change an existing Pot, its owner or its Router, or move what it holds |
-| The engine          | Run a program inside a Pot its Kitchen created   | Run anywhere else: called directly, it refuses                         |
+|                     | Can                                                                                      | Cannot                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| The Pot's owner     | Cook any program on it; sign a cook for someone else to submit; change an unfixed Router | Hand it to another owner: the owner is fixed when the Pot is created   |
+| Anyone else         | Deploy a Pot for any owner; send a Pot tokens; submit a cook its owner signed            | Cook on it unsigned, or move anything it holds                         |
+| The Kitchen's owner | Set the fee; choose the Router new Pots start on                                         | Change an existing Pot, its owner or its Router, or move what it holds |
+| The engine          | Run a program inside a Pot its Kitchen created                                           | Run anywhere else: called directly, it refuses                         |
 
 A Pot's code never changes once it is deployed: nothing upgrades it. To give what a Pot holds to
 someone else, cook a program that transfers it to them, or to their own Pot.
@@ -158,8 +199,9 @@ large program and the two ways to cook.
 ## Other kinds of Pot
 
 Everything above describes the default kind, a **private Pot**: one owner, who alone may cook on
-it. The Kitchen also makes **Shared Pots**, which have no owner: anyone can cook on one and spend
-what it holds, so a Shared Pot is funded and emptied within one transaction.
+it or sign a cook for someone else to send. The Kitchen also makes **Shared Pots**, which have no
+owner: anyone can cook on one and spend what it holds, so a Shared Pot is funded and emptied
+within one transaction.
 [Pots and cooks in code](../api/README.md#pots-and-cooks-in-code) lists the Kitchen calls for each
 kind.
 

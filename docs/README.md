@@ -58,6 +58,7 @@ Write programs:
 Run programs:
 
 - [Run a program](guides/cli-run.md): compile, simulate and run, read what came back, and get tokens into your Pot.
+- [Signed cooks](guides/signed-cooks.md): sign a cook for another account to send and pay the gas for, cancel one, and what to watch for.
 - [Solana](guides/solana.md): accounts, Token-2022, Solana's pools, large programs and the two ways to run a program.
 - [Solana from the command line](guides/cli-solana.md): accounts, costs, large programs, leftovers and running without a Pot.
 

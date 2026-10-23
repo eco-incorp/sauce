@@ -1,6 +1,6 @@
 ---
 name: sauce-cli
-description: The sauce command line, and the same steps as tools of the Sauce MCP server. Getting the command; looking up a chain's names and pools; compiling a program file or a JSON actions document; the owner's Pot, deployed when first needed and recorded; funding it (--fund and its modes); simulating the cook with no key and reading what it prints; sauce run to sign and send, sauce tx for the user's wallet MCP server (Coinbase, Phantom) or any signer, sauce send for what it signed; arguments to main; sauce inspect; endpoints and signers; an agent's own wallets, password sources and policies; what a preview chain refuses. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, sign with a wallet's MCP server or an agent's own wallet and its policy, map a command to its MCP tool, or when a command refuses a chain.
+description: The sauce command line, and the same steps as tools of the Sauce MCP server. Getting the command; looking up a chain's names and pools; compiling a program file or a JSON actions document; the owner's Pot, deployed when first needed and recorded; funding it (--fund and its modes); simulating the cook with no key and reading what it prints; sauce run to sign and send, sauce tx for the user's wallet MCP server (Coinbase, Phantom) or any signer, sauce send for what it signed, sauce sign for a cook another account sends; arguments to main; sauce inspect; endpoints and signers; an agent's own wallets, password sources and policies; what a preview chain refuses. Use when asked to compile, simulate, run, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, sign with a wallet's MCP server or an agent's own wallet and its policy, map a command to its MCP tool, or when a command refuses a chain.
 ---
 
 # The sauce command
@@ -18,6 +18,7 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
 | Compile, simulate, send, read back a program or an actions document | yes                 |                                        |
 | Deploy, fund or list a Pot                                          | yes                 |                                        |
 | Hand a transaction to another wallet, then broadcast what it signed | yes                 | a Solana plan of steps: `sauce-solana` |
+| Sign a cook for another account to send; cancel one                 | yes                 |                                        |
 | Sign through a wallet's MCP server (Coinbase, Phantom)              | yes                 |                                        |
 | Create or use an agent wallet; a policy refusal                     | yes                 |                                        |
 | A command stops with a message                                      | yes                 |                                        |
@@ -66,6 +67,7 @@ fetches and runs npm's unrelated `sauce` package.
 | `sauce run`      | Compiles, simulates, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
 | `sauce send`     | Broadcasts transactions signed elsewhere, waits for them, reports what they did   |
+| `sauce sign`     | Signs a cook for another account to send and pay the gas for; cancels one         |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
@@ -438,6 +440,54 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
   signature is refused by name, and a cook needing more than one transaction comes from `sauce tx`
   as a plan with a `cursor` for `sauce send <signed>… --cursor <cursor>` (`sauce-solana`).
 
+## A cook another account sends: `sauce sign`
+
+On an EVM chain the Pot's owner can sign a cook without sending it; any account then sends it, pays
+the gas, and the Pot runs exactly what was signed. The owner signs EIP-712 typed data (domain
+`Sauce Pot`, the chain and the Pot) over the engine, the program with `main`'s arguments, the value
+the sender must send, the most of the Kitchen's fee the Pot pays, a nonce, a deadline and the one
+account allowed to send it (anyone, unless named):
+
+```sh
+sauce sign buy.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <arguments>
+```
+
+- **What it signs.** The signer's own Pot, or `--pot <address>`, or `--owner <address>` with
+  `--salt <label>` or `--salt-hex <bytes32>`; the signer must be its owner. `--value <wei>` is what
+  the sender sends (0 unless given). `--max-fee <wei>` is the fee ceiling, else the Kitchen's fee
+  now. `--nonce <n>` is the nonce, else a random one. `--within <seconds>` (an hour unless given)
+  or `--deadline <unix seconds>` is the last second it runs, inclusive; not both.
+  `--submitter <address>` lets only that account send it.
+- **What it prints** (`--json` alone prints only this): `{ chainId, pot, owner, engine, program,
+value, maxExecutionFee, nonce, deadline, submitter, typedData, digest, signature, cook }`, each
+  number a decimal string, `typedData` as `eth_signTypedData_v4` takes it. `cook` is
+  `{ chainId, to, data, value }` with `value` a hex quantity, as `sauce tx` writes a transaction:
+  hand it to the sender. While the Pot has no code, `deployPot` comes too, for any account to send
+  first.
+- **Sending it.** Any wallet sends `cook` from the account it names (or any account), with exactly
+  its `value`: the Pot refuses another amount. The sender pays only gas; the Pot pays the Kitchen's
+  fee out of its balance, which includes the value, up to the ceiling. The notes say the fee now,
+  the ceiling and what the Pot holds, and warn when that is short. A transaction a signer signed
+  goes to `sauce send`. A cook that reverts spends nothing, and can be sent again until the
+  deadline.
+- **Another signer.** With `--owner <address>` and no key it prints `typedData` unsigned. Have the
+  owner's wallet sign it, then run the same line again with `--max-fee`, `--nonce` and `--deadline`
+  as printed and `--signature <hex>`: the signature is checked against the owner (a contract owner
+  through its `isValidSignature`) and `cook` is built. One that does not check is refused.
+- **Cancelling.** `sauce sign --cancel <nonce> --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD`
+  sends the owner's `invalidateNonces` for each word of nonces (`--cancel` repeats); with
+  `--owner <address>` instead it prints them unsigned, for `sauce send`.
+- **Which Pots.** A Private Pot the Kitchen created since signed cooks arrived, fixed Router or not.
+  A Pot created before them has no `cookSigned`, and a Shared Pot refuses every one: the command
+  refuses both, with the reason. Solana is refused: there the owner signs the cook transaction
+  itself.
+- **A wallet's policy.** A `--wallet` whose policy sets `native` or any `tokens` limit refuses to
+  sign, naming the limit: a signed cook runs when someone else sends it, on what the chain holds
+  then, so nothing simulated at signing measures what it moves. `chains` and `to` (the Pot) still
+  apply. Tell the user which limit; never edit the policy.
+- **Anyone holding the output can send it**, once, until the deadline: keep the deadline short,
+  name the submitter when only one account should send it, and cancel what is no longer wanted.
+
 ## Arguments to `main`
 
 A program whose `main` declares typed parameters takes them at run time, so one compiled program
@@ -503,7 +553,7 @@ line numbers in its errors.
 On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `simulate`, `inspect`,
 `verify`, `price` and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its
 deployment out. Everything that leaves a transaction ready to sign, unsigned JSON included, or
-sends one is refused before anything is read or signed: `tx`, `run`, `pot --deploy` and
+sends one is refused before anything is read or signed: `tx`, `run`, `sign`, `pot --deploy` and
 `pot --format cast`. No flag overrides it. The refusal exits 1 and names the supported chains and
 the chain's request:
 
@@ -610,6 +660,8 @@ a note when the cook leaves anything in the Pot: tell the user.
 - **The tools sign nothing**, so `sauce run` has none: the user signs what they return, through a
   wallet's MCP server (`sendCalls`, each transaction, or a Solana `transaction`, above) or with any other
   signer, and `sauce_send` broadcasts what a signer signed but did not send (`sauce send`).
+  `sauce_signed_cook` is `sauce sign` with no signer: the typed data to sign, and with `signature`
+  the `cook` to send, or with `cancel` the cancellations unsigned.
 - **The server over stdio serves the `sauce wallet` directory's wallets as tools**, for experiments
   and development.
   `sauce_wallet_list` and `sauce_wallet_address` name them with no password. Creating
@@ -623,6 +675,8 @@ a note when the cook leaves anything in the Pot: tell the user.
   `sauce_wallet_send` simulates what another tool returned, holds it to the wallet's policy, signs
   and sends it: `sauce run` from a wallet. Each transaction it sent comes back with its hash,
   `explorer` and `trace` to give the user, and a cook with `moves`, `leftInPot` and `summary`.
+  `sauce_sign` signs a cook with a wallet, as `sauce sign --wallet` does, under the same policy
+  rule; `sauce_wallet_send` sends its `cook`, or `sauce_signed_cook`'s, from any wallet.
   Whether an agent can sign is settled when the server starts: `sauce mcp --no-wallets` serves no
   wallet tool, and `--no-stores` keeps none of the command's stores, the wallet directory included,
   so with either nothing signs. Without them the agent can enable the wallets itself with
@@ -650,6 +704,9 @@ a note when the cook leaves anything in the Pot: tell the user.
   no longer land: build it again and hand over the new one.
 - **Fetching the explorer or trace link.** Give both to the user.
 - **Looking for another way to send on a preview chain.** Offer the chain-support request.
+- **A signed cook handed around, or signed for days.** Anyone holding `sauce sign`'s output can send
+  it until its deadline: give it only to the sender, keep the deadline short, and cancel what is no
+  longer wanted.
 - **Compiled output or a `sauce tx` result kept across `sauce update`.** Compiler output pairs with
   the engines by exact version: after an update, compile again and rebuild every unsigned
   transaction printed before it. `sauce compile --json` and `sauce pot list` name the compiler and
