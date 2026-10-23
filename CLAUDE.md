@@ -888,18 +888,28 @@ text stays in place for the accessor pass after it (`UniswapV4.PoolManager.WETH`
 registry contract or interface, an ABI imported from a `.json` module, a name the program does not
 declare; never a name it binds to a value, which shadows an import of that name — and
 `<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
-token's own contract is one (`WETH.ETH`; on Solana a mint, its token accounts derived off its key),
-an undeclared `self` or `ctx.self()` is the Pot and a declared `self` an ordinary variable (as on
-Solana, and for the accessor pass's bare `self`). The chain's native coin
-(`chains/index.ts#nativeCoinSymbol`) takes it too: `ctx.selfBalance()`/`ctx.balance(h)` on an EVM
-chain, `ctx.balance(<account>.address)` on Solana, refused where a token shares the symbol (Arc's
-USDC). Being textual it sees no types, so it refuses by name what the program's text says is not an
-address — a record or a list (`balance-holder.ts`), an interface with no address — and a misspelled symbol is named once the compile fails, from the compiler's byte span
+token's own contract is one (`WETH.balance`; on Solana a mint, its token accounts derived off its
+key), an undeclared `pot` or `ctx.self()` is the Pot and a declared `pot` an ordinary variable (as on
+Solana, and for the accessor pass's bare `pot`, which becomes `ctx.self()`; on Solana the lowering
+consumes every undeclared `pot` itself, as the Pot slot's key, or its account where an `Account` is
+expected). `.<SYMBOL>` is always a registered token; the chain's native coin is `<holder>.balance`:
+`ctx.selfBalance()`/`ctx.balance(h)` on an EVM chain, `ctx.balance(<account>.address)` on Solana, so
+on Arc `pot.USDC` is the 6-decimal token and `pot.balance` the coin. `.balance` on a record, a list or
+a contract call's result (`market.userCollateral(a, b).balance`), `X.at(a).balance()` and a
+namespace's own member keep their meaning. The retired spellings (an undeclared `self`,
+`self.<TOKEN>`, `<holder>.<native symbol>`, `Solana.self`) are refused naming the new one
+(`routes/pot-sugar.ts`). Being textual it sees no types, so it refuses by name what the program's
+text says is not an address — a record or a list (`balance-holder.ts`), an interface with no
+address — and a misspelled symbol is named once the compile fails, from the compiler's byte span
 (`unknown-global.ts#unknownBalanceError`). A struct a contract call returns is not seen: a field of
-one named like a token would be read as a balance.
+one named like a token would be read as a balance. `balance` is the other way round
+(`balance-holder.ts#readsField`): on a contract call's result, a value imported from a module or a
+record field the declaration does not type, `.balance` is left as the field it may be, and only
+where the registry records the result as an address (`contract-results.ts`) is it the native coin;
+`x.balance` the compiler then finds no field of names `ctx.balance(x)`.
 
 **On Solana the token methods and the venue namespaces add their accounts to `main`.**
-`USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)`,
+`USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `pot.USDC`, `Token(mint)`,
 `<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)` (the nine
 price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`,
 `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
@@ -923,7 +933,8 @@ engine with a collector per syntax (`svm-token-rewrite.ts`, `svm-venue-methods.t
 becomes its library function (`@sauce/token`'s SVM arm; for a namespace the venue's OWN
 `@sauce/router` function, `orcaWhirlpool`) and every account it takes is appended to `main` as an
 `Account` parameter, with how it is derived written as an `--account` value in
-`CompiledSauceProgram.derivedAccounts` (`self:USDC`, `@to:USDC`, `mint:USDC`, a program id,
+`CompiledSauceProgram.derivedAccounts` (`pot:USDC` where the program names `pot` in any form, else
+`authority:USDC`; `@to:USDC`, `mint:USDC`, a program id,
 `slot:@pool:USDC.vaultA`, `slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`, where a key with no pool,
 or an account at its address the venue does not own, resolves to an empty slot of nine System
 programs). The CLI's `prepare` refuses a cook naming more than the 64 accounts a transaction locks,
@@ -936,7 +947,7 @@ slot with it under `--account`, so the CLI and MCP share it. SPL Token mints tak
 decimals, an argument's mint the checked write with its decimals read on chain. Every holder's token
 account is checked on chain after the write (owner bytes 32–64), so a builder cannot redirect it; an
 explicit `Account` in a holder's place is paid as attached, unchecked (documented). Holders, mints
-and pools must be known at build time (`self`/`ctx.self()`, an `Address` parameter, a 32-byte key);
+and pools must be known at build time (`pot`/`ctx.self()`, an `Address` parameter, a 32-byte key);
 anything else, a call in a helper, and a script are refused. `compileSauceRoute` refuses derived
 accounts: a route's `execution.accounts` precede the compile. Executed in
 `cli-solana-token-methods.e2e.test.ts` and `cli-solana-venues.e2e.test.ts`.
@@ -1459,7 +1470,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
   example and selector, with its reason); every value an example program reads having a visible
   source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
-  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
+  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `pot`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
   `INPUT_EXCEPTIONS` entry, per example and name, with its reason); and the wording rules below.

@@ -30,7 +30,7 @@ This is the program the quick start runs, without its comments:
 
 ```js
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```

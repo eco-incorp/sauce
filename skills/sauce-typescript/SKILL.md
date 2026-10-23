@@ -253,7 +253,8 @@ address in `deployments` is recorded, not proof of live code.
     `tokenProgram: "token-2022"`.
   - A program compiled with the token methods, or writing an account where it uses it, carries
     `derivedAccounts`: each slot the SDK added to `main`, by name, with its derivation as an
-    `--account` value (`self:USDC`, `@to:USDC`, `pda:@program:"state",@owner`);
+    `--account` value (`pot:USDC` where the program names `pot`, else `authority:USDC`, `@to:USDC`,
+    `pda:@program:"state",@owner`);
     `routes.sourceGlobals("solana").accounts` lists the expressions.
     `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` resolves one to
     the address the cook's `AccountResolution` takes, as `sauce run` does; a venue namespace's

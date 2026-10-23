@@ -37,7 +37,7 @@ function main(
   require(ctx.timestamp() - round.updatedAt <= maxAge, "the price is stale");
 
   const triggered = (stop > 0 && price <= stop) || (takeProfit > 0 && price >= takeProfit);
-  const held = self.WETH;
+  const held = pot.WETH;
   if (!triggered || held == 0) {
     return { price, triggered, sold: 0, received: 0 };
   }
@@ -62,7 +62,7 @@ function main(
   // The limit decides how much sells, so no minimum is known before the swap; the average is held
   // to the floor after it.
   const received = uniswapV3(pool, WETH, USDC, held, limit, 0, ctx.self());
-  const sold = held - self.WETH;
+  const sold = held - pot.WETH;
   require(received >= Math.mulDiv(sold, floor, 10 ** 18), "sold below the floor");
   return { price, triggered, sold, received };
 }

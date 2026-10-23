@@ -19,7 +19,7 @@ const source = readFileSync(
 export const program = routes.compileSauceProgram("solana", source);
 
 // `slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA` is one of the pool's nine accounts paying USDC,
-// read from the pool its key finds; `self:USDC` the Pot's USDC account; `@to:WSOL` the WSOL
+// read from the pool its key finds; `authority:USDC` the Pot's USDC account; `@to:WSOL` the WSOL
 // account of main's argument `to`.
 export const derived = program.derivedAccounts ?? {};
 if (

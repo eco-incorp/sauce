@@ -1,6 +1,6 @@
 /**
  * Full protocol-accessor rewrite -- `Uniswap.UniversalRouter.execute(...)` ->
- * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `ctx.self()`.
+ * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `pot` -> `ctx.self()`.
  * See `src/routes/protocol-rewrite.ts`'s module doc for the design.
  */
 import { compileProgram as compile } from "./helpers";
@@ -156,12 +156,12 @@ describe("rewriteProtocolAccessors: qualified ancestor reference", () => {
   });
 });
 
-describe("rewriteProtocolAccessors: bare self -> ctx.self()", () => {
-  it("rewrites a bare `self` read, byte-identical to hand-written ctx.self()", () => {
-    const source = `function main() { return self; }`;
-    const { source: out, rewrote, selfSites } = rewriteProtocolAccessors(source, BASE);
+describe("rewriteProtocolAccessors: bare pot -> ctx.self()", () => {
+  it("rewrites a bare `pot` read, byte-identical to hand-written ctx.self()", () => {
+    const source = `function main() { return pot; }`;
+    const { source: out, rewrote, potSites } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(true);
-    expect(selfSites).toBe(1);
+    expect(potSites).toBe(1);
     expect(out).toContain("return ctx.self();");
 
     const a = compile(out);
@@ -169,23 +169,49 @@ describe("rewriteProtocolAccessors: bare self -> ctx.self()", () => {
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
 
-  it("skips a member property named self (x.self), an object-literal key, and a declared self", () => {
-    const source = `function main() { let x = 1n; return x.self; }`;
+  it("skips a member property named pot (x.pot), an object-literal key, and a declared pot", () => {
+    const source = `function main() { let x = 1n; return x.pot + { pot: 1n }.pot; }`;
     const { rewrote } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
   });
 
-  it("a declared `self` suppresses the whole-program rewrite", () => {
-    const source = `function main() { let self = 5n; return self; }`;
+  it("a declared `pot` suppresses the whole-program rewrite", () => {
+    const source = `function main() { let pot = 5n; return pot; }`;
     const { rewrote, source: out } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
     expect(out).toBe(source);
   });
 
-  it("selfSugar: false opts out", () => {
-    const source = `function main() { return self; }`;
-    const { rewrote } = rewriteProtocolAccessors(source, BASE, { selfSugar: false });
+  it("potSugar: false opts out", () => {
+    const source = `function main() { return pot; }`;
+    const { rewrote } = rewriteProtocolAccessors(source, BASE, { potSugar: false });
     expect(rewrote).toBe(false);
+  });
+});
+
+describe("rewriteProtocolAccessors: bare self, the Pot's old name, is refused", () => {
+  const message =
+    "`self`: the Pot is `pot`, not `self`: write `pot` (`pot` is the Pot's address, " +
+    "`pot.<TOKEN>` its balance of a token, `pot.balance` its native coin).";
+
+  it.each([
+    `function main() { return self; }`,
+    `function main(to: Address) { require(to != self); }`,
+    `function helper(): Address { return self; }\nfunction main() { return helper(); }`,
+    `function main() { return self.owner; }`,
+  ])("refuses `%s`, with the sugar on or off", (source) => {
+    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(message);
+    expect(() => rewriteProtocolAccessors(source, BASE, { potSugar: false })).toThrow(message);
+  });
+
+  it("leaves a program's own `self` alone, and `self` as a member or a key", () => {
+    for (const source of [
+      `function main() { let self = 5n; return self; }`,
+      `function main(self: Address) { return self; }`,
+      `function main() { let x = 1n; return x.self + { self: 1n }.self + ctx.self(); }`,
+    ]) {
+      expect(() => rewriteProtocolAccessors(source, BASE)).not.toThrow();
+    }
   });
 });
 

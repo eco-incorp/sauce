@@ -81,7 +81,7 @@ export interface SauceCompileOptions {
   /** Parsed ABI bindings merged with the protocol-accessor rewrite's bindings and adapted to the
    *  compiler's inlineContracts option. A same-named binding with a different ABI throws. */
   contracts?: ContractsConfig;
-  /** Resolve registered protocol calls and addresses, and rewrite bare `self` to `ctx.self()`.
+  /** Resolve registered protocol calls and addresses, and rewrite bare `pot` to `ctx.self()`.
    *  Enabled by default; pass false to disable this pass or an options object to configure it.
    *  Contract accessor rewrites require an EVM destination. */
   accessors?: boolean | ProtocolRewriteOptions;
@@ -268,9 +268,11 @@ export interface CompiledSauceProgram {
   readonly manifest?: AccountManifest;
   /**
    * The accounts the SDK added to `main` for the token methods (`USDC.transfer(to, amount)` on
-   * Solana), by parameter name: how each is derived, as an `--account` value — `self:USDC`, the
-   * Pot's USDC account; `@to:USDC`, the USDC account of main's argument `to`. `sauce` fills each
-   * from the cook (`svm/account-names.ts#resolveSvmAccountName`). Absent when it added none.
+   * Solana), by parameter name: how each is derived, as an `--account` value — `pot:USDC`, the
+   * Pot's USDC account (`authority:USDC` where the program never names `pot`: the account of
+   * whoever signs the engine call); `@to:USDC`, the USDC account of main's argument `to`. `sauce`
+   * fills each from the cook (`svm/account-names.ts#resolveSvmAccountName`). Absent when it added
+   * none.
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**
@@ -444,7 +446,8 @@ function compileForChain(
   // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
   // On svm they are values only: the token syntax below still throws there, by name.
   const tokenMap = resolveTokenMap(chain, options.tokens);
-  // The chain's native coin, which `<holder>.<symbol>` reads the balance of as a token's is.
+  // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
+  // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
@@ -483,16 +486,16 @@ function compileForChain(
         : { ...chainValues, ...options.defines };
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
-  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
-  // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
+  // pass. The accessor pass's `pot` sugar rewrites a bare `pot` Identifier -> `ctx.self()`
+  // textually; if it ran first, `pot.USDC` would become `ctx.self().USDC` and the balance
   // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
   // other direction: the accessor pass cannot claim the token pass's output (`__sauce_<write>(...)`
   // is a bare call, and `IERC20` is neither a namespace nor a chain key and its call sits
   // mid-chain, which `decomposeMemberChain` declines), and its
   // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
   // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
-  // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
-  // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
+  // pass's pot-sugar too (`self` there is a member PROPERTY, never a bare read). See
+  // routes-token-rewrite.test.ts's composition test for the regression lock.
   // Two ERC20 rewrites: the `<Sym>.transfer(...)` symbol syntax (when the chain has resolved token
   // symbols) and the `Token(addr)` global wrapper (always — it takes an arbitrary address, not a
   // registry symbol). Both lower a WRITE to `@sauce/token`'s SafeERC20 function and a READ to the
@@ -589,7 +592,7 @@ function compileForChain(
     // A token or protocol name the chain does not have, reported as one rather than as the call
     // the compiler could not lower. Asked only of a program the compiler refused.
     throw (
-      unknownBalanceError(source, chain, { tokens: tokenMap.keys(), native }, error) ??
+      unknownBalanceError(source, chain, { tokens: tokenMap.keys() }, error) ??
       unknownGlobalError(
         source,
         chain,

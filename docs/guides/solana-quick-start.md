@@ -50,7 +50,7 @@ Save this as `pay.sauce.ts`. It is the quick start's program, unchanged:
 //   to: Address       who gets the USDC, an address on the chain it runs on
 //   amount: Uint256   how much, in USDC's smallest unit: USDC has 6 decimals, so 1000000 is 1 USDC
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
@@ -172,7 +172,7 @@ The explorer link shows the cook on Solscan. The recipient now holds 1 USDC more
 
 Very little, for you:
 
-- **The same program.** `USDC.transfer` and `self.USDC` work as on Base. Sauce adds the accounts
+- **The same program.** `USDC.transfer` and `pot.USDC` work as on Base. Sauce adds the accounts
   and checks them.
 - **The Kitchen fee is in SOL**, and the run prints it.
 - **New accounts cost rent.** Your Pot's is paid once.

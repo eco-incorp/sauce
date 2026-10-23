@@ -44,8 +44,9 @@ export interface CompiledProgram {
   readonly manifest?: AccountManifest;
   /**
    * On Solana, the accounts the SDK added to `main` for the token methods and the venues, by name,
-   * with how each is derived (`self:USDC`, the Pot's USDC account; `@to:USDC`, that of `main`'s
-   * argument `to`). A cook fills each itself.
+   * with how each is derived (`pot:USDC`, the Pot's USDC account, where the program names `pot`;
+   * `authority:USDC`, that of whoever signs the engine call, where it does not; `@to:USDC`, that of
+   * `main`'s argument `to`). A cook fills each itself.
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**

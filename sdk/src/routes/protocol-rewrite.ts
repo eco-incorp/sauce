@@ -3,7 +3,8 @@
  *
  * For example, a Base route's `Uniswap.UniversalRouter.execute(...)` becomes
  * `IUniswapV4_UniversalRouter.at(<base-address>).execute(...)`, with the descriptor's ABI supplied
- * as a compiler binding. Bare `self` is rewritten to `ctx.self()` in the same pass.
+ * as a compiler binding. Bare `pot` is rewritten to `ctx.self()` in the same pass, and a bare `self`
+ * (the Pot's old name) is refused, naming `pot`.
  *
  * Recognized call shapes:
  *   (A) `<Protocol>.<Contract>.<method>(...)`        — enclosing chain
@@ -47,6 +48,7 @@ import {
   type Namespace,
 } from "./accessor-index.js";
 import { parseSauce } from "./parse.js";
+import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 
 export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
@@ -57,8 +59,9 @@ export interface ProtocolRewriteOptions {
   /** Restricts a chain-QUALIFIED accessor (shapes C/D) to a named allowlist. Default: any canonical
    *  chain. */
   chainScope?: readonly ChainRef[];
-  /** Rewrites bare `self` -> `ctx.self()` in read position. Default `true`. */
-  selfSugar?: boolean;
+  /** Rewrites bare `pot` -> `ctx.self()` in read position. Default `true`. A bare `self` is refused
+   *  either way. */
+  potSugar?: boolean;
   /** Caller-supplied `compile.contracts` bundle this rewrite's own synthesized bindings must not
    *  silently collide with (a same-name entry with a DIFFERENT ABI throws). */
   existingContracts?: Readonly<ContractsConfig>;
@@ -72,14 +75,14 @@ export interface ProtocolRewriteOptions {
 
 export interface ProtocolRewriteResult {
   readonly source: string;
-  /** True if at least one accessor or `self` site was rewritten. */
+  /** True if at least one accessor or `pot` site was rewritten. */
   readonly rewrote: boolean;
   /** One entry per REFERENCED descriptor -- merge straight into `compile()`'s own `contracts`. */
   readonly contracts: ContractsConfig;
-  /** Count of accessor call sites rewritten (excludes `self` sites) -- for tests/diagnostics. */
+  /** Count of accessor call sites rewritten (excludes `pot` sites) -- for tests/diagnostics. */
   readonly accessorSites: number;
-  /** Count of bare `self` sites rewritten. */
-  readonly selfSites: number;
+  /** Count of bare `pot` sites rewritten. */
+  readonly potSites: number;
   /** Count of bare `<Protocol>.<Contract>` VALUE-position sites resolved to an address literal. */
   readonly valueAccessSites: number;
 }
@@ -612,13 +615,13 @@ function resolveCandidate(
   };
 }
 
-// -- self-sugar: bare `self` -> `ctx.self()` in genuine read position -------------------------
+// -- pot-sugar: bare `pot` -> `ctx.self()` in genuine read position --------------------------------
 
-/** Collects, by node identity, every Identifier node that must NEVER be treated as a `self` READ
- *  even if its name happens to be `"self"`: a declarator id, a function/arrow parameter, a
- *  non-computed member property, a non-computed object-literal key, an assignment target, or an
- *  update-expression operand. */
-function collectSelfExclusions(program: AstNode): ReadonlySet<AstNode> {
+/** Collects, by node identity, every Identifier node that must NEVER be treated as a READ of a name
+ *  (`pot`, or the refused `self`): a declarator id, a function/arrow parameter, a non-computed
+ *  member property, a non-computed object-literal key, an assignment target, or an update-expression
+ *  operand. */
+function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
   walk(program, (n) => {
     if (n.type === "VariableDeclarator") {
@@ -653,30 +656,33 @@ function collectSelfExclusions(program: AstNode): ReadonlySet<AstNode> {
   return excluded;
 }
 
-function collectSelfSites(
+/** The bare reads of `name` the program does not declare: every `pot` the sugar rewrites. */
+function bareReads(
   program: AstNode,
+  name: string,
   excluded: ReadonlySet<AstNode>,
   shadowed: ReadonlySet<string>,
-): Splice[] {
-  if (shadowed.has("self")) return [];
-  const sites: Splice[] = [];
+): AstNode[] {
+  if (shadowed.has(name)) return [];
+  const reads: AstNode[] = [];
   walk(program, (n) => {
     if (
       n.type === "Identifier" &&
-      (n as unknown as { name: string }).name === "self" &&
+      (n as unknown as { name: string }).name === name &&
       !excluded.has(n)
     ) {
-      sites.push({ start: n.start, end: n.end, replacement: "ctx.self()" });
+      reads.push(n);
     }
   });
-  return sites;
+  return reads;
 }
 
 /**
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
- * `opts.selfSugar === false`, every bare `self` read, over `source` for the enclosing/destination
- * `chain`. Edits use parser ranges over the original source, preserving unrelated formatting,
- * comments, and code byte-for-byte.
+ * `opts.potSugar === false`, every bare `pot` read, over `source` for the enclosing/destination
+ * `chain`; refuses a bare `self` the program does not declare (the Pot is `pot`). Edits use parser
+ * ranges over the original source, preserving unrelated formatting, comments, and code
+ * byte-for-byte.
  */
 export function rewriteProtocolAccessors(
   source: string,
@@ -734,9 +740,17 @@ export function rewriteProtocolAccessors(
     }
   }
 
-  const selfSugar = opts.selfSugar ?? true;
-  const excluded = selfSugar ? collectSelfExclusions(program) : new Set<AstNode>();
-  const selfSites = selfSugar ? collectSelfSites(program, excluded, shadowed) : [];
+  const excluded = collectReadExclusions(program);
+  const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, shadowed);
+  if (retired !== undefined) throw selfRefusal(RETIRED_POT_NAME, POT_NAME);
+  const potSites: Splice[] =
+    (opts.potSugar ?? true)
+      ? bareReads(program, POT_NAME, excluded, shadowed).map((n) => ({
+          start: n.start,
+          end: n.end,
+          replacement: "ctx.self()",
+        }))
+      : [];
 
   // Bare `<Protocol>.<Contract>` / `<Chain>.<Protocol>[.<Contract>]` in value position -> its
   // on-chain address literal. Terminal by construction (never a call callee), so it can't overlap a
@@ -750,14 +764,14 @@ export function rewriteProtocolAccessors(
     opts.onContract,
   );
 
-  const allSites = [...resolved, ...selfSites, ...valueSites];
+  const allSites = [...resolved, ...potSites, ...valueSites];
   if (allSites.length === 0) {
     return {
       source,
       rewrote: false,
       contracts: {},
       accessorSites: 0,
-      selfSites: 0,
+      potSites: 0,
       valueAccessSites: 0,
     };
   }
@@ -773,7 +787,7 @@ export function rewriteProtocolAccessors(
     rewrote: true,
     contracts,
     accessorSites: resolved.length,
-    selfSites: selfSites.length,
+    potSites: potSites.length,
     valueAccessSites: valueSites.length,
   };
 }

@@ -63,7 +63,7 @@ describe("a name the program or the compile gives meaning to is not unknown", ()
       "an import",
       'import ISauceRouter from "./artifacts/ISauceRouter.json";\nfunction main() { ISauceRouter.at(ctx.self()); }',
     ],
-    ["the `self` sugar", "function main(): Uint256 { return self.USDC; }"],
+    ["the `pot` sugar", "function main(): Uint256 { return pot.USDC + pot.balance; }"],
   ])("%s", (_name, source) => {
     expect(() => compileOn("base", source)).not.toThrow(/is not a token or protocol/);
   });

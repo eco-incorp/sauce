@@ -57,7 +57,7 @@ describe("fork('base') replayed", { skip: anvilMissing() }, () => {
       source: `function main(recipient: Address, amount: Uint256, reserve: Uint256): void {
         try {
           USDC.transfer(recipient, amount);
-          require(self.USDC >= reserve, "keep the reserve");
+          require(pot.USDC >= reserve, "keep the reserve");
         } catch (error) {
           log(error);
         }

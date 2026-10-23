@@ -25,10 +25,11 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 - A program is a `.sauce.ts` file compiled **for a chain** (`--chain`). Compiling lowers the names
   that chain supplies and the token syntax; everything else reaches the compiler as written,
   annotations included.
-- **A balance is `<holder>.<TOKEN>`, on any address or contract**: `self.USDC` is the Pot's USDC,
-  `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`; the native coin
-  too, `self.ETH` (`ctx.selfBalance()`) and `self.SOL`. Which holders each target takes, and the
-  token methods, are `sauce-globals`'s.
+- **A balance is `<holder>.<TOKEN>`, on any address or contract**: `pot` is the Pot and `pot.USDC`
+  its USDC, `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`. The native
+  coin is `.balance` (wei on an EVM chain, lamports on Solana): `pot.balance` is
+  `ctx.selfBalance()`. Which holders each target takes, and the token methods, are
+  `sauce-globals`'s.
 - Its inputs are `main`'s parameters, taken in declaration order, ABI-encoded and appended to the
   bytecode: one compiled program serves every value. `--args` passes them (`sauce-cli`).
 - Integers are checked `Uint256` or `Int256`; amounts are in smallest units.
@@ -61,7 +62,7 @@ function afterFee(amount: Uint256, bps: Uint256): Uint256 {
 
 // Runtime inputs: main's parameters, passed with the transaction.
 function main(recipient: Address, floor: Uint256) {
-  const held = self.USDC;
+  const held = pot.USDC;
   if (held < floor) {
     throw "below floor";
   }
@@ -96,7 +97,7 @@ function afterFee(amount: Uint256): Uint256 {
 // Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
 // owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
 // `ctx.self()` there would keep them in the Pot.
-const held = self.USDC;
+const held = pot.USDC;
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
 USDC.approve(AaveV3.Pool, supplied);
@@ -357,7 +358,7 @@ Unlike JavaScript, a variable assigned before a failure returns to its earlier v
 function main(recipient: Address, amount: Uint256, reserve: Uint256): void {
   try {
     USDC.transfer(recipient, amount);
-    require(self.USDC >= reserve, "keep the reserve");
+    require(pot.USDC >= reserve, "keep the reserve");
   } catch (error) {
     // The transfer was undone too. Error bytes may be empty or truncated.
     log(error);

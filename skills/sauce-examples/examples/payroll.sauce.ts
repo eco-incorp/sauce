@@ -19,20 +19,19 @@
 //   sauce run payroll.sauce.ts --chain base --keystore <keystore> \
 //     --args '["<alice>","<bob>","<carol>"]' '[3,2,1]' 6000000000
 function main(recipients: Address[], weights: Uint256[], budget: Uint256): Uint256[] {
-  const self = ctx.self();
   const count = recipients.length;
   require(count > 0 && weights.length == count, "give one weight per recipient");
   let total: Uint256 = 0;
   for (let i = 0; i < count; i++) {
     const to = recipients[i];
-    require(to != 0 && to != self, "a recipient is the zero address or the Pot");
+    require(to != 0 && to != pot, "a recipient is the zero address or the Pot");
     for (let j = 0; j < i; j++) {
       require(recipients[j] != to, "a recipient is listed twice");
     }
     total += weights[i];
   }
   require(total > 0, "the weights sum to 0");
-  require(self.USDC >= budget, "budget is not in the Pot");
+  require(pot.USDC >= budget, "budget is not in the Pot");
 
   const paid: Uint256[] = new Array(count);
   let left = budget;

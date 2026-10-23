@@ -165,7 +165,7 @@ describe("a method called on a registry call's result", () => {
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   const word = pool.toBytesBe(32);
   require(word.length == 32);
-  return UniswapV3.Factory.getPool(WETH, USDC, 500).catch(() => { return 0; }) + self.USDC;
+  return UniswapV3.Factory.getPool(WETH, USDC, 500).catch(() => { return 0; }) + pot.USDC;
 }`;
     expect(rewriteContractResults(source, BASE)).toEqual({ source, rewrote: false, sites: 0 });
     expect(compileSauceProgram("base", source).bytecode.length).toBeGreaterThan(0);

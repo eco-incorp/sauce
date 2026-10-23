@@ -1,34 +1,50 @@
 /**
  * What the balance shorthand's holder is, as far as a program's text says: `<holder>.<TOKEN>` reads
- * the holder's balance of a token (`token-rewrite.ts` on an EVM chain, `svm-token-rewrite.ts` on
- * Solana), and any address-valued holder takes it. The rewrite sees no types, so a holder is taken
- * for an address unless the program says it is not one: a record or a list, written as a literal,
- * declared with a record or list type, initialized with one, or returned as one by the program's own
- * function. On such a holder a property named like a token is refused rather than read as a field:
- * the name is reserved for the shorthand.
+ * the holder's balance of a token and `<holder>.balance` its native coin (`token-rewrite.ts` on an
+ * EVM chain, `svm-token-rewrite.ts` on Solana), and any address-valued holder takes them. The
+ * rewrite sees no types, so a holder is taken for an address unless the program says it is not one:
+ * a record or a list, written as a literal, declared with a record or list type, initialized with
+ * one, or returned as one by the program's own function. On such a holder a property named like a
+ * token is refused rather than read as a field: the name is reserved for the shorthand. `balance`
+ * is not reserved: on a record, a list, or a value whose type the text does not show (a contract
+ * call's result, which may be a struct with a `balance` field, or a name imported from a module) it
+ * stays the field it always was (`readsField`).
  *
  * Name-based and whole-program, like the rewrites' shadowing check (`ast-walk.ts`): a name bound to
  * a record anywhere is a record everywhere.
  */
-import { walk, type AstNode } from "./ast-walk.js";
+import { collectPatternNames, walk, type AstNode } from "./ast-walk.js";
 
-/** What a value is, as its declaration says: an address or number, a record, or a list of a kind. */
+/**
+ * What a value is, as its declaration says: an address or number, a record, a list of a kind, or
+ * one whose type only the compiler knows (a contract call's result).
+ */
 type Shape =
   | { readonly kind: "scalar" }
-  | { readonly kind: "record" }
+  /** A record, and where its declaration says, each field's shape (undefined: a scalar). */
+  | { readonly kind: "record"; readonly fields?: ReadonlyMap<string, Shape | undefined> }
+  | { readonly kind: "unknown" }
   | { readonly kind: "list"; readonly element: Shape | undefined };
 
 const SCALAR: Shape = { kind: "scalar" };
 const RECORD: Shape = { kind: "record" };
+const UNKNOWN: Shape = { kind: "unknown" };
+
+/** The language's namespaces, whose calls return a number, bytes or a decoded tuple, never a struct
+ *  a contract defines. */
+const BUILTIN_ROOTS: ReadonlySet<string> = new Set(["ctx", "crypto", "Math", "abi", "evm", "svm"]);
 
 const nameOf = (node: AstNode): string => (node as unknown as { name: string }).name;
 
-/** The names a program binds to a record or a list, and its functions that return one. */
+/** The names a program binds to a record, a list or a value of a type it does not show, and its
+ *  functions that return a record or a list. */
 export interface HolderShapes {
   /** By name: the shape of every value the name is bound to that is not a scalar. */
   readonly names: ReadonlyMap<string, Shape>;
   /** By name: the shape a program function's return annotation declares, when not a scalar. */
   readonly returns: ReadonlyMap<string, Shape>;
+  /** The names the program's imports bind. */
+  readonly imported: ReadonlySet<string>;
 }
 
 /** The program's own type declarations, by name: `interface Leg { … }`, `type Pair = […]`. */
@@ -59,8 +75,22 @@ function shapeOfType(
   if (type === undefined) return undefined;
   switch (type.type) {
     case "TSTypeLiteral":
+    case "TSInterfaceDeclaration": {
+      const members =
+        type.type === "TSTypeLiteral"
+          ? (type as { members?: AstNode[] }).members
+          : (type as { body?: { body?: AstNode[] } }).body?.body;
+      const fields = new Map<string, Shape | undefined>();
+      for (const member of members ?? []) {
+        const key = member.key as AstNode | undefined;
+        if (member.type !== "TSPropertySignature" || key?.type !== "Identifier") continue;
+        const annotation = (member as { typeAnnotation?: { typeAnnotation?: AstNode } })
+          .typeAnnotation?.typeAnnotation;
+        fields.set(nameOf(key), shapeOfType(annotation, types, seen));
+      }
+      return { kind: "record", fields };
+    }
     case "TSTupleType":
-    case "TSInterfaceDeclaration":
       return RECORD;
     case "TSArrayType":
       return { kind: "list", element: shapeOfType(type.elementType as AstNode, types, seen) };
@@ -87,8 +117,17 @@ function annotated(id: AstNode, types: ReadonlyMap<string, AstNode>): Shape | un
 function shapeOfValue(node: AstNode | null | undefined, shapes: HolderShapes): Shape | undefined {
   if (node === null || node === undefined) return undefined;
   switch (node.type) {
-    case "ObjectExpression":
-      return RECORD;
+    case "ObjectExpression": {
+      const fields = new Map<string, Shape | undefined>();
+      for (const property of (node as { properties?: AstNode[] }).properties ?? []) {
+        const key = property.key as AstNode | undefined;
+        if (property.type !== "Property" || property.computed || key?.type !== "Identifier") {
+          continue;
+        }
+        fields.set(nameOf(key), shapeOfValue(property.value as AstNode, shapes) ?? SCALAR);
+      }
+      return { kind: "record", fields };
+    }
     case "ArrayExpression": {
       const elements = ((node as { elements?: (AstNode | null)[] }).elements ?? []).map((one) =>
         shapeOfValue(one, shapes),
@@ -103,35 +142,59 @@ function shapeOfValue(node: AstNode | null | undefined, shapes: HolderShapes): S
       return shapes.names.get(nameOf(node));
     case "CallExpression": {
       const callee = node.callee as AstNode;
-      if (callee.type === "Identifier") return shapes.returns.get(nameOf(callee));
-      // `abi.decode(data, [...])` gives its values as a tuple.
-      if (
-        callee.type === "MemberExpression" &&
-        (callee.object as AstNode).type === "Identifier" &&
-        nameOf(callee.object as AstNode) === "abi" &&
-        (callee.property as AstNode).type === "Identifier" &&
-        nameOf(callee.property as AstNode) === "decode"
-      ) {
-        return RECORD;
+      if (callee.type === "Identifier") {
+        const name = nameOf(callee);
+        // A function imported from a module returns what its module says, which this text does not.
+        return shapes.returns.get(name) ?? (shapes.imported.has(name) ? UNKNOWN : undefined);
       }
-      return undefined;
+      if (callee.type !== "MemberExpression") return UNKNOWN;
+      const object = callee.object as AstNode;
+      const property = callee.property as AstNode;
+      if (object.type === "Identifier" && BUILTIN_ROOTS.has(nameOf(object))) {
+        // `abi.decode(data, [...])` gives its values as a tuple; the other builtins a number or bytes.
+        return nameOf(object) === "abi" &&
+          property.type === "Identifier" &&
+          nameOf(property) === "decode"
+          ? RECORD
+          : undefined;
+      }
+      // A contract's method (`market.userCollateral(a, b)`): its result may be a struct.
+      return UNKNOWN;
     }
     case "MemberExpression": {
-      if ((node as { computed?: boolean }).computed !== true) return undefined;
       const of = shapeOfValue(node.object as AstNode, shapes);
-      return of?.kind === "list" ? of.element : undefined;
+      if ((node as { computed?: boolean }).computed === true) {
+        return of?.kind === "list" ? of.element : undefined;
+      }
+      // A field: of a record whose declaration types it, that type; of a value whose type the text
+      // does not show, or a record whose fields it does not name, a value of unknown type too.
+      if (of?.kind === "unknown") return UNKNOWN;
+      if (of?.kind !== "record") return undefined;
+      const property = node.property as AstNode;
+      const field = property.type === "Identifier" ? nameOf(property) : undefined;
+      return field !== undefined && of.fields?.has(field) === true
+        ? (of.fields.get(field) ?? SCALAR)
+        : UNKNOWN;
     }
     default:
       return undefined;
   }
 }
 
-/** Every name the program binds to a record or a list, and the functions that return one. */
+/** Every name the program binds to a record, a list or a value of a type it does not show, and the
+ *  functions that return a record or a list. */
 export function holderShapes(program: AstNode): HolderShapes {
   const types = typeDeclarations(program);
   const names = new Map<string, Shape>();
   const returns = new Map<string, Shape>();
-  const shapes: HolderShapes = { names, returns };
+  const imported = new Set<string>();
+  walk(program, (n) => {
+    if (n.type !== "ImportDeclaration") return;
+    for (const specifier of (n as { specifiers?: AstNode[] }).specifiers ?? []) {
+      collectPatternNames(specifier.local, imported);
+    }
+  });
+  const shapes: HolderShapes = { names, returns, imported };
   const bind = (id: AstNode | undefined, shape: Shape | undefined): void => {
     if (id?.type !== "Identifier" || shape === undefined || shape.kind === "scalar") return;
     if (!names.has(nameOf(id))) names.set(nameOf(id), shape);
@@ -163,7 +226,16 @@ export function holderShapes(program: AstNode): HolderShapes {
     walk(program, (n) => {
       if (n.type === "VariableDeclarator") {
         const id = n.id as AstNode;
-        bind(id, annotated(id, types) ?? shapeOfValue(n.init as AstNode | null, shapes));
+        const shape = annotated(id, types) ?? shapeOfValue(n.init as AstNode | null, shapes);
+        if (id.type === "Identifier") bind(id, shape);
+        // `const [a, b] = market.positions(x)`: each part of a value of unknown type is one too.
+        else if (shape?.kind === "unknown") {
+          collectPatternNames(id, {
+            add: (name: string) => {
+              if (!names.has(name)) names.set(name, UNKNOWN);
+            },
+          });
+        }
       }
       if (n.type === "ForOfStatement") {
         const left = n.left as AstNode;
@@ -176,6 +248,8 @@ export function holderShapes(program: AstNode): HolderShapes {
       }
     });
   }
+  // Last, so a name the program binds itself keeps that binding's shape.
+  for (const name of imported) if (!names.has(name)) names.set(name, UNKNOWN);
 
   return shapes;
 }
@@ -192,16 +266,27 @@ export function notAnAddress(holder: AstNode, shapes: HolderShapes): string | un
   return undefined;
 }
 
-/** The refusal of `<holder>.<name>` on a holder that is not an address. */
+/**
+ * Whether `<holder>.balance` is the holder's own field rather than its native-coin balance: a
+ * record, a list or a string, or a value whose type the text does not show — a contract call's
+ * result, which may be a struct with a `balance` field (Compound's `userCollateral`), or a name
+ * imported from a module. The compiler then reads the field, as it always did.
+ */
+export function readsField(holder: AstNode, shapes: HolderShapes): boolean {
+  return (
+    notAnAddress(holder, shapes) !== undefined || shapeOfValue(holder, shapes)?.kind === "unknown"
+  );
+}
+
+/** The refusal of `<holder>.<TOKEN>` on a holder that is not an address. */
 export function reservedNameError(
   spelled: string,
   holder: string,
   what: string,
   name: string,
-  kind: "token" | "native coin",
 ): Error {
   return new Error(
-    `${spelled}: \`${holder}\` is ${what}, not an address, and \`${name}\` names ${kind === "token" ? "a token" : "the native coin"}: ` +
+    `${spelled}: \`${holder}\` is ${what}, not an address, and \`${name}\` names a token: ` +
       `\`<holder>.${name}\` reads a holder's ${name} balance, so the name is reserved for that and ` +
       `cannot be a field. Name the field otherwise (\`${name.toLowerCase()}\`), or read the balance of an ` +
       `address it holds (\`${holder}.<field>.${name}\`).`,

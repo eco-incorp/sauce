@@ -33,10 +33,9 @@ One guarded swap on the hookless 0.05% WETH/USDC pool:
 import { uniswapV4 } from "@sauce/router";
 
 function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
-  const self = ctx.self();
-  const before = WETH.balanceOf(self);
+  const before = WETH.balanceOf(pot);
   uniswapV4(UniswapV4.PoolManager, WETH, USDC, amountIn, 500, 10, 0, sqrtPriceLimitX96, minOut, recipient);
-  const unspent = amountIn - (before - WETH.balanceOf(self));
+  const unspent = amountIn - (before - WETH.balanceOf(pot));
   if (unspent > 0) {
     WETH.transfer(recipient, unspent);
   }

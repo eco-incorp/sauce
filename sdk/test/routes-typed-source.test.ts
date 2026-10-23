@@ -69,16 +69,16 @@ function main(amount: Uint256, to: Address): void {
   });
 
   it("compiles to the program the compiler makes of the source with the rewrite done by hand", () => {
-    // The only rewrite here is the protocol pass's bare `self`; the rest must reach the compiler
+    // The only rewrite here is the protocol pass's bare `pot`; the rest must reach the compiler
     // byte for byte, annotations included.
     const source = `${HELPERS}
 function main(amount: Uint256): Uint256 {
   const parts: Uint256[] = [amount, ctx.timestamp()];
-  return total(doubled(parts)) + ctx.balance(self);
+  return total(doubled(parts)) + ctx.balance(pot);
 }`;
     const routed = compileSauceRoute("base", source, EXECUTION);
     const direct = compileWithRs({
-      source: source.replace("(self)", "(ctx.self())"),
+      source: source.replace("(pot)", "(ctx.self())"),
       target: "v12",
     });
 
@@ -137,14 +137,14 @@ function main(to: Address): Uint256 {
   });
 
   it("reads an annotated parameter as the binding it is", () => {
-    // `self` as an annotated parameter is a declaration, so the whole-program shadow rule leaves
-    // every `self` alone, exactly as it does for an unannotated one.
+    // `pot` as an annotated parameter is a declaration, so the whole-program shadow rule leaves
+    // every `pot` alone, exactly as it does for an unannotated one.
     const out = rewriteProtocolAccessors(
-      "function f(self: Address): Address { return self; }\nfunction main(): Address { return f(self); }",
+      "function f(pot: Address): Address { return pot; }\nfunction main(): Address { return f(pot); }",
       BASE,
     );
     expect(out.source).toBe(
-      "function f(self: Address): Address { return self; }\nfunction main(): Address { return f(self); }",
+      "function f(pot: Address): Address { return pot; }\nfunction main(): Address { return f(pot); }",
     );
   });
 

@@ -170,7 +170,7 @@ holder followed by a token's name reads a balance:
 function main(token: Address, amount: Uint256) {
   USDC.approve(Uniswap.UniversalRouter, amount);
   Token(token).approve(Uniswap.UniversalRouter, amount);
-  return self.USDC;
+  return pot.USDC;
 }
 ```
 
@@ -182,32 +182,34 @@ other than as `t.<method>(...)`. The token member syntax supports `transfer`, `a
 
 ### Balances
 
-A balance is the holder, a dot, and the token. Any address or contract can be the holder:
-`self.USDC` is the USDC your Pot holds, `recipient.TSLAx` is the TSLAx `recipient` holds, and
+A balance is the holder, a dot, and the token. Any address or contract can be the holder: `pot` is
+your Pot, so `pot.USDC` is the USDC it holds; `recipient.TSLAx` is the TSLAx `recipient` holds, and
 `UniswapV4.PoolManager.WETH` is the WETH sitting in Uniswap's PoolManager. It is a shorter way to
 write `USDC.balanceOf(recipient)`, and compiles to exactly the same program.
 
-The chain's own coin works the same way: `self.ETH` is the ETH your Pot holds (`ctx.selfBalance()`),
-`recipient.ETH` is `ctx.balance(recipient)`, and on Solana `self.SOL` is your Pot's SOL.
+After the dot, a symbol is always a registered token. The chain's own coin is `.balance`, in wei on
+an EVM chain and lamports on Solana: `pot.balance` is the ETH your Pot holds (`ctx.selfBalance()`),
+`recipient.balance` is `ctx.balance(recipient)`, and on Solana `pot.balance` is your Pot's SOL. On
+Arc, whose coin is USDC, `pot.USDC` is the 6-decimal token and `pot.balance` the 18-decimal coin.
 
 The holder can be:
 
-- **On an EVM chain**: any address. That is `self` (the Pot), a variable or parameter of the
-  program, an address written out, a protocol contract (`Aave.Pool`), a contract given an address
+- **On an EVM chain**: any address. That is `pot`, a variable or parameter of the program, an
+  address written out, a protocol contract (`Aave.Pool`), a contract given an address
   (`UniswapV3.Pool(pool).USDC` reads `pool`'s balance), or a call that returns an address
-  (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named
-  `self` reads that variable's balance.
-- **A token's own contract too**: `WETH.ETH` is the ETH locked in the WETH contract, and `USDC.WETH`
-  is the WETH held by the USDC contract. On Solana, `USDC.SOL` is the SOL in the USDC mint's
-  account.
-- **On Solana**: `self` (the Pot), `Solana.owner`, an `Address` parameter of `main`, a token's
-  mint, or a 32-byte key written out. The holder has to be known when the transaction is built,
-  because Sauce adds the holder's account to it ([Solana](solana.md)).
+  (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named `pot`
+  owns the name and reads that variable's balance.
+- **A token's own contract too**: `WETH.balance` is the ETH locked in the WETH contract, and
+  `USDC.WETH` is the WETH held by the USDC contract. On Solana, `USDC.balance` is the SOL in the
+  USDC mint's account.
+- **On Solana**: `pot`, `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a
+  32-byte key written out. The holder has to be known when the transaction is built, because Sauce
+  adds the holder's account to it ([Solana](solana.md)).
 
 Because `<anything>.USDC` reads a balance, a record or a list cannot have a field named like a
-token or the chain's coin: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to
-name the field otherwise (`usdc` is fine). On a chain whose coin shares its symbol with a token,
-as Arc's USDC does, it refuses the shorthand for that symbol and asks which you mean.
+token: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to name the field otherwise
+(`usdc` is fine). `.balance` on a record, a list or a contract call's result reads its field;
+write `ctx.balance(x)` for the coin there.
 
 A token named with `Token(address)` has no short form: write `Token(address).balanceOf(holder)`.
 
@@ -280,7 +282,7 @@ do. The `sauce` command's `run --fund` makes the signature and the pull for you
 
 ## Tokenized stocks
 
-Ethereum, Base and Solana also register tokenized stocks, named the same way: `self.SPCXc` is how
+Ethereum, Base and Solana also register tokenized stocks, named the same way: `pot.SPCXc` is how
 many of Coinbase's SpaceX tokens the Pot holds on Base. On Solana each is a Token-2022 mint (a mint
 of Solana's newer token program, which can add features such as transfer fees) that a program
 passes to `@sauce/token`'s functions: `balanceOf(TSLAx, account)`.

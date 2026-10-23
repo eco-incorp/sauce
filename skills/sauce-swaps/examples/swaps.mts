@@ -294,7 +294,7 @@ for (const part of ["program", "pool", "vaultA", "ticks2"])
     `the pool's ${part} is derived from the pool its key finds`,
   );
 check(
-  derived.potWSOL === "self:WSOL" && derived.toWSOL === "@to:WSOL",
+  derived.potWSOL === "authority:WSOL" && derived.toWSOL === "@to:WSOL",
   "what is bought lands in the Pot's WSOL account, and goes on to to's",
 );
 check(

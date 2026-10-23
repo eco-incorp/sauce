@@ -17,7 +17,7 @@ import { bytesToHex, concatHex, getAddress } from "viem";
 // `USDC` and `AaveV3.Pool` are the registry's names: each chain compiles them to its own addresses.
 const source = `
 function main(onBehalfOf: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.approve(AaveV3.Pool, amount);
   AaveV3.Pool.supply(USDC, amount, onBehalfOf, 0);
 }

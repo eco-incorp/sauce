@@ -416,13 +416,9 @@ function collectTokenMethods(l: SvmLowering): void {
     const isNative = !l.isSymbol(name);
     const what = notAnAddress(object, shapes);
     if (what !== undefined) {
-      throw reservedNameError(
-        spelled,
-        source.slice(object.start, object.end),
-        what,
-        name,
-        isNative ? "native coin" : "token",
-      );
+      // A record's or a list's field that only a token's name is reserved from.
+      if (isNative) return;
+      throw reservedNameError(spelled, source.slice(object.start, object.end), what, name);
     }
     l.site(n, () => {
       l.requireInMain(n, spelled, isNative ? "a balance of the native coin" : "a token method");

@@ -168,14 +168,14 @@ const slots = (payout.manifest?.accounts ?? []).map((a) =>
 check(
   JSON.stringify(payout.derivedAccounts) ===
     JSON.stringify({
-      potUSDC: "self:USDC",
-      pot: "self",
+      potUSDC: "pot:USDC",
+      pot: "pot",
       tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       recipientUSDC: "@recipient:USDC",
       recipientTSLAx: "@recipient:TSLAx",
       token2022Program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       mintTSLAx: "mint:TSLAx",
-      potTSLAx: "self:TSLAx",
+      potTSLAx: "pot:TSLAx",
     }),
   `the accounts added and their derivations: ${JSON.stringify(payout.derivedAccounts)}`,
 );

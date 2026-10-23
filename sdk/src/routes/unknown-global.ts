@@ -19,8 +19,9 @@ import { collectDeclaredNames, walk, type AstNode } from "./ast-walk.js";
 import { isChainKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
 import { parseSauce } from "./parse.js";
+import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 
-/** The compiler's own namespace roots, and the `self` sugar the protocol rewrite resolves. */
+/** The compiler's own namespace roots, and the `pot` sugar the protocol rewrite resolves. */
 const BUILTIN_ROOTS: ReadonlySet<string> = new Set([
   "ctx",
   "crypto",
@@ -28,7 +29,7 @@ const BUILTIN_ROOTS: ReadonlySet<string> = new Set([
   "abi",
   "evm",
   "svm",
-  "self",
+  POT_NAME,
 ]);
 
 /** What else gives a name meaning in this compile, beside the program's own declarations. */
@@ -128,8 +129,9 @@ export function unknownGlobalError(
     unknown = object;
   });
   if (unknown === undefined) return undefined;
-
   const name = (unknown as unknown as { name: string }).name;
+  // `self.X` reaches here only where the protocol rewrite, which refuses `self`, did not run.
+  if (name === RETIRED_POT_NAME) return selfRefusal(RETIRED_POT_NAME, POT_NAME);
   const matches = nearMatches(name, [...known.tokens, ...protocolsOn(chain)]);
   const suggestion =
     matches.length === 0
@@ -149,17 +151,19 @@ export function unknownGlobalError(
 const STYLE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 /**
- * For a compile that failed reading a member of a value that is no record — `self.USDCC`,
+ * For a compile that failed reading a member of a value that is no record — `pot.USDCC`,
  * `to.WETHH` — an error saying the name is not a token on `chain`, with the near matches among its
- * tokens and its native coin: a balance read misspelled, which the balance shorthand left as it was
- * written. The compiler says where (`field access is only valid on a tuple (bytes a..b)`), so a
+ * tokens and `balance`: a balance read misspelled, which the balance shorthand left as it was
+ * written. `x.balance` left as written on a value whose type the text does not show
+ * (`balance-holder.ts#readsField`) is read as its native coin by `ctx.balance(x)`, which the error
+ * names. The compiler says where (`field access is only valid on a tuple (bytes a..b)`), so a
  * real record's field, whose miss the compiler reports another way, is never taken for one.
  * `undefined` for any other failure, and the compiler's error stands.
  */
 export function unknownBalanceError(
   source: string,
   chain: CanonicalChain,
-  names: { readonly tokens: Iterable<string>; readonly native?: string },
+  names: { readonly tokens: Iterable<string> },
   cause: unknown,
 ): Error | undefined {
   const message = String((cause as Error | undefined)?.message ?? cause).replace(STYLE, "");
@@ -180,17 +184,27 @@ export function unknownBalanceError(
   if (property?.type !== "Identifier") return undefined;
 
   const name = (property as unknown as { name: string }).name;
-  const native = names.native;
-  const matches = nearMatches(name, [...names.tokens, ...(native === undefined ? [] : [native])]);
+  const object = member!.object as AstNode;
+  const holder = source.slice(object.start, object.end);
+  if (name === BALANCE_MEMBER) {
+    return new Error(
+      `compileSauceRoute: \`${holder}.${name}\` was read as a field of \`${holder}\`, which has ` +
+        `none: \`${holder}\` is a value whose type the program's text does not show (a contract ` +
+        `call's result, a record's member or an import may be a struct with a \`${BALANCE_MEMBER}\` ` +
+        `field), so \`.${BALANCE_MEMBER}\` is left to the compiler there. For its native coin write ` +
+        `\`ctx.balance(${holder})\`, or bind it to a local declared \`Address\` first.`,
+      { cause },
+    );
+  }
+  const matches = nearMatches(name, [...names.tokens, BALANCE_MEMBER]);
   const suggestion =
     matches.length === 0
       ? ""
       : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
   return new Error(
-    `compileSauceRoute: \`${name}\` is not a token on ${chain.slug}` +
-      (native === undefined ? "" : `, nor its native coin, ${native}`) +
-      `.${suggestion} \`<holder>.<TOKEN>\` reads the holder's balance of a token the chain ` +
-      "registers, or of its native coin; a value that is not a record has no other member.",
+    `compileSauceRoute: \`${name}\` is not a token on ${chain.slug}.${suggestion} ` +
+      `\`<holder>.<TOKEN>\` reads the holder's balance of a token the chain registers, and ` +
+      `\`<holder>.${BALANCE_MEMBER}\` its native coin; a value that is not a record has no other member.`,
     { cause },
   );
 }

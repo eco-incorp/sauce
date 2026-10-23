@@ -202,6 +202,14 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
    Use the [current command reference](../reference/cli.md) and
    [MCP tool reference](mcp-tools.md) when updating automation. Run `sauce skills update` to
    remove the retired `sauce-intents` skill; locally edited files are kept unless forced.
+10. **Rename the Pot and the native coin in programs.** Write `pot` for the old bare `self`,
+    `pot.USDC` for `self.USDC`, and `<holder>.balance` for `<holder>.ETH`, `<holder>.SOL` or any
+    native symbol (`pot.balance` for the Pot's). On Solana, write `pot` for `Solana.self`
+    (`pot.signer()`, `pot.writable()`). Each old spelling is refused, naming the new one. On a
+    contract call's result, `.balance` reads the field a struct may have: for the coin an address
+    holds there, write `ctx.balance(x)`. In `--account` values and Solana derivations, `self` is
+    `authority` (the Pot through the Kitchen, the owner with `--via engine`), and a program that
+    names `pot` is refused with `--via engine`.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,

@@ -20,7 +20,7 @@ function main(payees: { to: Address; bps: Uint256 }[]): Uint256[] {
     weights += payee.bps;
   }
   require(weights == 10000, "the weights do not add up to 10000");
-  const balance = self.USDC;
+  const balance = pot.USDC;
   require(balance > 0, "the Pot holds no USDC");
 
   const paid: Uint256[] = new Array(payees.length);

@@ -7,7 +7,7 @@
  *     writes (call position):  `<Sym>.transfer/.approve/.transferFrom(...)` -> `@sauce/token`'s function
  *     read (call position):    `<Sym>.balanceOf(...)`                       -> `IERC20.at(<Sym>).balanceOf(...)`
  *     sugar (value position):  `<holder>.<Sym>`                             -> `IERC20.at(<Sym>).balanceOf(<holder>)`
- *                              `<holder>.<native coin>`                     -> `ctx.selfBalance()`, `ctx.balance(<holder>)`
+ *                              `<holder>.balance`, the native coin          -> `ctx.selfBalance()`, `ctx.balance(<holder>)`
  *
  *   `rewriteTokenFactory` — the `Token(<addr>)` wrapper, for any address:
  *     `Token(<addr>).<write>(...)`, and `t.<write>(...)` on `const t = Token(<addr>)` -> `@sauce/token`
@@ -33,18 +33,25 @@
  *
  * RECOGNITION IS DISJOINT BY CONSTRUCTION, not by priority ordering: a symbol write or read needs
  * `<Sym>` as the member chain's HEAD with a REWRITABLE_METHODS member under a CALL parent; the
- * balance sugar needs `<Sym>` as the MEMBER with a non-call, non-lvalue parent and a HOLDER as the
- * object. A token symbol can never satisfy both shapes for the same node, so the site lists never
- * overlap. `USDC.balanceOf(x)` is the read's (and `token-registry.ts`'s module-eval guard -- no
- * registry symbol may equal a REWRITABLE_METHODS name -- keeps that permanent); `x.USDC` is the
- * sugar's, and so is `USDC.WETH`: the WETH the USDC contract holds.
+ * balance sugar needs `<Sym>` (or `balance`) as the MEMBER with a non-call, non-lvalue parent and a
+ * HOLDER as the object. A token symbol can never satisfy both shapes for the same node, so the site
+ * lists never overlap. `USDC.balanceOf(x)` is the read's (and `token-registry.ts`'s module-eval
+ * guard -- no registry symbol may equal a REWRITABLE_METHODS name -- keeps that permanent); `x.USDC`
+ * is the sugar's, and so is `USDC.WETH`: the WETH the USDC contract holds.
+ *
+ * `.<Sym>` is always a registered token, even where the chain's native coin has the same symbol
+ * (Arc's USDC); the native coin is `.balance`. Its old spelling, `<holder>.<native symbol>`, is
+ * refused where it read a holder's coin, naming `.balance` (`pot-sugar.ts`). `.balance` is not
+ * reserved: on a value that may have a field of that name (`balance-holder.ts#readsField`) it stays
+ * the field.
  *
  * Shadowing-aware, CONSERVATIVELY, on the TOKEN name only: if a name anywhere in the WHOLE program
  * is bound (`let`/`const`, a parameter, an import, ...), EVERY occurrence of it is left un-rewritten,
  * rather than re-deriving the compiler's own scoping rules. A user who declares `USDC` or `Token`
  * owns the name. The sugar's HOLDER name is deliberately NOT shadow-checked -- a local variable IS
- * the intended holder -- but for `self`, which is the Pot (`ctx.self()`) only while the program
- * declares no `self` of its own: `const self = ctx.self(); self.USDC` reads the local.
+ * the intended holder -- but for `pot`, which is the Pot (`ctx.self()`) only while the program
+ * declares no `pot` of its own: `const pot = ctx.self(); pot.USDC` reads the local. `self`, the
+ * Pot's old name, is refused while the program declares no `self`.
  *
  * A symbol method outside REWRITABLE_METHODS is left untouched and fails closed at compile. A `Token(...)` call in any position this module cannot lower is REFUSED with an
  * error naming the spellings that work — never passed through as the typed binding, which would
@@ -63,9 +70,17 @@ import { isChainKey, namedContractKind, resolveNamespace } from "./accessor-inde
 import {
   holderShapes,
   notAnAddress,
+  readsField,
   reservedNameError,
   type HolderShapes,
 } from "./balance-holder.js";
+import {
+  BALANCE_MEMBER,
+  nativeSymbolRefusal,
+  POT_NAME,
+  RETIRED_POT_NAME,
+  selfRefusal,
+} from "./pot-sugar.js";
 import { decomposeMemberChain } from "./protocol-rewrite.js";
 import { parseSauce } from "./parse.js";
 
@@ -319,7 +334,7 @@ export function collectValuePositionExclusions(program: AstNode): ReadonlySet<As
 
 /** A balance read's holder, as the rewrite emits it. */
 type Holder =
-  /** The Pot: `self`, while the program declares no `self` of its own, or `ctx.self()`. */
+  /** The Pot: `pot`, while the program declares no `pot` of its own, or `ctx.self()`. */
   | { readonly kind: "pot" }
   /** An address written out, in the exact value of its raw text. */
   | { readonly kind: "literal"; readonly value: string }
@@ -388,17 +403,18 @@ function registryRoot(name: string, shadowed: ReadonlySet<string>): boolean {
 
 /**
  * The holder in `<holder>.<name>`, or `undefined` where the member is not the shorthand's to read:
- * a chain's or a protocol's own member (`Base.USDC`, `Maker.Dai`), which the accessor pass owns.
- * Any address-valued holder takes it — `self`, `ctx.self()`, a variable, an address written out, a
+ * a chain's or a protocol's own member (`Base.USDC`, `Maker.Dai`), which the accessor pass owns,
+ * and, for `balance`, a field (`readsField`: a record's, or a contract call's result's).
+ * Any address-valued holder takes it — `pot`, `ctx.self()`, a variable, an address written out, a
  * protocol contract (`UniswapV4.PoolManager`), a contract bound to an address (`X.at(a)`, whose
- * address is the holder), a call that returns an address, a token's own contract (`WETH.ETH`).
- * Refused, by name: an interface that has no address, and a holder the program says is a record or
- * a list.
+ * address is the holder), a call that returns an address, a token's own contract (`WETH.balance`).
+ * Refused, by name: `self` (the Pot is `pot`), an interface that has no address, and, for a token,
+ * a holder the program says is a record or a list.
  */
 function resolveHolder(
   member: AstNode,
   name: string,
-  kind: "token" | "native coin",
+  kind: "token" | "balance",
   scope: HolderScope,
 ): Holder | undefined {
   const object = member.object as AstNode;
@@ -406,17 +422,29 @@ function resolveHolder(
   const text = scope.source.slice(object.start, object.end);
   const refuse = (why: string): Error => new Error(`${spelled}: ${why}`);
   const what = notAnAddress(object, scope.shapes);
-  if (what !== undefined) throw reservedNameError(spelled, text, what, name, kind);
+  if (what !== undefined) {
+    if (kind === "balance") return undefined;
+    throw reservedNameError(spelled, text, what, name);
+  }
+  // A value whose type the text does not show may be a struct with a field of the name.
+  const field = kind === "balance" && readsField(object, scope.shapes);
   switch (object.type) {
     case "Identifier": {
       const holder = (object as unknown as { name: string }).name;
-      if (holder === "self" && !scope.shadowed.has("self")) return { kind: "pot" };
+      if (holder === RETIRED_POT_NAME && !scope.shadowed.has(RETIRED_POT_NAME)) {
+        throw selfRefusal(
+          scope.source.slice(member.start, member.end),
+          `${POT_NAME}.${kind === "token" ? name : BALANCE_MEMBER}`,
+        );
+      }
+      if (holder === POT_NAME && !scope.shadowed.has(POT_NAME)) return { kind: "pot" };
       // Reserved defensively -- no longer a compiler namespace root (address.* was dropped for
       // gated ctx.*), but a bare `address` holder is still excluded rather than re-opened.
       if (holder === "address" && !scope.shadowed.has("address")) return undefined;
       if (registryRoot(holder, scope.shadowed)) return undefined;
-      // A token's own contract is a holder like any other: `WETH.ETH` is the ETH the WETH contract
-      // holds, `USDC.WETH` the WETH the USDC contract does. The symbol is its address's define.
+      if (field) return undefined;
+      // A token's own contract is a holder like any other: `WETH.balance` is the ETH the WETH
+      // contract holds, `USDC.WETH` the WETH the USDC contract does. The symbol is its address's define.
       return { kind: "expression", node: object };
     }
     case "Literal": {
@@ -432,13 +460,16 @@ function resolveHolder(
     case "MemberExpression": {
       const chain = decomposeMemberChain(object);
       if (chain === undefined || !registryRoot(chain.head, scope.shadowed)) {
-        return { kind: "expression", node: object };
+        // `p.to.balance`: a field of a record whose declaration types it, else what `field` says.
+        return field ? undefined : { kind: "expression", node: object };
       }
       // `<Ns>.<Contract>` or `<Chain>.<Ns>.<Contract>`: a contract's address, which the accessor
       // pass resolves (or refuses: an ambiguous alias, a contract not on the chain). A bare
-      // namespace or a chain's token is the accessor pass's own member.
+      // namespace or a chain's token is the accessor pass's own member, and so is a contract the
+      // registry names by the whole path, `balance` included.
       const segments = isChainKey(chain.head) ? chain.path : [chain.head, ...chain.path];
       if (segments.length < 2) return undefined;
+      if (namedContractKind(chain.head, [...chain.path, name]) !== undefined) return undefined;
       if (namedContractKind(chain.head, chain.path) === "interface") {
         throw refuse(
           `\`${text}\` is an interface, with no address of its own: give it the address, ` +
@@ -469,14 +500,15 @@ function resolveHolder(
       if (bound && args.length === 1 && args[0]!.type !== "SpreadElement") {
         return { kind: "expression", node: args[0]! };
       }
+      if (field) return undefined;
       return { kind: "expression", node: object };
     }
     default:
-      return { kind: "expression", node: object };
+      return field ? undefined : { kind: "expression", node: object };
   }
 }
 
-/** The chain's native coin, which `<holder>.<symbol>` reads the balance of too. */
+/** The chain's native coin, whose old spelling `<holder>.<symbol>` is refused, naming `.balance`. */
 export interface NativeCoin {
   readonly symbol: string;
   /** The chain's slug, for a message. */
@@ -555,34 +587,49 @@ function collectBalanceSites(
     const property = (n as { property?: AstNode }).property;
     if (!property || property.type !== "Identifier") return;
     const name = (property as unknown as { name: string }).name;
-    if (shadowed.has(name)) return;
-    const isNative = native !== undefined && name === native.symbol;
-    if (!tokens.has(name) && !isNative) return;
-    const holder = resolveHolder(n, name, tokens.has(name) ? "token" : "native coin", scope);
-    if (holder === undefined) return;
-    if (isNative && tokens.has(name)) {
-      const address = tokens instanceof Map ? tokens.get(name) : undefined;
-      throw new Error(
-        `\`${source.slice(n.start, n.end)}\`: on ${native.chain}, ${name} is both the native coin and ` +
-          `the token${address === undefined ? "" : ` at ${formatBigint(address)}`}, so ` +
-          `\`<holder>.${name}\` would not say which: write \`ctx.balance(<holder>)\` ` +
-          `(\`ctx.selfBalance()\` for the Pot) for the native coin, or \`${name}.balanceOf(<holder>)\` for the token.`,
-      );
+    const site = source.slice(n.start, n.end);
+    // `.<SYMBOL>` is always a registered token: on Arc, whose native coin is USDC, `pot.USDC` is the
+    // token, and the coin is `pot.balance`.
+    if (tokens.has(name)) {
+      if (shadowed.has(name)) return;
+      const holder = resolveHolder(n, name, "token", scope);
+      if (holder === undefined) return;
+      // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
+      // spellings are one program under any value the compile gives the symbol, a define included.
+      sites.push(...balanceSplices(n, holder, (at) => `IERC20.at(${name}).balanceOf(${at})`));
+      count++;
+      tokenReads++;
+      return;
     }
-    count++;
-    if (isNative) {
+    // A member, never a name the program binds: `const balance = …` leaves `pot.balance` alone.
+    if (name === BALANCE_MEMBER) {
+      const holder = resolveHolder(n, name, "balance", scope);
+      if (holder === undefined) return;
       // The Pot's native balance is the executing contract's own; any other holder's is read at it.
       sites.push(
         ...(holder.kind === "pot"
           ? [{ start: n.start, end: n.end, replacement: "ctx.selfBalance()" }]
           : balanceSplices(n, holder, (at) => `ctx.balance(${at})`)),
       );
+      count++;
       return;
     }
-    // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
-    // spellings are one program under any value the compile gives the symbol, a define included.
-    sites.push(...balanceSplices(n, holder, (at) => `IERC20.at(${name}).balanceOf(${at})`));
-    tokenReads++;
+    // `<holder>.ETH`, the native coin's old spelling, refused where a holder's balance was read:
+    // on a record or a list it is the field it says.
+    if (native === undefined || name !== native.symbol || shadowed.has(name)) return;
+    const object = n.object as AstNode;
+    if (notAnAddress(object, scope.shapes) !== undefined) return;
+    const balance = resolveHolder(n, name, "balance", scope);
+    if (balance === undefined && resolveHolder(n, name, "token", scope) === undefined) return;
+    const holder = source.slice(object.start, object.end);
+    throw nativeSymbolRefusal(
+      site,
+      name,
+      native.chain,
+      balance === undefined
+        ? `ctx.balance(${holder})`
+        : `${balance.kind === "pot" ? POT_NAME : holder}.${BALANCE_MEMBER}`,
+    );
   });
   return { sites, count, tokenReads };
 }

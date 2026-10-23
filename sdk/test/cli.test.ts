@@ -532,7 +532,7 @@ describe("sauce compile", () => {
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
     const report = appliedDefines(
       "function main(to: Address, payee: { bps: Uint256 }): Uint256 {\n" +
-        "  return self.WETH + to.USDC + payee.bps + Base.USDC;\n}\n",
+        "  return pot.WETH + to.USDC + payee.bps + Base.USDC;\n}\n",
       requireChain("ethereum"),
       { bps: 1n },
     );

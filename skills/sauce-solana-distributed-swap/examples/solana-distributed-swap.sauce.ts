@@ -35,8 +35,8 @@ function main(
   maxAvgPrice: Uint256,
   recipient: Address,
 ): { spent: Uint256; bought: Uint256; unspent: Uint256 } {
-  require(self.USDC >= budget, "budget is not in the Pot");
-  const kept = self.USDC - budget; // the Pot's other USDC, never spent
+  require(pot.USDC >= budget, "budget is not in the Pot");
+  const kept = pot.USDC - budget; // the Pot's other USDC, never spent
 
   // Each pool in turn, offered what is left of the budget.
   let bought = 0;
@@ -45,7 +45,7 @@ function main(
       Raydium.CLMM.pool(USDC, SPCX_US, fee),
       USDC,
       SPCX_US,
-      self.USDC - kept,
+      pot.USDC - kept,
       priceLimit,
       0,
     );
@@ -54,7 +54,7 @@ function main(
     Byreal.CLMM.pool(USDC, SPCX_US, 1000),
     USDC,
     SPCX_US,
-    self.USDC - kept,
+    pot.USDC - kept,
     priceLimit,
     0,
   );
@@ -62,12 +62,12 @@ function main(
     Pancakeswap.CLMM.pool(USDC, SPCX_US, 800),
     USDC,
     SPCX_US,
-    self.USDC - kept,
+    pot.USDC - kept,
     priceLimit,
     0,
   );
 
-  const unspent = self.USDC - kept;
+  const unspent = pot.USDC - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");

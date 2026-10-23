@@ -52,7 +52,7 @@ names a program uses: it gives `USDC` the token's address on that chain, and tur
 into a call to `transfer` in `@sauce/token`, Sauce's token library, which checks the token's reply
 as OpenZeppelin's SafeERC20 does. A protocol call such as `UniswapV3.Factory.getPool(...)` becomes a
 call bound to that contract's ABI, its interface, at its address on that chain. A balance such as
-`self.USDC` becomes a call to the token's `balanceOf` for the Pot.
+`pot.USDC` becomes a call to the token's `balanceOf` for the Pot.
 
 These names are the SDK's, not the compiler's. The compiler used on its own, from TypeScript,
 resolves nothing for you: you bind ABIs and supply addresses yourself

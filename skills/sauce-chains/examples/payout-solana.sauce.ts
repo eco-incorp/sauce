@@ -25,7 +25,7 @@
 //   sauce run payout-solana.sauce.ts --chain solana --keypair <keypair> \
 //     --args <recipient> 1000000 50000000
 function main(recipient: Address, cash: Uint256, shares: Uint256): Uint256 {
-  require(self.USDC >= cash, "not enough USDC");
+  require(pot.USDC >= cash, "not enough USDC");
   USDC.transfer(recipient, cash);
   // A Token-2022 mint may withhold a transfer fee: measure what arrived rather than assume it.
   const before = recipient.TSLAx;

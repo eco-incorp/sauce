@@ -24,7 +24,6 @@ function main(
   priceLimit: Uint256,
 ): { price: Uint256; spent: Uint256; bought: Uint256 } {
   require(tranche > 0 && priceLimit > 0, "set tranche and priceLimit");
-  const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   require(pool != 0, "no WETH/USDC pool at 0.05%");
   const fee = UniswapV3.Pool(pool).fee();
@@ -34,7 +33,7 @@ function main(
   const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1 << 96);
   const price =
     WETH < USDC ? Math.mulDiv(ratio, 10 ** 18, 1 << 96) : Math.mulDiv(10 ** 18, 1 << 96, ratio);
-  const usdc = self.USDC;
+  const usdc = pot.USDC;
   // Wait for a better price, or for the next tranche to arrive.
   if (Math.mulDiv(price, 1000000, 1000000 - fee) > priceLimit || usdc < tranche) {
     return { price, spent: 0, bought: 0 };
@@ -49,8 +48,8 @@ function main(
       : Math.sqrt(Math.mulDiv(1 << 192, 10 ** 18, atLimit));
   // The limit decides how much is bought, so no minimum is known before the swap; the average is
   // held to priceLimit after it.
-  const bought = uniswapV3(pool, USDC, WETH, tranche, limit, 0, self);
-  const spent = usdc - self.USDC;
+  const bought = uniswapV3(pool, USDC, WETH, tranche, limit, 0, pot);
+  const spent = usdc - pot.USDC;
   require(Math.mulDiv(bought, priceLimit, 10 ** 18) >= spent, "paid more than priceLimit");
   return { price, spent, bought };
 }

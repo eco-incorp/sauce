@@ -96,7 +96,7 @@ and the beneficiary as `main`'s inputs. Save it as `supply.sauce.ts`:
 //   amount: Uint256        how much USDC, in its smallest unit: 1000000 is 1 USDC
 //   onBehalfOf: Address    who receives the aTokens: your wallet, or your Pot's address to keep them there
 function main(amount: Uint256, onBehalfOf: Address) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.approve(AaveV3.Pool, amount);
   AaveV3.Pool.supply(USDC, amount, onBehalfOf, 0);
 }

@@ -317,7 +317,7 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
   pool's nine accounts are read from the pool on the cluster for the token paid; the trader's are
   the Pot's (the authority, its account for `tokenIn`, the two mints, the token programs, the memo
   program). All are added to `main`, and `sauce compile --json` shows how each is derived
-  (`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`, `self:USDC`). A pool no price-limit venue owns
+  (`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`, `authority:USDC`). A pool no price-limit venue owns
   is refused before the cook.
 - **What is bought lands in the Pot's own account for `tokenOut`** (Crema and Phoenix pay nowhere
   else); `sauce run` creates it when it is missing, asking first or with `--yes`. Forward what

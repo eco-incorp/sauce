@@ -82,7 +82,7 @@ Save this as `pay.sauce.ts`:
 //   to: Address       who gets the USDC, an address on the chain it runs on
 //   amount: Uint256   how much, in USDC's smallest unit: USDC has 6 decimals, so 1000000 is 1 USDC
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
@@ -93,7 +93,7 @@ and what each input means. The program is the last four lines.
 - `main` is where the program starts. Its parameters are its inputs: who to pay, and how much.
   `Address` and `Uint256` are their types: an address, and a whole number.
 - `USDC` needs no import and no address. Sauce knows where USDC lives on every chain it supports.
-- `self` is your Pot, and `self.USDC` is how much USDC it holds: a token's name after a holder
+- `pot` is your Pot, and `pot.USDC` is how much USDC it holds: a token's name after a holder
   reads that holder's balance.
 - `require` checks something. If it is false, the whole run stops and nothing moves.
 - `USDC.transfer(to, amount)` pays, from your Pot.

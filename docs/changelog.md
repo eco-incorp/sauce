@@ -124,6 +124,31 @@ remain available and explicitly report that deployment availability has not been
 
 ### SauceScript
 
+- **Breaking (both): the Pot is `pot`, and a holder's native coin is `.balance`.** One spelling
+  each, with no alias:
+
+  | Before                                         | Now                | What it reads                                                         |
+  | ---------------------------------------------- | ------------------ | --------------------------------------------------------------------- |
+  | `self`                                         | `pot`              | the Pot's address (on Solana its account too: `pot.signer()`)         |
+  | `self.USDC`                                    | `pot.USDC`         | the Pot's balance of a token the chain registers                      |
+  | `self.ETH`, `recipient.ETH`, `recipient.SOL`   | `pot.balance`, `recipient.balance` | the holder's native coin, in wei on an EVM chain and lamports on Solana |
+  | `Solana.self`                                  | `pot`              | the Pot's account on Solana                                           |
+
+  The old spellings no longer compile, and each error names the new one: `self` (unless the
+  program declares its own), `Solana.self`, and `<holder>.<native symbol>` such as `who.ETH` or
+  `who.SOL`. `.<SYMBOL>` now always reads a token the chain registers, so on Arc, whose native coin
+  is USDC, `pot.USDC` reads the 6-decimal token and `pot.balance` the coin, where `self.USDC` was
+  refused as ambiguous. `.balance` reads a field wherever it did: on a record, a list, a value
+  `abi.decode` returns, and a struct a contract call returns (`market.userCollateral(a, b).balance`);
+  for the native coin of such a value write `ctx.balance(x)`. `.ETH` on a record is an ordinary
+  field now. A program that declares its own `pot` owns the name. `ctx.self()`, `ctx.balance(x)`
+  and `ctx.selfBalance()` are unchanged.
+- **Added (Solana):** `pot` works as on an EVM chain. Bare `pot` is the Pot's key, and its account
+  wherever an `Account` is taken. A script with no `main` and a helper function can use `pot.USDC`,
+  `pot.balance` and the token methods: a script is given the `main` its accounts are added to, and
+  a helper takes the accounts it uses as parameters, at every call. A helper used as a value (a
+  `.catch` handler) is refused, saying why. Compiled for Solana, a program that names `pot` derives
+  the Pot's accounts (`pot`, `pot:USDC`), so cooked `--via engine`, which has no Pot, it is refused.
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
   assignments on success, or rolls them all back before handling failure. Work before the block
   remains. A sole external-call block has the narrower `.catch()` boundary: successful-return
@@ -219,6 +244,12 @@ remain available and explicitly report that deployment availability has not been
 
 **Also breaking:**
 
+- `routes`: the compile option `accessors: { selfSugar }` is `accessors: { potSugar }`, for the
+  bare `pot` rewrite; a bare `self` is refused either way.
+- Solana derivations: `CompiledSauceProgram.derivedAccounts` and a manifest slot's `derive` name the
+  Pot's accounts `pot` and `pot:<TOKEN>` where the program names `pot`, and `authority` and
+  `authority:<TOKEN>` (the account that signs the engine call) where it does not, in place of `self`
+  and `self:<TOKEN>`.
 - The root and `routes`: the chain exports (`Base`, `Solana` and the rest) are plain namespaces,
   and calling one, or its `.route`, is removed. `openRoute`, `assembleIntent`, `hashIntent`,
   `routeHash`, `rewardHash`, the intent codecs, every Portal helper (`intentSourceTxs`,
@@ -261,6 +292,12 @@ remain available and explicitly report that deployment availability has not been
 
 ### The sauce command and the MCP server
 
+- **Breaking** (Solana): the `--account` value `self` is `authority`, and `self:<TOKEN>` is
+  `authority:<TOKEN>` (in a `pda:` seed too): the account that signs the engine call, the Pot
+  through the Kitchen and the owner with `--via engine`. `self` is refused, naming `pot` through the
+  Kitchen and `authority` with `--via engine`. With `--via engine`, `pot`, `pot:<TOKEN>` and a
+  program whose derived accounts name the Pot are refused, since that cook has no Pot. The MCP
+  server's `accounts` take the same values.
 - **Added** (EVM): signed cooks. A Pot's owner signs a cook as EIP-712 typed data, and any account
   sends it with the Pot's `cookSigned`, paying the gas; the Pot pays the Kitchen's fee, up to the
   signed ceiling. `sauce sign` signs one (with a wallet, or as typed data for any wallet, checking

@@ -31,9 +31,8 @@ function main(
   recipient: Address,
   refundTo: Address,
 ): { fee: Uint256; spent: Uint256; shares: Uint256 } {
-  const self = ctx.self();
   require(priceLimit > 0, "priceLimit is 0");
-  const before = self.USDC;
+  const before = pot.USDC;
   require(before >= budget, "budget is not in the Pot");
 
   // Every fee tier the factory has, and the cheapest share among the pools with liquidity.
@@ -73,7 +72,7 @@ function main(
   const shares = uniswapV3(pool, USDC, SPCXon, budget, limit, minShares, recipient);
 
   // What the pool took; the rest of the budget goes back. The Pot's other USDC stays.
-  const spent = before - self.USDC;
+  const spent = before - pot.USDC;
   if (budget > spent) {
     USDC.transfer(refundTo, budget - spent);
   }

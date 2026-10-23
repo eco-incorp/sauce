@@ -74,7 +74,7 @@ Kitchen signs for the Pot when it runs a cook, so the program can spend tokens w
 the Pot, and nothing else can.
 
 Programs run by the engine, which sees the Pot as one of its accounts. In a program `ctx.self()`
-is the engine's program id, not the Pot, and `self` as a token holder is the Pot.
+is the engine's program id, not the Pot, and `pot` is the Pot.
 
 ## Why a program is staged
 
