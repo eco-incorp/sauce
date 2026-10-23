@@ -300,9 +300,9 @@ export interface DerivedValue {
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. Leave
-   * it out to compile `main` taking its arguments as it runs.
+   * `main`'s arguments, in order, bound into the program as constants: each must be one word (a
+   * signed or unsigned integer, an address or a `bool`), and the program then takes none at run time.
+   * Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
   /**
@@ -337,6 +337,20 @@ export function compileSauceProgram(
   );
   if (taken !== undefined) {
     throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
+  }
+  // Every bound argument but a signed one reaches the compiler as a define, and a define is
+  // program-wide: one named like a value of the chain (a token symbol, `chainId`, a protocol's
+  // address) would replace that value outside `main` too, where the parameter only shadowed it in
+  // `main`. A signed argument is a `let` in `main`'s body, which shadows it there alone.
+  const chainValues = bound === undefined ? {} : definesOf(resolved, given.tokens);
+  const shadowed = Object.keys(bound?.constants ?? {}).find((name) =>
+    Object.hasOwn(chainValues, name),
+  );
+  if (shadowed !== undefined) {
+    throw new RangeError(
+      `${shadowed} is main's parameter, given in args; it is not also a define ` +
+        `(${shadowed} on ${resolved.slug})`,
+    );
   }
   const compile: SauceCompileOptions =
     bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };

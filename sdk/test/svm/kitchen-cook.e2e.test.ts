@@ -22,6 +22,7 @@ import {
 import {
   type Bench,
   describeKitchen,
+  expectErrorCode,
   expectKitchenError,
   expectOk,
   present,
@@ -30,7 +31,7 @@ import {
   start,
   traceTests,
 } from "./kitchen-bench.js";
-
+import { ANCHOR_CONSTRAINT_SEEDS } from "./kitchen-errors.js";
 import { compileSvm } from "./rs-compile.js";
 
 /**
@@ -207,6 +208,39 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
     ]);
 
     expectKitchenError(result, "CodeBufferHashMismatch");
+  });
+
+  // The Kitchen checks the Pot's address at the bump the cook carries rather than searching for
+  // one, and `create_pot` mints a Pot only at its canonical bump, so a cook naming that Pot at any
+  // other bump is refused by Anchor's seeds constraint before the engine runs. The wallet policy
+  // measures the Pot a cook names (`measureSvm`) on exactly this: a cook cannot name a Pot its
+  // owner and salt do not derive at the bump it carries. The builder derives the bump itself, so
+  // the wrong one is written into the byte after the salt.
+  it("a cook naming its Pot at another bump is refused with ConstraintSeeds", async () => {
+    const salt = new Uint8Array(32).fill(24);
+    const { pot, tail } = await potFor(salt);
+    const { bump } = await derivePotPda(bench.kitchen, bench.owner.address, salt);
+    const canonical = buildCookInstruction({
+      kitchen: bench.kitchen,
+      owner: bench.owner.address,
+      engineProgram: bench.engine,
+      potSalt: salt,
+      pot,
+      feeConfig: bench.feeConfig,
+      bytecode: PROGRAM,
+      maxExecutionFee: 0n,
+      tail: [...tail],
+    });
+    // 8 bytes of discriminator, 32 of salt, then the bump.
+    expect(canonical.data![40]).toBe(bump);
+
+    // Above the canonical bump an address is not derived or is another; below, it is another.
+    for (const wrong of [(bump + 1) % 256, bump - 1]) {
+      const data = Uint8Array.from(canonical.data!);
+      data[40] = wrong;
+
+      expectErrorCode(await sendCook(bench, [{ ...canonical, data }]), ANCHOR_CONSTRAINT_SEEDS);
+    }
   });
 
   // A CPI-created account cannot be allocated more than GROWTH_STEP at once, so a larger buffer is

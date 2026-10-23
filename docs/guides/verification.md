@@ -169,12 +169,12 @@ does not fall back to the default pin.
 Four earlier builds of the settlement program can still be accepted when you list them. The last
 two predate the sweep following `SafeERC20`:
 
-| Built by                                   | `bytes` | Published in        |
-| ------------------------------------------ | ------- | ------------------- |
-| Compiler 2.4.0 and 2.5.0                   | 435     | before this upgrade |
-| Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release          |
-| Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4     |
-| Compiler 2.2.0 and 2.2.1                   | 362     | 0.99.0 – 0.99.1     |
+| Built by                                   | `bytes` | Published in     |
+| ------------------------------------------ | ------- | ---------------- |
+| Compiler 2.4.0 and 2.5.0                   | 435     | 0.99.5 – 0.99.15 |
+| Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release       |
+| Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4  |
+| Compiler 2.2.0 and 2.2.1                   | 362     | 0.99.0 – 0.99.1  |
 
 Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
 editor shows on hover. The current pin is

@@ -28,9 +28,10 @@ has the same three roles, and that section says what differs.
 
 ## A Pot's life
 
-1. **Its address comes first.** A Pot's address follows from the Kitchen, its owner and a salt, so
-   it is known before the Pot exists and never changes. An owner has one Pot per salt, a label,
-   and the first one's is zero.
+1. **Its address comes first.** For an EVM Kitchen release, a Pot's address follows from the
+   Kitchen, its Pot init-code hash, its owner and a salt (zero by default). It is known before
+   deployment and fixed once deployed. A release with new Pot code derives a different address
+   for the same owner and salt; it does not move an existing Pot or its balances.
 2. **It is deployed once.** The Kitchen's `deployPot(owner, salt)` creates it. Anyone may send that
    transaction, and the Pot is the owner's whoever sends it; sending it again returns the Pot
    already there. You need not do it as a step of your own: the `sauce` command deploys your Pot
@@ -55,8 +56,8 @@ value:  the Kitchen's fee        plus any native coin the program spends
 The `sauce` command builds it, and signs and sends it or hands it to another wallet
 ([Wallets and signing](../guides/cli-wallets.md)). When the Pot receives it, the Pot:
 
-1. checks that the sender is its owner, and refuses anyone else: the cook reverts with the error
-   `NotOwner()`;
+1. checks the owner's authorization: `cook` requires the owner as sender (`NotOwner()` otherwise);
+   on new Pots, `cookSigned` instead checks the owner's signed authorization;
 2. forwards the fee to the Kitchen;
 3. runs the engine's code inside itself, on its own balances, so the program runs **as the Pot**.
 
@@ -162,8 +163,8 @@ and what to read in it.
 
 |                     | Can                                                                                      | Cannot                                                                 |
 | ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| The Pot's owner     | Cook any program on it; sign a cook for someone else to submit; change an unfixed Router | Hand it to another owner: the owner is fixed when the Pot is created   |
-| Anyone else         | Deploy a Pot for any owner; send a Pot tokens; submit a cook its owner signed            | Cook on it unsigned, or move anything it holds                         |
+| The Pot's owner     | Cook any program on it; authorize signed cooks on new Pots; change an unfixed Router     | Hand it to another owner: the owner is fixed when the Pot is created   |
+| Anyone else         | Deploy a Pot for any owner; send it tokens; submit an authorized signed cook on new Pots | Cook without the owner's authorization, or move funds without it       |
 | The Kitchen's owner | Set the fee; choose the Router new Pots start on                                         | Change an existing Pot, its owner or its Router, or move what it holds |
 | The engine          | Run a program inside a Pot its Kitchen created                                           | Run anywhere else: called directly, it refuses                         |
 
@@ -198,10 +199,9 @@ large program and the two ways to cook.
 
 ## Other kinds of Pot
 
-Everything above describes the default kind, a **private Pot**: one owner, who alone may cook on
-it or sign a cook for someone else to send. The Kitchen also makes **Shared Pots**, which have no
-owner: anyone can cook on one and spend what it holds, so a Shared Pot is funded and emptied
-within one transaction.
+Everything above describes the default kind, a **private Pot**: one owner, whose authorization
+is needed for every cook. The Kitchen also makes **Shared Pots**, which have no owner: anyone can cook on one and spend
+what it holds, so a Shared Pot is funded and emptied within one transaction.
 [Pots and cooks in code](../api/README.md#pots-and-cooks-in-code) lists the Kitchen calls for each
 kind.
 

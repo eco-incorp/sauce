@@ -281,8 +281,8 @@ after its last statement. The pulls are the same token functions a program can c
 [Safety](../concepts/safety.md) describes.
 
 Signatures are made locally, by the signer you gave, and no key is printed. A Permit2 signature
-names the Pot as its spender, and only the Pot's owner can cook on the Pot, so nobody else can use
-it. A revert inside Permit2 is reported by name: `SignatureExpired(…)` for a passed deadline,
+names the Pot as its spender; cooking on a private Pot requires the owner's authorization
+(including for a signed cook on new EVM Pots). A revert inside Permit2 is reported by name: `SignatureExpired(…)` for a passed deadline,
 `InvalidNonce()` for a nonce already spent.
 
 ### Simulate a funded run

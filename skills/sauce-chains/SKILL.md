@@ -202,7 +202,7 @@ every Solana cluster, so one file lists them, each entry with what it is:
 | `evm.kitchenImplementation` | the implementation behind the Kitchen, an upgradeable proxy: call the Kitchen, never this |
 | `evm.router`                | the Router a new Pot starts on, through which swaps with a callback run                   |
 | `evm.quoteRouter`           | quotes Uniswap V3 and V4 swaps through `eth_call`; no Pot's Router                        |
-| `evm.pot`                   | how a Pot's address follows from its owner and salt                                       |
+| `evm.pot`                   | derivation from owner, salt and the Kitchen release's Pot init-code hash                  |
 | `svm.engine`, `svm.kitchen` | the Solana engine and Kitchen programs, each as its id and its 32-byte `key`              |
 
 A program names none of them: the `sauce` command puts the engine and the Kitchen into every cook it

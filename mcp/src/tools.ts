@@ -270,9 +270,10 @@ const ARGS = z
   .optional()
   .describe(
     "main's runtime arguments, in order, as JSON values: an integer in base units as a decimal " +
-      "string (or a number up to 2^53), an address as 0x hex (on Solana a base58 key), bytes " +
-      "as 0x hex, a bool as true/false, an array as an array, a tuple as an array of its fields " +
-      "or an object naming them. sauce_compile's entryParams lists what main takes.",
+      'string (or a number up to 2^53; negative for an Int256 parameter, such as "-5"), an ' +
+      "address as 0x hex (on Solana a base58 key), bytes as 0x hex, a bool as true/false, an " +
+      "array as an array, a tuple as an array of its fields or an object naming them. " +
+      "sauce_compile's entryParams lists what main takes.",
   );
 
 const COOK = {

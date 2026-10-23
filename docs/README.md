@@ -109,7 +109,7 @@ Read in this order; each page uses the words the one before it explains.
 - [API entry points](api/README.md): every published import and what it contains.
 - [Programs and cooks](api/routes.md): `compileSauceProgram`, `encodeEntryArguments`, `buildSauceEvmCall` and `sauceEvmDeployPotCall`: compile a program for a chain and build the cook that runs it.
 - [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in TypeScript.
-- [Compiler](api/compiler.md): `compile()`'s options and result, and the compact argument format.
+- [Compiler](api/compiler.md): `compile()`'s options and result, ABI-v1 inputs and nested programs.
 - [`@sauce/router`](api/router.md): the swap library, one function per kind of pool.
 - [`@sauce/router` on Solana](api/router-solana.md): the swap library's Solana venues, their accounts and price limits.
 - [Testing kit](api/testing-kit.md): the local chains, recordings and helpers your tests use.
