@@ -619,8 +619,9 @@ function resolveCandidate(
 
 /** Collects, by node identity, every Identifier node that must NEVER be treated as a READ of a name
  *  (`pot`, or the refused `self`): a declarator id, a function/arrow parameter, a non-computed
- *  member property, a non-computed object-literal key, an assignment target, or an update-expression
- *  operand. */
+ *  member property, a non-computed object-literal key, an assignment target, an update-expression
+ *  operand, or a name in an import or export specifier (`import { pot as holder }` names a
+ *  module's export, and binds `holder`). */
 function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
   walk(program, (n) => {
@@ -651,6 +652,14 @@ function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
     if (n.type === "UpdateExpression") {
       const argument = (n as { argument?: AstNode }).argument;
       if (argument?.type === "Identifier") excluded.add(argument);
+    }
+    if (
+      n.type === "ImportSpecifier" ||
+      n.type === "ImportDefaultSpecifier" ||
+      n.type === "ImportNamespaceSpecifier" ||
+      n.type === "ExportSpecifier"
+    ) {
+      walk(n, (name) => excluded.add(name));
     }
   });
   return excluded;

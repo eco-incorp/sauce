@@ -189,6 +189,28 @@ describe("rewriteProtocolAccessors: bare pot -> ctx.self()", () => {
   });
 });
 
+describe("rewriteProtocolAccessors: an import's names are never a read of the Pot", () => {
+  const constants = {
+    resolve: (path: string) =>
+      path === "./constants.js"
+        ? new TextEncoder().encode("export const pot = 7;\nexport const self = 8;")
+        : undefined,
+  };
+
+  it.each([
+    ["pot", 7],
+    ["self", 8],
+  ])("`import { %s as held }` reads the module's value", (name, value) => {
+    const source = `import { ${name} as held } from "./constants.js";\nfunction main(): Uint256 { return held; }`;
+    expect(rewriteProtocolAccessors(source, BASE).source).toBe(source);
+    expect(Array.from(route("base", source, constants).compiled.bytecode[0]!)).toEqual(
+      Array.from(
+        route("base", `function main(): Uint256 { return ${value}; }`).compiled.bytecode[0]!,
+      ),
+    );
+  });
+});
+
 describe("rewriteProtocolAccessors: bare self, the Pot's old name, is refused", () => {
   const message =
     "`self`: the Pot is `pot`, not `self`: write `pot` (`pot` is the Pot's address, " +
