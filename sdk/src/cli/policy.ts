@@ -58,6 +58,7 @@ import { join } from "node:path";
 
 import {
   address as solanaAddress,
+  getBase58Encoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
@@ -604,8 +605,25 @@ const KITCHEN_COOKS = [
 const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
 
 /**
+ * A program the transaction calls through another (a CPI), as a simulation reports it. Mainnet
+ * nodes answer `simulateTransaction` with every inner instruction keyed by `programId`: parsed
+ * (`parsed`, `program`; no `accounts` or `data`) for a program they parse, such as System and SPL
+ * Token, and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
+ * Kitchen's and the engine's. `programIdIndex` and index `accounts` are the unparsed form a
+ * transaction's own report uses, taken here too.
+ */
+type InnerInstruction = Readonly<{
+  programId?: string;
+  programIdIndex?: number;
+  accounts?: readonly (string | number)[];
+  data?: string;
+}>;
+
+/**
  * What a signed Solana `transaction` moves out of `wallet` and the Pots it cooks on, as a
  * simulation that reports its writable accounts shows it; a transaction that would fail is refused.
+ * A cook counts wherever it runs: called by the transaction, or by a program it calls (a signer's
+ * signature passes through a CPI, and the Kitchen takes a cook at any depth).
  */
 export async function measureSvm(
   rpc: Rpc,
@@ -658,19 +676,27 @@ export async function measureSvm(
   // Measure the Pot the cook names, not the salt's canonical PDA. The Kitchen checks that account
   // against the owner, salt and supplied bump before signing; any off-curve bump can select it.
   const accounts = messageAccounts(transaction, tables);
-  const pots: SvmAddress[] = [];
-  for (const instruction of message.instructions) {
-    const data = instruction.data ?? new Uint8Array();
+  /** The Pot `program` signs for with `data` on `keys` (its accounts in order): the Kitchen's cook
+   *  by `wallet`, else nothing. */
+  const cookPot = (
+    program: string | undefined,
+    data: Uint8Array,
+    keys: readonly (string | undefined)[],
+  ): string | undefined => {
     const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
-    const pot = accounts[instruction.accountIndices?.[cook?.pot ?? -1] ?? -1];
-    if (
-      cook !== undefined &&
-      pot !== undefined &&
-      accounts[instruction.programAddressIndex] === kitchen &&
-      accounts[instruction.accountIndices?.[0] ?? -1] === wallet
-    ) {
-      pots.push(pot);
-    }
+
+    return program === kitchen && cook !== undefined && keys[0] === wallet
+      ? keys[cook.pot]
+      : undefined;
+  };
+  const pots: string[] = [];
+  for (const instruction of message.instructions) {
+    const pot = cookPot(
+      accounts[instruction.programAddressIndex],
+      instruction.data ?? new Uint8Array(),
+      (instruction.accountIndices ?? []).map((at) => accounts[at]),
+    );
+    if (pot !== undefined) pots.push(pot);
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
@@ -679,11 +705,46 @@ export async function measureSvm(
     .simulateTransaction(wire, {
       encoding: "base64",
       sigVerify: false,
+      innerInstructions: true,
       accounts: { addresses: tracked, encoding: "base64" },
     })
     .send();
   if (value.err !== null) {
     throw new CliError("the transaction would fail in the simulation, so nothing was sent");
+  }
+  // The cooks its programs make: each inner instruction, at any depth, that calls the Kitchen.
+  const inner: readonly Readonly<{ instructions: readonly InnerInstruction[] }>[] | null =
+    value.innerInstructions ?? null;
+  let unseen: string | undefined =
+    inner === null
+      ? "the endpoint did not report the programs its programs call, so a cook among them is not seen"
+      : undefined;
+  for (const each of (inner ?? []).flatMap((group) => group.instructions)) {
+    const program =
+      each.programId ??
+      (each.programIdIndex === undefined ? undefined : accounts[each.programIdIndex]);
+    if (program === undefined) {
+      unseen = "the endpoint reported a program its programs call that cannot be named";
+      continue;
+    }
+    if (program !== kitchen) continue;
+    const keys = (each.accounts ?? []).map((key) =>
+      typeof key === "number" ? accounts[key] : key,
+    );
+    let data: Uint8Array | undefined;
+    try {
+      data =
+        each.data === undefined ? undefined : new Uint8Array(getBase58Encoder().encode(each.data));
+    } catch {
+      data = undefined;
+    }
+    if (data === undefined || keys.some((key) => key === undefined)) {
+      unseen =
+        "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+      continue;
+    }
+    const pot = cookPot(program, data, keys);
+    if (pot !== undefined) pots.push(pot);
   }
   const after = (value.accounts ?? []).map((account) =>
     account === null
@@ -718,7 +779,7 @@ export async function measureSvm(
       .filter(([, out]) => out.amount > 0n)
       .map(([token, out]) => ({ token, ...out })),
     approvals: [],
-    unmeasured: {},
+    unmeasured: unseen === undefined ? {} : { native: unseen, tokens: unseen },
   };
 }
 

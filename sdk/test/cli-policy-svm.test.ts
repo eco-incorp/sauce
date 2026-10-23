@@ -4,9 +4,10 @@
  * and staged cooks move SOL and SPL tokens, with and without lookup-table-loaded Pot accounts;
  * those outflows must trigger limits without reserving anything.
  */
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   AccountRole,
@@ -28,6 +29,7 @@ import {
 } from "@solana/kit";
 
 import { requireChain } from "../src/chains/canonical.js";
+import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { guardWallet, measureSvm, PolicyRefusal, readPolicy } from "../src/cli/policy.js";
 import type { WalletInfo } from "../src/cli/wallets.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
@@ -44,6 +46,7 @@ import {
   fabricateAlt,
   HARNESS_POT_SALT,
   randomAddress,
+  sendSigned,
   setMint,
   setTokenAccount,
   stageProgram,
@@ -128,6 +131,145 @@ describe("measuring a Solana transaction that loads accounts through a lookup ta
     expect(measured.unmeasured).toEqual({ native: UNREAD, tokens: UNREAD });
     expect(measured.tokens).toEqual([]);
     expect(measured.native.amount).toBe(0n);
+  });
+});
+
+describe("measuring a Solana transaction whose programs' calls the endpoint does not show", () => {
+  const PROGRAM = address("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+  const KITCHEN = address(v12SvmKitchenProgramId());
+  const NOT_REPORTED =
+    "the endpoint did not report the programs its programs call, so a cook among them is not seen";
+  const UNREADABLE_CALL =
+    "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+  const UNNAMED = "the endpoint reported a program its programs call that cannot be named";
+  /** The wallet calling PROGRAM with the Kitchen among its accounts (as a CPI to it needs), which
+   *  the simulation says made `inner`, given each account's index in the message. */
+  const calling = (inner: (at: (key: Address) => number) => unknown) => {
+    const transaction = compileTransaction(
+      pipe(
+        createTransactionMessage({ version: 0 }),
+        (message) => setTransactionMessageFeePayer(WALLET, message),
+        (message) =>
+          setTransactionMessageLifetimeUsingBlockhash(
+            {
+              blockhash: "11111111111111111111111111111111" as Blockhash,
+              lastValidBlockHeight: 1n,
+            },
+            message,
+          ),
+        (message) =>
+          appendTransactionMessageInstruction(
+            {
+              programAddress: PROGRAM,
+              accounts: [{ address: KITCHEN, role: AccountRole.READONLY }],
+              data: new Uint8Array([1]),
+            },
+            message,
+          ),
+      ),
+    );
+    const { staticAccounts } = getCompiledTransactionMessageDecoder().decode(
+      transaction.messageBytes,
+    ) as unknown as { staticAccounts: readonly Address[] };
+    const reported = inner((key) => staticAccounts.indexOf(key));
+    const rpc = {
+      getMultipleAccounts: (keys: readonly string[]) => ({
+        send: () => Promise.resolve({ context: { slot: 1n }, value: keys.map(() => null) }),
+      }),
+      simulateTransaction: (_: string, config: { accounts: { addresses: readonly string[] } }) => ({
+        send: () =>
+          Promise.resolve({
+            context: { slot: 1n },
+            value: {
+              err: null,
+              logs: [],
+              accounts: config.accounts.addresses.map(() => null),
+              innerInstructions: reported,
+            },
+          }),
+      }),
+    } as unknown as Parameters<typeof measureSvm>[0];
+
+    return { rpc, transaction };
+  };
+
+  it.each([
+    ["the endpoint reports none", () => null, NOT_REPORTED],
+    ["the endpoint leaves them out", () => undefined, NOT_REPORTED],
+    [
+      "a call to the Kitchen comes parsed, without its data",
+      () => [
+        { index: 0, instructions: [{ programId: KITCHEN, accounts: [WALLET], stackHeight: 2 }] },
+      ],
+      UNREADABLE_CALL,
+    ],
+    [
+      "a call to the Kitchen names an account past the message's",
+      (at: (key: Address) => number) => [
+        { index: 0, instructions: [{ programIdIndex: at(KITCHEN), accounts: [0, 9], data: "1" }] },
+      ],
+      UNREADABLE_CALL,
+    ],
+    [
+      "a call names its program by an index past the message's",
+      () => [{ index: 0, instructions: [{ programIdIndex: 9, accounts: [], data: "1" }] }],
+      UNNAMED,
+    ],
+  ])("measures nothing it can stand behind when %s", async (_, inner, why) => {
+    const { rpc, transaction } = calling(inner);
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+    expect(measured.unmeasured).toEqual({ native: why, tokens: why });
+
+    const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-inner-"));
+    const wallet: WalletInfo = {
+      name: "agent",
+      kind: "solana",
+      address: WALLET,
+      path: join(dir, "agent.json"),
+      policyPath: join(dir, "agent.policy.json"),
+    };
+    try {
+      writeFileSync(wallet.policyPath, JSON.stringify({ native: { perTransaction: "1" } }), {
+        mode: 0o600,
+      });
+      const refusal = await guardWallet(wallet, readPolicy(wallet))
+        .svm(rpc, transaction)
+        .then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+      expect(refusal).toBeInstanceOf(PolicyRefusal);
+      expect((refusal as PolicyRefusal).message).toContain(`native is limited, and ${why}`);
+      expect(readdirSync(dir).filter((file) => file.endsWith(".ledger.jsonl"))).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("measures as usual when every call it reports is read", async () => {
+    // A System transfer as a mainnet node reports it (parsed: no accounts, no data), a call
+    // PROGRAM makes to itself, and one to the Kitchen that is not a cook.
+    const { rpc, transaction } = calling((at) => [
+      {
+        index: 0,
+        instructions: [
+          {
+            parsed: {
+              info: { destination: PROGRAM, lamports: 85672, source: WALLET },
+              type: "transfer",
+            },
+            program: "system",
+            programId: "11111111111111111111111111111111",
+            stackHeight: 2,
+          },
+          { programIdIndex: at(PROGRAM), accounts: [0], data: "1", stackHeight: 2 },
+          { programId: KITCHEN, accounts: [WALLET], data: "1", stackHeight: 3 },
+        ],
+      },
+    ]);
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+    expect(measured.unmeasured).toEqual({});
+    expect(measured.to).toEqual([PROGRAM]);
   });
 });
 
@@ -274,6 +416,156 @@ describeSvm("measuring the actual Pot a Kitchen cook signs for", () => {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    },
+  );
+});
+
+// A program the wallet calls at the top level that CPIs the Kitchen's cook with the wallet's own
+// signature: the Kitchen allows a cook at any depth (it checks the owner's signature, not where the
+// instruction sits), and a signer's privilege passes through a CPI. Source and build line beside it.
+const FORWARDER_SO = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "fixtures/cpi-forwarder/cpi_forwarder.so",
+);
+
+describeSvm("measuring a Kitchen cook another program makes for the wallet", () => {
+  const RPC_URL = "http://127.0.0.1:65528/";
+  const SYSTEM = address("11111111111111111111111111111111");
+  let harness: EngineHarness;
+  let shim: SolanaShim;
+  let forwarder: Address;
+  // A Pot under a salt of its own that create_pot never allocated: a System transfer needs a
+  // `from` with no data, and the cook signs a Pot that need not exist.
+  const salt = new Uint8Array(32).fill(12);
+  let pot: Address;
+  let mint: Address;
+  let destination: Address;
+  let source: Address;
+  let tokenDestination: Address;
+  let bytecode: Uint8Array;
+  let staged: StagedProgram;
+
+  beforeAll(async () => {
+    harness = await startEngine(1_700_000_000n);
+    forwarder = randomAddress();
+    harness.svm.addProgram(forwarder, new Uint8Array(readFileSync(FORWARDER_SO)));
+    pot = (await derivePotPda(harness.kitchen, harness.payer.address, salt)).address;
+    harness.svm.airdrop(pot, lamports(1_000_000_000n));
+    destination = randomAddress();
+    harness.svm.airdrop(destination, lamports(1_000_000n));
+    mint = setMint(harness, randomAddress(), 6);
+    source = setTokenAccount(harness, randomAddress(), mint, pot, 10_000n);
+    tokenDestination = setTokenAccount(harness, randomAddress(), mint, destination, 0n);
+    bytecode = compileSauceProgram(
+      "solana",
+      "function main(system: Account, pot: Account<Writable, Signer>, destination: Account<Writable>, " +
+        "tokenProgram: Account, source: Account<Writable>, tokenDestination: Account<Writable>) {\n" +
+        "  let native = hex`02000000`;\n" +
+        "  svm.call(system, [pot, destination], native.concat(123456789n.toBytesLe(8)));\n" +
+        "  let token = hex`03`;\n" +
+        "  svm.call(tokenProgram, [source, tokenDestination, pot], token.concat(400n.toBytesLe(8)));\n" +
+        "}",
+    ).bytecode;
+    staged = await stageProgram(harness, bytecode, 209n);
+    shim = solanaShim(harness.svm, RPC_URL);
+    shim.install();
+  });
+  afterAll(() => shim?.restore());
+
+  /** The wallet's cook on its Pot, as the forwarder's CPI: the Kitchen first, then its accounts. */
+  const forwarded = (via: "inline" | "staged"): Instruction => {
+    const input = {
+      kitchen: harness.kitchen,
+      owner: harness.payer.address,
+      engineProgram: harness.programId,
+      potSalt: salt,
+      pot,
+      feeConfig: harness.feeConfig,
+      maxExecutionFee: 0n,
+      tail: [
+        { address: SYSTEM, role: AccountRole.READONLY },
+        { address: pot, role: AccountRole.WRITABLE },
+        { address: destination, role: AccountRole.WRITABLE },
+        { address: TOKEN_PROGRAM, role: AccountRole.READONLY },
+        { address: source, role: AccountRole.WRITABLE },
+        { address: tokenDestination, role: AccountRole.WRITABLE },
+      ],
+    };
+    const cook =
+      via === "inline"
+        ? buildCookInstruction({ ...input, bytecode })
+        : buildCookFromAccountInstruction({ ...input, ...staged, pin: staged.sha256 });
+
+    return {
+      programAddress: forwarder,
+      accounts: [{ address: harness.kitchen, role: AccountRole.READONLY }, ...cook.accounts!],
+      data: cook.data!,
+    };
+  };
+
+  it.each([
+    ["inline", false],
+    ["inline", true],
+    ["staged", false],
+    ["staged", true],
+  ] as const)(
+    "%s, lookup table %s: counts what leaves the Pot a CPI cook signs for",
+    async (via, alt) => {
+      harness.svm.expireBlockhash();
+      const transaction = await buildExecuteTransaction({
+        payer: harness.payer,
+        instructions: [buildHeapFramePrepend(), forwarded(via)],
+        latestBlockhash: {
+          blockhash: harness.svm.latestBlockhash(),
+          lastValidBlockHeight: 1_000_000n,
+        },
+        ...(alt ? { lookupTables: fabricateAlt(harness, [pot, source, tokenDestination]) } : {}),
+      });
+      // The Kitchen is nowhere among the transaction's own instructions.
+      const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+        staticAccounts: readonly Address[];
+        instructions: readonly { programAddressIndex: number }[];
+      };
+      expect(
+        message.instructions.map((each) => message.staticAccounts[each.programAddressIndex]),
+      ).not.toContain(harness.kitchen);
+      const rpc = createSolanaRpc(RPC_URL);
+      const measured = await measureSvm(
+        rpc,
+        requireChain("solana"),
+        harness.payer.address,
+        transaction,
+      );
+
+      expect(measured.unmeasured).toEqual({});
+      expect(measured.native.amount).toBe(123_461_789n); // Outflow plus the signature fee.
+      expect(measured.tokens).toEqual([{ token: mint, amount: 400n, decimals: 6 }]);
+
+      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-cpi-"));
+      const wallet: WalletInfo = {
+        name: "agent",
+        kind: "solana",
+        address: harness.payer.address,
+        path: join(dir, "agent.json"),
+        policyPath: join(dir, "agent.policy.json"),
+      };
+      try {
+        for (const policy of [
+          { native: { perTransaction: "123456788n" } },
+          { tokens: { [mint]: { perTransaction: "399n" } } },
+        ]) {
+          writeFileSync(wallet.policyPath, JSON.stringify(policy), { mode: 0o600 });
+          await expect(
+            guardWallet(wallet, readPolicy(wallet)).svm(rpc, transaction),
+          ).rejects.toBeInstanceOf(PolicyRefusal);
+        }
+        expect(readdirSync(dir).filter((file) => file.endsWith(".ledger.jsonl"))).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+
+      // And the cook does run: what the measurement counts is what moves.
+      expect(sendSigned(harness, transaction).ok).toBe(true);
     },
   );
 });
