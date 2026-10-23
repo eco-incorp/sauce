@@ -117,6 +117,7 @@ import {
   mintFacts,
   movedBy,
   namesAnyOf,
+  parsedApprovesOn,
   permanentDelegateOf,
   tokenAccount,
   tokenTransition,
@@ -876,7 +877,8 @@ const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
  * A program the transaction calls through another (a CPI), as a simulation reports it. Mainnet
  * nodes answer `simulateTransaction` with every inner instruction keyed by `programId`: parsed
  * (`parsed`, `program`; no `accounts` or `data`) for a program they parse, such as System and SPL
- * Token, and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
+ * Token and Token-2022 (`{ type, info }`, the token account an approval sets in `info.source`),
+ * and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
  * Kitchen's and the engine's. `programIdIndex` and index `accounts` are the unparsed form a
  * transaction's own report uses, taken here too.
  */
@@ -885,6 +887,7 @@ type InnerInstruction = Readonly<{
   programIdIndex?: number;
   accounts?: readonly (string | number)[];
   data?: string;
+  parsed?: unknown;
 }>;
 
 /**
@@ -961,16 +964,22 @@ export async function measureSvm(
       : undefined;
   };
   const pots: string[] = [];
-  // The token accounts a token program's `Approve` or `ApproveChecked` names, at any depth: an
-  // allowance that ends where it began may still have been raised and spent between.
+  // The token accounts a token program's `Approve` or `ApproveChecked` names, at any depth and in a
+  // batch: an allowance that ends where it began may still have been raised and spent between.
+  // A token program's instruction whose report cannot be read may be one, so it is not measured.
   const approving = new Set<string>();
+  let unseen: string | undefined;
   for (const instruction of message.instructions) {
     const program = accounts[instruction.programAddressIndex];
     const keys = (instruction.accountIndices ?? []).map((at) => accounts[at]);
     const pot = cookPot(program, instruction.data ?? new Uint8Array(), keys);
     if (pot !== undefined) pots.push(pot);
     const approves = approvesOn(program, instruction.data, keys);
-    if (approves !== undefined) approving.add(approves);
+    if (approves === null) {
+      unseen =
+        "one of its token program instructions cannot be read, so an approval in it is not seen";
+    }
+    for (const account of approves ?? []) approving.add(account);
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
@@ -987,13 +996,14 @@ export async function measureSvm(
   if (value.err !== null) {
     throw new CliError("the transaction would fail in the simulation, so nothing was sent");
   }
-  // The cooks its programs make: each inner instruction, at any depth, that calls the Kitchen.
+  // The cooks and approvals its programs make: each inner instruction, at any depth, that calls the
+  // Kitchen or a token program.
   const inner: readonly Readonly<{ instructions: readonly InnerInstruction[] }>[] | null =
     value.innerInstructions ?? null;
-  let unseen: string | undefined =
-    inner === null
-      ? "the endpoint did not report the programs its programs call, so a cook among them is not seen"
-      : undefined;
+  if (inner === null) {
+    unseen =
+      "the endpoint did not report the programs its programs call, so a cook among them is not seen";
+  }
   for (const each of (inner ?? []).flatMap((group) => group.instructions)) {
     const program =
       each.programId ??
@@ -1012,8 +1022,15 @@ export async function measureSvm(
     } catch {
       data = undefined;
     }
-    const approves = approvesOn(program, data, keys);
-    if (approves !== undefined) approving.add(approves);
+    const approves =
+      each.parsed === undefined
+        ? approvesOn(program, data, keys)
+        : parsedApprovesOn(program, each.parsed);
+    if (approves === null) {
+      unseen =
+        "one of its programs calls a token program, and the endpoint's report of that call cannot be read, so an approval in it is not seen";
+    }
+    for (const account of approves ?? []) approving.add(account);
     if (program !== kitchen) continue;
     // Every Kitchen instruction opens with an 8-byte discriminator: shorter data is a cut report.
     if (data === undefined || data.length < 8 || keys.some((key) => key === undefined)) {

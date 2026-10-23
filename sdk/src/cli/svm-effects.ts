@@ -356,20 +356,86 @@ export function lamportKeys(account: SimulatedAccount | null): readonly Address[
 }
 
 /**
- * The token account an instruction of `program` with `data` on `keys` (its accounts in order) sets a
- * delegate's allowance on: its first, for SPL Token's or Token-2022's `Approve` (4) or
- * `ApproveChecked` (13). A token program's instruction whose data cannot be read counts as one,
- * since what it does cannot be told. `undefined` for any other instruction.
+ * The token accounts an instruction of `program` with `data` on `keys` (its accounts in order) sets
+ * a delegate's allowance on: the first account of SPL Token's or Token-2022's `Approve` (4) or
+ * `ApproveChecked` (13), and of each one in a `Batch` (255), whose instructions take its accounts
+ * in turn (each an account count and a data length, a byte each, then its data). `null` for a
+ * token program's instruction that cannot be read (no data, a batch cut short, an approval with no
+ * first account), since what it does cannot be told; empty for any other instruction.
  */
 export function approvesOn(
   program: string | undefined,
   data: Uint8Array | undefined,
   keys: readonly (string | undefined)[],
-): string | undefined {
-  if (program === undefined || !TOKEN_PROGRAMS.has(program)) return undefined;
-  if (data !== undefined && data[0] !== 4 && data[0] !== 13) return undefined;
+): readonly string[] | null {
+  if (program === undefined || !TOKEN_PROGRAMS.has(program)) return [];
+  if (data === undefined || data.length === 0) return null;
+  const batched = data[0] === 255;
+  const instructions: Array<{ data: Uint8Array; keys: readonly (string | undefined)[] }> = [];
+  for (let at = 1, account = 0; batched && at < data.length;) {
+    const count = data[at]!;
+    const length = data[at + 1];
+    if (length === undefined || at + 2 + length > data.length || account + count > keys.length) {
+      return null;
+    }
+    instructions.push({
+      data: data.subarray(at + 2, at + 2 + length),
+      keys: keys.slice(account, account + count),
+    });
+    at += 2 + length;
+    account += count;
+  }
+  if (!batched) instructions.push({ data, keys });
+  const approved: string[] = [];
+  for (const each of instructions) {
+    // A batch holds no batch: one in it, or an instruction with no data, is nothing it runs.
+    if (each.data.length === 0 || (batched && each.data[0] === 255)) return null;
+    if (each.data[0] !== 4 && each.data[0] !== 13) continue;
+    const source = each.keys[0];
+    if (source === undefined) return null;
+    approved.push(source);
+  }
 
-  return keys[0];
+  return approved;
+}
+
+/**
+ * The token accounts an instruction of `program`, as a node parses it, sets a delegate's allowance
+ * on: `info.source` of an `approve` or `approveChecked`, and of each one in a `batch`'s
+ * `info.instructions`. `parsed` is a JsonParsed instruction's `{ type, info }`, which a node
+ * reports for SPL Token and Token-2022 in place of the instruction's accounts and data (Agave's
+ * `parse_token.rs`). `null` where it cannot be read (no type, an approval with no source, a batch
+ * with no list of instructions or a batch in one), since what it does cannot be told; empty for any
+ * other instruction, and for any other program's.
+ */
+export function parsedApprovesOn(
+  program: string | undefined,
+  parsed: unknown,
+): readonly string[] | null {
+  if (program === undefined || !TOKEN_PROGRAMS.has(program)) return [];
+  const read = (instruction: unknown, inBatch: boolean): readonly string[] | null => {
+    if (typeof instruction !== "object" || instruction === null) return null;
+    const { type, info } = instruction as { type?: unknown; info?: unknown };
+    if (typeof type !== "string") return null;
+    if (type === "batch") {
+      const listed = (info as { instructions?: unknown } | null | undefined)?.instructions;
+      if (inBatch || !Array.isArray(listed)) return null;
+      const approved: string[] = [];
+      for (const each of listed as readonly unknown[]) {
+        const approves = read(each, true);
+        if (approves === null) return null;
+        approved.push(...approves);
+      }
+
+      return approved;
+    }
+    if (type !== "approve" && type !== "approveChecked") return [];
+    const source = (info as { source?: unknown } | null | undefined)?.source;
+
+    return typeof source === "string" && source !== "" ? [source] : null;
+  };
+
+  return read(parsed, false);
 }
 
 /**
