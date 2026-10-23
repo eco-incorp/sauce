@@ -1075,6 +1075,7 @@ const COMPUTE_STOPS = {
         skipped: z.boolean(),
         stopTick: z.number().optional(),
         stopPrice: z.string().optional(),
+        deepTick: z.number().optional(),
         ticksToLimit: z.number(),
         estimatedUnits: z.number(),
         share: z.number(),
@@ -2040,7 +2041,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "risk that a pool runs the cook out of compute units: worked out here from its pool's " +
         "tick arrays and the cost table alone, with no simulation, the pool buying the most " +
         "per unit first. `computeStops` names each pool held short of its limit (`held`, its " +
-        "`stopPrice`) or skipped. sauce_simulate works the stops out again against the units " +
+        "`stopPrice`) or skipped, and `deepTick` where its walk goes on into the furthest tick " +
+        "array its slot gives. sauce_simulate works the stops out again against the units " +
         "it measures, so the cook it reports can differ from this one, and the cursor " +
         "sauce_send resumes sends this cook as built, its stops from the pools now. " +
         "Nothing needs a fresh keypair: the owner signs and pays every " +
@@ -2394,7 +2396,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "its program staged as sauce run stages it. A Solana swap at a price may be held to a " +
         "stop that keeps its pool within its share of the cook's compute units, the pool " +
         "buying the most per unit first (`computeStops`: each pool held short of its limit, " +
-        "`held` with its `stopPrice`, or `skipped`): a cook that runs out of units anyway is " +
+        "`held` with its `stopPrice`, or `skipped`, and `deepTick` where its walk goes on into " +
+        "the furthest tick array its slot gives): a cook that runs out of units anyway is " +
         "simulated again with the stops tightened, twice, then refused (`computeRefused`). " +
         "The cook simulated can differ from the one sauce_tx builds, which takes the stops " +
         "from the cost table alone. `sourceSha256` is the " +

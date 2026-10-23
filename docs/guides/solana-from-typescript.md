@@ -264,9 +264,10 @@ mint's transfer fee exactly as Token-2022 computes it.
 A swap at a price through a venue namespace is listed in the compiled program's `stoppable`, by the
 derivation of its stop ([compute](../concepts/solana-model.md#compute)).
 `svmProgramStops(program, chain, accounts, integers, load)` works each out as `sauce` does, and
-names in `binding` the swaps to hold. Compiled again with `stops: binding`, those call the Stopped
-form, each stop a value added to `main` after the accounts (`derivedValues`, never one of
-`entryParams`), and `svmStopValues` gives the values to encode after `main`'s own arguments.
+names in `binding` the swaps to hold or walk on into their furthest tick array. Compiled again with
+`stops: binding`, those call the Stopped form, each stop a value added to `main` after the accounts
+(`derivedValues`, never one of `entryParams`), and `svmStopValues` gives the values to encode after
+`main`'s own arguments.
 
 ## Build a direct cook yourself
 

@@ -114,18 +114,29 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
 
 Each of the eight concentrated-liquidity functions also has a Stopped form, the same swap with its
 limit held to a `stop` as well. The stop's low 192 bits are a tighter `priceLimit`, and the swap
-takes the lower of the two (`0` none). From bit 192 it carries a start bound, a tick: the swap skips
+takes the lower of the two (`0` none). Bits 192 to 223 carry a start bound, a tick: the swap skips
 the pool if its price has moved further than that from the stop. A bound past every tick the walk's
 way skips the pool whatever its price: `1` paying the pool's lower-key token, `2^32 - 1` paying the
 other.
+
+On Raydium's code and Crema, bits 224 to 255 carry a deep tick (`0` none). Their swap at a price
+stops where the furthest tick array its slot gives begins, because past that array's last
+initialized tick their program fails the whole transaction. A deep tick is that last initialized
+tick that way, which the `sauce` command reads from the array; the swap then walks on into the
+array, to a tick inside it. The Stopped form reads the tick where the command read it, in a fixed
+array (Raydium's code), a dynamic one (Byreal's) or Crema's, and checks it there. A tick no longer
+initialized leaves the swap where it would have stopped. A place that holds another tick reverts
+(`deep: the tick array is not laid out as Raydium's`, or `Crema's`), and so does a tick no array
+of the slot holds. A tick is read as the window reads ticks, its sign bit flipped.
 
 ```text
 orcaWhirlpoolStopped(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account, stop): Uint256
 ```
 
 A program written with the venue namespaces (`Orca.Whirlpool.swap(…)`) is compiled to it only for a
-pool whose stop binds, as the `sauce` command works the stops out (see [compute](../concepts/solana-model.md#compute)); every other
-swap is the plain function, so a program no stop binds is the same program, byte for byte.
+pool whose stop binds or walks on, as the `sauce` command works the stops out (see
+[compute](../concepts/solana-model.md#compute)); every other swap is the plain function, so a
+program no stop binds is the same program, byte for byte.
 
 ### What reverts and what is skipped
 

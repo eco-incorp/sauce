@@ -158,6 +158,17 @@ remain available and explicitly report that deployment availability has not been
   known branches and helper arguments specialize at compilation. `program(closure, ...args)` builds
   a separate program with explicit, read-only captures. EVM calls accept a gas cap through `.gas(n)`
   or the final raw-call argument. See the [language reference](reference/saucescript.md).
+- **Added (Solana): a walk on into the furthest tick array.** A swap at a price on Raydium's code
+  (`raydiumClmm`, `pancakeswapClmm`, `byreal`, `stabbleClmm`) or Crema stops where the furthest
+  tick array its slot gives begins. Where its limit takes it past there, the `sauce` command reads
+  that array's last initialized tick that way and compiles the swap to its Stopped form, the tick in
+  bits 224 to 255 of its `stop`; the swap then walks on to a tick inside it. The Stopped form reads
+  the tick in its array and checks it: one no longer initialized leaves the swap where it stopped
+  before, and a place that holds another tick reverts, naming the layout it expected
+  (`deep: the tick array is not laid out as Raydium's`). `computeStops` gives each such pool's
+  `deepTick`.
+- **Changed (Solana):** the Stopped form's start bound is bits 192 to 223 of its `stop`, where it
+  was everything from bit 192. Every bound the command works out fits there, `svmSkipStop`'s too.
 
 ### Compiler and engines
 

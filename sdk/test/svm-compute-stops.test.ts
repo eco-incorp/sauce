@@ -11,6 +11,7 @@ import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { resolveSvmAccountName } from "../src/svm/account-names.js";
 import {
   SVM_COOK_FIXED,
+  SVM_COOK_UNITS,
   SVM_HEADROOM_TICKS,
   SVM_SWAP_COSTS,
   SVM_SWAP_FIXED,
@@ -123,6 +124,98 @@ describe("the cook's builder's model of a swap at a price", () => {
     expect(stop!.estimatedUnits).toBe(
       cost.base + cost.tick * (walk.crossed.length + SVM_HEADROOM_TICKS),
     );
+  });
+
+  // Raydium's code and Crema stop where the furthest tick array their slot gives begins; a walk its
+  // limit takes past there goes on to that array's last initialized tick (its deep tick), which the
+  // stop carries in bits 224 to 255, held or not. Raydium's SOL/USDC pool bought with USDC, the price
+  // rising, on the arrays the fixture holds (the router suite cooks these on the venues' programs).
+  describe("a walk on into the furthest tick array", () => {
+    const raydium = pool("raydium-clmm-sol-usdc");
+    const biased = (tick: number): bigint => BigInt(tick) + (1n << 31n);
+    const of = (
+      p: Pool,
+      times: bigint,
+      layout: SvmStopPool["layout"],
+      arrays: readonly Address[] = p.payB,
+    ): SvmStopPool => ({
+      name: p.name,
+      program: p.program,
+      layout,
+      pool: BYTES.get(p.pool)!,
+      fee: LAYOUT[p.venue]!.fee(p),
+      arrays: arrays.map((at) => BYTES.get(at)),
+      paysA: false,
+      priceLimit: (allIn(p, false) * times) / 10000n,
+    });
+    const ONE = SVM_COOK_UNITS - SVM_COOK_FIXED - SVM_SWAP_FIXED;
+
+    it("walks a whole walk on to the deep tick, its stop that tick alone", () => {
+      // The price's own array, the next, and one behind: the window ends where the next begins.
+      const near = of(raydium, 30000n, "raydium", [
+        raydium.payB[0]!,
+        raydium.payB[1]!,
+        raydium.payA[1]!,
+      ]);
+      const walk = svmPoolWalk(near);
+      expect([walk.window, walk.deep, walk.limitTick]).toEqual([-21360, -21303, -21305]);
+      const [stop] = svmComputeStops([near], ONE);
+      expect([stop!.stopTick, stop!.deepTick, String(stop!.stop)]).toEqual([
+        undefined,
+        -21303,
+        String(biased(-21303) << 224n),
+      ]);
+      // A limit that ends inside the window walks no further, and no stop binds.
+      const short = of(raydium, 10060n, "raydium");
+      expect(svmPoolWalk(short).deep).toBeUndefined();
+      expect(String(svmComputeStops([short], ONE)[0]!.stop)).toBe("0");
+    });
+
+    it("carries the deep tick where a held walk stops in the furthest array, and only there", () => {
+      const far = of(raydium, 30000n, "raydium");
+      const [held] = svmComputeStops([far], ONE);
+      expect([held!.stopTick, held!.deepTick]).toEqual([-21264, -21241]);
+      const stop = held!.stop;
+      expect([
+        String(stop >> 224n),
+        String((stop >> 192n) & 0xffffffffn),
+        String(stop & ((1n << 192n) - 1n)),
+      ]).toEqual([String(biased(-21241)), String(biased(held!.from!)), String(held!.limit!)]);
+      // PancakeSwap's pool is held in the array before its furthest: no deep tick.
+      const pancake = pool("pancakeswap-clmm-sol-usdc");
+      const [before] = svmComputeStops([of(pancake, 30000n, "raydium")], ONE);
+      expect([before!.stopTick, before!.deepTick, String(before!.stop >> 224n)]).toEqual([
+        -20710,
+        undefined,
+        "0",
+      ]);
+      expect(
+        svmStopsJson({
+          stops: [
+            {
+              ...held!,
+              pool: raydium.pool,
+              label: "pool",
+              venue: "Raydium CLMM",
+              pay: "USDC",
+              buy: "WSOL",
+            },
+          ],
+          binding: [held!.name],
+          budget: ONE,
+          fixed: { units: 0, measured: false },
+          headroom: 0,
+        }).computeStops,
+      ).toMatchObject([{ held: true, stopTick: -21264, deepTick: -21241 }]);
+    });
+
+    it("walks Crema on, and never a whirlpool, whose window is its program's own", () => {
+      const crema = pool("crema-sol-usdc");
+      const walk = svmPoolWalk(of(crema, 30000n, "crema"));
+      expect([walk.window, walk.deep, walk.limitTick]).toEqual([-14800, -13100, -13102]);
+      const orca = pool("orca-whirlpool-sol-usdc");
+      expect(svmPoolWalk(fromFixture(orca, allIn(orca, false) * 3n)).deep).toBeUndefined();
+    });
   });
 
   // A swap in a loop runs as many times as the loop does: each run is the router's work and the

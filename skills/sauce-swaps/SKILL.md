@@ -361,8 +361,13 @@ pool out of the cook's compute before then: keep it tight.
 
 Each of the eight concentrated-liquidity functions has a Stopped form, the same swap with its limit
 held to a `stop` as well: its low 192 bits a tighter `priceLimit` (the swap takes the lower of the
-two; `0` none), and from bit 192 a start bound, a tick past which the swap skips the pool (`1`
-paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price):
+two; `0` none), bits 192 to 223 a start bound, a tick past which the swap skips the pool (`1`
+paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price), and on
+Raydium's code and Crema bits 224 to 255 a deep tick (`0` none): the furthest array's last
+initialized tick that way, which walks the swap on into that array, to a tick inside it. The
+Stopped form reads the deep tick in its array and checks it there: one no longer initialized leaves
+the swap where it would have stopped, and a place holding another tick reverts, naming the layout
+(`deep: the tick array is not laid out as Raydium's`, or `Crema's`).
 
 ```text
 orcaWhirlpoolStopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint256
@@ -375,7 +380,9 @@ reads the pool's tick arrays, counts the initialized ticks its walk to its limit
 them from a table measured on each venue's program with three more crossings kept back, and gives
 the pool whose walk buys the most per unit its whole walk first, then the next from what is left. A
 pool the rest does not cover is compiled to the Stopped form, held short of its limit, its start
-bound three tick-spacing positions past its price then; one it cannot pay for at all is skipped.
+bound three tick-spacing positions past its price then; one it cannot pay for at all is skipped. A
+walk whose limit takes it past where the furthest array begins, on Raydium's code or Crema, is
+compiled to the Stopped form too, with that array's deep tick, held or not.
 Where no stop binds, the program is the plain one. A swap in a loop whose count is written out
 (`for (let i = 0; i < 3; i++)`) is charged its own units for each run, and its walk once; in a loop
 whose count is a value or a negative number, or more runs than one cook pays for, no pool is held,

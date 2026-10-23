@@ -275,8 +275,9 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 //
 // For Raydium's code and Crema that is where the furthest array the slot gives that way begins,
 // since the swap reaches it by lookup and stops there; and when that array holds the price, the last
-// tick initialized in it that way. A tick is an i32 read with its sign bit flipped (biased), so that
-// ticks compare in order; 0 is no room at all.
+// tick initialized in it that way. A Stopped form whose stop names that array's last initialized
+// tick walks on to it ("Held to a stop"). A tick is an i32 read with its sign bit flipped (biased),
+// so that ticks compare in order; 0 is no room at all.
 
 // The biased tick at `at` of `account`, an i32.
 function tickAt(account: Account, at: Uint256): Uint256 {
@@ -1673,14 +1674,153 @@ export function phoenix(
 // builder works out from the pool's tick arrays so that the pool's swap stays within its share of
 // the cook's compute units (a swap crossing many initialized ticks runs the transaction out of them,
 // failing it whole). Its low 192 bits are a tighter `priceLimit`, in its units, and the swap takes
-// the lower of the two; 0 is no stop. From bit 192 it carries the tick the pool's price may lie no
+// the lower of the two; 0 is no stop. Bits 192 to 223 carry the tick the pool's price may lie no
 // further from the stop than, as the window reads ticks: the price the walk was priced from, with the
-// builder's headroom. A price that has moved further since skips the pool, so a held swap crosses no
-// more initialized ticks than were allowed for, while those in its way stay as they were read. A
-// bound past every tick the walk's way (1 paying the lower-key token, 2^32 - 1 the other) skips the
-// pool whatever its price. A program written with the venue namespaces calls one of these only for a
-// pool whose stop binds, and the plain swap otherwise, so a cook no stop binds runs exactly the
-// plain swaps.
+// builder's headroom (0, none). A price that has moved further since skips the pool, so a held swap
+// crosses no more initialized ticks than were allowed for, while those in its way stay as they were
+// read. A bound past every tick the walk's way (1 paying the lower-key token, 2^32 - 1 the other)
+// skips the pool whatever its price. On Raydium's code and Crema, bits 224 to 255 carry a deep tick
+// (0, none): the window walked on into its furthest tick array, below. A program written with the
+// venue namespaces calls one of these only for a pool whose stop binds or walks on, and the plain
+// swap otherwise, so a cook no stop binds runs exactly the plain swaps.
+//
+// Raydium's code and Crema stop where the furthest tick array the slot gives that way begins, since
+// the swap reaches it by lookup and fails past its last initialized tick (the window, above). The
+// cook's builder can read that array and name its last initialized tick that way, its deep tick;
+// the window then ends there instead, the limit held a tick inside it, so the swap stays in that
+// array, which holds the next initialized tick it meets. Past the window an array of the slot holds
+// the tick only where it is that furthest one, and the tick is read only past the window, where it
+// must still be initialized: a tick no longer initialized leaves the window as it is. A tick whose
+// place in its array holds another means the array is not laid out as read here, which reverts,
+// naming it, rather than walk on a guess. Such a swap is sent as `…AtLimit` sends it, its limit the
+// one `clmmOrder` works out.
+
+// Raydium's code's window walked on to `deep`: a fixed array's ticks of 168 bytes from 44, a Byreal
+// dynamic one's from 216 in the places its map at 48 gives (`raydiumStop`), a tick's state its index,
+// its net liquidity, then its gross, 0 when it is not initialized.
+function raydiumDeep(slot: Account[], down: bool, window: Uint256, deep: Uint256): Uint256 {
+  if (window == 0 || (down ? deep >= window : deep <= window)) {
+    return window;
+  }
+  const spacing = svm.sload(slot[1], 235, 2).toLe();
+  const span = 60 * spacing;
+  for (let i = 6; i < 9; i = i + 1) {
+    const array = slot[i];
+    const kind = svm.sload(array, 0, 8).toBe();
+    if (kind == 0xc09b55cd31f9812a || kind == 0x6a8b98247599b838) {
+      const start = tickAt(array, 40);
+      if (deep >= start && deep < start + span) {
+        require((deep - start) % spacing == 0, "deep: its tick is off its pool's spacing");
+        const offset = (deep - start) / spacing;
+        let at = 44 + offset * 168;
+        if (kind == 0x6a8b98247599b838) {
+          const place = svm.sload(array, 48 + offset, 1).toLe();
+          if (place == 0) {
+            return window;
+          }
+          at = 216 + (place - 1) * 168;
+        }
+        if (svm.sload(array, at + 20, 16).toLe() == 0) {
+          return window;
+        }
+        require(tickAt(array, at) == deep, "deep: the tick array is not laid out as Raydium's");
+        return deep;
+      }
+    }
+  }
+  require(false, "deep: no tick array of the slot holds its tick");
+  return window;
+}
+
+// Crema's window walked on to `deep`: the slot's last tick array, of 64 ticks of 133 bytes from 44
+// (`cremaStop`), a tick's state its initialized byte, then its index.
+function cremaDeep(slot: Account[], down: bool, window: Uint256, deep: Uint256): Uint256 {
+  if (window == 0 || (down ? deep >= window : deep <= window)) {
+    return window;
+  }
+  const spacing = svm.sload(slot[1], 168, 2).toLe();
+  const span = 64 * spacing;
+  const last = slot[7].address == 0 ? slot[6] : slot[8].address == 0 ? slot[7] : slot[8];
+  const start = 0x80000000 - 443636 + (443636 % spacing) + svm.sload(last, 8, 2).toLe() * span;
+  require(deep >= start &&
+    deep < start + span &&
+    (deep - start) % spacing == 0, "deep: its tick is not in the slot's last tick array");
+  const at = 44 + ((deep - start) / spacing) * 133;
+  if (svm.sload(last, at, 1).toLe() != 1) {
+    return window;
+  }
+  require(tickAt(last, at + 1) == deep, "deep: the tick array is not laid out as Crema's");
+  return deep;
+}
+
+// `swapRaydium`, its window walked on to `deep`.
+function swapRaydiumDeep(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  recipient: Account,
+  deep: Uint256,
+): void {
+  const pool = slot[1];
+  const status = svm.sload(pool, 389, 1).toLe();
+  if (
+    (status & 16) != 0 ||
+    svm.sload(pool, 393, 4).toLe() != 0 ||
+    svm.sload(pool, 1096, 16).toLe() != 0
+  ) {
+    return;
+  }
+  const paysA = trader[2].address < trader[3].address;
+  const stop = raydiumDeep(slot, paysA, raydiumStop(slot, paysA), deep);
+  if (stop == 0) {
+    return;
+  }
+  const order = clmmOrder(
+    pool,
+    73,
+    105,
+    237,
+    slot[2],
+    47,
+    4,
+    trader,
+    priceLimit,
+    amountIn,
+    269,
+    stop,
+  );
+  if (order.length == 0) {
+    return;
+  }
+  // The order's limit is its bits from 128.
+  cpiRaydium(slot, trader, paysA, amountIn, order.toLe() >> 128, 0, recipient);
+}
+
+// `swapCrema`, its window walked on to `deep`.
+function swapCremaDeep(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  priceLimit: Uint256,
+  recipient: Account,
+  deep: Uint256,
+): void {
+  const pool = slot[1];
+  if (svm.sload(pool, 747, 1).toLe() != 0) {
+    return;
+  }
+  const paysA = trader[2].address < trader[3].address;
+  const stop = cremaDeep(slot, paysA, cremaStop(slot, paysA), deep);
+  if (stop == 0) {
+    return;
+  }
+  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, priceLimit, amountIn, 206, stop);
+  if (order.length == 0) {
+    return;
+  }
+  cpiCrema(slot, trader, paysA, amountIn, order.toLe() >> 128, 0, recipient);
+}
 
 export function raydiumClmmStopped(
   slot: Account[],
@@ -1697,9 +1837,10 @@ export function raydiumClmmStopped(
   }
   const owned = pool.owner == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
   require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 269);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1707,15 +1848,15 @@ export function raydiumClmmStopped(
     }
   }
   const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const bound = limit != 0 && limit < priceLimit ? limit : priceLimit;
+  const deep = stop >> 224;
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(
-    slot,
-    trader,
-    amountIn,
-    limit != 0 && limit < priceLimit ? limit : priceLimit,
-    recipient,
-  );
+  if (deep == 0) {
+    swapRaydium(slot, trader, amountIn, bound, recipient);
+  } else {
+    swapRaydiumDeep(slot, trader, amountIn, bound, recipient, deep);
+  }
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1734,9 +1875,10 @@ export function pancakeswapClmmStopped(
   }
   const owned = pool.owner == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
   require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 269);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1744,15 +1886,15 @@ export function pancakeswapClmmStopped(
     }
   }
   const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const bound = limit != 0 && limit < priceLimit ? limit : priceLimit;
+  const deep = stop >> 224;
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(
-    slot,
-    trader,
-    amountIn,
-    limit != 0 && limit < priceLimit ? limit : priceLimit,
-    recipient,
-  );
+  if (deep == 0) {
+    swapRaydium(slot, trader, amountIn, bound, recipient);
+  } else {
+    swapRaydiumDeep(slot, trader, amountIn, bound, recipient, deep);
+  }
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1771,9 +1913,10 @@ export function byrealStopped(
   }
   const owned = pool.owner == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
   require(owned && slot[0].address == pool.owner, "not a Byreal pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 269);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1781,15 +1924,15 @@ export function byrealStopped(
     }
   }
   const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const bound = limit != 0 && limit < priceLimit ? limit : priceLimit;
+  const deep = stop >> 224;
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(
-    slot,
-    trader,
-    amountIn,
-    limit != 0 && limit < priceLimit ? limit : priceLimit,
-    recipient,
-  );
+  if (deep == 0) {
+    swapRaydium(slot, trader, amountIn, bound, recipient);
+  } else {
+    swapRaydiumDeep(slot, trader, amountIn, bound, recipient, deep);
+  }
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1808,9 +1951,10 @@ export function stabbleClmmStopped(
   }
   const owned = pool.owner == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
   require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 269);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1818,15 +1962,15 @@ export function stabbleClmmStopped(
     }
   }
   const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const bound = limit != 0 && limit < priceLimit ? limit : priceLimit;
+  const deep = stop >> 224;
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(
-    slot,
-    trader,
-    amountIn,
-    limit != 0 && limit < priceLimit ? limit : priceLimit,
-    recipient,
-  );
+  if (deep == 0) {
+    swapRaydium(slot, trader, amountIn, bound, recipient);
+  } else {
+    swapRaydiumDeep(slot, trader, amountIn, bound, recipient, deep);
+  }
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1845,9 +1989,10 @@ export function orcaWhirlpoolStopped(
   }
   const owned = pool.owner == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
   require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 81);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1882,9 +2027,10 @@ export function cropperStopped(
   }
   const owned = pool.owner == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
   require(owned && slot[0].address == pool.owner, "not a Cropper pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 81);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1919,9 +2065,10 @@ export function defitunaStopped(
   }
   const owned = pool.owner == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
   require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 183);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1956,9 +2103,10 @@ export function cremaStopped(
   }
   const owned = pool.owner == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
   require(owned && slot[0].address == pool.owner, "not a Crema pool");
-  // Its walk was priced from a price no further from the stop than the tick from bit 192 (0, none):
-  // one that has moved further since is skipped, so the swap crosses no more than its stop allowed.
-  const from = stop >> 192;
+  // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
+  // none): one that has moved further since is skipped, so the swap crosses no more than its stop
+  // allowed.
+  const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 206);
     if (trader[2].address < trader[3].address ? live > from : live < from) {
@@ -1966,15 +2114,15 @@ export function cremaStopped(
     }
   }
   const limit = stop & 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+  const bound = limit != 0 && limit < priceLimit ? limit : priceLimit;
+  const deep = stop >> 224;
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapCrema(
-    slot,
-    trader,
-    amountIn,
-    limit != 0 && limit < priceLimit ? limit : priceLimit,
-    recipient,
-  );
+  if (deep == 0) {
+    swapCrema(slot, trader, amountIn, bound, recipient);
+  } else {
+    swapCremaDeep(slot, trader, amountIn, bound, recipient, deep);
+  }
   return settled(trader[1], recipient, held, before, minOut);
 }
 
