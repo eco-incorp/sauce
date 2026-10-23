@@ -188,6 +188,38 @@ function importOf(program: AstNode, specifier: string): AstNode | undefined {
 }
 
 /**
+ * `fn`, answering each argument list as it first did: the same bytes or path, or the same error
+ * thrown again. One compile reads the caller's `resolve` and `resolvePackage` through one of these
+ * each, so its probe of the names they bind (`ambientNamesOf`) and the compile itself read the same
+ * modules, however the caller answers when asked again. Bytes are kept as a copy of what was first
+ * served, since a resolver may hand out one buffer and write the next module into it. It is the
+ * compile's own: the next compile makes its own, and asks the caller afresh.
+ */
+export function firstAnswers<A extends readonly string[], R>(
+  fn: (...args: A) => R,
+): (...args: A) => R {
+  const answers = new Map<string, { readonly value: R } | { readonly error: unknown }>();
+
+  return (...args) => {
+    const key = JSON.stringify(args);
+    let answer = answers.get(key);
+    if (answer === undefined) {
+      try {
+        const value = fn(...args);
+        // A copy of a `Uint8Array` is one, whatever its subclass (a Node `Buffer`'s `slice` is a view).
+        answer = { value: value instanceof Uint8Array ? (Uint8Array.from(value) as R) : value };
+      } catch (error) {
+        answer = { error };
+      }
+      answers.set(key, answer);
+    }
+    if ("error" in answer) throw answer.error;
+
+    return answer.value;
+  };
+}
+
+/**
  * Index of the closing quote of the string/template literal opening at `open`.
  *
  * Template interpolation does not nest here: `${…}` is scanned as ordinary string body, so a
@@ -303,27 +335,46 @@ function sharedOptions(
  * (`makeResolve`), so no module a caller serves, ambient or imported, is at it.
  */
 const PROBE_MODULE = `.${SDK_STD_ROOT}/__sauce_probe.js`;
-/** The probe's program: it declares and reads nothing, so no name it binds is its own. */
-const PROBE_PROGRAM = "function main(): void {}";
+/**
+ * The probe's program after the program's own imports: a `main` that reads nothing, so no name it
+ * binds is its own, and a function nothing calls that writes a closure. A compile with a closure
+ * lowers only what its `main` reaches, so the probe lowers nothing. One without would lower every
+ * function of every module, which the compile of a program that has one does not, and could fail
+ * on a function only a closure's program can compile.
+ */
+const PROBE_PROGRAM =
+  "function main(): void {}\nfunction __sauce_probe(): bytes {\n  return program(() => 0).code;\n}\n";
 /** The compiler's refusal of a name two ambient modules export, which names it. */
 const EXPORTED_TWICE = /`([A-Za-z_$][\w$]*)` is exported by more than one ambient module/;
 
 /**
  * The names among `names` that one of `input.ambient`'s modules exports, as the compiler finds them:
- * the compiler is asked, never the SDK. A probe compiles an empty `main` with `input`'s options and
- * one more ambient module, which exports every name asked about. The compiler refuses a name two
- * ambient modules export, naming it, so each name it refuses is one a caller's module exports; it is
- * set aside and the rest asked again. A compile the probe's names do not trouble ends the probe.
- * Any other refusal is the compile's own, the same for the program, and is thrown as it is.
+ * the compiler is asked, never the SDK. A probe compiles `imports`, the program's own import
+ * declarations as written, then a `main` that reads nothing (`PROBE_PROGRAM`), at the program's
+ * path with `input`'s options and one more ambient module, which exports every name asked about.
+ * The compiler loads an entry's imports before the ambient modules and loads a module once, so with
+ * the same imports it loads the same modules, each where the compile does (a `resolvePackage` that
+ * answers by importer included). It refuses a name two ambient modules export, naming it, so each
+ * name it refuses is one a caller's module exports; it is set aside and the rest asked again. A
+ * compile the probe's names do not trouble ends the probe.
+ *
+ * Any other refusal leaves every name still asked about as the caller's, never the Pot's. What the
+ * compiler checks before it compares the ambient modules' exports, the probe and the compile share
+ * (the modules, the options, the imports), so the compile is refused too and reports it as it
+ * reports any refusal; after it, the probe compiles nothing but its own `main`.
  *
  * Nothing is remembered between calls: one `resolve` may serve other text on the next compile. The
  * compiler's own caches, keyed by each module's text, keep a probe that reads nothing new cheap.
  */
-export function ambientNamesOf(input: RsProbeInput, names: Iterable<string>): Set<string> {
+export function ambientNamesOf(
+  input: RsProbeInput,
+  names: Iterable<string>,
+  imports: readonly string[],
+): Set<string> {
   const found = new Set<string>();
   const asked = new Set(names);
   if (asked.size === 0 || input.ambient === undefined || input.ambient.length === 0) return found;
-  const program = makeResolve(PROBE_PROGRAM, input.resolve);
+  const program = makeResolve([...imports, PROBE_PROGRAM].join("\n"), input.resolve);
   const options = sharedOptions(input);
   const ambient = [...input.ambient, PROBE_MODULE];
   while (asked.size > 0) {
@@ -339,7 +390,10 @@ export function ambientNamesOf(input: RsProbeInput, names: Iterable<string>): Se
       break;
     } catch (error) {
       const name = exportedTwice(error);
-      if (name === undefined || !asked.has(name)) throw error;
+      if (name === undefined || !asked.has(name)) {
+        for (const rest of asked) found.add(rest);
+        break;
+      }
       found.add(name);
       asked.delete(name);
     }
