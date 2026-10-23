@@ -1058,10 +1058,13 @@ export async function measureSvm(
       0n,
     );
     if (amount <= 0n) return [];
-    // Every allowance is in the mint's decimals after; scaled with the rest.
+    // Every allowance is in the mint's decimals after, which are among the parts summed, so the
+    // finest is at least theirs; scaled with the rest. With none, there is nothing to scale.
     const after = facts.get(token)?.decimals;
     const scale =
-      decimals === undefined || after === undefined ? 1n : 10n ** BigInt(decimals - after);
+      delegated === 0n || decimals === undefined || after === undefined
+        ? 1n
+        : 10n ** BigInt(decimals - after);
 
     return [
       {

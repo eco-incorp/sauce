@@ -1023,6 +1023,34 @@ describe("measuring token accounts from a simulation's account images", () => {
       ...refused(`tokens.${MINT_A}.perTransaction`, "this transaction sends 999.999999 USDC"),
     });
   });
+
+  it("measures a balance burnt from a mint made again with more decimals, beside a close authority handed out", async () => {
+    // The wallet's account held 1000 of a mint of 3 decimals: the transaction burns it, makes the
+    // mint again with 9, and lets another key close the emptied account. Nothing is delegated, so no
+    // allowance is scaled; a policy limiting only another token lets it through.
+    const closed = held(SPL, MINT_A, WALLET, 0n)!;
+    const view = new DataView(closed.data.buffer);
+    view.setUint32(129, 1, true);
+    closed.data.set(getAddressEncoder().encode(PROGRAM), 133);
+    const { rpc, transaction } = simulated(
+      { [ACCOUNT]: held(SPL, MINT_A, WALLET, 1_000n), [MINT_A]: minted(SPL, 3) },
+      { [ACCOUNT]: closed, [MINT_A]: minted(SPL, 9) },
+      [MINT_A],
+    );
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+    expect({
+      tokens: plain(measured.tokens),
+      closers: measured.closers,
+      refusal: (
+        await verdictOf(rpc, WALLET, { tokens: { [MINT_B]: { perTransaction: "1" } } }, transaction)
+      ).refusal,
+    }).toEqual({
+      tokens: [{ token: MINT_A, symbol: "USDC", amount: "1000", decimals: 3 }],
+      closers: [{ token: MINT_A, account: ACCOUNT, closer: PROGRAM, symbol: "USDC" }],
+      refusal: "none: the guard let it through",
+    });
+  });
 });
 
 // What a token account lets another key do once a transaction lands: spend from it as its delegate,
