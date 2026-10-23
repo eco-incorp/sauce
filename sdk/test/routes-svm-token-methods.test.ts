@@ -52,6 +52,29 @@ describe("the token methods on Solana", () => {
     ]);
   });
 
+  it("a write through parentheses, around its method or an argument, keeps them matched", () => {
+    const write = (call: string) =>
+      compile(`function main(to: Address, amount: Uint256) {\n  ${call};\n}\n`);
+    const plain = write("USDC.transfer(to, amount)");
+    for (const call of [
+      "(USDC.transfer)(to, amount)",
+      "((USDC.transfer))(to, amount)",
+      "USDC.transfer(to, (amount))",
+      "USDC.transfer((to), ((amount)))",
+      "(USDC.transfer)(to, (amount),)",
+    ]) {
+      const program = write(call);
+      expect(program.bytecode).toEqual(plain.bytecode);
+      expect(program.manifest).toEqual(plain.manifest);
+    }
+    // A write that is a branch's body, its checks after it in braces.
+    const branch = (call: string) =>
+      compile(`function main(to: Address, amount: Uint256) {\n  if (amount > 0) ${call};\n}\n`);
+    expect(branch("(USDC.transfer)(to, (amount))").bytecode).toEqual(
+      branch("USDC.transfer(to, amount)").bytecode,
+    );
+  });
+
   it("a Token-2022 mint moves by transferChecked, with the mint as an account and the registry's decimals", () => {
     const pyusd = svmTokenRows(SOLANA).find((row) => row.symbol === "PYUSD")!;
     const program = compile(

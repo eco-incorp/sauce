@@ -34,6 +34,7 @@ import { shadowed, walkScoped, type Scope } from "./lexical-scope.js";
 import { parseSauce } from "./parse.js";
 import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { applySplices, methodCall, type MethodCall, type Splice } from "./token-rewrite.js";
+import { blankLiterals } from "./rs-compile.js";
 import type { SvmTokenRow } from "./token-registry.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { STD_SOURCES } from "../embedded/sources.generated.js";
@@ -616,6 +617,8 @@ export class SvmLowering {
   readonly parents: ReadonlyMap<AstNode, AstNode>;
   /** Every place the program reads a name (`readsOf`). */
   private readonly reads: readonly AstNode[];
+  /** The source with its strings and comments as spaces (`blankLiterals`), once a splice needs it. */
+  private blanked: string | undefined;
   /** Every read of `pot` where the program does not bind it (`owns`): the Pot. */
   readonly potReads: ReadonlySet<AstNode>;
   /** Every read of `self` where the program does not bind it: refused, naming `pot`. */
@@ -1110,9 +1113,10 @@ export class SvmLowering {
   }
 
   /**
-   * Replaces a call with `<prefix>…kept…<suffix>`, from its callee to the first argument kept and
+   * Replaces a call with `<prefix>…kept…<suffix>`, from its start to the first argument kept and
    * from the last kept to its end: the arguments kept stay in place, so a call inside one is lowered
-   * on its own.
+   * on its own. The parser leaves parentheses out of an expression's range, so the call's own range
+   * is taken, which a parenthesized callee's are inside, and each argument kept keeps its own.
    */
   spliceCall(
     site: MethodCall,
@@ -1121,9 +1125,22 @@ export class SvmLowering {
     prefix: string,
     suffix: string,
   ): void {
+    // Comments read as spaces, so none is taken for a parenthesis.
+    const code = (this.blanked ??= blankLiterals(this.source));
+    const opens: number[] = [];
+    for (let i = first.start - 1; i >= 0 && /[\s(]/.test(code[i]!); i--) {
+      if (code[i] === "(") opens.push(i);
+    }
+    // Before the call's first argument, the furthest is the call's own.
+    if (((site.call as { arguments?: AstNode[] }).arguments ?? [])[0] === first) opens.pop();
+    let end = last.end;
+    // Up to the call's own closing parenthesis, its last character.
+    for (let i = last.end; i < site.call.end - 1 && /[\s)]/.test(code[i]!); i++) {
+      if (code[i] === ")") end = i + 1;
+    }
     this.splices.push(
-      { start: site.callee.start, end: first.start, replacement: prefix },
-      { start: last.end, end: site.call.end, replacement: suffix },
+      { start: site.call.start, end: opens.at(-1) ?? first.start, replacement: prefix },
+      { start: end, end: site.call.end, replacement: suffix },
     );
   }
 

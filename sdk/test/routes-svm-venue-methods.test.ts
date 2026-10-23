@@ -15,6 +15,24 @@ const SWAP =
   "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
   "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}\n";
 
+describe("a swap through parentheses keeps them matched", () => {
+  it("around the venue's method, an argument it keeps, or the last", () => {
+    const plain = compile(SWAP);
+    for (const call of [
+      "Orca.Whirlpool.swap(pool, USDC, WSOL, (amountIn), priceLimit, (1))",
+      "(Orca.Whirlpool.swap)(pool, USDC, WSOL, amountIn, priceLimit, 1)",
+      "((Orca.Whirlpool.swap))(pool, USDC, WSOL, ((amountIn)), (priceLimit), ((1)),)",
+    ]) {
+      const program = compile(
+        SWAP.replace("Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1)", call),
+      );
+      expect(program.bytecode).toEqual(plain.bytecode);
+      expect(program.manifest).toEqual(plain.manifest);
+      expect(program.stoppable).toEqual(plain.stoppable);
+    }
+  });
+});
+
 describe("Solana's venue namespaces", () => {
   it("lowers to the venue's own function, its slot and trader added to main", () => {
     const program = compile(SWAP);

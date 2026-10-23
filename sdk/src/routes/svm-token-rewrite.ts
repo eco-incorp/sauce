@@ -290,14 +290,14 @@ function collectTokenMethods(l: SvmLowering): void {
     const wrap = !l.listed.has(statement);
     const semicolon = source[statement.end - 1] === ";" ? "" : ";";
     const open = wrap ? "{ " : "";
-    if (wrap && statement.start !== site.callee.start) {
+    if (wrap && statement.start !== site.call.start) {
       l.splices.push({ start: statement.start, end: statement.start, replacement: open });
     }
     l.spliceCall(
       site,
       amount,
       amount,
-      `${wrap && statement.start === site.callee.start ? open : ""}${prefix}`,
+      `${wrap && statement.start === site.call.start ? open : ""}${prefix}`,
       suffix,
     );
     const after = checks.map((check) => ` ${check};`).join("");
