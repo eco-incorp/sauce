@@ -617,7 +617,16 @@ export async function measureEvm(
       logged || (result.logs ?? []).some((log) => getAddress(log.address) === NATIVE_EMITTER);
     let native = 0n;
     const tokens = new Map<string, bigint>();
-    const approvals: Array<{ token: Address; spender: Address; amount: bigint }> = [];
+    // Every allowance the wallet or its Pot gives in the transaction, with whose it is and on which
+    // contract it stands: one on the token, and one through Permit2, are two permissions, as are the
+    // wallet's and its Pot's. A change to one leaves the others as they were.
+    const grants: Array<{
+      readonly channel: "erc20" | "permit2";
+      readonly owner: Address;
+      readonly token: Address;
+      readonly spender: Address;
+      readonly amount: bigint;
+    }> = [];
     for (const log of logs) {
       const [topic, one, two, three] = log.topics;
       // A standing allowance granted through Permit2 is an approval of the token it names: the
@@ -630,7 +639,9 @@ export async function measureEvm(
         log.data.length >= 66
       ) {
         if (ours.has(topicAddress(one!))) {
-          approvals.push({
+          grants.push({
+            channel: "permit2",
+            owner: topicAddress(one!),
             token: topicAddress(two!),
             spender: topicAddress(three!),
             amount: BigInt(log.data.slice(0, 66)),
@@ -648,24 +659,33 @@ export async function measureEvm(
         if (emitter === NATIVE_EMITTER) native += amount;
         else tokens.set(emitter, (tokens.get(emitter) ?? 0n) + amount);
       } else if (topic?.toLowerCase() === APPROVAL && ours.has(topicAddress(one!))) {
-        approvals.push({ token: emitter, spender: topicAddress(two!), amount });
+        grants.push({
+          channel: "erc20",
+          owner: topicAddress(one!),
+          token: emitter,
+          spender: topicAddress(two!),
+          amount,
+        });
       }
     }
-    // The allowance each spender keeps: the last a token reports in the transaction (a token may
-    // report one again as a spender pulls). A spender that is the wallet or its own Pot is no other
-    // key, and none is kept at 0. What another key keeps counts as sent, with what the transaction
-    // moves of the token, per transaction and in the day's total: it needs no later signature.
-    // (The ERC-20 approval of Permit2 itself moves nothing without one, and is not counted.)
-    const kept = new Map<string, (typeof approvals)[number]>();
-    for (const each of approvals) kept.set(`${each.token}/${each.spender}`, each);
-    const granted: typeof approvals = [];
+    // The allowance each permission leaves: the last its contract reports in the transaction (a token
+    // may report one again as a spender pulls). Distinct permissions add up. A spender that is the
+    // wallet or its own Pot is no other key, and none is kept at 0. What another key keeps counts as
+    // sent, with what the transaction moves of the token, per transaction and in the day's total: it
+    // needs no later signature. (The ERC-20 approval of Permit2 itself moves nothing without one,
+    // and is not counted.)
+    const kept = new Map<string, (typeof grants)[number]>();
+    for (const each of grants) {
+      kept.set(`${each.channel}/${each.owner}/${each.token}/${each.spender}`, each);
+    }
+    const granted: Array<{ token: Address; spender: Address; amount: bigint }> = [];
     const delegated = new Map<string, bigint>();
     for (const each of kept.values()) {
       if (each.amount === 0n || ours.has(each.spender) || (await ownPot(each.spender)) === "own") {
         continue;
       }
-      granted.push(each);
-      if (each.spender.toLowerCase() === permit2) continue;
+      granted.push({ token: each.token, spender: each.spender, amount: each.amount });
+      if (each.channel === "erc20" && each.spender.toLowerCase() === permit2) continue;
       tokens.set(each.token, (tokens.get(each.token) ?? 0n) + each.amount);
       delegated.set(each.token, (delegated.get(each.token) ?? 0n) + each.amount);
     }

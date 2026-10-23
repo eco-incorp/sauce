@@ -553,6 +553,52 @@ describe("the guard", () => {
     });
   });
 
+  it("holds each allowance as its own permission, whoever grants it and through which contract", async () => {
+    // An allowance on the token and one through Permit2 are two permissions; so are the wallet's and
+    // its Pot's. A change to one leaves the others as they are, and they share one cap.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
+    const viaPermit2 = (owner: Address, amount: bigint) => ({
+      address: PERMIT2,
+      topics: [PERMIT2_APPROVAL, topic(owner), topic(USDC), topic(SPENDER)] as Hex[],
+      data: encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }], [amount, 2 ** 40]),
+    });
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const verdict = (logs: Log[]) =>
+      guard.evm(client(logs), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    const twenty = parseUnits("20", 6);
+    const six = parseUnits("6", 6);
+
+    expect({
+      erc20ThenPermit2Zero: await verdict([
+        approval(USDC, POT, SPENDER, twenty),
+        viaPermit2(POT, 0n),
+      ]),
+      permit2ZeroThenErc20: await verdict([
+        viaPermit2(POT, 0n),
+        approval(USDC, POT, SPENDER, twenty),
+      ]),
+      walletAndPot: await verdict([
+        approval(USDC, WALLET, SPENDER, six),
+        approval(USDC, POT, SPENDER, six),
+      ]),
+      erc20AndPermit2: await verdict([approval(USDC, POT, SPENDER, six), viaPermit2(POT, six)]),
+    }).toEqual({
+      erc20ThenPermit2Zero: "tokens.USDC",
+      permit2ZeroThenErc20: "tokens.USDC",
+      walletAndPot: "tokens.USDC.perTransaction",
+      erc20AndPermit2: "tokens.USDC.perTransaction",
+    });
+  });
+
   it("holds an approval and a transfer of a token together, and reserves the approval in the day's total", async () => {
     const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
     const six = parseUnits("6", 6);
