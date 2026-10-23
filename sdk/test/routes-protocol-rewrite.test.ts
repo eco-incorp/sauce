@@ -287,6 +287,17 @@ describe("rewriteProtocolAccessors: a binder is never a read of the Pot", () => 
   });
 });
 
+describe("rewriteProtocolAccessors: a shorthand `{ pot }` is the Pot's field", () => {
+  it("writes the field out, its key kept", () => {
+    const record = (field: string) =>
+      `function main(): Address { const row = { size: 1, ${field} }; return row.pot; }`;
+    expect(rewriteProtocolAccessors(record("pot"), BASE).source).toBe(record("pot: ctx.self()"));
+    expect(Array.from(route("base", record("pot")).compiled.bytecode[0]!)).toEqual(
+      Array.from(route("base", record("pot: ctx.self()")).compiled.bytecode[0]!),
+    );
+  });
+});
+
 describe("rewriteProtocolAccessors: bare self, the Pot's old name, is refused", () => {
   const message =
     "`self`: the Pot is `pot`, not `self`: write `pot` (`pot` is the Pot's address, " +
@@ -310,6 +321,14 @@ describe("rewriteProtocolAccessors: bare self, the Pot's old name, is refused", 
     ]) {
       expect(() => rewriteProtocolAccessors(source, BASE)).not.toThrow();
     }
+  });
+
+  it("refuses a shorthand `{ self }`, naming the field written out", () => {
+    const shorthand = "`self`: the Pot is `pot`, not `self`: write `self: pot` (`pot` is the Pot's";
+    const source = "function main(): Address { const row = { self }; return row.self; }";
+    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(shorthand);
+    expect(() => compileSauceProgram("base", source)).toThrow(shorthand);
+    expect(() => compileSauceProgram("solana", source)).toThrow(shorthand);
   });
 });
 

@@ -213,7 +213,11 @@ function refuseRetiredPot(l: SvmLowering): void {
       native !== undefined && rest.startsWith(native) && !/^[\w$]/.test(rest.slice(native.length))
         ? `.${BALANCE_MEMBER}${rest.slice(native.length)}`
         : rest;
-    return selfRefusal(l.source.slice(node.start, top.end), `${POT_NAME}${instead}`);
+    // A shorthand field (`{ self }`) keeps its key, written out.
+    const parent = l.parents.get(node);
+    const field =
+      parent?.type === "Property" && parent.shorthand === true ? `${RETIRED_POT_NAME}: ` : "";
+    return selfRefusal(l.source.slice(node.start, top.end), `${field}${POT_NAME}${instead}`);
   };
   const [first] = l.selfReads;
   const solanaSelf: AstNode[] = [];
