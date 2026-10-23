@@ -249,8 +249,14 @@ export const windowStop = (
 };
 
 /** The sqrt price the router holds a swap at a price to: a tick inside the window's last safe tick
- *  (`windowStop`), or the pool's price where it leaves no room. */
-export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.payB): bigint => {
+ *  (`windowStop`, or `stop` where a Stopped form walks the window on to it), or the pool's price
+ *  where it leaves no room. */
+export const windowBound = (
+  p: Pool,
+  paysA: boolean,
+  ticks = paysA ? p.payA : p.payB,
+  stop = windowStop(p, paysA, ticks),
+): bigint => {
   const data = BYTES.get(p.pool)!;
   const at = ["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"].includes(p.venue)
     ? { tick: 269, price: 253 }
@@ -261,7 +267,6 @@ export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.
         : { tick: 206, price: 190 };
   const tick = i32(data, at.tick);
   const price = le(data, at.price, 16);
-  const stop = windowStop(p, paysA, ticks);
   if (stop === undefined) return price;
   if (paysA) return stop + 1 < tick ? closer(price, BigInt(tick - stop - 1), false) : price;
   return stop > tick + 2 ? closer(price, BigInt(stop - tick - 2), true) : price;

@@ -13,6 +13,8 @@
  *     small to buy one unit and a Phoenix limit too large for an order among them); the smallest
  *     input the estimate lets through delivers at least one unit;
  *   - a swap that ran below its floor reverts;
+ *   - on Raydium's code and Crema, a Stopped form given a deep tick walks on into the furthest tick
+ *     array its slot gives, to a tick inside it, and refuses a tick its array does not hold as read;
  *   - a slot that is not the pair, whose program is not the venue's, or whose pool is another venue's
  *     or no venue's, is refused.
  *
@@ -592,10 +594,13 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
           priceLimit: (allIn(p, paysA) * times) / 10000n,
           amountIn: 10_000_000_000n * 10n ** 6n,
         };
-        // A walk that fits: no stop, the plain swap.
+        // A walk that fits: no stop, the plain swap, but for one that walks on into its furthest
+        // tick array, which its Stopped form runs with its deep tick alone.
         const walk = svmPoolWalk(poolOf(order));
-        expect(stopOf(order).stop).toBe(0n);
-        const outcome = succeeded(await cook(compiled(lower(venue)), order));
+        const stop = stopOf(order);
+        expect([times, stop.stopTick, stop.skipped]).toEqual([times, undefined, undefined]);
+        const fn = stop.stop === 0n ? lower(venue) : `${lower(venue)}Stopped`;
+        const outcome = succeeded(await cook(compiled(fn), { ...order, stop: stop.stop }));
         const ended = i32(poolData(p), tickAt);
         expect([times, ended]).toEqual([times, walk.limitTick]);
         const estimate = cost.base + cost.tick * walk.crossed.length;
@@ -767,6 +772,137 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     );
     expect([one.returned, one.received, one.paid]).toEqual([all.returned, all.received, all.paid]);
   }, 120_000);
+
+  // Raydium's code and Crema walk on into the furthest tick array their slot gives, past where their
+  // window ends, with the stop the command works out (`svm/compute-stops.ts`): its deep tick, that
+  // array's last initialized tick that way, which the Stopped form reads in the array at the offsets
+  // the command read it at, and checks there. The plain swap stops where that array begins; the
+  // Stopped form ends a tick inside the deep tick, as the router holds a limit to any edge, past the
+  // plain swap's price and having bought more. Each walks its whole way within one cook's units: on
+  // fixed arrays (Raydium's, PancakeSwap's, Stabble's), dynamic ones (Byreal's) and Crema's. `near`
+  // gives the slot the price's own array, the next one that way and one behind the price.
+  const DEEP = [
+    { venue: "RaydiumClmm", paysOther: false, near: true },
+    { venue: "PancakeswapClmm", paysOther: true, near: true },
+    { venue: "Byreal", paysOther: true, near: true },
+    { venue: "StabbleClmm", paysOther: false, near: false },
+    { venue: "Crema", paysOther: false, near: false },
+  ];
+  const deepOrder = async ({ venue, paysOther, near }: (typeof DEEP)[number]) => {
+    const base = await orderFor(VENUES.find((one) => one.venue === venue)!);
+    const p = base.pool;
+    const [pay, buy] = paysOther ? [base.buy, base.pay] : [base.pay, base.buy];
+    const paysA = key(pay) < key(buy);
+    const [walk, behind] = paysA ? [p.payA, p.payB] : [p.payB, p.payA];
+    const ticks = near ? [walk[0]!, walk[1]!, behind[1]!] : [...walk];
+    const order: Order = {
+      ...base,
+      pay,
+      buy,
+      priceLimit: allIn(p, paysA) * 3n,
+      amountIn: 10_000_000_000n * 10n ** 6n,
+      ticks,
+    };
+    const stop = stopOf(order);
+    return { order, p, paysA, ticks, stop, deep: stop.deepTick! };
+  };
+  /** A tick as the router reads it, its sign bit flipped, in the stop's deep bits. */
+  const deepStop = (tick: number): bigint => (BigInt(tick) + (1n << 31n)) << 224n;
+  /** Where `deep`'s state lies in the slot's arrays: the array, the tick's index, and its first byte
+   *  that says it is initialized (Raydium's gross liquidity, Crema's flag). */
+  const stateOf = (p: Pool, ticks: readonly Address[], deep: number) => {
+    const pool = BYTES.get(p.pool)!;
+    if (p.venue === "crema") {
+      const spacing = Number(le(pool, 168, 2));
+      const passed = ticks.filter((at) => at !== SYSTEM);
+      const address = passed[passed.length - 1]!;
+      const array = BYTES.get(address)!;
+      const start = -443636 + (443636 % spacing) + Number(le(array, 8, 2)) * 64 * spacing;
+      const flag = 44 + ((deep - start) / spacing) * 133;
+      return { address, index: flag + 1, initialized: { at: flag, width: 1 } };
+    }
+    const spacing = Number(le(pool, 235, 2));
+    for (const address of ticks) {
+      const array = BYTES.get(address);
+      const start = array === undefined ? NaN : i32(array, 40);
+      if (!(deep >= start && deep < start + 60 * spacing)) continue;
+      const offset = (deep - start) / spacing;
+      const fixed = Buffer.from(array!.subarray(0, 8)).toString("hex") === "c09b55cd31f9812a";
+      const index = fixed ? 44 + offset * 168 : 216 + (array![48 + offset]! - 1) * 168;
+      return { address, index, initialized: { at: index + 20, width: 16 } };
+    }
+    throw new Error(`no array of the slot holds ${deep}`);
+  };
+
+  it.each(DEEP)(
+    "$venue: a deep tick walks on into the furthest tick array, a tick inside it",
+    async (entry) => {
+      const { order, p, paysA, ticks, stop, deep } = await deepOrder(entry);
+      // Its whole walk within the cook's units: no limit held, its deep tick alone, past the window.
+      expect([stop.stopTick, stop.skipped, String(stop.stop)]).toEqual([
+        undefined,
+        undefined,
+        String(deepStop(deep)),
+      ]);
+      const window = windowStop(p, paysA, ticks)!;
+      expect(paysA ? deep < window : deep > window).toBe(true);
+      const plain = succeeded(await cook(compiled(lower(entry.venue)), order));
+      expect(String(plain.price)).toBe(String(windowBound(p, paysA, ticks)));
+      const deeper = succeeded(
+        await cook(compiled(`${lower(entry.venue)}Stopped`), { ...order, stop: stop.stop }),
+      );
+      expect(String(deeper.price)).toBe(String(windowBound(p, paysA, ticks, deep)));
+      expect(deeper.received > plain.received).toBe(true);
+    },
+    300_000,
+  );
+
+  // The deep tick read where the command read it: a place in its array that holds another tick means
+  // the array is not laid out as the Stopped form reads it, and the cook reverts, naming it, rather
+  // than walk on a guess; a tick no longer initialized there leaves the window where it was; and a
+  // tick no array of the slot holds reverts. On a fixed array (Raydium's), a dynamic one (Byreal's)
+  // and Crema's.
+  it.each(DEEP.filter((one) => ["RaydiumClmm", "Byreal", "Crema"].includes(one.venue)))(
+    "$venue: a deep tick its array does not hold as read reverts, one no longer initialized is not walked to",
+    async (entry) => {
+      const { order, p, paysA, ticks, stop, deep } = await deepOrder(entry);
+      const program = compiled(`${lower(entry.venue)}Stopped`);
+      const state = stateOf(p, ticks, deep);
+      expect(i32(BYTES.get(state.address)!, state.index)).toBe(deep);
+      const other = new Uint8Array(4);
+      new DataView(other.buffer).setInt32(0, deep + 1, true);
+      const layout = entry.venue === "Crema" ? "Crema's" : "Raydium's";
+      expect(
+        refused(
+          await cook(program, {
+            ...order,
+            stop: stop.stop,
+            edit: { address: state.address, offset: state.index, bytes: [...other] },
+          }),
+        ),
+      ).toBe(`deep: the tick array is not laid out as ${layout}`);
+      const cleared = succeeded(
+        await cook(program, {
+          ...order,
+          stop: stop.stop,
+          edit: {
+            address: state.address,
+            offset: state.initialized.at,
+            bytes: new Array<number>(state.initialized.width).fill(0),
+          },
+        }),
+      );
+      expect(String(cleared.price)).toBe(String(windowBound(p, paysA, ticks)));
+      const spacing = Number(le(BYTES.get(p.pool)!, entry.venue === "Crema" ? 168 : 235, 2));
+      const nowhere = deepStop(paysA ? deep - 1000 * spacing : deep + 1000 * spacing);
+      expect(refused(await cook(program, { ...order, stop: nowhere }))).toBe(
+        entry.venue === "Crema"
+          ? "deep: its tick is not in the slot's last tick array"
+          : "deep: no tick array of the slot holds its tick",
+      );
+    },
+    300_000,
+  );
 
   describe("each function skips, having moved nothing", () => {
     const skips: { why: string; fn: string; order: () => Promise<Order>; numbered: boolean }[] = [];

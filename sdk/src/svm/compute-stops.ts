@@ -22,7 +22,11 @@
  *
  * The walk is the router's own: the pool's limit for `priceLimit` and its fee, and no further than its
  * window, the last tick its slot's tick arrays let it reach (`router.svm.js`, "The window a swap at a
- * price walks"). Nothing here reads a cluster: the caller hands it the accounts.
+ * price walks"). On Raydium's code and Crema the window ends where the furthest of those arrays
+ * begins; a walk its limit takes past there goes on to that array's last initialized tick that way,
+ * its deep tick, which its stop carries, and its swap is compiled to the Stopped form for it, held or
+ * not (`router.svm.js`, "Held to a stop", reads the tick there and checks it). Nothing here reads a
+ * cluster: the caller hands it the accounts.
  */
 import { getAddressDecoder, getAddressEncoder, type Address } from "@solana/kit";
 
@@ -141,7 +145,13 @@ export interface SvmWalk {
   readonly spacing: number;
   /** Its window's last safe tick, as the router reads it. */
   readonly window: number;
-  /** The tick its walk ends in: its limit's, or a tick inside its window. */
+  /**
+   * On Raydium's code and Crema, where the walk goes on past `window` into the furthest tick array
+   * its slot gives that way: that array's last initialized tick that way, which its stop carries
+   * (`SvmComputeStop.deepTick`). Absent where the walk ends inside its window.
+   */
+  readonly deep?: number;
+  /** The tick its walk ends in: its limit's, or a tick inside its window (or `deep`). */
   readonly limitTick: number;
   /** The initialized ticks it crosses getting there, in walk order. */
   readonly crossed: readonly number[];
@@ -158,11 +168,17 @@ export interface SvmComputeStop {
   readonly name: string;
   /**
    * The swap's `stop`, as the Stopped form takes it: 0 none (the plain swap); `svmSkipStop`'s where
-   * it is `skipped`; else a tighter `priceLimit` (`limit`) in its low 192 bits, and from bit 192 the
-   * start bound (`from`): the tick, as the router reads ticks, its price may lie no further from the
-   * stop than when it was priced, give or take `SVM_HEADROOM_TICKS` positions.
+   * it is `skipped`; else a tighter `priceLimit` (`limit`) in its low 192 bits, 0 for none; in bits
+   * 192 to 223 the start bound (`from`): the tick, as the router reads ticks, its price may lie no
+   * further from the stop than when it was priced, give or take `SVM_HEADROOM_TICKS` positions, 0
+   * for none; and in bits 224 to 255 `deepTick`, as the router reads ticks, 0 for none.
    */
   readonly stop: bigint;
+  /**
+   * Where its walk goes on into the furthest tick array its slot gives (`SvmWalk.deep`), to a tick
+   * inside this one: on its own, a stop that holds the pool nowhere short of its limit.
+   */
+  readonly deepTick?: number;
   /** Where the units leave the pool too few for its swap at all: its stop skips it. */
   readonly skipped?: boolean;
   /** The tighter `priceLimit`, holding the swap a tick inside `stopTick`. */
@@ -303,8 +319,10 @@ export function svmTickArray(
 const floorDiv = (a: number, b: number): number => Math.floor(a / b);
 
 /**
- * The window's last safe tick, as the router reads it (`raydiumStop`, `cremaStop`, `whirlpoolStop`):
- * undefined where the swap has no room to walk.
+ * The window's last safe tick, as the router reads it (`raydiumStop`, `cremaStop`, `whirlpoolStop`),
+ * absent where the swap has no room to walk; and on Raydium's code and Crema, where the furthest
+ * array the slot gives that way lies past the price, that array's last initialized tick that way
+ * (`deep`), which a Stopped form's stop walks the window on to (`raydiumDeep`, `cremaDeep`).
  */
 function windowStop(
   layout: SvmStopLayout,
@@ -312,13 +330,13 @@ function windowStop(
   spacing: number,
   arrays: readonly (SvmTickArray | undefined)[],
   down: boolean,
-): number | undefined {
+): { readonly window?: number; readonly deep?: number } {
   if (layout === "whirlpool" || layout === "defituna") {
     const span = 88 * spacing;
     const base = floorDiv(tick, span) * span;
-    if (down) return base - 2 * span;
+    if (down) return { window: base - 2 * span };
     const first = tick + spacing >= base + span ? base + span : base;
-    return first + 2 * span + 87 * spacing;
+    return { window: first + 2 * span + 87 * spacing };
   }
   let far: SvmTickArray | undefined;
   if (layout === "crema") {
@@ -334,13 +352,19 @@ function windowStop(
         far = array;
     }
   }
-  if (far === undefined) return undefined;
-  // Past the price: where it begins. Holding it: its last initialized tick that way, if any.
-  if (down ? far.start + far.span <= tick : far.start > tick)
-    return down ? far.start + far.span : far.start;
+  if (far === undefined) return {};
+  // Past the price: where it begins, and its last initialized tick that way. Holding it: that tick
+  // ahead of the price, if any.
+  if (down ? far.start + far.span <= tick : far.start > tick) {
+    const ticks = far.ticks.map((t) => t.tick);
+    return {
+      window: down ? far.start + far.span : far.start,
+      ...(ticks.length === 0 ? {} : { deep: down ? Math.min(...ticks) : Math.max(...ticks) }),
+    };
+  }
   const ahead = far.ticks.map((t) => t.tick).filter((t) => (down ? t <= tick : t > tick));
-  if (ahead.length === 0) return undefined;
-  return down ? Math.min(...ahead) : Math.max(...ahead);
+  if (ahead.length === 0) return {};
+  return { window: down ? Math.min(...ahead) : Math.max(...ahead) };
 }
 
 /** The tick whose sqrt price is the greatest at or below `sqrt`. */
@@ -401,7 +425,11 @@ function bought(liquidity: bigint, from: bigint, to: bigint, down: boolean): big
   return down ? (liquidity * (from - to)) / Q64 : (liquidity * (to - from) * Q64) / (from * to);
 }
 
-/** How far `pool`'s swap walks, held by nothing but its limit and its window, its cost and output. */
+/**
+ * How far `pool`'s swap walks, held by nothing but its limit and its window, its cost and output: on
+ * Raydium's code and Crema, on into the furthest tick array its slot gives where its limit takes it
+ * past the window (`SvmWalk.deep`), as its Stopped form walks with the deep tick its stop carries.
+ */
 export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   const layout = SVM_CLMM_LAYOUT[pool.layout];
   const tick = i32(pool.pool, layout.tick);
@@ -411,7 +439,7 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   const cost = svmSwapCost(pool.program);
   const arrays = pool.arrays.map((data) => svmTickArray(pool.layout, data, spacing));
   const down = pool.paysA;
-  const window = windowStop(pool.layout, tick, spacing, arrays, down);
+  const { window, deep } = windowStop(pool.layout, tick, spacing, arrays, down);
   const none = (): SvmWalk => ({
     liquidity,
     tick,
@@ -425,9 +453,11 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   });
   if (window === undefined || liquidity === 0n || spacing === 0 || skipped(pool.layout, pool.pool))
     return none();
-  // The router's room: a tick inside the window, measured from the price's own tick, or none.
-  if (down ? window + 1 >= tick : window <= tick + 2) return none();
-  let limitTick = down ? window + 1 : window - 2;
+  // The router's room: a tick inside the window's edge, the deep tick where there is one, measured
+  // from the price's own tick, or none.
+  const edge = deep ?? window;
+  if (down ? edge + 1 >= tick : edge <= tick + 2) return none();
+  let limitTick = down ? edge + 1 : edge - 2;
   let end = raydiumSqrtPriceAtTick(limitTick);
   if (pool.priceLimit !== undefined && pool.priceLimit > 0n) {
     const own = svmOwnLimit(pool.priceLimit, pool.fee, down);
@@ -438,6 +468,10 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
       limitTick = svmTickAtSqrtPrice(own);
     }
   }
+  // It walks on where the window alone leaves it no room, or ends short of where the walk does.
+  const roomy = down ? window + 1 < tick : window > tick + 2;
+  const short = raydiumSqrtPriceAtTick(down ? window + 1 : window - 2);
+  const walksOn = deep !== undefined && (!roomy || (down ? end < short : end > short));
   const all = [
     ...new Map(
       arrays.flatMap((array) => (array === undefined ? [] : array.ticks.map((t) => [t.tick, t]))),
@@ -469,6 +503,7 @@ export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
     tick,
     spacing,
     window,
+    ...(walksOn ? { deep } : {}),
     limitTick,
     crossed: crossed.map((t) => t.tick),
     units: cost.base + cost.tick * crossed.length,
@@ -515,6 +550,10 @@ export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint 
 /** A tick as the router reads it: its i32 with the sign bit flipped. */
 const biased = (tick: number): bigint => BigInt(tick) + (1n << 31n);
 
+/** The stop's bits that walk a window on to `deep` (`SvmWalk.deep`), none for none. */
+const deepBits = (deep: number | undefined): bigint =>
+  deep === undefined ? 0n : biased(deep) << 224n;
+
 /**
  * The stop that skips a pool, whatever its price: a start bound past every tick the walk's way (the
  * least an i32 tick reads as paying the lower-key token, as the price falls, the greatest the other
@@ -529,7 +568,9 @@ export function svmSkipStop(paysA: boolean): bigint {
  * whose walk buys the most per unit of compute goes first, each walking as far as its limit takes
  * it within what is left; a pool the rest no longer covers is held a tick inside the first
  * initialized tick it cannot pay to cross, and one that cannot pay for the swap itself is skipped.
- * Every pool that trades is charged `SVM_HEADROOM_TICKS` crossings past its walk.
+ * Every pool that trades is charged `SVM_HEADROOM_TICKS` crossings past its walk. A walk that goes
+ * on into the furthest tick array its slot gives (`SvmWalk.deep`) carries its deep tick, held or
+ * not, wherever it trades past its window.
  */
 export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): SvmComputeStop[] {
   const walks = pools.map((pool, index) => ({ pool, walk: svmPoolWalk(pool), index }));
@@ -554,8 +595,13 @@ export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): 
     }
     if (whole <= left) {
       left -= whole;
-      // Its whole way: no stop, the plain swap.
-      stops.set(pool.name, { ...of, stop: 0n, share: whole });
+      // Its whole way: no stop, the plain swap, but for a walk on into its furthest tick array.
+      stops.set(pool.name, {
+        ...of,
+        stop: deepBits(walk.deep),
+        ...(walk.deep === undefined ? {} : { deepTick: walk.deep }),
+        share: whole,
+      });
       return;
     }
     // The most crossings what is left pays for: held a tick inside the next.
@@ -573,9 +619,15 @@ export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): 
     // headroom's positions.
     const room = SVM_HEADROOM_TICKS * walk.spacing;
     const from = pool.paysA ? walk.tick + room : walk.tick - room;
+    // Held past its window, in the furthest tick array: there it walks on.
+    const deep =
+      walk.deep !== undefined && (pool.paysA ? stopTick < walk.window : stopTick >= walk.window)
+        ? walk.deep
+        : undefined;
     stops.set(pool.name, {
       ...of,
-      stop: limit | (biased(from) << 192n),
+      stop: limit | (biased(from) << 192n) | deepBits(deep),
+      ...(deep === undefined ? {} : { deepTick: deep }),
       limit,
       from,
       stopTick,
@@ -617,7 +669,10 @@ export interface SvmPoolStop extends SvmComputeStop {
 /** The stops of a cook: each swap's, by its stop's derivation (`name`), in the program's order. */
 export interface SvmProgramStops {
   readonly stops: readonly SvmPoolStop[];
-  /** The swaps whose stop binds (held or skipped): what to compile to the Stopped form. */
+  /**
+   * The swaps whose stop binds (held, skipped, or walked on into its furthest tick array): what to
+   * compile to the Stopped form.
+   */
   readonly binding: readonly string[];
   /** The units the venues' programs were given between them. */
   readonly budget: number;

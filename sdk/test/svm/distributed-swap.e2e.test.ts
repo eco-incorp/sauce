@@ -471,23 +471,31 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(alone.spent * E18).toBeLessThanOrEqual(priceLimit * alone.bought);
   }, 120_000);
 
-  it("stops PancakeSwap's far-priced pool a tick inside the two arrays its slot gives it", async () => {
+  it("walks PancakeSwap's far-priced pool on into the furthest array its slot gives", async () => {
     // Its slot paying USDC is its bitmap extension and two arrays, which its swap walks and no
     // further: a limit at three times its price, with the budget to reach it, used to fail the cook
-    // (`NotEnoughTickArrayAccount`); it stops a tick inside the window, the pool's price exactly the
-    // window's bound.
+    // (`NotEnoughTickArrayAccount`). The plain swap stops a tick inside the window, where the
+    // furthest array begins, the pool's price exactly the window's bound. With the stop the command
+    // works out, its Stopped form walks on to a tick inside that array's last initialized tick,
+    // 50082, and buys more.
     const wide = allIn(PANCAKE, false) * 3n;
     const bound = windowBound(PANCAKE, false);
     expect(ownLimit(PANCAKE, wide, false)).toBeGreaterThan(bound);
-    const alone = succeeded(
-      await cook({
-        budget: 10_000_000n * 10n ** 6n,
-        priceLimit: wide,
-        edit: emptied(RAYDIUM, BYREAL),
-      }),
+    const order = {
+      budget: 10_000_000n * 10n ** 6n,
+      priceLimit: wide,
+      edit: emptied(RAYDIUM, BYREAL),
+    };
+    const plain = succeeded(await cook({ ...order, unheld: true }));
+    expect(plain.bought).toBeGreaterThan(0n);
+    expect(String(priceOf(PANCAKE))).toBe(String(bound));
+    const deeper = succeeded(await cook(order));
+    const stop = deeper.stops!.stops.find((one) => one.pool === PANCAKE.pool)!;
+    expect([stop.stopTick, stop.deepTick]).toEqual([undefined, 50082]);
+    expect(String(priceOf(PANCAKE))).toBe(
+      String(windowBound(PANCAKE, false, PANCAKE.payB, stop.deepTick)),
     );
-    expect(alone.bought).toBeGreaterThan(0n);
-    expect(priceOf(PANCAKE)).toBe(bound);
+    expect(deeper.bought > plain.bought).toBe(true);
   }, 120_000);
 
   it("gives the deepest pool its whole walk, holds the next within what is left, and skips the shallowest", async () => {

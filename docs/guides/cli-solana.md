@@ -247,12 +247,13 @@ data) is refused, as it cannot pay. LiteSVM is installed the first time it is ne
 A program that swaps at a price through the venue namespaces (`Orca.Whirlpool.swap(…)`) has each
 pool's walk worked out before the cook, to lower the risk that one runs the cook out of compute
 units: `simulate`, `run` and `tx` read each pool's tick arrays and work out how far each may walk,
-the pool buying the most per unit first, and a pool held short of its limit or skipped is compiled
-to its swap's Stopped form ([compute](../concepts/solana-model.md#compute)). Each prints a line for such a pool,
-and `--json` gives every pool's in `computeStops`. `tx` takes them from a table of each venue's
-costs alone, so the cook it builds can differ from the one `simulate` reports; `simulate` and `run`
-check them in a simulation first, and tighten them if the cook would still run out. A price that
-moves between building the cook and landing it can still run it out.
+the pool buying the most per unit first, and a pool held short of its limit or skipped, or walked
+on into the furthest tick array its slot gives, is compiled to its swap's Stopped form
+([compute](../concepts/solana-model.md#compute)). Each prints a line for a pool held or skipped,
+and `--json` gives every pool's in `computeStops`, with `deepTick` for a walk on. `tx` takes them
+from a table of each venue's costs alone, so the cook it builds can differ from the one `simulate`
+reports; `simulate` and `run` check them in a simulation first, and tighten them if the cook would
+still run out. A price that moves between building the cook and landing it can still run it out.
 
 ### Running on Solana
 
