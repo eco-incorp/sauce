@@ -8,7 +8,7 @@
 > name a program writes for each contract. Polygon is a preview chain: programs compile and simulate
 > here, and the `sauce` command sends nothing.
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base and Solana only. On Polygon a program
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Polygon a program
 compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,

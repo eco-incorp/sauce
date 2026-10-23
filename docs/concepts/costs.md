@@ -13,18 +13,20 @@ This page is for you once you know what a Pot, a cook and the Kitchen are
 
 ## At a glance
 
-| What                                | Who pays                                   | Paid in                 | How much                                    |
-| ----------------------------------- | ------------------------------------------ | ----------------------- | ------------------------------------------- |
-| Simulating a program                | nobody                                     | nothing                 | free                                        |
-| A cook's gas                        | the wallet that sends the cook             | the chain's native coin | depends on the program; the simulation says |
-| The Kitchen's fee                   | the wallet that sends the cook             | the chain's native coin | a flat fee per cook, set on chain           |
-| Native coin a program spends        | the Pot, or the wallet in the cook's value | the chain's native coin | what the program spends                     |
-| Deploying a Pot on Ethereum or Base | whoever sends the deployment, once         | the chain's native coin | its gas only                                |
-| Creating a Pot on Solana            | its owner, once                            | SOL                     | about 0.072 SOL of rent, plus fees          |
-| A token account on Solana           | whoever creates it                         | SOL                     | about 0.002 SOL of rent                     |
+| What                                     | Who pays                                   | Paid in                 | How much                                    |
+| ---------------------------------------- | ------------------------------------------ | ----------------------- | ------------------------------------------- |
+| Simulating a program                     | nobody                                     | nothing                 | free                                        |
+| A cook's gas                             | the wallet that sends the cook             | the chain's native coin | depends on the program; the simulation says |
+| The Kitchen's fee                        | the wallet that sends the cook             | the chain's native coin | a flat fee per cook, set on chain           |
+| Native coin a program spends             | the Pot, or the wallet in the cook's value | the chain's native coin | what the program spends                     |
+| Deploying a Pot on Ethereum, Base or Arc | whoever sends the deployment, once         | the chain's native coin | its gas only                                |
+| Creating a Pot on Solana                 | its owner, once                            | SOL                     | about 0.072 SOL of rent, plus fees          |
+| A token account on Solana                | whoever creates it                         | SOL                     | about 0.002 SOL of rent                     |
 
-The **native coin** is the coin a chain charges its fees in: ETH on Ethereum and Base, SOL on
-Solana. The tokens your program moves, such as USDC, come from your Pot and pay none of these.
+The **native coin** is the coin a chain charges its fees in: ETH on Ethereum and Base, USDC on Arc,
+SOL on Solana. The tokens your program moves, such as USDC, come from your Pot and pay none of
+these. On Arc the native coin and the `USDC` token are one balance: 18 decimals as native value, 6
+as the token.
 
 ## An example: the quick start's cook
 
@@ -50,10 +52,10 @@ Read it as a bill:
 
 ## Gas
 
-Every transaction on an EVM chain, such as Ethereum or Base, pays **gas** to the network in the
-chain's native coin. It is the network's charge, not Sauce's, and the wallet that signs the cook
-pays it. A cook's gas is the transaction's, the Kitchen's and the Pot's, plus the program's own,
-which the engine runs step by step.
+Every transaction on an EVM chain, such as Ethereum, Base or Arc, pays **gas** to the network in
+the chain's native coin. It is the network's charge, not Sauce's, and the wallet that signs the
+cook pays it. A cook's gas is the transaction's, the Kitchen's and the Pot's, plus the program's
+own, which the engine runs step by step.
 
 Measured on a local chain through the released engine and a Pot the Kitchen made:
 
@@ -80,8 +82,9 @@ A cook that fails still pays the gas it used up to the failure. It pays no Kitch
 
 Every cook pays the Kitchen a flat fee, whatever the program does:
 
-- **It is paid in the native coin**, as the cook's value, even when the program moves only tokens.
-  What the Pot already holds does not pay it, and native coin the program spends comes on top.
+- **It is paid in the native coin** (USDC on Arc), as the cook's value, even when the program moves
+  only tokens. What the Pot already holds does not pay it, and native coin the program spends comes
+  on top.
 - **It is set on chain.** The Kitchen's owner sets it, and it can change. The `sauce` command reads
   it when it builds a cook. A cook built with less than the current fee reverts, so a fee that rises
   between building and landing fails the cook, and nothing moves.
@@ -92,8 +95,8 @@ states the most it will pay, so a fee that rises before it lands fails the cook.
 
 ## A Pot
 
-On Ethereum and Base, a Pot is deployed once, by a transaction to the Kitchen that carries no fee:
-it costs its gas, about 536,000 in a simulation on Base. Anyone may send it, and the Pot is its
+On Ethereum, Base and Arc, a Pot is deployed once, by a transaction to the Kitchen that carries no
+fee: it costs its gas, about 536,000 in a simulation on Base. Anyone may send it, and the Pot is its
 owner's either way. `sauce run` sends it the first time a run needs it, as a transaction of its own
 before the cook, and asks you first.
 
@@ -122,8 +125,8 @@ Besides the Pot, a first run on Solana can pay for:
 
 A simulation is free and shows every cost before you sign:
 
-- On Ethereum and Base, the gas, the cook's value and the Kitchen's fee, and a Pot deployment when
-  one is needed.
+- On Ethereum, Base and Arc, the gas, the cook's value and the Kitchen's fee, and a Pot deployment
+  when one is needed.
 - On Solana, each first-run cost under the lamport changes (the Pot's rent, each new token
   account's, a code buffer's, a lookup table's), the fees of the transactions before the cook, and
   the total.

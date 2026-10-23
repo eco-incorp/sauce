@@ -1215,8 +1215,12 @@ wallet and the Pot it cooks on — EVM from an `eth_simulateV1` rehearsal's Tran
 traced native transfers, Solana from a simulation reporting its writable accounts (`svm-effects.ts`)
 — and holds it to the policy's `chains`, `to`, `native` and `tokens` limits, per transaction and per
 24 hours from `<name>.ledger.jsonl` (reserve, then sent or released, under a lock file). What cannot
-be measured where a limit needs it is refused. The policy file is parsed strictly (an unknown field
-is an error) and refused when others may write it.
+be measured where a limit needs it is refused. Each native movement counts once:
+`evm/effects.ts#nativeOnce`, which the simulate and run reports read through too, folds what Arc
+reports of its native USDC (its own EIP-7708 Transfer logs from `0xff…fe`, the trace's, its ERC-20's)
+into one, and on Arc that movement is held to `native` and to the `USDC` token limit both (a
+base-unit cap in the ERC-20's 6 decimals: `limitDecimals`). The policy file is parsed strictly (an
+unknown field is an error) and refused when others may write it.
 
 **The MCP server's wallets.** `sauce mcp` over stdio serves the wallet tools by DEFAULT, on the
 CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the server once had to
@@ -1278,7 +1282,7 @@ the `send_*_transaction` names its documentation uses are not what it lists.
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
-builds transactions on — Ethereum, Base and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
+builds transactions on — Ethereum, Base, Arc and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
 canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
 search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,
 `requireSupported`. The MCP server imports them from there (`mcp/src/sdk.ts`), and the skills'
@@ -1294,7 +1298,7 @@ beside `refused`, because a client validates an error's structured content too. 
 `cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
 chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
-the README, the manual's pages and the skills that name the three (`git grep "Ethereum, Base"`). A
+the README, the manual's pages and the skills that name the four (`git grep "Ethereum, Base"`). A
 test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills

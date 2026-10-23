@@ -298,9 +298,9 @@ blockhash and fee), and reading the Kitchen's fee or whether a Pot exists.
 
 ## Supported and preview chains
 
-The server builds transactions only on the chains Sauce supports: Ethereum, Base and Solana. Every
-other chain is a preview chain; [Chains](../reference/chains.md) has the policy and every chain.
-`sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
+The server builds transactions only on the chains Sauce supports: Ethereum, Base, Arc and Solana.
+Every other chain is a preview chain; [Chains](../reference/chains.md) has the policy and every
+chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
 
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
 `sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`

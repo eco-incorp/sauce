@@ -2,7 +2,7 @@
 
 # Base
 
-**Supported.** Sauce supports transactions on Ethereum, Base and Solana. On Base a program compiles
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Base a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them.
 

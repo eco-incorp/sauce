@@ -4,7 +4,7 @@
 
 **Reference** · [Documentation](../README.md)
 
-> Sauce knows 41 chains. On Ethereum, Base and Solana, the `sauce` command builds and sends
+> Sauce knows 41 chains. On Ethereum, Base, Arc and Solana, the `sauce` command builds and sends
 > transactions. Every other chain is a preview chain: programs compile and simulate there, and
 > nothing is sent. Each chain has a page with its tokens and the protocols a program can call on it.
 
@@ -13,7 +13,7 @@ coin, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
 [Deployments](deployments.md) lists them once.
 
-Sauce supports transactions on Ethereum, Base and Solana (`ethereum`, `base`, `solana`); every other chain is a preview chain, as the last
+Sauce supports transactions on Ethereum, Base, Arc and Solana (`ethereum`, `base`, `arc`, `solana`); every other chain is a preview chain, as the last
 section says.
 
 | Chain | Slug | Id | Kind | Support | CCTP | Tokens | Protocols |
@@ -41,7 +41,7 @@ section says.
 | [Ronin](chains/ronin.md) | `ronin` | 2020 | EVM | preview | — | 0 | 0 |
 | [Kava](chains/kava.md) | `kava` | 2222 | EVM | preview | — | 0 | 0 |
 | [Mantle](chains/mantle.md) | `mantle` | 5000 | EVM | preview | — | 1 | 0 |
-| [Arc](chains/arc.md) | `arc` | 5042 | EVM | preview | 26 | 4 | 23 |
+| [Arc](chains/arc.md) | `arc` | 5042 | EVM | supported | 26 | 4 | 23 |
 | [ZetaChain](chains/zetachain.md) | `zetachain` | 7000 | EVM | preview | — | 0 | 0 |
 | [Klaytn](chains/klaytn.md) | `klaytn` | 8217 | EVM | preview | — | 0 | 0 |
 | [Base](chains/base.md) | `base` | 8453 | EVM | supported | 6 | 69 | 47 |
@@ -62,7 +62,7 @@ section says.
 
 ## Supported and preview chains
 
-Every chain but Ethereum, Base and Solana is a preview chain:
+Every chain but Ethereum, Base, Arc and Solana is a preview chain:
 a program compiles and simulates there, but the `sauce` command and the MCP server build and
 send no transaction, and say so with the supported chains and how to request that chain. To
 request one, look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to
