@@ -464,6 +464,8 @@ Solana is a supported chain: its cooks and Pots are built and sent.
 deployed on solana: this SDK's cook cannot run there` (with `--via engine`, the engine alone, and
    the Kitchen too when the program is staged). A plan carried on later, and a transaction a wallet
    sends for another step, are held to it again on the endpoint they go to, before anything is signed.
+   The check reads the programs through that endpoint, so it does not protect against a dishonest
+   endpoint, and it does not pin the programs' upgrade authority.
 4. **Send.** `sauce run` signs with `--keypair` (or `--wallet`), stages the program when it does not
    fit, creates the token accounts the cook names that are missing (asking first, or with `--yes`),
    and sends. A cook that succeeds, simulated or sent, leads with what it leaves in the Pot's token

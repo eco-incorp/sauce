@@ -153,7 +153,9 @@ a simulation used to succeed in its local copy, which runs the release's own pro
 whose Kitchen could not run the cook. A cook with `--via engine` needs the engine alone, and the
 Kitchen too when its program is staged through the Kitchen's code buffer. A plan carried on with
 `sauce send` or `sauce_wallet_send`, and a wallet sending what another tool built, are checked again
-on the endpoint they go to, before anything is signed or sent.
+on the endpoint they go to, before anything is signed or sent. The check reads the programs through
+that endpoint, so it does not protect against a dishonest endpoint, and it does not pin the programs'
+upgrade authority, which can replace them after the check.
 
 ### SauceScript
 

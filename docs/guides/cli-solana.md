@@ -238,7 +238,10 @@ Kitchen too when its program is staged, which runs through the Kitchen's code bu
 on with `sauce send`, and a wallet's send of what another step built, are checked again on the
 endpoint they go to, before anything is signed or sent: a cursor may have been made against another
 cluster, or before an upgrade. This holds for the local copy below too, which runs the release's own
-programs and so could otherwise succeed where the cluster would not.
+programs and so could otherwise succeed where the cluster would not. The check reads the programs
+through the endpoint the command is given, so it does not protect against a dishonest endpoint,
+which can answer with the release's bytes and run another build, and it does not pin the programs'
+upgrade authority, which can replace them after the check.
 
 #### In a local copy
 
