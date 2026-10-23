@@ -529,10 +529,7 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
     expect(
       bytes("base", "function main(): Uint256 { return AaveV3.Pool.toBytesLe(20).toLe(); }"),
     ).toEqual(
-      bytes(
-        "base",
-        `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesLe(20).toLe(); }`,
-      ),
+      bytes("base", `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesLe(20).toLe(); }`),
     );
     const pass = rewriteProtocolAccessors(
       "function main() { const pool = AaveV3.Pool; return pool.toBytesBe(32); }",
