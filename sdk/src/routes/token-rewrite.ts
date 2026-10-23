@@ -84,6 +84,7 @@ import {
 } from "./pot-sugar.js";
 import { decomposeMemberChain } from "./protocol-rewrite.js";
 import { parseSauce } from "./parse.js";
+import { blankLiterals } from "./rs-compile.js";
 
 /**
  * The ERC-20 writes the token syntax offers: each lowers to the `@sauce/token` function of the same
@@ -200,6 +201,31 @@ export function methodCall(node: AstNode): MethodCall | undefined {
   };
 }
 
+/**
+ * `node`, an argument of `call`, with the parentheses around it, which the parser leaves out of its
+ * range, and never the call's own. `code` is the source with its comments blanked
+ * (`blankLiterals`), so none is read as a parenthesis.
+ */
+export function argumentRange(
+  code: string,
+  call: AstNode,
+  node: AstNode,
+): { readonly start: number; readonly end: number } {
+  const opens: number[] = [];
+  for (let i = node.start - 1; i >= 0 && /[\s(]/.test(code[i]!); i--) {
+    if (code[i] === "(") opens.push(i);
+  }
+  // Before the call's first argument, the furthest is the call's own.
+  if (((call as { arguments?: AstNode[] }).arguments ?? [])[0] === node) opens.pop();
+  let end = node.end;
+  // Up to the call's own closing parenthesis, its last character.
+  for (let i = node.end; i < call.end - 1 && /[\s)]/.test(code[i]!); i++) {
+    if (code[i] === ")") end = i + 1;
+  }
+
+  return { start: opens.at(-1) ?? node.start, end };
+}
+
 /** Every call that is a whole statement on its own — the only place a write can stand. */
 export function statementCalls(program: AstNode): ReadonlySet<AstNode> {
   const calls = new Set<AstNode>();
@@ -256,14 +282,23 @@ function assertLocalsFree(declared: ReadonlySet<string>, writes: ReadonlySet<Saf
   }
 }
 
-/** `<receiver>.<write>(a, b)` -> `<local>(<receiver>, a, b)`, for a receiver that is a name. */
-function nameWriteSplice(site: MethodCall, name: string, statements: ReadonlySet<AstNode>): Splice {
+/**
+ * `<receiver>.<write>(a, b)` -> `<local>(<receiver>, a, b)`, for a receiver that is a name: from the
+ * call's own start, which a parenthesized callee's parentheses are inside, to its first argument
+ * with its own (`argumentRange`). `code` is the source blanked.
+ */
+function nameWriteSplice(
+  site: MethodCall,
+  name: string,
+  statements: ReadonlySet<AstNode>,
+  code: string,
+): Splice {
   const method = site.method as SafeWrite;
   const [first] = writeArguments(site.call, method, name, statements);
 
   return {
-    start: site.callee.start,
-    end: first!.start,
+    start: site.call.start,
+    end: argumentRange(code, site.call, first!).start,
     replacement: `${SAFE_WRITES[method].local}(${name}, `,
   };
 }
@@ -276,9 +311,11 @@ function collectMemberCallSites(
   program: AstNode,
   tokens: TokenSymbols,
   writes: Set<SafeWrite>,
+  source: string,
 ): { sites: Splice[]; reads: number } {
   const sites: Splice[] = [];
   const statements = statementCalls(program);
+  let code: string | undefined;
   let reads = 0;
   walkScoped(program, (n, here) => {
     const site = methodCall(n);
@@ -288,7 +325,7 @@ function collectMemberCallSites(
     if (shadowedAt(here, symbol, site.object.start)) return;
     if (!REWRITABLE_METHODS.has(site.method)) return;
     if (isSafeWrite(site.method)) {
-      sites.push(nameWriteSplice(site, symbol, statements));
+      sites.push(nameWriteSplice(site, symbol, statements, (code ??= blankLiterals(source))));
       writes.add(site.method);
       return;
     }
@@ -811,6 +848,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
   let erc20 = false;
   const lowered = new Set<AstNode>();
   const statements = statementCalls(program);
+  const code = blankLiterals(source);
 
   // `Token(a).<method>(...)`.
   walk(program, (n) => {
@@ -826,14 +864,19 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
         statements,
       );
       // `Token(` -> `<local>(` and `).<method>(` -> `, `, leaving the address and the arguments in
-      // place so a rewrite inside either splices on its own.
+      // place so a rewrite inside either splices on its own: from the call's own start, which a
+      // parenthesized callee's parentheses are inside, and to the first argument with its own.
       splices.push(
         {
-          start: site.object.start,
+          start: site.call.start,
           end: address.start,
           replacement: `${SAFE_WRITES[site.method].local}(`,
         },
-        { start: address.end, end: first!.start, replacement: ", " },
+        {
+          start: address.end,
+          end: argumentRange(code, site.call, first!).start,
+          replacement: ", ",
+        },
       );
       writes.add(site.method);
       return;
@@ -862,7 +905,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
     );
     for (const site of calls) {
       if (isSafeWrite(site.method)) {
-        splices.push(nameWriteSplice(site, name, statements));
+        splices.push(nameWriteSplice(site, name, statements, code));
         writes.add(site.method);
         continue;
       }
@@ -922,7 +965,7 @@ export function rewriteTokenMembers(
   const shadowed = collectDeclaredNames(program);
 
   const writes = new Set<SafeWrite>();
-  const members = collectMemberCallSites(program, tokens, writes);
+  const members = collectMemberCallSites(program, tokens, writes, source);
   const exclusions = collectValuePositionExclusions(program);
   const balances = collectBalanceSites(
     program,

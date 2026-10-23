@@ -161,6 +161,27 @@ describe("compileSauceRoute: token member rewrite end to end", () => {
     const compiled = compileSauceProgram("solana", `USDC.transfer(${key}, 5n);`);
     expect(compiled.derivedAccounts).toMatchObject({ potUSDC: "authority:USDC", pot: "authority" });
   });
+
+  it("a write through parentheses, around its method or an argument, keeps them matched", () => {
+    const bytes = (call: string) =>
+      Buffer.from(
+        compileSauceProgram("base", `function main(to: Address, amount: Uint256) { ${call}; }`)
+          .bytecode,
+      ).toString("hex");
+    for (const [plain, written] of [
+      ["USDC.transfer(to, amount)", "(USDC.transfer)(to, amount)"],
+      ["USDC.transfer(to, amount)", "((USDC.transfer))((to), (amount))"],
+      ["USDC.approve(to, amount)", "USDC.approve((to), amount)"],
+      ["Token(USDC).transfer(to, amount)", "(Token(USDC).transfer)((to), amount)"],
+      ["Token(USDC).transfer(to, amount)", "(Token((USDC))).transfer(/* to */ (to), amount)"],
+      [
+        "const t = Token(USDC); t.transfer(to, amount)",
+        "const t = Token(USDC); (t.transfer)((to), amount)",
+      ],
+    ]) {
+      expect(bytes(written!)).toBe(bytes(plain!));
+    }
+  });
 });
 
 // --- registry default: bare USDC.transfer with NO tokenDefines at all ---------------------------
