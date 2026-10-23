@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { decodeFunctionData, getAddress, type Hex } from "viem";
+import { decodeFunctionData, getAddress, numberToHex, type Hex } from "viem";
 
 import {
   v12EngineAddress,
@@ -1060,6 +1060,28 @@ describe("sauce_tx", () => {
       (out.notes as string[]).some((note) => /fee was not read \(no endpoint\)/.test(note)),
     );
     assert.ok((out.notes as string[]).some((note) => /run sauce_simulate/.test(note)));
+  });
+
+  it("takes a negative Int256 argument as a number or a string, as args says", async () => {
+    const source = "function main(x: Int256): Int256 {\n  return x;\n}\n";
+    const minusFive = numberToHex(BigInt.asUintN(256, -5n), { size: 32 }).slice(2);
+    for (const value of [-5, "-5"]) {
+      const out = ok(
+        await mcp.call("sauce_tx", {
+          source,
+          chain: "base",
+          owner: OWNER,
+          value: 0,
+          args: [value],
+        }),
+      );
+      assert.ok((out.data as string).includes(minusFive), `${value} as its two's-complement word`);
+    }
+    const { tools } = await mcp.client.listTools();
+    const args = tools.find((tool) => tool.name === "sauce_tx")!.inputSchema.properties!.args as {
+      description: string;
+    };
+    assert.match(args.description, /negative for an Int256 parameter/);
   });
 
   it("derives a named Pot from its salt label, or takes the Pot by address", async () => {

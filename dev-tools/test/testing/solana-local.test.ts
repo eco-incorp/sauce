@@ -164,6 +164,12 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     assert.equal(result.returned, 5n);
   });
 
+  it("derives an account from main's Int256 argument, as from a Uint256 one", async () => {
+    const source = "function main(seeded: Account, n: Int256): Int256 {\n  return n;\n}\n";
+    const accounts = { seeded: `pda:${chain.kitchen}:u64:@n` };
+    assert.equal((await chain.run({ source }, { args: [300n], accounts })).returned, 300n);
+  });
+
   it("is Solana by any of its names, and takes no block", async () => {
     const other = await local({ chain: 1399811149 });
     assert.equal(other.chain.slug, "solana");

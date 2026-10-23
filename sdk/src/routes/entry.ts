@@ -30,7 +30,7 @@ import {
   type Hex,
 } from "viem";
 
-import type { AstNode } from "./ast-walk.js";
+import { collectPatternNames, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
@@ -63,6 +63,9 @@ type ProgramEntry = Pick<CompiledSauceProgram, "entryEncoding" | "entryParams">;
 // ---------------------------------------------------------------------------------------------
 
 interface MainSignature {
+  /** The source with its strings and comments blanked (`blankLiterals`), at the same offsets: what
+   *  a parameter's name and type and the return type are read from, so no comment is part of one. */
+  readonly code: string;
   /** Index of the `(` opening the parameter list, and of the `)` closing it. */
   readonly open: number;
   readonly close: number;
@@ -70,15 +73,17 @@ interface MainSignature {
   readonly returnEnd: number;
 }
 
-const MAIN = /(^|[^.\w$])function\s+main\s*\(/;
+const MAIN = /(^|[^.\w$])function\s+main\s*(?:<[^()]*>\s*)?\(/g;
+const BODY = /\s*\{/y;
 
-/** The end of the type starting at `from` in blanked `code`: at the body's `{` or end of input. */
+/** The end of the type starting at `from` in blanked `code`: at the body's `{`, the `;` ending a
+ *  declaration with none, or end of input. */
 function endOfType(code: string, from: number): number {
   let depth = 0;
   let started = false;
   for (let i = from; i < code.length; i++) {
     const ch = code[i]!;
-    if (ch === "{" && depth === 0 && started) return i;
+    if (depth === 0 && (ch === ";" || (ch === "{" && started))) return i;
     if (ch === "<" || ch === "{" || ch === "[" || ch === "(") depth++;
     else if (ch === ">" || ch === "}" || ch === "]" || ch === ")") depth--;
     if (!/\s/.test(ch)) started = true;
@@ -87,16 +92,29 @@ function endOfType(code: string, from: number): number {
   return code.length;
 }
 
+/** The module's own `main`: the first declared at its top level with a body, never one nested in
+ *  another function, nor an overload or `declare` with no body. */
 function locateMain(source: string): MainSignature | undefined {
   const code = blankLiterals(source);
-  const found = MAIN.exec(code);
-  if (found === null) return undefined;
+  let depth = 0;
+  let scanned = 0;
+  for (const found of code.matchAll(MAIN)) {
+    for (const at = found.index + found[1]!.length; scanned < at; scanned++) {
+      if (code[scanned] === "{") depth++;
+      else if (code[scanned] === "}") depth--;
+    }
+    if (depth !== 0) continue;
+    const signature = signatureAt(code, found.index + found[0].length - 1);
+    if (signature === undefined) continue;
+    BODY.lastIndex = signature.returnEnd;
+    if (BODY.test(code)) return { code, ...signature };
+  }
 
-  return signatureAt(code, found.index + found[0].length - 1);
+  return undefined;
 }
 
 /** The signature whose parameter list opens at `open` in blanked `code`. */
-function signatureAt(code: string, open: number): MainSignature | undefined {
+function signatureAt(code: string, open: number): Omit<MainSignature, "code"> | undefined {
   let depth = 0;
   let close = -1;
   for (let i = open; i < code.length; i++) {
@@ -187,9 +205,10 @@ function bodyReturnsValue(code: string, brace: number): boolean {
 export function mainSignature(source: string): MainSignatureText | undefined {
   const main = locateMain(source);
   if (main === undefined) return undefined;
+  const { code } = main;
   const params = source.slice(main.open + 1, main.close);
   const returns = source.slice(main.close + 1, main.returnEnd);
-  const code = blankLiterals(source);
+  const declared = code.slice(main.close + 1, main.returnEnd).trim();
   const brace = code.indexOf("{", main.returnEnd);
 
   return {
@@ -197,11 +216,11 @@ export function mainSignature(source: string): MainSignatureText | undefined {
     close: main.close,
     params,
     returns,
-    names: splitTopLevel(params).map((param) => splitParam(param).name),
+    names: splitTopLevel(code.slice(main.open + 1, main.close)).map(
+      (param) => splitParam(param).name,
+    ),
     returnsValue:
-      returns.trim() === ""
-        ? brace >= 0 && bodyReturnsValue(code, brace)
-        : !/^:\s*void$/.test(returns.trim()),
+      declared === "" ? brace >= 0 && bodyReturnsValue(code, brace) : !/^:\s*void$/.test(declared),
   };
 }
 
@@ -213,7 +232,7 @@ export function mainSignature(source: string): MainSignatureText | undefined {
 export function mainParams(source: string): EntryParam[] {
   const main = locateMain(source);
   if (main === undefined) return [];
-  const params = splitTopLevel(source.slice(main.open + 1, main.close)).map(splitParam);
+  const params = splitTopLevel(main.code.slice(main.open + 1, main.close)).map(splitParam);
   const records = params.some((param) => param.type !== undefined) ? interfaces(source) : new Map();
 
   return params.map(({ name, type }) => ({
@@ -230,7 +249,7 @@ export function mainParams(source: string): EntryParam[] {
 export function mainReturnType(source: string): string | undefined {
   const main = locateMain(source);
   if (main === undefined) return undefined;
-  const annotation = source
+  const annotation = main.code
     .slice(main.close + 1, main.returnEnd)
     .replace(/^\s*:/, "")
     .trim();
@@ -577,7 +596,9 @@ export interface BoundEntryArguments {
  * run time. Each must be one word: a signed or unsigned integer, an address or a `bool`.
  *
  * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
- * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.
+ * `TypeError` naming the parameter for a value of the wrong type, a parameter no one word holds, or
+ * an unsigned one, an address or a `bool` whose name the module declares too: bound, each of those
+ * is a compile-time define, which replaces the name in every module, so outside `main` as well.
  */
 export function bindEntryArguments(
   source: string,
@@ -598,6 +619,7 @@ export function bindEntryArguments(
   const constants: Record<string, bigint | boolean> = {};
   const addresses: string[] = [];
   const signed: string[] = [];
+  let declared: ReadonlySet<string> | undefined;
   params.forEach((param, index) => {
     const at = `argument ${index + 1} (${param.name}: ${param.type})`;
     const value = entryConstant(param.type, values[index]!, at);
@@ -607,13 +629,23 @@ export function bindEntryArguments(
       );
     }
     const kind = parseEntryType(param.type).kind;
-    if (kind === "int") signed.push(`let ${param.name}: Int256 = ${value};`);
-    else constants[param.name] = value;
+    if (kind === "int") {
+      signed.push(`let ${param.name}: Int256 = ${value};`);
+    } else {
+      declared ??= moduleNames(source);
+      if (declared.has(param.name)) {
+        throw new TypeError(
+          `${at}: the module declares ${param.name} too, which the bound value would replace ` +
+            "outside main as well; rename one of them",
+        );
+      }
+      constants[param.name] = value;
+    }
     if (kind === "address") addresses.push(param.name);
   });
   const list = source.slice(signature.open + 1, signature.close);
   const sourceTail = source.slice(signature.close);
-  const body = blankLiterals(source).indexOf("{", signature.returnEnd) - signature.close;
+  const body = signature.code.indexOf("{", signature.returnEnd) - signature.close;
   const tail =
     signed.length === 0
       ? sourceTail
@@ -624,6 +656,33 @@ export function bindEntryArguments(
     constants,
     addresses,
   };
+}
+
+/** The value names `source` declares at module scope: its variables, functions, classes and
+ *  imports. */
+function moduleNames(source: string): ReadonlySet<string> {
+  const names = new Set<string>();
+  // An acorn Program: its body is its statements.
+  const statements = parseSauce(source).body as AstNode[];
+  for (const statement of statements) {
+    const node =
+      statement.type === "ExportNamedDeclaration"
+        ? (statement.declaration as AstNode | null)
+        : statement;
+    if (node?.type === "VariableDeclaration") {
+      for (const declarator of node.declarations as AstNode[]) {
+        collectPatternNames(declarator.id, names);
+      }
+    } else if (node?.type === "FunctionDeclaration" || node?.type === "ClassDeclaration") {
+      collectPatternNames(node.id, names);
+    } else if (node?.type === "ImportDeclaration") {
+      for (const specifier of node.specifiers as AstNode[]) {
+        collectPatternNames(specifier.local, names);
+      }
+    }
+  }
+
+  return names;
 }
 
 /**

@@ -189,6 +189,20 @@ remain available and explicitly report that deployment availability has not been
 - **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
   eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
   an editor typed nothing on it.
+- **Fixed**: A compiled program's `entryParams`, and `main`'s parameters as the `sauce` command
+  reads them, are read past comments in `main`'s signature. A comment in the parameter list became
+  part of a parameter's name or type, or a parameter of its own, so `encodeEntryArguments` and
+  `--args` refused the right values; a comment before the return type was read as part of it. The
+  module's own top-level `main` is the one read, not one nested in a function, a bodyless overload
+  or a `declare`, and a `main` with type parameters is found.
+- **Now refused**: `routes.compileSauceProgram` with `args` refuses a bound `Uint256`, `Address` or
+  `bool` parameter whose name the module also declares, or that names one of the chain's values (a
+  token symbol, `chainId` or a protocol address). Bound, it replaced that value everywhere in the
+  program, so a helper outside `main` read the argument instead. A bound `Int256` is a local of
+  `main` and is not refused.
+- **Fixed**: The Ambient protocol document had the swap direction backwards. `isBuy: true` pays
+  base and receives quote, and `inBaseQty` names the side `qty` counts, as Ambient defines them and
+  as the `ambientSwap` action already sends them.
 
 **Also breaking:**
 
@@ -251,6 +265,14 @@ remain available and explicitly report that deployment availability has not been
   unsigned transactions they print leave fees to the signer. `sauce send` and `sauce_send` refuse a
   transaction signed with a lower fee cap before sending it. `@eco-incorp/sauce/chains` records the
   floor as `minBaseFeePerGas` on Arc's chain.
+- **Fixed** (Solana): A Pot or account derived from `main`'s `Int256` argument (`u64:@index`) is
+  derived as from a `Uint256` one, where the command said the argument was not given. A negative
+  one is refused by name, and the SDK's account resolver refuses a negative seed instead of
+  deriving from its wrapped bytes.
+- **Fixed** (EVM): An `Int256` swap price limit gets the note a `Uint256` one gets, a negative one
+  included.
+- **Changed**: The `--args` help and the MCP server's `args` description say a negative `Int256`
+  is accepted, as `--args -5` with no `--` before it.
 
 ## SDK 0.99.15 — 2026-10-21
 

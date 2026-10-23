@@ -122,7 +122,7 @@ Options:
       --json                    Print JSON: sizes, defines and contracts applied, main's parameters, engine
   -h, --help                    Show this help
       --no-update-check         No notice of a newer sauce, and no registry read for one
-      --args <value>…           main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --args <value>…           main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -211,7 +211,7 @@ Options:
       --json                           Print one JSON object instead
   -h, --help                           Show this help
       --no-update-check                No notice of a newer sauce, and no registry read for one
-      --args <value>…                  main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --args <value>…                  main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
@@ -333,7 +333,7 @@ Options:
       --json                        Print one JSON object instead
   -h, --help                        Show this help
       --no-update-check             No notice of a newer sauce, and no registry read for one
-      --args <value>…               main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --args <value>…               main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
@@ -602,7 +602,7 @@ Options:
       --format <json|cast>     json (default), or a `cast send` line with placeholders
   -h, --help                   Show this help
       --no-update-check        No notice of a newer sauce, and no registry read for one
-      --args <value>…          main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --args <value>…          main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 EVM chains only:
       --pot <address>        Or the Pot itself, by address

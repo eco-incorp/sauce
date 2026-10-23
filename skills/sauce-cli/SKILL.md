@@ -475,6 +475,7 @@ The cook reverts: the program threw "the weights do not add up to 10000"
 - `--args-json '[…]'` (or a file) gives all of them as one JSON array; write an address or a value
   past 2^53 as a JSON string.
 - Every value is checked against its declared type before anything is sent: `Address`, `Uint256`,
+  `Int256` (from -2^255 through 2^255 - 1; a negative value is a word of its own, `--args -5`),
   `bool`, `bytes`, `string`, `T[]` and `{ field: T }`. A parameter with no annotation is a
   `Uint256`.
 - An actions document's `argument` actions are its `main`'s parameters, in the order the document

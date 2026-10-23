@@ -29,7 +29,8 @@ Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrat
 - Same contract address on both Ethereum and Scroll
 - `poolIdx` identifies the pool type: different pool indices have different fee rates and tick spacing
 - Common pool indices: `420` (standard on Ethereum), `36000` (stable pairs on Scroll)
-- `isBuy` + `inBaseQty` together determine the exact swap semantics
+- Exact-input: `isBuy: true, inBaseQty: true` specifies base paid; `isBuy: false, inBaseQty: false` specifies quote paid
+- Exact-output: `isBuy: true, inBaseQty: false` specifies quote received; `isBuy: false, inBaseQty: true` specifies base received
 - `tip`: Optional tip in basis points for priority execution (usually `0`)
 - `limitPrice`: Price limit as sqrt price Q64.64 fixed-point (`0` is no limit, which leaves `minOut` as the only bound)
 - `reserveFlags`: Bitmask for using surplus collateral (set to `0` for standard swaps)
