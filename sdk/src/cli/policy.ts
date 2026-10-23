@@ -106,6 +106,7 @@ import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js"
 import { requireSupported } from "./support.js";
 import {
   accountsNow,
+  approvesOn,
   lamportKeys,
   messageAccounts,
   mintFacts,
@@ -753,13 +754,16 @@ export async function measureSvm(
       : undefined;
   };
   const pots: string[] = [];
+  // The token accounts a token program's `Approve` or `ApproveChecked` names, at any depth: an
+  // allowance that ends where it began may still have been raised and spent between.
+  const approving = new Set<string>();
   for (const instruction of message.instructions) {
-    const pot = cookPot(
-      accounts[instruction.programAddressIndex],
-      instruction.data ?? new Uint8Array(),
-      (instruction.accountIndices ?? []).map((at) => accounts[at]),
-    );
+    const program = accounts[instruction.programAddressIndex];
+    const keys = (instruction.accountIndices ?? []).map((at) => accounts[at]);
+    const pot = cookPot(program, instruction.data ?? new Uint8Array(), keys);
     if (pot !== undefined) pots.push(pot);
+    const approves = approvesOn(program, instruction.data, keys);
+    if (approves !== undefined) approving.add(approves);
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
@@ -791,7 +795,6 @@ export async function measureSvm(
       unseen = "the endpoint reported a program its programs call that cannot be named";
       continue;
     }
-    if (program !== kitchen) continue;
     const keys = (each.accounts ?? []).map((key) =>
       typeof key === "number" ? accounts[key] : key,
     );
@@ -802,6 +805,9 @@ export async function measureSvm(
     } catch {
       data = undefined;
     }
+    const approves = approvesOn(program, data, keys);
+    if (approves !== undefined) approving.add(approves);
+    if (program !== kitchen) continue;
     // Every Kitchen instruction opens with an 8-byte discriminator: shorter data is a cut report.
     if (data === undefined || data.length < 8 || keys.some((key) => key === undefined)) {
       unseen =
@@ -888,13 +894,17 @@ export async function measureSvm(
     // spent in the same transaction, ending below where it began: the delegate can take only what
     // its allowance allowed, so where the allowance moved and what it allows now plus what left the
     // account is more than it allowed before, it was raised. (Conservative: an owner's spend beside
-    // a delegate's reads as one too, and counts the allowance left as approved again.)
+    // a delegate's reads as one too, and counts the allowance left as approved again.) Spent back
+    // to exactly where it began, the allowance alone cannot tell a raise from an owner's spend
+    // beside a standing allowance: where the transaction approves on the account, it is the raise.
+    const exceeded =
+      was !== undefined && is.delegatedAmount + was.amount - is.amount > was.delegatedAmount;
     const raised =
       was !== undefined &&
       is.delegate === was.delegate &&
       (is.delegatedAmount > was.delegatedAmount ||
-        (is.delegatedAmount !== was.delegatedAmount &&
-          is.delegatedAmount + was.amount - is.amount > was.delegatedAmount));
+        (is.delegatedAmount !== was.delegatedAmount && exceeded) ||
+        (approving.has(account) && exceeded));
     if (
       is.delegate !== undefined &&
       !ours.has(is.delegate) &&

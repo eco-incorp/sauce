@@ -347,6 +347,23 @@ export function lamportKeys(account: SimulatedAccount | null): readonly Address[
 }
 
 /**
+ * The token account an instruction of `program` with `data` on `keys` (its accounts in order) sets a
+ * delegate's allowance on: its first, for SPL Token's or Token-2022's `Approve` (4) or
+ * `ApproveChecked` (13). A token program's instruction whose data cannot be read counts as one,
+ * since what it does cannot be told. `undefined` for any other instruction.
+ */
+export function approvesOn(
+  program: string | undefined,
+  data: Uint8Array | undefined,
+  keys: readonly (string | undefined)[],
+): string | undefined {
+  if (program === undefined || !TOKEN_PROGRAMS.has(program)) return undefined;
+  if (data !== undefined && data[0] !== 4 && data[0] !== 13) return undefined;
+
+  return keys[0];
+}
+
+/**
  * Whether `account` is held under a layout {@link lamportKeys} does not read, by a program other
  * than the System program (which moves a data-less account's lamports only on its own signature),
  * and names one of `keys` anywhere in its data: an account whose lamports one of them might command.

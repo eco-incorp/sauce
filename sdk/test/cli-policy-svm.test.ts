@@ -1833,6 +1833,61 @@ describeSvm(
       expect(String(tokenAmount(harness, elsewhere))).toBe("600000");
     });
 
+    it("counts an allowance raised and spent back to what it was, and not an owner's spend beside an allowance that stands", async () => {
+      // An allowance of 500 tokens stands. Raised to 1100, the delegate spends 600: it ends at 500,
+      // as it began, yet 600 left and 500 more the delegate may still take. Beside it, the owner's
+      // own spend of 600 with the same allowance standing, untouched, gives the delegate nothing.
+      const mint = mints.spl;
+      const delegate = await generateKeyPairSigner();
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const spend = (source: Address, authority: KeyPairSigner | Address): Instruction => ({
+        programAddress: TOKEN_PROGRAM,
+        accounts: [
+          writable(source),
+          readonly(mint),
+          writable(elsewhere),
+          typeof authority === "string" ? signer(authority) : signing(authority),
+        ],
+        data: transferCheckedData(600_000n, DECIMALS),
+      });
+      const policy = { tokens: { [mint]: { perTransaction: "700" } } };
+      const tokens = async (transaction: Transaction) =>
+        (await measure(transaction)).tokens.map(({ amount, delegated, ...rest }) => ({
+          ...rest,
+          amount: String(amount),
+          ...(delegated === undefined ? {} : { delegated: String(delegated) }),
+        }));
+
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const owned = delegatedAccount(wallet, mint, AMOUNT, delegate.address, 500_000n);
+      const ownerSpend = await signed([spend(owned, wallet)]);
+      const plain = { tokens: await tokens(ownerSpend), ...(await guarded(policy, ownerSpend)) };
+      const raisedFrom = delegatedAccount(wallet, mint, AMOUNT, delegate.address, 500_000n);
+      const raisedAndSpent = await signed([
+        approve(raisedFrom, delegate.address, 1_100_000n),
+        spend(raisedFrom, delegate),
+      ]);
+
+      expect({
+        raised: {
+          tokens: await tokens(raisedAndSpent),
+          ...(await guarded(policy, raisedAndSpent)),
+        },
+        plain: { tokens: plain.tokens, refusal: plain.refusal },
+      }).toEqual({
+        raised: {
+          tokens: [{ token: mint, amount: "1100000", decimals: DECIMALS, delegated: "500000" }],
+          ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1100 ${mint}`),
+        },
+        plain: {
+          tokens: [{ token: mint, amount: "600000", decimals: DECIMALS }],
+          refusal: "none: the guard let it through",
+        },
+      });
+      expectOk(sendSigned(harness, raisedAndSpent));
+      expect(String(keyAt(raisedFrom, 76))).toBe(delegate.address);
+    });
+
     it("counts what the wallet moves out of a Pot's account it is the delegate of, with no cook", async () => {
       // A Pot's account, the wallet its delegate for all of it (an approval that gave no outside
       // key anything); then the wallet alone spends from it, no cook naming the Pot.
