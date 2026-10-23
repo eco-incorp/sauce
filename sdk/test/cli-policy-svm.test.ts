@@ -538,8 +538,12 @@ describeSvm("measuring a Kitchen cook another program makes for the wallet", () 
       );
 
       expect(measured.unmeasured).toEqual({});
-      expect(measured.native.amount).toBe(123_461_789n); // Outflow plus the signature fee.
-      expect(measured.tokens).toEqual([{ token: mint, amount: 400n, decimals: 6 }]);
+      // As strings: a failing BigInt comparison cannot cross Jest's worker boundary, and this is the
+      // assertion that shows the bypass when the Kitchen's CPI cook is not measured.
+      expect(String(measured.native.amount)).toBe("123461789"); // Outflow plus the signature fee.
+      expect(
+        measured.tokens.map(({ amount, ...rest }) => ({ ...rest, amount: String(amount) })),
+      ).toEqual([{ token: mint, amount: "400", decimals: 6 }]);
 
       const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-cpi-"));
       const wallet: WalletInfo = {
