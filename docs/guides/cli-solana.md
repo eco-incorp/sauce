@@ -261,7 +261,9 @@ still run out. A price that moves between building the cook and landing it can s
 ### Running on Solana
 
 `run` signs with `--wallet` or `--keypair`, confirms by polling the endpoint (no websocket to
-configure), and prints the signature, status and compute units, and the logs when it fails. A
+configure), and prints the signature, status and compute units, and the logs when it fails. What it
+simulates first, a swap's stops included, is simulated unsigned: the key signs each transaction
+only as it is sent, and a wallet's only once its policy let it go. A
 program too large for one transaction is staged in a Kitchen code buffer first, and the buffer is
 closed again after the cook, or when staging or the cook's simulation fails; if closing it fails,
 the run still prints the cook and warns with the buffer's address. A failure is named for the

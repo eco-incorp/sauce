@@ -117,15 +117,25 @@ makes, so SOL and token limits cannot miss those outflows. A transaction whose l
 calls to the Kitchen the endpoint does not report readably is refused where a limit applies.
 On Solana a policy also holds what a transaction gives another key over a token account of the
 wallet or the Pot it cooks on. A delegate approval (SPL Token `Approve` or `ApproveChecked`) to
-another key counts as sent, at the delegate's allowance, per transaction and in the day's total. An
-account handed to another owner is a send of all it holds, a transfer out of it in the same
-transaction included, and so is one closed and made again at its address for another token. A
-close authority given to another key, or a Token-2022 mint's permanent delegate handed from the
-wallet to another key, is refused where that token is limited. `native` counts every account the
-wallet controls, net: its token accounts (wrapped SOL among them) and the durable nonce and stake
-accounts it is the authority of, and all a wallet holds when the transaction gives it to another
-program. A mint whose decimals cannot be read refuses only the limits that name it. Every
-simulation is unsigned, and the wallet signs only a transaction its policy has let go.
+another key counts as sent, at the delegate's allowance, per transaction and in the day's total;
+an allowance raised and partly spent in one transaction counts what it spent and what is left. What
+the wallet spends as a delegate from an account it does not own, a Pot's with no cook among them,
+counts as sent. An account handed to another owner is a send of all it holds, a transfer out of
+it in the same transaction included, and so is one closed and made again at its address for
+another token. A close authority given to another key, or a Token-2022 mint's permanent delegate
+handed from the wallet to another key, is refused where that token is limited. `native` counts
+every account the wallet controls, net: its token accounts (wrapped SOL among them, but not what an
+outside delegate may take from it) and the durable nonce and stake accounts it is the authority of,
+and all a wallet holds when the transaction gives it to another program or makes it a nonce
+account another key commands. A balance is counted in its mint's decimals as they were before the
+transaction, and what arrives as they are after it. A mint whose decimals cannot be read refuses
+only the limits that name it. A transaction is held to the policy of every wallet it needs a
+signature from, whichever pays its fee, and a planned one sent from a wallet must be paid by it.
+Every simulation is unsigned, a swap's stops in `sauce run` included, and the wallet signs only a
+transaction its policy has let go. `sauce_wallet_send` checks a whole plan against the policy
+before sending any, counting the rent of the wallet's own token account and of a Pot a cook
+creates as the wallet's, as the send's own measurement does. The measurement errs toward counting:
+wrapped SOL that both an outside delegate and an outside close authority may take counts twice.
 `sauce simulate` and `sauce run` on Solana count a token account's change for its owner before the
 transaction, and name the new owner of one handed over (`ownerAfter` in `tokenChanges`). The SDK
 adds `prepareExecuteTransaction`, which compiles a transaction now and signs it when asked. See
