@@ -251,11 +251,14 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
 
 /**
  * On Solana a token is a value (`balanceOf(TSLAx, account)`), so a symbol the cluster does not
- * register fails as an undeclared name. Name the cause: a stock's symbol written in another case,
- * or a token only an EVM chain registers.
+ * register is refused by name: as an undeclared name, or, where another chain registers it, as a
+ * token the cluster lacks. Name the cause: a stock's symbol written in another case, or a token
+ * only an EVM chain registers.
  */
 function unregisteredMints(message: string, chain: CanonicalChain): string[] {
-  const name = /`([A-Za-z_$][\w$]*)` is not a declared variable/.exec(message)?.[1];
+  const name = /`([A-Za-z_$][\w$]*)` is not (?:a declared variable|a token on [\w-]+\.)/.exec(
+    message,
+  )?.[1];
   if (chain.kind !== "svm" || name === undefined) return [];
   const cased = svmTokenRows(chain).find((row) => row.symbol.toUpperCase() === name.toUpperCase());
   if (cased !== undefined) {
