@@ -231,8 +231,8 @@ lacks is **zero** there.
   absent name in it is refused. Outside a condition `X && Y` is the value `X` or `Y` itself, a use
   of `X`; a decision kept in a value compares, `X != 0 && Y != 0`. A helper function is checked as
   if it ran: it tests the name itself, or is refused on a chain that lacks the name.
-- A name no chain has (`UniswapV3.Factroy`, `Uniswapp`) is refused where it is written, with the
-  names it is nearest, so a typo cannot quietly drop a branch.
+- A name no chain has (`Uniswapp`, or a contract its namespace does not have) is refused where it
+  is written, with the names it is nearest, so a typo cannot quietly drop a branch.
 - There is no `available` call: test the name itself. Calling it is refused.
 
 ```sauce chain=base,linea
