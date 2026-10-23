@@ -73,9 +73,12 @@ import {
 } from "@solana/kit";
 import {
   decodeAbiParameters,
+  encodeFunctionData,
+  erc20Abi,
   formatUnits,
   getAddress,
   isAddress,
+  parseAbi,
   parseUnits,
   toEventSelector,
   toFunctionSelector,
@@ -423,6 +426,13 @@ const PERMIT2_GRANTS = new Set<string>([
   toEventSelector("Approval(address,address,address,uint160,uint48)"),
   toEventSelector("Permit(address,address,address,uint160,uint48,uint48)"),
 ]);
+/** Permit2's `lockdown`: `owner` zeroes its allowance of `token` to `spender` (in its data). */
+const PERMIT2_LOCKDOWN = toEventSelector("Lockdown(address,address,address)");
+/** What Permit2 lets `spender` take of `user`'s `token` now, its first word (the registry's Permit2
+ *  ABI does not declare it; the deployed Permit2 dispatches it). */
+const PERMIT2_ALLOWANCE = parseAbi([
+  "function allowance(address user, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
+]);
 /** Where `traceTransfers` reports native transfers, as ERC-20 Transfer logs. */
 const NATIVE_EMITTER = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 /** `Kitchen.deployPot(owner, salt)`, as `sauce run` and `sauce tx` send it. */
@@ -530,6 +540,76 @@ export async function rehearsePlan(
     return undefined;
   }
 }
+/** One allowance: `owner`'s of `token` to `spender`, on the token itself or through Permit2. */
+interface Permission {
+  readonly channel: "erc20" | "permit2";
+  readonly owner: Address;
+  readonly token: Address;
+  readonly spender: Address;
+}
+
+/**
+ * What each of `permissions` allows once `calls` have run, from `wallet` in order: the calls
+ * rehearsed again in one `eth_simulateV1` block with each allowance read after them, so the read
+ * sees the state they leave. `undefined` for one that cannot be read (an endpoint or a token that
+ * does not answer), where the caller keeps what the transaction reported.
+ */
+async function allowancesAfter(
+  client: PublicClient,
+  wallet: Address,
+  calls: readonly TxRequest[],
+  permissions: readonly Permission[],
+  permit2: string | undefined,
+): Promise<Array<bigint | undefined>> {
+  const reads = permissions.map((each) =>
+    each.channel === "erc20"
+      ? {
+          to: each.token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [each.owner, each.spender],
+          }),
+        }
+      : {
+          to: getAddress(permit2!),
+          data: encodeFunctionData({
+            abi: PERMIT2_ALLOWANCE,
+            functionName: "allowance",
+            args: [each.owner, each.token, each.spender],
+          }),
+        },
+  );
+  try {
+    const [block] = await client.simulateBlocks({
+      blocks: [
+        {
+          calls: [
+            ...calls.map((call) => ({
+              account: wallet,
+              to: call.to,
+              data: call.data,
+              value: call.value,
+            })),
+            ...reads.map((read) => ({ account: wallet, to: read.to, data: read.data })),
+          ],
+        },
+      ],
+      validation: false,
+    });
+    const answers = (block?.calls ?? []).slice(calls.length);
+
+    return permissions.map((_, index) => {
+      const answer = answers[index];
+
+      return answer?.status === "success" && answer.data.length >= 66
+        ? BigInt(answer.data.slice(0, 66))
+        : undefined;
+    });
+  } catch {
+    return permissions.map(() => undefined);
+  }
+}
 
 /**
  * What `calls`, sent in order from `wallet`, move out of the wallet and the Pot each cooks on: one
@@ -620,13 +700,7 @@ export async function measureEvm(
     // Every allowance the wallet or its Pot gives in the transaction, with whose it is and on which
     // contract it stands: one on the token, and one through Permit2, are two permissions, as are the
     // wallet's and its Pot's. A change to one leaves the others as they were.
-    const grants: Array<{
-      readonly channel: "erc20" | "permit2";
-      readonly owner: Address;
-      readonly token: Address;
-      readonly spender: Address;
-      readonly amount: bigint;
-    }> = [];
+    const grants: Array<Permission & { readonly amount: bigint }> = [];
     for (const log of logs) {
       const [topic, one, two, three] = log.topics;
       // A standing allowance granted through Permit2 is an approval of the token it names: the
@@ -645,6 +719,25 @@ export async function measureEvm(
             token: topicAddress(two!),
             spender: topicAddress(three!),
             amount: BigInt(log.data.slice(0, 66)),
+          });
+        }
+        continue;
+      }
+      // Permit2's lockdown: the owner zeroes an allowance it gave.
+      if (
+        permit2 !== undefined &&
+        log.address.toLowerCase() === permit2 &&
+        log.topics.length === 2 &&
+        topic!.toLowerCase() === PERMIT2_LOCKDOWN &&
+        log.data.length >= 130
+      ) {
+        if (ours.has(topicAddress(one!))) {
+          grants.push({
+            channel: "permit2",
+            owner: topicAddress(one!),
+            token: topicAddress(`0x${log.data.slice(2, 66)}`),
+            spender: topicAddress(`0x${log.data.slice(66, 130)}`),
+            amount: 0n,
           });
         }
         continue;
@@ -668,26 +761,33 @@ export async function measureEvm(
         });
       }
     }
-    // The allowance each permission leaves: the last its contract reports in the transaction (a token
-    // may report one again as a spender pulls). Distinct permissions add up. A spender that is the
-    // wallet or its own Pot is no other key, and none is kept at 0. What another key keeps counts as
-    // sent, with what the transaction moves of the token, per transaction and in the day's total: it
+    // The allowance each permission leaves: the chain's own, read once the transaction has run (a
+    // spender may pull what it was allowed with no report of what is left, as Permit2 does), else
+    // the last its contract reported. Distinct permissions add up. A spender that is the wallet or
+    // its own Pot is no other key, and none is kept at 0. What another key keeps counts as sent,
+    // with what the transaction moves of the token, per transaction and in the day's total: it
     // needs no later signature. (The ERC-20 approval of Permit2 itself moves nothing without one,
     // and is not counted.)
     const kept = new Map<string, (typeof grants)[number]>();
     for (const each of grants) {
       kept.set(`${each.channel}/${each.owner}/${each.token}/${each.spender}`, each);
     }
+    const permissions = [...kept.values()];
+    const after =
+      permissions.length === 0
+        ? []
+        : await allowancesAfter(client, wallet, calls.slice(0, index + 1), permissions, permit2);
     const granted: Array<{ token: Address; spender: Address; amount: bigint }> = [];
     const delegated = new Map<string, bigint>();
-    for (const each of kept.values()) {
-      if (each.amount === 0n || ours.has(each.spender) || (await ownPot(each.spender)) === "own") {
+    for (const [at, each] of permissions.entries()) {
+      const amount = after[at] ?? each.amount;
+      if (amount === 0n || ours.has(each.spender) || (await ownPot(each.spender)) === "own") {
         continue;
       }
-      granted.push({ token: each.token, spender: each.spender, amount: each.amount });
+      granted.push({ token: each.token, spender: each.spender, amount });
       if (each.channel === "erc20" && each.spender.toLowerCase() === permit2) continue;
-      tokens.set(each.token, (tokens.get(each.token) ?? 0n) + each.amount);
-      delegated.set(each.token, (delegated.get(each.token) ?? 0n) + each.amount);
+      tokens.set(each.token, (tokens.get(each.token) ?? 0n) + amount);
+      delegated.set(each.token, (delegated.get(each.token) ?? 0n) + amount);
     }
     // An account's own native leaves only as a transaction's value, which a trace shows; with no
     // trace, the value is what the wallet sends, and a cook's Pot is not seen. (What `native` holds

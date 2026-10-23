@@ -25,6 +25,7 @@ import {
   pad,
   parseUnits,
   toBytes,
+  toFunctionSelector,
   type Address,
   type Hex,
   type PublicClient,
@@ -77,21 +78,41 @@ const approval = (token: Address, owner: Address, spender: Address, amount: bigi
 
 type Log = ReturnType<typeof transfer>;
 
+/** The selectors of `allowance` on an ERC-20 and on Permit2, which a measurement reads after. */
+const ALLOWANCE_READS = [
+  toFunctionSelector("function allowance(address owner, address spender)"),
+  toFunctionSelector("function allowance(address user, address token, address spender)"),
+];
+
 /** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. Its
  *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. A contract with no
  *  such function answers with no data, as viem reports it; a read of a contract in `unreadable`
- *  fails at the endpoint instead, before any contract answers. */
+ *  fails at the endpoint instead, before any contract answers. An `allowance` read in a rehearsal
+ *  answers `remaining` (the allowance the transaction leaves), or fails where it is `null`; left
+ *  out, it answers no data. */
 function client(
   logs: Log[] | null,
   decimals: number | null = 18,
   unreadable: readonly Address[] = [],
+  remaining?: bigint | null,
 ): PublicClient {
   return {
     getChainId: async () => BASE.id,
-    simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: unknown[] }> }) => {
+    simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: Array<{ data?: Hex }> }> }) => {
       if (logs === null) throw new Error("the method eth_simulateV1 does not exist");
 
-      return [{ calls: blocks[0]!.calls.map(() => ({ status: "success", logs, data: "0x" })) }];
+      return [
+        {
+          calls: blocks[0]!.calls.map((call) =>
+            remaining !== undefined &&
+            ALLOWANCE_READS.some((read) => call.data?.toLowerCase().startsWith(read))
+              ? remaining === null
+                ? { status: "failure", logs: [], data: "0x" }
+                : { status: "success", logs: [], data: word(remaining) }
+              : { status: "success", logs, data: "0x" },
+          ),
+        },
+      ];
     },
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
       if (unreadable.includes(getAddress(address))) throw new Error("fetch failed: 429");
@@ -596,6 +617,64 @@ describe("the guard", () => {
       permit2ZeroThenErc20: "tokens.USDC",
       walletAndPot: "tokens.USDC.perTransaction",
       erc20AndPermit2: "tokens.USDC.perTransaction",
+    });
+  });
+
+  it("counts the allowance a transaction leaves, as the chain holds it after, not the last it reported", async () => {
+    // A spender pulls what it was allowed with no Approval of what is left (Permit2 never reports
+    // one, nor do many tokens), or Permit2's lockdown zeroes it: the allowance after the transaction,
+    // read in the same rehearsal, is what the spender keeps.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
+    const LOCKDOWN = keccak256(toBytes("Lockdown(address,address,address)"));
+    const viaPermit2 = (amount: bigint) => ({
+      address: PERMIT2,
+      topics: [PERMIT2_APPROVAL, topic(POT), topic(USDC), topic(SPENDER)] as Hex[],
+      data: encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }], [amount, 2 ** 40]),
+    });
+    const lockdown = {
+      address: PERMIT2,
+      topics: [LOCKDOWN, topic(POT)] as Hex[],
+      data: encodeAbiParameters([{ type: "address" }, { type: "address" }], [USDC, SPENDER]),
+    };
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const guard = guarded({ tokens: { USDC: { perTransaction: "7" } } });
+    const verdict = (logs: Log[], remaining?: bigint | null) =>
+      guard.evm(client(logs, 18, [], remaining), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    const usdc = (whole: string) => parseUnits(whole, 6);
+    const spent = (amount: bigint) => transfer(USDC, POT, SPENDER, amount);
+
+    expect({
+      // 6 allowed and all of it pulled: 6 moved, nothing left (not 6 + 6 = 12 against 7).
+      pulledWhole: await verdict([approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("6"))], 0n),
+      // 6 allowed and 2 pulled: 2 moved and 4 left, 6 in all (not 6 + 2 = 8).
+      pulledPart: await verdict(
+        [approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("2"))],
+        usdc("4"),
+      ),
+      throughPermit2: await verdict([viaPermit2(usdc("6")), spent(usdc("6"))], 0n),
+      // 20 allowed through Permit2, then locked down: nothing left to take.
+      lockedDown: await verdict([viaPermit2(usdc("20")), lockdown], 0n),
+      revoked: await verdict(
+        [approval(USDC, POT, SPENDER, usdc("20")), approval(USDC, POT, SPENDER, 0n)],
+        0n,
+      ),
+      // Where the allowance after cannot be read, the last one reported counts.
+      unread: await verdict([approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("6"))], null),
+    }).toEqual({
+      pulledWhole: "let through",
+      pulledPart: "let through",
+      throughPermit2: "let through",
+      lockedDown: "let through",
+      revoked: "let through",
+      unread: "tokens.USDC.perTransaction",
     });
   });
 
