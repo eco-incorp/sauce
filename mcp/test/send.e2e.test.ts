@@ -842,5 +842,72 @@ describe(
       assert.equal(tokenAmount(harness, dest), 400n);
       rmSync(policy);
     });
+
+    it("preflights a wallet's plan as its policy measures it: rent into its own token account, and its Pot's in the cook, stay its own", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-rent", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const mint = setMint(harness, randomAddress(), 6);
+      // The wallet's own token account, which the plan creates first, and its Pot, which the cook
+      // creates: neither is there yet.
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(mine: Account<Writable>): Uint256 {\n  return 5;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          accounts: { mine: `owner:${mint}` },
+          rpcUrl: SOLANA_URL,
+        }),
+      );
+      // A native limit a transaction's fee fits and either rent does not: each rent stays in what
+      // the wallet controls, so only the fees leave.
+      const policy = join(dir, "wallets", "sol-rent.policy.json");
+      writeFileSync(policy, JSON.stringify({ native: { perTransaction: "0.001" } }), {
+        mode: 0o600,
+      });
+      const before = harness.svm.getBalance(wallet) ?? 0n;
+      const sent = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol-rent",
+          transaction: planned,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean; sent: Array<{ what: string; status: string; returned?: unknown }> };
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      assert.ok(
+        sent.sent.some((one) => /token account/.test(one.what)),
+        JSON.stringify(sent.sent),
+      );
+      assert.equal(sent.sent.at(-1)!.returned, "5");
+      assert.ok(sent.sent.every((one) => one.status === "success"));
+      // What left the wallet's own account: the two rents, which it still controls, and the fees.
+      assert.ok(before - (harness.svm.getBalance(wallet) ?? 0n) > 72_000_000n);
+
+      // The rent of an account another key holds does leave: refused before anything goes.
+      const elsewhere = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(theirs: Account<Writable>): Uint256 {\n  return 5;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          accounts: { theirs: `pot:${setMint(harness, randomAddress(), 6)}` },
+          rpcUrl: SOLANA_URL,
+        }),
+      );
+      const count = shim.sent.length;
+      assert.match(
+        failed(
+          await wallets.call("sauce_wallet_send", {
+            wallet: "sol-rent",
+            transaction: elsewhere,
+            rpcUrl: SOLANA_URL,
+          }),
+        ),
+        /native\.perTransaction is 0\.001 SOL/,
+      );
+      assert.equal(shim.sent.length, count);
+      rmSync(policy);
+    });
   },
 );
