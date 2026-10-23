@@ -670,19 +670,13 @@ describe("sauce_compile", () => {
     );
   });
 
-  it("reports main's runtime parameters, and the compact-v1 schema with compactArgs", async () => {
+  it("reports main's runtime parameters and ABI-v1 encoding", async () => {
     const abi = ok(await mcp.call("sauce_compile", { source: PAY, chain: "base" }));
     assert.deepEqual(abi.entryParams, [
       { name: "recipient", type: "Address" },
       { name: "amount", type: "Uint256" },
     ]);
     assert.equal(abi.entryEncoding, "abi-v1");
-    assert.equal(abi.entrySchema, null);
-    const compact = ok(
-      await mcp.call("sauce_compile", { source: PAY, chain: "base", compactArgs: true }),
-    );
-    assert.equal(compact.entryEncoding, "compact-v1");
-    assert.match(compact.entrySchema as string, /^0x[0-9a-f]+$/);
   });
 
   it("returns the account manifest on Solana, and takes the chain from the header", async () => {

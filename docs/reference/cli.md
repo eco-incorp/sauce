@@ -111,7 +111,6 @@ Usage: sauce compile <file | -> --chain <slug|id> [options]
 Options:
       --chain <slug|id>         Chain the program runs on (base, 8453, solana)
       --target <evm|svm>        Checked against the chain; svm alone means solana
-      --compact-args            Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>        Resolve the program's relative imports here (default: beside it; from stdin, .)
       --args-json <json|file>   main's arguments as a JSON array, inline or in a file
       --account NAME=<address>  Solana: an account main takes (an address, pot, owner, self, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
@@ -158,11 +157,10 @@ Examples:
 ```text
 Lower an actions document to SauceScript for a chain; print the source and bytecode.
 
-Usage: sauce actions <file | -> [--chain <slug|id>] [--compact-args] [--json]
+Usage: sauce actions <file | -> [--chain <slug|id>] [--json]
 
 Options:
       --chain <slug|id>  The chain to compile for (default: the document's chainId)
-      --compact-args     Take main's arguments as compact-v1, not ABI-v1
       --json             Print JSON: the document, source, bytecode and main's parameters
   -h, --help             Show this help
       --no-update-check  No notice of a newer sauce, and no registry read for one
@@ -195,7 +193,6 @@ Usage: sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <a
 Options:
       --chain <slug|id>                Chain the program runs on (base, 8453, solana)
       --target <evm|svm>               Checked against the chain; svm alone means solana
-      --compact-args                   Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>               Resolve the program's relative imports here (default: beside it; from stdin, .)
       --owner <address>                The Pot's owner, which derives the Pot with the salt (default 0)
       --salt <label>                   Name one of the owner's Pots: salt = keccak256(label)
@@ -317,7 +314,6 @@ Usage: sauce run <file | -> --chain <slug|id> (--keystore <path> | --private-key
 Options:
       --chain <slug|id>             Chain the program runs on (base, 8453, solana)
       --target <evm|svm>            Checked against the chain; svm alone means solana
-      --compact-args                Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>            Resolve the program's relative imports here (default: beside it; from stdin, .)
       --owner <address>             The Pot's owner, which derives the Pot with the salt (default 0)
       --salt <label>                Name one of the owner's Pots: salt = keccak256(label)
@@ -595,7 +591,6 @@ Usage: sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address
 Options:
       --chain <slug|id>        Chain the program runs on (base, 8453, solana)
       --target <evm|svm>       Checked against the chain; svm alone means solana
-      --compact-args           Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>       Resolve the program's relative imports here (default: beside it; from stdin, .)
       --owner <address>        The Pot's owner, which derives the Pot with the salt (default 0)
       --salt <label>           Name one of the owner's Pots: salt = keccak256(label)
@@ -1101,7 +1096,6 @@ Usage: sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <f
 Options:
       --chain <slug|id>   Chain the program runs on (base, 8453, solana)
       --target <evm|svm>  Checked against the chain; svm alone means solana
-      --compact-args      Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>  Resolve the program's relative imports here (default: beside it; from stdin, .)
       --source <file>     The program a cook was compiled from: decode its arguments
       --rpc-url <url>     Your own RPC endpoint for the chain (default: a built-in public one)

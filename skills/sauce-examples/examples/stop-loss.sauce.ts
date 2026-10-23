@@ -32,8 +32,8 @@ function main(
 ): { price: Uint256; triggered: bool; sold: Uint256; received: Uint256 } {
   require(maxSlippageBps < 10000, "maxSlippageBps is 100% or more");
   const round = Chainlink.EthUsdFeed.latestRoundData();
-  const price = round.answer; // USD per ETH, 8 decimals
-  require(price > 0, "no price");
+  require(round.answer > 0, "no price");
+  const price = Uint256(round.answer); // USD per ETH, 8 decimals
   require(ctx.timestamp() - round.updatedAt <= maxAge, "the price is stale");
 
   const triggered = (stop > 0 && price <= stop) || (takeProfit > 0 && price >= takeProfit);

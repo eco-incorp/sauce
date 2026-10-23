@@ -173,9 +173,9 @@ you know what the transaction you sign does ([Try it](cli-run.md#try-it-sauce-si
 
 ### Read the unsigned transaction
 
-`sauce tx` prints the transaction for the owner to sign:
+`sauce tx` prints the transaction for the owner to sign (addresses and `sendCalls` are abbreviated here):
 
-```json
+```text
 { "chainId": 8453, "to": "0x8a…", "data": "0x…", "value": "0x3e8", "sendCalls": { … } }
 ```
 
@@ -189,9 +189,9 @@ chain; `--value` sets it. The transaction is exactly what a wallet's MCP server 
 
 When the chain shows the Pot has no code yet, `sauce tx` prints a plan of two instead: the Pot's
 creation, marked `deploysPot`, then the cook. Sign and send them in that order. Any account may
-send the first; only the owner can send the second.
+send the first; only the owner can send the second. This output is abbreviated:
 
-```json
+```text
 {
   "chainId": 8453,
   "pot": "0x8a…",

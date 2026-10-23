@@ -122,7 +122,7 @@
     "@solana/kit": "^8.5.0",
     "@sveltejs/acorn-typescript": "1.0.13",
     "acorn": "8.16.0",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.5.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.0",
     "viem": "^2.45.3"
   },
   "peerDependencies": {

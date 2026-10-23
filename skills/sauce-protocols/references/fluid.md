@@ -57,7 +57,7 @@ import { FluidVaultABI as IFluidVault } from "./abis";
 
 function main(vaultAddress: Address, nftId: Uint256, amount: Uint256, to: Address): Uint256 {
   const vault = IFluidVault.at(vaultAddress);
-  vault.operate(nftId, 0, amount, to);
+  vault.operate(nftId, 0, Int256(amount), to);
   return 1;
 }
 ```
@@ -75,7 +75,7 @@ import { FluidVaultABI as IFluidVault } from "./abis";
 function main(
   vaultAddress: Address,
   nftId: Uint256,
-  negativeDebtDelta: Uint256,
+  negativeDebtDelta: Int256,
   to: Address,
 ): Uint256 {
   const vault = IFluidVault.at(vaultAddress);
@@ -84,7 +84,7 @@ function main(
 }
 ```
 
-- `negativeDebtDelta`: the repayment as a negative `int256`, passed in two's complement (`2**256 - amount`)
+- `negativeDebtDelta`: repayment as a negative `Int256`, for example `-1000000`, not an unsigned two's-complement word. From an unsigned amount, write `-Int256(amount)`.
 - Requires ERC-20 approval of the debt token to the Vault
 
 ## Deployments and ABI

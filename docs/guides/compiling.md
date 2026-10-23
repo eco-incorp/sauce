@@ -24,8 +24,8 @@ contract you deploy. Two entry points compile, and they differ in who resolves n
 | `compile({ target, resolve, ... })`                   | All source and dependency resolution, and compiler settings | Nothing: you get the compiler's own result                                        |
 
 The first resolves names for one chain. The second, the raw compiler, resolves nothing: reach for
-it when you want full control over modules, compact arguments, or a Solana account manifest you
-declare yourself.
+it when you want full control over modules, closure entries, compile-time scalar arguments,
+or a Solana account manifest you declare yourself.
 
 Bare `USDC`, `Token(address)` and protocol members such as `Uniswap.UniversalRouter` exist only in
 the first. There, `USDC.approve(Uniswap.UniversalRouter, 1000000)` becomes a call to
@@ -54,7 +54,7 @@ The result carries:
 - `bytecode`: the program. `Pot.cook(engine, program)` runs it, with `main`'s arguments after it.
 - `entryParams`: what `main` takes. `routes.encodeEntryArguments(program, values)` encodes values
   for them, checked against their types, as `--args` does.
-- `entryEncoding`: `"abi-v1"`, or `"compact-v1"` when you pass `compactArgs: true`.
+- `entryEncoding`: always `"abi-v1"`; compact entry arguments were removed in compiler 2.6.
 - `manifest` and `derivedAccounts` on Solana: the accounts to attach, and those the SDK added.
 
 `options.args` binds `main`'s arguments into the program as it compiles. The program then takes no
@@ -160,55 +160,18 @@ field of another tuple, a fixed-size tuple is inline, as `abi.encode` writes it.
 `routes.encodeEntryArguments` encodes arguments in the layout `main` reads, from the parameters
 `main` declares, and `routes.decodeEntryArguments` reads them back.
 
-### Pass arguments with compact-v1
-
-Compile with `compactArgs: true` and use the schema that comes back with it. The schema and the
-bytecode belong to the same artifact; do not pair one with another.
-
-```ts
-import {
-  compile,
-  encodeCompactArguments,
-  decodeCompactArguments,
-} from "@eco-incorp/sauce/compiler";
-
-const compact = compile({
-  target: "evm",
-  entry: "main.ts",
-  resolve: (path) => (path === "main.ts" ? entry : undefined),
-  compactArgs: true,
-});
-
-if (compact.entryEncoding !== "compact-v1" || !compact.entrySchema) {
-  throw new Error("Expected a compact argument schema");
-}
-
-const compactArgs = encodeCompactArguments(compact.entrySchema, [[25n, 75n], 100n]);
-const inspected = decodeCompactArguments(compact.entrySchema, compactArgs);
-// inspected: [[25n, 75n], 100n]
-
-const compactPayload = new Uint8Array(compact.bytecode.length + compactArgs.length);
-compactPayload.set(compact.bytecode);
-compactPayload.set(compactArgs, compact.bytecode.length);
-```
-
-Compact encoding is usually smaller for scalars and collections. The two formats are not
-interchangeable: a compact program does not accept an ABI-v1 tail, and the reverse is equally true.
-Either way, contract calls the program _makes_ still use their own contract ABIs: this is about
-getting values into `main`, nothing else.
-
 ### Return values an ABI decoder can read
 
 `entryEncoding` describes inputs. What `main` returns comes back as raw bytes, by its declared
 type:
 
-| `main` returns                 | The bytes                                             |
-| ------------------------------ | ----------------------------------------------------- |
-| `Address`, `Uint256` or `bool` | One 32-byte word                                      |
-| A record                       | Its fields, one word each                             |
-| An array                       | Its elements, one word each, with no offset or length |
-| `bytes`                        | The bytes themselves                                  |
-| nothing (`void`)               | Nothing                                               |
+| `main` returns                           | The bytes                                               |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `Address`, `Uint256`, `Int256` or `bool` | One 32-byte word (signed integers use two's complement) |
+| A record                                 | Its fields, one word each                               |
+| An array                                 | Its elements, one word each, with no offset or length   |
+| `bytes`                                  | The bytes themselves                                    |
+| nothing (`void`)                         | Nothing                                                 |
 
 So a raw array is not what an ABI decoder reads. Encode explicitly whenever a caller depends on the
 shape:
@@ -300,14 +263,13 @@ const source = new TextEncoder().encode(`
 const artifact = compile({
   target: "svm",
   resolve: (path) => (path === "main.js" ? source : undefined),
-  compactArgs: true,
 });
 
 console.log(artifact.manifest?.accounts);
 // [{ kind: "slot", index: 0, name: "vault", requires: "readonly" }]
 ```
 
-`amount` is the one compact field; `vault` is attached at account slot 0. Resolve and attach accounts
+`amount` is the one encoded ABI argument; `vault` is attached at account slot 0. Resolve and attach accounts
 in manifest order with the SVM helpers. The manifest records what the _author_ declared: it does not
 discover an account's address, balance, owner or existence.
 
@@ -321,8 +283,8 @@ modules, optimization setting and argument format alongside any artifact you kee
 arguments out of the code cache, and hash the final code-plus-arguments payload when you commit to
 one execution.
 
-The compiler caches its own work between calls as an optimization; `cache: false` forces fresh
-lowering. That cache is not an application-level artifact store: if your resolver's inputs change,
+The compiler caches its own work between calls; `cache: false` forces a fresh compile.
+That cache is not an application-level artifact store: if your resolver's inputs change,
 refresh them yourself.
 
 ## Next

@@ -1,5 +1,5 @@
 {
-  "$comment": "Generation-4 Router swap methods, copied from kitchen-evm 1.2.0's IRouter ABI. A Pot's fallback delegatecalls its Router; programs call these on ctx.self(). The ABI drift test checks every fragment against the release.",
+  "$comment": "Router swap methods, copied from kitchen-evm 1.3.0's IRouter ABI. A Pot's fallback delegatecalls its Router; programs call these on ctx.self(). The ABI drift test checks every fragment against the release.",
   "abi": [
     {
       "type": "function",

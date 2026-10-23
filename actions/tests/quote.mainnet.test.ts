@@ -11,11 +11,22 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createPublicClient, custom, http, parseAbi, type Address } from "viem";
+import {
+  createPublicClient,
+  custom,
+  encodeAbiParameters,
+  hexToBytes,
+  http,
+  parseAbi,
+  type Address,
+} from "viem";
 
 import { quoteAction, type QuoteOptions } from "../src/index.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
+import { compileEvm } from "../src/compile.js";
+import { newEmitter } from "../src/emit.js";
+import { quoteCall } from "../src/to-quote.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { DEADLINE } from "./mainnet.js";
 
@@ -138,23 +149,21 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
     await env?.stop();
   });
 
-  it("refuses generation 4 as a quote service before issuing a call", () => {
+  it("refuses the execution Router as a quote service before issuing a call", () => {
     assert.notEqual(env.router, env.quoteRouter);
-    assert.throws(
-      () =>
-        quoteAction(
-          {
-            type: "uniswapV3Swap",
-            pool: UNIV3_USDC_WETH_500,
-            tokenIn: USDC,
-            tokenOut: WETH,
-            amount: "1000000",
-            amountOutMin: "0",
-            recipient: "self",
-          },
-          { router: env.router },
-        ),
-      /generation 4 has no quote method; use v12QuoteRouterAddress/,
+    assert.throws(() =>
+      quoteAction(
+        {
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_WETH_500,
+          tokenIn: USDC,
+          tokenOut: WETH,
+          amount: "1000000",
+          amountOutMin: "0",
+          recipient: "self",
+        },
+        { router: env.router },
+      ),
     );
   });
 
@@ -540,6 +549,19 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
       assert.ok(quoted >= atLeast, `${name} quoted ${quoted}`);
     });
   }
+
+  it("a runtime V4 quote matches the venue's own quoter for a nonzero amount", async () => {
+    const candidate = cases.find(({ action }) => action.type === "uniswapV4Swap")!;
+    const dynamic = quoteCall(candidate.action, ONE_ETH, quoters).toSauceDynamic;
+    assert.ok(dynamic);
+    const fragment = dynamic(newEmitter(), "amount");
+    const compiled = compileEvm(
+      `function main(amount: Uint256): Uint256 {\n${fragment.stmts.join("\n")}\nreturn ${fragment.expr};\n}`,
+    );
+    const args = hexToBytes(encodeAbiParameters([{ type: "uint256" }], [ONE_ETH]));
+    const result = await env.returned(new Uint8Array([...compiled.bytecode, ...args]));
+    assert.equal(BigInt(result), await candidate.expected());
+  });
 
   it("quotes every swap action type", () => {
     const quoted = new Set<string>([...cases.map((c) => c.action.type), ...QUOTED_ELSEWHERE]);

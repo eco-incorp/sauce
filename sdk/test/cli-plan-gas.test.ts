@@ -209,12 +209,12 @@ describe("the gas sauce tx suggests for a plan's deployment and cook", () => {
   });
 
   it("has no plan to give gas to with no endpoint: the cook alone, with no gas", async () => {
-    const out = jsonOf(
-      await sauce(
-        ...["tx", join(CLI_FIXTURES, "pay.sauce.ts"), "--chain", "ethereum", "--owner", OWNER],
-        ...["--args-json", JSON.stringify([POT, "1"]), "--value", "1000"],
-      ),
-    ) as Record<string, unknown>;
+    const run = await sauce(
+      ...["tx", join(CLI_FIXTURES, "pay.sauce.ts"), "--chain", "ethereum", "--owner", OWNER],
+      ...["--args-json", JSON.stringify([POT, "1"]), "--value", "1000"],
+    );
+    const out = jsonOf(run);
+    expect(run.stderr).toContain("Release availability is NOT verified: no RPC endpoint was given");
     expect(out).toMatchObject({ chainId: 1, value: "0x3e8" });
     expect(out.transactions).toBeUndefined();
     expect(out.gas).toBeUndefined();

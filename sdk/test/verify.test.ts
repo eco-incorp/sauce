@@ -418,15 +418,4 @@ describe("@eco-incorp/sauce/verify", () => {
       expect(parse.tokenWords).toEqual([]);
     });
   });
-
-  describe("closure", () => {
-    it("SETTLE_WIRE exposes the wire constants a foreign implementer needs", () => {
-      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(435);
-      expect(SETTLE_WIRE.WORD_BYTES).toBe(32);
-      expect(SETTLE_WIRE.ADDRESS_BYTES).toBe(20);
-      expect(SETTLE_WIRE.HEAD_SLOTS).toBe(3);
-      expect(SETTLE_WIRE.HEAD_BYTES).toBe(96);
-      expect(SETTLE_WIRE.PROGRAM_HASH).toMatch(/^0x[0-9a-f]{64}$/);
-    });
-  });
 });

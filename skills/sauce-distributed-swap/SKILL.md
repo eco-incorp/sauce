@@ -71,8 +71,10 @@ once; one that only wraps a call costs a call frame of gas.
   `UniswapV3.Pool(pool).liquidity()`, or `AerodromeSlipstream.Pool(pool)` for a Slipstream pool,
   whose `slot0` has no `feeProtocol`; a V4 pool through the StateView, by id:
   `UniswapV4.StateView.getLiquidity(id)`. The binding and the method are one expression, never a
-  value kept in a variable. Take only the outputs you need, by name (`.slot0().sqrtPriceX96`) or by
+  value kept in a variable. Select fields for readability, by name (`.slot0().sqrtPriceX96`) or
   position: `const [sqrtPriceX96, , protocolFees, poolFee] = UniswapV4.StateView.getSlot0(pool);`.
+  Reading any field still decodes and validates every declared output; field selection is not
+  partial decoding.
 - **A function that returns a value returns it on every path**, or the program does not compile
   (`` `trade` does not return on every path ``): end every early exit with `return 0;`.
 

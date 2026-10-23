@@ -21,11 +21,16 @@
 
 /** `one`, or a union of it: `c ? x : 0` is `number | bigint`. */
 const UNION = (one) => String.raw`${one}(?: \| ${one})*`;
-/** A TypeScript type that is a SauceScript number: `bigint`, `number`, a literal of either, or an
- *  address typed as a contract (`bigint & UniswapV3PoolMethods`). */
-const NUMBER = UNION(String.raw`(?:bigint(?: & \w+)*|number|-?\d+n?|SauceInt)`);
+/** A TypeScript type that is a SauceScript integer: either signedness, a plain number, a literal,
+ *  or an address typed as a contract (`bigint & UniswapV3PoolMethods`). Range and signedness
+ *  conversions remain the Sauce compiler's responsibility, not a TypeScript diagnostic filter. */
+const NUMBER = UNION(
+  String.raw`(?:bigint(?: & \w+)*|number|-?\d+n?|SauceInt|Uint256|Int256|SauceCall<(?:bigint|Uint256|Int256)(?: & \w+)*>)`,
+);
 /** ... or an `Account` (`Account<Writable, Signer>`), which compares as its address. */
-const INT = UNION(String.raw`(?:bigint(?: & \w+)*|number|-?\d+n?|SauceInt|Account(?:<[\w, ]*>)?)`);
+const INT = UNION(
+  String.raw`(?:bigint(?: & \w+)*|number|-?\d+n?|SauceInt|Uint256|Int256|SauceCall<(?:bigint|Uint256|Int256)(?: & \w+)*>|Account(?:<[\w, ]*>)?)`,
+);
 
 const PATTERNS = {
   // Type 'bigint' cannot be used as an index type. / Type '0n' cannot be …

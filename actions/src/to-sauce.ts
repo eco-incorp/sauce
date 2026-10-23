@@ -807,7 +807,7 @@ function balancerV2BatchSwap(
   // step's output asset, wherever it appears in `assets`. Other assets have no output floor.
   const limits = list(
     action.assets.map((_, i) =>
-      i === outputIndex ? `-${word(action.amountOutMin)}` : word(MAX_INT256),
+      i === outputIndex ? `Int256(-${word(action.amountOutMin)})` : `Int256(${word(MAX_INT256)})`,
     ),
   );
   const funds = record({

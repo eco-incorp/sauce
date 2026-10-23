@@ -42,7 +42,7 @@ It reads how much USDC your Pot holds, stops if that is less than `amount`, and 
   program serves every payment.
 - **`USDC` is a name, not an address.** Sauce knows where USDC lives on each chain it runs on, and
   the same file runs on Base and on Solana.
-- **`require` is a check.** When it fails, the whole transaction stops and nothing moves.
+- **`require` is a check.** A failed check stops and undoes the cook unless an EVM `try` catches it.
 
 ## How a program becomes one transaction
 
@@ -57,7 +57,7 @@ the cook, unsigned
      │  simulate              run it on a copy of the chain: free, nothing is sent
      │  sign and send         your wallet signs
      ▼
-your Pot                      checks the cook is from its owner, pays the Kitchen,
+your Pot                      checks the owner's authorization, pays the Kitchen,
                               and has the engine run the program: every step, or none
 ```
 
@@ -71,10 +71,10 @@ your Pot                      checks the cook is from its owner, pays the Kitche
    You see what would move, or why it would fail, for free.
 4. **Sign and send.** Your wallet signs. Your key stays with you: Sauce builds the transaction, and
    the `sauce` command signs it with a wallet on your computer or hands it to another one.
-5. **Run.** Your Pot checks that the cook comes from its owner, pays the Kitchen, and has the engine
+5. **Run.** Your Pot checks the owner's authorization, pays the Kitchen, and has the engine
    run the program as the Pot. Every call the program makes comes from your Pot, and what it
-   receives lands there. If any step fails, the whole transaction reverts: nothing moves, and only
-   the network's fee for the attempt, the gas, is spent.
+   receives lands there. An uncaught failure reverts the transaction: nothing moves, and only
+   the network fee is spent. EVM `try` blocks can roll back one attempt and run a recovery path.
 
 ## Why one transaction matters
 
@@ -96,8 +96,9 @@ returned, refuse it below a minimum you set, and pay out exactly that.
   of the 134 protocols Sauce knows, by name, and mixes them in one transaction.
 - **Not a bridge.** A program runs on one chain. To move tokens to another, it calls a bridge
   protocol by name, such as Across or Circle's CCTP, as it calls any other.
-- **Not a custodian.** Only your wallet can run programs on your Pot, and nobody else, Sauce
-  included, can move what it holds.
+- **Not a custodian.** Your private Pot requires your wallet's authorization for every program.
+  New EVM Pots can accept an owner-signed cook submitted by another account; Sauce cannot
+  move what your Pot holds without your authorization.
 - **Not your application's code.** A program runs on chain, inside the transaction. It cannot call
   back into your application or read its variables, so everything it needs is given to it at the
   start, as `main`'s arguments.

@@ -4,7 +4,7 @@
 //   node sdk/scripts/check-browser-compile.mjs [--package-root <dir>] [--consumer <dir>]
 //
 // `browser/cases.mjs` imports the package by name and compiles: a `compileSauceProgram` program
-// (typed `main`, then its argument bound), a raw `compile()` with `compactArgs` on both targets,
+// (typed `main`, then its argument bound), a raw `compile()` with ABI arguments on both targets,
 // the settle recipe through `resolveSdkModule`, a swap and a deposit builder, and an actions
 // program. This script runs it in Node, then bundles it with esbuild for the browser, loads it into
 // headless Chromium (Playwright) and requires the browser's results to equal Node's. The page runs
@@ -157,7 +157,7 @@ window.__sauce = (async () => {
       `  program       ${expected.program.bytecode.length / 2} bytes, bound ${expected.program.bound.length / 2}\n` +
       `  settle        ${expected.settle.length / 2} bytes\n` +
       `  swap/deposit  ${expected.swap[0].length / 2} / ${expected.deposit[0].length / 2} bytes\n` +
-      `  compact       evm ${expected.raw.evm.bytecode.length / 2}, svm ${expected.raw.svm.bytecode.length / 2} bytes\n` +
+      `  ABI arguments evm ${expected.raw.evm.bytecode.length / 2}, svm ${expected.raw.svm.bytecode.length / 2} bytes\n` +
       `  actions       ${expected.action.length / 2} bytes; by names on base ${expected.actionNamed.length / 2} bytes\n` +
       `  before ready() a compile throws: ${notReady}`,
   );

@@ -84,9 +84,6 @@ export interface SauceCompileOptions {
    * always loses to user code — a name the module declares, imports or binds wins silently.
    */
   ambient?: string[];
-  /** Compile for compact-v1 entry arguments; a caller wanting entry arguments generally uses the
-   *  raw compiler. */
-  compactArgs?: boolean;
 }
 
 export interface SauceEvmExecutionInput {
@@ -255,10 +252,8 @@ export interface CompiledSauceProgram {
   readonly chain: CanonicalChain;
   /** The program. `Pot.cook(engine, program)` runs it, with any entry arguments appended. */
   readonly bytecode: Uint8Array;
-  /** How `main`'s arguments are encoded: `abi-v1`, or `compact-v1` under `compactArgs`. */
-  readonly entryEncoding: "abi-v1" | "compact-v1";
-  /** With compact-v1, the schema its arguments are encoded against. */
-  readonly entrySchema?: Uint8Array;
+  /** How `main`'s arguments are encoded. */
+  readonly entryEncoding: "abi-v1";
   /** `main`'s runtime parameters, in order — on Solana without the `Account` slots, which the
    *  manifest carries. `encodeEntryArguments` encodes values for them. */
   readonly entryParams: readonly EntryParam[];
@@ -305,9 +300,9 @@ export interface DerivedValue {
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. Leave
-   * it out to compile `main` taking its arguments as it runs.
+   * `main`'s arguments, in order, bound into the program as constants: each must be one word (a
+   * signed or unsigned integer, an address or a `bool`), and the program then takes none at run time.
+   * Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
   /**
@@ -337,8 +332,8 @@ export function compileSauceProgram(
   const resolved = requireChain(chain);
   const { args, stops, ...given } = options;
   const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const taken = Object.keys(bound?.constants ?? {}).find((name) =>
-    Object.hasOwn(given.defines ?? {}, name),
+  const taken = (args === undefined ? [] : mainParams(source).map((param) => param.name)).find(
+    (name) => Object.hasOwn(given.defines ?? {}, name),
   );
   if (taken !== undefined) {
     throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
@@ -375,9 +370,6 @@ export function compileSauceProgram(
     chain: resolved,
     bytecode: program.compiled.bytecode[0]!,
     entryEncoding: program.entryEncoding,
-    ...(program.compiled.entrySchema === undefined
-      ? {}
-      : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     ...(program.derivedAccounts === undefined ? {} : { derivedAccounts: program.derivedAccounts }),
@@ -405,7 +397,7 @@ function compileForChain(
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
   readonly source: string;
-  readonly entryEncoding: "abi-v1" | "compact-v1";
+  readonly entryEncoding: "abi-v1";
   readonly manifest?: AccountManifest;
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   readonly derivedValues?: Readonly<Record<string, string>>;
@@ -565,7 +557,6 @@ function compileForChain(
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
       ambient: options.ambient,
-      compactArgs: options.compactArgs,
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call

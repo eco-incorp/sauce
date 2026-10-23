@@ -447,17 +447,14 @@ export class TestChain {
   /**
    * Sends `program` as a cook from `options.from`'s Pot, waits for it, and reports that transaction:
    * what `main` returned is the mined transaction's return data, read from the node's trace of it.
-   * Nothing but the gas is rehearsed first, so a cook valid only in the block it is mined in is sent.
+   * Uses the block's gas budget without rehearsing the program, so block-dependent cooks are sent.
    * Throws {@link CookReverted} when the mined transaction reverts, with its own revert data.
    */
   async run(program: ProgramInput, options: CookOptions = {}): Promise<CookResult> {
     const compiled = this.compile(program);
     const { owner, to, data, value } = await this.cookCall(compiled, options);
-    // What the cook uses in the pending block, the one it is mined in; when that estimate
-    // reverts, the block's whole limit, so the transaction itself decides, in its own block.
-    const gas = await this.client
-      .estimateGas({ account: owner.address, to, data, value, blockTag: "pending" })
-      .catch(async () => (await this.client.getBlock()).gasLimit);
+    // Estimation can choose a cheaper caught out-of-gas path instead of the program's intended path.
+    const gas = (await this.client.getBlock({ blockTag: "pending" })).gasLimit;
     const hash = await this.wallet(owner).sendTransaction({ to, data, value, gas });
     const receipt = await this.client.waitForTransactionReceipt({ hash });
     const trace = (onlyTopCall: boolean) =>

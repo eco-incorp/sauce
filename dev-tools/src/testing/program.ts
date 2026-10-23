@@ -88,6 +88,7 @@ function load(input: ProgramInput): { source: string; path: string | undefined }
 function valueOf(type: EntryType, returned: Returned): Value {
   switch (type.kind) {
     case "uint":
+    case "int":
       return BigInt(returned as string);
     case "array":
       return (returned as readonly Returned[]).map((element) => valueOf(type.of, element));

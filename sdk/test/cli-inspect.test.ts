@@ -561,14 +561,14 @@ describe("sauce verify", () => {
   });
 
   it("accepts a historical program only with its --pin", async () => {
-    // A different 435-byte program: the same length, one byte changed.
+    // An explicitly accepted alternative program with one byte changed.
     const program = hexToBytes(SETTLE_PROGRAM);
     program[200] = program[200]! ^ 0xff;
     const older = `${bytesToHex(program)}${SETTLE_VECTORS[0]!.args.slice(2)}` as Hex;
     const refused = await sauce("verify", older, "--json");
     expect(JSON.parse(refused.stdout)).toMatchObject({ valid: false, code: "PROGRAM_HASH" });
     const pinned = json(
-      await sauce("verify", older, "--pin", `${keccak256(program)}:435`, "--json"),
+      await sauce("verify", older, "--pin", `${keccak256(program)}:${program.length}`, "--json"),
     );
     expect(pinned).toMatchObject({ valid: true, programHash: keccak256(program) });
     expect((await sauce("verify", older, "--pin", "0x12")).stderr).toMatch(/is not <hash>:<bytes>/);
@@ -697,15 +697,14 @@ describe("decodeEntryArguments: encodeEntryArguments, inverted", () => {
   ];
   const values = [RECIPIENT, [1n, 2n ** 200n], "0xdeadbeef", "hello", { a: 9n, b: true }];
 
-  it("reads back exactly what was encoded, ABI-v1 and compact-v1", () => {
+  it("reads back exactly what was ABI-v1 encoded", () => {
     const abi = { entryEncoding: "abi-v1" as const, entryParams: params };
     expect(decodeEntryArguments(abi, encodeEntryArguments(abi, values))).toEqual(values);
     const compiled = compileSauceProgram(
       "base",
       "function main(who: Address, amounts: Uint256[], memo: bytes, label: string, pair: { a: Uint256, b: bool }) { require(pair.b); }",
-      { compactArgs: true },
     );
-    expect(compiled.entryEncoding).toBe("compact-v1");
+    expect(compiled.entryEncoding).toBe("abi-v1");
     expect(decodeEntryArguments(compiled, encodeEntryArguments(compiled, values))).toEqual(values);
   });
 

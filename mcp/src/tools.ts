@@ -207,10 +207,6 @@ export const PROGRAM = {
         "address as 0x hex, a Solana key in base58 (Solana programs), true or false. A define " +
         "replaces the program's module-level const of that name.",
     ),
-  compactArgs: z
-    .boolean()
-    .optional()
-    .describe("Encode main's arguments compact-v1 instead of ABI-v1 (default false)."),
 };
 
 /** `path`, beside an optional `source`: on a server over stdio, whose caller is its own user. */
@@ -581,7 +577,6 @@ function programWith(
       chain,
       defines,
       ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
-      compactArgs: args.compactArgs === true,
     },
     files,
   };
@@ -1637,7 +1632,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "namespaces, chainId and the @sauce/token functions all resolve against that chain. " +
         "Returns the bytecode (0x hex) and its size in bytes, " +
         "`entryParams` (main's runtime parameters, which sauce_tx's args fill) and how they are " +
-        "encoded (`entryEncoding`; with compactArgs, the compact-v1 `entrySchema`), the defines " +
+        "encoded (`entryEncoding`: ABI-v1), the defines " +
         "it was given, the compiler and the released engine it pairs with, and on Solana the " +
         "account `manifest` (the accounts a cook attaches, in order). A program that does not " +
         "compile is an error naming its line. Also `contracts`, each protocol contract it calls " +
@@ -1675,7 +1670,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         derivedValues: z
           .array(z.looseObject({ name: z.string(), type: z.string(), derive: z.string() }))
           .optional(),
-        entrySchema: z.string().nullable(),
         defines: z.unknown(),
         manifest: z.unknown().optional(),
       },
@@ -1755,7 +1749,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
               "chainId; one with a chainId compiles for that chain only.",
           ),
         target: z.enum(["evm"]).optional().describe("Always evm: actions run on EVM chains."),
-        compactArgs: PROGRAM.compactArgs,
         ...COOK,
       },
       output: {
@@ -1777,7 +1770,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         file: ACTIONS_FILE,
         text,
         ...(args.chain === undefined ? {} : { chain: String(args.chain) }),
-        compactArgs: args.compactArgs === true,
       };
       const report = await actionsCommand(input);
       const cook =

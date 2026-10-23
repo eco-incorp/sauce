@@ -98,7 +98,7 @@ export interface QuoteOptions {
   /**
    * The generation-3 quote service for `uniswapV3Swap` and `uniswapV4Swap`, which needs no tokens.
    * Use `v12QuoteRouterAddress()` from `@eco-incorp/sauce/deployments`.
-   * The generation-4 execution Router (`v12RouterAddress()`) has no `quote` method.
+   * The execution Router (`v12RouterAddress()`) has no `quote` method.
    */
   readonly router?: Address;
   /** The MaverickV2Quoter, for `maverickV2Swap`. */
@@ -155,10 +155,10 @@ type Shape = readonly string[];
 
 /** Return data is a single uint256. */
 const OUT_UINT256: Shape = ["Uint256"];
-/** Return data is a single dynamic uint256[] (or int256[] read as its two's-complement words). */
+/** Return data is a single dynamic uint256[]. */
 const OUT_UINT256_ARRAY: Shape = ["Uint256[]"];
 /** Ambient's `(int128 baseFlow, int128 quoteFlow, uint128 finalPrice)` — three static words. */
-const AMBIENT_OUTPUT: Shape = ["Uint256", "Uint256", "Uint256"];
+const AMBIENT_OUTPUT: Shape = ["Int256", "Int256", "Uint256"];
 
 /** `count` static 32-byte fields. */
 function words(count: number): Shape {
@@ -234,31 +234,19 @@ const arrayLast: Extract = (emit, decoded) => {
   return { stmts: [...decoded.stmts, ...arr.stmts], expr: `${arr.expr}[${arr.expr}.length - 1]` };
 };
 
-/**
- * Return is int256[] (e.g. BalancerV2 queryBatchSwap deltas). The entry at
- * `index` is known to be negative (tokens owed to the caller) — negate it to
- * recover the magnitude. Unary `-` is two's-complement negation, so it wraps
- * rather than tripping an overflow check the way a checked `0 - x` would.
- */
-
-/**
- * Pick the negative flow from Ambient's `(int128 baseFlow, int128 quoteFlow,
- * uint128 finalPrice)` return tuple and negate it. Branchless:
- *   sign(x) = x >> 255  (0 for non-negative, 1 for negative after sign-ext)
- *   result  = -(sign(base)*base + sign(quote)*quote)
- */
+/** Pick the negative flows (tokens leaving the pool), then return their unsigned magnitude. */
 const ambientFlow: Extract = (emit, decoded) => {
   const base = bindConst(emit, "qbase", `${decoded.expr}[0]`);
   const quote = bindConst(emit, "qquote", `${decoded.expr}[1]`);
   const sum = bindConst(
     emit,
     "qsum",
-    `(${base.expr} >> 255) * ${base.expr} + (${quote.expr} >> 255) * ${quote.expr}`,
+    `(${base.expr} < 0 ? ${base.expr} : Int256(0)) + (${quote.expr} < 0 ? ${quote.expr} : Int256(0))`,
   );
 
   return {
     stmts: [...decoded.stmts, ...base.stmts, ...quote.stmts, ...sum.stmts],
-    expr: `-${sum.expr}`,
+    expr: `Uint256(-${sum.expr})`,
   };
 };
 
@@ -877,7 +865,7 @@ function quoteThroughRouter(
   router: Address,
 ): QuoteCall {
   if (router.toLowerCase() === v12RouterAddress().toLowerCase()) {
-    throw new Error("Router generation 4 has no quote method; use v12QuoteRouterAddress()");
+    throw new Error("The execution Router has no quote method; use v12QuoteRouterAddress()");
   }
   const v4 = action.type === "uniswapV4Swap";
   const [c0, c1] =
@@ -925,7 +913,7 @@ function quoteThroughRouter(
     // SwapQuoteResult (amountIn, amountOut, sqrtPriceAfter, gasEstimate): the output is the second.
     decode: (result: Hex) => (returned(ROUTER_QUOTE, result)[0] as { amountOut: bigint }).amountOut,
     toSauce: asTupleFieldUint256("call", router, data, 4, 1),
-    toSauceDynamic: v4 ? (emit, amountExpr) => dynamic(emit, `-(${amountExpr})`) : dynamic,
+    toSauceDynamic: v4 ? (emit, amountExpr) => dynamic(emit, `-Int256(${amountExpr})`) : dynamic,
   };
 }
 

@@ -1,4 +1,4 @@
-import { v12RouterGeneration } from "@eco-incorp/sauce/deployments";
+import { v12RouterAddress } from "@eco-incorp/sauce/deployments";
 import { potRouterUpdate } from "@eco-incorp/sauce/evm/engine";
 import type { Address, PublicClient } from "viem";
 
@@ -8,9 +8,8 @@ export async function potRouter(client: PublicClient, pot: Address) {
   // which has no setRouter and keeps its Router for good.
   const update = await potRouterUpdate(client, pot);
   if (update === undefined) {
-    // The Pot runs its Kitchen's current Router. Its generation decides which pools' callbacks it
-    // answers: Synthra V3 and UnitFlow V3 swaps need generation 3.
-    return { current: true as const, routerGeneration: v12RouterGeneration() };
+    // The Pot runs its Kitchen's current Router. Compare release addresses, not a generation number.
+    return { current: true as const, router: v12RouterAddress() };
   }
 
   // Only the Pot's owner can send this; anyone else reverts with NotOwner(). Send it with the

@@ -16,7 +16,13 @@
  * NOT skippable for the opposite reason: its artifact is vendored in-repo.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { AccountRole, type Address, type Instruction } from "@solana/kit";
+import {
+  AccountRole,
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  type Address,
+  type Instruction,
+} from "@solana/kit";
 import {
   buildCloseCodeBufferInstruction,
   buildClosePotInstruction,
@@ -94,7 +100,7 @@ const reader = <T>(path: string | undefined): (() => T) => {
 /** Stand-in addresses — the drift under test is in the DATA, so the accounts only have to be valid. */
 const ADDR = (n: string): Address => `${n}${"1".repeat(43 - n.length)}` as Address;
 const KITCHEN = ADDR("K");
-const OWNER = ADDR("O");
+const OWNER = ADDR("A");
 const ENGINE = ADDR("E");
 const CODE_BUFFER = ADDR("B");
 const CODE = ADDR("C");
@@ -224,7 +230,11 @@ describeWire("released engine wire drift guard", () => {
 
 describeIdl("kitchen IDL drift guard", () => {
   const idl = reader<{
-    instructions: { name: string; discriminator: number[] }[];
+    instructions: {
+      name: string;
+      discriminator: number[];
+      args: { name: string; type: unknown }[];
+    }[];
     constants: { name: string; value: string }[];
     errors: { name: string; code: number }[];
   }>(IDL_JSON);
@@ -312,6 +322,32 @@ describeIdl("kitchen IDL drift guard", () => {
   it.each(Object.keys(BUILT))("%s emits the discriminator the IDL declares", (name) => {
     expect(emitted(BUILT[name]!)).toBe(discriminatorOf(name));
   });
+
+  it.each(["cook", "cook_from_account"])(
+    "%s carries salt, canonical bump, payload and fee cap",
+    async (name) => {
+      const [, bump] = await getProgramDerivedAddress({
+        programAddress: KITCHEN,
+        seeds: [new TextEncoder().encode(POT_SEED), getAddressEncoder().encode(OWNER), SALT],
+      });
+      const bytes = Uint8Array.from(BUILT[name]!.data!);
+      expect(bytes.slice(8, 40)).toEqual(SALT);
+      expect(bytes[40]).toBe(bump);
+      expect(bytes.slice(41)).toEqual(
+        name === "cook"
+          ? new Uint8Array([3, 0, 0, 0, 1, 2, 3, ...new Uint8Array(8)])
+          : new Uint8Array(9),
+      );
+      const args = idl().instructions.find((i) => i.name === name)!.args;
+      expect(args.map((arg) => arg.name)).toEqual([
+        "pot_salt",
+        "pot_bump",
+        name === "cook" ? "bytecode" : "pin",
+        "max_execution_fee",
+      ]);
+      expect(args[1]!.type).toBe("u8");
+    },
+  );
 
   /**
    * The direction the per-builder cases cannot cover: they prove every builder is right, not that

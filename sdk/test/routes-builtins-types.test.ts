@@ -31,7 +31,7 @@ Base(() => {
   require(held > 0n, "empty");
   log(held.toBytesBe(32n));
   const raw = evm.sload(0n);
-  const b = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+  const b = UniswapV3.Factory.getPool(USDC, WETH, 500n).gas(50000n).catch(() => { return 0n; });
   const x = chainId;
 }, OPTIONS);
 `;
@@ -73,18 +73,22 @@ Base(() => {
   const root: bigint = Math.sqrt(held);
   const fee: bigint = Math.mulDiv(held, 30n, 10000n);
   const sum: bigint = Math.addMod(held, fee, 7n) + Math.mulMod(held, fee, 7n);
-  const signed2: bigint = Math.sDiv(held, 2n) + Math.sMod(held, 3n) + Math.sShr(held, 1n);
-  const extended: bigint = Math.signExtend(held, 2n);
-  const order: bigint = Math.sLt(held, 0n) + Math.sGt(held, 0n) + Math.sLte(held, 0n) + Math.sGte(held, 0n);
+  const signedWord: Int256 = Int256.fromBits(held);
+  const signed2: Int256 = signedWord / 2n + signedWord % 3n + (signedWord >> 1n);
+  const extended: Int256 = Math.signExtend(held, 2n);
+  const order: boolean = signedWord < 0n || signedWord > 0n || signedWord <= 0n || signedWord >= 0n;
+  const unsigned: Uint256 = Uint256.fromBits(signedWord);
+  const converted: Int256 = Int256(held);
+  const positive: Uint256 = Uint256(converted);
 
   // abi
   const encoded = abi.encode(held, caller, input);
   const [amount, to] = abi.decode(encoded, ["Uint256", "Address"]);
 
   // evm
-  const reply = evm.call(to, 0n, encoded);
-  const read = evm.static(to, encoded);
-  evm.delegate(to, encoded);
+  const reply = evm.call(to, 0n, encoded, 50000n);
+  const read = evm.static(to, encoded, 50000n);
+  evm.delegate(to, encoded, 50000n).catch((error) => { log(error); });
   const slot: bigint = evm.sload(0n);
   evm.sstore(0n, slot + 1n);
   const seen: bigint = evm.tload(0n);
@@ -108,6 +112,8 @@ Base(() => {
   log(held.toBytesBe(32n), topic);
   log(input);
   const result = eval(input, held, 1n);
+  const nested = program((delta: Int256): Int256 => delta / 2n, signedWord, { target: "evm" });
+  const nestedResult = eval(nested.code.concat(nested.args));
   if (held == 0n) {
     revert();
   }
@@ -137,8 +143,8 @@ Base(() => {
   const negative: bigint = -held;
   return [chain, at, now, wei, value, gas, size, codeHash, contract, eoa, origin, recipient, seed,
     blockLimit, baseFee, gasPrice, previous, blob, blobFee, vault, bump, root, sum, signed2,
-    extended, order, amount, reply, read, seen, returned, result, call, word, fields, length, key,
-    owner, dataLen, same, xs, selector, negative];
+    extended, order, unsigned, converted, positive, amount, reply, read, seen, returned, result,
+    nestedResult, call, word, fields, length, key, owner, dataLen, same, xs, selector, negative];
 }, OPTIONS);
 `;
 

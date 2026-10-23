@@ -69,7 +69,6 @@ import * as routes from "../src/routes/index.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";
 import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
-import { encodeCompactArguments } from "../src/compact-arguments.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
@@ -400,7 +399,6 @@ describe("sauce compile", () => {
       payload: { size: ((out.bytecode as string).length - 2) / 2, argumentsSize: 0 },
       entryEncoding: "abi-v1",
       entryParams: [],
-      entrySchema: null,
       returnType: null,
       defines: [
         { name: "AMOUNT", value: "1000", source: "user", chain: "ethereum" },
@@ -1200,18 +1198,6 @@ describe("sauce tx", () => {
         { name: "amount", type: "Uint256" },
         { name: "alsoUsdc", type: "bool" },
       ]);
-      const compact = json(
-        await sauce(
-          "compile",
-          file("split.sauce.ts", SPLIT),
-          "--chain",
-          "base",
-          "--compact-args",
-          "--json",
-        ),
-      );
-      expect(compact.entryEncoding).toBe("compact-v1");
-      expect(compact.entrySchema).toMatch(/^0x94/);
     });
 
     it("appends the encoded values to the program the cook runs", async () => {
@@ -1233,19 +1219,6 @@ describe("sauce tx", () => {
         JSON.stringify([OWNER, [RECIPIENT, SECOND], "1000", true]),
       );
       expect(dataOf(await tx("--args-json", argsFile))).toBe(data);
-    });
-
-    it("encodes compact-v1 for a program compiled for it", async () => {
-      const data = dataOf(await tx("--compact-args", "--args", ...ARGS));
-      const program = compileSauceProgram("base", SPLIT, { compactArgs: true });
-      const cook = decodeFunctionData({ abi: v12Pot.abi, data });
-      const args = encodeCompactArguments(program.entrySchema!, [
-        OWNER,
-        [RECIPIENT, SECOND],
-        1000n,
-        true,
-      ]);
-      expect(cook.args[1]).toBe(`${bytesToHex(program.bytecode)}${bytesToHex(args).slice(2)}`);
     });
 
     it("names what is wrong with them, exiting 2", async () => {

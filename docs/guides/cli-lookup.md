@@ -253,8 +253,8 @@ and the program file it came from, and it names the engine, the program and `mai
 ```text
 $ sauce inspect 0x<calldata> --chain base --source pay.sauce.ts
 Pot.cook on engine 0x… (the released v12 engine …)
-  program: 314 bytes, keccak256 0x…
-    pay.sauce.ts's program, 250 bytes, then 64 of arguments
+  program: 287 bytes, keccak256 0x…
+    pay.sauce.ts's program, 223 bytes, then 64 of arguments
       to: Address = 0x2222222222222222222222222222222222222222
       amount: Uint256 = 1000000
 ```
@@ -295,7 +295,7 @@ sauce verify 0x<tx hash> --chain base
 Anything else is rejected, with a code and the reason, and the command exits 1:
 
 ```text
-rejected (PROGRAM_TRUNCATED): decodeSettleProgram: payload is 314 bytes, shorter than the 435-byte settle program
+rejected (PROGRAM_TRUNCATED): decodeSettleProgram: payload is 314 bytes, shorter than the 410-byte settle program
 ```
 
 [Verification](verification.md) says what a pass proves and what it does not.

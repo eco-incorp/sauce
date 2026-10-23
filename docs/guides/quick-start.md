@@ -107,7 +107,7 @@ sauce compile pay.sauce.ts --chain base
 It prints the compiled program, the **bytecode**, as one long line of hex:
 
 ```text
-0xa502013ad1514702000eb19000b6d00200fa01209554e102011a01209554010014833589fcd6edb6e08f4c…
+0xa502011fd1514702000eb19000b6d00200df01209554e10200ff01209554010014833589fcd6edb6…
 ```
 
 That is what runs on chain: there is no contract to write or deploy. A mistake in the file prints

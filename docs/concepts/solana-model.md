@@ -146,8 +146,9 @@ storage, and a transfer whose authority is a Pot fails for the missing signature
 
 A transaction has a budget of 1,400,000 **compute units**, Solana's measure of work, and every
 instruction spends from it, the engine's and each venue's. A cook that runs out fails whole.
-Every cook also asks the cluster for a larger heap frame, the working memory the engine needs;
-`sauce` and the client add that request, and a cook assembled by hand must too.
+When assembling a cook yourself, prepend `buildHeapFramePrepend()` from
+`@eco-incorp/sauce/svm` exactly once: it requests the required 262,144-byte heap frame.
+The command and high-level client include it automatically.
 
 Swaps are where the budget goes. A swap at a price on a concentrated-liquidity pool walks from one
 initialized tick to the next until its price reaches its limit or its input runs out, and the

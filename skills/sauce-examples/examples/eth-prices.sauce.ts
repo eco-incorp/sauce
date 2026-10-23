@@ -42,7 +42,7 @@ function main(amount: Uint256): {
   require(amount > 0, "amount is 0");
   const round = Chainlink.EthUsdFeed.latestRoundData();
   require(round.answer > 0, "no oracle price");
-  const oracle = round.answer / 100; // the feed's 8 decimals as USDC's 6
+  const oracle = Uint256(round.answer) / 100; // the feed's 8 decimals as USDC's 6
 
   const v3Fee500 = v3Price(UniswapV3.Factory.getPool(WETH, USDC, 500));
   const v3Fee3000 = v3Price(UniswapV3.Factory.getPool(WETH, USDC, 3000));

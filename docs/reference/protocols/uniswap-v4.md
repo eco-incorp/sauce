@@ -29,8 +29,9 @@ hooks)`. A pool can attach a hook contract that runs around swaps and liquidity 
 
 ## Pitfalls for a program
 
-- Exact input is a **negative** `amountSpecified` (`-amount`), the reverse of V3's pool.
-  `uniswapV4` takes a positive `amountIn` and passes `-amountIn` itself.
+- Exact input is a **negative** `amountSpecified`, the reverse of V3's pool. For raw calls use
+  `-Int256(amount)` when `amount` is unsigned; `uniswapV4` takes a positive `amountIn` and handles
+  the protocol's signed convention itself.
 - A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0`) unless you have
   reviewed the hook.
 - A protocol fee can apply on top of the LP fee; both are in the pool's state
@@ -78,7 +79,7 @@ not take before the price limit goes back to `recipient` too.
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
 - Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
-- From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, which unlocks the PoolManager, swaps, takes the output and settles the input from the Pot — no UniversalRouter and no approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first) with `fee`, `tickSpacing` and `hooks`; the function passes `-amountIn`, exact input, and returns the amount out. The `uniswapV4Swap` action is the same call
+- From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, with no UniversalRouter or approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first), with `fee`, `tickSpacing` and `hooks`. Pass positive `amountIn`; the helper handles the signed exact-input convention and returns output. The `uniswapV4Swap` action is the same call.
 - On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance
 
 ## Its names in a program

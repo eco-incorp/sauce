@@ -99,9 +99,8 @@ recipient, clean address words, and no trailing data. Some alternate encodings
 execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
-This surface verifies the pinned **ABI-v1** settlement artifact. Recompiling the
-settlement program with `compactArgs: true` changes that contract and is not accepted by the
-existing settlement decoder.
+This surface verifies the pinned **ABI-v1** settlement artifact. Historical compact-encoded
+payloads are not accepted by the settlement decoder. Compiler 2.6 produces ABI-v1 only.
 
 ### Inspection levels
 
@@ -167,21 +166,21 @@ program and reports the engine it names.
 program with a different length. Passing an empty list accepts no program; it
 does not fall back to the default pin.
 
-Three earlier builds of the settlement program can still be accepted, when you list them. Each is
-the same program from an earlier compiler or source; the last two predate the sweep following
-`SafeERC20`:
+Four earlier builds of the settlement program can still be accepted when you list them. The last
+two predate the sweep following `SafeERC20`:
 
-| Built by                                   | `bytes` | Published in    |
-| ------------------------------------------ | ------- | --------------- |
-| Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release      |
-| Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4 |
-| Compiler 2.2.0 and 2.2.1                   | 362     | 0.99.0 – 0.99.1 |
+| Built by                                   | `bytes` | Published in     |
+| ------------------------------------------ | ------- | ---------------- |
+| Compiler 2.4.0 and 2.5.0                   | 435     | 0.99.5 – 0.99.15 |
+| Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release       |
+| Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4  |
+| Compiler 2.2.0 and 2.2.1                   | 362     | 0.99.0 – 0.99.1  |
 
 Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
 editor shows on hover. The current pin is
-`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`, the program 0.99.5 and
-every later release produce. An explicit list replaces the default, so include the current pin
-alongside the historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
+`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`: the 410-byte program
+produced by compiler 2.6.0. An explicit list replaces the default, so include the current pin
+alongside any historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
 adds one.
 
 A compiler change can change program bytes without changing a line of the source. So an SDK or

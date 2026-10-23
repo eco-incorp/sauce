@@ -148,9 +148,10 @@ What `run` and `simulate` return on an EVM chain.
 
 `run` reports the transaction it mined: `returned` and a revert's reason come from the node's trace
 of that transaction, so a program that reads the block number or the time returns what it read in
-its own block. Only the gas is estimated first. A cook is sent even when that estimate reverts, and
-a reverted cook is mined like any other transaction: it moves nothing, but it takes a block and a
-nonce.
+its own block. It sends with the pending block's gas limit as its budget, without estimating gas
+or simulating the cook first. `gasUsed` is the gas actually consumed, not that budget; unused gas
+is not charged. A reverted cook is mined like any other transaction: it moves nothing, but it
+takes a block and a nonce. Use `simulate` separately when you want a result without sending.
 
 ### `fund` and the tokens it cannot write
 

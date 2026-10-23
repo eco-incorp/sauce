@@ -13,18 +13,20 @@ live are the [production checklist](../guides/production-checklist.md).
 
 ## What Sauce guarantees
 
-- **Every step or none.** A program runs inside one transaction. A failed `require`, a call that
-  fails, an overflow: any of them reverts the whole cook. Nothing moves, the Kitchen's fee is not
-  paid, and only the gas is spent. There is never a half-finished run to clean up.
-- **Only you can cook on your Pot.** Your Pot checks that each cook comes from its owner, and
-  refuses anyone else with the error `NotOwner()`. The owner is fixed when the Pot is created.
-  Anyone may deploy your Pot or send it tokens, and neither gives them any say over it.
+- **Uncaught failure undoes the cook.** A failed `require`, call or checked operation reverts the
+  whole transaction unless caught. On EVM, a multi-statement `try` rolls back its own work and runs
+  `catch`, preserving earlier work outside it. A single-call catch undoes only that call's effects.
+  Review recovery paths as carefully as success paths. Solana has no catch support.
+- **You authorize every cook on your private Pot.** `cook` requires its fixed owner as sender
+  (`NotOwner()` otherwise). New EVM Pots also accept `cookSigned`, so another account can submit
+  a cook with your signed authorization. Anyone may deploy your Pot or send it tokens; neither
+  gives them control. See [signed cooks](kitchen-pot-cook.md#signed-cooks).
 - **Nobody else can change your Pot.** Its code never changes once it is deployed: nothing upgrades
   it. The Kitchen's owner can set the fee, and the swap helper (the Router) that new Pots start on,
   and nothing else: not an existing Pot, not its owner, not what it holds. Only you can point your
   Pot at another Router.
 - **On Ethereum and Base, the engine runs only inside a Pot.** Called directly, it refuses, so a
-  program runs only on the Pot whose owner sent it. On Solana a program can also run on the engine
+  program runs only on a Pot with its owner's authorization. On Solana a program can also run on the engine
   with no Pot, holding only what its own transaction's signers give it.
 - **The compiler checks before anything runs.** Types, names and the shape of every call are
   checked when the program compiles, and a name the chain does not have fails the compile.
@@ -56,8 +58,9 @@ live are the [production checklist](../guides/production-checklist.md).
   the next call spends.
 - **That a recorded contract is there.** Sauce records where contracts are deployed; a record is
   not proof that code is at that address today. `sauce pot` reads whether the engine and the
-  Kitchen are deployed on a chain. In a program, a token write to an address with no code reverts,
-  and so does a call whose result the program reads, so a simulation shows the failure.
+  Kitchen are deployed on a chain. Checked token writes reject no-code targets, but a raw bound
+  call whose result is unread now skips decoding and output validation, so empty data can pass.
+  Use `ctx.isContract(address)` when code is required; a read result keeps its whole declared decode.
 
 ## Keys and wallets
 

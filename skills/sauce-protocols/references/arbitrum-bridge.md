@@ -29,7 +29,7 @@ function main(
   gasPriceBid: Uint256,
 ): bytes {
   const router = IL1GatewayRouter.at(routerAddress);
-  return router.outboundTransfer(token, recipient, amount, maxGas, gasPriceBid, 0x00);
+  return router.outboundTransfer(token, recipient, amount, maxGas, gasPriceBid, hex``);
 }
 ```
 
@@ -38,7 +38,7 @@ function main(
 - `amount`: Amount of tokens to deposit
 - `maxGas`: Maximum L2 gas for the deposit transaction (e.g. 300000). Excess is refunded
 - `gasPriceBid`: L2 gas price bid in wei. Use Arbitrum's `ArbGasInfo.getMinimumGasPrice()` or estimate
-- `_data`: Extra data, typically `0x00` for standard deposits. Used for custom gateway params
+- `_data`: Extra data, typically ` hex`` ` for standard deposits. Used for custom gateway params
 - Requires ERC-20 approval to the appropriate gateway (use `getGateway(token)` to find it)
 - Requires ETH as msg.value to cover L2 execution costs (`maxGas * gasPriceBid + maxSubmissionCost`)
 

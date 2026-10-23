@@ -98,12 +98,16 @@ When something fails, [Troubleshooting](docs/guides/troubleshooting.md) says wha
 and what to do. The [changelog](docs/changelog.md) records what each SDK release changed in
 SauceScript, the compiler and the engines.
 
+Upgrading an existing project? [Move from compiler 2.5 to 2.6](docs/guides/upgrading.md#moving-from-compiler-25-to-26)
+covers signed `Int256` values, ABI-only inputs, EVM atomic `try`/`catch`, and the engine/Kitchen
+pairing. The [language reference](docs/reference/saucescript.md) is the source for exact semantics.
+
 ## Three words you will see
 
 Sauce borrows its words from a kitchen. Your program is a recipe.
 
 - **Pot**: your own smart account on chain. It belongs to your wallet, holds the tokens your
-  programs spend, and makes every call they make. Only you can run programs on it.
+  programs spend, and makes every call they make. Every program needs your authorization.
 - **Cook**: the transaction that runs one program on your Pot. Every step happens, or none does.
 - **Kitchen**: the contract that makes Pots and charges a small flat fee for each cook.
 

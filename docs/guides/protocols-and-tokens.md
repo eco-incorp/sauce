@@ -392,22 +392,26 @@ carries its encoded `data`, `.toCall()` for `{ target, data, value }` and `.toSa
 same call as a program. Run one against a client you pass. The library embeds no RPC endpoint and
 reads no environment (only the `sauce` command has built-in public endpoints):
 
+For example, both clients below must be on Ethereum, where the registry records the QuoterV2 and
+SwapRouter02 deployments. The wallet must hold USDC and approve the router before calling this
+function.
+
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { Ethereum } from "@eco-incorp/sauce";
 import type { PublicClient, WalletClient } from "viem";
 
 export async function quoteAndSwap(publicClient: PublicClient, walletClient: WalletClient) {
-  const [amountOut] = await Base.UniswapV3.QuoterV2.quoteExactInputSingle({
-    tokenIn: Base.USDC.address,
-    tokenOut: Base.WETH.address,
+  const [amountOut] = await Ethereum.UniswapV3.QuoterV2.quoteExactInputSingle({
+    tokenIn: Ethereum.USDC.address,
+    tokenOut: Ethereum.WETH.address,
     amountIn: 1_000_000n,
     fee: 500,
     sqrtPriceLimitX96: 0n,
   }).read(publicClient);
 
-  const swap = Base.UniswapV3.SwapRouter02.exactInputSingle({
-    tokenIn: Base.USDC.address,
-    tokenOut: Base.WETH.address,
+  const swap = Ethereum.UniswapV3.SwapRouter02.exactInputSingle({
+    tokenIn: Ethereum.USDC.address,
+    tokenOut: Ethereum.WETH.address,
     fee: 500,
     recipient: walletClient.account!.address,
     amountIn: 1_000_000n,
@@ -431,7 +435,7 @@ export async function quoteAndSwap(publicClient: PublicClient, walletClient: Wal
 Each first checks that the client is on the call's chain, because the address is that chain's
 deployment. viem's actions load on the first such call, not when the call is built. The swap above
 also needs the router's allowance for `USDC` first: an interface bound to the token,
-`Base.Erc20.ERC20.at(Base.USDC.address).approve(router, amount)`, builds it, as do the
+`Ethereum.Erc20.ERC20.at(Ethereum.USDC.address).approve(router, amount)`, builds it, as do the
 [token builders](builders-and-actions.md).
 
 In TypeScript, `available` is a contract's `.available`, and whether the chain export has the

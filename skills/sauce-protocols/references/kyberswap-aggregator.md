@@ -50,7 +50,7 @@ function main(
       amount: amount,
       minReturnAmount: minReturnAmount,
       flags: 0,
-      permit: 0x00,
+      permit: hex``,
     },
     clientData: clientData,
   });
