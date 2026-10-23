@@ -614,7 +614,11 @@ function compileForChain(
       defines,
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
-      ambient: [...(options.ambient ?? []), CHAIN_MODULE, ...[...keys.values()].map(chainKeyModule)],
+      ambient: [
+        ...(options.ambient ?? []),
+        CHAIN_MODULE,
+        ...[...keys.values()].map(chainKeyModule),
+      ],
       packages: {
         [CHAIN_MODULE]: `${CHAIN_MODULE_ROOT}/${names.path}`,
         ...Object.fromEntries(

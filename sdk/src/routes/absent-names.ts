@@ -456,14 +456,7 @@ export function checkNames(
       }
       const namespace = namespaceOf(object, at);
       if (namespace !== undefined) {
-        return member(
-          target,
-          `${namespace.key}.${name}`,
-          chain,
-          namespace,
-          name,
-          role,
-        );
+        return member(target, `${namespace.key}.${name}`, chain, namespace, name, role);
       }
       const on = chainKeyOf(object, at);
       if (on !== undefined) {
@@ -492,7 +485,14 @@ export function checkNames(
       if (namespace === undefined) {
         fail(object, `\`${nameOf(head)}.${nameOf(middle)}\` is not a protocol on ${on.slug}.`);
       }
-      return member(target, `${nameOf(head)}.${namespace!.key}.${name}`, on, namespace!, name, role);
+      return member(
+        target,
+        `${nameOf(head)}.${namespace!.key}.${name}`,
+        on,
+        namespace!,
+        name,
+        role,
+      );
     }
 
     return undefined;
@@ -558,10 +558,18 @@ export function checkNames(
       const operator = prop<string>(target, "operator");
       const left = valueOf(prop(target, "left"), at);
       if (operator === "&&") {
-        return left === false ? false : left === true ? valueOf(prop(target, "right"), at) : undefined;
+        return left === false
+          ? false
+          : left === true
+            ? valueOf(prop(target, "right"), at)
+            : undefined;
       }
       if (operator === "||") {
-        return left === true ? true : left === false ? valueOf(prop(target, "right"), at) : undefined;
+        return left === true
+          ? true
+          : left === false
+            ? valueOf(prop(target, "right"), at)
+            : undefined;
       }
       return undefined;
     }

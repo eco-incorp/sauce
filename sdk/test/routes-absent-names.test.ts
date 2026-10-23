@@ -68,11 +68,26 @@ describe("a name the chain lacks is zero: one program, the venue only where the 
   });
 
   it.each([
-    ["if (X)", "if (PancakeswapV3.Factory) { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }"],
-    ["X != 0", "if (PancakeswapV3.Factory != 0) { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }"],
-    ["0 != X", "if (0 != PancakeswapV3.Factory) { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }"],
-    ["X == 0 else", "if (PancakeswapV3.Factory == 0) { } else { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }"],
-    ["!X else", "if (!PancakeswapV3.Factory) { } else { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }"],
+    [
+      "if (X)",
+      "if (PancakeswapV3.Factory) { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }",
+    ],
+    [
+      "X != 0",
+      "if (PancakeswapV3.Factory != 0) { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }",
+    ],
+    [
+      "0 != X",
+      "if (0 != PancakeswapV3.Factory) { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }",
+    ],
+    [
+      "X == 0 else",
+      "if (PancakeswapV3.Factory == 0) { } else { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }",
+    ],
+    [
+      "!X else",
+      "if (!PancakeswapV3.Factory) { } else { pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500); }",
+    ],
   ])("every test spelling decides it: %s", (_spelling, test) => {
     const body = `let pool = 0;\n${test}\nreturn pool;`;
     expect(build("optimism", body)).toBe(build("optimism", NOTHING));
@@ -90,10 +105,16 @@ describe("a name the chain lacks is zero: one program, the venue only where the 
       return pool;
     `;
     expect(build("base", ladder)).toBe(
-      build("base", "let pool = 0;\npool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);\nreturn pool;"),
+      build(
+        "base",
+        "let pool = 0;\npool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);\nreturn pool;",
+      ),
     );
     expect(build("optimism", ladder)).toBe(
-      build("optimism", "let pool = 0;\npool = UniswapV3.Factory.getPool(USDC, WETH, 500);\nreturn pool;"),
+      build(
+        "optimism",
+        "let pool = 0;\npool = UniswapV3.Factory.getPool(USDC, WETH, 500);\nreturn pool;",
+      ),
     );
   });
 
@@ -112,7 +133,10 @@ describe("a name the chain lacks is zero: one program, the venue only where the 
 
   it("?:, && and || decide the same way", () => {
     expect(
-      build("optimism", "return PancakeswapV3.Factory ? PancakeswapV3.Factory.getPool(USDC, WETH, 500) : 7;"),
+      build(
+        "optimism",
+        "return PancakeswapV3.Factory ? PancakeswapV3.Factory.getPool(USDC, WETH, 500) : 7;",
+      ),
     ).toBe(build("optimism", "return 7;"));
     expect(
       build(
@@ -128,7 +152,10 @@ describe("a name the chain lacks is zero: one program, the venue only where the 
     ).toBe(build("optimism", "return 1;"));
     // The value of `X || Y` is `X` where the chain has it, else `Y`.
     expect(
-      build("optimism", "const either: Address = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn either;"),
+      build(
+        "optimism",
+        "const either: Address = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn either;",
+      ),
     ).toBe(build("optimism", "const either: Address = UniswapV3.Factory;\nreturn either;"));
   });
 
@@ -144,13 +171,34 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
     ["a call", "return PancakeswapV3.Factory.getPool(USDC, WETH, 500);"],
     ["a value returned", "const f: Address = PancakeswapV3.Factory;\nreturn f;"],
     ["an argument", "USDC.approve(PancakeswapV3.Factory, 1);"],
-    ["the address a binding is given", "return UniswapV3.Factory.at(PancakeswapV3.Factory).getPool(USDC, WETH, 500);"],
-    ["a branch behind a value the program may change", "let has = PancakeswapV3.Factory != 0;\nif (has) { return PancakeswapV3.Factory.getPool(USDC, WETH, 500); }\nreturn 0;"],
-    ["the other arm of its test", "if (PancakeswapV3.Factory) { return 1; }\nreturn PancakeswapV3.Factory.getPool(USDC, WETH, 500);"],
-    ["the value of `X && …`, which is `X` where the chain lacks it", "const both = PancakeswapV3.Factory && UniswapV3.Factory;\nreturn both;"],
-    ["the value of `X || Y` where the chain lacks both", "const either: Address = Curve.ThreePool || PancakeswapV3.Factory;\nreturn either;"],
-    ["the value of `Y && X` given as a binding's address", "return UniswapV3.Factory.at(UniswapV3.Factory && PancakeswapV3.Factory).getPool(USDC, WETH, 500);"],
-    ["the value of `!Y || X` given as an argument", "USDC.approve(!UniswapV3.Factory || PancakeswapV3.Factory, 1);"],
+    [
+      "the address a binding is given",
+      "return UniswapV3.Factory.at(PancakeswapV3.Factory).getPool(USDC, WETH, 500);",
+    ],
+    [
+      "a branch behind a value the program may change",
+      "let has = PancakeswapV3.Factory != 0;\nif (has) { return PancakeswapV3.Factory.getPool(USDC, WETH, 500); }\nreturn 0;",
+    ],
+    [
+      "the other arm of its test",
+      "if (PancakeswapV3.Factory) { return 1; }\nreturn PancakeswapV3.Factory.getPool(USDC, WETH, 500);",
+    ],
+    [
+      "the value of `X && …`, which is `X` where the chain lacks it",
+      "const both = PancakeswapV3.Factory && UniswapV3.Factory;\nreturn both;",
+    ],
+    [
+      "the value of `X || Y` where the chain lacks both",
+      "const either: Address = Curve.ThreePool || PancakeswapV3.Factory;\nreturn either;",
+    ],
+    [
+      "the value of `Y && X` given as a binding's address",
+      "return UniswapV3.Factory.at(UniswapV3.Factory && PancakeswapV3.Factory).getPool(USDC, WETH, 500);",
+    ],
+    [
+      "the value of `!Y || X` given as an argument",
+      "USDC.approve(!UniswapV3.Factory || PancakeswapV3.Factory, 1);",
+    ],
   ])("%s", (_what, body) => {
     const message = refusal("optimism", `function main() {\n${body}\n}`);
     expect(message).toMatch(/`PancakeswapV3\.Factory` is not deployed on optimism/);
@@ -164,14 +212,18 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
       "return Token(USDT).balanceOf(pot);",
       "const t: Address = USDT; return t;",
     ]) {
-      expect(refusal("base", `function main() {\n${body}\n}`)).toMatch(/`USDT` is not a token on base/);
+      expect(refusal("base", `function main() {\n${body}\n}`)).toMatch(
+        /`USDT` is not a token on base/,
+      );
     }
   });
 
   it("a helper is checked as if it ran: a ruled-out branch's call does not excuse it", () => {
     const source = `function quote(): Uint256 { return PancakeswapV3.Factory.getPool(USDC, WETH, 500); }
 function main(): Uint256 { if (PancakeswapV3.Factory) { return quote(); } return 0; }`;
-    expect(refusal("optimism", source)).toMatch(/`PancakeswapV3\.Factory` is not deployed on optimism/);
+    expect(refusal("optimism", source)).toMatch(
+      /`PancakeswapV3\.Factory` is not deployed on optimism/,
+    );
     expect(() => hex("base", source)).not.toThrow();
   });
 
@@ -185,7 +237,10 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     expect(refusal("linea", namespace)).toMatch(/`UniswapV3\.Factory` is not deployed on linea/);
     // In its own function the parameter is the program's.
     expect(() =>
-      hex("base", "function helper(USDT: Address): Address { return USDT; }\nfunction main(a: Address): Address { return helper(a); }"),
+      hex(
+        "base",
+        "function helper(USDT: Address): Address { return USDT; }\nfunction main(a: Address): Address { return helper(a); }",
+      ),
     ).not.toThrow();
     expect(build("base", "const USDT = 5;\nreturn USDT;")).toBe(build("base", "return 5;"));
   });
@@ -226,12 +281,25 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
         "base",
         "function main(flag: Uint256): Address { if (flag == 1) { const USDT = 1; return USDT; } return 0; }",
       ),
-    ).toBe(hex("base", "function main(flag: Uint256): Address { if (flag == 1) { return 1; } return 0; }"));
+    ).toBe(
+      hex(
+        "base",
+        "function main(flag: Uint256): Address { if (flag == 1) { return 1; } return 0; }",
+      ),
+    );
     expect(() =>
-      hex("base", "function main(): Uint256 { let s = 0; for (const USDT of [1, 2]) { s = s + USDT; } return s; }"),
+      hex(
+        "base",
+        "function main(): Uint256 { let s = 0; for (const USDT of [1, 2]) { s = s + USDT; } return s; }",
+      ),
     ).not.toThrow();
     // A function's own `const`, before the use, holds for the rest of the function, past a block.
-    expect(build("base", "const USDT = 5;\nif (USDT == 5) { const x = 1; require(x != 0); }\nreturn USDT;")).toBe(
+    expect(
+      build(
+        "base",
+        "const USDT = 5;\nif (USDT == 5) { const x = 1; require(x != 0); }\nreturn USDT;",
+      ),
+    ).toBe(
       build("base", "const USDT = 5;\nif (USDT == 5) { const x = 1; require(x != 0); }\nreturn 5;"),
     );
   });
@@ -252,7 +320,9 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
       /`PancakeswapV3\.Factory` is not deployed on optimism/,
     );
     // The same module on a chain that has the names compiles.
-    expect(() => hex("ethereum", main, { resolve: resolve({ "helper.js": helper }) })).not.toThrow();
+    expect(() =>
+      hex("ethereum", main, { resolve: resolve({ "helper.js": helper }) }),
+    ).not.toThrow();
   });
 
   it("the chain's names are never imported under a name of the program's own", () => {
@@ -262,13 +332,18 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
       ["/@eco-incorp/sauce/chain/base.js", "USDT"],
     ] as const) {
       expect(
-        refusal("base", `import { ${name} as missing } from "${specifier}";\nfunction main(): Address { return missing; }`),
+        refusal(
+          "base",
+          `import { ${name} as missing } from "${specifier}";\nfunction main(): Address { return missing; }`,
+        ),
       ).toMatch(/is the chain's names, which a program reads with no import/);
     }
   });
 
   it("require(X != 0) on a chain without X fails whatever the program does, and is refused", () => {
-    expect(refusal("optimism", "function main() {\nrequire(PancakeswapV3.Factory != 0);\n}")).toMatch(
+    expect(
+      refusal("optimism", "function main() {\nrequire(PancakeswapV3.Factory != 0);\n}"),
+    ).toMatch(
       /fails on optimism whatever the program does: `PancakeswapV3\.Factory` is not deployed on optimism/,
     );
     expect(() => build("base", "require(PancakeswapV3.Factory != 0);")).not.toThrow();
@@ -281,17 +356,25 @@ describe("what a chain can lack", () => {
     expect(build("ethereum", usdt)).toBe(build("ethereum", "return USDT.balanceOf(pot);"));
     expect(build("base", usdt)).toBe(build("base", "return 0;"));
     const tokens = { USDT: "0x2222222222222222222222222222222222222222" } as const;
-    expect(build("base", usdt, { tokens })).toBe(build("base", "return USDT.balanceOf(pot);", { tokens }));
+    expect(build("base", usdt, { tokens })).toBe(
+      build("base", "return USDT.balanceOf(pot);", { tokens }),
+    );
   });
 
   it("a family member and a chain-qualified contract", () => {
-    expect(build("base", "return Uniswap.UniversalRouter != 0;")).toBe(build("base", "return true;"));
-    // Named on another chain, the test is that chain's, whatever the program is compiled for.
-    expect(build("base", "return Optimism.PancakeswapV3.Factory != 0;")).toBe(build("base", "return false;"));
-    expect(build("optimism", "return Base.PancakeswapV3.Factory != 0;")).toBe(build("optimism", "return true;"));
-    expect(refusal("base", "function main(): Address { return Optimism.PancakeswapV3.Factory; }")).toMatch(
-      /`Optimism\.PancakeswapV3\.Factory` is not deployed on optimism/,
+    expect(build("base", "return Uniswap.UniversalRouter != 0;")).toBe(
+      build("base", "return true;"),
     );
+    // Named on another chain, the test is that chain's, whatever the program is compiled for.
+    expect(build("base", "return Optimism.PancakeswapV3.Factory != 0;")).toBe(
+      build("base", "return false;"),
+    );
+    expect(build("optimism", "return Base.PancakeswapV3.Factory != 0;")).toBe(
+      build("optimism", "return true;"),
+    );
+    expect(
+      refusal("base", "function main(): Address { return Optimism.PancakeswapV3.Factory; }"),
+    ).toMatch(/`Optimism\.PancakeswapV3\.Factory` is not deployed on optimism/);
   });
 
   it("a chain named outside the allowed scope is refused", () => {
@@ -299,11 +382,15 @@ describe("what a chain can lack", () => {
       refusal("base", "function main(): Address { return Optimism.UniswapV3.Factory; }", {
         accessors: { chainScope: ["base"] },
       }),
-    ).toMatch(/chain 'optimism' \(referenced as 'Optimism\.\.\.\.'\) is outside the allowed chainScope/);
+    ).toMatch(
+      /chain 'optimism' \(referenced as 'Optimism\.\.\.\.'\) is outside the allowed chainScope/,
+    );
   });
 
   it("on Solana no EVM contract is there, and a branch that tests one compiles to nothing", () => {
-    expect(build("solana", "return UniswapV3.Factory != 0;")).toBe(build("solana", "return false;"));
+    expect(build("solana", "return UniswapV3.Factory != 0;")).toBe(
+      build("solana", "return false;"),
+    );
     expect(
       hex(
         "solana",
@@ -314,9 +401,12 @@ describe("what a chain can lack", () => {
     expect(build("solana", "if (UniswapV3.Factory) { return evm.sload(0); }\nreturn 1;")).toBe(
       build("solana", "return 1;"),
     );
-    expect(refusal("solana", "function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPool(a, b, 500); }")).toMatch(
-      /`UniswapV3\.Factory` is not deployed on solana/,
-    );
+    expect(
+      refusal(
+        "solana",
+        "function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPool(a, b, 500); }",
+      ),
+    ).toMatch(/`UniswapV3\.Factory` is not deployed on solana/);
   });
 
   it("on Solana a token it lacks is the same: the Pot's balance of it, and Token(it), only under a test", () => {
@@ -327,9 +417,14 @@ describe("what a chain can lack", () => {
     );
     expect(Buffer.from(read.bytecode).toString("hex")).toBe(build("solana", "return 0;"));
     expect(read.derivedAccounts ?? {}).toEqual({});
-    expect(build("solana", "if (!WETH) { return 0; }\nreturn pot.WETH;")).toBe(build("solana", "return 0;"));
+    expect(build("solana", "if (!WETH) { return 0; }\nreturn pot.WETH;")).toBe(
+      build("solana", "return 0;"),
+    );
     expect(
-      hex("solana", "function main(to: Account): Uint256 { if (WETH) { Token(WETH).transfer(to, 1); } return 0; }"),
+      hex(
+        "solana",
+        "function main(to: Account): Uint256 { if (WETH) { Token(WETH).transfer(to, 1); } return 0; }",
+      ),
     ).toBe(hex("solana", "function main(to: Account): Uint256 { return 0; }"));
     // Anywhere else it is refused before anything compiles, at the read, as on an EVM chain: no
     // stand-in for the Pot reaches the compiler.
@@ -344,14 +439,20 @@ describe("what a chain can lack", () => {
             `\`${symbol}\` is not a token on ${chain}\\. [\\s\\S]*--> main\\.js:1:${source.indexOf(`.${symbol}`) + 2}`,
           ),
         );
-        expect(refusal(chain, `function main(): Uint256 { if (${holder}.${symbol} > 0) { return 1; } return 0; }`)).toMatch(
-          new RegExp(`\`${symbol}\` is not a token on ${chain}\\.`),
-        );
+        expect(
+          refusal(
+            chain,
+            `function main(): Uint256 { if (${holder}.${symbol} > 0) { return 1; } return 0; }`,
+          ),
+        ).toMatch(new RegExp(`\`${symbol}\` is not a token on ${chain}\\.`));
       }
     }
-    expect(refusal("solana", "function main(to: Account): Uint256 { Token(WETH).transfer(to, 1); return 0; }")).toMatch(
-      /`WETH` is not a token on solana\.[\s\S]*--> main\.js:1:45/,
-    );
+    expect(
+      refusal(
+        "solana",
+        "function main(to: Account): Uint256 { Token(WETH).transfer(to, 1); return 0; }",
+      ),
+    ).toMatch(/`WETH` is not a token on solana\.[\s\S]*--> main\.js:1:45/);
     // A name no chain registers keeps the Pot's own refusal.
     expect(refusal("solana", "function main(): Uint256 { return pot.USDCC; }")).toMatch(
       /`pot\.USDCC` on Solana: `USDCC` is not a token solana registers\. Did you mean `USDC`\?/,
@@ -359,12 +460,28 @@ describe("what a chain can lack", () => {
   });
 
   it.each([
-    ["a contract the protocol does not have", "UniswapV3.Factroy != 0", /`UniswapV3\.Factroy` is not a contract of UniswapV3.*Did you mean `Factory`/],
+    [
+      "a contract the protocol does not have",
+      "UniswapV3.Factroy != 0",
+      /`UniswapV3\.Factroy` is not a contract of UniswapV3.*Did you mean `Factory`/,
+    ],
     ["a symbol no chain registers", "USDX != 0", /`USDX` is not a declared variable/],
-    ["a namespace no registry protocol has", "Nope.Factory != 0", /`Nope` is not a declared variable/],
-    ["a protocol, which is no contract", "UniswapV3 != 0", /`UniswapV3` is a protocol, not a contract/],
+    [
+      "a namespace no registry protocol has",
+      "Nope.Factory != 0",
+      /`Nope` is not a declared variable/,
+    ],
+    [
+      "a protocol, which is no contract",
+      "UniswapV3 != 0",
+      /`UniswapV3` is a protocol, not a contract/,
+    ],
     ["an ambiguous family name", "Uniswap.Factory != 0", /ambiguous under Uniswap/],
-    ["an interface, which no chain deploys", "Erc4626.Vault != 0", /`Erc4626\.Vault` is an interface, with no address of its own/],
+    [
+      "an interface, which no chain deploys",
+      "Erc4626.Vault != 0",
+      /`Erc4626\.Vault` is an interface, with no address of its own/,
+    ],
   ])("refuses %s on every chain", (_what, test, error) => {
     for (const chain of ["base", "solana"]) {
       expect(refusal(chain, `function main(): bool {\nreturn ${test};\n}`)).toMatch(error);
@@ -374,14 +491,20 @@ describe("what a chain can lack", () => {
 
 describe("available(X) is gone", () => {
   it("calling it says to test the name itself", () => {
-    const message = refusal("base", "function main(): Uint256 { return available(UniswapV3.Factory) ? 1 : 2; }");
+    const message = refusal(
+      "base",
+      "function main(): Uint256 { return available(UniswapV3.Factory) ? 1 : 2; }",
+    );
     expect(message).toMatch(/`available\(X\)` is removed: test the name itself, `if \(X\)`/);
     expect(message).toMatch(/--> main\.js:1:\d+/);
   });
 
   it("a program that declares its own available keeps it", () => {
     const own = (name: string) =>
-      hex("base", `function ${name}(x: Uint256): Uint256 { return x + 1; }\nfunction main(): Uint256 { return ${name}(2); }`);
+      hex(
+        "base",
+        `function ${name}(x: Uint256): Uint256 { return x + 1; }\nfunction main(): Uint256 { return ${name}(2); }`,
+      );
     expect(own("available")).toBe(own("plus"));
   });
 });
@@ -410,8 +533,7 @@ const BEFORE: readonly { chain: string; available: string; bytecode: string }[] 
     chain: "solana",
     available:
       "function main(a: Address, b: Address): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Factory.getPool(a, b, 500); } return 0; }",
-    bytecode:
-      "a5020068d1514702000eb19000b6d002002801209554e002004801209554e0010001208ae1d18900",
+    bytecode: "a5020068d1514702000eb19000b6d002002801209554e002004801209554e0010001208ae1d18900",
   },
   {
     chain: "base",
@@ -494,15 +616,13 @@ const BEFORE: readonly { chain: string; available: string; bytecode: string }[] 
     chain: "ethereum",
     available:
       "function main(): Uint256 { const both = available(USDT) && available(UniswapV3.Factory); return both ? 1 : 2; }",
-    bytecode:
-      "010101208ae1d1890520000000003100",
+    bytecode: "010101208ae1d1890520000000003100",
   },
   {
     chain: "base",
     available:
       "function main(): Uint256 { const both = available(USDT) && available(UniswapV3.Factory); return both ? 1 : 2; }",
-    bytecode:
-      "010201208ae1d1890520000000003100",
+    bytecode: "010201208ae1d1890520000000003100",
   },
   {
     chain: "ethereum",
@@ -515,29 +635,25 @@ const BEFORE: readonly { chain: string; available: string; bytecode: string }[] 
     chain: "base",
     available:
       "function main(): Uint256 { return available(USDT) ? USDT.balanceOf(ctx.self()) : 0; }",
-    bytecode:
-      "010001208ae1d1890520000000003100",
+    bytecode: "010001208ae1d1890520000000003100",
   },
   {
     chain: "base",
     available:
       "function main(): Uint256 { if (available(Linea.UniswapV3.Factory)) { return 1; } else { return 2; } }",
-    bytecode:
-      "010201208ae1d1890520000000003100",
+    bytecode: "010201208ae1d1890520000000003100",
   },
   {
     chain: "solana",
     available:
       "function main(): Uint256 { if (available(UniswapV3.Factory)) { return evm.sload(0); } return 1; }",
-    bytecode:
-      "010101208ae1d18900",
+    bytecode: "010101208ae1d18900",
   },
   {
     chain: "base",
     available:
       "function main(): Uint256 { if (available(UniswapV3.Factory)) { return evm.sload(0); } return 1; }",
-    bytecode:
-      "01008101208ae1d1890520000000003100",
+    bytecode: "01008101208ae1d1890520000000003100",
   },
 ];
 
@@ -554,7 +670,14 @@ describe("a test of the name compiles to the bytes available(X) did", () => {
       // A decision held as a value is a comparison: `USDT && …` is `USDT` where the chain lacks
       // it, a value a chain without it may not use.
       .filter(([spelling]) => spelling !== "if (X)" || !entry.available.includes("const both"))
-      .map(([spelling, spell]) => [`${entry.chain}, ${spelling}: ${spell(entry.available)}`, spell(entry.available), entry] as const),
+      .map(
+        ([spelling, spell]) =>
+          [
+            `${entry.chain}, ${spelling}: ${spell(entry.available)}`,
+            spell(entry.available),
+            entry,
+          ] as const,
+      ),
   );
   it.each(cases)("%s", (_name, source, { chain, bytecode }) => {
     expect(hex(chain, source)).toBe(bytecode);

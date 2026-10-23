@@ -140,7 +140,10 @@ function makeResolvePackage(
   packages: Readonly<Record<string, string>> | undefined,
 ): ResolvePackage {
   return (specifier, importer) =>
-    packages?.[specifier] ?? resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
+    packages?.[specifier] ??
+    resolveSdkPackage(specifier) ??
+    own?.(specifier, importer) ??
+    undefined;
 }
 
 /**

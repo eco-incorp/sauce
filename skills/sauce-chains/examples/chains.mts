@@ -112,7 +112,10 @@ quoted(
   refusal("base", "function main(to: Address, amount: Uint256) { USDT.transfer(to, amount); }"),
   "`USDT` is not a token on base.",
 );
-compile("base", "function main(to: Address, amount: Uint256) { if (USDT) { USDT.transfer(to, amount); } }");
+compile(
+  "base",
+  "function main(to: Address, amount: Uint256) { if (USDT) { USDT.transfer(to, amount); } }",
+);
 check(skill.includes("`if (USDT) { … }`"), "the skill says to test the name");
 quoted(
   refusal(
@@ -131,7 +134,10 @@ const tesla = (chain: string) =>
 check(tesla("ethereum").includes("TSLAx") && tesla("solana").includes("TSLAx"), "TSLAx");
 check(tesla("base").join() === "TSLAc,bTSLA", `Tesla on Base is TSLAc or bTSLA: ${tesla("base")}`);
 compile("ethereum", "function main(): Address { return TSLAx; }");
-quoted(refusal("base", "function main(): Address { return TSLAx; }"), "`TSLAx` is not a token on base.");
+quoted(
+  refusal("base", "function main(): Address { return TSLAx; }"),
+  "`TSLAx` is not a token on base.",
+);
 
 // Another chain's contract, by its name: its address there, as a value in a program for this one.
 const factoryOnBase = rows.find((row) => row.name === "UniswapV3.Factory")!.on.base;

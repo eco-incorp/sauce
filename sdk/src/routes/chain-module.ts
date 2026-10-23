@@ -42,7 +42,12 @@ import type { ContractDescriptor } from "../descriptors/types.js";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
-import { CHAIN_KEY_SET, chainSlugForKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
+import {
+  CHAIN_KEY_SET,
+  chainSlugForKey,
+  NAMESPACE_KEYS,
+  resolveNamespace,
+} from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
 import { resolveTokenMap } from "./token-registry.js";
 

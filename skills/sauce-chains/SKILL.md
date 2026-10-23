@@ -90,12 +90,12 @@ sauce compile: pay.sauce.ts does not compile for base
 compileSauceRoute: `USDT` is not a token on base. A token the chain lacks is zero there, and only a test of it may use it: `if (USDT) { … }` compiles the branch only where the chain has it. …
 ```
 
-| Refused                                   | Message                                                                     |
-| ----------------------------------------- | --------------------------------------------------------------------------- |
-| A token called on a chain without it      | `` `USDT` is not a token on base. ``                                        |
-| A contract the chain does not have        | `` `AerodromeSlipstream.CLFactory` is not deployed on ethereum. ``          |
-| A symbol the chain lacks, used as a value | `` `TSLAx` is not a token on base. `` (`return TSLAx;` compiled for Base)   |
-| A qualified token (`Base.USDC`)           | `` `Base.USDC` is not a protocol on base. ``                                |
+| Refused                                   | Message                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| A token called on a chain without it      | `` `USDT` is not a token on base. ``                                      |
+| A contract the chain does not have        | `` `AerodromeSlipstream.CLFactory` is not deployed on ethereum. ``        |
+| A symbol the chain lacks, used as a value | `` `TSLAx` is not a token on base. `` (`return TSLAx;` compiled for Base) |
+| A qualified token (`Base.USDC`)           | `` `Base.USDC` is not a protocol on base. ``                              |
 
 Then compile for a chain that has the name, test the name itself (`if (USDT) { … }`, whose branch
 is compiled only where the chain has it, `sauce-globals`), or, for a token the registry does not

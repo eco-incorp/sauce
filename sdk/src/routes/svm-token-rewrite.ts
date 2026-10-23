@@ -490,7 +490,9 @@ function collectTokenMethods(l: SvmLowering): void {
       // the EVM: compiled only where a test of it rules the read out, and refused anywhere else.
       if (l.isAbsentToken(name)) {
         if (l.isPot(object)) {
-          l.site(n, () => l.splices.push({ start: object.start, end: object.end, replacement: "ctx.self()" }));
+          l.site(n, () =>
+            l.splices.push({ start: object.start, end: object.end, replacement: "ctx.self()" }),
+          );
         }
         return;
       }

@@ -107,7 +107,10 @@ const refusal = (slug: string, body: string): string => {
 const call = "UniswapV3.Factory.getPool(USDC, WETH, 500)";
 for (const slug of ["linea", "solana"]) {
   check(
-    !rejects(slug, `function main(): Uint256 { if (UniswapV3.Factory) { return ${call}; } return 0; }`),
+    !rejects(
+      slug,
+      `function main(): Uint256 { if (UniswapV3.Factory) { return ${call}; } return 0; }`,
+    ),
     `if (UniswapV3.Factory) compiles on ${slug}, its branch left out`,
   );
   check(
@@ -130,28 +133,32 @@ check(
 );
 // A decision held in a variable is live code: the name in its branch is refused.
 check(
-  refusal("base", "function main() { let has = USDT != 0; if (has) { USDT.transfer(pot, 1); } }").includes(
-    "`USDT` is not a token on base.",
-  ),
+  refusal(
+    "base",
+    "function main() { let has = USDT != 0; if (has) { USDT.transfer(pot, 1); } }",
+  ).includes("`USDT` is not a token on base."),
   "a branch behind a variable is live",
 );
 check(
-  refusal("base", "function main(): Uint256 { if (Uniswapp.Factory) { return 1; } return 0; }").includes(
-    "`Uniswapp` is not a token or protocol on base.",
-  ),
+  refusal(
+    "base",
+    "function main(): Uint256 { if (Uniswapp.Factory) { return 1; } return 0; }",
+  ).includes("`Uniswapp` is not a token or protocol on base."),
   "a name no chain has is an error, even tested",
 );
 check(
-  refusal("base", "function main(): Uint256 { if (UniswapV3.Factroy) { return 1; } return 0; }").includes(
-    "`UniswapV3.Factroy` is not a contract of UniswapV3",
-  ),
+  refusal(
+    "base",
+    "function main(): Uint256 { if (UniswapV3.Factroy) { return 1; } return 0; }",
+  ).includes("`UniswapV3.Factroy` is not a contract of UniswapV3"),
   "a contract no chain has is an error, even tested",
 );
 // The removed call is refused, in the words that say to test the name.
 check(
-  refusal("base", "function main(): Uint256 { if (available(UniswapV3.Factory)) { return 1; } return 0; }").includes(
-    "`available(X)` is removed",
-  ),
+  refusal(
+    "base",
+    "function main(): Uint256 { if (available(UniswapV3.Factory)) { return 1; } return 0; }",
+  ).includes("`available(X)` is removed"),
   "there is no such call: a program tests the name itself",
 );
 // The Pot's own balance of a symbol, and the chain's id.

@@ -13,13 +13,13 @@ name. Where a name points on a given chain (its address, whether it exists there
 
 ## When to use
 
-| Task                                                         | Here | Elsewhere                                |
-| ------------------------------------------------------------ | ---- | ---------------------------------------- |
-| Find a token's or a stock's symbol; check a name exists      | yes  |                                          |
-| Move, approve or read a token; USDT                          | yes  | on Solana, its accounts: `sauce-solana`  |
-| Call a protocol contract; an alias; a name a chain may lack  | yes  | which protocol to use: `sauce-protocols` |
-| A name's address on one chain, or a name one chain lacks     |      | `sauce-chains`                           |
-| A swap                                                       |      | `sauce-swaps`                            |
+| Task                                                        | Here | Elsewhere                                |
+| ----------------------------------------------------------- | ---- | ---------------------------------------- |
+| Find a token's or a stock's symbol; check a name exists     | yes  |                                          |
+| Move, approve or read a token; USDT                         | yes  | on Solana, its accounts: `sauce-solana`  |
+| Call a protocol contract; an alias; a name a chain may lack | yes  | which protocol to use: `sauce-protocols` |
+| A name's address on one chain, or a name one chain lacks    |      | `sauce-chains`                           |
+| A swap                                                      |      | `sauce-swaps`                            |
 
 ## Core model
 

@@ -105,8 +105,13 @@ describe("protocol accessors: shape coverage (A-D)", () => {
 
   it("shape B: <Protocol>.<method> uses the protocol's single default contract", () => {
     const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
-    const { rewrote, source: out, contracts, defaultSites, accessorSites } =
-      rewriteProtocolAccessors(source, BASE);
+    const {
+      rewrote,
+      source: out,
+      contracts,
+      defaultSites,
+      accessorSites,
+    } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(true);
     expect(out).toBe(`function main() { AaveV3.Pool.getUserAccountData(ctx.self()); }`);
     expect(defaultSites).toBe(1);
@@ -130,10 +135,12 @@ describe("protocol accessors: shape coverage (A-D)", () => {
 
   it("shape D: <Chain>.<Protocol>.<method> reaches the NAMED chain's default contract", () => {
     const source = `function main() { Base.AaveV3.getUserAccountData(ctx.self()); }`;
-    const { rewrote, source: out, defaultSites, accessorSites } = rewriteProtocolAccessors(
-      source,
-      OPTIMISM,
-    );
+    const {
+      rewrote,
+      source: out,
+      defaultSites,
+      accessorSites,
+    } = rewriteProtocolAccessors(source, OPTIMISM);
     expect(rewrote).toBe(true);
     expect(out).toBe(`function main() { Base.AaveV3.Pool.getUserAccountData(ctx.self()); }`);
     expect(defaultSites).toBe(1);
@@ -415,7 +422,9 @@ describe("protocol accessors: fallback / named errors", () => {
     const source = `function main() { return Optimism.UniswapV3.Factory; }`;
     expect(() =>
       compileSauceProgram("base", source, { accessors: { chainScope: ["base"] } }),
-    ).toThrow(/chain 'optimism' \(referenced as 'Optimism\.\.\.\.'\) is outside the allowed chainScope/);
+    ).toThrow(
+      /chain 'optimism' \(referenced as 'Optimism\.\.\.\.'\) is outside the allowed chainScope/,
+    );
     expect(() => compileSauceProgram("base", source)).not.toThrow();
   });
 });
@@ -492,10 +501,12 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
 
   it("ISOLATION: a non-namespace member value (foo.bar) is left completely untouched", () => {
     const source = `function main() { let foo = 0; return foo.bar; }`;
-    const { rewrote, accessorSites, defaultSites, source: out } = rewriteProtocolAccessors(
-      source,
-      BASE,
-    );
+    const {
+      rewrote,
+      accessorSites,
+      defaultSites,
+      source: out,
+    } = rewriteProtocolAccessors(source, BASE);
     expect(accessorSites).toBe(0);
     expect(defaultSites).toBe(0);
     expect(rewrote).toBe(false);
