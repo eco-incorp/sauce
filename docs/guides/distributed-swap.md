@@ -104,7 +104,8 @@ every command below runs that file. Its code:
 //   maxAvgPrice: Uint256  the most the average may cost, in priceLimit's units; 0 turns it off
 //   recipient: Address    receives the SPCXc bought, and what is left of the budget
 //
-//   All of 1,000 USDC or nothing, at most 150 USDC a share and 149.25 on average:
+//   At most 150 USDC a share and 149.25 on average, and at least the 6.66666667 SPCXc all of
+//   1,000 USDC buys at 150 (a cheaper fill can leave some of the budget, sent to the recipient):
 //   sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> --fund USDC:1000 \
 //     --args 1000000000 1500000000000000000 666666667 1492500000000000000 <recipient>
 import { uniswapV3, uniswapV4 } from "@sauce/router";
@@ -349,9 +350,12 @@ its `minAvgPrice` runs the other way round, output per input, and is never a `ma
 **`minTokens`, consistent with `priceLimit`.** Every share costs `priceLimit` or less, so spending
 the whole budget buys at least `budget × 1e18 ÷ priceLimit`:
 
-- **To spend all of the budget or nothing**: `minTokens = budget × 1e18 ÷ priceLimit`, rounded up:
-  1,000 USDC at most 150 is `666666667` (6.66666667 SPCXc). When the pools cannot take all of it
-  within `priceLimit`, the cook reverts `bought below minTokens`.
+- **At least what the whole budget buys at `priceLimit`**:
+  `minTokens = budget × 1e18 ÷ priceLimit`, rounded up: 1,000 USDC at most 150 is `666666667`
+  (6.66666667 SPCXc). Fewer reverts the cook `bought below minTokens`. It is not all of the budget
+  or nothing: shares bought below `priceLimit` cost less, so a fill can reach `minTokens` with
+  budget left over, which goes to `recipient`. To take all of the budget or nothing, add
+  `require(unspent == 0, "budget not filled")` once `unspent` is known.
 - **To buy as much as fills within `priceLimit`**: `minTokens` is the least worth the gas, or `0`,
   and the rest of the budget goes to `recipient`.
 
@@ -377,8 +381,8 @@ The budget must be in the Pot before the program runs: send it there from any wa
    signing. Or print it unsigned with `sauce tx`, the same `--args` and `--owner <address>`, for any
    signer.
 
-Buying SPCXc with 1,000 USDC at most 150 each, all of it or nothing (prices change: take the
-reference from `sauce pools` when you run it):
+Buying SPCXc with 1,000 USDC at most 150 each, at least what all of it buys at 150 (prices change:
+take the reference from `sauce pools` when you run it):
 
 ```sh
 sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
@@ -461,8 +465,8 @@ differently gets its own `venue` value and branch in `trade`.
   more; move each by `√(1 − fee)`.
 - **`priceLimit` at or below the best price.** Nothing trades and the whole budget comes back to
   `recipient`, which is not a success: check `bought`.
-- **`minTokens` inconsistent with `priceLimit`**: to spend all or nothing it is
-  `budget × 1e18 ÷ priceLimit`, rounded up.
+- **`minTokens` inconsistent with `priceLimit`**: at least what the whole budget buys at the limit
+  is `budget × 1e18 ÷ priceLimit`, rounded up, and a cheaper fill still leaves budget unspent.
 - **`maxAvgPrice` set without a simulation.** Take it halfway from a simulated average to
   `priceLimit`.
 - **Sending the Pot's whole balance back.** Send only what is left of the budget.

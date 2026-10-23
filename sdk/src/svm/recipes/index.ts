@@ -200,8 +200,8 @@ ${Array.from({ length: escrowCount }, (_, i) => sweep(i)).join("\n")}
  * The account refs a generated program declares, in manifest order, for `escrowCount` escrows:
  * `tokenProgram0`, `tokenProgram1`, then per escrow `escrow_i` (source, writable), `mint_i`
  * (read for decimals), `dest_i` (recipient ATA, writable) — with the shared `owner` (signer) landing
- * right after escrow 0's group, which is simply the order `main` declares its params in. A caller's
- * `AccountResolution` must cover
+ * right after escrow 0's group: the order `svmSettleSource` declares `main`'s parameters in. A
+ * caller's `AccountResolution` must cover
  * exactly these; `sdk/test/svm-settle.compile.test.ts` pins this against a real compile for several
  * escrow counts so it can never drift from what the compiler actually emits.
  */

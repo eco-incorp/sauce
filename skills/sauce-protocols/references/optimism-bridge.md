@@ -71,6 +71,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 - L1 to L2 deposits finalize in ~2-5 minutes (after L1 inclusion + sequencer processing)
 - L2 to L1 withdrawals require 7-day challenge period (optimistic rollup security)
 - `_l2Token` must be the official bridged token representation on Optimism -- incorrect L2 token address will cause deposit to fail
-- Canonical bridge -- no third-party risk, secured by the Optimism rollup itself
+- Canonical bridge, secured by the Optimism rollup itself
 - L2StandardBridge is at a predefined address: `0x4200000000000000000000000000000000000010`
 - Audited

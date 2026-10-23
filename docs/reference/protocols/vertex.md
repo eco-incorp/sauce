@@ -35,7 +35,7 @@ On Arbitrum One, `Vertex` is a namespace: its contracts need no import.
 
 ```ts
 function main() {
-  // Arbitrum One's clearinghouse, `0x773bb71b0108b060b76746422ee810bfec9a963d`.
+  // Arbitrum One's clearinghouse, `0x773BB71B0108b060b76746422eE810Bfec9A963d`.
   require(Vertex.Clearinghouse != 0);
 }
 ```
@@ -44,8 +44,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../chains/arbitrum.md) | clearinghouse | `0x773bb71b0108b060b76746422ee810bfec9a963d` | `Vertex.Clearinghouse` |
-| [Arbitrum One](../chains/arbitrum.md) | endpoint | `0x73eab16c88b9f38d3f2661c9e5875ec0eeee2965` | `Vertex.Endpoint` |
+| [Arbitrum One](../chains/arbitrum.md) | clearinghouse | `0x773BB71B0108b060b76746422eE810Bfec9A963d` | `Vertex.Clearinghouse` |
+| [Arbitrum One](../chains/arbitrum.md) | endpoint | `0x73EAB16c88B9f38d3f2661C9e5875Ec0eEEE2965` | `Vertex.Endpoint` |
 
 ## ABI
 

@@ -95,15 +95,15 @@ address.
 | [Trader Joe](../protocols/trader-joe.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory` |
 | [Trader Joe](../protocols/trader-joe.md) | lbRouter | `0x18556DA13313f3532c54711497A8FedAC273220E` | `TraderJoe.LBRouter` |
 | [Uniswap V2](../protocols/uniswap-v2.md) | factory | `0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C` | `UniswapV2.Factory` |
-| [Uniswap V2](../protocols/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |
+| [Uniswap V2](../protocols/uniswap-v2.md) | router | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | `UniswapV2.Router` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD` | `UniswapV3.Factory` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0x655C406EBFa14EE2006250925e54ec43AD184f8B` | `UniswapV3.NonfungiblePositionManager` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | quoterV2 | `0xbe0F5544EC67e9B3b2D979aaA43f18Fd87E6257F` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | swapRouter02 | `0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE` | `UniswapV3.SwapRouter02` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x06380c0e0912312b5150364b9dc4542ba0dbbc85` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd` | `UniswapV4.PositionManager` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0xc3c9e198c735a4b97e3e683f391ccbdd60b69286` | `UniswapV4.StateView` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | universalRouter | `0x94b75331ae8d42c1b61065089b7d48fe14aa73b7` | `UniswapV4.UniversalRouter` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x06380C0e0912312B5150364B9DC4542BA0DbBc85` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0xB74b1F14d2754AcfcbBe1a221023a5cf50Ab8ACD` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0xc3c9e198C735a4b97e3e683f391cCBDD60B69286` | `UniswapV4.StateView` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | universalRouter | `0x94b75331AE8d42C1b61065089B7d48FE14aA73b7` | `UniswapV4.UniversalRouter` |
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0x54a8e5f9c4CbA08F9943965859F6c34eAF03E26c` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x0e082F06FF657D94310cB8cE8B0D9a04541d8052` | `Wormhole.TokenBridge` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |

@@ -2,7 +2,7 @@
 
 # Moonwell (`moonwell`)
 
-Leading lending protocol on Base. Compound V2 fork with governance and safety module features.
+Lending protocol on Base. Compound V2 fork with governance and safety module features.
 
 | Fact | Value |
 | --- | --- |

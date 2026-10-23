@@ -26,7 +26,7 @@ Official Linea zkEVM bridge via L1MessageService. Deposits ETH from Ethereum to 
 - zkEVM architecture -- finality with ZK proofs (typically 8-32 hours for proof generation)
 - L2 to L1 withdrawals also require ZK proof finalization
 - For ERC-20 bridging, use the Linea Token Bridge contracts (separate from the message service)
-- Canonical bridge -- no third-party risk, secured by Linea's ZK proving system (Consensys)
+- Canonical bridge, secured by Linea's ZK proving system (Consensys)
 - Audited
 
 ## Its names in a program

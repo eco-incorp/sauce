@@ -34,7 +34,7 @@ export const deployments: ChainDeployment[] = [
     addresses: {
       clFactory: "0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03",
       nonfungiblePositionManager: "0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473",
-      metarouter: "0x7275FA44c67BbA8d921422e600B4ed396209c886",
+      metarouter: "0x7275fA44c67bba8D921422e600b4Ed396209C886",
     },
   },
 ];

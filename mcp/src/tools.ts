@@ -187,9 +187,10 @@ export const PROGRAM = {
     .optional()
     .describe(
       "Other files the program imports by relative path, as path → text, each path from the " +
-        "directory of `file` (lib/math.sauce.ts). The server reads nothing from its own disk, " +
-        "but serves what the SDK ships without being passed: @sauce/token, @sauce/router, " +
-        "./artifacts/IERC20.json, ./artifacts/ISauceRouter.json and ./protocols/<slug>/<Export>.json.",
+        "directory of `file` (lib/math.sauce.ts for ./lib/math.sauce.ts), inside which every " +
+        "import stays. The server reads nothing from its own disk, but serves what the SDK ships " +
+        "without being passed: @sauce/token, @sauce/router, ./artifacts/IERC20.json, " +
+        "./artifacts/ISauceRouter.json and ./protocols/<slug>/<Export>.json.",
     ),
   chain: chainRef
     .optional()

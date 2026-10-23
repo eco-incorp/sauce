@@ -17,7 +17,12 @@ says what changed and why, and gives the `sauce` command that runs it.
 
 Every program here runs, not only compiles, before the package ships: through `sauce simulate`
 and `sauce run` on Ethereum's state at a fixed block, against the protocols' deployed contracts,
-with each result held to the protocol's own quotes and accounts.
+with the tokens it spends already in the Pot and each result held to the protocol's own quotes
+and accounts. The Uniswap flash swap is an arbitrage, so it runs there only after another trade
+has moved one of its two pools: with its header's example on a block where the pools agree, the
+cycle loses both fees and the whole transaction reverts, moving nothing. DAI is not one of the
+`sauce` command's token symbols on Ethereum, so `--fund` and `--assume-balance` take it by its
+address, which `sauce globals --chain ethereum --protocol Maker` gives.
 
 A flash loan changes most. A lender pays first and then calls its borrower back to be repaid,
 Uniswap's pool through `uniswapV3FlashCallback` and Aave's Pool through `executeOperation`, and
@@ -36,9 +41,9 @@ not ship with.
 
 | Example | Ported from | Solidity lines (code) | Sauce lines (code) |
 | --- | --- | ---: | ---: |
-| [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 128 (84) |
-| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 74 (30) |
-| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 167 (121) |
+| [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 130 (84) |
+| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 77 (30) |
+| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 169 (121) |
 | [Aave V3: credit delegation](#aave-v3-credit-delegation) | [aave/code-examples-protocol, `MyV2CreditDelegation.sol`](https://github.com/aave/code-examples-protocol/blob/c343d266d04f210e1de9a7f008fdbc8ad63e5c22/V2/Credit%20Delegation/MyV2CreditDelegation.sol) | 83 (33) | 81 (42) |
 | [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 203 (141) |
 | [Morpho Blue: the snippets](#morpho-blue-the-snippets) | [morpho-org/morpho-blue-snippets, `MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol) | 380 (219) | 256 (197) |
@@ -49,7 +54,7 @@ not ship with.
 
 ## Uniswap V3: the swap examples
 
-Ported from Uniswap/docs, [`content/examples/smart-contracts/SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol): 163 lines of Solidity, 80 of them code. In Sauce, `uniswap-v3-swap-examples.sauce.ts`: 128 lines, 84 of them code.
+Ported from Uniswap/docs, [`content/examples/smart-contracts/SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol): 163 lines of Solidity, 80 of them code. In Sauce, `uniswap-v3-swap-examples.sauce.ts`: 130 lines, 84 of them code.
 
 ```ts
 // Uniswap's swap examples, ported: the four swaps of the `SwapExamples` contract in Uniswap's V3
@@ -67,7 +72,9 @@ Ported from Uniswap/docs, [`content/examples/smart-contracts/SwapExamples.sol`](
 // is a function here, with `msg.sender` as `recipient`. The original passes `amountOutMinimum: 0`
 // and says to choose a safer value in production: `limit` is that value. It also takes both hops
 // through 0.3% pools; DAI and USDC trade in the 0.01% pool now (the 0.3% one turns 1,000 DAI into
-// about 116 USDC), so the path takes that hop at 0.01%.
+// about 116 USDC), so the path takes that hop at 0.01%. DAI is not one of the `sauce` command's
+// token symbols on Ethereum: `--fund` and `--assume-balance` take it by its address, which
+// `sauce globals --chain ethereum --protocol Maker` prints as `Dai`.
 //
 //   sauce run uniswap-v3-swap-examples.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <multihop> <exactOutput> <amount> <limit> <recipient>
@@ -184,7 +191,7 @@ function main(
 
 ## Uniswap V3: a flash, as a flash swap
 
-Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 74 lines, 30 of them code.
+Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 77 lines, 30 of them code.
 
 ```ts
 // Uniswap's flash example, ported: `PairFlash` borrows from one Uniswap V3 pool, trades the loan
@@ -219,7 +226,10 @@ Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://g
 //   payer: Address        who receives the profit, in `tokenIn`
 //
 // On Ethereum, 1 WETH's worth of USDC borrowed from the 0.05% pool and sold back for WETH in the
-// 0.3% pool:
+// 0.3% pool. It is an arbitrage, as PairFlash's is: it pays only while the 0.3% pool gives more
+// than 1 WETH for that USDC, after another trade has moved one pool's price. Where the two pools
+// agree, the cycle loses both fees and the whole transaction reverts, moving nothing; simulate it
+// first:
 //
 //   sauce run uniswap-v3-pair-flash.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
@@ -265,7 +275,7 @@ function main(
 
 ## Uniswap V3: the liquidity examples
 
-Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 167 lines, 121 of them code.
+Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 169 lines, 121 of them code.
 
 ```ts
 // Uniswap's liquidity examples, ported: the `LiquidityExamples` contract of Uniswap's V3 guides
@@ -285,7 +295,9 @@ Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.s
 // rounded in. Its `decreaseLiquidityInHalf` sent the owner tokens the position had only credited,
 // not paid: here it collects them first. Position reads and the NFT's transfer are in
 // UniswapV3Positions.json beside this file, which the registry's ABI for the position manager
-// leaves out.
+// leaves out. DAI is not one of the `sauce` command's token symbols on Ethereum: `--fund` and
+// `--assume-balance` take it by its address, which `sauce globals --chain ethereum --protocol
+// Maker` prints as `Dai`.
 //
 //   sauce run uniswap-v3-liquidity-examples.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <step> <tokenId> <amount0> <amount1> <owner>

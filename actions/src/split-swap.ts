@@ -51,7 +51,7 @@ export interface SplitSwap {
   /**
    * The venues to split across. Each is an ordinary swap action without `amount`, `amountRef` or
    * `saveOutputAs` — the split decides its amount — and must have an on-chain quote with a fixed
-   * amount offset (every venue but Uniswap V4, Balancer and Carbon). Each delivers to the Pot.
+   * amount offset (every venue but Balancer V2, Balancer V3 and Carbon). Each delivers to the Pot.
    */
   readonly candidates: readonly SwapAction[];
   /** The total input, a base-10 string divisible by `buckets`. */

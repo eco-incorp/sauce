@@ -1,6 +1,6 @@
 # Spark
 
-Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers competitive rates on DAI/USDS borrowing backed by the Maker protocol.
+Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers DAI/USDS borrowing backed by the Maker protocol.
 
 ## Category
 
@@ -101,7 +101,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 ## Notes
 
 - Same interface as Aave V3 (forked codebase) -- referralCode always 0
-- Competitive DAI/USDS borrow rates subsidized by MakerDAO/Sky
 - interestRateMode: 2 = variable (stable rate being phased out)
 - All supply/repay operations require ERC-20 approval to the Pool
 - Ethereum-only deployment. TVL: $5B+. Audited

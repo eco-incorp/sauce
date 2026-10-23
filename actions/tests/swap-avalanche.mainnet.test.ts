@@ -17,6 +17,8 @@ import type { TraderJoeLBSwapAction } from "../src/types.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
 import {
   actionProgram,
+  assertReverts,
+  assertSkips,
   balanceOf,
   call,
   compileSource,
@@ -41,6 +43,8 @@ const BALANCE = { [WAVAX]: { slot: 3n }, [USDC]: { slot: 9n } } as const;
 /** LB v2.2 WAVAX/USDC pairs from the LBFactory: bin step 10 (deep) and bin step 25 (one unit of Y). */
 const LB_DEEP = "0x864d4e5Ee7318e97483DB7EB0912E09F161516EA";
 const LB_THIN = "0xE52BeDE8CFd7C5C8894c8616E49Fb25811c97367";
+/** An address with no code. */
+const CODELESS = "0x00000000000000000000000000000000DeaDBeef";
 
 const ONE_AVAX = 10n ** 18n;
 const USDC_100 = 100_000_000n;
@@ -232,6 +236,21 @@ describe("@sauce/router on Avalanche state", { skip: skipReason(), timeout: 600_
     await fund(WAVAX, ONE_AVAX);
     assert.equal((await cookCall("traderJoeLB", lb(WAVAX, USDC, ONE_AVAX))).status, "success");
     assert.equal(await balanceOf(env, USDC, env.pot), out, "the same output as traderJoeLB");
+  });
+
+  it("tryTraderJoeLB skips a pair with no code, moving nothing; a contract that has code and is no pair still reverts", async () => {
+    await fund(WAVAX, ONE_AVAX);
+    // The Pot's and the address's WAVAX and USDC, which neither call may move.
+    const watch = [WAVAX, USDC].flatMap((t) => [
+      [t, env.pot] as const,
+      [t, CODELESS] as const,
+      [t, USDC] as const,
+    ]);
+    const args = values(lb(WAVAX, USDC, ONE_AVAX, { pool: CODELESS }));
+    await assertSkips(env, CHAIN, "tryTraderJoeLB", args, watch);
+    // The check is for code, not for a pair: USDC has code and answers no `getSwapOut`.
+    const notPair = values(lb(WAVAX, USDC, ONE_AVAX, { pool: USDC }));
+    await assertReverts(env, CHAIN, "tryTraderJoeLB", notPair, watch);
   });
 
   it("the action's quote of an input the pair cannot fully take is zero", async () => {

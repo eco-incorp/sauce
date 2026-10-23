@@ -127,15 +127,19 @@ it. (Through the Router, a price limit or a pool that runs out can leave part of
 it stays in the Pot.)
 
 The `try` forms are the one way to get a swap that may fail without reverting the program, and they
-lose nothing either: a `try` that cannot swap returns `0` having moved nothing, and the program
-goes on. A swap that ran returns at least 1, so `0` always means nothing moved. That holds three
-ways:
+lose nothing either: each skips — returns `0` having moved nothing, and the program goes on — in
+the cases below, and a swap that ran returns at least 1, so `0` always means nothing moved. Anything
+else reverts the program as the plain function does, among it arguments that contradict each other
+(the same token in and out on a pay-first venue, tokens other than the pair a DODO V2 or LB call
+names, a V2 fee of 100% or more). Every `try` form skips a pool, Vault or PoolManager with no code,
+and the rest holds three ways:
 
 - `tryUniswapV2`, `tryTraderJoeLB`, `tryDodoV2` and `tryWoofi` check, before anything moves, that
   the pool takes the whole input at the floor — `minOut`, and at least 1 — from the V2 reserves,
-  LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote` or WooPPV2's `query`. A pool with
-  no code, or whose view reverts, is skipped. Otherwise the swap runs uncaught, so a failure the
-  check did not foresee still reverts;
+  LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote` or WooPPV2's `query`. `tryDodoV2`
+  and `tryWoofi` also skip a contract whose view reverts; `tryUniswapV2` and `tryTraderJoeLB` read
+  the pair uncaught, so a contract that has code but is not a pair reverts the program. Otherwise
+  the swap runs uncaught, so a failure the check did not foresee still reverts;
 - `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero: the pool
   pulls the input and enforces the floor, at least 1, inside the call that is caught;
 - `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` catch the

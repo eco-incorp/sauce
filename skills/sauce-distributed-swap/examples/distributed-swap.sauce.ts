@@ -14,7 +14,8 @@
 //   maxAvgPrice: Uint256  the most the average may cost, in priceLimit's units; 0 turns it off
 //   recipient: Address    receives the SPCXc bought, and what is left of the budget
 //
-//   All of 1,000 USDC or nothing, at most 150 USDC a share and 149.25 on average:
+//   At most 150 USDC a share and 149.25 on average, and at least the 6.66666667 SPCXc all of
+//   1,000 USDC buys at 150 (a cheaper fill can leave some of the budget, sent to the recipient):
 //   sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> --fund USDC:1000 \
 //     --args 1000000000 1500000000000000000 666666667 1492500000000000000 <recipient>
 import { uniswapV3, uniswapV4 } from "@sauce/router";

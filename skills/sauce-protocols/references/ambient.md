@@ -2,7 +2,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
-Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrated liquidity in one unified pool. Extremely gas-efficient architecture where all liquidity lives in one contract.
+Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrated liquidity in one unified pool. All liquidity lives in one contract.
 
 ## Category
 
@@ -59,7 +59,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 ## Notes
 
 - Single contract holds ALL liquidity (similar to Balancer V2 Vault and Uniswap V4 PoolManager)
-- Same contract address on both Ethereum and Scroll
+- The contract address differs on Ethereum and Scroll
 - `poolIdx` identifies the pool type: different pool indices have different fee rates and tick spacing
 - Common pool indices: `420` (standard on Ethereum), `36000` (stable pairs on Scroll)
 - Exact-input: `isBuy: true, inBaseQty: true` specifies base paid; `isBuy: false, inBaseQty: false` specifies quote paid

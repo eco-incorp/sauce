@@ -1,6 +1,6 @@
 # Aave V3
 
-Non-custodial liquidity protocol for earning interest on deposits and borrowing assets. The most widely deployed lending protocol in DeFi.
+Non-custodial liquidity protocol for earning interest on deposits and borrowing assets.
 
 ## When to use it
 

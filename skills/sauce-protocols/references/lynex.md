@@ -64,6 +64,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Solidly-fork routes contain `{from, to, stable}` tuples (NO `factory` field)
 - Two pool types: `stable=true` for correlated assets, `stable=false` for uncorrelated
 - ve(3,3) model: LYNX token holders vote-lock to direct gauge emissions
-- Linea-only deployment; the dominant DEX on Linea zkEVM
+- Linea-only deployment
 - LP tokens can be staked in gauges for LYNX emissions
 - Input token must be ERC20-approved to the Router

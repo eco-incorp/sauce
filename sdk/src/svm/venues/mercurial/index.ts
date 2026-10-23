@@ -257,7 +257,7 @@ export async function fetchMercurialPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like orca-whirlpool/raydium-clmm/saber-stableswap). */
+/** The Mercurial venue: a multi-token stableswap. */
 export const mercurial = {
   slug: SLUG,
   programId: MERCURIAL_PROGRAM_ID,

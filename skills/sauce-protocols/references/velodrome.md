@@ -2,7 +2,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
-The central trading and liquidity marketplace on Optimism. Solidly-fork with ve(3,3) tokenomics, supporting both stable (correlated assets) and volatile (uncorrelated assets) pool types.
+DEX on Optimism. Solidly-fork with ve(3,3) tokenomics, supporting both stable (correlated assets) and volatile (uncorrelated assets) pool types.
 
 ## Category
 
@@ -136,4 +136,3 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Routes include both `stable` flag and `factory` address per hop
 - Optimism-only deployment; Aerodrome is the Base equivalent (same interface)
 - LP tokens can be staked in gauges for VELO emissions
-- The default DEX on Optimism; preferred for stablecoin swaps (stable pools) and major volatile pairs

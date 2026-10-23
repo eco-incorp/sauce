@@ -5,7 +5,7 @@ export const protocolInfo: ProtocolInfo = {
   name: "MUX Protocol",
   slug: "mux-protocol",
   description:
-    "Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs for best execution with shared liquidity pool.",
+    "Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs with a shared liquidity pool.",
   website: "https://mux.network",
   github: "https://github.com/mux-world/mux-protocol",
   category: "perpetuals",

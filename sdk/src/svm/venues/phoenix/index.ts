@@ -524,7 +524,7 @@ function b58EncodeAddress(bytes: Uint8Array): Address {
   return address("1".repeat(leadingZeros) + out);
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
+/** The Phoenix venue: an on-chain central limit order book. */
 export const phoenix = {
   slug: SLUG,
   programId: PHOENIX_PROGRAM_ID,
