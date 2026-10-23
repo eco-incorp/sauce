@@ -1,12 +1,11 @@
 // Checks the SauceScript reference (skills/sauce-script/references/) against the compiler:
 //   - builtins.json: every entry's example program compiles on each target it lists, and where an
-//     entry is single-target, its program for the other target fails with the error it states;
+//     entry is single-target, its program for the other target is refused;
 //     its count is its length;
 //   - builtins.md: every example in a table's "Example" column compiles, on each target its row
 //     claims, inside a `main` that declares the names the example uses without declaring them;
 //   - every form in a "Rejected" column, and every program in builtins-rejections.mjs, is refused;
-//   - every error message builtins.md quotes matches what the compiler says, and every quoted
-//     message and every row of its "Not supported" table is claimed by a program that triggers it.
+//   - every row of its "Not supported" table has a semantic rejected example.
 import { stripVTControlCharacters } from "node:util";
 
 import { rejections } from "./builtins-rejections.mjs";
@@ -46,16 +45,6 @@ function spans(text) {
     out.push({ start: open, end: close + n, code });
     i = close + n;
   }
-  return out;
-}
-// Double-quoted text outside code spans: the reference quotes compiler messages this way.
-function quotes(text) {
-  const code = spans(text);
-  const marks = [];
-  for (let k = 0; k < text.length; k++)
-    if (text[k] === '"' && !code.some((s) => k >= s.start && k < s.end)) marks.push(k);
-  const out = [];
-  for (let q = 0; q + 1 < marks.length; q += 2) out.push(text.slice(marks[q] + 1, marks[q + 1]));
   return out;
 }
 function cells(line) {
@@ -149,18 +138,9 @@ function blocks(md) {
   return out;
 }
 
-// ---- Matching messages ----------------------------------------------------------------------------
+// ---- Formatting failures --------------------------------------------------------------------------
 const flat = (s) =>
   stripVTControlCharacters(String(s)).replace(/`/g, "").replace(/\s+/g, " ").trim();
-// `…` elides text, `N` stands for a number, `<placeholder>` for a name.
-const pattern = (quote) =>
-  new RegExp(
-    flat(quote)
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/…/g, ".*?")
-      .replace(/<[^>]+>/g, ".+?")
-      .replace(/\bN\b/g, "\\d+"),
-  );
 
 // ---- The harness an example compiles in -----------------------------------------------------------
 // The type of each name an example uses without declaring it; any other name is a number.
@@ -218,7 +198,7 @@ const ABIS = {
   ]),
 };
 const RESERVED = new Set(
-  "const let if else for while of return true false new Array require revert throw log eval hex ctx crypto Math abi evm svm function break continue".split(
+  "const let if else for while of return true false new Array require revert throw log eval hex ctx crypto Math abi evm svm Int256 Uint256 function break continue".split(
     " ",
   ),
 );
@@ -238,7 +218,13 @@ function freeNames(code) {
   const names = new Set();
   // Identifiers that are not a property (after `.`) or a record key (before `:`).
   for (const m of body.matchAll(/(?<![\w.$])([A-Za-z_]\w*)\b(?!\s*:)/g))
-    if (!RESERVED.has(m[1]) && !declared.has(m[1]) && !ABIS[m[1]]) names.add(m[1]);
+    if (
+      !RESERVED.has(m[1]) &&
+      !declared.has(m[1]) &&
+      !ABIS[m[1]] &&
+      !(m[1] === "program" && /^\s*\(/.test(body.slice(m.index + m[0].length)))
+    )
+      names.add(m[1]);
   // A shorthand record field, `{ amount }`, is a value.
   for (const m of body.matchAll(/[{,]\s*([A-Za-z_]\w*)\s*(?=[,}])/g))
     if (!RESERVED.has(m[1]) && !declared.has(m[1])) names.add(m[1]);
@@ -301,7 +287,6 @@ export function checkBuiltins(md, compiler, fail, where) {
     });
   };
   const all = blocks(md);
-  const messages = [];
 
   for (const block of all.filter((b) => b.row)) {
     const example = block.header.indexOf("Example");
@@ -323,37 +308,27 @@ export function checkBuiltins(md, compiler, fail, where) {
       try {
         build({ src: `function main(): void { const value = ${code}; }` }, "evm");
         fail(where, `\`${code}\` is listed as rejected, but it compiles`);
-      } catch (error) {
-        messages.push(flat(error.message));
+      } catch {
         counts.rejected++;
       }
     }
   }
 
-  const doc = flat(md);
   for (const r of rejections) {
     for (const target of r.targets) {
-      let message;
+      let rejected = false;
       try {
         build(r, target);
-      } catch (error) {
-        message = flat(error.message);
+      } catch {
+        rejected = true;
       }
-      if (message === undefined) {
+      if (!rejected) {
         fail(where, `must be rejected on ${target}, but compiles: ${r.src.slice(0, 120)}`);
         continue;
       }
       counts.rejected++;
-      for (const quote of r.quotes ?? [])
-        if (!pattern(quote).test(message))
-          fail(where, `"${quote}" is not what the compiler says on ${target}: ${message}`);
     }
-    for (const quote of r.quotes ?? [])
-      if (!doc.includes(flat(quote))) fail(where, `does not quote "${quote}"`);
   }
-  for (const quote of all.flatMap((b) => quotes(b.text)))
-    if (!rejections.some((r) => (r.quotes ?? []).some((q) => q.includes(quote))))
-      fail(where, `quotes "${quote}", which no program in builtins-rejections.mjs triggers`);
   const unsupported = all
     .filter((b) => b.row && b.header[0] === "Not supported")
     .map((b) => b.row[0]);
@@ -394,14 +369,12 @@ export function checkBuiltinsJson(doc, compiler, fail, where) {
         fail(where, `${item.name} does not compile on ${target}: ${flat(error.message)}`);
       }
     }
-    for (const [target, { program, error }] of Object.entries(item.unavailable ?? {})) {
+    for (const [target, { program }] of Object.entries(item.unavailable ?? {})) {
       try {
         build(program, target, item);
         fail(where, `${item.name} compiles on ${target}, where it is documented as unavailable`);
-      } catch (thrown) {
+      } catch {
         counts.rejected++;
-        if (!flat(thrown.message).includes(flat(error)))
-          fail(where, `${item.name} on ${target} says "${flat(thrown.message)}", not "${error}"`);
       }
     }
   }

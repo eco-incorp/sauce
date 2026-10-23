@@ -149,10 +149,9 @@ export interface EngineHarness {
   svm: LiteSVM;
   programId: Address;
   payer: KeyPairSigner;
-  /** The kitchen every execution goes through, and the Pot it signs for, with its bump. */
+  /** The kitchen every execution goes through, and the Pot it signs for. */
   kitchen: Address;
   pot: Address;
-  potBump: number;
   feeConfig: Address;
 }
 
@@ -212,12 +211,8 @@ export const startEngine = async (
   const { address: programData } = await deriveProgramDataPda(kitchen);
   grantUpgradeAuthority(svm, programData, payer.address);
 
-  const { address: pot, bump: potBump } = await derivePotPda(
-    kitchen,
-    payer.address,
-    HARNESS_POT_SALT,
-  );
-  const harness: EngineHarness = { svm, programId, payer, kitchen, pot, potBump, feeConfig };
+  const { address: pot } = await derivePotPda(kitchen, payer.address, HARNESS_POT_SALT);
+  const harness: EngineHarness = { svm, programId, payer, kitchen, pot, feeConfig };
 
   const admin = { kitchen, authority: payer.address, programData, feeConfig };
   // Priced, then freed. Initialization refuses zero, a later set to zero is allowed, and a zero fee
@@ -457,7 +452,6 @@ export const signExecuteTransaction = async (
       engineProgram: harness.programId,
       potSalt: HARNESS_POT_SALT,
       pot: harness.pot,
-      potBump: harness.potBump,
       feeConfig: harness.feeConfig,
       bytecode: output.bytecode,
       maxExecutionFee: 0n,
@@ -579,7 +573,6 @@ export const executeStaged = async (
       engineProgram: harness.programId,
       potSalt: HARNESS_POT_SALT,
       pot: harness.pot,
-      potBump: harness.potBump,
       feeConfig: harness.feeConfig,
       maxExecutionFee: 0n,
       tail: accounts,

@@ -17,37 +17,6 @@ Hub-and-spoke lending. Liquidity sits in a Hub; users supply, borrow and repay t
 | Namespace | `AaveV4` on ethereum, arc, base, avalanche |
 | Chains | ethereum, arc, base, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### supply
-
-```typescript
-import { AaveV4SpokeABI as ISpoke } from "./abis";
-
-function main(
-  spokeAddress: Address,
-  reserveId: Uint256,
-  amount: Uint256,
-  onBehalfOf: Address,
-): Uint256 {
-  const spoke = ISpoke.at(spokeAddress);
-  spoke.supply(reserveId, amount, onBehalfOf);
-  return 1;
-}
-```
-
-- `reserveId`: the Spoke's reserve id for the asset. Resolve it with `spoke.getReserveId(hub, hub.getAssetId(token))`
-- The underlying token must be `approve`d to the Spoke first
-
-- `onBehalfOf`: who holds the supplied position. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
-
-`withdraw`, `borrow` and `repay` take the same `(reserveId, amount, onBehalfOf)` arguments.
-
 ## Notes
 
 - Arc's market lists USDC, EURC, WETH and cirBTC. The Main Spoke carries all four; the Forex Spoke carries USDC and EURC
@@ -122,3 +91,9 @@ function main() {
 - `getReserveCount() view returns (uint256)`
 - `getUserSuppliedAssets(uint256 reserveId, address user) view returns (uint256)`
 - `getUserTotalDebt(uint256 reserveId, address user) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -114,7 +114,6 @@ describeSvm("binding a slot to the Pot: the owner check, and re-deriving the add
         engineProgram: harness.programId,
         potSalt: HARNESS_POT_SALT,
         pot: harness.pot,
-        potBump: harness.potBump,
         feeConfig: harness.feeConfig,
         bytecode,
         maxExecutionFee: 0n,

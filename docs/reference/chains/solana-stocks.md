@@ -1815,3 +1815,9 @@ what was sent: the recipient gets less.
 | `ZSx` | Zscaler xStock | Backed | `Xsb1a2VbaT6rLLq48qcgMQ1iPbs5fW2JZZURBxKfhY6` | `0x07e89f5a33cceff7535cd8e72010398e3e84255bef33d9e43183c0470311749b` | 8 | none |
 | `ZTSx` | Zoetis xStock | Backed | `XsRPgsEQ3dFR84DhMv18jtob5D77FivAsTTsv1jCYmv` | `0x07e86f593e200d916e42ec3fbde0bf01bc31b80b0b13d262bd0cd105fb429c21` | 8 | none |
 | `Zx` | Zillow xStock | Backed | `XsYo1hFTUk7pU4GdYxu67sEEHcw8CvdgkPzF9dRXqyh` | `0x07e8944a5ab0f84ab9f2a2907e402f6eeeea0af4c98ebd0200aedf96c24cb648` | 8 | none |
+
+## Next
+
+- [Solana](solana.md): the chain's other tokens and its contracts.
+- [Tokenized stocks](../tokens.md#tokenized-stocks): what a stock token is, and how its symbol is spelled.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

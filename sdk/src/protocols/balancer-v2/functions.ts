@@ -3,7 +3,7 @@ import { BalancerV2VaultABI as IVault } from "./abis";
 
 function main(vaultAddress: Address, poolId: Uint256, assetIn: Address, assetOut: Address, amount: Uint256, limit: Uint256, sender: Address, recipient: Address): Uint256 {
   const vault = IVault.at(vaultAddress);
-  return vault.swap({poolId: poolId, kind: 0, assetIn: assetIn, assetOut: assetOut, amount: amount, userData: ""}, {sender: sender, fromInternalBalance: false, recipient: recipient, toInternalBalance: false}, limit, 99999999999);
+  return vault.swap({poolId: poolId, kind: 0, assetIn: assetIn, assetOut: assetOut, amount: amount, userData: hex\`\`}, {sender: sender, fromInternalBalance: false, recipient: recipient, toInternalBalance: false}, limit, 99999999999);
 }
 `;
 

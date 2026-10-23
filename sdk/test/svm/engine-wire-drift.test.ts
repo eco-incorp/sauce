@@ -8,17 +8,21 @@
  * seed and bound in it is a hand copy. Here they are compared against the artifact itself.
  *
  * Discriminators are checked THROUGH THE BUILDERS rather than against an exported table: they are
- * the first eight bytes each builder emits, which is the thing that actually has to be right. The
- * Kitchen's are also held to Anchor's sighash of each instruction's name, which needs no artifact.
- * `KITCHEN_DISCRIMINATORS`, which reads an instruction back, is the table the builders write from.
+ * the first eight bytes each builder emits, which is the thing that actually has to be right, and
+ * it keeps the module's discriminator table private.
  *
  * Both suites skip without their artifact rather than fail, because the artifacts are release
  * downloads and not every checkout has run the sync. The engine-abi drift guard beside this one is
  * NOT skippable for the opposite reason: its artifact is vendored in-repo.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { AccountRole, type Address, type Instruction } from "@solana/kit";
+import {
+  AccountRole,
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  type Address,
+  type Instruction,
+} from "@solana/kit";
 import {
   buildCloseCodeBufferInstruction,
   buildClosePotInstruction,
@@ -96,7 +100,7 @@ const reader = <T>(path: string | undefined): (() => T) => {
 /** Stand-in addresses — the drift under test is in the DATA, so the accounts only have to be valid. */
 const ADDR = (n: string): Address => `${n}${"1".repeat(43 - n.length)}` as Address;
 const KITCHEN = ADDR("K");
-const OWNER = ADDR("O");
+const OWNER = ADDR("A");
 const ENGINE = ADDR("E");
 const CODE_BUFFER = ADDR("B");
 const CODE = ADDR("C");
@@ -110,85 +114,8 @@ const FEE_ADMIN = {
   feeConfig: FEE_CONFIG,
 } as const;
 const SALT = new Uint8Array(32).fill(7);
-const POT_BUMP = 253;
 const SHA = new Uint8Array(32).fill(9);
 const BUFFER_ACCOUNTS = { kitchen: KITCHEN, owner: OWNER, codeBuffer: CODE_BUFFER, code: CODE };
-
-/** Anchor's discriminator for an instruction named `name`: `sha256("global:<name>")`'s first eight bytes. */
-const sighash = (name: string): string =>
-  createHash("sha256").update(`global:${name}`).digest("hex").slice(0, 16);
-
-/** The bytes a builder puts on the wire, minus its arguments. */
-const emitted = (instruction: Instruction): string =>
-  hex(Uint8Array.from(instruction.data!).slice(0, 8));
-
-/** One instruction from each Kitchen builder, by the name the Kitchen's IDL gives it. */
-const BUILT: Record<string, Instruction> = {
-  create_pot: buildCreatePotInstruction({
-    kitchen: KITCHEN,
-    owner: OWNER,
-    engineProgram: ENGINE,
-    pot: POT,
-    salt: SALT,
-    space: 128,
-  }),
-  close_pot: buildClosePotInstruction({
-    kitchen: KITCHEN,
-    owner: OWNER,
-    engineProgram: ENGINE,
-    pot: POT,
-    salt: SALT,
-  }),
-  cook: buildCookInstruction({
-    kitchen: KITCHEN,
-    owner: OWNER,
-    engineProgram: ENGINE,
-    potSalt: SALT,
-    pot: POT,
-    potBump: POT_BUMP,
-    feeConfig: FEE_CONFIG,
-    bytecode: new Uint8Array([1, 2, 3]),
-    maxExecutionFee: 0n,
-  }),
-  cook_from_account: buildCookFromAccountInstruction({
-    kitchen: KITCHEN,
-    owner: OWNER,
-    engineProgram: ENGINE,
-    codeBuffer: CODE_BUFFER,
-    code: CODE,
-    potSalt: SALT,
-    pot: POT,
-    potBump: POT_BUMP,
-    feeConfig: FEE_CONFIG,
-    maxExecutionFee: 0n,
-  }),
-  create_code_buffer: buildCreateCodeBufferInstruction({
-    ...BUFFER_ACCOUNTS,
-    nonce: 0n,
-    capacity: 1024,
-  }),
-  grow_code_buffer: buildGrowCodeBufferInstruction(BUFFER_ACCOUNTS),
-  write_code_buffer: buildWriteCodeBufferInstruction({
-    ...BUFFER_ACCOUNTS,
-    offset: 0,
-    chunk: new Uint8Array([1]),
-  }),
-  finalize_code_buffer: buildFinalizeCodeBufferInstruction({
-    ...BUFFER_ACCOUNTS,
-    len: 3,
-    expectedSha256: SHA,
-  }),
-  close_code_buffer: buildCloseCodeBufferInstruction(BUFFER_ACCOUNTS),
-  initialize_execution_fee: buildInitializeExecutionFeeInstruction({
-    ...FEE_ADMIN,
-    initialFee: 25_000n,
-  }),
-  set_execution_fee: buildSetExecutionFeeInstruction({ ...FEE_ADMIN, fee: 0n }),
-  withdraw_execution_fees: buildWithdrawExecutionFeesInstruction({
-    ...FEE_ADMIN,
-    recipient: OWNER,
-  }),
-};
 
 /**
  * Assertions over the SDK's OWN constants and builders — no release artifact, so not gated. They
@@ -201,83 +128,6 @@ describe("kitchen constants and bounds (no artifact needed)", () => {
     expect(() =>
       buildCreateCodeBufferInstruction({ ...BUFFER_ACCOUNTS, nonce: 0n, capacity }),
     ).toThrow(/capacity must be an integer/);
-  });
-
-  // Every builder's first eight bytes are Anchor's sighash of its instruction's name, so a wrong
-  // digit in the table fails here, with no artifact. The two cooks keep their names but take the
-  // sighash of a `_v2` name: a cook in the layout before the Pot's bump starts with
-  // `sha256("global:cook")`, which no Kitchen instruction matches, so the Kitchen refuses it at
-  // dispatch rather than reading its bytes as the new arguments.
-  const SIGHASH_NAME: Readonly<Record<string, string>> = {
-    cook: "cook_v2",
-    cook_from_account: "cook_from_account_v2",
-  };
-  it.each(Object.keys(BUILT))("%s emits Anchor's sighash of its instruction's name", (name) => {
-    expect(emitted(BUILT[name]!)).toBe(sighash(SIGHASH_NAME[name] ?? name));
-  });
-
-  // A cook's arguments byte for byte: the discriminator, the Pot's salt, then its bump, then what
-  // each transport carries, then the signed fee cap.
-  it("a cook carries the Pot's bump right after its salt", () => {
-    const cook = buildCookInstruction({
-      kitchen: KITCHEN,
-      owner: OWNER,
-      engineProgram: ENGINE,
-      potSalt: SALT,
-      pot: POT,
-      potBump: POT_BUMP,
-      feeConfig: FEE_CONFIG,
-      bytecode: new Uint8Array([1, 2, 3]),
-      maxExecutionFee: 25_000n,
-    });
-    const staged = buildCookFromAccountInstruction({
-      kitchen: KITCHEN,
-      owner: OWNER,
-      engineProgram: ENGINE,
-      codeBuffer: CODE_BUFFER,
-      code: CODE,
-      potSalt: SALT,
-      pot: POT,
-      potBump: POT_BUMP,
-      feeConfig: FEE_CONFIG,
-      pin: SHA,
-      maxExecutionFee: 25_000n,
-    });
-
-    expect(hex(Uint8Array.from(cook.data!))).toBe(
-      [
-        "3339a809f0979a01", // sha256("global:cook_v2")[..8]
-        "07".repeat(32), // pot_salt
-        "fd", // pot_bump, 253
-        "03000000010203", // bytecode: a u32 length, then the bytes
-        "a861000000000000", // max_execution_fee, 25,000
-      ].join(""),
-    );
-    expect(hex(Uint8Array.from(staged.data!))).toBe(
-      [
-        "f118f7234c2ef0d1", // sha256("global:cook_from_account_v2")[..8]
-        "07".repeat(32), // pot_salt
-        "fd", // pot_bump
-        "01" + "09".repeat(32), // pin: Some, then the hash
-        "a861000000000000", // max_execution_fee
-      ].join(""),
-    );
-  });
-
-  it.each([-1, 256, 1.5])("refuses a pot bump of %s", (potBump) => {
-    expect(() =>
-      buildCookInstruction({
-        kitchen: KITCHEN,
-        owner: OWNER,
-        engineProgram: ENGINE,
-        potSalt: SALT,
-        pot: POT,
-        potBump,
-        feeConfig: FEE_CONFIG,
-        bytecode: new Uint8Array([1]),
-        maxExecutionFee: 0n,
-      }),
-    ).toThrow(/a pot bump must be an integer from 0 to 255/);
   });
 
   it("accepts the bounds themselves", () => {
@@ -378,14 +228,12 @@ describeWire("released engine wire drift guard", () => {
   });
 });
 
-type IdlType = string | { array: [string, number] } | { option: IdlType };
-
 describeIdl("kitchen IDL drift guard", () => {
   const idl = reader<{
     instructions: {
       name: string;
       discriminator: number[];
-      args: { name: string; type: IdlType }[];
+      args: { name: string; type: unknown }[];
     }[];
     constants: { name: string; value: string }[];
     errors: { name: string; code: number }[];
@@ -402,61 +250,104 @@ describeIdl("kitchen IDL drift guard", () => {
 
     return found.value;
   };
+  /** The bytes a builder puts on the wire, minus its arguments. */
+  const emitted = (instruction: Instruction): string =>
+    hex(Uint8Array.from(instruction.data!).slice(0, 8));
+
+  const BUILT: Record<string, Instruction> = {
+    create_pot: buildCreatePotInstruction({
+      kitchen: KITCHEN,
+      owner: OWNER,
+      engineProgram: ENGINE,
+      pot: POT,
+      salt: SALT,
+      space: 128,
+    }),
+    close_pot: buildClosePotInstruction({
+      kitchen: KITCHEN,
+      owner: OWNER,
+      engineProgram: ENGINE,
+      pot: POT,
+      salt: SALT,
+    }),
+    cook: buildCookInstruction({
+      kitchen: KITCHEN,
+      owner: OWNER,
+      engineProgram: ENGINE,
+      potSalt: SALT,
+      pot: POT,
+      feeConfig: FEE_CONFIG,
+      bytecode: new Uint8Array([1, 2, 3]),
+      maxExecutionFee: 0n,
+    }),
+    cook_from_account: buildCookFromAccountInstruction({
+      kitchen: KITCHEN,
+      owner: OWNER,
+      engineProgram: ENGINE,
+      codeBuffer: CODE_BUFFER,
+      code: CODE,
+      potSalt: SALT,
+      pot: POT,
+      feeConfig: FEE_CONFIG,
+      maxExecutionFee: 0n,
+    }),
+    create_code_buffer: buildCreateCodeBufferInstruction({
+      ...BUFFER_ACCOUNTS,
+      nonce: 0n,
+      capacity: 1024,
+    }),
+    grow_code_buffer: buildGrowCodeBufferInstruction(BUFFER_ACCOUNTS),
+    write_code_buffer: buildWriteCodeBufferInstruction({
+      ...BUFFER_ACCOUNTS,
+      offset: 0,
+      chunk: new Uint8Array([1]),
+    }),
+    finalize_code_buffer: buildFinalizeCodeBufferInstruction({
+      ...BUFFER_ACCOUNTS,
+      len: 3,
+      expectedSha256: SHA,
+    }),
+    close_code_buffer: buildCloseCodeBufferInstruction(BUFFER_ACCOUNTS),
+    initialize_execution_fee: buildInitializeExecutionFeeInstruction({
+      ...FEE_ADMIN,
+      initialFee: 25_000n,
+    }),
+    set_execution_fee: buildSetExecutionFeeInstruction({ ...FEE_ADMIN, fee: 0n }),
+    withdraw_execution_fees: buildWithdrawExecutionFeesInstruction({
+      ...FEE_ADMIN,
+      recipient: OWNER,
+    }),
+  };
+
   it.each(Object.keys(BUILT))("%s emits the discriminator the IDL declares", (name) => {
     expect(emitted(BUILT[name]!)).toBe(discriminatorOf(name));
   });
 
-  /**
-   * A builder's bytes past the discriminator, read by `name`'s arguments as the IDL declares them:
-   * each argument's own bytes as hex (a `bytes` argument's payload, an `Option`'s value or `null`).
-   * Throws if the bytes run out or any are left over, so an argument the SDK drops, adds or moves
-   * fails here rather than at the Kitchen.
-   */
-  const argumentsOf = (name: string, data: Uint8Array): Record<string, string | null> => {
-    let at = 8;
-    const take = (count: number): Uint8Array => {
-      if (at + count > data.length) throw new Error(`${name}'s arguments run past its data`);
-      at += count;
-
-      return data.slice(at - count, at);
-    };
-    const WIDTH: Record<string, number> = { u8: 1, u32: 4, u64: 8 };
-    const read = (type: IdlType): string | null => {
-      if (typeof type !== "string") {
-        if ("array" in type) return hex(take(type.array[1]));
-
-        return take(1)[0] === 0 ? null : read(type.option);
-      }
-      if (type === "bytes") return hex(take(new DataView(take(4).buffer).getUint32(0, true)));
-      if (WIDTH[type] === undefined) throw new Error(`no reader for the IDL type ${type}`);
-
-      return hex(take(WIDTH[type]));
-    };
-    const found = idl().instructions.find((i) => i.name === name);
-    if (found === undefined) throw new Error(`the kitchen IDL declares no instruction ${name}`);
-    const args = Object.fromEntries(found.args.map((arg) => [arg.name, read(arg.type)]));
-    if (at !== data.length)
-      throw new Error(`${data.length - at} bytes left past ${name}'s arguments`);
-
-    return args;
-  };
-
-  it("each cook carries the IDL's arguments, in its order and widths", () => {
-    expect(argumentsOf("cook", Uint8Array.from(BUILT.cook!.data!))).toEqual({
-      pot_salt: hex(SALT),
-      pot_bump: "fd",
-      bytecode: "010203",
-      max_execution_fee: "0000000000000000",
-    });
-    expect(
-      argumentsOf("cook_from_account", Uint8Array.from(BUILT.cook_from_account!.data!)),
-    ).toEqual({
-      pot_salt: hex(SALT),
-      pot_bump: "fd",
-      pin: null,
-      max_execution_fee: "0000000000000000",
-    });
-  });
+  it.each(["cook", "cook_from_account"])(
+    "%s carries salt, canonical bump, payload and fee cap",
+    async (name) => {
+      const [, bump] = await getProgramDerivedAddress({
+        programAddress: KITCHEN,
+        seeds: [new TextEncoder().encode(POT_SEED), getAddressEncoder().encode(OWNER), SALT],
+      });
+      const bytes = Uint8Array.from(BUILT[name]!.data!);
+      expect(bytes.slice(8, 40)).toEqual(SALT);
+      expect(bytes[40]).toBe(bump);
+      expect(bytes.slice(41)).toEqual(
+        name === "cook"
+          ? new Uint8Array([3, 0, 0, 0, 1, 2, 3, ...new Uint8Array(8)])
+          : new Uint8Array(9),
+      );
+      const args = idl().instructions.find((i) => i.name === name)!.args;
+      expect(args.map((arg) => arg.name)).toEqual([
+        "pot_salt",
+        "pot_bump",
+        name === "cook" ? "bytecode" : "pin",
+        "max_execution_fee",
+      ]);
+      expect(args[1]!.type).toBe("u8");
+    },
+  );
 
   /**
    * The direction the per-builder cases cannot cover: they prove every builder is right, not that
@@ -521,7 +412,6 @@ describeIdl("kitchen IDL drift guard", () => {
       engineProgram: ENGINE,
       potSalt: SALT,
       pot: POT,
-      potBump: POT_BUMP,
       feeConfig: FEE_CONFIG,
       bytecode: new Uint8Array([1]),
       maxExecutionFee: 0n,

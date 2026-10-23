@@ -1,8 +1,8 @@
 /**
  * A compile failure, reported against the file the developer wrote.
  *
- * The compiler never sees that file. It sees the program after the SDK's passes — token, protocol
- * and intent syntax lowered, `@sauce/token` imports prepended — under the entry name `main.js`. So its `--> main.js:5:15` names a line of a text nobody has open. This
+ * The compiler never sees that file. It sees the program after the SDK's passes — token and protocol
+ * syntax lowered, `@sauce/token` imports prepended — under the entry name `main.js`. So its `--> main.js:5:15` names a line of a text nobody has open. This
  * maps each location back to the file where the line it quotes is still that file's own line, and
  * says so plainly where the SDK rewrote the line itself.
  */
@@ -110,7 +110,7 @@ function relocate(message: string, file: string, text: string): string {
   }
   if (unmapped) {
     lines.push(
-      `note: ${ENTRY} is ${file} as the SDK rewrote it (token, protocol and intent syntax ` +
+      `note: ${ENTRY} is ${file} as the SDK rewrote it (token and protocol syntax ` +
         "lowered, imports added), and the line above is one of those rewrites rather than a line " +
         "of the file.",
     );
@@ -203,14 +203,6 @@ function locate(
 
 /** What to pass the command for a failure whose SDK message names an API option instead. */
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
-  [/needs a `deadline`/, () => "pass --intent-deadline <unix seconds>"],
-  [/needs a `creator`/, () => "pass --intent-creator <address>"],
-  [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
-  [
-    /`intents\.svm\.executionFee`/,
-    () => "pass --intent-execution-fee auto, which reads it, or the fee in lamports",
-  ],
-  [/`intents\.svm\.potExists`/, () => "give Solana's endpoint (--config), not --offline"],
   [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,
     (match) =>

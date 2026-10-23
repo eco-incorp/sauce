@@ -2,9 +2,8 @@
  * The generated half of the SauceScript declarations an editor loads for a program file
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
- * - every chain as the function that opens an intent there, with its namespaces
- *   (`Base(() => { … })`, `Base.UniswapV3.Factory`), and Solana with the accounts a program for it
- *   writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every chain as a namespace of its contracts (`Base.UniswapV3.Factory`), and Solana with the
+ *   accounts a program for it writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
  * - every token symbol and native coin as a holder's balance (`self.USDC`, `pot.ETH`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
@@ -63,6 +62,7 @@ function valueType(parameter: AbiParameter, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
+  if (/^int\d*$/.test(parameter.type)) return input ? "SauceInt" : "Int256";
   if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) return input ? "SauceInt" : "bigint";
   if (parameter.type === "bool") return "boolean";
   if (/^(bytes|string)$/.test(parameter.type)) return input ? "SauceData" : "SauceBytes";
@@ -127,6 +127,7 @@ function annotatedType(annotation: string | undefined, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
+  if (type === "Int256") return input ? "SauceInt" : "Int256";
   if (/^(Address|Uint256|u?int\d*|number|bigint)$/.test(type)) return input ? "SauceInt" : "bigint";
   if (/^(bool|boolean)$/.test(type)) return "boolean";
   if (/^(bytes|string)$/.test(type)) return input ? "SauceData" : "SauceBytes";
@@ -180,7 +181,8 @@ function libraryModules(): string[] {
 
 /** The generated `index.d.ts`. */
 export function sauceScriptDeclarations(): string {
-  const namespaces = new Set<string>();
+  // A namespace's type: `<Namespace>Source`, or `<Namespace>FamilySource` for a family alias.
+  const namespaces = new Map<string, string>();
   const defines = new Set<string>();
   const tokens = new Set<string>();
   const coins = new Set<string>();
@@ -188,7 +190,9 @@ export function sauceScriptDeclarations(): string {
   for (const chain of CANONICAL_CHAINS) {
     const globals = sourceGlobals(chain);
     chains = globals.chains;
-    for (const ns of globals.protocols) namespaces.add(ns.namespace);
+    for (const ns of globals.protocols) {
+      namespaces.set(ns.namespace, `${ns.namespace}${ns.kind === "family" ? "Family" : ""}Source`);
+    }
     for (const name of Object.keys(globals.defines)) defines.add(name);
     for (const token of globals.tokens) tokens.add(token.symbol);
     const native = nativeCoinSymbol(chain);
@@ -211,8 +215,8 @@ export function sauceScriptDeclarations(): string {
     '/// <reference path="./builtins.d.ts" />',
     '/// <reference path="../routes/source-globals.generated.d.ts" />',
     "",
-    "/** A contract call's result; `.catch(() => …)` gives a value for when the call fails. */",
-    "type SauceCall<R> = R & { catch<T>(handler: () => T): R | T };",
+    "/** An external call's result, with an optional gas cap and a failure handler. */",
+    "type SauceCall<R> = R & { gas(cap: SauceInt): SauceCall<R>; catch(handler: (error: SauceBytes) => unknown): SauceCall<R> };",
     "",
     "/** A contract an ABI types: its methods, called at an address. */",
     "interface SauceContractOf<B> {",
@@ -221,13 +225,11 @@ export function sauceScriptDeclarations(): string {
     "  lib(address: SauceInt): B;",
     "}",
     "",
-    "/** Opening an intent on a chain, as a typed closure in a host file opens one too. */",
-    `type SauceOpensIntent = ${sources}.SauceIntentChain;`,
-    "",
-    "/** A chain: called, it opens an intent there (`Base(() => { … }).reward({ … })`); its",
-    " *  namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
-    "interface SauceChain extends SauceOpensIntent {",
-    ...[...namespaces].sort().map((ns) => `  readonly ${ns}: ${sources}.${ns}Source;`),
+    "/** A chain: its namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
+    "interface SauceChain {",
+    ...[...namespaces]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([ns, type]) => `  readonly ${ns}: ${sources}.${type};`),
     "}",
     "",
     ...chains.map((chain) =>

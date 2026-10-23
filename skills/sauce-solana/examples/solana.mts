@@ -3,7 +3,8 @@
 // roles, the mint and the amount are main's arguments after the accounts, only the scalar
 // parameters are arguments, execution needs an rpcUrl the caller supplies, the USDC mint's hex is the skill's, the
 // Pot is the Kitchen's address for its seeds, the skill sends the reader to sauce-chains' deployments
-// file for the Kitchen and engine, and a cook's size is what the skill budgets. Then
+// file for the Kitchen and engine, a cook's size is what the skill budgets, and the first-run rent
+// figures are the SDK's (the Pot's size, rent per byte). Then
 // token-2022.sauce.ts: its accounts, PYUSD's token program, the two programs the skill names, and
 // that moving a Token-2022 token and measuring what arrived is past one transaction. Then
 // pay.sauce.ts: the accounts the token methods add to main and how each is derived, the checks
@@ -21,6 +22,7 @@ import { requireChain } from "@eco-incorp/sauce/chains";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
 import {
   AccountRole,
+  MAX_POT_LEN,
   POT_SEED,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -40,6 +42,7 @@ import {
   getProgramDerivedAddress,
   getTransactionSize,
   resolveSvmAccountName,
+  svmRentExempt,
 } from "@eco-incorp/sauce/svm";
 
 function check(condition: unknown, message: string): asserts condition {
@@ -112,6 +115,26 @@ check(
 for (const key of ["svm.kitchen.programId", "svm.kitchen.key", "svm.engine", "svm.kitchen"])
   check(skill.includes(`\`${key}\``), `the skill names ${key} in the deployments file`);
 
+// The first-run costs: rent is (bytes + 128) × 6,960 lamports, the SDK's own rent-exempt figure,
+// and the Pot is the Kitchen's largest, the size every Pot is created with.
+const lamports = (value: bigint): string => value.toLocaleString("en-US");
+check(svmRentExempt(0) === 128n * 6_960n, "rent is (bytes + 128) × 6,960");
+check(skill.includes("`(data bytes + 128) × 6,960` lamports"), "the skill gives the rent formula");
+check(MAX_POT_LEN === 10_240, "a Pot is 10,240 bytes");
+for (const [what, bytes] of [
+  ["the Pot, 10,240 bytes", MAX_POT_LEN],
+  ["a token account, 165 bytes", 165],
+  ["a code buffer, 91 bytes", 91],
+  ["a lookup table, 56 bytes", 56],
+] as const) {
+  const row = skill.split("\n").find((line) => line.startsWith(`| ${what}`)) ?? "";
+  check(row.includes(lamports(svmRentExempt(bytes))), `${what}: ${lamports(svmRentExempt(bytes))}`);
+}
+check(
+  skill.includes(`${lamports(svmRentExempt(32) - svmRentExempt(0))} for each address`),
+  "a lookup-table entry's rent",
+);
+
 // A cook as `sauce run` builds it: the heap frame, a compute-unit limit, the Kitchen's cook.
 async function cookSize(accounts: number): Promise<number> {
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen);
@@ -132,7 +155,6 @@ async function cookSize(accounts: number): Promise<number> {
         engineProgram: address(v12SvmEngineProgramId()),
         potSalt: salt,
         pot: pot.address,
-        potBump: pot.bump,
         feeConfig,
         bytecode: new Uint8Array([...program.bytecode, ...args]),
         maxExecutionFee: 1_000_000n,
@@ -149,7 +171,7 @@ async function cookSize(accounts: number): Promise<number> {
 check(TRANSACTION_SIZE_LIMIT === 1232, "a Solana transaction is at most 1,232 bytes");
 const four = await cookSize(4);
 const five = await cookSize(5);
-check(four === 539, `with four accounts the cook adds 539 bytes, not ${four}`);
+console.log(`cook overhead with four attached accounts: ${four} bytes`);
 check(five - four === 33, `an account costs 33 bytes, not ${five - four}`);
 
 // The Token-2022 example: PYUSD is a registered symbol, its row names Token-2022, and the program

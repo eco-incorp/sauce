@@ -3,7 +3,7 @@
  * `verify.compile.test.ts`.
  *
  * We hand partners a snippet (see `sdk/src/svm/recipes/index.ts`'s module doc) that compiles the SVM
- * `settle.sauce.ts` with the ORDINARY compiler for `target: 'svm'`, passing this intent's
+ * `settle.sauce.ts` with the ORDINARY compiler for `target: 'svm'`, passing the settlement's
  * `SETTLE_MIN_OUT`/`SETTLE_SPL_COUNT` as `defines`, and tells them the result is byte-identical to
  * the program we hand them. This test IS that snippet, run for real, plus the structural checks a
  * partner would want before trusting the compiled account manifest.

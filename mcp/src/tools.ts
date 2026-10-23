@@ -31,7 +31,6 @@ import {
   actionsProgram,
   addressDefinesOf,
   assumedBalances,
-  bindMainArguments,
   CANONICAL_CHAINS,
   type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
@@ -46,7 +45,6 @@ import {
   type CookInput,
   definesReach,
   expectingRevert,
-  fillTargets,
   forkSnapshot,
   type ForkSnapshot,
   fundingFor,
@@ -55,23 +53,21 @@ import {
   handoff,
   inspectCommand,
   inspectFile,
-  intentRecord,
-  type IntentRecord,
   keeping,
   keepsAny,
   kitchenFee,
   type LocalStores,
   MAX_V4_KEYS,
+  nativeErc20,
+  nativeSymbol,
   parseAccounts,
   parseAddress,
-  parseIntentParty,
   parseChain,
   parseDefineMap,
   parseLamports,
   parsePin,
   parsePubkey,
   parseSalt,
-  parseUnixSeconds,
   parseV4Key,
   parseVia,
   parseWei,
@@ -87,11 +83,7 @@ import {
   pricedChain,
   priceGiven,
   programChain,
-  programChains,
   type ProgramInput,
-  publishCommand,
-  publishSvmCommand,
-  solanaIntentState,
   readPoolAt,
   reclaimCommand,
   TABLES_PER_RUN,
@@ -215,49 +207,6 @@ export const PROGRAM = {
         "address as 0x hex, a Solana key in base58 (Solana programs), true or false. A define " +
         "replaces the program's module-level const of that name.",
     ),
-  compactArgs: z
-    .boolean()
-    .optional()
-    .describe("Encode main's arguments compact-v1 instead of ABI-v1 (default false)."),
-  intentDeadline: integer
-    .optional()
-    .describe("For intents the program opens: their deadline, as Unix seconds."),
-  intentCreator: z
-    .string()
-    .max(64)
-    .optional()
-    .describe(
-      "For intents the program opens: their creator (0x address; from Solana a base58 key), " +
-        "who may reclaim an unearned reward.",
-    ),
-  intentRewardDeadline: integer
-    .optional()
-    .describe(
-      "For intents the program opens: from when an unproven intent's reward may be refunded, " +
-        "as Unix seconds (default: the intent's deadline).",
-    ),
-  intentProver: z
-    .string()
-    .max(64)
-    .optional()
-    .describe(
-      "For intents the program opens: the reward's prover (0x address; default the registry's " +
-        "for the pair).",
-    ),
-  intentExecutionFee: integer
-    .optional()
-    .describe(
-      "For intents that run a program on their destination: that chain's Kitchen fee, in wei.",
-    ),
-  intentFundVia: z
-    .enum(["transfer", "publishAndFund"])
-    .optional()
-    .describe(
-      "For intents the program opens: how their reward reaches the intent's vault. transfer " +
-        "(default) pays it into the vault, then Portal.publish; publishAndFund approves the " +
-        "Portal, then Portal.publishAndFund, which emits IntentFunded (for an intent built from " +
-        "a solver's quote).",
-    ),
 };
 
 /** `path`, beside an optional `source`: on a server over stdio, whose caller is its own user. */
@@ -319,26 +268,6 @@ const ARGS = z
       "or an object naming them. sauce_compile's entryParams lists what main takes.",
   );
 
-/** An intent file's `main` arguments, which a wallet's intents are built with (`bindMainArguments`). */
-export const INTENT_ARGS = z
-  .array(z.unknown())
-  .max(LIMITS.entries)
-  .optional()
-  .describe(
-    "main's arguments, in order, as JSON values: the values the intents are built with. " +
-      "A wallet publishes what it knows before anything runs, so each is bound into the " +
-      "intents as it is, and each is one word: an integer in base units as a decimal " +
-      "string (or a number up to 2^53), an address as 0x hex, or a bool. Required " +
-      "exactly when main declares parameters.",
-  );
-
-/** A program file's `main` arguments with `bindMainArguments`, which a wallet's intents use. */
-export function boundProgram(args: ProgramArgs & { readonly args?: readonly unknown[] }): Program {
-  const given = programOf(args);
-
-  return { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
-}
-
 const COOK = {
   ...POT,
   pot: z
@@ -399,9 +328,6 @@ const COOK = {
     ),
   rpcUrl: RPC_URL,
 };
-
-/** Endpoints by chain, for a call that reads more than one: each intent's destination. */
-export const RPC_URLS = z.record(z.string().max(64), z.string().min(1).max(2048)).optional();
 
 const TOKEN_AMOUNTS = z
   .array(z.string().min(3).max(200))
@@ -540,59 +466,7 @@ function integerText(value: string | number, name: string): string {
   return String(value);
 }
 
-/** The intents a program opens, as `ProgramInput.intents` takes them. */
-function intentsOf(
-  args: Pick<
-    ProgramArgs,
-    | "intentDeadline"
-    | "intentRewardDeadline"
-    | "intentCreator"
-    | "intentProver"
-    | "intentExecutionFee"
-    | "intentFundVia"
-  >,
-  /** The intents' source: on Solana their creator and prover are base58 keys. */
-  chain: CanonicalChain,
-) {
-  const { intentDeadline, intentRewardDeadline, intentCreator, intentProver } = args;
-  const { intentExecutionFee, intentFundVia } = args;
-
-  return {
-    ...(intentDeadline === undefined
-      ? {}
-      : {
-          deadline: parseUnixSeconds(
-            "intent-deadline",
-            integerText(intentDeadline, "intentDeadline"),
-          ),
-        }),
-    ...(intentRewardDeadline === undefined
-      ? {}
-      : {
-          rewardDeadline: parseUnixSeconds(
-            "intent-reward-deadline",
-            integerText(intentRewardDeadline, "intentRewardDeadline"),
-          ),
-        }),
-    ...(intentProver === undefined
-      ? {}
-      : { prover: parseIntentParty("intent-prover", intentProver, chain) }),
-    ...(intentCreator === undefined
-      ? {}
-      : { creator: parseIntentParty("intent-creator", intentCreator, chain) }),
-    ...(intentExecutionFee === undefined
-      ? {}
-      : {
-          executionFee: parseWei(
-            "intent-execution-fee",
-            integerText(intentExecutionFee, "intentExecutionFee"),
-          ),
-        }),
-    ...(intentFundVia === undefined ? {} : { fundVia: intentFundVia }),
-  };
-}
-
-export function programOf(given: ProgramArgs, fallback?: CanonicalChain): Program {
+function programOf(given: ProgramArgs, fallback?: CanonicalChain): Program {
   // A `#!` line, as a program file may start with, is blanked as the command blanks it.
   const args = { ...given, source: withoutShebang(given.source) };
 
@@ -703,8 +577,6 @@ function programWith(
       chain,
       defines,
       ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
-      compactArgs: args.compactArgs === true,
-      intents: intentsOf(args, chain),
     },
     files,
   };
@@ -712,23 +584,6 @@ function programWith(
 
 const argsOf = (args: { readonly args?: readonly unknown[] | undefined }) =>
   args.args === undefined ? {} : { args: { from: "--args-json" as const, values: args.args } };
-
-/** A call's `rpcUrls`, each reached as `reach` reaches a call's URL: by chain id. */
-export async function endpointsByChain(
-  urls: Readonly<Record<string, string>> | undefined,
-  reach: Reach,
-): Promise<ReadonlyMap<number, string>> {
-  if (Object.keys(urls ?? {}).length > LIMITS.entries) {
-    throw new UsageError(`rpcUrls: at most ${LIMITS.entries}`);
-  }
-  const byChain = new Map<number, string>();
-  for (const [key, url] of Object.entries(urls ?? {})) {
-    const chain = parseChain(key, "rpcUrls");
-    byChain.set(chain.id, (await reach.endpoint(chain, url))!);
-  }
-
-  return byChain;
-}
 
 /** An EVM cook: the program on the Pot `owner`/`salt` or `pot` names. */
 function evmCook(args: CookArgs, program: Program): CookInput {
@@ -881,14 +736,14 @@ function scaled(price: string, numerator: bigint, denominator: bigint): string {
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 /** A rehearsal's approver: it sends nothing, so there is nothing to approve and no one to ask. */
 /** No one to ask: what a tool would need approved is refused, never assumed. */
-export const NO_APPROVER = {
+const NO_APPROVER = {
   auto: false,
   canAsk: false,
   approve: async () => undefined,
 } as const;
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
-export const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 function hexArg(raw: string, what: string): Hex {
   if (!HEX.test(raw)) throw new UsageError(`${what}: not 0x-prefixed hex bytes`);
@@ -901,43 +756,6 @@ function hexArg(raw: string, what: string): Hex {
 // ---------------------------------------------------------------------------------------------
 
 /** What a tool returns: the command's JSON, and its notes — what must be true for it to land. */
-/**
- * `output`'s intents, each with its `record`: the intent in full, as the intent tools take it, so
- * what is published here is named there with no import. A file whose intents cannot be built
- * without running it (one the publish refuses anyway) gets none.
- */
-function withRecords(program: Program, output: CommandOutput): ToolOutput {
-  const intents = output.json.intents as Array<Record<string, unknown>> | undefined;
-  let records: Map<string, IntentRecord>;
-  try {
-    records = new Map(
-      fillTargets(program.input, program.files).map((target) => {
-        const record = intentRecord(target.intent, { sourcePortal: target.sourcePortal });
-
-        return [record.intentHash.toLowerCase(), record];
-      }),
-    );
-  } catch {
-    return fromCommand(output);
-  }
-
-  return {
-    json: {
-      ...output.json,
-      ...(intents === undefined
-        ? {}
-        : {
-            intents: intents.map((intent) => {
-              const record = records.get(String(intent.intentHash).toLowerCase());
-
-              return record === undefined ? intent : { ...intent, record };
-            }),
-          }),
-    },
-    notes: output.notes,
-  };
-}
-
 export interface ToolOutput {
   readonly json: Record<string, unknown>;
   readonly notes?: readonly string[] | undefined;
@@ -956,7 +774,7 @@ function limited(output: CommandOutput, limit: number | undefined): CommandOutpu
   };
 }
 
-export const fromCommand = (output: CommandOutput): ToolOutput => ({
+const fromCommand = (output: CommandOutput): ToolOutput => ({
   json: output.json,
   notes: output.notes,
 });
@@ -1032,7 +850,7 @@ const PURE: ToolAnnotations = {
   openWorldHint: false,
 };
 /** May read a chain, through an endpoint, and never writes one. */
-export const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
+const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
 
 const notesSchema = z.array(z.string()).optional();
 
@@ -1113,7 +931,7 @@ export const HANDOFF =
   "order, as one atomic batch); a Solana `transaction` is what Phantom's solana_send takes.";
 
 /** The sentence every tool that builds a transaction ends on. */
-export const UNSIGNED =
+const UNSIGNED =
   "Nothing is signed or sent: the caller signs and sends with its own wallet or signer. " + HANDOFF;
 
 /** What every tool that builds a transaction says about where it builds one. */
@@ -1160,15 +978,6 @@ export const potsKept = (context: ToolContext): string =>
     : "which this server also records in the sauce command's Pot store, as the command does " +
       "(sauce_pot_list lists them)";
 
-/** What a send's description says becomes of what its transactions do to intents: recorded by a
- *  server that keeps the intent store, else nothing. */
-export const intentsKept = (context: ToolContext): string =>
-  context.stores?.intents === undefined
-    ? ""
-    : "What each does to an intent (publishing it, a fill, a proof, a claim, a refund, a " +
-      "cancellation) this server records in the sauce command's intent store, as the command " +
-      "does (sauce_intent_list lists them). ";
-
 /** How many tokens `sauce_globals` returns at a time. */
 const TOKEN_PAGE = 200;
 
@@ -1184,7 +993,6 @@ export const TOOL_NAMES = [
   "sauce_pot",
   "sauce_reclaim",
   "sauce_simulate",
-  "sauce_intent_publish",
   "sauce_inspect",
   "sauce_verify",
 ] as const;
@@ -1248,12 +1056,7 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
             ...(kept.length === 0 ? {} : { notes: [...(output.notes ?? []), ...kept] }),
           };
 
-          return result(
-            sendable && (args as { dryRun?: unknown }).dryRun !== true
-              ? withSendNote(keptOutput)
-              : keptOutput,
-            reach.scrub,
-          );
+          return result(sendable ? withSendNote(keptOutput) : keptOutput, reach.scrub);
         } catch (error) {
           if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
           // A public endpoint's failure (a rate limit) is the one an endpoint of your own fixes.
@@ -1376,7 +1179,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "(Orca.Whirlpool.pool(USDC, WSOL, 4)), each pool's accounts derived as the cook is " +
         "built) and the accounts a " +
         "program writes where it uses them (`accounts`: Solana.pda(program, [seeds]), " +
-        "USDC.accountOf(holder), Solana.systemProgram, …), the chain names that open intents, the " +
+        "USDC.accountOf(holder), Solana.systemProgram, …), the chain names, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
         "tokenized stocks (Ethereum and Solana have over a thousand each; Base's include " +
         "Coinbase's, such as SPCXc for SpaceX; Solana's are Token-2022 mints, such as TSLAx), " +
@@ -1826,21 +1629,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       description:
         "Compiles a SauceScript program for a chain — use it to check a program and to learn " +
         "what it takes, before sauce_simulate or sauce_tx. The chain's token symbols, protocol " +
-        "namespaces, chainId, the @sauce/token functions and the intents the program opens all " +
-        "resolve against that chain. Returns the bytecode (0x hex) and its size in bytes, " +
+        "namespaces, chainId and the @sauce/token functions all resolve against that chain. " +
+        "Returns the bytecode (0x hex) and its size in bytes, " +
         "`entryParams` (main's runtime parameters, which sauce_tx's args fill) and how they are " +
-        "encoded (`entryEncoding`; with compactArgs, the compact-v1 `entrySchema`), the defines " +
+        "encoded (`entryEncoding`: ABI-v1), the defines " +
         "it was given, the compiler and the released engine it pairs with, and on Solana the " +
         "account `manifest` (the accounts a cook attaches, in order). A program that does not " +
         "compile is an error naming its line. Also `contracts`, each protocol contract it calls " +
         "with its address, and with args the `payload` (the program with main's arguments " +
         "appended, what a cook carries) and its size; on Solana, with args and accounts, the " +
-        "cook's transaction size against the one-transaction limit. For a program that opens " +
-        "intents, the result is the program the source chain runs; sauce_inspect with the " +
-        "source alone lists each intent's destination, route and reward. Reads no chain unless " +
-        "rpcUrls is given: then each intent's destination is checked for the Pot its cook " +
-        "needs (`intentPots`). `sourceSha256` is the sha256 of the program's text. To check " +
-        "only that a program compiles, omitBytecode leaves the bytecode out.",
+        "cook's transaction size against the one-transaction limit. Reads no chain. " +
+        "`sourceSha256` is the sha256 of the program's text. To check only that a program " +
+        "compiles, omitBytecode leaves the bytecode out.",
       input: {
         ...PROGRAM,
         ...sourceInputs(local),
@@ -1857,11 +1657,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           "Solana only: size the Kitchen's cook (the default) or the engine's own paid cook, " +
             "which carries no Kitchen, Pot or salt.",
         ),
-        rpcUrls: RPC_URLS.describe(
-          "For a program that opens intents: each destination's endpoint by chain (slug or " +
-            'id), { "base": "<url>" }, to check the Pot its cook runs on is deployed there. ' +
-            "Used for this call only, never returned or logged.",
-        ),
       },
       output: {
         chain: z.string(),
@@ -1875,13 +1670,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         derivedValues: z
           .array(z.looseObject({ name: z.string(), type: z.string(), derive: z.string() }))
           .optional(),
-        entrySchema: z.string().nullable(),
         defines: z.unknown(),
         manifest: z.unknown().optional(),
       },
-      annotations: READS_CHAIN,
+      annotations: PURE,
     },
-    async (args, reach) => {
+    async (args) => {
       const program = programFrom(args, local);
       if (args.accounts !== undefined && program.input.chain.kind !== "svm") {
         throw new UsageError(
@@ -1894,7 +1688,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "is the Pot's",
         );
       }
-      const byChain = await endpointsByChain(args.rpcUrls, reach);
       const output = await compiled({
         input: {
           ...program.input,
@@ -1907,9 +1700,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 ),
               }),
           ...(args.via === undefined ? {} : { via: parseVia(args.via, "via") }),
-          ...(byChain.size === 0
-            ? {}
-            : { endpoints: (chain: CanonicalChain) => byChain.get(chain.id) }),
         },
         files: program.files,
       });
@@ -1959,7 +1749,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
               "chainId; one with a chainId compiles for that chain only.",
           ),
         target: z.enum(["evm"]).optional().describe("Always evm: actions run on EVM chains."),
-        compactArgs: PROGRAM.compactArgs,
         ...COOK,
       },
       output: {
@@ -1981,7 +1770,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         file: ACTIONS_FILE,
         text,
         ...(args.chain === undefined ? {} : { chain: String(args.chain) }),
-        compactArgs: args.compactArgs === true,
       };
       const report = await actionsCommand(input);
       const cook =
@@ -1992,7 +1780,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const refused =
         cook === undefined
           ? undefined
-          : previewRefusal("building the cook transaction", programChains(cook.input, cook.files));
+          : previewRefusal("building the cook transaction", [cook.input.chain]);
       const building =
         cook === undefined || refused !== undefined
           ? undefined
@@ -2087,11 +1875,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     },
     async (args, reach) => {
       const program = programFrom(args, local);
-      // Before any endpoint: the chain, and every chain an intent the program opens goes to.
-      requireSupported(
-        "building the cook transaction",
-        programChains(program.input, program.files),
-      );
+      // Before any endpoint: the chain.
+      requireSupported("building the cook transaction", [program.input.chain]);
       const output = await cookTransaction(args, program, reach);
       if (program.input.chain.kind === "svm") {
         return {
@@ -2208,6 +1993,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
       const held =
         reading && client !== undefined ? await registeredBalances(client, chain, pot) : undefined;
+      const native = nativeSymbol(chain);
+      // Where the native coin is also an ERC-20 (Arc's USDC), its balance is read twice.
+      const nativeToken = nativeErc20(chain.id);
 
       return {
         json: {
@@ -2215,12 +2003,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           deployed,
           ...(fee === undefined
             ? {}
-            : { kitchenFee: { wei: fee.toString(), native: formatUnits(fee, 18) } }),
+            : {
+                kitchenFee: { wei: fee.toString(), native: formatUnits(fee, 18), symbol: native },
+              }),
           ...(held === undefined
             ? {}
             : {
                 balances: {
-                  native: { wei: held.native.toString(), formatted: formatUnits(held.native, 18) },
+                  native: {
+                    symbol: native,
+                    wei: held.native.toString(),
+                    formatted: formatUnits(held.native, 18),
+                  },
                   tokens: held.tokens.map((token) => ({
                     symbol: token.symbol,
                     address: token.address,
@@ -2234,6 +2028,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         notes: [
           ...(output.notes ?? []),
           ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+          ...(held === undefined || nativeToken === undefined
+            ? []
+            : [
+                `On ${chain.name} the native coin is ${native}, and the token at ` +
+                  `${nativeToken.address} is the same balance: balances.native (18 decimals) and ` +
+                  `that token's entry (${nativeToken.decimals}) read it twice, so do not add them.`,
+              ]),
         ],
       };
     },
@@ -2562,167 +2363,16 @@ export function registerTools(server: McpServer, context: ToolContext): void {
   );
 
   tool(
-    "sauce_intent_publish",
-    {
-      title: "Build an intent's unsigned publish transactions",
-      description:
-        "For a program that only opens cross-chain intents whose amounts are fixed when it is " +
-        "built (every amount a define or a literal): the source chain's transactions that fund " +
-        "and publish each intent from a wallet — each reward token transferred to the intent's " +
-        "vault (and a native reward sent to it), then Portal.publish, with no approval — with " +
-        "each intent's hash, vault and `record`, the intent in full, which sauce_intent_status " +
-        "and the other intent tools take. Send them in order from the wallet that funds the " +
-        "reward, the transfers first, and publish once they have landed. The vault is the " +
-        "package's own computation; with `from` and an endpoint it is also read from the Portal " +
-        "and must agree, or the tool refuses, and only what the vault does not hold yet is " +
-        "transferred. intentFundVia publishAndFund gives each reward token's approve to the " +
-        "Portal (a USDT-style reset to 0 first where needed), then Portal.publishAndFund, " +
-        "instead. dryRun simulates them together through eth_simulateV1 from `from` and reports " +
-        "each intent's isIntentFunded after them (intents[].funded), assumeBalance giving that " +
-        "wallet balances for the simulation only. A program that measures an amount on chain, or " +
-        "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
-        "dryRun works on every chain; the transactions only where the source and every " +
-        "destination are supported. From Solana (chain solana): two Solana transactions an " +
-        "intent for `from`, Portal.fund (the reward into the vault Solana's Portal derives) then " +
-        "Portal.publish, each simulated first; the route must fit one Solana transaction (token " +
-        `transfers, not a program body). ${UNSIGNED} ${SUPPORTED_ONLY}`,
-      input: {
-        ...PROGRAM,
-        args: INTENT_ARGS,
-        from: z
-          .string()
-          .max(64)
-          .optional()
-          .describe(
-            "The 0x wallet that funds and publishes: with an endpoint, the vault is read and " +
-              "only what it lacks is transferred (or, with intentFundVia publishAndFund, the " +
-              "approvals are planned against its allowance); dryRun's sender. From Solana " +
-              "(chain solana), the base58 key that funds the reward and pays the fee: required.",
-          ),
-        dryRun: z
-          .boolean()
-          .optional()
-          .describe(
-            "Simulate the transactions together (eth_simulateV1) instead; needs from and an " +
-              "endpoint.",
-          ),
-        assumeBalance: TOKEN_AMOUNTS.describe(
-          "With dryRun: balances `from` holds for the simulation only, by state override. Each " +
-            "<TOKEN|address>:<amount>, the amount in whole tokens (USDC:2 is 2 USDC), or base " +
-            "units ending in n (USDC:2000000n).",
-        ),
-        rpcUrl: RPC_URL,
-      },
-      output: refusable({ intents: z.array(z.looseObject({ intentHash: z.string() })) }),
-      annotations: READS_CHAIN,
-    },
-    async (args, reach) => {
-      // An intent to Solana is built against the cluster's state, read as the command reads it,
-      // through the server's endpoint; the Kitchen's fee there too, unless the call gives one.
-      const bound = boundProgram(args);
-      const solana = await solanaIntentState(
-        bound.input,
-        bound.files,
-        (on) => reach.endpoint(on, undefined),
-        { autoFee: args.intentExecutionFee === undefined },
-      );
-      const program: Program = { ...bound, input: solana.input };
-      const noted = (output: CommandOutput): CommandOutput =>
-        solana.notes.length === 0
-          ? output
-          : { ...output, notes: [...solana.notes, ...(output.notes ?? [])] };
-      const chain = program.input.chain;
-      // From Solana the wallet calls Solana's Portal itself: fund, then publish, one transaction an
-      // intent, built for `from` (the CLI's `publish-svm.ts`).
-      if (chain.kind === "svm") {
-        if (args.assumeBalance !== undefined) {
-          throw new UsageError(
-            "assumeBalance overrides an EVM chain's state: a Solana simulation runs on the accounts " +
-              "as they are",
-          );
-        }
-        if (args.from === undefined) {
-          throw new UsageError(
-            "give from: the base58 key of the Solana wallet that funds the reward and pays the fee",
-          );
-        }
-
-        return withRecords(
-          program,
-          await publishSvmCommand(
-            {
-              ...program.input,
-              ...(args.dryRun === true ? {} : { format: "json" as const }),
-              dryRun: args.dryRun === true,
-              rpcUrl: await reach.require(chain, args.rpcUrl, "Publishing from Solana"),
-              from: parsePubkey("from", args.from),
-            },
-            program.files,
-          ),
-        );
-      }
-      const from = args.from === undefined ? undefined : parseAddress("from", args.from);
-      const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
-      if (assume.length > 0 && args.dryRun !== true) {
-        throw new UsageError(
-          "assumeBalance goes with dryRun: it gives the wallet a balance for a simulation, and " +
-            "nothing to transactions that are sent",
-        );
-      }
-      if (args.dryRun === true) {
-        if (from === undefined) throw new UsageError("a dry run needs whose wallet: give from");
-
-        return withRecords(
-          program,
-          noted(
-            await publishCommand(
-              {
-                ...program.input,
-                dryRun: true,
-                rpcUrl: await reach.require(chain, args.rpcUrl, "A dry run"),
-                from,
-                ...(assume.length === 0 ? {} : { assume }),
-              },
-              program.files,
-            ),
-          ),
-        );
-      }
-      // Before any endpoint: the source, and every chain the intents go to.
-      requireSupported("publishing intents", programChains(program.input, program.files));
-      const rpcUrl = from === undefined ? undefined : await reach.endpoint(chain, args.rpcUrl);
-
-      return withRecords(
-        program,
-        noted(
-          await publishCommand(
-            {
-              ...program.input,
-              format: "json",
-              dryRun: false,
-              ...(from === undefined ? {} : { from }),
-              ...(rpcUrl === undefined ? {} : { rpcUrl }),
-            },
-            program.files,
-          ),
-        ),
-      );
-    },
-  );
-
-  tool(
     "sauce_inspect",
     {
       title: "Take a call or a program apart",
       description:
         "Reads a transaction, calldata or program back into what its author wrote — use it to " +
-        "check what you are about to sign, or what landed: a Pot.cook (its engine, its program, " +
-        "the intents the program opens), a Kitchen.deployPot (the Pot it makes), a Portal " +
-        "publish or publishAndFund (the route and the reward), an ERC-20 call, or a bare " +
-        "program. A 32-byte hash is a transaction on `chain`, fetched through an endpoint " +
-        "(rpcUrl, or the server's). With `source`, a cook's program is checked against that " +
-        "program's and the arguments after it are decoded against main; `source` alone is " +
-        "compiled and the intents it opens are listed.",
+        "check what you are about to sign, or what landed: a Pot.cook (its engine and its " +
+        "program), a Kitchen.deployPot (the Pot it makes), an ERC-20 call, or a bare program. A " +
+        "32-byte hash is a transaction on `chain`, fetched through an endpoint (rpcUrl, or the " +
+        "server's). With `source`, a cook's program is checked against that program's and the " +
+        "arguments after it are decoded against main; `source` alone is compiled and reported.",
       input: {
         hex: z
           .string()
@@ -2736,11 +2386,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "The program the hex was compiled from, to check and decode it against; or, with " +
               "no hex, the program to inspect.",
           ),
-        args: INTENT_ARGS.describe(
-          "With source and no hex: main's arguments, bound into the intents the program opens " +
-            "as sauce_intent_publish binds them, so they are listed as published. A cook's " +
-            "arguments are decoded from its hex instead.",
-        ),
         rpcUrl: RPC_URL,
       },
       output: {},
@@ -2751,18 +2396,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         if (args.source === undefined) {
           throw new UsageError("give hex (calldata, a program or a transaction hash), or source");
         }
-        const program =
-          args.args === undefined
-            ? programOf({ ...args, source: args.source })
-            : boundProgram({ ...args, source: args.source });
+        const program = programOf({ ...args, source: args.source });
 
         return fromCommand(
           inspectFile(program.input.file, compileProgram(program.input, program.files)),
-        );
-      }
-      if (args.args !== undefined) {
-        throw new UsageError(
-          "args gives source's main its arguments; a cook's are decoded from its hex",
         );
       }
       const hex = hexArg(args.hex, "hex");
@@ -2801,21 +2438,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     {
       title: "Check that a settle runs the audited program",
       description:
-        "Checks whether a settle payload, a Pot.cook, a Portal publish or a transaction runs " +
-        "the audited settle program, and with which parameters: valid with its tokens, minOut " +
-        "and recipient, or valid: false with the rejection `code` (a rejection is a result, not " +
-        "an error). A 32-byte hash is a transaction on `chain`, fetched through an endpoint " +
-        "(rpcUrl, or the server's). On Solana (chain solana): a cook transaction's signature, " +
-        "with the minOut and splCount the settle was compiled for. Use it to confirm an " +
-        "intent's settlement before relying on it.",
+        "Checks whether a settle payload, a Pot.cook or a transaction runs the audited settle " +
+        "program, and with which parameters: valid with its tokens, minOut and recipient, or " +
+        "valid: false with the rejection `code` (a rejection is a result, not an error). A " +
+        "32-byte hash is a transaction on `chain`, fetched through an endpoint (rpcUrl, or the " +
+        "server's). On Solana (chain solana): a cook transaction's signature, with the minOut and " +
+        "splCount the settle was compiled for. Use it to confirm a settlement before relying on it.",
       input: {
         hex: z
           .string()
           .max(LIMITS.hex)
           .optional()
-          .describe(
-            "0x hex: a settle payload, Pot.cook or Portal calldata, or a transaction hash.",
-          ),
+          .describe("0x hex: a settle payload or Pot.cook calldata, or a transaction hash."),
         signature: z
           .string()
           .max(128)

@@ -55,15 +55,7 @@ import {
   type McpWallets,
   type PasswordSource,
 } from "./sdk.js";
-import {
-  chainRef,
-  intentsKept,
-  LIMITS,
-  potsKept,
-  refusable,
-  toolRegistrar,
-  type ToolContext,
-} from "./tools.js";
+import { chainRef, LIMITS, potsKept, refusable, toolRegistrar, type ToolContext } from "./tools.js";
 
 /** The wallet tools, in the order `tools/list` gives them. */
 export const WALLET_TOOL_NAMES = [
@@ -551,8 +543,8 @@ export function registerWalletTools(
         "Lists this server's wallets: each one's name, kind (evm or solana), address, and the " +
         "policy that limits what it sends (null: no limits), with the wallet directory and " +
         "whether the wallets are enabled to create, import and sign (sauce_wallet_enable), " +
-        "and by which source. Needs no password. Use an address as `from` or `owner` in the " +
-        "other tools, and the name in sauce_wallet_send. Reads no chain.",
+        "and by which source. Needs no password. Use an address as `owner` in the other tools, " +
+        "and the name in sauce_wallet_send. Reads no chain.",
       input: {},
       output: {
         dir: z.string(),
@@ -613,8 +605,7 @@ export function registerWalletTools(
         "Signs and sends, from one of this server's wallets, the transactions another tool built " +
         "unsigned: pass that tool's whole result as `transaction` — sauce_tx (a Solana plan " +
         "too, sent step by step from its cursor, each step built fresh), sauce_pot, " +
-        "sauce_actions (with owner), sauce_intent_publish, sauce_intent_fill, sauce_intent_prove, " +
-        "sauce_intent_claim, sauce_intent_refund, sauce_intent_cancel — or one transaction ({ to, " +
+        "sauce_actions (with owner) — or one transaction ({ to, " +
         "data, value }, or a Solana { transaction }), or a list. Needs the wallets enabled " +
         "(sauce_wallet_enable). First it simulates them: on an " +
         "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each as " +
@@ -628,9 +619,8 @@ export function registerWalletTools(
         "to read and report; and on a transaction that deployed a Pot, `pots`: each Pot as the " +
         "sauce command records it (chain, address, owner, salt, kind, Kitchen, the engine and " +
         `compiler release it was minted under, the deploying transaction), ${potsKept(context)}. ` +
-        intentsKept(context) +
-        "Build the transactions for the wallet's address: as `owner` or " +
-        "`from` in the tool that builds them. Needs the chain's endpoint (rpcUrl, or the " +
+        "Build the transactions for the wallet's address: as `owner` in the tool that builds " +
+        "them. Needs the chain's endpoint (rpcUrl, or the " +
         "server's). What it sends is spent: simulate with sauce_simulate first. It sends only on " +
         `${supportedChainNames()}, the chains this release supports; on any other it is refused ` +
         "before any endpoint is reached, with `refused` saying how to request the chain.",

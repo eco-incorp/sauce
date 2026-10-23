@@ -441,6 +441,30 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     });
   }
 
+  it("dodoV2Swap sells quote tokens when the input is the pool's quote token", async () => {
+    const receipt = await env.cook(compiled({ ...SAMPLES.dodoV2Swap, tokenIn: B, tokenOut: A }));
+    assert.equal(receipt.status, "success");
+    assert.deepEqual(
+      recordedCalls(receipt, RECORDERS).map(({ to, data, value }) => ({
+        to: to.toLowerCase(),
+        data,
+        value,
+      })),
+      [
+        {
+          to: B.toLowerCase(),
+          data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]).toLowerCase(),
+          value: 0n,
+        },
+        {
+          to: T.toLowerCase(),
+          data: call("function sellQuote(address)", "sellQuote", [R]).toLowerCase(),
+          value: 0n,
+        },
+      ],
+    );
+  });
+
   for (const { name, assets, steps, limits } of [
     {
       name: "output first in the assets list",

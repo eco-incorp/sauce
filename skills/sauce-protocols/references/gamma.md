@@ -54,4 +54,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Use getDepositAmount() to find correct token1 amount for your token0 deposit
 - The uint256[4] minIn/minAmounts array provides slippage protection (use zeros for no limit)
 - Approve both token0 and token1 to UniProxy before depositing
-- The Ethereum UniProxy is an older deployment; its `deposit` has no `minIn` (the `depositLegacy` template calls it).
+- The Ethereum UniProxy is an older deployment; its `deposit` has no `minIn`: call it through `UniProxyLegacyABI`, `deposit(deposit0, deposit1, to, pos)`.

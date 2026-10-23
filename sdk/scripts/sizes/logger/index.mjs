@@ -1,7 +1,7 @@
 // A stand-in `sauce-compiler` that compiles with the build in SAUCE_COMPILER_REAL (a built
 // crates/sauce-wasm/pkg) and writes each compile's inputs to LOG_DIR as 0.json, 1.json, …: the
 // options, every file `resolve` answered, every `resolvePackage` answer, and every `programOptions`
-// scope with its answer, so a program that opens intents replays with its bodies' options.
+// scope with its answer, so a compile replays with exactly the options it was given.
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";

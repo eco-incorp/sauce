@@ -17,55 +17,12 @@ Lending protocol that lets users borrow MIM stablecoin against yield-bearing col
 | Namespace | `Abracadabra` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 
-## Key Operations
+## What it offers
 
 - **borrow**: Borrow MIM from a Cauldron
 - **repay**: Repay MIM debt
 - **addCollateral**: Add collateral to a Cauldron position
 - **removeCollateral**: Remove collateral from a Cauldron position
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Borrow MIM from Cauldron
-import { CauldronABI as ICauldron } from "./abis";
-function main(
-  cauldronAddress: Address,
-  to: Address,
-  amount: Uint256,
-): { part: Uint256; share: Uint256 } {
-  const cauldron = ICauldron.at(cauldronAddress);
-  return cauldron.borrow(to, amount);
-}
-
-// Repay MIM debt
-import { CauldronABI as ICauldron } from "./abis";
-function main(cauldronAddress: Address, to: Address, part: Uint256): Uint256 {
-  const cauldron = ICauldron.at(cauldronAddress);
-  return cauldron.repay(to, 0, part);
-}
-
-// Add collateral
-import { CauldronABI as ICauldron } from "./abis";
-function main(cauldronAddress: Address, to: Address, share: Uint256): Uint256 {
-  const cauldron = ICauldron.at(cauldronAddress);
-  cauldron.addCollateral(to, 0, share);
-  return 1;
-}
-
-// Remove collateral
-import { CauldronABI as ICauldron } from "./abis";
-function main(cauldronAddress: Address, to: Address, share: Uint256): Uint256 {
-  const cauldron = ICauldron.at(cauldronAddress);
-  cauldron.removeCollateral(to, share);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -116,3 +73,9 @@ function main() {
 - `deposit(address token, address from, address to, uint256 amount, uint256 share) payable returns (uint256 amountOut, uint256 shareOut)`
 - `withdraw(address token, address from, address to, uint256 amount, uint256 share) returns (uint256 amountOut, uint256 shareOut)`
 - `balanceOf(address token, address user) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

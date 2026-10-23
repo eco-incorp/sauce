@@ -3,7 +3,7 @@ import { CurveStableSwapABI as IStableSwap } from "./abis";
 
 function main(poolAddress: Address, i: Uint256, j: Uint256, amountIn: Uint256, minAmountOut: Uint256): Uint256 {
   const pool = IStableSwap.at(poolAddress);
-  return pool.exchange(i, j, amountIn, minAmountOut);
+  return pool.exchange(Int256(i), Int256(j), amountIn, minAmountOut);
 }
 `;
 

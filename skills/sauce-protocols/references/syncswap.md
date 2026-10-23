@@ -37,7 +37,7 @@ function main(
   return router.swap(
     [
       {
-        steps: [{ pool: pool, data: swapData, callback: zeroAddr, callbackData: 0x00 }],
+        steps: [{ pool: pool, data: swapData, callback: zeroAddr, callbackData: hex`` }],
         tokenIn: tokenIn,
         amountIn: amountIn,
       },
@@ -55,7 +55,7 @@ function main(
 - `amountOutMin`: Minimum output for slippage protection
 - `swapData`: ABI-encoded bytes containing `(address tokenIn, address recipient, uint8 withdrawMode)`. Withdraw modes: `0` = vault deposit, `1` = withdraw to wallet, `2` = unwrap WETH
 - `callback`: Set to zero address for standard swaps (no callback)
-- `callbackData`: Set to `0x00` for standard swaps
+- `callbackData`: Set to ` hex`` ` for standard swaps
 - Supports multi-step paths: add more entries to the `steps` array for multi-hop
 
 ## Deployments and ABI

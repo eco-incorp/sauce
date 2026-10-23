@@ -17,42 +17,6 @@ Official Arbitrum L1-L2 gateway bridge. Routes tokens through the canonical Arbi
 | Namespace | `ArbitrumBridge` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### depositToL2
-
-Deposit ERC-20 tokens from Ethereum L1 to Arbitrum L2 via the Gateway Router.
-
-```typescript
-import { ArbitrumL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  token: Address,
-  recipient: Address,
-  amount: Uint256,
-  maxGas: Uint256,
-  gasPriceBid: Uint256,
-): bytes {
-  const router = IL1GatewayRouter.at(routerAddress);
-  return router.outboundTransfer(token, recipient, amount, maxGas, gasPriceBid, 0x00);
-}
-```
-
-- `token`: L1 ERC-20 token address to bridge
-- `recipient`: Address to receive tokens on Arbitrum L2
-- `amount`: Amount of tokens to deposit
-- `maxGas`: Maximum L2 gas for the deposit transaction (e.g. 300000). Excess is refunded
-- `gasPriceBid`: L2 gas price bid in wei. Use Arbitrum's `ArbGasInfo.getMinimumGasPrice()` or estimate
-- `_data`: Extra data, typically `0x00` for standard deposits. Used for custom gateway params
-- Requires ERC-20 approval to the appropriate gateway (use `getGateway(token)` to find it)
-- Requires ETH as msg.value to cover L2 execution costs (`maxGas * gasPriceBid + maxSubmissionCost`)
-
 ## Notes
 
 - **L1 to L2 only** via this contract. For L2 to L1 withdrawals, use `ArbSys.sendTxToL1()` on Arbitrum (takes 7 days)
@@ -91,3 +55,9 @@ function main() {
 
 - `outboundTransfer(address _token, address _to, uint256 _amount, uint256 _maxGas, uint256 _gasPriceBid, bytes _data) payable returns (bytes)`
 - `getGateway(address _token) view returns (address)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

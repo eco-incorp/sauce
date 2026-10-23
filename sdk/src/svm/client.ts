@@ -363,7 +363,7 @@ export async function createSauceSvmClient({
   const rpcSubscriptions = createSolanaRpcSubscriptions(wsUrl ?? rpcUrl.replace(/^http/, "ws"));
   // Derived once: both are pure functions of the kitchen and the payer, and a cook names them on
   // every call.
-  const { address: pot, bump: potBump } = await derivePotPda(kitchen, payer.address, potSalt);
+  const { address: pot } = await derivePotPda(kitchen, payer.address, potSalt);
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen);
 
   /**
@@ -462,7 +462,6 @@ export async function createSauceSvmClient({
           engineProgram: programId,
           potSalt,
           pot,
-          potBump,
           feeConfig,
           bytecode,
           maxExecutionFee: cap,
@@ -541,7 +540,6 @@ export async function createSauceSvmClient({
           engineProgram: programId,
           potSalt,
           pot,
-          potBump,
           feeConfig,
           maxExecutionFee: cap,
           tail: accounts,

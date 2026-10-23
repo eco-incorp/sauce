@@ -17,37 +17,12 @@ Decentralized perpetual futures exchange (Curie v2) on Optimism. Concentrated-li
 | Namespace | `PerpetualProtocol` on optimism |
 | Chains | optimism |
 
-## Key Operations
+## What it offers
 
 - **deposit**: Deposit collateral into Vault for trading
 - **withdraw**: Withdraw collateral from Vault
 - **openPosition**: Open a leveraged perpetual position
 - **closePosition**: Close an existing perpetual position
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit collateral
-import { VaultABI as IVault } from "./abis";
-function main(vaultAddress: Address, token: Address, amount: Uint256): Uint256 {
-  const vault = IVault.at(vaultAddress);
-  vault.deposit(token, amount);
-  return 1;
-}
-
-// Withdraw collateral
-import { VaultABI as IVault } from "./abis";
-function main(vaultAddress: Address, token: Address, amount: Uint256): Uint256 {
-  const vault = IVault.at(vaultAddress);
-  vault.withdraw(token, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -92,3 +67,9 @@ function main() {
 - `deposit(address token, uint256 amount)`
 - `withdraw(address token, uint256 amount)`
 - `getFreeCollateral(address trader) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

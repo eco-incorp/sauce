@@ -25,15 +25,10 @@ import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Pot } from "../src/evm/engine.js";
-import { PortalABI } from "../src/protocols/eco-routes/abis.js";
-import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "../src/routes/accessor-index.js";
 import { chainDefines } from "../src/routes/ambient.js";
-import { encodeRoute, hashIntent } from "../src/routes/encode.js";
 import { decodeEntryArguments, encodeEntryArguments } from "../src/routes/entry.js";
-import { toUniversalAddress } from "../src/routes/normalize.js";
-import { predictIntentVault } from "../src/routes/portal.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
@@ -48,9 +43,8 @@ import {
 
 const OWNER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
-const CREATOR: Address = "0x3333333333333333333333333333333333333333";
+const OTHER_RECIPIENT: Address = "0x3333333333333333333333333333333333333333";
 const ENGINE = getAddress(v12EngineAddress());
-const INTENT_FLAGS = ["--intent-deadline", "2000000000", "--intent-creator", CREATOR];
 
 interface Run {
   readonly code: number;
@@ -420,23 +414,6 @@ const SPLIT = [
   "}",
   "",
 ].join("\n");
-const FIXED = [
-  "// @chain ethereum",
-  "Base(() => {",
-  "  USDC.transfer(RECIPIENT, 1000n);",
-  "}).reward({ tokens: [{ token: USDC, amount: 2000n }] });",
-  "",
-].join("\n");
-const MEASURED = [
-  "// @chain ethereum",
-  "function main(recipient: Address) {",
-  "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base(() => {",
-  "    USDC.transfer(recipient, amount);",
-  "  }).reward({ tokens: [{ token: USDC, amount: amount }] });",
-  "}",
-  "",
-].join("\n");
 const TOKEN: Address = "0x1111111111111111111111111111111111111111";
 
 /** What a transaction-printing command printed on stdout; its advice goes to stderr. */
@@ -453,7 +430,7 @@ const cookOf = async (file: string, ...argv: string[]): Promise<Hex> =>
 describe("sauce inspect", () => {
   it("decodes a cook's arguments against the program's source", async () => {
     const split = file("split.sauce.ts", SPLIT);
-    const args = [TOKEN, JSON.stringify([RECIPIENT, CREATOR]), "5", '{"tag":7,"ok":true}'];
+    const args = [TOKEN, JSON.stringify([RECIPIENT, OTHER_RECIPIENT]), "5", '{"tag":7,"ok":true}'];
     const data = await cookOf(split, "--chain", "base", "--args", ...args);
     const inspected = json(
       await sauce("inspect", data, "--source", split, "--chain", "base", "--json"),
@@ -467,12 +444,11 @@ describe("sauce inspect", () => {
           matches: true,
           arguments: [
             { name: "token", type: "Address", value: TOKEN },
-            { name: "recipients", type: "Address[]", value: [RECIPIENT, CREATOR] },
+            { name: "recipients", type: "Address[]", value: [RECIPIENT, OTHER_RECIPIENT] },
             { name: "amount", type: "Uint256", value: "5" },
             { name: "note", type: "{ tag: Uint256, ok: bool }", value: { tag: "7", ok: true } },
           ],
         },
-        intents: [],
       },
     });
     const text = await sauce("inspect", data, "--source", split, "--chain", "base");
@@ -482,7 +458,6 @@ describe("sauce inspect", () => {
     expect(bare.program).toEqual({
       size: expect.any(Number),
       keccak256: expect.stringMatching(/^0x[0-9a-f]{64}$/),
-      intents: [],
     });
     // Another file's program is not this one.
     const another = file("another.sauce.ts", "function main(x: Uint256) {\n  require(x > 0);\n}\n");
@@ -495,67 +470,7 @@ describe("sauce inspect", () => {
     });
   });
 
-  it("reads a fixed intent out of the program that opens it, hash and all", async () => {
-    const fixed = file("fixed.sauce.ts", FIXED);
-    const [lowered] = compileSauceProgram("ethereum", FIXED, {
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    }).intents;
-    const { intentHash } = hashIntent(lowered!.intent);
-    const defines = ["--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS];
-    // From the file: the compile's own intent.
-    const fromFile = json(await sauce("inspect", fixed, ...defines, "--json"));
-    expect(fromFile.intents).toEqual([expect.objectContaining({ intentHash })]);
-    // From the cook's bytes alone, on the chain that publishes it: the same intent.
-    const data = await cookOf(fixed, ...defines);
-    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
-    const [intent] = (fromBytes.program as { intents: Array<Record<string, unknown>> }).intents;
-    expect(intent).toMatchObject({
-      destination: { id: "8453", chain: "base" },
-      intentHash,
-      // The program pays the vault the Portal derives, so that is the one shown: the registry's.
-      vault: predictIntentVault(lowered!.intent, { portal: ecoRoutesPortal("ethereum") }),
-      fundVia: "transfer",
-      reward: { creator: CREATOR, tokens: [{ amount: "2000" }] },
-      route: {
-        calls: [{ function: "transfer", args: { to: RECIPIENT, amount: "1000" } }],
-      },
-    });
-    expect(fromFile.intents).toEqual([expect.objectContaining({ fundVia: "transfer" })]);
-    // Opted out, the program approves and calls publishAndFund, and says so.
-    const optedOut = await cookOf(fixed, ...defines, "--intent-fund-via", "publishAndFund");
-    const [approved] = (
-      json(await sauce("inspect", optedOut, "--chain", "ethereum", "--json")).program as {
-        intents: Array<Record<string, unknown>>;
-      }
-    ).intents;
-    expect(approved).toMatchObject({ intentHash, fundVia: "publishAndFund" });
-    // With no --chain there is no source chain to hash it for, and it says no more than it knows.
-    const unhashed = json(await sauce("inspect", data, "--json"));
-    expect((unhashed.program as { intents: object[] }).intents[0]).not.toHaveProperty("intentHash");
-  });
-
-  it("names the values an intent measures at run time, and says the bytes alone cannot", async () => {
-    const measured = file("measured.sauce.ts", MEASURED);
-    const fromFile = await sauce("inspect", measured, ...INTENT_FLAGS);
-    expect(fromFile.code).toBe(0);
-    expect(fromFile.stdout).toMatch(/reward: <amount> of 0x/);
-    expect(fromFile.stdout).toMatch(/\.transfer\(<recipient>, <amount>\)/);
-    const data = await cookOf(measured, ...INTENT_FLAGS, "--args", RECIPIENT);
-    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
-    expect((fromBytes.program as { intents: unknown[] }).intents).toEqual([
-      { destination: { id: "8453", chain: "base" }, measured: true, fundVia: "transfer" },
-    ]);
-    expect((await sauce("inspect", data, "--chain", "ethereum")).stdout).toContain(
-      "funded: the program pays the reward into the intent's vault, then calls Portal.publish",
-    );
-    // Given the source, the cook's intents are the compile's, named.
-    const sourced = await sauce("inspect", data, "--source", measured, ...INTENT_FLAGS);
-    expect(sourced.stdout).toMatch(/recipient: Address = 0x6666/);
-    expect(sourced.stdout).toMatch(/reward: <amount> of 0x/);
-  });
-
-  it("reads a Kitchen.deployPot, a transfer to a vault and the Portal publish after it", async () => {
+  it("reads a Kitchen.deployPot, and an ERC-20 transfer and approve", async () => {
     const pot = printed(
       await sauce("pot", "--chain", "base", "--owner", OWNER, "--salt", "treasury"),
     );
@@ -565,42 +480,23 @@ describe("sauce inspect", () => {
       salt: potSalt("treasury"),
       pot: v12PredictPot(OWNER, potSalt("treasury")),
     });
-    const fixed = file("fixed.sauce.ts", FIXED);
-    const publishing = (...flags: string[]) =>
-      sauce(
-        ...["intent", "publish", fixed, "--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS],
-        ...["--format", "json", ...flags],
-      );
-    type Printed = {
-      intents: Array<{ intentHash: string; vault: Hex; transactions: Array<{ data: Hex }> }>;
-    };
-    const published = printed(await publishing()) as Printed;
-    const [{ intentHash, vault, transactions }] = published.intents as [Printed["intents"][number]];
-    const [transfer, publish] = transactions.map((tx) => tx.data);
-    // The transfer pays the vault the publish below names: the address inspect derives for it.
-    expect(json(await sauce("inspect", transfer!, "--json"))).toMatchObject({
+    const transfer = encodeFunctionData({
+      abi: ERC20ABI,
+      functionName: "transfer",
+      args: [RECIPIENT, 2000n],
+    });
+    expect(json(await sauce("inspect", transfer, "--json"))).toMatchObject({
       call: "ERC20.transfer",
-      args: { to: vault, amount: "2000" },
+      args: { to: RECIPIENT, amount: "2000" },
     });
-    const text = await sauce("inspect", publish!, "--chain", "ethereum");
-    expect(text.stdout).toContain(`vault: ${vault}, funded once it holds the reward`);
-    expect(json(await sauce("inspect", publish!, "--chain", "ethereum", "--json"))).toMatchObject({
-      call: "Portal.publish",
-      intent: { intentHash, vault, destination: { chain: "base" } },
+    const approve = encodeFunctionData({
+      abi: ERC20ABI,
+      functionName: "approve",
+      args: [OTHER_RECIPIENT, 2000n],
     });
-
-    // Opted out: an approve to the Portal, then publishAndFund of the same intent.
-    const optedOut = printed(await publishing("--intent-fund-via", "publishAndFund")) as Printed;
-    const [approve, publishAndFund] = optedOut.intents[0]!.transactions.map((tx) => tx.data);
-    expect(json(await sauce("inspect", approve!, "--json"))).toMatchObject({
+    expect(json(await sauce("inspect", approve, "--json"))).toMatchObject({
       call: "ERC20.approve",
       args: { amount: "2000" },
-    });
-    expect(
-      json(await sauce("inspect", publishAndFund!, "--chain", "ethereum", "--json")),
-    ).toMatchObject({
-      call: "Portal.publishAndFund",
-      intent: { intentHash, vault, destination: { chain: "base" } },
     });
   });
 
@@ -665,70 +561,17 @@ describe("sauce verify", () => {
   });
 
   it("accepts a historical program only with its --pin", async () => {
-    // A different 435-byte program: the same length, one byte changed.
+    // An explicitly accepted alternative program with one byte changed.
     const program = hexToBytes(SETTLE_PROGRAM);
     program[200] = program[200]! ^ 0xff;
     const older = `${bytesToHex(program)}${SETTLE_VECTORS[0]!.args.slice(2)}` as Hex;
     const refused = await sauce("verify", older, "--json");
     expect(JSON.parse(refused.stdout)).toMatchObject({ valid: false, code: "PROGRAM_HASH" });
     const pinned = json(
-      await sauce("verify", older, "--pin", `${keccak256(program)}:435`, "--json"),
+      await sauce("verify", older, "--pin", `${keccak256(program)}:${program.length}`, "--json"),
     );
     expect(pinned).toMatchObject({ valid: true, programHash: keccak256(program) });
     expect((await sauce("verify", older, "--pin", "0x12")).stderr).toMatch(/is not <hash>:<bytes>/);
-  });
-
-  it("finds the settle cook among an intent's route calls, or says there is none", async () => {
-    const pot = v12PredictPot(OWNER);
-    const call = (target: Address, data: Hex) => ({
-      target: toUniversalAddress(target),
-      data,
-      value: 0n,
-    });
-    const route = (calls: ReturnType<typeof call>[]) =>
-      encodeRoute(
-        {
-          salt: `0x${"00".repeat(32)}`,
-          deadline: 2_000_000_000n,
-          portal: toUniversalAddress(CREATOR),
-          nativeAmount: 0n,
-          tokens: [],
-          calls,
-        },
-        "evm",
-      );
-    const reward = {
-      deadline: 2_000_000_000n,
-      creator: CREATOR,
-      prover: CREATOR,
-      nativeAmount: 0n,
-      tokens: [],
-    };
-    const publish = (routeBytes: Hex) =>
-      encodeFunctionData({
-        abi: PortalABI,
-        functionName: "publishAndFund",
-        args: [8453n, routeBytes, reward, false],
-      });
-    const transfer = call(
-      TOKEN,
-      encodeFunctionData({ abi: ERC20ABI, functionName: "transfer", args: [RECIPIENT, 1n] }),
-    );
-    const settle = call(
-      pot as Address,
-      v12Pot.encodeCook(ENGINE, settlePayload(SETTLE_VECTORS[0]!.args)),
-    );
-    expect(json(await sauce("verify", publish(route([transfer, settle])), "--json"))).toMatchObject(
-      {
-        valid: true,
-        callIndex: 1,
-        target: pot,
-        engine: ENGINE,
-      },
-    );
-    const none = await sauce("verify", publish(route([transfer])), "--json");
-    expect(none.code).toBe(1);
-    expect(JSON.parse(none.stdout)).toMatchObject({ valid: false, code: "NO_SETTLE" });
   });
 });
 
@@ -854,15 +697,14 @@ describe("decodeEntryArguments: encodeEntryArguments, inverted", () => {
   ];
   const values = [RECIPIENT, [1n, 2n ** 200n], "0xdeadbeef", "hello", { a: 9n, b: true }];
 
-  it("reads back exactly what was encoded, ABI-v1 and compact-v1", () => {
+  it("reads back exactly what was ABI-v1 encoded", () => {
     const abi = { entryEncoding: "abi-v1" as const, entryParams: params };
     expect(decodeEntryArguments(abi, encodeEntryArguments(abi, values))).toEqual(values);
     const compiled = compileSauceProgram(
       "base",
       "function main(who: Address, amounts: Uint256[], memo: bytes, label: string, pair: { a: Uint256, b: bool }) { require(pair.b); }",
-      { compactArgs: true },
     );
-    expect(compiled.entryEncoding).toBe("compact-v1");
+    expect(compiled.entryEncoding).toBe("abi-v1");
     expect(decodeEntryArguments(compiled, encodeEntryArguments(compiled, values))).toEqual(values);
   });
 

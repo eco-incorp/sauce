@@ -17,32 +17,9 @@ High-performance options and perpetuals exchange built on a custom OP Stack roll
 | Namespace | `Aevo` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **depositERC20**: Deposit ERC-20 tokens into Aevo L2 for trading
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit ERC-20 into Aevo
-import { DepositContractABI as IDeposit } from "./abis";
-function main(
-  depositAddress: Address,
-  token: Address,
-  l2Token: Address,
-  amount: Uint256,
-  minGasLimit: Uint256,
-): Uint256 {
-  const deposit = IDeposit.at(depositAddress);
-  deposit.depositERC20(token, l2Token, amount, minGasLimit, "");
-  return 1;
-}
-```
 
 ## Notes
 
@@ -78,3 +55,9 @@ function main() {
 
 - `depositERC20(address l1Token, address l2Token, uint256 amount, uint32 minGasLimit, bytes extraData)`
 - `depositETH(uint32 minGasLimit, bytes extraData) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

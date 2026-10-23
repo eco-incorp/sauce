@@ -2,7 +2,7 @@
 
 # A distributed swap on Solana
 
-**How-to guide** · [Documentation](../README.md)
+**How-to guide** · [Documentation](../README.md) · [Solana](solana.md)
 
 > The same order on Solana: buy a lot of a token, never paying more than a set price for any of it,
 > spread over the pools of several Solana exchanges. Each pool sells what it can below your price,
@@ -10,11 +10,11 @@
 
 The limit order of [the distributed swap](distributed-swap.md), on Solana: one price, the most the caller pays for any
 unit, fees included, and every pool trading until its own price reaches it. The method (the price
-does the splitting, no sorting, the two checks on the total) is that skill's. This skill owns what
-Solana changes: the program finds its pools by key, as an EVM program asks a factory for a pool,
-every account a pool takes is read from it as the cook is built, and what fits in one transaction.
+does the splitting, no sorting, the two checks on the total) is explained there; what Solana changes
+is here: the program finds its pools by key, as an EVM program asks a factory for a pool, every
+account a pool takes is read from it as the cook is built, and what fits in one transaction.
 
-## Core model
+## How it works
 
 - **A program for one request.** It names its tokens by symbol (`USDC`, `SPCX_US`), its venues by
   namespace (`Raydium.CLMM`, `Byreal.CLMM`) and its pools by key, written in; the amounts and the
@@ -38,7 +38,7 @@ every account a pool takes is read from it as the cook is built, and what fits i
   with the Pot's own, so it is given no account. A key with no pool there is an empty slot: its
   accounts are the System program, `11111111111111111111111111111111`, and its swap returns 0.
 - **One call per pool.** Each is
-  `<Venue>.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)` ([the `@sauce/router` reference](../api/router.md) gives each
+  `<Venue>.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)` ([`@sauce/router` on Solana](../api/router-solana.md) gives each
   argument), offered everything still unspent. What it buys
   lands in the Pot's own account for the token bought, and it returns what arrived, `0` for a pool
   it skipped.
@@ -124,7 +124,7 @@ Phoenix market is not derived from its pair: a program takes it as a `main` argu
   only a minimum output: they fill in full at whatever price, so they cannot stop at one.
 
 Each venue's pool layout, how its program derives a pool from its key, the nine accounts a swap at
-its pool takes and how to list a pair's pools are in [the venues, their pools and their slots](#the-venues-their-pools-and-their-slots).
+its pool takes and how to list a pair's pools are in [each venue's pools and slots](#each-venues-pools-and-slots).
 
 ## The program
 
@@ -132,9 +132,9 @@ its pool takes and how to list a pair's pools are in [the venues, their pools an
 complete implementation of those rules, buying SpaceX's tokenized share, `SPCX_US` (a Token-2022
 mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%,
 Byreal's at 0.1% and PancakeSwap's at 0.08%; its header gives every input with its units and how to
-run it. Each venue's byte layout,
-instruction format and account order is `@sauce/router`'s, which every compile the package makes
-resolves with no option. Its code:
+run it. Each venue's byte layout, instruction format and account order is `@sauce/router`'s, which
+every compile the package makes resolves with no option. Save it as
+`solana-distributed-swap.sauce.ts` in your project: every command below runs that file. Its code:
 
 ```ts
 // SpaceX for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
@@ -303,8 +303,8 @@ nothing and sends the whole budget to the recipient, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 5.4 KB, past one transaction, so it runs from a code
-  buffer it is written into first; `sauce run` does that ([Solana](solana.md)).
+- **The program is staged.** Its compiled payload is larger than one transaction, so it runs from
+  a code buffer it is written into first; `sauce run` measures it and handles staging ([Solana](solana.md)).
 - **The accounts go through a lookup table.** The program names 46 accounts, every one derived: nine
   for each key, the Pot's, the mints', the programs' and the recipient's two. A key with no pool
   names the System program nine times, one account; each pool found brings eight of its own. The
@@ -344,8 +344,8 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
    the released engine and Kitchen ([Solana](solana.md)): `--owner` is any wallet's address, or any
    address with no account, never a program's account such as a pool or a mint;
    `--assume-balance` gives the Pot's USDC account the budget in that copy. `<recipient>` is a
-   wallet, or the Pot's address. The program file is the example's, in the project (or run where
-   the skill is installed):
+   wallet, or the Pot's address. The program file is the one saved above,
+   `solana-distributed-swap.sauce.ts`:
 
    ```sh
    sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
@@ -396,7 +396,7 @@ addresses as placeholders:
 The cook succeeds from <owner>: 519966 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 34 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 5528-byte program staged into a code buffer in 9 transactions, as `sauce run` stages it
+  the <program-bytes>-byte program staged into a code buffer in <transactions> transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potUSDC, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC
@@ -437,7 +437,7 @@ Token balance changes:
 - **A program's account as `--owner`** (a pool, a mint). The owner signs and pays: a wallet, or an
   address with no account.
 
-## The venues, their pools and their slots
+## Each venue's pools and slots
 
 Every venue the distributed swap trades on, with its swap in a program and its function in
 `@sauce/router`, where its pool keeps what that function reads, how its program derives a pool
@@ -620,3 +620,9 @@ and cheapest. `sauce pools` does all of this, and gives each pool's `byKey`: how
 A pool's price, back in whole tokens: `(sqrtPrice ÷ 2^64)^2 × 10^(lowerDecimals − higherDecimals)`
 higher-key tokens per lower-key token. Paying the higher-key token, its price fee included is that
 divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`.
+
+## Next
+
+- [`@sauce/router` on Solana](../api/router-solana.md): every Solana venue's swap function.
+- [How Sauce runs on Solana](../concepts/solana-model.md): accounts, staging and compute.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

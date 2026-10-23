@@ -16,6 +16,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { publicEndpoints, type PublicEndpoints } from "../src/cli/public-endpoints.js";
 import { PUBLIC_RPCS, PUBLIC_RPCS_VERIFIED, type PublicRpc } from "../src/cli/public-rpcs.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import { supportedChains } from "../src/cli/support.js";
 import { CANONICAL_CHAINS } from "../src/chains/canonical.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -124,8 +125,8 @@ describe("the list", () => {
   });
 
   it("gives the supported chains at least two endpoints each, to fall back between", () => {
-    for (const slug of ["ethereum", "base", "solana"]) {
-      expect(PUBLIC_RPCS[requireChain(slug).id]!.length).toBeGreaterThanOrEqual(2);
+    for (const chain of supportedChains()) {
+      expect(PUBLIC_RPCS[chain.id]!.length).toBeGreaterThanOrEqual(2);
     }
     // Where an endpoint runs eth_simulateV1, the first one does: a simulation and the reads around
     // it then go to one node.

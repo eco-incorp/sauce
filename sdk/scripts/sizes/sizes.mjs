@@ -1,5 +1,5 @@
-// The size of every example and recipe program an SDK tree compiles, and of each intent body, by
-// file and chain, as JSON on stdout. Usage:
+// The size of every example and recipe program an SDK tree compiles, by file and chain, as JSON on
+// stdout. Usage:
 //   SAUCE_COMPILER_PKG=<compiler>/crates/sauce-wasm/pkg \
 //     node --import ./register.mjs sizes.mjs <sdk-tree> > sizes.json
 // <sdk-tree> is an eco-incorp/sauce checkout whose SDK is built (`pnpm build`). Without
@@ -24,14 +24,6 @@ const files = dirs
       .filter((name) => name.endsWith(".sauce.ts"))
       .map((name) => join(dir, name)),
   );
-const options = {
-  intents: {
-    executionFee: 1000n,
-    deadline: 2000000000n,
-    openedAt: 1900000000n,
-    salt: `0x${"5a".repeat(32)}`,
-  },
-};
 const sizes = {};
 for (const file of files) {
   const text = readFileSync(file, "utf8");
@@ -41,7 +33,7 @@ for (const file of files) {
   };
   for (const chain of ["base", "ethereum", "solana"]) {
     try {
-      const program = compileSauceProgram(chain, text, { ...options, resolve });
+      const program = compileSauceProgram(chain, text, { resolve });
       sizes[`${file.slice(root.length + 1)}@${chain}`] = [
         program.bytecode.length,
         ...(program.bodies ?? []).map((body) => body.bytecode.length),

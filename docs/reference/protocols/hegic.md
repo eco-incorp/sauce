@@ -17,26 +17,9 @@ On-chain options trading protocol allowing users to buy call and put options on 
 | Namespace | `Hegic` on arbitrum |
 | Chains | arbitrum |
 
-## Key Operations
+## What it offers
 
 - **exerciseOption**: Exercise an options position to claim profit
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Exercise option: the OperationalTreasury pays off the position to `account`
-import { HegicABI as IHegic } from "./abis";
-function main(treasuryAddress: Address, optionId: Uint256, account: Address): Uint256 {
-  const treasury = IHegic.at(treasuryAddress);
-  treasury.payOff(optionId, account);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -70,3 +53,9 @@ function main() {
 `import HegicABI from "./protocols/hegic/HegicABI.json";` Speaks for: operationalTreasury.
 
 - `payOff(uint256 positionID, address account)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

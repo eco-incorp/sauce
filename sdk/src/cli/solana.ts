@@ -122,7 +122,6 @@ import {
   compileProgram,
   payloadOf,
   type ProgramInput,
-  refusePastDeadline,
   revertedFirst,
   unapproved,
 } from "./commands.js";
@@ -663,9 +662,9 @@ export async function svmLanded(
 }
 
 /**
- * Signs a plan's Solana transaction (`lifecycle-svm.ts`: base64, its fresh keys' signatures in, the
- * fee payer's out) with `signer`, the fee payer, rehearses it as signed and refuses it if it would
- * fail, then sends it and waits until it is confirmed.
+ * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
+ * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, rehearses it as
+ * signed and refuses it if it would fail, then sends it and waits until it is confirmed.
  */
 export async function sendPlannedSvm(
   url: string,
@@ -1087,10 +1086,6 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
-/** The bump `target`'s Pot is minted at, which a cook through the Kitchen passes beside it. */
-const potBumpOf = async (target: SvmTarget): Promise<number> =>
-  (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).bump;
-
 /** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
 export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
   return exists(createSolanaRpc(rpcUrl), rpcUrl, await potOf(target), "the Pot");
@@ -1385,12 +1380,6 @@ export function svmPayload(
     );
   }
   const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
-  if (keyed && program.entryEncoding === "compact-v1") {
-    throw new UsageError(
-      "--compact-args: an Address argument on Solana is encoded as an ABI-v1 word only; compile " +
-        "without --compact-args, or take the key as an Account parameter",
-    );
-  }
 
   return hexToBytes(
     payloadOf(
@@ -1562,7 +1551,6 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
-  refusePastDeadline(input);
   const via = input.via ?? "kitchen";
   // Compiled with every swap the plain one; a swap whose stop binds is compiled again, below, to
   // the Stopped form. The arguments are checked before anything is read.
@@ -1841,7 +1829,6 @@ export async function svmCookSize(
           engineProgram: engine(),
           potSalt: saltBytes(target.salt),
           pot,
-          potBump: await potBumpOf(target),
           feeConfig,
           bytecode,
           maxExecutionFee: 0n,
@@ -2212,7 +2199,6 @@ async function stagedRehearsal(
         engineProgram: engine(),
         potSalt: saltBytes(input.salt),
         pot: prepared.pot,
-        potBump: await potBumpOf(input),
         feeConfig,
         maxExecutionFee: prepared.fee,
         tail,

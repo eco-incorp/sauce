@@ -8,7 +8,7 @@
 > the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Decentralized perpetual exchange with multi-asset liquidity pool (GLP). Supports leverage trading up to 50x with low swap fees and zero price impact trades.
 
@@ -19,88 +19,11 @@ Decentralized perpetual exchange with multi-asset liquidity pool (GLP). Supports
 | Namespace | `GmxV1` on arbitrum, avalanche |
 | Chains | arbitrum, avalanche |
 
-## Key Operations
+## What it offers
 
 - **openPosition**: Open/increase leveraged position via PositionRouter
 - **closePosition**: Close/decrease leveraged position
 - **swap**: Swap tokens via GMX Router
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Open leveraged long position
-import { PositionRouterABI as IPositionRouter } from "./abis";
-function main(
-  positionRouterAddress: Address,
-  path: Address[],
-  indexToken: Address,
-  amountIn: Uint256,
-  sizeDelta: Uint256,
-  isLong: bool,
-): Uint256 {
-  const positionRouter = IPositionRouter.at(positionRouterAddress);
-  positionRouter.createIncreasePosition(
-    path,
-    indexToken,
-    amountIn,
-    0,
-    sizeDelta,
-    isLong,
-    0,
-    200000000000000,
-    0x0000000000000000000000000000000000000000000000000000000000000000,
-    0x0000000000000000000000000000000000000000,
-  );
-  return 1;
-}
-
-// Close position
-import { PositionRouterABI as IPositionRouter } from "./abis";
-function main(
-  positionRouterAddress: Address,
-  path: Address[],
-  indexToken: Address,
-  collateralDelta: Uint256,
-  sizeDelta: Uint256,
-  isLong: bool,
-  receiver: Address,
-): Uint256 {
-  const positionRouter = IPositionRouter.at(positionRouterAddress);
-  positionRouter.createDecreasePosition(
-    path,
-    indexToken,
-    collateralDelta,
-    sizeDelta,
-    isLong,
-    receiver,
-    0,
-    0,
-    200000000000000,
-    false,
-    0x0000000000000000000000000000000000000000,
-  );
-  return 1;
-}
-
-// Swap tokens
-import { RouterABI as IRouter } from "./abis";
-function main(
-  routerAddress: Address,
-  path: Address[],
-  amountIn: Uint256,
-  minOut: Uint256,
-  receiver: Address,
-): Uint256 {
-  const router = IRouter.at(routerAddress);
-  router.swap(path, amountIn, minOut, receiver);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -155,3 +78,9 @@ function main() {
 - `swap(address _tokenIn, address _tokenOut, address _receiver) returns (uint256)`
 - `increasePosition(address _account, address _collateralToken, address _indexToken, uint256 _sizeDelta, bool _isLong)`
 - `decreasePosition(address _account, address _collateralToken, address _indexToken, uint256 _collateralDelta, uint256 _sizeDelta, bool _isLong, address _receiver) returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

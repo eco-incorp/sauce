@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: SauceScript, the language of a Sauce program (.sauce.ts), the checked TypeScript subset Sauce compiles to bytecode. The two program forms (function main(...) whose parameters are every input, intent files included; a script of top-level statements with none), the header every program opens with, inputs against module constants, values, the three ways to call a contract and who receives what a call produces, helpers, what compiles and what to write instead, require, throw and atomic failure, .catch on a failed call, ctx and the other builtins, gas, the editor and reading compile errors, with a complete reference of every type, operator, statement and builtin per target. Use when writing or editing any Sauce program, when a compile fails ("unsupported construct", "is not a declared variable", "does not return on every path", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: SauceScript authoring for .sauce.ts programs, including inputs, signed and unsigned integers, contract calls and unread results, helpers, atomic try/catch rollback and revert data, program closures, builtins and compile errors. Use when writing or editing a Sauce program, fixing a compile error, or checking which syntax and builtins a target supports.
 ---
 
 # SauceScript
@@ -23,18 +23,17 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 ## Core model
 
 - A program is a `.sauce.ts` file compiled **for a chain** (`--chain`). Compiling lowers the names
-  that chain supplies, the token syntax and the intents the file opens; everything else reaches
-  the compiler as written, annotations included.
+  that chain supplies and the token syntax; everything else reaches the compiler as written,
+  annotations included.
 - **A balance is `<holder>.<TOKEN>`, on any address or contract**: `self.USDC` is the Pot's USDC,
   `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`; the native coin
   too, `self.ETH` (`ctx.selfBalance()`) and `self.SOL`. Which holders each target takes, and the
   token methods, are `sauce-globals`'s.
 - Its inputs are `main`'s parameters, taken in declaration order, ABI-encoded and appended to the
   bytecode: one compiled program serves every value. `--args` passes them (`sauce-cli`).
-- Integers are 256-bit and checked; amounts are in a token's smallest units; nothing scales
-  decimals for you.
-- Failure is atomic: a failed `require`, a `throw` or a reverting call reverts the whole
-  transaction.
+- Integers are checked `Uint256` or `Int256`; amounts are in smallest units.
+- Uncaught failure reverts the whole transaction. EVM `try` blocks roll back only their own work
+  before running a handler; a single-call catch handles only that external call's failure.
 - **Look a builtin up in [references/builtins.md](references/builtins.md) before using it**: every
   type, literal, operator, statement, `ctx`, `crypto`, `Math`, `abi`, `evm` and `svm` builtin,
   value method, account property, contract binding and limit, with its targets, an example and the
@@ -43,10 +42,10 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 
 ## Program forms
 
-| Form                   | Inputs                                                    | Use for                                                                                        |
-| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **`function main(…)`** | `main`'s parameters, passed with `--args`                 | every program that takes an input (tokens, amounts, recipients, limits), intent files included |
-| **Top-level script**   | none: every value is written in the file or read on chain | a program with no inputs                                                                       |
+| Form                   | Inputs                                                    | Use for                                                                 |
+| ---------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **`function main(…)`** | `main`'s parameters, passed with `--args`                 | every program that takes an input (tokens, amounts, recipients, limits) |
+| **Top-level script**   | none: every value is written in the file or read on chain | a program with no inputs                                                |
 
 A `main` program may declare module constants, helpers and imports. (The `chain=…` after a fence
 here only says which chains the block is checked on; it is not part of the file.)
@@ -106,12 +105,11 @@ AaveV3.Pool.supply(USDC, supplied, ctx.msgSender(), 0);
 
 ## The header
 
-Every program, an intent file included, opens with a comment that says, in order:
+Every program opens with a comment that says, in order:
 
 1. what it does, in one line;
 2. the `sauce` command that runs it, with `--chain <chain>` (a program names no chain) and `--args`
-   naming every `main` parameter in order: `--args <tokenIn> <tokenOut> <amountIn>`; an intent
-   file adds its `--intent-…` flags (`sauce-intents`);
+   naming every `main` parameter in order: `--args <tokenIn> <tokenOut> <amountIn>`;
 3. one line per parameter, `name: Type`, its meaning and its units, in smallest units
    (`5000000000` is 5,000 USDC, which has 6 decimals); an array or a record is passed as JSON;
 4. one concrete run on a supported chain with real values: addresses from the registry
@@ -140,25 +138,27 @@ function main(recipients: Address[], amount: Uint256) {
 
 ## Inputs and fixed values
 
-| Value                                                        | Write it as                 | Arrives                                                                   |
-| ------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------- |
-| What the caller chooses per run: tokens, amounts, recipients | a **`main(...)` parameter** | with the transaction (`--args`)                                           |
-| The inputs of intents published from a wallet                | **`main(...)` parameters**  | fixed into the intents by `sauce intent publish --args` (`sauce-intents`) |
-| A value the program fixes: a fee, a pool's tier              | a **module constant**       | folded into the bytecode                                                  |
-| A value the chain supplies                                   | a name (`sauce-globals`)    | resolved when compiling for that chain                                    |
+| Value                                                        | Write it as                 | Arrives                                |
+| ------------------------------------------------------------ | --------------------------- | -------------------------------------- |
+| What the caller chooses per run: tokens, amounts, recipients | a **`main(...)` parameter** | with the transaction (`--args`)        |
+| A value the program fixes: a fee, a pool's tier              | a **module constant**       | folded into the bytecode               |
+| A value the chain supplies                                   | a name (`sauce-globals`)    | resolved when compiling for that chain |
 
 ## Values
 
-- **Integers** are 256-bit, written plainly (`3000`, `10 ** 18`), never as floats (`1.5` is
-  rejected). A constant expression that overflows or underflows (`0 - 1`, `2 ** 256 - 1`) is a
-  compile error: write the maximum as `~0`, and a two's-complement negative as **`-x`**, which never
-  fails (`~x + 1` reverts when `x` is `0`).
+- **Integers** are checked 256-bit values, written plainly (`3000`, `10 ** 18`); bigint suffixes
+  work too. Nonnegative values default to `Uint256`, negative literals to `Int256`. Write `~0` for
+  the unsigned maximum. A signed amount from an unsigned input is `-Int256(amount)`: plain
+  `-amount` is checked unsigned negation and rejects nonzero values.
+- **Signed operations** use `Int256` and ordinary `/`, `%`, `>>` and comparisons. Convert with
+  `Int256(value)`/`Uint256(value)` (checked) or `.fromBits(value)` (bit reinterpretation).
+  Mixed arithmetic needs a conversion; mixed comparisons compare mathematical values.
+  ABI `intN` outputs and `Math.signExtend` now produce `Int256`; annotate signed helper returns.
 - **Addresses** are numbers: a `main` parameter, a name such as `USDC`, or a literal from the
   registry written as its hex (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`), never an invented one.
 - **`bytes`**: `` hex`a9059cbb` ``, `"text"`, `.concat`, `.slice(a, b)`, `.length`, `b[i]`,
   `x.toBytesBe(32)`, `x.toBytesLe(8)`, `abi.encode`/`abi.decode` (EVM). `hex` is the only template
-  form: every untagged template literal is rejected. Bind a literal before calling a method on it:
-  ``const selector = hex`a9059cbb`; selector.concat(data)``.
+  form; untagged template literals are rejected. Byte methods also work directly on bytes literals.
 - **Arrays and records**: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1 }`. A
   record type is an `interface` or an inline object type
   (`orders: { amount: Uint256, to: Address }[]`; `;` between fields works too). Destructuring, `const [a, b] = …`, takes a record (a
@@ -169,11 +169,12 @@ function main(recipients: Address[], amount: Uint256) {
 - **`Account` parameters** (`Account<Writable>`, `Account<Signer>`) are `main`'s alone: on Solana
   the transaction's accounts (`sauce-solana`); on an EVM chain only a bare `Account` compiles, as
   an address.
-- **Module level takes only scalar literals.** A module-level `let` starts as a number, address or
-  boolean literal and is scratch, reset every run; anything else (`[1, 2]`, `new Array(n)`, `-1`,
-  `1 << 160`, a call) is refused with "must be initialized with a literal". A module-level `const`
-  array is a lookup table read at a literal index (`FEES[0]`), never looped over. Persistent state
-  is `evm.sstore`/`evm.sload` (`svm.sstore`/`svm.sload`).
+- **Module `let`s** start from scalar literals and reset every run; they are not persistent storage.
+  A module `const` can hold known expressions, static objects/arrays or contract bindings. Plain
+  runtime data belongs inside a function; persistent state is `evm.sstore`/`svm.sstore`.
+- **Known values** decide branches and specialize helper calls during compilation. `program((fee)
+=> { … }, feeValue)` builds `{ code, args }` from an inline arrow with explicit read-only captures.
+  Read the reference's closure rules before using captured arrays, records or cross-target options.
 
 ### `ctx`: the transaction's context
 
@@ -189,8 +190,15 @@ Each read is a call; the complete list, per target, is section 6 of
 | `ctx.balance(a)`                                                                                             | the balance of `a`                                      | an attached account's lamports: pass `acct.address`       |
 | `ctx.blockNumber()`                                                                                          | block number                                            | slot                                                      |
 | `ctx.msgValue()`, `ctx.gasLeft()`, `ctx.codeSize(a)`, `ctx.codeHash(a)`, `ctx.isContract(a)`, `ctx.isEOA(a)` | yes                                                     | rejected                                                  |
+| `ctx.txOrigin()`, `ctx.gasPrice()`                                                                           | the transaction's signer and gas price                  | rejected                                                  |
+| `ctx.coinbase()`, `ctx.prevrandao()`, `ctx.blockGasLimit()`, `ctx.baseFee()`, `ctx.blobBaseFee()`            | the block's fee recipient, randomness, gas limit, fees  | rejected                                                  |
+| `ctx.blockHash(n)`, `ctx.blobHash(i)`                                                                        | a recent block's hash; the transaction's blob hashes    | rejected                                                  |
 
-There is no read for the transaction's origin.
+`ctx.txOrigin()` is the account that signed the transaction, which is not the program's caller
+whenever a contract stands between them. Authorize on `ctx.msgSender()`, never on the origin: a
+check of the origin passes for any contract the signer calls. `ctx.blobBaseFee()` halts the cook
+on a chain that does not implement that read, such as Arbitrum or Polygon, although it compiles
+there.
 
 ## Calling a contract
 
@@ -223,9 +231,9 @@ Call a contract by name, in this order of preference:
    (`{ "IOracle.json": "<its JSON>" }`).
 
 Never call through `evm.static` or `evm.call` with a hex selector where one of these exists: the
-typed call encodes the arguments, decodes the result and names its fields. Take only what you need
-of a result: `const [sqrtPriceX96] = pool.slot0();` and `pool.slot0().sqrtPriceX96` both read the
-first field alone.
+typed call encodes arguments and names outputs. Select the field you need for clarity, but any read
+still decodes **all** declared outputs, including unused siblings. Discarding the entire result skips
+all output checks; it is not SafeERC20 validation.
 
 ```sauce chain=base,ethereum
 function main(vault: Address, shares: Uint256): Uint256 {
@@ -247,8 +255,7 @@ Every call comes from the Pot. A call that credits its caller, or names `ctx.sel
 beneficiary, leaves the output in the Pot. A call that names a beneficiary (a lending market's
 `onBehalfOf`, a vault's `receiver`, a swap's `recipient`, a bridge's `to`) credits that address:
 make it a `main` parameter, the user's wallet or `ctx.self()` as the user chose (`sauce-overview`
-says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner; in an intent's body it
-is not (the body runs on the shared intent Pot), so there the wallet is always a parameter.
+says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner.
 
 ```sauce chain=base,ethereum
 // Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
@@ -266,9 +273,8 @@ function main(onBehalfOf: Address, amount: Uint256) {
   one that wraps a single call adds nothing and costs a call frame of gas.
 - Helpers are top-level `function` declarations, annotated on the signature. They may call each
   other and recurse; `main` is never called.
-- **A helper that returns a value returns it on every path.** An `if` with a `return` and no `else`,
-  or a loop that may end without one, fails with "does not return on every path": end the helper
-  with a `return`.
+- **A helper returns on every reachable runtime path.** Known arguments may decide branches while
+  compiling. If any remaining path can end without a return, add one or reject that path explicitly.
 
 ```sauce fails chain=base
 function larger(a: Uint256, b: Uint256): Uint256 {
@@ -319,15 +325,14 @@ Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...o
 `/` and `%`, helpers, `Math.mulDiv(a, b, c)`, `Math.sqrt(x)`. The full list, with each rejection's
 message, is section 14 of [references/builtins.md](references/builtins.md).
 
-| Rejected                                                                                                          | Write instead                                                                                |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                    | `if` chains, arrays, inline object types, plain functions                                    |
-| `try`/`catch`, `throw new Error(...)`                                                                             | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
-| arrow functions and nested functions, except the intent syntax `Chain(() => { ... })` and `.catch(() => { ... })` | top-level function declarations                                                              |
-| template literals, comparing bytes with `==`                                                                      | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
-| `as` casts, default parameters, spread, object destructuring                                                      | explicit values and field access                                                             |
-| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                        | `new Array(n)` and an index; `if`; `**`                                                      |
-| a method on a literal: ``hex`a9059cbb`.concat(d)``                                                                | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
+| Rejected                                                       | Write instead                                                                    |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await` | `if` chains, arrays, inline object types, plain functions                        |
+| `finally`, `throw new Error(...)`                              | EVM `try`/`catch`; `require(cond, "reason")` or `throw "reason"` on both targets |
+| arbitrary arrows, nested functions                             | top-level helpers; arrows only in `.catch(...)` and `program(...)`               |
+| template literals, comparing bytes with `==`                   | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each      |
+| `as` casts, default parameters, spread, object destructuring   | explicit values and field access                                                 |
+| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`     | `new Array(n)` and an index; `if`; `**`                                          |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {
@@ -339,27 +344,49 @@ function main(x: Uint256): Uint256 {
 }
 ```
 
-## Failure and `.catch`
+## Failure, `try` and `.catch`
 
-`require(false)`, `require(cond, "reason")`, `throw "reason"`, a reverting call and every guard the
-package emits revert the **whole transaction**; for an intent, the whole fulfilment. Nothing
-half-happens, so every safety check belongs in the program.
+An uncaught `require(false)`, `throw`, reverting call or checked operation reverts the whole
+transaction. Every safety check belongs in the program.
 
-The one way to survive a failure is on an external EVM call: `.catch(() => { ... })` runs instead
-when that call reverts, and the call's own effects are undone. The handler may assign locals of the
-enclosing function.
+On **EVM**, a multi-statement `try` is an atomic unit. Its calls, writes and assignments all commit
+on success, or all roll back on failure before `catch` runs. Work before the block remains.
+Unlike JavaScript, a variable assigned before a failure returns to its earlier value.
 
 ```sauce chain=base
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+function main(recipient: Address, amount: Uint256, reserve: Uint256): void {
+  try {
+    USDC.transfer(recipient, amount);
+    require(self.USDC >= reserve, "keep the reserve");
+  } catch (error) {
+    // The transfer was undone too. Error bytes may be empty or truncated.
+    log(error);
+  }
+}
+```
 
-function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256, recipient: Address) {
-  let filled = true;
-  ISauceRouter.at(ctx.self())
-    .swapV3(pool, WETH, WETH < USDC, amount, sqrtPriceLimitX96, recipient)
+A `try` containing only one external call has the same boundary as `.catch(...)`: it catches the
+call's failure, not argument evaluation or decoding a successful reply. Any read of a bound call's
+output still decodes **all** its declared outputs. An unread result, even an unused variable,
+skips decoding/checks: empty/malformed replies and a no-code target can then pass. Check
+`ctx.isContract` where required; token writes should use the SDK's checked token methods.
+
+`catch (error)` and `.catch((error) => { … })` receive at most 256 raw revert bytes; check their
+length and shape before decoding. A handler's own failure propagates; there is no `finally`.
+Neither catch form exists on Solana. The full rules are in section 13 of
+[references/builtins.md](references/builtins.md).
+
+```sauce chain=base,ethereum
+import PoolABI from "./protocols/uniswap-v3/UniswapV3PoolABI.json";
+
+// A Uniswap V3 pool's liquidity, or 0 when the pool refuses the read.
+function main(pool: Address): Uint256 {
+  require(ctx.codeSize(pool) > 0, "no contract at the pool address");
+  return PoolABI.at(pool)
+    .liquidity()
     .catch(() => {
-      filled = false;
+      return 0;
     });
-  require(filled, "the pool refused");
 }
 ```
 
@@ -369,8 +396,8 @@ function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256, recipi
   for ("a `.catch()` fallback: expected a bytes value, found a number"): test a raw read with the
   statement form, then read again only when it worked. A read changes nothing, so the second call is
   safe; never repeat a write that way.
-- **`.catch()` does not catch a call to an address with no code**: that call succeeds and returns
-  nothing, and decoding nothing reverts the cook. Check `ctx.codeSize(address) > 0` first:
+- **A no-code address succeeds with empty data.** A read result's decode can fail outside its
+  single-call catch. Check `ctx.isContract(address)` first when code must exist:
 
 ```sauce chain=base,arbitrum
 // One word from a read that may fail, or 0: an address with no code, or a read that reverts.
@@ -395,24 +422,14 @@ function main(target: Address, query: bytes): Uint256 {
 
 ## Gas
 
-On an EVM chain a cook's gas is the transaction's, the Kitchen's and the Pot's, plus the program's,
-which the engine interprets step by step. Measured on a local chain through the engine and a
-Kitchen-made Pot:
+Simulation reports the gas a cook needs; it includes the transaction, Kitchen, Pot, protocol calls
+and program execution. Bound loops and read repeated values once. Leave headroom for chain state
+to change before inclusion, especially swaps that may cross more ticks.
 
-| What                                                | Gas, about                                   |
-| --------------------------------------------------- | -------------------------------------------- |
-| A cook whose program does almost nothing            | 43,000, the transaction's 21,000 included    |
-| One loop iteration that adds two numbers            | 1,000                                        |
-| Writing an array element, or reading one            | 500, or 300, on top                          |
-| A call to a contract the transaction already called | 2,000 on top, plus what that contract spends |
-| `.catch()` on that call                             | 100 more                                     |
-| `crypto.keccak256(abi.encode(a, b))`                | 2,000                                        |
-
-The first call to a contract in a transaction costs 2,600 more than later ones. Loops are what add
-up: a hundred iterations of a little arithmetic cost about 100,000 gas. Read a value once into a
-local, and bound each loop by its input. The real figure is the simulation's: `sauce simulate`
-prints it, and `sauce run` and most signers set the limit from an estimate; leave headroom when the
-chain can move before the send (a swap that crosses more ticks spends more).
+On EVM, `.gas(n)` on a bound call, or the optional final `gas` argument on a raw `evm.call`,
+`evm.static` or `evm.delegate`, caps what that call receives. Omitted forwards what the EVM allows;
+zero forwards no gas. This is not the transaction's gas limit. A callee running out of gas is a
+call failure a catch can handle; the enclosing program still needs gas to recover.
 
 ## In an editor
 
@@ -431,18 +448,18 @@ A compile error fails the command; there is no warning channel. `sauce compile` 
 file's line and column, including on a line the package rewrote, and a `hint:` line names what to
 add. For any message not here, search [references/builtins.md](references/builtins.md).
 
-| Message                                                | Means                                                                                | Do                                                     |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `X is not a declared variable`                         | a typo, a name the chain does not have, or a value that should be a `main` parameter | check the name (`sauce-globals`), or add the parameter |
-| `Unexpected token`                                     | a syntax error at that line and column                                               | fix the syntax                                         |
-| `a function argument: expected a number, found a bool` | the called function's parameter has no annotation, so it is a number                 | annotate it: `first: bool`                             |
-| `does not return on every path`                        | a helper can end without a `return`                                                  | end it with a `return`                                 |
-| `a nested function declaration is not supported`       | a function declared inside another function or a block                               | declare it at the top level                            |
-| `X is called but never declared`                       | a function not in scope, usually a typo                                              | fix the name                                           |
-| `calling anything other than a plain function name`    | a method called on a literal (``hex`…`.concat(…)``)                                  | bind the literal to a `const` first                    |
-| `must be initialized with a literal`                   | a module-level `let` or `const` given a computed value                               | compute it inside a function                           |
-| `the registry does not record which contract it is`    | a method called on an address a registry function returns, of no recorded contract   | name its interface, as the message spells it           |
-| `does not name a function`                             | a method called on an address in a variable or parameter                             | name its interface: `UniswapV3.Pool(pool).liquidity()` |
+| Message                                                | Means                                                                                | Do                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `X is not a declared variable`                         | a typo, a name the chain does not have, or a value that should be a `main` parameter | check the name (`sauce-globals`), or add the parameter    |
+| `Unexpected token`                                     | a syntax error at that line and column                                               | fix the syntax                                            |
+| `a function argument: expected a number, found a bool` | the called function's parameter has no annotation, so it is a number                 | annotate it: `first: bool`                                |
+| `does not return on every path`                        | a helper can end without a `return`                                                  | end it with a `return`                                    |
+| `a nested function declaration is not supported`       | a function declared inside another function or a block                               | declare it at the top level                               |
+| `X is called but never declared`                       | a function not in scope, usually a typo                                              | fix the name                                              |
+| `calling anything other than a plain function name`    | an unsupported call expression                                                       | use a named helper, contract binding or supported builtin |
+| `must be initialized with a literal`                   | a module-level `let` or `const` given a computed value                               | compute it inside a function                              |
+| `the registry does not record which contract it is`    | a method called on an address a registry function returns, of no recorded contract   | name its interface, as the message spells it              |
+| `does not name a function`                             | a method called on an address in a variable or parameter                             | name its interface: `UniswapV3.Pool(pool).liquidity()`    |
 
 ## Pitfalls
 
@@ -450,7 +467,8 @@ add. For any message not here, search [references/builtins.md](references/builti
 - **A comparison returned from an unannotated function is a number.** Annotate `: bool`.
 - **A script's top-level `const` is invisible to its helpers.** Pass it in, or use `main` and a
   module constant.
-- **`.catch()` on an address with no code still reverts.** Check `ctx.codeSize` first.
+- **A no-code target is not a failed call.** Unread output skips validation; read output can fail
+  decoding outside a single-call catch. Check `ctx.isContract` and use checked token writes.
 - **A raw selector where a binding exists.** Use the namespace, the registry ABI or an ABI file.
 - **Amounts in whole tokens.** Integers are smallest units: 1 USDC is `1000000`.
 

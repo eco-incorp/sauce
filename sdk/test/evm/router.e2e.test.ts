@@ -36,10 +36,9 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12RouterGeneration } from "../../src/deployments/index.js";
-import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
+import { v12DeployedAddresses } from "../../src/deployments/index.js";
+import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
-import { ecoRoutesExecutor } from "../../src/protocols/eco-routes/lookup.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import { potFromReleasedBytecode } from "./pot-address.js";
@@ -156,17 +155,17 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
     }
   });
 
-  it("the live Kitchen predicts the Pots the SDK derives — the shared intent Pot included", async () => {
-    // The registry Portal's Executor: the owner of the Pot every intent cooks on by default.
-    const executor = ecoRoutesExecutor("base");
+  it("the live Kitchen predicts the Pot the SDK derives for an owner", async () => {
+    // Any owner: a Pot's address is the Kitchen's CREATE2 of (owner, salt), deployed or not.
+    const owner = STRANGER.address;
     const predicted = await publicClient.readContract({
       abi: v12KitchenAbi,
       address: sauce.kitchen,
-      args: [executor, SAUCE_INTENT_POT_SALT],
+      args: [owner, DEFAULT_POT_SALT],
       functionName: "predictPot",
     });
-    expect(predicted).toBe(v12PredictPot(executor));
-    expect(predicted).toBe(potFromReleasedBytecode(executor));
+    expect(predicted).toBe(v12PredictPot(owner));
+    expect(predicted).toBe(potFromReleasedBytecode(owner));
   });
 
   describe("potRouterUpdate", () => {
@@ -316,8 +315,8 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       );
     });
 
-    it("is the release's generation-4 Router, and it answers both renamed callbacks", () => {
-      expect(v12RouterGeneration()).toBe(4);
+    it("is the release's content-addressed Router, and it answers both renamed callbacks", () => {
+      expect(v12DeployedAddresses().evm.contracts.router.addressing).toBe("content");
       const answered = ISAUCE_ROUTER.abi
         .filter((item) => item.type === "function")
         .map((item) => (item as { name: string }).name);

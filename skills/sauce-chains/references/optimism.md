@@ -2,11 +2,11 @@
 
 # Optimism
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Optimism a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Optimism a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one.
 
 To request Optimism, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22) and add your
 use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10) with the chain-support issue form.
@@ -20,9 +20,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Name in a program | `Optimism` |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [deployments.json](deployments.json) (`evm.intentPot`); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 2 |
 
 ## In a program
@@ -110,7 +107,9 @@ address.
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x9a13f98cb987694c9f086b1f5eb990eea8264ec3` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x3c3ea4b57a46241e54610e5f022e5c45859a1017` | `UniswapV4.PositionManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xc18a3169788f4f75a170290584eca6395c75ecdb` | `UniswapV4.StateView` |

@@ -1,6 +1,6 @@
 /**
- * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names and no
- * intent around it — and `encodeEntryArguments`, the values for its `main(...)`.
+ * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names — and
+ * `encodeEntryArguments`, the values for its `main(...)`.
  */
 import {
   bytesToHex,
@@ -12,9 +12,7 @@ import {
   type Hex,
 } from "viem";
 
-import { encodeCompactArguments } from "../src/compact-arguments.js";
 import { decodeEntryArguments, encodeEntryArguments, mainParams } from "../src/routes/entry.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
 
@@ -59,79 +57,23 @@ describe("compileSauceProgram", () => {
     ]);
   });
 
-  it("gives a program the ambient openRoute gives a route body, with no intent around it", () => {
+  it("gives a program the chain's ambient names, which compileSauceRoute leaves out", () => {
     const body = "require(chainId == 8453n);\ntransfer(USDC, RECIPIENT, 5n);\n";
     const defines = { RECIPIENT: BigInt(RECIPIENT) };
-    const program = compileSauceProgram("base", body, { defines });
-    const built = openRoute("base", body, { deadline: 2_000_000_000n, defines }).reward({
-      source: "ethereum",
-      creator: CREATOR,
-      prover: PROVER,
-      nativeAmount: 0n,
-    });
-    expect(program.bytecode).toEqual(built.compiled.bytecode[0]);
+    expect(compileSauceProgram("base", body, { defines }).bytecode.length).toBeGreaterThan(0);
     // compileSauceRoute adds none of it, deliberately: chainId and `transfer` are undeclared there.
     expect(() =>
       compileSauceRoute("base", body, { pot: RECIPIENT, engine: RECIPIENT }, { defines }),
     ).toThrow();
   });
 
-  it("builds an intent the program opens", () => {
-    const body = [
-      "function main(recipient: Address) {",
-      "  const amount = USDC.balanceOf(ctx.self());",
-      "  Arbitrum(() => {",
-      "    USDC.transfer(recipient, amount);",
-      "  }).reward({ tokens: [{ token: USDC, amount }] });",
-      "}",
-    ].join("\n");
-    expect(() => compileSauceProgram("base", body)).toThrow(/needs a `deadline`/);
-    const program = compileSauceProgram("base", body, {
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    });
-    expect(program.entryParams).toEqual([{ name: "recipient", type: "Address" }]);
-    expect(program.bytecode.length).toBeGreaterThan(0);
-  });
-
-  it("compiles an intent every value of which is known now, and reports it fixed", () => {
-    const body = [
-      "Base(() => {",
-      "  USDC.transfer(RECIPIENT, 5n);",
-      "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
-    ].join("\n");
-    const program = compileSauceProgram("arbitrum", body, {
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    });
-    expect(program.intents).toHaveLength(1);
-    const [lowered] = program.intents;
-    expect(lowered!.captures).toEqual([]);
-    expect(lowered!.destination.slug).toBe("base");
-    expect(lowered!.fundVia).toBe("transfer");
-    // No slot to fill: the program carries the publish calldata as it is, and pays the vault itself.
-    const target = { portal: "0x3333333333333333333333333333333333333333" } as const;
-    const publish = routes.publishTx(lowered!.intent, target);
-    expect(bytesToHex(program.bytecode)).toContain(publish.data.slice(10, 200));
-
-    // Opted out, it carries the publishAndFund calldata instead.
-    const optedOut = compileSauceProgram("arbitrum", body, {
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
-    });
-    expect(optedOut.intents[0]!.fundVia).toBe("publishAndFund");
-    const publishAndFund = routes.publishAndFundTx(optedOut.intents[0]!.intent, false, target);
-    expect(bytesToHex(optedOut.bytecode)).toContain(publishAndFund.data.slice(10, 200));
-  });
-
-  it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {
-    const compact = compileSauceProgram("base", SPLIT, { compactArgs: true });
-    expect(compact.entryEncoding).toBe("compact-v1");
-    expect(compact.entrySchema).toBeInstanceOf(Uint8Array);
+  it("reports ABI-v1, and on Solana the accounts apart from the arguments", () => {
+    expect(compileSauceProgram("base", SPLIT).entryEncoding).toBe("abi-v1");
     const svm = compileSauceProgram(
       "solana",
       "function main(vault: Account<Writable>, amount: Uint256) {\n  require(vault.dataLen > amount);\n}\n",
-      { compactArgs: true },
     );
+    expect(svm.entryEncoding).toBe("abi-v1");
     expect(svm.entryParams).toEqual([{ name: "amount", type: "Uint256" }]);
     expect(svm.manifest).toEqual({
       accounts: [{ kind: "slot", index: 0, name: "vault", requires: "writable" }],
@@ -278,23 +220,24 @@ describe("encodeEntryArguments", () => {
     );
   });
 
-  it("encodes compact-v1 against the program's own schema", () => {
+  it("encodes ABI-v1 against the compiled program's declared parameters", () => {
     const program = compileSauceProgram(
       "base",
       "function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: bool, leg: { amount: Uint256, to: Address }, memo: bytes) {}",
-      { compactArgs: true },
     );
     expect(program.entryParams).toEqual(params);
+    expect(program.entryEncoding).toBe("abi-v1");
     expect(encodeEntryArguments(program, values)).toEqual(
-      encodeCompactArguments(program.entrySchema!, [
-        RECIPIENT,
-        [RECIPIENT, CREATOR],
-        1000n,
-        true,
-        [5n, PROVER],
-        hexToBytes("0xbeef"),
-      ]),
+      encodeEntryArguments({ entryEncoding: "abi-v1", entryParams: params }, values),
     );
+    expect(decodeEntryArguments(program, encodeEntryArguments(program, values))).toEqual([
+      RECIPIENT,
+      [RECIPIENT, CREATOR],
+      1000n,
+      true,
+      { amount: 5n, to: PROVER },
+      "0xbeef",
+    ]);
   });
 
   it("reads a record type's fields separated by ;, as a formatter writes them", () => {

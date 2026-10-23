@@ -2,11 +2,11 @@
 
 # Avalanche C-Chain
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Avalanche C-Chain a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Avalanche C-Chain a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one.
 
 To request Avalanche C-Chain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Avalanche+C-Chain%22) and add your
 use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Avalanche+C-Chain+%2843114%29&chain=Avalanche+C-Chain&chain-id=43114) with the chain-support issue form.
@@ -20,7 +20,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Name in a program | `Avalanche` |
 | Native coin | AVAX (AVAX), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
-| Intents (eco-routes) | none recorded |
 | CCTP domain | 1 |
 
 ## In a program
@@ -94,6 +93,8 @@ address.
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD` | `UniswapV3.Factory` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0x655C406EBFa14EE2006250925e54ec43AD184f8B` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0xbe0F5544EC67e9B3b2D979aaA43f18Fd87E6257F` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x06380c0e0912312b5150364b9dc4542ba0dbbc85` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd` | `UniswapV4.PositionManager` |

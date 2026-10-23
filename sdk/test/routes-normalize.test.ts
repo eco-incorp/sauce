@@ -1,15 +1,12 @@
 /**
  * routes/normalize.ts — `toBigInt` numeric-input contract.
  *
- * `amount`/`value`/`deadline`/`nativeAmount` are all `bigint | number | string` on the caller-facing
- * `RouteInput`/`RewardInput`, so `toBigInt` is the single gate every public entry point funnels
- * through. Past 2^53-1 a `number` has already been rounded by the JSON/JS parser, so it is rejected
- * rather than converted — these assertions pin exactly where the accepted range ends and which of
- * the three input forms carry a large value exactly.
+ * `amount`/`value` inputs are `bigint | number | string`, so `toBigInt` is the single gate every
+ * public entry point funnels through. Past 2^53-1 a `number` has already been rounded by the
+ * JSON/JS parser, so it is rejected rather than converted — these assertions pin exactly where the
+ * accepted range ends and which of the three input forms carry a large value exactly.
  */
-import { normalizeReward, toBigInt } from "../src/routes/normalize.js";
-
-const EVM_ADDR = "0x7777777777777777777777777777777777777777" as const;
+import { toBigInt } from "../src/routes/normalize.js";
 
 describe("toBigInt: number", () => {
   it("accepts Number.MAX_SAFE_INTEGER exactly", () => {
@@ -70,30 +67,5 @@ describe("toBigInt: bigint", () => {
 
   it("rejects a negative", () => {
     expect(() => toBigInt(-1n)).toThrow("Expected a non-negative bigint, got -1");
-  });
-});
-
-describe("normalizeReward: the guard is reachable from a public entry point", () => {
-  it("rejects an unsafe number reward amount instead of silently rounding it", () => {
-    const reward = {
-      deadline: 1893456000n,
-      creator: EVM_ADDR,
-      prover: EVM_ADDR,
-      // The imprecise literal IS the input under test: it asserts the safe-integer guard
-      // rejects it before anything reads a rounded value.
-      // eslint-disable-next-line no-loss-of-precision
-      tokens: [{ token: EVM_ADDR, amount: 999999999999999999 }],
-    };
-    expect(() => normalizeReward(reward)).toThrow("Expected a safe integer number");
-  });
-
-  it("accepts the same amount as a plain decimal string, exactly", () => {
-    const reward = {
-      deadline: 1893456000n,
-      creator: EVM_ADDR,
-      prover: EVM_ADDR,
-      tokens: [{ token: EVM_ADDR, amount: "999999999999999999" }],
-    };
-    expect(normalizeReward(reward).tokens[0]!.amount).toBe(999999999999999999n);
   });
 });

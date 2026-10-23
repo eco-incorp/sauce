@@ -31,10 +31,9 @@ import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" }
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
-import { v12Pot } from "../evm/engine.js";
-import { destinationExecutionFee } from "../evm/execution-fee.js";
-import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
+import { v12EngineAddress, v12KitchenAddress, v12PotDerivation } from "../deployments/index.js";
+import { v12KitchenAbi, v12Pot } from "../evm/engine.js";
+import { kitchenExecutionFee } from "../evm/execution-fee.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
@@ -276,7 +275,7 @@ export async function chainServedBy(url: string): Promise<CanonicalChain> {
 
 /** The released Kitchen's current execution fee on the connected chain. */
 export async function kitchenFee(client: PublicClient, chain: CanonicalChain): Promise<bigint> {
-  const fee = destinationExecutionFee();
+  const fee = kitchenExecutionFee();
   const answer = await request("the Kitchen's executionFee()", () =>
     client.call({ to: fee.to, data: fee.data }),
   );
@@ -316,7 +315,7 @@ export async function releasedContracts(client: PublicClient): Promise<Released>
   ]);
   let executionFee: bigint | undefined;
   if (kitchenThere) {
-    const fee = destinationExecutionFee(kitchen);
+    const fee = kitchenExecutionFee(kitchen);
     const answer = await request("the Kitchen's executionFee()", () =>
       client.call({ to: fee.to, data: fee.data }),
     );
@@ -331,6 +330,49 @@ export async function releasedContracts(client: PublicClient): Promise<Released>
       ...(executionFee === undefined ? {} : { executionFee }),
     },
   };
+}
+
+/** Refuses an online cook without its released engine and Kitchen, returning the Kitchen's fee. */
+export async function requireCookContracts(
+  client: PublicClient,
+  chain: CanonicalChain,
+): Promise<bigint> {
+  const released = await releasedContracts(client);
+  for (const [name, contract] of [
+    ["engine", released.engine],
+    ["Kitchen", released.kitchen],
+  ] as const) {
+    if (!contract.deployed) {
+      throw new CliError(
+        `the released ${name} ${contract.address} is not deployed on ${chain.slug}: ` +
+          "this SDK's cook cannot run there",
+      );
+    }
+  }
+
+  return released.kitchen.executionFee ?? kitchenFee(client, chain);
+}
+
+/** A new Pot must be derived by the Kitchen version this SDK predicts, not an older factory. */
+export async function requirePotDerivation(
+  client: PublicClient,
+  chain: CanonicalChain,
+): Promise<void> {
+  const kitchen = getAddress(v12KitchenAddress());
+  const liveHash = await request("the Kitchen's potInitCodeHash()", () =>
+    client.readContract({
+      address: kitchen,
+      abi: v12KitchenAbi,
+      functionName: "potInitCodeHash",
+    }),
+  );
+  if (liveHash.toLowerCase() !== v12PotDerivation().initCodeHash.toLowerCase()) {
+    throw new CliError(
+      `the Kitchen ${kitchen} on ${chain.slug} derives Pots for a different release ` +
+        "(potInitCodeHash does not match this SDK): it cannot deploy this SDK's predicted Pot. " +
+        "No transaction was sent",
+    );
+  }
 }
 
 /** Whether `pot` is deployed, and whose it is. */
@@ -405,16 +447,14 @@ const ERC20_ERRORS = parseAbi([
   "error ERC20InvalidSpender(address spender)",
 ]);
 
-/** The errors a cook or a publish can revert with by name: the Pot's, the Kitchen's, the Pot's
- *  Router's (which `@sauce/router` swaps through), Permit2's (which `--fund` pulls through),
- *  whatever the registry's Portal and prover ABIs declare, and ERC-20's standard ones. */
+/** The errors a cook can revert with by name: the Pot's, the Kitchen's, the Pot's Router's (which
+ *  `@sauce/router` swaps through), Permit2's (which `--fund` pulls through), and ERC-20's standard
+ *  ones. */
 const ERRORS = [
   ...potArtifact.abi,
   ...kitchenArtifact.abi,
   ...routerArtifact.abi,
   ...Permit2ABI,
-  ...PortalABI,
-  ...ProverABI,
   ...ERC20_ERRORS,
 ].filter((item) => item.type === "error") as Abi;
 

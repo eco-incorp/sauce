@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Blast's native yield on ETH and USDB, and gas rebate features. Fork of Uniswap V3 architecture.
 
@@ -19,52 +19,9 @@ Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Bla
 | Namespace | `Thruster` on blast |
 | Chains | blast |
 
-## Key Operations
+## What it offers
 
 - **swap**: Exact input single-hop swap with fee tier selection via V3 SwapRouter
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { ThrusterV3SwapRouterABI as ISwapRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenIn: Address,
-  tokenOut: Address,
-  fee: Uint256,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256 {
-  const router = ISwapRouter.at(routerAddress);
-  return router.exactInputSingle({
-    tokenIn: tokenIn,
-    tokenOut: tokenOut,
-    fee: fee,
-    recipient: recipient,
-    deadline: 99999999999,
-    amountIn: amountIn,
-    amountOutMinimum: amountOutMin,
-    sqrtPriceLimitX96: 0,
-  });
-}
-```
-
-- `routerAddress`: Thruster V3 SwapRouter on Blast (`0x337827814155ECBf24D20231fCA4444F530c0555`)
-- `tokenIn` / `tokenOut`: Input and output token addresses
-- `fee`: Pool fee tier (standard Uniswap V3 tiers: `500`, `3000`, `10000`)
-- `amountIn`: Exact input amount (in wei)
-- `amountOutMin`: Minimum output for slippage protection
-- `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound
 
 ## Notes
 
@@ -99,3 +56,9 @@ function main() {
 `import ThrusterV3SwapRouterABI from "./protocols/thruster/ThrusterV3SwapRouterABI.json";` Speaks for: v3SwapRouter.
 
 - `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

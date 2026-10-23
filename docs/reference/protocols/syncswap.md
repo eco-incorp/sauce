@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 The leading DEX on zkSync Era with optimized gas efficiency for the ZK rollup environment. Supports classic constant product pools and stable pools with native account abstraction support.
 
@@ -19,55 +19,9 @@ The leading DEX on zkSync Era with optimized gas efficiency for the ZK rollup en
 | Namespace | `Syncswap` on zksync |
 | Chains | zksync |
 
-## Key Operations
+## What it offers
 
 - **swap**: Swap tokens via path-based routing with encoded swap data and step-based execution
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { SyncSwapRouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  pool: Address,
-  tokenIn: Address,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  swapData: bytes,
-): { token: Address; amount: Uint256 } {
-  const router = IRouter.at(routerAddress);
-  const zeroAddr = 0x0000000000000000000000000000000000000000;
-  return router.swap(
-    [
-      {
-        steps: [{ pool: pool, data: swapData, callback: zeroAddr, callbackData: 0x00 }],
-        tokenIn: tokenIn,
-        amountIn: amountIn,
-      },
-    ],
-    amountOutMin,
-    99999999999,
-  );
-}
-```
-
-- `routerAddress`: SyncSwap Router on zkSync (`0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295`)
-- `pool`: The specific pool contract address to swap through
-- `tokenIn`: Input token address
-- `amountIn`: Exact input amount (in wei)
-- `amountOutMin`: Minimum output for slippage protection
-- `swapData`: ABI-encoded bytes containing `(address tokenIn, address recipient, uint8 withdrawMode)`. Withdraw modes: `0` = vault deposit, `1` = withdraw to wallet, `2` = unwrap WETH
-- `callback`: Set to zero address for standard swaps (no callback)
-- `callbackData`: Set to `0x00` for standard swaps
-- Supports multi-step paths: add more entries to the `steps` array for multi-hop
 
 ## Notes
 
@@ -103,3 +57,9 @@ function main() {
 `import SyncSwapRouterABI from "./protocols/syncswap/SyncSwapRouterABI.json";` Speaks for: router.
 
 - `swap(((address pool, bytes data, address callback, bytes callbackData)[] steps, address tokenIn, uint256 amountIn)[] paths, uint256 amountOutMin, uint256 deadline) payable returns ((address token, uint256 amount) amountOut)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

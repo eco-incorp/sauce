@@ -35,8 +35,6 @@ export interface ActionsInput {
    * document without one needs it, and one with a `chainId` compiles for that chain only.
    */
   readonly chain?: string;
-  /** Compile `main`'s parameters (`argument` actions) for compact-v1 arguments. */
-  readonly compactArgs?: boolean;
 }
 
 /** What the actions package's lowering returns (`actions/src/compose.ts#ProgramSource`). */
@@ -129,8 +127,6 @@ export async function actionsProgram(input: ActionsInput): Promise<ProgramInput>
     text: source,
     chain,
     defines: {},
-    compactArgs: input.compactArgs === true,
-    intents: {},
     contracts,
   };
 }
@@ -150,8 +146,6 @@ export async function actionsCommand(
     text: lowering.source,
     chain: lowering.chain,
     defines: {},
-    compactArgs: input.compactArgs === true,
-    intents: {},
     contracts: lowering.contracts,
   };
   const compiled = await compileCommand(program, files);

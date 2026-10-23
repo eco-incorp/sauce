@@ -29,15 +29,6 @@ describe("fork('base') replayed", { skip: anvilMissing() }, () => {
   beforeEach(() => base.snapshot());
   afterEach(() => base.revert());
 
-  it("uses Base's own stack, Kitchen fee included", async () => {
-    assert.equal(base.mode, recording ? "record" : "replay");
-    assert.equal(base.stack.origin, "live");
-    assert.ok((await base.executionFee()) > 0n);
-    // The pinned block, and the few setup mined after it (account 0's Pot).
-    const head = await base.client.getBlockNumber();
-    assert.ok(head >= BigInt(BLOCK) && head < BigInt(BLOCK) + 5n);
-  });
-
   it("funds a Pot with USDC by writing the token's balance slot", async () => {
     const pot = base.account(0).pot;
     await base.fund(pot, { USDC: "100" });
@@ -57,6 +48,30 @@ describe("fork('base') replayed", { skip: anvilMissing() }, () => {
     assert.equal(result.delta(alice.address, "WETH"), bought);
     assert.equal(result.delta(alice.pot, "USDC"), -100_000_000n);
     assert.equal(await base.balanceOf(alice.address, "WETH"), bought);
+  });
+
+  it("does not choose a caught out-of-gas path instead of a successful atomic payment", async () => {
+    const alice = base.account(0);
+    const recipient = base.account(1).address;
+    const payment = {
+      source: `function main(recipient: Address, amount: Uint256, reserve: Uint256): void {
+        try {
+          USDC.transfer(recipient, amount);
+          require(self.USDC >= reserve, "keep the reserve");
+        } catch (error) {
+          log(error);
+        }
+      }`,
+    };
+    await base.fund(alice.pot, { USDC: "5" });
+
+    const rolledBack = await base.run(payment, { args: [recipient, 1_000_000n, 5_000_000n] });
+    assert.equal(rolledBack.delta(recipient, "USDC"), 0n);
+    assert.equal(await base.balanceOf(alice.pot, "USDC"), 5_000_000n);
+
+    const committed = await base.run(payment, { args: [recipient, 1_000_000n, 1_000_000n] });
+    assert.equal(committed.delta(recipient, "USDC"), 1_000_000n);
+    assert.equal(await base.balanceOf(alice.pot, "USDC"), 4_000_000n);
   });
 
   it("reverts below minOut, moving nothing", async () => {

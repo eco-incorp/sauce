@@ -4,14 +4,8 @@ export type { ProgramIssue } from "./semantics.js";
 export { programSchema } from "./schema.js";
 export type { JsonSchema } from "./schema.js";
 
-export { compileProgram, programIntent } from "./compose.js";
-export type {
-  ArgumentEncoding,
-  ArgumentValues,
-  CompiledProgram,
-  CompileOptions,
-  ProgramIntentOptions,
-} from "./compose.js";
+export { compileProgram } from "./compose.js";
+export type { ArgumentValues, CompiledProgram, CompileOptions } from "./compose.js";
 
 export { quoteAction } from "./to-quote.js";
 export type { Quote, QuoteOptions } from "./to-quote.js";

@@ -8,8 +8,14 @@
 > cleans up afterwards. This page covers those differences, and how to name an account yourself
 > when you need to.
 
-Start with the [Solana quick start](solana-quick-start.md) if you have not: it runs a program
-end to end.
+This page is for running programs on Solana from the command line. Start with the
+[Solana quick start](solana-quick-start.md) if you have not: it makes the Solana wallet
+`me-solana` the commands below sign with, and runs a program end to end. Why Solana needs accounts,
+staging and lookup tables is in [How Sauce runs on Solana](../concepts/solana-model.md).
+
+Before a first run, the signing wallet needs SOL for the rent of your Pot and any new token account,
+about 0.08 SOL in all, plus fees ([What a run costs](#what-a-run-costs)). The Pot needs the tokens
+the program spends: send them to the Pot's address from any wallet (`--fund` is EVM only).
 
 ## The same commands
 
@@ -31,7 +37,8 @@ or a token as `USDC` (or `mint:USDC`) for its mint.
 For the token methods (`USDC.transfer(to, amount)`, `self.USDC`) and every account
 a program writes where it uses it (`USDC.accountOf(to)`, `Solana.pda(program, [seeds])`), compiling
 adds each account the program needs to `main`, with how to find it. `sauce compile --json` lists
-them in its `manifest`:
+them in its `manifest`, the account manifest: every account, in order, with its role and how it is
+derived.
 
 ```json
 { "kind": "slot", "index": 3, "name": "toUSDC", "requires": "writable", "derive": "@to:USDC" }
@@ -44,10 +51,10 @@ runs: the run asks first (or `--yes`), and you pay its rent.
 ### Naming an account yourself
 
 A program can also take an account as a parameter, `Account`, `Account<Writable>` or
-`Account<Signer>`. Then you name it with `--account NAME=<value>`:
+`Account<Signer>`. Then you name it with `--account NAME=<value>`. This program moves a token
+between two accounts it is given; save it as `sweep.sauce.ts`:
 
 ```js
-// @chain solana
 function main(
   tokenProgram: Account,
   source: Account<Writable>,
@@ -60,8 +67,10 @@ function main(
 }
 ```
 
+Run it, naming each account:
+
 ```sh
-sauce run sweep.sauce.ts --keypair ~/.config/solana/id.json \
+sauce run sweep.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
   --account tokenProgram=program:USDC --account source=pot:USDC \
   --account dest=<token account> --account authority=pot --args <mint> 400
 ```
@@ -137,7 +146,7 @@ engine instead, with no Pot: you sign, and the program acts with your signature,
 token accounts.
 
 ```sh
-sauce run sweep.sauce.ts --keypair ~/.config/solana/id.json \
+sauce run sweep.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
   --via engine --max-execution-fee 10000 \
   --account tokenProgram=program:USDC --account source=owner:USDC \
   --account dest=<token account> --account authority=owner --args <mint> 400
@@ -146,12 +155,8 @@ sauce run sweep.sauce.ts --keypair ~/.config/solana/id.json \
 Use the Kitchen (the default) when the program holds or spends what the Pot owns, or writes the
 Pot's storage. Use `--via engine` when it acts for your wallet, or needs one more level of calls
 into other programs: with no Kitchen in between, it has one level more to spare. The fee is the
-same either way. The [Solana guide](solana.md#two-ways-to-run-a-program) sets the two side by side.
-
-## Intents
-
-An intent can go to Solana ([An intent to Solana](cli-intents.md#an-intent-to-solana)) or start
-there, published with a Solana wallet ([An intent from Solana](cli-intents.md#an-intent-from-solana)).
+same either way. [Two ways to cook](../concepts/solana-model.md#two-ways-to-cook) sets the two side
+by side.
 
 ## Details
 
@@ -172,7 +177,8 @@ The value language `--account` takes, and `derive` in the manifest uses:
 - `slot:<pool>:<token>.<part>`: one of the nine accounts a venue's swap takes for a pool paying the
   token (`program`, `pool`, `config`, `vaultA`, `vaultB`, `extra`, `ticks0` to `ticks2`), read from
   the pool on the cluster: what a venue's namespace (`Orca.Whirlpool.swap(pool, …)`) adds;
-- `pda:<program>:<seeds>`: the address a program derives for its seeds, comma-separated. A seed is
+- `pda:<program>:<seeds>`: the program-derived address (PDA) a program computes from its seeds,
+  with no key behind it; seeds comma-separated. A seed is
   `"text"` or a bare word, a key (`pot`, `owner`, `self`, `@to`, base58), `mint:USDC`, an integer
   (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.
 
@@ -190,7 +196,7 @@ requires.
 
 A `main` argument of type `Address` is a 32-byte public key: pass it in base58 (or as 32 bytes of
 hex), or a token as `USDC` or `mint:USDC` for its mint, and the command encodes the whole key as the
-word the engine reads (ABI-v1 only, not under `--compact-args`).
+word the engine reads, using ABI-v1.
 
 ### The Pot on Solana
 
@@ -202,6 +208,8 @@ stock's is `pot:<symbol>`. A cook names its Pot by `--owner` and `--salt`, never
 asks before creating a missing one.
 
 ### Simulating on Solana
+
+#### What a simulation prints
 
 `simulate` simulates the cook from `--owner` with signatures unchecked; a Pot the Kitchen has not
 created yet is created by its `create_pot` ahead of the cook, in the same transaction. It prints the
@@ -215,6 +223,8 @@ balance change (SPL Token and Token-2022, in whole units by its mint's decimals,
 records by its symbol) and each account's lamports are listed, named by their `--account` names, as
 the owner, the Pot and the Kitchen's fee config; the owner's lamports include the transaction's fee.
 `--json` lists them as `tokenChanges` and `lamportChanges`.
+
+#### In a local copy
 
 Solana's `simulateTransaction` takes no account overrides, so a plain simulation runs on the
 accounts as they are, and the owner must hold the Pot's rent and the fees (a shortfall is named). A
@@ -232,11 +242,13 @@ under the lamport changes with what it pays for, then what the owner pays in all
 data) is refused, as it cannot pay. LiteSVM is installed the first time it is needed
 ([Runtime packages](cli.md#runtime-packages)).
 
+#### Swaps and compute
+
 A program that swaps at a price through the venue namespaces (`Orca.Whirlpool.swap(…)`) has each
 pool's walk worked out before the cook, to lower the risk that one runs the cook out of compute
 units: `simulate`, `run` and `tx` read each pool's tick arrays and work out how far each may walk,
 the pool buying the most per unit first, and a pool held short of its limit or skipped is compiled
-to its swap's Stopped form ([Stops](../api/router.md#stops)). Each prints a line for such a pool,
+to its swap's Stopped form ([compute](../concepts/solana-model.md#compute)). Each prints a line for such a pool,
 and `--json` gives every pool's in `computeStops`. `tx` takes them from a table of each venue's
 costs alone, so the cook it builds can differ from the one `simulate` reports; `simulate` and `run`
 check them in a simulation first, and tighten them if the cook would still run out. A price that
@@ -263,7 +275,8 @@ smaller: no Kitchen, Pot or salt). Past the limit, stderr says `sauce run` stage
 ### A cook in several transactions
 
 `tx` prints the cook as a base64 transaction signed by no one, `{ chain, via, feePayer, pot, fee,
-maxExecutionFee, transaction, cursor }`, for the owner's wallet to sign; its blockhash expires in
+maxExecutionFee, createsPot, transaction, cursor }`, for the owner's wallet to sign (`createsPot`:
+the same transaction creates the Pot ahead of the cook); its blockhash expires in
 about a minute. A cook that needs more than one transaction (a program too large for one, staged in
 a code buffer; accounts past one transaction's list, through a lookup table; a Pot or token account
 to create first) is a plan of three steps: the setup, the cook, then closing the code buffer.
@@ -351,19 +364,25 @@ the tables it can close or deactivate first; an owner with more is told how many
 for. `--via engine` calls the engine's own paid cook (`cookAndPay`) with no Kitchen and no Pot:
 nothing is created, `--owner` (or the signer's key) signs and pays the fee, and the program acts with
 that signature. Give `--account NAME=owner` where it needs an authority, such as the owner of the
-token account it spends from. The program's own calls get one more level of CPI depth, as no Kitchen
+token account it spends from. The program's own calls into other programs (cross-program
+invocations, CPI) get one more level of depth, as no Kitchen
 frame sits under the engine. A staged program runs pinned to the staged bytes' digest. The fee is
 read from the Kitchen's config and paid into it either way. `compile --json` sizes either cook with
 `--via`.
 
 The flag is `--via` rather than `--entry` because "entry" is already the compiler's word for a
-program's entry module and the arguments `main` takes (`--compact-args`, `entryEncoding`); `--via`
+program's entry module and the arguments `main` takes (`entryEncoding`); `--via`
 names what the transaction calls.
 
 ### Verifying a settle on Solana
 
 `sauce verify --chain solana <signature> --min-out <n> --spl-count <n>` checks a settle cook: the
 engine invocation it made, against the SDK's settle program recompiled for that floor and split
-(`svm.verifySvmSettleExecution`). It rejects with `TX_FAILED` (the transaction failed),
+(`verifySvmSettleExecution` from `@eco-incorp/sauce/svm/verify`). It rejects with `TX_FAILED` (the transaction failed),
 `NO_SETTLE` or `NOT_GENUINE`. It reads a cook through the Kitchen: a settle cooked `--via engine` is
 not one it checks.
+
+## Next
+
+- Write programs for Solana: the [Solana guide](solana.md) covers accounts in a program, pools by
+  name and Token-2022 tokens.

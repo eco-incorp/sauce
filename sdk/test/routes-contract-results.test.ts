@@ -15,7 +15,6 @@ import { rewriteContractResults, VALUE_METHODS } from "../src/routes/contract-re
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const BASE = requireChain("base");
-const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const BUILTINS = JSON.parse(
   readFileSync(resolve(process.cwd(), "../skills/sauce-script/references/builtins.json"), "utf8"),
 ) as { intrinsics: readonly { name: string; group: string }[] };
@@ -125,25 +124,6 @@ describe("a method called on a registry call's result", () => {
 }`;
     expect(rewriteContractResults(chained, BASE).source).toBe(explicit);
     sameProgram(chained, explicit, ["ethereum"]);
-  });
-
-  it("an intent body calling on the program's own const", () => {
-    const intent = (call: string): string => `function main(recipient: Address) {
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
-  Ethereum(() => {
-    require(${call} > 0, "no liquidity");
-    USDC.transfer(recipient, 1);
-  }).reward({ tokens: [{ token: USDC, amount: 2 }] });
-}`;
-    const options = { intents: { deadline: 2_000_000_000n, creator: CREATOR, executionFee: 0n } };
-    const chained = compileSauceProgram("base", intent("pool.liquidity()"), options);
-    const explicit = compileSauceProgram(
-      "base",
-      intent("UniswapV3.Pool(pool).liquidity()"),
-      options,
-    );
-    expect(Array.from(chained.bytecode)).toEqual(Array.from(explicit.bytecode));
-    expect(chained.intents[0]!.intent).toEqual(explicit.intents[0]!.intent);
   });
 
   it("a deployed contract's ABI at the address returned: `.at(...)`", () => {

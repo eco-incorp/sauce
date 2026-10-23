@@ -18,7 +18,6 @@ a swap, `sauce-swaps`'s.
 | A protocol's deployments, contract names and ABI functions | yes  | one chain's every protocol: `sauce-chains`                            |
 | A protocol's pitfalls before calling it                    | yes  |                                                                       |
 | A swap                                                     |      | `sauce-swaps` (a program never swaps through a protocol's own router) |
-| Work on another chain                                      |      | `sauce-intents` (not a bridge call alone)                             |
 
 ## Core model
 
@@ -46,7 +45,6 @@ input. Namespace members (deployed contract, address only, interface) are `sauce
 | A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
 | An address-only factory      | discover the pool off chain and pass its address as a `main` input                                       |
 | A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`)                                                 |
-| Code on another chain        | an intent (`sauce-intents`)                                                                              |
 
 ## Calling a protocol
 
@@ -98,8 +96,10 @@ sauce run pools.sauce.ts --chain base --keystore <keystore> \
 - **Recorded is not live.** A registry address is not proof of code: confirm `eth_getCode` returns
   code before relying on it.
 - **Swapping through a protocol's own router.** Use `@sauce/router` (`sauce-swaps`).
-- **An address-only factory called for a pool** (Algebra forks such as Camelot V3 and QuickSwap
-  V3): the registry has no verified ABI with its pool lookup; pass the pool as a `main` input.
+- **An address-only factory called for a pool** (`Kyberswap.ElasticFactory`): the registry has no
+  ABI for it, only its address; pass the pool as a `main` input. An Algebra factory (Camelot V3,
+  QuickSwap V3) is a deployed contract: `Camelot.V3Factory.poolByPair(a, b)` returns the pool, with
+  no fee argument (Algebra fees are dynamic).
 - **A standing allowance.** Approve exactly what the call spends: the Pot keeps any allowance it
   grants.
 - **An output left in the Pot by default.** A call naming no beneficiary credits its caller, the

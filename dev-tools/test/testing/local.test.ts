@@ -46,6 +46,13 @@ describe("local()", { skip: anvilMissing() }, () => {
     assert.deepEqual(effects.moves, transfers);
   });
 
+  it("keeps a hex-looking string literal as UTF-8 bytes", async () => {
+    const result = await chain.run({
+      source: 'function main(): bytes { return "0x1234"; }',
+    });
+    assert.equal(result.returned, "0x307831323334");
+  });
+
   it("simulates without sending", async () => {
     const before = await chain.client.getBlockNumber();
     const result = await chain.simulate(program("multiply"), { args: [3n, 5n, 100n] });

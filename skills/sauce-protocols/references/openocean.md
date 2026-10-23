@@ -48,7 +48,7 @@ function main(
       guaranteedAmount: guaranteedAmount,
       flags: 0,
       referrer: referrer,
-      permit: 0x00,
+      permit: hex``,
     },
     calls,
   );

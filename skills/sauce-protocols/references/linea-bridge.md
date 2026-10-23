@@ -22,14 +22,14 @@ import { LineaL1MessageServiceABI as IL1MessageService } from "./abis";
 
 function main(messageServiceAddress: Address, recipient: Address, fee: Uint256): Uint256 {
   const service = IL1MessageService.at(messageServiceAddress);
-  service.sendMessage(recipient, fee, 0x00);
+  service.sendMessage(recipient, fee, hex``);
   return 1;
 }
 ```
 
 - `recipient`: Address to receive ETH on Linea L2
 - `fee`: Fee for the postman (relayer) to deliver the message on L2. Set to 0 for self-claim
-- `_calldata`: Optional calldata to execute on L2 when message is delivered. `0x00` for simple ETH transfers
+- `_calldata`: Optional calldata to execute on L2 when message is delivered. ` hex`` ` for simple ETH transfers
 - ETH amount (minus fee) is sent as `msg.value`
 
 ## Deployments and ABI

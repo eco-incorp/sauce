@@ -94,13 +94,21 @@ export const METADAO_FUTARCHY_EVENT_AUTHORITY: Address = address(
 /** sha256("account:Dao")[0:8] (Anchor account discriminator). */
 const DAO_DISCRIMINATOR = [0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31];
 /**
- * Fixed Dao account size REGARDLESS of PoolState variant (verified against
- * 82 real mainnet dao accounts, 80 Spot-state + 2 Futarchy-state, all
- * exactly 1205 bytes) — the account is pre-allocated at the `Futarchy`-sized
- * worst case (`resizeDao` exists but a fresh dao already carries the max
- * space), so `dataSize` alone is a safe, cheap gPA prune.
+ * Minimum Dao account size: the CURRENT `Dao` layout (futarchy 0.6.2 IDL, deployed 2026-10-20).
+ * The upgrade appended six fields after `is_optimistic_governance_enabled` — `liquidator:
+ * Option<Pubkey>` (33), `last_failed_takeover_at: i64` (8), `last_failed_liquidation_at: i64` (8),
+ * `spending_limit_dirty: bool` (1), `last_buyback_finalized_at: i64` (8) and
+ * `typed_proposals_enabled: bool` (1) — growing every Dao from 1205 to 1264 bytes (the IDL keeps the
+ * old shape as `OldDao`). The discriminator and every offset below are unchanged. All 94 mainnet
+ * Daos were 1264 bytes after the upgrade; the account is allocated at the `Futarchy`-sized worst
+ * case, so the size does not vary with the PoolState variant.
+ *
+ * A SHORTER account is refused (fail closed): it is not the layout the program now writes, the real
+ * pre-upgrade `OldDao` bytes fail its `SpotSwap` with `AccountDidNotDeserialize` (3003), and no
+ * mainnet Dao is shorter, so refusing one costs nothing. A LONGER one is accepted: Anchor ignores
+ * trailing bytes, so a later field append keeps decoding.
  */
-const DAO_ACCOUNT_SIZE = 1205;
+const DAO_ACCOUNT_MIN_SIZE = 1264;
 
 const STATE_TAG_OFFSET = 8; // 8-byte disc, then the PoolState enum's 1-byte variant tag.
 const STATE_SPOT = 0; // PoolState::Spot { spot: Pool }
@@ -151,9 +159,9 @@ export async function fetchMetaDaoFutarchySpotConfig(
 ): Promise<MetaDaoFutarchySpotPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} dao ${pool} account not found`);
-  if (data.length !== DAO_ACCOUNT_SIZE) {
+  if (data.length < DAO_ACCOUNT_MIN_SIZE) {
     throw new Error(
-      `${SLUG} dao ${pool} account is ${data.length} bytes, expected ${DAO_ACCOUNT_SIZE}`,
+      `${SLUG} dao ${pool} account is ${data.length} bytes, expected at least ${DAO_ACCOUNT_MIN_SIZE}`,
     );
   }
   if (!DAO_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {

@@ -5,13 +5,15 @@
  * Every piece is the SDK's own: `compileSauceProgram` compiles the file as a standalone program with
  * the chain's ambient names, `encodeEntryArguments` encodes `main`'s arguments, `buildSauceEvmCall`
  * (`v12Pot.encodeCook`) is the cook, `v12PredictPot`, `potSalt` and `sauceEvmDeployPotCall` are the
- * Pot, and `destinationExecutionFee` is the Kitchen's fee. Nothing is reimplemented here; `chain.ts`
+ * Pot, and `kitchenExecutionFee` is the Kitchen's fee. Nothing is reimplemented here; `chain.ts`
  * reads and sends, and `signer.ts` holds the key.
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
 import {
   bytesToHex,
+  formatEther,
+  formatGwei,
   getAddress,
   hexToBytes,
   type Address,
@@ -21,6 +23,7 @@ import {
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
+import { getChain } from "../chains/index.js";
 import {
   v12DeployedAddresses,
   v12EngineAddress,
@@ -28,18 +31,16 @@ import {
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
+import { nativeSymbol } from "../evm/effects.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
-import type { IntentSvmState } from "../routes/intent-sugar.js";
-import type { IntentFundVia } from "../routes/portal.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
-  lowerProgramIntents,
   type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
@@ -47,7 +48,8 @@ import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.
 import {
   awaitPot,
   connect,
-  kitchenFee,
+  requireCookContracts,
+  requirePotDerivation,
   potState,
   releasedContracts,
   sendAndWait,
@@ -68,14 +70,6 @@ import {
 } from "./approvals.js";
 import { hexQuantity } from "./handoff.js";
 import { linkLines, txLinks } from "./links.js";
-import {
-  checkIntentPots,
-  intentCooks,
-  missingPotNote,
-  potCheckJson,
-  type PotCheck,
-  type Endpoints,
-} from "./intents.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import { rehearse } from "./rehearse.js";
 import { appliedDefines, contractCollector } from "./report.js";
@@ -83,12 +77,7 @@ import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmAccountsToGive, svmCookSize, svmPayload } from "./solana.js";
 import { transfersToPot, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
-import {
-  intentDestinations,
-  previewRefusal,
-  requireSupported,
-  type PreviewChainRefusal,
-} from "./support.js";
+import { previewRefusal, requireSupported, type PreviewChainRefusal } from "./support.js";
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
 export interface CliFiles {
@@ -167,64 +156,11 @@ export interface ProgramInput {
   /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
    *  report shows as one. */
   readonly addressDefines?: readonly string[];
-  /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
-  readonly compactArgs: boolean;
-  /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
-  readonly intents: {
-    readonly deadline?: bigint;
-    /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
-    readonly rewardDeadline?: bigint;
-    /** An EVM address; on Solana a key, as its 32 bytes. */
-    readonly creator?: Hex;
-    /** The reward's prover; the registry's for the pair by default. */
-    readonly prover?: Hex;
-    readonly executionFee?: bigint;
-    /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
-     *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
-    readonly fundVia?: IntentFundVia;
-    /** For an intent to Solana: the cluster's state its route is built against
-     *  (`intent-solana.ts#solanaIntentState` reads it). */
-    readonly svm?: IntentSvmState;
-  };
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
    * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
    */
   readonly contracts?: SauceCompileOptions["contracts"];
-}
-
-/** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
-export function pastDeadline(
-  program: Pick<ProgramInput, "intents">,
-  now: number = Date.now(),
-): string | undefined {
-  const deadline = program.intents.deadline;
-  if (deadline === undefined || deadline > BigInt(Math.floor(now / 1000))) return undefined;
-
-  return (
-    `--intent-deadline ${deadline} (${new Date(Number(deadline) * 1000).toISOString()}) has ` +
-    "passed: an intent can be filled only until its deadline"
-  );
-}
-
-/**
- * Refuses a program whose intents' deadline has passed: the commands that build an intent to
- * publish — `compileCommand`, `cookOf` (simulate, tx, run), the Solana cook, `publishCommand` —
- * would build one no solver could ever fill. Here, in the commands both front ends call, so the
- * CLI and the MCP tools refuse it alike. `fill` rehearses one anyway, with a note, and `inspect`
- * reads what was.
- */
-export function refusePastDeadline(
-  program: Pick<ProgramInput, "intents">,
-  now: number = Date.now(),
-): void {
-  const past = pastDeadline(program, now);
-  if (past === undefined) return;
-  const later = BigInt(Math.floor(now / 1000)) + 86_400n;
-  throw new UsageError(
-    `${past}, so this one never could be. Give a later Unix time in seconds, such as ${later} ` +
-      "(a day from now).",
-  );
 }
 
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
@@ -256,8 +192,8 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
 
 /**
  * The options every compile here runs with, on top of the chain's ambient names that
- * `compileSauceProgram` adds itself: the defines, the intent settings, the argument encoding, and a
- * resolver that serves the program's own relative imports from beside the file.
+ * `compileSauceProgram` adds itself: the defines, the argument encoding, and a resolver that serves
+ * the program's own relative imports from beside the file.
  */
 function compileOptions(
   input: ProgramInput,
@@ -265,22 +201,9 @@ function compileOptions(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia, svm } = input.intents;
-  const intents = {
-    ...(svm === undefined ? {} : { svm }),
-    ...(deadline === undefined ? {} : { deadline }),
-    ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
-    ...(creator === undefined ? {} : { creator }),
-    ...(prover === undefined ? {} : { prover }),
-    ...(executionFee === undefined ? {} : { executionFee }),
-    ...(fundVia === undefined ? {} : { fundVia }),
-  };
 
   return {
     defines: input.defines,
-    ...(Object.keys(intents).length === 0 ? {} : { intents }),
-    ...(input.compactArgs ? { compactArgs: true } : {}),
-    // The intents the program opens compile with these options too, so this hears their contracts.
     ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
@@ -321,54 +244,6 @@ export function compileProgram(
   }
 }
 
-/**
- * The intents the file opens, lowered as {@link compileProgram} lowers them but with no program
- * compiled: what a wallet publishes. The only way to build an intent from Solana
- * (`routes/sauce-route.ts#lowerProgramIntents`).
- */
-export function lowerProgram(
-  input: ProgramInput,
-  files: CliFiles,
-): ReturnType<typeof lowerProgramIntents> {
-  try {
-    return lowerProgramIntents(input.chain, input.text, compileOptions(input, files));
-  } catch (error) {
-    throw new CliError(
-      `${input.file} does not lower for ${input.chain.slug}\n` +
-        describeCompileError(error, input.file, input.text, input.chain),
-    );
-  }
-}
-
-/**
- * The chains a cook of `input` is refused by: its own, and the destination of each intent it opens
- * — what {@link requireSupported} is asked about before anything that publishes them. A fee the
- * intents' cooks are not given yet is zero here: the chains do not depend on it.
- */
-export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  const probe = compileProgram(probeInput(input), files);
-
-  return [input.chain, ...intentDestinations(probe.intents)];
-}
-
-/**
- * `input` with what its intents' routes are built against filled in where it is not given, for a
- * compile that only asks which intents a program opens and what their routes touch: a fee of zero,
- * and on Solana no account existing. Never what is published.
- */
-export function probeInput(input: ProgramInput): ProgramInput {
-  const { svm } = input.intents;
-
-  return {
-    ...input,
-    intents: {
-      ...input.intents,
-      executionFee: input.intents.executionFee ?? 0n,
-      svm: { ...svm, potExists: svm?.potExists ?? false },
-    },
-  };
-}
-
 /** The installed compiler's package name and version, read from its own manifest. */
 function compilerPackage(): { name: string; version: string } {
   const require = createRequire(import.meta.url);
@@ -404,8 +279,6 @@ export interface CompileInput extends ProgramInput {
   readonly accounts?: Readonly<Record<string, string>>;
   /** Solana: size the Kitchen's cook (the default) or the engine's direct one. */
   readonly via?: CookVia;
-  /** Endpoints for the intents' destinations: where given, each intent's Pot is checked. */
-  readonly endpoints?: Endpoints;
 }
 
 /**
@@ -415,7 +288,6 @@ export interface CompileInput extends ProgramInput {
  * the cook's transaction against the one-transaction limit.
  */
 export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
-  refusePastDeadline(input);
   const collected = contractCollector();
   const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
@@ -448,18 +320,11 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
     program.manifest === undefined
       ? []
       : svmAccountsToGive(program.manifest, program.derivedAccounts, input.accounts, input.via);
-  const cooks = intentCooks(program.intents);
-  const pots: readonly PotCheck[] =
-    input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
     ...priceLimitNotes(input, program.entryParams, input.args),
-    ...pots.filter((check) => check.deployed === false).map(missingPotNote),
-    ...unread.map(({ name, readOn }) =>
-      readOn.length === 0
-        ? `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`
-        : `--define ${name}: ${input.file} reads ${name} only in intents on ${readOn.join(", ")}, ` +
-          `where it is that chain's own: a define of a name each chain sets holds on ` +
-          `${input.chain.slug} alone, so this one changes nothing`,
+    ...unread.map(
+      (name) =>
+        `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`,
     ),
     ...(program.derivedValues === undefined
       ? []
@@ -494,12 +359,10 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
       ...(program.derivedValues === undefined ? {} : { derivedValues: program.derivedValues }),
-      entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: mainReturnType(input.text) ?? null,
       defines,
       contracts: collected.contracts(),
-      ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined
@@ -686,13 +549,11 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
-  refusePastDeadline(input);
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
   const program = compileProgram(input, files);
-  // The cook `compileSauceRoute` would build, over the program with its arguments appended — the
-  // way the SDK's own intent children carry theirs.
+  // The cook `compileSauceRoute` would build, over the program with its arguments appended.
   const data = buildSauceEvmCall({ pot, engine, program: payloadOf(program, input.args) }).data;
 
   return { pot, engine, data, program };
@@ -817,6 +678,23 @@ function deployHint(chain: CanonicalChain, target: PotInput): string {
     : `sauce pot --deploy --chain ${chain.slug} --keystore <its owner's keystore>`;
 }
 
+/**
+ * What a signer outside the command must know of a chain whose protocol sets a minimum base fee
+ * (Arc's): the transactions a command hands out carry no fee fields, and one signed with a lower fee
+ * cap is never included. Nothing for a chain that sets none.
+ */
+function feeFloorNotes(chain: CanonicalChain): string[] {
+  const floor = getChain(chain.id)?.minBaseFeePerGas;
+
+  return floor === undefined
+    ? []
+    : [
+        `On ${chain.slug} a transaction is included only with a maxFeePerGas (or gasPrice) of at ` +
+          `least ${formatGwei(floor)} gwei, the chain's minimum base fee: sign each with a fee cap ` +
+          "at or above it, or it is never mined.",
+      ];
+}
+
 /** The cook's value: as given, or the Kitchen's fee — refusing a given one below the fee. */
 export function valueOf(
   given: bigint | undefined,
@@ -825,8 +703,8 @@ export function valueOf(
 ): bigint {
   if (given !== undefined && fee !== undefined && given < fee) {
     throw new CliError(
-      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei: the ` +
-        "cook would revert with FeeNotPaid",
+      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei ` +
+        `(${formatEther(fee)} ${nativeSymbol(chain)}): the cook would revert with FeeNotPaid`,
     );
   }
   const value = given ?? fee;
@@ -924,6 +802,12 @@ export async function planGas(
   };
 }
 
+/** An offline transaction is a builder result, not evidence that its release is live. */
+const UNVERIFIED_COOK =
+  "Release availability is NOT verified: no RPC endpoint was given. The released engine and " +
+  "compatible Kitchen must be deployed, and the Pot must have code before the cook is sent. " +
+  "Pass an RPC endpoint to check; an empty target can accept value without running the program.";
+
 export interface TxInput extends CookInput {
   /** An endpoint, when given: it reads the fee and checks the Pot. */
   readonly rpcUrl?: string;
@@ -942,13 +826,19 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   if (input.value === undefined && input.rpcUrl === undefined)
     valueOf(undefined, undefined, input.chain);
   const cook = cookOf(input, files);
-  requireSupported("building the cook transaction", [
-    input.chain,
-    ...intentDestinations(cook.program.intents),
-  ]);
+  requireSupported("building the cook transaction", [input.chain]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
-  const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
+  const fee = client === undefined ? undefined : await requireCookContracts(client, input.chain);
   const state = client === undefined ? undefined : await potState(client, cook.pot);
+  if (state !== undefined && !state.deployed && "pot" in input.target) {
+    throw new CliError(
+      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
+        `is. Give its --owner (and --salt) to plan its deployment, or deploy it first`,
+    );
+  }
+  if (client !== undefined && state !== undefined && !state.deployed) {
+    await requirePotDerivation(client, input.chain);
+  }
   const value = valueOf(input.value, fee, input.chain);
   const target = input.target;
   const owner = state?.owner ?? ("owner" in target ? target.owner : undefined);
@@ -1073,6 +963,8 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(funds?.notes ?? []),
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
+        ...feeFloorNotes(input.chain),
+        ...(client === undefined ? [UNVERIFIED_COOK] : []),
       ],
     };
   }
@@ -1086,6 +978,8 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         : `It is NOT deployed, and --pot does not say whose it is: deploy it first ` +
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
+    ...feeFloorNotes(input.chain),
+    ...(client === undefined ? [UNVERIFIED_COOK] : []),
   ];
   const json = {
     chainId: input.chain.id,
@@ -1150,8 +1044,9 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   const cook = cookOf(input, files);
-  requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.intents)]);
+  requireSupported("sending the cook", [input.chain]);
   const client = await connect(input.rpcUrl, input.chain);
+  const fee = await requireCookContracts(client, input.chain);
   const state = await potState(client, cook.pot);
   // What the cook needs sent first, approved together in one question: the Pot, when it has no
   // code, then whatever else the caller sets up.
@@ -1161,6 +1056,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         `is. Deploy it first: ${deployHint(input.chain, target)}`,
     );
   }
+  if (!state.deployed) await requirePotDerivation(client, input.chain);
   if (state.deployed && state.owner !== signer) {
     throw new CliError(
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
@@ -1206,9 +1102,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
-  const value =
-    valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
-    (funding?.value ?? 0n);
+  const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
   const notes = [...(funding?.notes ?? [])];
@@ -1321,6 +1215,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
     notes: [
       `This is Kitchen.deployPot on the released Kitchen. Any account may send it: the Pot is ` +
         `${input.owner}'s either way, and it deploys once.`,
+      ...feeFloorNotes(input.chain),
     ],
   };
 }
@@ -1356,7 +1251,7 @@ function deploymentLines(
         `${kitchen.address} is ${there(kitchen.deployed)}` +
         (kitchen.executionFee === undefined
           ? ""
-          : `, its execution fee ${kitchen.executionFee} wei`) +
+          : `, its execution fee ${kitchen.executionFee} wei (${formatEther(kitchen.executionFee)} ${nativeSymbol(chain)})`) +
         `; the Pot ${pot} is ${there(state.deployed)}` +
         (state.owner === undefined ? "." : `, owned by ${state.owner}.`),
       ...(kitchen.deployed

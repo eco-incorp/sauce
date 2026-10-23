@@ -506,10 +506,6 @@ export async function planBuffer(
 const potOf = async (plan: Pick<SvmPlan, "owner" | "salt">): Promise<Address> =>
   (await derivePotPda(kitchen(), plan.owner, hexToBytes(plan.salt))).address;
 
-/** The bump the plan's Pot is minted at, which its cook through the Kitchen passes beside it. */
-const potBumpOf = async (plan: Pick<SvmPlan, "owner" | "salt">): Promise<number> =>
-  (await derivePotPda(kitchen(), plan.owner, hexToBytes(plan.salt))).bump;
-
 /**
  * Whether `transaction`, read back, is `plan`'s cook: a cook the owner pays for, on the plan's Pot
  * where it cooks through the Kitchen. A Pot the message loads through a table not given in `tables`
@@ -583,7 +579,6 @@ async function cookInstruction(
           engineProgram: engine(),
           potSalt: hexToBytes(plan.salt),
           pot: await potOf(plan),
-          potBump: await potBumpOf(plan),
           feeConfig,
           maxExecutionFee: fee,
           tail,
@@ -606,7 +601,6 @@ async function cookInstruction(
         engineProgram: engine(),
         potSalt: hexToBytes(plan.salt),
         pot: await potOf(plan),
-        potBump: await potBumpOf(plan),
         feeConfig,
         bytecode: plan.payload,
         maxExecutionFee: fee,

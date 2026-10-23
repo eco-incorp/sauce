@@ -22,7 +22,7 @@ top of this document shows, and write SauceScript's values (`~0`, not `type(uint
 import { AggregatorV3ABI as IAggregatorV3 } from "./abis";
 function main(feedAddress: Address): {
   roundId: Uint256;
-  answer: Uint256;
+  answer: Int256;
   startedAt: Uint256;
   updatedAt: Uint256;
   answeredInRound: Uint256;

@@ -5,19 +5,19 @@
  * package exports none of it; the MCP server imports it from here (`mcp/src/sdk.ts`), and the
  * skills' generator and checker read the built module.
  *
- * For the initial release the command supports transactions on three chains: Ethereum, Base and
- * Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a program
- * for it compiles, and the command simulates, rehearses and reads there, but builds no transaction
- * for it to sign and sends none.
+ * For the initial release the command supports transactions on four chains: Ethereum, Base, Arc
+ * and Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
+ * program for it compiles, and the command simulates, rehearses and reads there, but builds no
+ * transaction for it to sign and sends none.
  *
  * {@link requireSupported} is the gate, called from the command functions both front ends call
- * (`txCommand`, `runCommand`, `potDeployCommand`, `publishCommand`, `fillCommand`, the lifecycle's
- * `build*`) and, where a front end reaches a network or a key before those, from the front end
- * too. Anything that leaves a transaction ready to sign — the unsigned JSON included — or sends one
- * is refused on a preview chain: the cook (`tx`, `run`), a Pot's deployment, publishing intents,
- * and every lifecycle step. A cook or a publish is refused by its own chain and each destination of
- * the intents it opens ({@link intentDestinations}); each lifecycle step by the chain it is sent on.
- * Compiling, simulating, dry runs and reads are never refused.
+ * (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s deployment, `sendCommand`,
+ * `reclaimCommand`, and on Solana `svmTxCommand`, `svmRunCommand` and `svmPotDeployCommand`), from
+ * a wallet's guard for every send it makes, and, where a front end reaches a network or a key
+ * before those, from the front end too. Anything that leaves a transaction ready to sign — the
+ * unsigned JSON included — or sends one is refused on a preview chain, each by its own chain: the
+ * cook (`tx`, `run`), a Pot's deployment, a raw send (`send`) and a reclaim. Compiling, simulating
+ * and reads are never refused.
  *
  * A developer who needs another chain asks for it with a GitHub issue on the repository, from the
  * issue form `.github/ISSUE_TEMPLATE/chain-support.yml`, or adds a use case to the request already
@@ -33,14 +33,13 @@ import {
   type CanonicalChain,
   type ChainRef,
 } from "../chains/canonical.js";
-import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { CliError } from "./args.js";
 
 /** `supported`: the release builds and sends transactions there. `preview`: compile and simulate. */
 export type ChainSupport = "supported" | "preview";
 
 /** The chains the release supports, by slug, in the order the docs name them. */
-export const SUPPORTED_CHAIN_SLUGS = ["ethereum", "base", "solana"] as const;
+export const SUPPORTED_CHAIN_SLUGS = ["ethereum", "base", "arc", "solana"] as const;
 
 const SUPPORTED = new Set<number>(
   SUPPORTED_CHAIN_SLUGS.map((slug) => {
@@ -258,14 +257,14 @@ const summary = (chain: CanonicalChain): ChainSummary => ({
 const listed = (words: readonly string[]): string =>
   words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 
-/** The supported chains by name, as every message says them: "Ethereum, Base and Solana". */
+/** The supported chains by name, as every message says them: "Ethereum, Base, Arc and Solana". */
 export const supportedChainNames = (): string => listed(supportedChains().map((c) => c.name));
 
 /** One sentence of what a preview chain still does, for a help text or a note. */
 export const previewChainsNote = (): string =>
-  `For the initial release, transactions are built and sent only on ${supportedChainNames()}. ` +
-  "Every other chain is a preview chain: programs compile there, and simulate, dry runs and " +
-  `reads work, but no transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
+  `Transactions are built and sent only on ${supportedChainNames()}. ` +
+  "Every other chain is a preview chain: programs compile there, and simulate and reads work, " +
+  `but no transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
 
 /** The refusal of `action` for the preview chains among `chains`; `undefined` when there is none. */
 export function previewRefusal(
@@ -285,9 +284,9 @@ export function previewRefusal(
   }));
   const message = [
     `${action} is refused: it involves ${named}, ${preview.length === 1 ? "a preview chain" : "preview chains"}. ` +
-      `For the initial release, the sauce command and its MCP server build and send transactions ` +
+      `The sauce command and its MCP server build and send transactions ` +
       `only on ${supportedChainNames()}. On a preview chain a program still compiles, and ` +
-      "simulate and dry runs still run it.",
+      "simulate still runs it.",
     ...requests.map(
       ({ name, request }) =>
         `To ask for ${name}: add your use case to its request if there is one ` +
@@ -308,13 +307,4 @@ export function previewRefusal(
 export function requireSupported(action: string, chains: readonly CanonicalChain[]): void {
   const refusal = previewRefusal(action, chains);
   if (refusal !== undefined) throw new PreviewChainError(refusal);
-}
-
-/**
- * The chain each of `intents` delivers to: what a cook or a publish that opens them is refused by,
- * beside its own. An intent its body opens on the destination in turn (a cascade) is not among
- * them: the lowering reports the intents a program opens itself, and no more.
- */
-export function intentDestinations(intents: readonly LoweredIntent[]): CanonicalChain[] {
-  return intents.map((intent) => intent.destination);
 }

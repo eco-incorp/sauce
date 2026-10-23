@@ -276,8 +276,6 @@ describeEvm(
             text: PAYS,
             chain: local.chain,
             defines: {},
-            compactArgs: false,
-            intents: {},
             target: { pot },
             args: { from: "--args", values: [usdc, RECIPIENT, amount.toString()] },
             rpcUrl: local.rpcUrl,

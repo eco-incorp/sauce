@@ -2,9 +2,9 @@
 
 # Solana
 
-**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
-Solana a program compiles and simulates, and the `sauce` command and the MCP server build
-its transactions and send them.
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Solana a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
@@ -15,7 +15,6 @@ its transactions and send them.
 | Name in a program | `Solana` |
 | Native coin | not recorded |
 | Sauce | the engine and Kitchen programs, the same ids on every cluster: [deployments.json](deployments.json) (`svm`) |
-| Intents (eco-routes) | takes intents; Portal `EcoowmRRrMyYtQCuh5fCvMDWcD6B9ZDZkpgedf2bWKXi` (key `0xca542f97103ea70daa48b4a15f9fd1c0a21a50bfac60a57717fc305f495f5245`) |
 
 ## In a program
 

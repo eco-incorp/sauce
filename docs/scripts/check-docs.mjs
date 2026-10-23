@@ -45,7 +45,13 @@ const manual = [
     ? ["CLAUDE.md", "sdk/README.md", "actions/README.md", "dev-tools/README.md"]
     : []),
   "docs/README.md",
+  "docs/changelog.md",
 ].map((path) => join(root, path));
+// The changelog is a page of the manual like any other: its links, fragments and fenced integers are
+// checked with the rest, and it is held to the releases below.
+if (!existsSync(join(root, "docs/changelog.md"))) {
+  throw new Error("docs/changelog.md: missing; the manual records every release in its changelog");
+}
 // The agent skills ship in the package, and link to their own supporting files.
 manual.push(...markdownFiles(join(root, "skills")));
 for (const directory of ["concepts", "guides", "api", "reference", "examples"]) {
@@ -104,6 +110,7 @@ console.log(`Manual links: ${manual.length} files checked`);
   const taught = [
     join(root, "README.md"),
     join(root, "docs/README.md"),
+    join(root, "docs/changelog.md"),
     ...["concepts", "guides", "api", "examples"].flatMap((directory) =>
       markdownFiles(join(root, "docs", directory)),
     ),
@@ -256,11 +263,13 @@ console.log(`Manual links: ${manual.length} files checked`);
         `${page(file)}: its breadcrumb line names no part of the manual: ${Object.values(KINDS).join(", ")}`,
       );
   }
-  // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.
+  // A page that is mostly links sends its reader on instead of telling them. The indexes are lists,
+  // and so is the command reference, which opens with a link to every command's section.
   const lists = new Set([
     "docs/README.md",
     "docs/examples/README.md",
     "docs/reference/chains.md",
+    "docs/reference/cli.md",
     "docs/reference/protocols.md",
   ]);
   for (const file of readerPages) {
@@ -309,6 +318,112 @@ console.log(`Manual links: ${manual.length} files checked`);
   );
 }
 
+// ---- Every tutorial leads on, and the changelog records every release -------------------------------
+// A tutorial is one step of the learning path, so it ends with `## Next` naming the following step
+// (CLAUDE.md). The changelog's version table has a row for each release set the SDK pins
+// (`sdk/src/deployments/releases.json`), and an entry for each SDK release in it, so a bump that
+// lands its releases without saying what changed fails here.
+{
+  const docs = join(root, "docs");
+  const problems = [];
+  const outsideFences = (file) => readFileSync(file, "utf8").replace(/```[^]*?```/g, "");
+  const tutorials = [];
+  let part;
+  for (const line of readFileSync(join(docs, "README.md"), "utf8").split("\n")) {
+    const heading = /^## (.+)$/.exec(line);
+    if (heading) part = heading[1];
+    const entry = /^- \[[^\]]*\]\(([^)#\s]+)/.exec(line);
+    if (part === "Tutorials" && entry && !/^[a-z]+:/i.test(entry[1])) tutorials.push(entry[1]);
+  }
+  if (tutorials.length === 0) problems.push("docs/README.md: lists no page under ## Tutorials");
+  for (const target of tutorials) {
+    const file = resolve(docs, target);
+    // A page that does not exist is the link check's to report.
+    if (existsSync(file) && !/^## Next\s*$/m.test(outsideFences(file)))
+      problems.push(
+        `${relative(root, file).split("\\").join("/")}: is listed under ## Tutorials, so it ends with a \`## Next\` heading naming the next step`,
+      );
+  }
+
+  // The table under `## Which versions work together` has a row whose Compiler, v12-evm,
+  // kitchen-evm, v12-svm and kitchen-svm cells are the versions of each released row. A row is not
+  // out yet when the sync would refuse it: a `null` engine id, Kitchen, Pot init-code hash or asset
+  // digest in any of its components. Such a row needs no table row. Every table row whose SDK cell
+  // is a version has its `## SDK <version>` entry; a row whose SDK cell is `Unreleased` needs none.
+  // The quote router pin names a kitchen-evm release, which the page names outside code. The
+  // installed package ships no releases.json, and its run skips this.
+  const pinned = join(root, "sdk/src/deployments/releases.json");
+  if (existsSync(pinned)) {
+    const releases = JSON.parse(readFileSync(pinned, "utf8"));
+    const COMPONENTS = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
+    const pending = (entry) =>
+      ["engine", "kitchen", "potInitCodeHash"].some((key) => entry?.[key] === null) ||
+      Object.values(entry?.assets ?? {}).some((digest) => digest === null);
+    const changelog = outsideFences(join(docs, "changelog.md"));
+    const COLUMNS = ["SDK", "Compiler", ...COMPONENTS];
+    const section = /^## Which versions work together\s*$([^]*?)(?=^## |(?![^]))/m.exec(changelog);
+    const cells = (line) =>
+      line
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split("|")
+        .map((cell) => cell.trim());
+    const tableLines = (section?.[1] ?? "").split("\n").filter((line) => line.startsWith("|"));
+    const header = tableLines.length ? cells(tableLines[0]) : [];
+    const parsed = section && COLUMNS.every((column, i) => header[i] === column);
+    if (!section)
+      problems.push("docs/changelog.md: has no ## Which versions work together section");
+    else if (!parsed)
+      problems.push(
+        `docs/changelog.md: the table under ## Which versions work together has columns ${header.join(", ") || "(none)"}; it needs ${COLUMNS.join(", ")}`,
+      );
+    if (parsed) {
+      const table = tableLines.slice(2).map((line) => {
+        const row = cells(line);
+        return Object.fromEntries(COLUMNS.map((column, i) => [column, row[i] ?? ""]));
+      });
+      for (const row of releases.releases) {
+        if (COMPONENTS.some((component) => pending(row[component]))) continue;
+        // A component with no version is one no release publishes: its cell is not compared, and
+        // the row's other cells still are.
+        const want = { Compiler: row.compiler };
+        for (const component of COMPONENTS) {
+          const version = row[component]?.version;
+          if (typeof version === "string" && version !== "") want[component] = version;
+        }
+        if (!table.some((entry) => Object.keys(want).every((key) => entry[key] === want[key])))
+          problems.push(
+            `docs/changelog.md: no row of the table under ## Which versions work together has ${Object.entries(
+              want,
+            )
+              .map(([key, version]) => `${key} ${version}`)
+              .join(", ")} (releases.json, compiler ${row.compiler})`,
+          );
+      }
+      const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (const { SDK: sdk } of table)
+        if (
+          /^\d+\.\d+\.\d+$/.test(sdk) &&
+          !new RegExp(`^## SDK ${escaped(sdk)}(?= |$)`, "m").test(changelog)
+        )
+          problems.push(
+            `docs/changelog.md: has no "## SDK ${sdk}" heading (its row in the table under ## Which versions work together)`,
+          );
+    }
+    const quote = releases.quoteRouter;
+    if (quote && !pending(quote) && typeof quote.version === "string" && quote.version !== "") {
+      if (!changelog.split(/\s+/).join(" ").includes(`kitchen-evm ${quote.version}`))
+        problems.push(
+          `docs/changelog.md: never names "kitchen-evm ${quote.version}" outside code fences (releases.json, quoteRouter)`,
+        );
+    }
+  }
+  if (problems.length) throw new Error(`Tutorials and the changelog:\n${problems.join("\n")}`);
+  console.log(
+    `Tutorials: ${tutorials.length} end with ## Next; the changelog covers every pinned release`,
+  );
+}
+
 // The release's addresses are the same on every chain, so the manual writes them on one generated
 // page and points there everywhere else, examples and their comments included
 // (`release-addresses.mjs`). The skills are skills:check's.
@@ -319,7 +434,6 @@ console.log(`Manual links: ${manual.length} files checked`);
       return entry.isDirectory() ? files(child) : [child];
     });
   const addresses = releaseAddresses({
-    sdk: await import(pathToFileURL(join(root, "sdk/dist/index.js")).href),
     deployments: await import(pathToFileURL(join(root, "sdk/dist/deployments/index.js")).href),
   });
   const pages = [join(root, "README.md"), ...files(join(root, "docs"))]

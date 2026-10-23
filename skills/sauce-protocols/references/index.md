@@ -147,10 +147,9 @@ rules. The stablecoin itself is an ordinary ERC-20 to transfer.
 
 Each bridge has its own trust model and delay. Canonical rollup bridges (Arbitrum, Optimism,
 Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to
-Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
+Ethereum; bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
 settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the
-destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a
-program on another chain, not only move a token, open a Sauce intent (`sauce-intents`).
+destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -337,18 +336,16 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (9)
+## Infrastructure and standards (8)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
-ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-(`sauce-intents`).
+ENS, Gelato automation and Instadapp flash-loan routing.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
 | [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |
 | [ERC-3156](erc3156.md) ([registry](registry/erc3156.md)) | — | — | none recorded |

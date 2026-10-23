@@ -136,7 +136,7 @@ try {
       "--no-fund",
       join(work, filename),
       // Node typings, because the shipped examples are Node programs: `docs/examples`'s
-      // `cross-chain-intent.ts` reads its SauceScript sibling off disk, which is the property that
+      // `router-swap.ts` reads its SauceScript sibling off disk, which is the property that
       // keeps the README and the compiled file from drifting. A real consumer typechecking a Node
       // example has these -- the package declares Node >= 24.
       //
@@ -320,20 +320,19 @@ try {
     import { existsSync, readFileSync } from 'node:fs';
     import { dirname, join, resolve } from 'node:path';
     import { fileURLToPath } from 'node:url';
-    import { keccak256 } from 'viem';
-    import { compile, encodeCompactArguments, decodeCompactArguments, resolveSdkModule } from '${name}/compiler';
+    import { decodeAbiParameters, encodeAbiParameters, keccak256 } from 'viem';
+    import { compile, resolveSdkModule } from '${name}/compiler';
     import { settleSource } from '${name}/recipes';
     import { SETTLE_PROGRAM, SETTLE_WIRE } from '${name}/verify';
     const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
     for (const target of ['evm', 'svm']) {
-      const a = compile({ target, compactArgs: true, resolve: () => source });
-      assert.equal(a.isaRevision, 'stack-compact-v2');
-      assert.equal(a.entryEncoding, 'compact-v1');
-      const data = encodeCompactArguments(a.entrySchema, [7n]);
-      assert.deepEqual(decodeCompactArguments(a.entrySchema, data), [7n]);
-      assert.throws(() => decodeCompactArguments(a.entrySchema, data.slice(0, -1)));
+      const a = compile({ target, resolve: () => source });
+      assert.equal(a.entryEncoding, 'abi-v1');
+      const params = [{ type: 'uint256' }];
+      const data = encodeAbiParameters(params, [7n]);
+      assert.deepEqual(decodeAbiParameters(params, data), [7n]);
     }
-    console.log('Clean package install: the compact compiler and codec resolve and round-trip');
+    console.log('Clean package install: the compiler resolves and ABI arguments round-trip');
 
     // The settle recipe, compiled the way ./recipes documents it to partners, from the shipped
     // source and the shipped IERC20 artifact. A pin the tarball cannot reproduce rejects every
@@ -459,34 +458,25 @@ try {
   });
   // Check emitted declarations from a real install, not src/. Bare source globals and builtins
   // must survive declaration emit and the root package's side-effect import.
-  // Base is a named export; USDC and Uniswap are SauceScript globals the compiler resolves
-  // inside the route body — declared types with no runtime value, so importing them would be
-  // wrong. This fixture is the packaged surface a consumer actually gets.
+  // USDC and Uniswap are SauceScript globals the compiler resolves in a program — declared types
+  // with no runtime value, so importing them would be wrong. A typed closure checks against them.
+  // This fixture is the packaged surface a consumer actually gets.
   const consumer = `
-    import { Base } from '${name}';
-    import { parseProgram, programIntent, type ActionProgram } from '${name}/actions';
-    const options = {
-      pot: '0x1111111111111111111111111111111111111111' as const,
-      engine: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const,
-      deadline: 2000000000n,
-      portal: '0x2222222222222222222222222222222222222222' as const,
-      source: 'ethereum' as const,
-      creator: '0x3333333333333333333333333333333333333333' as const,
-      prover: '0x4444444444444444444444444444444444444444' as const,
-    };
-    const built = Base(() => {
+    import { routes } from '${name}';
+    import { compileProgram, parseProgram, type ActionProgram } from '${name}/actions';
+    const owner = '0x3333333333333333333333333333333333333333' as const;
+    const typed = routes.compileSauceProgram('base', routes.sauceBodyToSource(() => {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
       // The language's builtins are declared for a typed closure too (builtins.generated.ts).
       require(ctx.timestamp() > 0n, "stale");
       log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
-    }, options).reward(0n);
-    if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
+    }));
+    if (typed.bytecode.length === 0) throw new Error('Empty program');
     // The actions declarations reference the SDK's by relative path; this checks they resolve.
     const program: ActionProgram = parseProgram({ version: 1, chainId: 8453, actions: [
-      { type: 'approve', amount: '1', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: options.pot },
+      { type: 'approve', amount: '1', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: owner },
     ] });
-    const intent = programIntent(program, options).reward(0n);
-    if (intent.compiled.bytecode[0].length === 0) throw new Error('Empty action route');
+    if (compileProgram(program).bytecode.length === 0) throw new Error('Empty action program');
   `;
   writeFileSync(join(work, "consumer.ts"), consumer);
   // Every export the actions pages name, typechecked from the installed package: the runtime ones as
@@ -1037,7 +1027,7 @@ try {
   );
 
   // An editor on that project, asked through its own tsserver from the installed TypeScript: the
-  // programs in programs/ — an agent's three, as it wrote them, and every one the skills ship —
+  // programs in programs/ — an agent's two, as it wrote them, and every one the skills ship —
   // show no error, a real mistake does, the skills' programs where the init installed them show
   // none either, and the project's other TypeScript is untouched.
   const { checkEditor } = await import(
@@ -1046,7 +1036,6 @@ try {
   const demo = join(root, "sdk/test/fixtures/sauce-script/demo");
   const editorPrograms = [
     join(demo, "usdc-to-weth.sauce.ts"),
-    join(demo, "intent/usdc-to-weth-on-base.sauce.ts"),
     join(demo, "solana/pay-usdc-keep-minimum.sauce.ts"),
     ...shippedSkills
       .filter((file) => file.endsWith(".sauce.ts"))
@@ -1307,12 +1296,16 @@ try {
     "sauce_tx",
     "sauce_pot",
     "sauce_simulate",
-    "sauce_intent_publish",
     "sauce_skills",
     "sauce_skill",
   ]) {
     assert.ok(toolNames.includes(tool), `sauce mcp lists ${tool}`);
   }
+  assert.deepEqual(
+    toolNames.filter((tool) => tool.startsWith("sauce_intent_")),
+    [],
+    "sauce mcp lists no intent tool",
+  );
   assert.equal(
     answers.get(3).result.structuredContent.bytecode,
     JSON.parse(sauce("compile", join(work, "mcp-check.sauce.ts"), "--chain", "ethereum", "--json"))
@@ -1565,8 +1558,6 @@ try {
     // The same tools, but for the wallets' and the stores', which a server serves and keeps over
     // stdio only (by default): the HTTP server never signs, and keeps nothing.
     const stdioOnly = [
-      "sauce_intent_list",
-      "sauce_intent_show",
       "sauce_wallet_enable",
       "sauce_wallet_create",
       "sauce_wallet_import",

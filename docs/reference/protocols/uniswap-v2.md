@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Constant product AMM (x*y=k) with permissionless pair creation. The most forked DEX protocol in DeFi, deployed across 9 chains with identical interfaces.
 
@@ -54,108 +54,11 @@ function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
 `amountIn` to the pair, pays `recipient` and reverts below `minOut`. The pair takes the whole input
 or the program reverts, so no input is left to return.
 
-## Key Operations
+## What it offers
 
 - **swap**: Swap an exact amount of input tokens for as many output tokens as possible, routed through a path of pairs
 - **addLiquidity**: Deposit two tokens into a pair to mint LP tokens proportional to pool share
 - **removeLiquidity**: Burn LP tokens to withdraw both underlying tokens from a pair
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { UniswapV2RouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  path: Address[],
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256[] {
-  const router = IRouter.at(routerAddress);
-  return router.swapExactTokensForTokens(amountIn, amountOutMin, path, recipient, 99999999999);
-}
-```
-
-- `routerAddress`: The Uniswap V2 Router contract address for the target chain
-- `path`: Ordered array of token addresses defining the swap route (e.g., `[tokenIn, WETH, tokenOut]` for multi-hop)
-- `amountIn`: Exact amount of input token to swap (in wei)
-- `amountOutMin`: Minimum acceptable output amount, used for slippage protection
-- `recipient`: Address to receive the output tokens
-- Deadline is hardcoded to `99999999999` (far future) since Sauce executes atomically
-
-### addLiquidity
-
-```typescript
-import { UniswapV2RouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenA: Address,
-  tokenB: Address,
-  amountADesired: Uint256,
-  amountBDesired: Uint256,
-  amountAMin: Uint256,
-  amountBMin: Uint256,
-  recipient: Address,
-): { amountA: Uint256; amountB: Uint256; liquidity: Uint256 } {
-  const router = IRouter.at(routerAddress);
-  return router.addLiquidity(
-    tokenA,
-    tokenB,
-    amountADesired,
-    amountBDesired,
-    amountAMin,
-    amountBMin,
-    recipient,
-    99999999999,
-  );
-}
-```
-
-- `tokenA` / `tokenB`: The two token addresses forming the pair
-- `amountADesired` / `amountBDesired`: Ideal amounts to deposit (router adjusts to maintain ratio)
-- `amountAMin` / `amountBMin`: Minimum amounts to deposit (slippage protection)
-- `recipient`: Address to receive the LP tokens
-- Both tokens must be approved to the router before calling
-
-### removeLiquidity
-
-```typescript
-import { UniswapV2RouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenA: Address,
-  tokenB: Address,
-  liquidity: Uint256,
-  amountAMin: Uint256,
-  amountBMin: Uint256,
-  recipient: Address,
-): { amountA: Uint256; amountB: Uint256 } {
-  const router = IRouter.at(routerAddress);
-  return router.removeLiquidity(
-    tokenA,
-    tokenB,
-    liquidity,
-    amountAMin,
-    amountBMin,
-    recipient,
-    99999999999,
-  );
-}
-```
-
-- `liquidity`: Amount of LP tokens to burn
-- `amountAMin` / `amountBMin`: Minimum amounts of each token to receive (slippage protection)
-- LP token must be approved to the router before calling
 
 ## Notes
 
@@ -236,3 +139,9 @@ functions, and its writes are SafeERC20.
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB)`
 - `getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -17,73 +17,6 @@ Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through opti
 | Namespace | `Lifi` on ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridge
-
-Bridge tokens cross-chain via the LI.FI Diamond's Across V4 facet. Each underlying bridge has its own facet entry point (`startBridgeTokensVia<Bridge>`), with a bridge-specific second struct.
-
-```typescript
-import { LiFiDiamondABI as ILiFiDiamond } from "./abis";
-
-function main(
-  diamondAddress: Address,
-  transactionId: Uint256,
-  sendingAsset: Address,
-  receivingAsset: Address,
-  receiver: Address,
-  amount: Uint256,
-  outputAmount: Uint256,
-  destinationChainId: Uint256,
-  quoteTimestamp: Uint256,
-  fillDeadline: Uint256,
-): Uint256 {
-  const lifi = ILiFiDiamond.at(diamondAddress);
-  lifi.startBridgeTokensViaAcrossV4(
-    {
-      transactionId: transactionId,
-      bridge: "acrossV4",
-      integrator: "sauce",
-      referrer: 0x0000000000000000000000000000000000000000,
-      sendingAssetId: sendingAsset,
-      receiver: receiver,
-      minAmount: amount,
-      destinationChainId: destinationChainId,
-      hasSourceSwaps: false,
-      hasDestinationCall: false,
-    },
-    {
-      receiverAddress: receiver,
-      refundAddress: receiver,
-      sendingAssetId: sendingAsset,
-      receivingAssetId: receivingAsset,
-      outputAmount: outputAmount,
-      outputAmountMultiplier: 0,
-      exclusiveRelayer: 0,
-      quoteTimestamp: quoteTimestamp,
-      fillDeadline: fillDeadline,
-      exclusivityParameter: 0,
-      message: "",
-    },
-  );
-  return 1;
-}
-```
-
-- `transactionId`: Unique identifier for tracking this bridge transaction (bytes32)
-- `integrator`: Integration partner identifier (e.g. "sauce")
-- `referrer`: Referral address for fee sharing. `address(0)` for none
-- `sendingAssetId` / `receivingAssetId`: token sent, and token received on the destination
-- `minAmount` / `outputAmount`: amount bridged, and the amount the Across relayer delivers
-- `quoteTimestamp` / `fillDeadline`: the Across quote's timestamp and fill deadline
-- `hasSourceSwaps` / `hasDestinationCall`: `true` only with pre-bridge swaps or a destination call
-- Requires ERC-20 approval to the LiFi Diamond
-
 ## Notes
 
 - LI.FI is a bridge **aggregator** -- it routes through underlying bridges (Across, Stargate, Hop, cBridge, etc.)
@@ -130,3 +63,9 @@ function main() {
 
 - `startBridgeTokensViaAcrossV4((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData, (bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) acrossData) payable`
 - `extractBridgeData(bytes data) pure returns ((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

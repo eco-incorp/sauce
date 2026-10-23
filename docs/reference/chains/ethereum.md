@@ -8,9 +8,9 @@
 > name a program writes for each contract. The `sauce` command builds and sends transactions on
 > Ethereum.
 
-**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
-Ethereum a program compiles and simulates, and the `sauce` command and the MCP server build
-its transactions and send them.
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Ethereum a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
@@ -22,9 +22,6 @@ its transactions and send them.
 | In TypeScript | `import { Ethereum } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [Deployments](../deployments.md#the-shared-intent-pot); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 0 |
 
 ## In a program
@@ -258,3 +255,9 @@ address.
 | [Yearn V3](../protocols/yearn-v3.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F` | `YearnV3.VaultFactory` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
 | [zkSync Native Bridge](../protocols/zksync-bridge.md) | diamondProxy | `0x32400084C286CF3E17e7B677ea9583e60a000324` | `ZksyncBridge.DiamondProxy` |
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

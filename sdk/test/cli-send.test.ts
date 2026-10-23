@@ -176,6 +176,35 @@ describe("an EVM transaction sauce send does not broadcast", () => {
   });
 });
 
+describe("an EVM transaction under the chain's minimum base fee", () => {
+  const arc = requireChain("arc");
+  const send = (transaction: Hex) =>
+    sendCommand({ chain: arc, rpcUrl: "http://127.0.0.1:9/", transactions: [transaction] });
+  const call = { chainId: arc.id, nonce: 0, to: RECIPIENT, value: 0n, gas: 21_000n } as const;
+
+  it("is refused before the endpoint, its fee cap and Arc's 20 gwei named", async () => {
+    const under = await signer.signTransaction({
+      ...call,
+      type: "eip1559",
+      maxFeePerGas: 19_000_000_000n,
+      maxPriorityFeePerGas: 0n,
+    });
+    await expect(send(under)).rejects.toThrow(
+      /transaction 1 is signed with a fee cap of 19 gwei, below arc's minimum base fee of 20 gwei, so it would never be included: sign it again with a maxFeePerGas of at least 20 gwei/,
+    );
+    const legacy = await signer.signTransaction({ ...call, type: "legacy", gasPrice: 1n });
+    await expect(send(legacy)).rejects.toThrow(/a fee cap of 0.000000001 gwei, below arc's/);
+    // At the floor it goes on, to the endpoint, which is not there.
+    const at = await signer.signTransaction({
+      ...call,
+      type: "eip1559",
+      maxFeePerGas: 20_000_000_000n,
+      maxPriorityFeePerGas: 0n,
+    });
+    await expect(send(at)).rejects.not.toThrow(/minimum base fee/);
+  });
+});
+
 describe("the wait for a transaction read back", () => {
   const HASH: Hex = `0x${"ab".repeat(32)}`;
   /** A client whose chain answers each poll from `polls`: mined, pending, or not there. */

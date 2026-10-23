@@ -42,7 +42,6 @@ import {
   buildWriteCodeBufferInstruction,
   deriveCodeBufferPda,
   deriveCodePda,
-  derivePotPda,
   ENGINE_GAS_LIMIT_CU,
   engineFaultName,
   GROWTH_STEP,
@@ -322,8 +321,6 @@ function tableAddresses(transaction: Transaction): Address[] {
  */
 export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> {
   const manifest = input.program.manifest ?? { accounts: [] };
-  // The bump the Kitchen checks `input.pot` with: the canonical one, which it was minted at.
-  const { bump: potBump } = await derivePotPda(chain.kitchen, input.owner.address, input.salt);
   const { resolution, labels, tokenAccounts } = await resolveNames(chain, input, manifest);
   // Each swap at a price's stop, worked out from the pools the cook names, as `sauce` works it out:
   // a swap whose stop binds compiled again to the Stopped form, every other the plain one.
@@ -399,7 +396,6 @@ export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> 
         engineProgram: engine,
         potSalt: input.salt,
         pot: input.pot,
-        potBump,
         feeConfig,
         bytecode: payload,
         maxExecutionFee: input.fee,
@@ -470,7 +466,6 @@ export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> 
       engineProgram: engine,
       potSalt: input.salt,
       pot: input.pot,
-      potBump,
       feeConfig,
       maxExecutionFee: input.fee,
       tail,

@@ -38,7 +38,7 @@ import {
 } from "../src/cli/optional.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { installRuntime, npmCommand, npmReason, NPM_CI, prune } from "../src/cli/runtime.js";
-import { IntentStore } from "../src/cli/store.js";
+import { POT_SCHEMA, PotStore } from "../src/cli/pot-store.js";
 
 let work: string;
 let root: string;
@@ -225,17 +225,26 @@ describe("where a command's runtime packages come from", () => {
     );
   });
 
-  it("a ~/.sauce the intent store creates stays the user's alone, whatever the umask", () => {
+  it("a ~/.sauce the Pot store creates stays the user's alone, whatever the umask", () => {
     if (process.platform === "win32") return;
     const sauce = join(work, ".sauce");
     useRuntime({ root: join(sauce, "runtime") });
     const umask = process.umask(0o002);
     try {
-      new IntentStore(join(sauce, "intents")).append(`0x${"11".repeat(32)}`, {
-        event: "published",
+      new PotStore(join(sauce, "pots")).save({
+        schema: POT_SCHEMA,
         chain: "base",
         chainId: 8453,
-        time: new Date(0).toISOString(),
+        pot: "0x5a0Ce0000000000000000000000000000000Beef",
+        owner: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        salt: `0x${"00".repeat(32)}`,
+        kind: "private",
+        kitchen: "0x19845b22989150E6B09dE55a661295Dd9188506b",
+        engine: "0xcF7A92abCC7Ede43277AcCBAfda910b8829bF9AD",
+        release: { compiler: "2.5.0", "v12-evm": "1.2.0", "kitchen-evm": "1.2.0" },
+        sdk: "0.0.0",
+        origin: "imported",
+        recordedAt: new Date(0).toISOString(),
       });
     } finally {
       process.umask(umask);
