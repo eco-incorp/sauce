@@ -29,8 +29,17 @@ const TOKEN_PROGRAMS = new Set<string>([
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
 ]);
-/** An SPL token account's base layout: mint, owner, amount (u64 LE), and 165 bytes in all. */
+/**
+ * An SPL token account's base layout, which a Token-2022 account shares at its start, 165 bytes in
+ * all: mint (32), owner (32), amount (u64 LE), delegate (a u32 tag, then a key), state (1),
+ * is_native (a u32 tag, then the rent it keeps as a u64), delegated amount (u64), close authority
+ * (a u32 tag, then a key). A tag is 1 where the value is there.
+ */
 const TOKEN_ACCOUNT_SIZE = 165;
+const DELEGATE_AT = 72;
+const IS_NATIVE_AT = 109;
+const DELEGATED_AMOUNT_AT = 121;
+const CLOSE_AUTHORITY_AT = 129;
 /** Token-2022 marks an extended account's kind at byte 165: 2 is a token account, 1 a mint. */
 const ACCOUNT_TYPE_TOKEN = 2;
 /** A mint's decimals: after its optional authority (4 + 32 bytes) and its supply (8). */
@@ -45,12 +54,32 @@ export interface LamportChange {
 export interface TokenChange {
   readonly account: Address;
   readonly mint: Address;
-  /** Whose token account it is (its SPL owner, the authority that may move it). */
+  /**
+   * Whose token account it was before the transaction (its SPL owner, the authority that may move
+   * it), and so whose balance changed; whose it is, for one the transaction created.
+   */
   readonly owner: Address;
+  /** Whose it is after the transaction, where the transaction handed it to another key. */
+  readonly ownerAfter?: Address;
   readonly before: bigint;
   readonly after: bigint;
   readonly decimals?: number;
   readonly symbol?: string;
+}
+
+/** A token account as its program records it, in either program. */
+export interface TokenAccountState {
+  readonly mint: Address;
+  /** Its SPL owner: who may move it, approve a delegate, hand it over and close it. */
+  readonly owner: Address;
+  readonly amount: bigint;
+  /** Who else may move up to `delegatedAmount` of it, if anyone. */
+  readonly delegate?: Address;
+  readonly delegatedAmount: bigint;
+  /** Who may close it in the owner's stead, if anyone: closing it pays its lamports out. */
+  readonly closeAuthority?: Address;
+  /** Wrapped SOL: its amount is lamports it holds above its rent. */
+  readonly isNative: boolean;
 }
 
 /**
@@ -177,10 +206,8 @@ export async function accountsNow(
   );
 }
 
-/** A token account's mint, owner and amount, or `undefined` for any other account. */
-function tokenAccount(
-  account: SimulatedAccount | null,
-): { mint: Address; owner: Address; amount: bigint } | undefined {
+/** `account` as a token account of either program, or `undefined` for any other account. */
+export function tokenAccount(account: SimulatedAccount | null): TokenAccountState | undefined {
   if (account === null || !TOKEN_PROGRAMS.has(account.owner)) return undefined;
   const { data } = account;
   if (
@@ -190,11 +217,20 @@ function tokenAccount(
     return undefined;
   }
   const decoder = getAddressDecoder();
+  const view = new DataView(data.buffer, data.byteOffset);
+  const key = (at: number): Address | undefined =>
+    view.getUint32(at, true) === 1 ? decoder.decode(data.subarray(at + 4, at + 36)) : undefined;
+  const delegate = key(DELEGATE_AT);
+  const closeAuthority = key(CLOSE_AUTHORITY_AT);
 
   return {
     mint: decoder.decode(data.subarray(0, 32)),
     owner: decoder.decode(data.subarray(32, 64)),
-    amount: new DataView(data.buffer, data.byteOffset).getBigUint64(64, true),
+    amount: view.getBigUint64(64, true),
+    ...(delegate === undefined ? {} : { delegate }),
+    delegatedAmount: view.getBigUint64(DELEGATED_AMOUNT_AT, true),
+    ...(closeAuthority === undefined ? {} : { closeAuthority }),
+    isNative: view.getUint32(IS_NATIVE_AT, true) === 1,
   };
 }
 
@@ -210,11 +246,48 @@ function registryRow(
   );
 }
 
+/** A mint's decimals and the registry's symbol for it, where they are known. */
+export interface MintFacts {
+  readonly decimals?: number;
+  readonly symbol?: string;
+}
+
+/**
+ * Each of `mints`' decimals, read from the cluster, else taken from the registry, which also names
+ * a mint it records.
+ */
+export async function mintFacts(
+  rpc: Rpc,
+  chain: CanonicalChain,
+  mints: readonly Address[],
+): Promise<Map<string, MintFacts>> {
+  const facts = new Map<string, MintFacts>();
+  const unique = [...new Set(mints)];
+  if (unique.length === 0) return facts;
+  const read = await accountsNow(rpc, unique).catch(() => unique.map(() => null));
+  const registered = sourceGlobals(chain).tokens;
+  unique.forEach((mint, index) => {
+    const account = read[index] ?? null;
+    const row = registryRow(registered, mint);
+    const decimals =
+      account !== null && account.data.length > MINT_DECIMALS_AT
+        ? account.data[MINT_DECIMALS_AT]!
+        : row?.decimals;
+    facts.set(mint, {
+      ...(decimals === undefined ? {} : { decimals }),
+      ...(row?.symbol === undefined ? {} : { symbol: row.symbol }),
+    });
+  });
+
+  return facts;
+}
+
 /**
  * What changed between `before` and `after` for each of `tracked`: the token accounts' balances
  * (a token account the cook created starts at 0, one it closed ends at 0), and every account's
- * lamports. Each mint's decimals are read from the cluster, else taken from the registry, which
- * also names a mint it records.
+ * lamports. A balance change counts for whose the account was before (the transaction may hand it
+ * to another key after moving what it holds), and each mint's decimals and symbol are
+ * {@link mintFacts}'.
  */
 export async function movedBy(
   rpc: Rpc,
@@ -237,7 +310,7 @@ export async function movedBy(
     }
     const held = tokenAccount(was);
     const holds = tokenAccount(is);
-    const seen = holds ?? held;
+    const seen = held ?? holds;
     if (seen === undefined) return;
     const amountBefore = held?.amount ?? 0n;
     const amountAfter = holds?.amount ?? 0n;
@@ -246,36 +319,20 @@ export async function movedBy(
         account,
         mint: seen.mint,
         owner: seen.owner,
+        ...(holds === undefined || holds.owner === seen.owner ? {} : { ownerAfter: holds.owner }),
         before: amountBefore,
         after: amountAfter,
       });
     }
   });
-  const mints = [...new Set(tokens.map((change) => change.mint))];
-  const decimals = new Map<string, number>();
-  if (mints.length > 0) {
-    const read = await accountsNow(rpc, mints).catch(() => mints.map(() => null));
-    read.forEach((account, index) => {
-      if (account !== null && account.data.length > MINT_DECIMALS_AT) {
-        decimals.set(mints[index]!, account.data[MINT_DECIMALS_AT]!);
-      }
-    });
-  }
-
-  const registered = tokens.length === 0 ? [] : sourceGlobals(chain).tokens;
+  const facts = await mintFacts(
+    rpc,
+    chain,
+    tokens.map((change) => change.mint),
+  );
 
   return {
-    tokens: tokens.map((change) => {
-      const row = registryRow(registered, change.mint);
-      const places = decimals.get(change.mint) ?? row?.decimals;
-      const symbol = row?.symbol;
-
-      return {
-        ...change,
-        ...(places === undefined ? {} : { decimals: places }),
-        ...(symbol === undefined ? {} : { symbol }),
-      };
-    }),
+    tokens: tokens.map((change) => ({ ...change, ...facts.get(change.mint) })),
     lamports,
     labels,
     payer,
@@ -306,8 +363,11 @@ export function svmMovedLines(moved: SvmMoved): string[] {
     for (const change of moved.tokens) {
       const unit = change.symbol ?? `of mint ${change.mint}`;
       lines.push(
-        `  ${named(moved, change.account)}, owned by ${named(moved, change.owner)}: ` +
-          signed(change.after - change.before, change.decimals, unit),
+        `  ${named(moved, change.account)}, owned by ${named(moved, change.owner)}` +
+          (change.ownerAfter === undefined
+            ? ""
+            : `, handed to ${named(moved, change.ownerAfter)} by the transaction`) +
+          `: ${signed(change.after - change.before, change.decimals, unit)}`,
       );
     }
   }
@@ -346,9 +406,10 @@ export function svmMovedLines(moved: SvmMoved): string[] {
 }
 
 /** The Pot's token accounts the cook changed and leaves holding something: what the cook leaves in
- *  the Pot, not in the owner's wallet. */
+ *  the Pot, not in the owner's wallet. An account it hands the Pot counts; one it hands away does
+ *  not. */
 export const svmLeftInPot = (moved: SvmMoved, pot: Address): TokenChange[] =>
-  moved.tokens.filter((change) => change.owner === pot && change.after > 0n);
+  moved.tokens.filter((change) => (change.ownerAfter ?? change.owner) === pot && change.after > 0n);
 
 const amountOf = (change: TokenChange, amount: bigint): string =>
   change.decimals === undefined
@@ -402,6 +463,7 @@ export function svmMovedJson(moved: SvmMoved): Record<string, unknown> {
       mint: change.mint,
       ...(change.symbol === undefined ? {} : { symbol: change.symbol }),
       owner: change.owner,
+      ...(change.ownerAfter === undefined ? {} : { ownerAfter: change.ownerAfter }),
       before: change.before.toString(),
       after: change.after.toString(),
       delta: (change.after - change.before).toString(),

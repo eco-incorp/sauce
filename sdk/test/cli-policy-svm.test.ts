@@ -28,6 +28,7 @@ import {
   lamports,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
+  type AccountSignerMeta,
   type Address,
   type Blockhash,
   type Instruction,
@@ -1256,5 +1257,237 @@ describeSvm(
       expectOk(sendSigned(harness, transaction));
       expect(keyAt(account, 133)).toBe(closer);
     });
+
+    it("refuses wrapped SOL another key may close, where wrapped SOL is limited as a token", async () => {
+      const { account } = wrappedSol(wallet, 2_000_000_000n);
+      const closer = randomAddress();
+      const transaction = await signed([setAuthority(TOKEN_PROGRAM, account, "close", closer)]);
+
+      expect(await guarded(limited(NATIVE_MINT), transaction)).toEqual(
+        refused(`tokens.${NATIVE_MINT}`, `this transaction lets ${closer} close ${account}`),
+      );
+    });
+
+    /** `signer` as the authority an instruction names, signing beside the wallet. */
+    const signing = (signer: KeyPairSigner): AccountSignerMeta => ({
+      address: signer.address,
+      role: AccountRole.READONLY_SIGNER,
+      signer,
+    });
+
+    it.each(["spl", "token2022"] as const)(
+      "lets a %s approval within the limit through, and reserves nothing for it",
+      async (kind) => {
+        const mint = mints[kind];
+        const source = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          wallet,
+          AMOUNT,
+          PROGRAMS[kind],
+        );
+        const delegate = randomAddress();
+        // 1,000 base units: 1 token, the limit itself.
+        const transaction = await signed([
+          kind === "spl"
+            ? approve(source, delegate, 1_000n)
+            : approveChecked(kind, source, delegate, 1_000n),
+        ]);
+
+        const measured = await measure(transaction);
+        const { refusal, ledger } = await guarded(limited(mint), transaction);
+        expect({
+          approvals: plain(measured.approvals),
+          refusal,
+          spend: (JSON.parse(ledger) as { spend: unknown }).spend,
+        }).toEqual({
+          approvals: [{ token: mint, spender: delegate, amount: "1000", decimals: DECIMALS }],
+          refusal: "none: the guard let it through",
+          spend: {},
+        });
+      },
+    );
+
+    it("counts a raised allowance at its new total, and not a lowered one, a revoke, or one spent down", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const delegate = await generateKeyPairSigner();
+      expectOk(sendSigned(harness, await signed([approve(source, delegate.address, 5_000n)])));
+
+      // Raised from 5 tokens to 6, for the same delegate: an approval of 6, over the limit of 1.
+      const raised = await signed([approve(source, delegate.address, 6_000n)]);
+      expect({
+        approvals: plain((await measure(raised)).approvals),
+        ...(await guarded(limited(mint), raised)),
+      }).toEqual({
+        approvals: [{ token: mint, spender: delegate.address, amount: "6000", decimals: DECIMALS }],
+        ...refused(`tokens.${mint}`, `this transaction approves ${delegate.address} for 6 ${mint}`),
+      });
+
+      // Lowered, revoked, or spent down by the delegate (400 of it, in a transaction the wallet
+      // pays for): nothing new for anyone to take, and the 400 count as what the wallet sends.
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const instructions: Instruction[] = [
+        approve(source, delegate.address, 2_000n),
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(source), signer(wallet)],
+          data: Uint8Array.of(5),
+        },
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(source), readonly(mint), writable(elsewhere), signing(delegate)],
+          data: transferCheckedData(400n, DECIMALS),
+        },
+      ];
+      const outcomes = [];
+      // Each measured as soon as it is signed, while its blockhash is the bank's latest.
+      for (const instruction of instructions) {
+        const transaction = await signed([instruction]);
+        const measured = await measure(transaction);
+        outcomes.push({
+          approvals: plain(measured.approvals),
+          tokens: plain(measured.tokens),
+          refusal: (await guarded(limited(mint), transaction)).refusal,
+        });
+      }
+      const allowed = "none: the guard let it through";
+      expect(outcomes).toEqual([
+        { approvals: [], tokens: [], refusal: allowed },
+        { approvals: [], tokens: [], refusal: allowed },
+        {
+          approvals: [],
+          tokens: [{ token: mint, amount: "400", decimals: DECIMALS }],
+          refusal: allowed,
+        },
+      ]);
+    });
+
+    it("ignores an approval on a token account that is neither the wallet's nor a Pot's it cooks on", async () => {
+      const mint = mints.token2022;
+      const stranger = await generateKeyPairSigner();
+      const source = setTokenAccount(
+        harness,
+        randomAddress(),
+        mint,
+        stranger.address,
+        AMOUNT,
+        TOKEN_2022_PROGRAM,
+      );
+      const transaction = await signed([
+        {
+          programAddress: TOKEN_2022_PROGRAM,
+          accounts: [
+            writable(source),
+            readonly(mint),
+            readonly(randomAddress()),
+            signing(stranger),
+          ],
+          data: Uint8Array.of(13, ...u64(AMOUNT), DECIMALS),
+        },
+      ]);
+
+      const measured = await measure(transaction);
+      expect({
+        approvals: plain(measured.approvals),
+        refusal: (await guarded(limited(mint), transaction)).refusal,
+      }).toEqual({ approvals: [], refusal: "none: the guard let it through" });
+      expectOk(sendSigned(harness, transaction));
+    });
+
+    it("gives nothing away by a close authority handed to the wallet itself", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const transaction = await signed([setAuthority(TOKEN_PROGRAM, source, "close", wallet)]);
+
+      const measured = await measure(transaction);
+      expect({
+        closers: measured.closers,
+        refusal: (await guarded(limited(mint), transaction)).refusal,
+      }).toEqual({ closers: [], refusal: "none: the guard let it through" });
+    });
+
+    it("counts a handoff in the day's total, as the ledger records it", async () => {
+      const mint = mints.spl;
+      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-handoff-"));
+      const info: WalletInfo = {
+        name: "agent",
+        kind: "solana",
+        address: wallet,
+        path: join(dir, "agent.json"),
+        policyPath: join(dir, "agent.policy.json"),
+      };
+      const handOff = async () =>
+        signed([
+          setAuthority(
+            TOKEN_PROGRAM,
+            setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT),
+            "owner",
+            randomAddress(),
+          ),
+        ]);
+      try {
+        writeFileSync(info.policyPath, JSON.stringify({ tokens: { [mint]: { perDay: "1500" } } }), {
+          mode: 0o600,
+        });
+        const guard = guardWallet(info, readPolicy(info));
+        (await guard.svm(rpc, await handOff())).sent("the first handoff");
+        const refusal = await guard.svm(rpc, await handOff()).then(
+          () => "none: the guard let it through",
+          (error: unknown) =>
+            error instanceof PolicyRefusal
+              ? { limit: error.limit, message: error.message }
+              : String(error),
+        );
+        const ledger = readFileSync(join(dir, "agent.ledger.jsonl"), "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+        expect({ ledger, refusal }).toEqual({
+          ledger: [
+            expect.objectContaining({
+              state: "reserved",
+              spend: { [`tokens.${mint}`]: { amount: "1000000", decimals: DECIMALS } },
+            }),
+            expect.objectContaining({ state: "sent", tx: "the first handoff" }),
+          ],
+          refusal: {
+            limit: `tokens.${mint}.perDay`,
+            message: expect.stringContaining(
+              `1000 ${mint} went in the last 24 hours, and this transaction sends 1000 ${mint}`,
+            ) as unknown,
+          },
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it.each(["an approval", "a handoff"] as const)(
+      "refuses %s of a token whose decimals cannot be read, where a token is limited",
+      async (what) => {
+        // A mint with no account, which the registry does not record: neither Approve nor
+        // SetAuthority reads it.
+        const mint = randomAddress();
+        const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+        const transaction = await signed([
+          what === "an approval"
+            ? approve(source, randomAddress(), AMOUNT)
+            : setAuthority(TOKEN_PROGRAM, source, "owner", randomAddress()),
+        ]);
+        const why = `the decimals of mint ${mint} could not be read`;
+
+        const measured = await measure(transaction);
+        expect({
+          unmeasured: measured.unmeasured,
+          ...(await guarded(limited(mint), transaction)),
+        }).toEqual({
+          unmeasured: { tokens: expect.stringContaining(why) as unknown },
+          ...refused(`tokens.${mint}`, `tokens.${mint} is limited, and ${why}`),
+        });
+      },
+    );
   },
 );

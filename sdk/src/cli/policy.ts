@@ -92,7 +92,14 @@ import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { accountsNow, messageAccounts, movedBy, writableAccounts } from "./svm-effects.js";
+import {
+  accountsNow,
+  messageAccounts,
+  mintFacts,
+  movedBy,
+  tokenAccount,
+  writableAccounts,
+} from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -338,6 +345,15 @@ interface Approval extends Outflow {
   readonly spender: string;
 }
 
+/** A Solana token account the transaction lets another key close, in its owner's stead. */
+interface Closer {
+  /** The account's mint. */
+  readonly token: string;
+  readonly symbol?: string;
+  readonly account: string;
+  readonly closer: string;
+}
+
 /** What one transaction spends, as measured. */
 export interface Measured {
   readonly chain: CanonicalChain;
@@ -348,6 +364,8 @@ export interface Measured {
   readonly native: Outflow;
   readonly tokens: readonly Outflow[];
   readonly approvals: readonly Approval[];
+  /** Solana: the token accounts of the wallet's or its Pots' it lets another key close. */
+  readonly closers?: readonly Closer[];
   /** Why native or token movements could not be measured, when they could not. */
   readonly unmeasured: { readonly native?: string; readonly tokens?: string };
 }
@@ -623,7 +641,10 @@ type InnerInstruction = Readonly<{
  * What a signed Solana `transaction` moves out of `wallet` and the Pots it cooks on, as a
  * simulation that reports its writable accounts shows it; a transaction that would fail is refused.
  * A cook counts wherever it runs: called by the transaction, or by a program it calls (a signer's
- * signature passes through a CPI, and the Kitchen takes a cook at any depth).
+ * signature passes through a CPI, and the Kitchen takes a cook at any depth). So does what it gives
+ * another key over a token account of theirs: a delegate's allowance is an approval, the account
+ * handed over is a send of what it holds, and the right to close it is refused where the token is
+ * limited, and for wrapped SOL is a send of its lamports.
  */
 export async function measureSvm(
   rpc: Rpc,
@@ -771,9 +792,52 @@ export async function measureSvm(
   );
   const moved = await movedBy(rpc, chain, tracked, before, after, new Map(), wallet);
   const ours = new Set<string>([wallet, ...pots]);
-  const lamports = moved.lamports
-    .filter((change) => ours.has(change.account))
-    .reduce((sum, change) => sum + change.before - change.after, 0n);
+  // What it gives another key over a token account of the wallet's or a Pot's, which counts for
+  // whose the account was before it (whose it is, for one it creates), as its balance does: a
+  // delegate's allowance, new or raised; the account itself; or the right to close it.
+  const approved: Array<{ token: SvmAddress; spender: SvmAddress; amount: bigint }> = [];
+  const handedOff = new Map<SvmAddress, bigint>();
+  const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
+  let closableLamports = 0n;
+  tracked.forEach((account, index) => {
+    const was = tokenAccount(before[index] ?? null);
+    const is = tokenAccount(after[index] ?? null);
+    // An account it closes gives nothing more away: its balance is counted as it leaves.
+    if (is === undefined || !ours.has((was ?? is).owner)) return;
+    if (
+      is.delegate !== undefined &&
+      is.delegatedAmount > 0n &&
+      (is.delegate !== was?.delegate || is.delegatedAmount > (was?.delegatedAmount ?? 0n))
+    ) {
+      approved.push({ token: is.mint, spender: is.delegate, amount: is.delegatedAmount });
+    }
+    if (!ours.has(is.owner) && is.amount > 0n) {
+      handedOff.set(is.mint, (handedOff.get(is.mint) ?? 0n) + is.amount);
+    }
+    if (
+      is.closeAuthority !== undefined &&
+      !ours.has(is.closeAuthority) &&
+      is.closeAuthority !== was?.closeAuthority
+    ) {
+      closable.push({ token: is.mint, account, closer: is.closeAuthority });
+      // Closing wrapped SOL pays out its lamports: what it wraps, and its rent.
+      if (is.isNative) closableLamports += after[index]!.lamports;
+    }
+  });
+  const facts = await mintFacts(rpc, chain, [
+    ...approved.map((each) => each.token),
+    ...handedOff.keys(),
+    ...closable.map((each) => each.token),
+  ]);
+  // A limit holds an amount only in its token's decimals: where they cannot be read, no token
+  // limit can stand behind what the transaction lets another key take.
+  const undecided = [...approved.map((each) => each.token), ...handedOff.keys()].find(
+    (mint) => facts.get(mint)?.decimals === undefined,
+  );
+  const lamports =
+    moved.lamports
+      .filter((change) => ours.has(change.account))
+      .reduce((sum, change) => sum + change.before - change.after, 0n) + closableLamports;
   const byMint = new Map<string, { amount: bigint; symbol?: string; decimals?: number }>();
   for (const change of moved.tokens) {
     if (!ours.has(change.owner)) continue;
@@ -784,6 +848,10 @@ export async function measureSvm(
     };
     byMint.set(change.mint, { ...seen, amount: seen.amount + change.before - change.after });
   }
+  for (const [mint, amount] of handedOff) {
+    const seen = byMint.get(mint) ?? { amount: 0n, ...facts.get(mint) };
+    byMint.set(mint, { ...seen, amount: seen.amount + amount });
+  }
 
   return {
     ...base,
@@ -791,8 +859,20 @@ export async function measureSvm(
     tokens: [...byMint]
       .filter(([, out]) => out.amount > 0n)
       .map(([token, out]) => ({ token, ...out })),
-    approvals: [],
-    unmeasured: unseen === undefined ? {} : { native: unseen, tokens: unseen },
+    approvals: approved.map((each) => ({ ...each, ...facts.get(each.token) })),
+    closers: closable.map((each) => {
+      const symbol = facts.get(each.token)?.symbol;
+
+      return symbol === undefined ? each : { ...each, symbol };
+    }),
+    unmeasured:
+      unseen !== undefined
+        ? { native: unseen, tokens: unseen }
+        : undecided !== undefined
+          ? {
+              tokens: `the decimals of mint ${undecided} could not be read, so what the transaction lets another key take of it cannot be held to a limit`,
+            }
+          : {},
   };
 }
 
@@ -905,7 +985,7 @@ async function locked<T>(path: string, body: () => T): Promise<T> {
 }
 
 /** Whether the policy's token key `key` names `outflow` on its chain. */
-function names(key: string, outflow: Outflow): boolean {
+function names(key: string, outflow: Pick<Outflow, "token" | "symbol">): boolean {
   if (outflow.token === "native") return false;
   if (key.startsWith("0x")) return outflow.token.toLowerCase() === key;
   if (isSolanaAddress(key)) return outflow.token === key;
@@ -916,9 +996,12 @@ function names(key: string, outflow: Outflow): boolean {
 const shown = (amount: bigint, outflow: Pick<Outflow, "decimals" | "symbol" | "token">): string =>
   `${outflow.decimals === undefined ? `${amount} base units` : formatUnits(amount, outflow.decimals)} ${outflow.symbol ?? outflow.token}`;
 
-/** The registry's Permit2 on `chain`, lowercase; `undefined` where it has none. */
+/**
+ * The registry's Permit2 on `chain`, lowercase; `undefined` where it has none, and on a chain that
+ * is not an EVM chain, so that no other chain's key can ever match it.
+ */
 function permit2Of(chain: CanonicalChain): string | undefined {
-  const descriptor = getDescriptor("permit2", "Permit2");
+  const descriptor = chain.kind === "evm" ? getDescriptor("permit2", "Permit2") : undefined;
 
   return descriptor === undefined ? undefined : addressOn(descriptor, chain)?.toLowerCase();
 }
@@ -1025,6 +1108,14 @@ function spendOf(
             `more than the ${whole(cap > 0n ? cap : 0n)} ${approval.symbol ?? approval.token} tokens.${key} leaves room for`,
         );
       }
+    }
+    // A token account another key may close holds no amount a limit can weigh: refused outright.
+    for (const handed of (measured.closers ?? []).filter((each) => names(key, each))) {
+      refuse(
+        `tokens.${key}`,
+        `this transaction lets ${handed.closer} close ${handed.account}, an account of ` +
+          `${handed.symbol ?? handed.token}, which tokens.${key} limits`,
+      );
     }
   }
 
