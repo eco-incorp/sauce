@@ -54,7 +54,16 @@ import type { CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { guardOf, type Reservation } from "./policy.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
-import { failureReason, sendAndConfirm, svmLanded, svmReader, type SvmSent } from "./solana.js";
+import {
+  failureReason,
+  programsCalled,
+  requireReleased,
+  sendAndConfirm,
+  svmLanded,
+  svmReader,
+  type SvmSent,
+} from "./solana.js";
+import { releasedProgramsCalled } from "./solana-release.js";
 import { requireSupported } from "./support.js";
 import {
   decodeCursor,
@@ -62,6 +71,7 @@ import {
   isCook,
   isPlanCook,
   nextStep,
+  planPrograms,
   readPlanTx,
   signableStep,
   unsignedSigner,
@@ -258,6 +268,13 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
     url: input.rpcUrl,
     signer: unsignedSigner(plan.owner),
   };
+  // The cluster the plan carries on against, checked again: its cursor may have been made against
+  // another endpoint, or before an upgrade.
+  await requireReleased(
+    ctx.rpc,
+    ctx.url,
+    planPrograms(input.close === true ? { ...plan, closing: true } : plan),
+  );
   const step = await nextStep(plan, ctx, { close: input.close === true });
   if (step.name === "done") {
     return {
@@ -663,6 +680,15 @@ async function sendSvm(
     input.transactions.map((raw, index) => signedSvm(raw, `transaction ${index + 1}`)),
   );
   const rpc = createSolanaRpc(input.rpcUrl);
+  // What goes to the engine or the Kitchen goes only to a cluster running the release's: checked
+  // before any of it is sent.
+  for (const tx of signed) {
+    await requireReleased(
+      rpc,
+      input.rpcUrl,
+      releasedProgramsCalled(programsCalled(tx.transaction)),
+    );
+  }
   const read = svmReader(input.rpcUrl);
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(
     v12SvmKitchenProgramId() as SvmAddress,

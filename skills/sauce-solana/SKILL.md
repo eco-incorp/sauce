@@ -461,7 +461,9 @@ Solana is a supported chain: its cooks and Pots are built and sent.
    with no account: it signs and pays. Before any of this, and before `run`, `tx` or
    `pot --deploy`, the command holds the cluster's engine and Kitchen to the release's own programs,
    and refuses a cluster where either is missing or another build: `the released Kitchen <id> is not
-deployed on solana: this SDK's cook cannot run there` (the engine alone with `--via engine`).
+deployed on solana: this SDK's cook cannot run there` (with `--via engine`, the engine alone, and
+   the Kitchen too when the program is staged). A plan carried on later, and a transaction a wallet
+   sends for another step, are held to it again on the endpoint they go to, before anything is signed.
 4. **Send.** `sauce run` signs with `--keypair` (or `--wallet`), stages the program when it does not
    fit, creates the token accounts the cook names that are missing (asking first, or with `--yes`),
    and sends. A cook that succeeds, simulated or sent, leads with what it leaves in the Pot's token

@@ -233,9 +233,12 @@ Before it simulates, builds or sends a cook, and before `pot --deploy` creates a
 reads the engine and the Kitchen at the release's addresses and holds each to the release's own
 program, byte for byte. A cluster with either missing, or with another build there, is refused, as
 an EVM chain without the release's contracts is: `the released Kitchen <id> is not deployed on
-solana: this SDK's cook cannot run there`. A cook with `--via engine` needs the engine alone. This
-holds for the local copy below too, which runs the release's own programs and so could otherwise
-succeed where the cluster would not.
+solana: this SDK's cook cannot run there`. A cook with `--via engine` needs the engine alone, and the
+Kitchen too when its program is staged, which runs through the Kitchen's code buffer. A plan carried
+on with `sauce send`, and a wallet's send of what another step built, are checked again on the
+endpoint they go to, before anything is signed or sent: a cursor may have been made against another
+cluster, or before an upgrade. This holds for the local copy below too, which runs the release's own
+programs and so could otherwise succeed where the cluster would not.
 
 #### In a local copy
 

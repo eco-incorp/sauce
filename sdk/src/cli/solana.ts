@@ -55,7 +55,12 @@ import {
 import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
-import { requireSolanaRelease, type ProgramName, type ReadProgram } from "./solana-release.js";
+import {
+  releasedProgramsCalled,
+  requireSolanaRelease,
+  type ProgramName,
+  type ReadProgram,
+} from "./solana-release.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
   isSvmAccountName,
@@ -206,6 +211,18 @@ export async function requireReleased(
   await requireSolanaRelease(programReader(rpc, url), unread, requireChain("solana").slug);
   for (const name of unread) shown.add(name);
   shownReleased.set(rpc, shown);
+}
+
+/** The programs a compiled transaction calls (a program is never one a lookup table loads). */
+export function programsCalled(transaction: Pick<Transaction, "messageBytes">): string[] {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+    staticAccounts: readonly string[];
+    instructions: readonly { programAddressIndex: number }[];
+  };
+
+  return message.instructions.map(
+    (instruction) => message.staticAccounts[instruction.programAddressIndex]!,
+  );
 }
 
 /**
@@ -756,6 +773,8 @@ export async function sendPlannedSvm(
     }
   }
   const rpc = createSolanaRpc(url);
+  // The cluster it goes to, checked now: a plan made against one endpoint can be sent to another.
+  await requireReleased(rpc, url, releasedProgramsCalled(programsCalled(decoded)));
   await rehearsed(rpc, url, decoded, tx.what, false);
 
   return sendAndConfirm(rpc, url, decoded, () => signTransaction([signer.keyPair], decoded));
@@ -2746,6 +2765,11 @@ export async function sendPlanTx(
   tx: PlanTx,
   sending?: (lifetime: CookHandedOut) => void,
 ): Promise<SvmSent> {
+  await requireReleased(
+    ctx.rpc,
+    ctx.url,
+    releasedProgramsCalled(tx.instructions.map((instruction) => instruction.programAddress)),
+  );
   const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );

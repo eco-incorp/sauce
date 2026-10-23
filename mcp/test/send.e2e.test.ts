@@ -36,7 +36,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
 import { decodeCursor, encodeCursor, isCook } from "../../sdk/dist/cli/svm-plan.js";
-import { derivePotPda } from "../../sdk/dist/svm/index.js";
+import { deriveProgramDataPda, derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
   fixture,
   registered,
@@ -662,6 +662,53 @@ describe(
       assert.equal(shim.sent.length, before + 1);
       const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
       assert.deepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
+    });
+
+    it("checks the cluster again when a wallet resumes a plan: a Kitchen not the release's signs nothing", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-swapped", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      // Planned on the release.
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 6;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; cursor: string };
+      const { cook: _, ...unsent } = decodeCursor(planned.cursor);
+      // Resumed once the endpoint's Kitchen is another build: at the release's address, its bytes
+      // not the release's.
+      const { address: kitchenData } = await deriveProgramDataPda(harness.kitchen);
+      const original = harness.svm.getAccount(kitchenData);
+      assert.ok(original.exists);
+      const data = new Uint8Array(original.data);
+      data[data.length - 1] ^= 0xff;
+      harness.svm.setAccount({ ...original, address: kitchenData, data });
+      const before = shim.sent.length;
+      try {
+        // The cook as handed out, and the plan with none handed out yet, which the wallet builds.
+        for (const transaction of [planned, { cursor: encodeCursor(unsent) }]) {
+          assert.match(
+            failed(
+              await wallets.call("sauce_wallet_send", {
+                wallet: "sol-swapped",
+                transaction,
+                rpcUrl: SOLANA_URL,
+              }),
+            ),
+            new RegExp(
+              `the released Kitchen ${v12SvmKitchenProgramId()} is not deployed on solana`,
+            ),
+          );
+        }
+        assert.equal(shim.sent.length, before);
+      } finally {
+        harness.svm.setAccount({ ...original, address: kitchenData });
+      }
     });
 
     it("keeps the cook a wallet sent and could not confirm, and learns it landed rather than send it again", async () => {

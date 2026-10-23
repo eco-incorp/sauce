@@ -97,9 +97,9 @@ import {
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { failureReason, svmTokenAccountsToCreate } from "./solana.js";
+import { failureReason, requireReleased, svmTokenAccountsToCreate } from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
-import type { ProgramName } from "./solana-release.js";
+import { releasedProgramsCalled, type ProgramName } from "./solana-release.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -1703,6 +1703,15 @@ export async function signableTransactions(
   readonly lifetime?: CookHandedOut;
 }> {
   if (txs.length === 0) return { transactions: [] };
+  // The cluster they are built against, checked now: a cursor made against one endpoint, or before
+  // an upgrade, can be carried on against another.
+  await requireReleased(
+    ctx.rpc,
+    ctx.url,
+    releasedProgramsCalled(
+      txs.flatMap((tx) => tx.instructions.map((instruction) => instruction.programAddress)),
+    ),
+  );
   const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );

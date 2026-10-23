@@ -49,7 +49,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { decodeCursor } from "../src/cli/svm-plan.js";
-import { buildExecuteTransaction, derivePotPda } from "../src/svm/index.js";
+import { buildExecuteTransaction, deriveProgramDataPda, derivePotPda } from "../src/svm/index.js";
 import {
   CLI_FIXTURES,
   describeEvm,
@@ -741,6 +741,46 @@ describeSvm("sauce send: a staged Solana cook as a plan of steps, signed elsewhe
     expect(refused.next.step).toBe("cook");
     expect(refused.next.transactions).toHaveLength(1);
     const cooked = await send(refused.next.cursor!, ...(await signAll(refused.next)));
+    expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
+  }, 300_000);
+
+  it("checks the cluster again when a plan is resumed: a Kitchen not the release's gets nothing sent or built", async () => {
+    // Made, and its setup sent, on the release.
+    const first = await planFor("resumed");
+    const setup = await send(first.cursor!, ...(await signAll(first)));
+    expect(setup.next.step).toBe("cook");
+    const [cook] = await signAll(setup.next);
+    // Then the endpoint's Kitchen is another build: at the release's address, its bytes not the release's.
+    const { address: kitchenData } = await deriveProgramDataPda(harness.kitchen);
+    const original = harness.svm.getAccount(kitchenData);
+    if (!original.exists) throw new Error("no Kitchen programdata");
+    const data = new Uint8Array(original.data);
+    data[data.length - 1] ^= 0xff;
+    harness.svm.setAccount({ ...original, address: kitchenData, data });
+    const refusal = `the released Kitchen ${v12SvmKitchenProgramId()} is not deployed on solana`;
+    try {
+      const sentBefore = shim.sent.length;
+      // The cook as signed, with its cursor: not sent.
+      const signed = await sauce(
+        ...["send", cook!, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(signed.code).toBe(1);
+      expect(signed.stderr).toContain(refusal);
+      // The cursor alone, given up on too: no step built for anyone to sign.
+      for (const extra of [[], ["--close"]]) {
+        const alone = await sauce(
+          ...["send", ...extra, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+        );
+        expect(alone.code).toBe(1);
+        expect(alone.stderr).toContain(refusal);
+        expect(alone.stdout).not.toContain('"transactions"');
+      }
+      expect(shim.sent.length).toBe(sentBefore);
+    } finally {
+      harness.svm.setAccount({ ...original, address: kitchenData });
+    }
+    // The release's again: the same cook and cursor carry on.
+    const cooked = await send(setup.next.cursor!, cook!);
     expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
   }, 300_000);
 

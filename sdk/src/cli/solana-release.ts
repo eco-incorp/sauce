@@ -28,7 +28,8 @@ export interface ProgramAccount {
 /** Reads one account by address: `undefined` where the cluster has none. Injected, so it runs offline. */
 export type ReadProgram = (account: string) => Promise<ProgramAccount | undefined>;
 
-/** The programs a cook runs through: the engine, and the Kitchen unless the cook goes straight to it. */
+/** The programs a cook runs through: the engine, and the Kitchen for a cook through a Pot or a
+ *  program staged in its code buffer. */
 export type ProgramName = "engine" | "Kitchen";
 
 /** The release's program binaries. The engine is built for each cluster kind and either is the release's. */
@@ -123,6 +124,16 @@ export function packagedRelease(): ReleasedPrograms {
     ),
     kitchen: packaged(svmKitchenPath(), "kitchen.so", set["kitchen-svm"].assets["kitchen.so"]),
   };
+}
+
+/** Which of the release's programs `programs` — the ones a transaction calls — are. */
+export function releasedProgramsCalled(programs: Iterable<string>): ProgramName[] {
+  const called = new Set(programs);
+
+  return [
+    ...(called.has(v12SvmEngineProgramId()) ? (["engine"] as const) : []),
+    ...(called.has(v12SvmKitchenProgramId()) ? (["Kitchen"] as const) : []),
+  ];
 }
 
 /**

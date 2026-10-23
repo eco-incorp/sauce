@@ -150,7 +150,10 @@ the engine and the Kitchen at the release's addresses first, and refuse a cluste
 missing or is another build of the program: `the released Kitchen <id> is not deployed on solana:
 this SDK's cook cannot run there`. The programs are upgradeable, so the address alone said nothing:
 a simulation used to succeed in its local copy, which runs the release's own programs, on a cluster
-whose Kitchen could not run the cook. A cook with `--via engine` needs the engine alone.
+whose Kitchen could not run the cook. A cook with `--via engine` needs the engine alone, and the
+Kitchen too when its program is staged through the Kitchen's code buffer. A plan carried on with
+`sauce send` or `sauce_wallet_send`, and a wallet sending what another tool built, are checked again
+on the endpoint they go to, before anything is signed or sent.
 
 ### SauceScript
 
