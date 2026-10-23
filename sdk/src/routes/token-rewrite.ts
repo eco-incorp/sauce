@@ -404,6 +404,23 @@ function registryRoot(name: string, shadowed: ReadonlySet<string>): boolean {
   return !shadowed.has(name) && (isChainKey(name) || resolveNamespace(name) !== undefined);
 }
 
+/** `pot` or `self` as `node` reads it where neither the program (in scope there) nor the compile
+ *  binds it: the Pot, or its retired name. Decided before any holder shape, which is by name and
+ *  whole-program: a helper's own `pot` record is not this one. */
+function freePotName(
+  node: AstNode,
+  scope: HolderScope,
+  here: Scope | undefined,
+): string | undefined {
+  if (node.type !== "Identifier") return undefined;
+  const name = (node as unknown as { name: string }).name;
+  return (name === POT_NAME || name === RETIRED_POT_NAME) &&
+    !shadowedAt(here, name, node.start) &&
+    !scope.bound.has(name)
+    ? name
+    : undefined;
+}
+
 /**
  * The holder in `<holder>.<name>`, or `undefined` where the member is not the shorthand's to read:
  * a chain's or a protocol's own member (`Base.USDC`, `Maker.Dai`), which the accessor pass owns,
@@ -426,6 +443,14 @@ function resolveHolder(
   const spelled = `\`${scope.source.slice(member.start, member.end)}\``;
   const text = scope.source.slice(object.start, object.end);
   const refuse = (why: string): Error => new Error(`${spelled}: ${why}`);
+  const free = freePotName(object, scope, here);
+  if (free === RETIRED_POT_NAME) {
+    throw selfRefusal(
+      scope.source.slice(member.start, member.end),
+      `${POT_NAME}.${kind === "token" ? name : BALANCE_MEMBER}`,
+    );
+  }
+  if (free === POT_NAME) return { kind: "pot" };
   const what = notAnAddress(object, scope.shapes);
   if (what !== undefined) {
     if (kind === "balance") return undefined;
@@ -436,23 +461,6 @@ function resolveHolder(
   switch (object.type) {
     case "Identifier": {
       const holder = (object as unknown as { name: string }).name;
-      if (
-        holder === RETIRED_POT_NAME &&
-        !shadowedAt(here, RETIRED_POT_NAME, object.start) &&
-        !scope.bound.has(RETIRED_POT_NAME)
-      ) {
-        throw selfRefusal(
-          scope.source.slice(member.start, member.end),
-          `${POT_NAME}.${kind === "token" ? name : BALANCE_MEMBER}`,
-        );
-      }
-      if (
-        holder === POT_NAME &&
-        !shadowedAt(here, POT_NAME, object.start) &&
-        !scope.bound.has(POT_NAME)
-      ) {
-        return { kind: "pot" };
-      }
       // Reserved defensively -- no longer a compiler namespace root (address.* was dropped for
       // gated ctx.*), but a bare `address` holder is still excluded rather than re-opened.
       if (holder === "address" && !scope.shadowed.has("address")) return undefined;
@@ -635,7 +643,8 @@ function collectBalanceSites(
     // on a record or a list it is the field it says.
     if (native === undefined || name !== native.symbol || shadowedAt(here, name, n.start)) return;
     const object = n.object as AstNode;
-    if (notAnAddress(object, scope.shapes) !== undefined) return;
+    const free = freePotName(object, scope, here) !== undefined;
+    if (!free && notAnAddress(object, scope.shapes) !== undefined) return;
     const balance = resolveHolder(n, name, "balance", scope, here);
     if (balance === undefined && resolveHolder(n, name, "token", scope, here) === undefined) {
       return;

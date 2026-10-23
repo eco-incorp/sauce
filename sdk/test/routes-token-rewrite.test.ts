@@ -441,6 +441,24 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       );
     });
 
+    it("a helper's own `pot` record leaves another function's `pot` the Pot, `.balance` included", () => {
+      const helper =
+        "function held(): Uint256 { const pot = { balance: 7 }; return pot.balance; }\n";
+      const program = (body: string) => `${helper}function main(): Uint256 { return ${body}; }`;
+      const native = { symbol: "ETH", chain: "base" };
+      expect(rewriteTokenMembers(program("pot.USDC + pot.balance"), tokens, native).source).toBe(
+        program("IERC20.at(USDC).balanceOf(ctx.self()) + ctx.selfBalance()"),
+      );
+      const hex = (source: string) =>
+        Buffer.from(compileSauceProgram("base", source).bytecode).toString("hex");
+      expect(hex(program("pot.USDC + pot.balance + held()"))).toBe(
+        hex(program("USDC.balanceOf(ctx.self()) + ctx.selfBalance() + held()")),
+      );
+      expect(() => compileSauceProgram("base", program("pot.ETH"))).toThrow(
+        "`pot.ETH`: a holder's native coin is `.balance`: write `pot.balance`.",
+      );
+    });
+
     it("USDC.WETH -- a token's own contract is a holder: the WETH the USDC contract holds", () => {
       const source = `function main() { return USDC.WETH; }`;
       const { source: out, memberSites, balanceSites } = rewriteTokenMembers(source, tokens);
