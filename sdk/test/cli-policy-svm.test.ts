@@ -23,6 +23,7 @@ import {
   getAddressDecoder,
   getAddressEncoder,
   getBase58Decoder,
+  getBase64EncodedWireTransaction,
   getCompiledTransactionMessageDecoder,
   pipe,
   lamports,
@@ -39,6 +40,7 @@ import {
 import { requireChain } from "../src/chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { guardWallet, measureSvm, PolicyRefusal, readPolicy } from "../src/cli/policy.js";
+import { sendPlannedSvm } from "../src/cli/solana.js";
 import type { WalletInfo } from "../src/cli/wallets.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import {
@@ -1375,6 +1377,76 @@ describeSvm(
 
       return account;
     };
+
+    it("hands the endpoint nothing the wallet signed before its policy lets a planned transaction go, and nothing at all for one it refuses", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      /** A plan's transaction as another tool hands it out: base64, the fee payer's slot empty. */
+      const planned = (instruction: Instruction) => {
+        harness.svm.expireBlockhash();
+
+        return getBase64EncodedWireTransaction(
+          compileTransaction(
+            pipe(
+              createTransactionMessage({ version: 0 }),
+              (message) => setTransactionMessageFeePayer(wallet, message),
+              (message) =>
+                setTransactionMessageLifetimeUsingBlockhash(
+                  {
+                    blockhash: harness.svm.latestBlockhash() as Blockhash,
+                    lastValidBlockHeight: 1_000_000n,
+                  },
+                  message,
+                ),
+              (message) => appendTransactionMessageInstruction(instruction, message),
+            ),
+          ),
+        );
+      };
+      const signedBy = (from: number): string[] =>
+        shim.handed.slice(from).flatMap(({ method, transaction }) => {
+          const signature = (transaction.signatures as Record<string, Uint8Array | null>)[wallet];
+
+          return signature?.some((byte) => byte !== 0) === true ? [method] : [];
+        });
+      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-signing-"));
+      const info: WalletInfo = {
+        name: "agent",
+        kind: "solana",
+        address: wallet,
+        path: join(dir, "agent.json"),
+        policyPath: join(dir, "agent.policy.json"),
+      };
+      try {
+        writeFileSync(info.policyPath, JSON.stringify(limited(mint)), { mode: 0o600 });
+        guardWallet(info, readPolicy(info));
+        const send = async (instruction: Instruction) => {
+          const from = shim.handed.length;
+          const outcome = await sendPlannedSvm(RPC_URL, harness.payer, {
+            feePayer: wallet,
+            transaction: planned(instruction),
+            what: "a planned approval",
+          }).then(
+            (sent) => (sent.ok ? "sent" : "failed"),
+            (error: unknown) => (error instanceof PolicyRefusal ? "refused" : String(error)),
+          );
+
+          return { outcome, signed: signedBy(from) };
+        };
+
+        expect({
+          // 1,000 tokens to a delegate, over the limit of 1; then 1 token, within it.
+          over: await send(approve(source, randomAddress(), AMOUNT)),
+          within: await send(approve(source, randomAddress(), 1_000n)),
+        }).toEqual({
+          over: { outcome: "refused", signed: [] },
+          within: { outcome: "sent", signed: ["sendTransaction"] },
+        });
+      } finally {
+        guardWallet(info, undefined);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
 
     it("counts the wallet's wrapped SOL closed to another key against native", async () => {
       const { account, held } = wrappedSol(wallet, 2_000_000_000n);

@@ -9,10 +9,12 @@ import {
   address,
   getAddressDecoder,
   getAddressEncoder,
+  getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   type Address,
   type AddressesByLookupTableAddress,
+  type Base64EncodedWireTransaction,
   type createSolanaRpc,
   type Transaction,
 } from "@solana/kit";
@@ -239,6 +241,18 @@ export function writableAccounts(
     ),
     ...loaded,
   ];
+}
+
+/**
+ * `transaction` on the wire with every signature slot empty: what a simulation that checks no
+ * signature (`sigVerify: false`) needs, and all an endpoint is shown of a transaction not yet sent.
+ * One carrying the wallet's signature could be sent by whoever runs the endpoint, policy or not.
+ */
+export function unsignedWire(transaction: Transaction): Base64EncodedWireTransaction {
+  return getBase64EncodedWireTransaction({
+    ...transaction,
+    signatures: Object.fromEntries(Object.keys(transaction.signatures).map((key) => [key, null])),
+  });
 }
 
 const bytesOf = (base64: string): Uint8Array => new Uint8Array(getBase64Encoder().encode(base64));

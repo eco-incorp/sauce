@@ -111,17 +111,44 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
       { mode: 0o600 },
     );
     const nonce = await base.publicClient.getTransactionCount({ address: wallet });
-    const over = await run(2_000_000n);
-    expect(over.code).toBe(1);
-    expect(over.stderr).toMatch(
+    // What the command asks the endpoint, by method: a signed transaction leaves only as
+    // eth_sendRawTransaction, and every rehearsal before it (eth_call, eth_simulateV1) is unsigned.
+    const asked = async <T>(body: () => Promise<T>): Promise<{ result: T; methods: string[] }> => {
+      const methods: string[] = [];
+      const original = globalThis.fetch;
+      globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        if (typeof init?.body === "string") {
+          for (const call of [JSON.parse(init.body) as { method?: string }].flat()) {
+            if (call.method !== undefined) methods.push(call.method);
+          }
+        }
+
+        return original(input, init);
+      }) as typeof fetch;
+      try {
+        return { result: await body(), methods };
+      } finally {
+        globalThis.fetch = original;
+      }
+    };
+    const over = await asked(() => run(2_000_000n));
+    expect(over.result.code).toBe(1);
+    expect(over.result.stderr).toMatch(
       /refused by the policy of wallet agent \(.*agent\.policy\.json\): tokens\.USDC\.perTransaction is 1 USDC, and this transaction sends 2 USDC/,
     );
     expect(await base.publicClient.getTransactionCount({ address: wallet })).toBe(nonce);
+    expect(over.methods).toContain("eth_simulateV1");
+    expect(over.methods).not.toContain("eth_sendRawTransaction");
 
-    const within = await run(1_000_000n);
-    expect(within.code).toBe(0);
-    expect(within.stderr).not.toMatch(/no limits are set/);
+    const within = await asked(() => run(1_000_000n));
+    expect(within.result.code).toBe(0);
+    expect(within.result.stderr).not.toMatch(/no limits are set/);
     expect(await base.balanceOf(usdc, RECIPIENT)).toBe(3_000_000n);
+    // Signed once, after the policy's rehearsal let it go.
+    expect(within.methods.filter((method) => method === "eth_sendRawTransaction")).toHaveLength(1);
+    expect(within.methods.lastIndexOf("eth_simulateV1")).toBeLessThan(
+      within.methods.indexOf("eth_sendRawTransaction"),
+    );
     const ledger = readFileSync(join(wallets, "agent.ledger.jsonl"), "utf8")
       .trim()
       .split("\n")

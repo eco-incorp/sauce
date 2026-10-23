@@ -59,7 +59,6 @@ import { join } from "node:path";
 import {
   address as solanaAddress,
   getBase58Encoder,
-  getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   isAddress as isSolanaAddress,
@@ -110,6 +109,7 @@ import {
   namesAnyOf,
   permanentDelegateOf,
   tokenTransition,
+  unsignedWire,
   writableAccounts,
 } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
@@ -752,7 +752,8 @@ export async function measureSvm(
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
-  const wire = getBase64EncodedWireTransaction(transaction);
+  // Simulated with no signature: an endpoint shown the wallet's could send it, policy or not.
+  const wire = unsignedWire(transaction);
   const { value } = await rpc
     .simulateTransaction(wire, {
       encoding: "base64",
