@@ -178,8 +178,18 @@ one, and the command says so (`noComputeStops`).
 
 A held or skipped pool's swap is compiled to its Stopped form, its `stop` a tighter `priceLimit`
 the command finds with the router's own arithmetic, and the start bound three tick-spacing
-positions past the pool's price then. Every other pool's swap stays the plain one. A program no
-stop binds is the same program, byte for byte.
+positions past the pool's price then.
+
+On Raydium's code and Crema a swap at a price stops where the furthest tick array its slot gives
+begins, since past that array's last initialized tick their program fails the transaction. Where a
+pool's limit takes its walk past there, the command reads that array, prices the walk on to a tick
+inside its last initialized tick that way, and compiles the swap to its Stopped form with that tick,
+its deep tick, held or not. The Stopped form reads the tick in its array and checks it there before
+it walks on: a tick no longer initialized leaves the swap where it would have stopped, and an array
+not laid out as read reverts.
+
+Every other pool's swap stays the plain one. A program no stop binds is the same program, byte for
+byte.
 
 Stops lower the risk that a wide limit runs the cook out of compute units. They do not remove it,
 because each stop is fixed when the cook is built, from the pools' prices then:

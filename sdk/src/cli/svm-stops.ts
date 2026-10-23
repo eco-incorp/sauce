@@ -80,6 +80,7 @@ export function svmStopsJson(stops: SvmStops): Record<string, unknown> {
       skipped: stop.skipped === true,
       ...(stop.stopTick === undefined ? {} : { stopTick: stop.stopTick }),
       ...(stop.stopPrice === undefined ? {} : { stopPrice: stop.stopPrice }),
+      ...(stop.deepTick === undefined ? {} : { deepTick: stop.deepTick }),
       ticksToLimit: stop.ticksToLimit,
       estimatedUnits: stop.estimatedUnits,
       share: stop.share,

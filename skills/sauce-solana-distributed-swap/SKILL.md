@@ -51,7 +51,10 @@ account a pool takes is read from it as the cook is built, and what fits in one 
   it skipped.
 - **Each swap stops inside its window.** A venue's swap walks only the tick arrays the cook gives
   it, and past them its program fails the whole cook. So each swap at a price holds its limit a tick
-  inside them: a `priceLimit` far past a pool's price buys up to its window and stops there.
+  inside them: a `priceLimit` far past a pool's price buys up to its window and stops there. On
+  Raydium's code and Crema the window ends where the furthest of those arrays begins; where a
+  pool's limit takes it past there, the command reads that array's last initialized tick and the
+  swap walks on to a tick inside it, its tick checked in the array as the cook runs.
 - **A swap is held within its share of the cook's compute.** Every initialized tick a pool's swap
   crosses costs compute units, and a cook that runs out fails whole. So the command works out each
   swap's walk as it builds the cook, from the pool's tick arrays and a cost table of each venue's
