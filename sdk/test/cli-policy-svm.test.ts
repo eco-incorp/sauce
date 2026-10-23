@@ -2,7 +2,9 @@
  * Solana policy measurement: unreadable lookup tables fail closed, and real released Kitchen cooks
  * in LiteSVM measure the Pot they actually name, including a valid noncanonical bump. Both inline
  * and staged cooks move SOL and SPL tokens, with and without lookup-table-loaded Pot accounts;
- * those outflows must trigger limits without reserving anything.
+ * those outflows must trigger limits without reserving anything. What a token account of the
+ * wallet's or a Pot's lets another key do — spend it as a delegate, own it, close it — is held as
+ * an approval or a send, whether the wallet signs it or a cook does.
  */
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,6 +19,8 @@ import {
   compressTransactionMessageUsingAddressLookupTables,
   createTransactionMessage,
   createSolanaRpc,
+  generateKeyPairSigner,
+  getAddressDecoder,
   getAddressEncoder,
   getBase58Decoder,
   getCompiledTransactionMessageDecoder,
@@ -27,6 +31,8 @@ import {
   type Address,
   type Blockhash,
   type Instruction,
+  type KeyPairSigner,
+  type Transaction,
 } from "@solana/kit";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -35,6 +41,7 @@ import { guardWallet, measureSvm, PolicyRefusal, readPolicy } from "../src/cli/p
 import type { WalletInfo } from "../src/cli/wallets.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import {
+  buildComputeBudgetPrepend,
   buildCookFromAccountInstruction,
   buildCookInstruction,
   buildExecuteTransaction,
@@ -45,6 +52,7 @@ import {
 import { memoizedCreateProgramAddress } from "../src/svm/venues/pda-memo.js";
 import {
   describeSvm,
+  expectOk,
   fabricateAlt,
   HARNESS_POT_SALT,
   randomAddress,
@@ -53,7 +61,11 @@ import {
   setTokenAccount,
   stageProgram,
   startEngine,
+  TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
+  tokenAccountData,
+  tokenAmount,
+  transferCheckedData,
   type EngineHarness,
   type StagedProgram,
 } from "./svm/engine-harness.js";
@@ -696,3 +708,553 @@ describe("a wallet's policy, on a transaction it cannot measure", () => {
     }
   });
 });
+
+// What a token account lets another key do once a transaction lands: spend from it as its delegate,
+// own it, or close it. Each gives away what the wallet (or a Pot it cooks on) holds, so a policy that
+// limits the token holds each of them: an approval as an ERC-20 approval is held, an account handed
+// to another key as a send of its whole balance, and wrapped SOL another key may close as a send of
+// its lamports.
+describeSvm(
+  "a wallet's policy, on a Solana approval or a token account handed to another key",
+  () => {
+    const RPC_URL = "http://127.0.0.1:65527/";
+    /** 1,000,000 base units at 3 decimals: 1,000 tokens, against a limit of 1. */
+    const DECIMALS = 3;
+    const AMOUNT = 1_000_000n;
+    const NATIVE_MINT = address("So11111111111111111111111111111111111111112");
+    const PROGRAMS = { spl: TOKEN_PROGRAM, token2022: TOKEN_2022_PROGRAM } as const;
+    type Kind = keyof typeof PROGRAMS;
+    /** The Pot programs that approve a delegate: `@sauce/token`'s checked write on both token
+     *  programs, and its legacy `approve`, which only SPL Token takes. */
+    const POT_APPROVALS = [
+      ["approveChecked", "spl"],
+      ["approveChecked", "token2022"],
+      ["approve", "spl"],
+    ] as const;
+    type Approving = (typeof POT_APPROVALS)[number][0];
+    let harness: EngineHarness;
+    let shim: SolanaShim;
+    let rpc: ReturnType<typeof createSolanaRpc>;
+    let wallet: Address;
+    let forwarder: Address;
+    const mints = {} as Record<Kind, Address>;
+    /** Each of POT_APPROVALS, compiled and staged once. */
+    const cooking = new Map<string, { bytecode: Uint8Array; staged: StagedProgram }>();
+
+    const keyBytes = (key: Address) => new Uint8Array(getAddressEncoder().encode(key));
+    const keyHex = (key: Address) => Buffer.from(keyBytes(key)).toString("hex");
+    const u64 = (value: bigint) => {
+      const bytes = new Uint8Array(8);
+      new DataView(bytes.buffer).setBigUint64(0, value, true);
+
+      return bytes;
+    };
+    const readonly = (key: Address) => ({ address: key, role: AccountRole.READONLY });
+    const writable = (key: Address) => ({ address: key, role: AccountRole.WRITABLE });
+    const signer = (key: Address) => ({ address: key, role: AccountRole.READONLY_SIGNER });
+
+    /** SPL Token's `Approve` (4), which names the source, the delegate and the owner. */
+    const approve = (source: Address, delegate: Address, amount: bigint): Instruction => ({
+      programAddress: TOKEN_PROGRAM,
+      accounts: [writable(source), readonly(delegate), signer(wallet)],
+      data: Uint8Array.of(4, ...u64(amount)),
+    });
+    /** `ApproveChecked` (13), on either program: the mint and its decimals too. */
+    const approveChecked = (
+      kind: Kind,
+      source: Address,
+      delegate: Address,
+      amount: bigint,
+    ): Instruction => ({
+      programAddress: PROGRAMS[kind],
+      accounts: [writable(source), readonly(mints[kind]), readonly(delegate), signer(wallet)],
+      data: Uint8Array.of(13, ...u64(amount), DECIMALS),
+    });
+    /** The wallet's own approval of `delegate` on `source`, as each program takes it. */
+    const approval = (kind: Kind, source: Address, delegate: Address): Instruction =>
+      kind === "spl"
+        ? approve(source, delegate, AMOUNT)
+        : approveChecked(kind, source, delegate, AMOUNT);
+    /** `SetAuthority` (6) over the wallet's `account`: its owner (2) or its close authority (3). */
+    const setAuthority = (
+      program: Address,
+      account: Address,
+      what: "owner" | "close",
+      to: Address,
+    ): Instruction => ({
+      programAddress: program,
+      accounts: [writable(account), signer(wallet)],
+      data: Uint8Array.of(6, what === "owner" ? 2 : 3, 1, ...keyBytes(to)),
+    });
+    const transferChecked = (
+      kind: Kind,
+      source: Address,
+      dest: Address,
+      amount: bigint,
+      authority: Address,
+    ): Instruction => ({
+      programAddress: PROGRAMS[kind],
+      accounts: [writable(source), readonly(mints[kind]), writable(dest), signer(authority)],
+      data: transferCheckedData(amount, DECIMALS),
+    });
+    const prepends = () => [
+      ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
+      buildHeapFramePrepend(),
+    ];
+
+    /** `instructions` signed by `payer` (the wallet unless said), `tabled` loaded through a table. */
+    const signed = (
+      instructions: readonly Instruction[],
+      tabled?: readonly Address[],
+      payer: KeyPairSigner = harness.payer,
+    ) => {
+      harness.svm.expireBlockhash();
+
+      return buildExecuteTransaction({
+        payer,
+        instructions,
+        latestBlockhash: {
+          blockhash: harness.svm.latestBlockhash(),
+          lastValidBlockHeight: 1_000_000n,
+        },
+        ...(tabled === undefined ? {} : { lookupTables: fabricateAlt(harness, tabled) }),
+      });
+    };
+    const staticAccounts = (transaction: Transaction) =>
+      (
+        getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+          staticAccounts: readonly Address[];
+        }
+      ).staticAccounts;
+    const measure = (transaction: Transaction) =>
+      measureSvm(rpc, requireChain("solana"), wallet, transaction);
+    /** Amounts as strings: a failing BigInt comparison cannot cross Jest's worker boundary. */
+    const plain = <T extends { amount: bigint }>(list: readonly T[]) =>
+      list.map(({ amount, ...rest }) => ({ ...rest, amount: String(amount) }));
+    const limited = (mint: Address) => ({ tokens: { [mint]: { perTransaction: "1" } } });
+
+    /**
+     * What the wallet's guard does with `transaction` under `policy`, as one value a failure shows
+     * whole: its refusal (the limit and the message), or that it let the transaction through, and the
+     * ledger it leaves (a reservation, when it let it through).
+     */
+    const guarded = async (policy: Record<string, unknown>, transaction: Transaction) => {
+      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-approval-"));
+      const info: WalletInfo = {
+        name: "agent",
+        kind: "solana",
+        address: wallet,
+        path: join(dir, "agent.json"),
+        policyPath: join(dir, "agent.policy.json"),
+      };
+      try {
+        writeFileSync(info.policyPath, JSON.stringify(policy), { mode: 0o600 });
+        const refusal = await guardWallet(info, readPolicy(info))
+          .svm(rpc, transaction)
+          .then(
+            () => "none: the guard let it through",
+            (error: unknown) =>
+              error instanceof PolicyRefusal
+                ? { limit: error.limit, message: error.message }
+                : String(error),
+          );
+        const ledger = join(dir, "agent.ledger.jsonl");
+
+        return {
+          refusal,
+          ledger: readdirSync(dir).includes("agent.ledger.jsonl")
+            ? readFileSync(ledger, "utf8")
+            : "",
+        };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+    /** What {@link guarded} gives for a refusal by `limit` that says `why` and reserves nothing. */
+    const refused = (limit: string, why: string) => ({
+      refusal: { limit, message: expect.stringContaining(why) as unknown },
+      ledger: "",
+    });
+    const keyAt = (key: Address, at: number): Address => {
+      const account = harness.svm.getAccount(key);
+      if (!account.exists) throw new Error(`${key} does not exist`);
+
+      return getAddressDecoder().decode(new Uint8Array(account.data).subarray(at, at + 32));
+    };
+    /** A wrapped SOL account of `owner`'s holding `amount`, beside the rent it keeps. */
+    const wrappedSol = (owner: Address, amount: bigint): { account: Address; held: bigint } => {
+      const data = tokenAccountData(NATIVE_MINT, owner, amount);
+      const rent = harness.svm.minimumBalanceForRentExemption(BigInt(data.length));
+      const view = new DataView(data.buffer);
+      view.setUint32(109, 1, true); // is_native: Some(the rent it keeps)
+      view.setBigUint64(113, rent, true);
+      const account = randomAddress();
+      harness.svm.setAccount({
+        address: account,
+        data,
+        executable: false,
+        lamports: lamports(rent + amount),
+        programAddress: TOKEN_PROGRAM,
+        space: BigInt(data.length),
+      });
+
+      return { account, held: rent + amount };
+    };
+
+    /** The wallet's cook on its Pot approving `delegate` on `source`, at the top level or through
+     *  the forwarder. */
+    const potApproval = (
+      fn: Approving,
+      kind: Kind,
+      source: Address,
+      delegate: Address,
+      depth: "the top level" | "a CPI",
+      via: "inline" | "staged",
+    ): Instruction => {
+      const { bytecode, staged } = cooking.get(`${fn}/${kind}`)!;
+      const input = {
+        kitchen: harness.kitchen,
+        owner: wallet,
+        engineProgram: harness.programId,
+        potSalt: HARNESS_POT_SALT,
+        pot: harness.pot,
+        feeConfig: harness.feeConfig,
+        maxExecutionFee: 0n,
+        tail: [
+          readonly(PROGRAMS[kind]),
+          writable(source),
+          readonly(mints[kind]),
+          readonly(delegate),
+          writable(harness.pot),
+        ],
+      };
+      const cook =
+        via === "inline"
+          ? buildCookInstruction({ ...input, bytecode })
+          : buildCookFromAccountInstruction({ ...input, ...staged, pin: staged.sha256 });
+
+      return depth === "the top level"
+        ? cook
+        : {
+            programAddress: forwarder,
+            accounts: [readonly(harness.kitchen), ...cook.accounts!],
+            data: cook.data!,
+          };
+    };
+
+    beforeAll(async () => {
+      harness = await startEngine(1_700_000_000n);
+      wallet = harness.payer.address;
+      forwarder = randomAddress();
+      harness.svm.addProgram(forwarder, new Uint8Array(readFileSync(FORWARDER_SO)));
+      for (const kind of Object.keys(PROGRAMS) as Kind[]) {
+        mints[kind] = setMint(harness, randomAddress(), DECIMALS, PROGRAMS[kind]);
+      }
+      let nonce = 301n;
+      for (const [fn, kind] of POT_APPROVALS) {
+        const mint = `0x${keyHex(mints[kind])}n`;
+        const bytecode = compileSauceProgram(
+          "solana",
+          `import { ${fn} } from "@sauce/token";\n` +
+            "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, " +
+            "delegate: Account, pot: Account<Writable, Signer>) {\n" +
+            (fn === "approve"
+              ? `  approve(${mint}, tokenProgram, source, delegate, pot, ${AMOUNT});\n`
+              : `  approveChecked(${mint}, tokenProgram, source, mint, delegate, pot, ${AMOUNT}, ${DECIMALS});\n`) +
+            "}",
+        ).bytecode;
+        cooking.set(`${fn}/${kind}`, {
+          bytecode,
+          staged: await stageProgram(harness, bytecode, nonce++),
+        });
+      }
+      shim = solanaShim(harness.svm, RPC_URL);
+      shim.install();
+      rpc = createSolanaRpc(RPC_URL);
+    });
+    afterAll(() => shim?.restore());
+
+    it.each([
+      ["SPL Token Approve", "spl", false],
+      ["SPL Token Approve", "spl", true],
+      ["Token-2022 ApproveChecked", "token2022", false],
+      ["Token-2022 ApproveChecked", "token2022", true],
+    ] as const)(
+      "the wallet's own %s (%s), lookup table %s, is an approval its token's limit holds",
+      async (_, kind, alt) => {
+        const mint = mints[kind];
+        const source = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          wallet,
+          AMOUNT,
+          PROGRAMS[kind],
+        );
+        const delegate = randomAddress();
+        const transaction = await signed(
+          [approval(kind, source, delegate)],
+          alt ? [source] : undefined,
+        );
+        expect(staticAccounts(transaction).includes(source)).toBe(!alt);
+
+        const measured = await measure(transaction);
+        expect({
+          unmeasured: measured.unmeasured,
+          approvals: plain(measured.approvals),
+          ...(await guarded(limited(mint), transaction)),
+        }).toEqual({
+          unmeasured: {},
+          approvals: [{ token: mint, spender: delegate, amount: "1000000", decimals: DECIMALS }],
+          ...refused(`tokens.${mint}`, `this transaction approves ${delegate} for 1000 ${mint}`),
+        });
+      },
+    );
+
+    it.each(["spl", "token2022"] as const)(
+      "once the wallet's %s approval lands, the delegate alone moves the tokens out",
+      async (kind) => {
+        const mint = mints[kind];
+        const source = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          wallet,
+          AMOUNT,
+          PROGRAMS[kind],
+        );
+        const delegate = await generateKeyPairSigner();
+        harness.svm.airdrop(delegate.address, lamports(1_000_000_000n));
+        const dest = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          delegate.address,
+          0n,
+          PROGRAMS[kind],
+        );
+        expectOk(sendSigned(harness, await signed([approval(kind, source, delegate.address)])));
+
+        const drain = await signed(
+          [transferChecked(kind, source, dest, AMOUNT, delegate.address)],
+          undefined,
+          delegate,
+        );
+        expect(Object.keys(drain.signatures)).toEqual([delegate.address]);
+        expectOk(sendSigned(harness, drain));
+        expect(String(tokenAmount(harness, dest))).toBe("1000000");
+        expect(String(tokenAmount(harness, source))).toBe("0");
+      },
+    );
+
+    it.each(
+      POT_APPROVALS.flatMap(([fn, kind]) =>
+        (["the top level", "a CPI"] as const).flatMap((depth) =>
+          (["inline", "staged"] as const).flatMap((via) =>
+            [false, true].map((alt) => [fn, kind, depth, via, alt] as const),
+          ),
+        ),
+      ),
+    )(
+      "the Pot's %s (%s) in a cook at %s, %s, lookup table %s, is an approval its token's limit holds",
+      async (fn, kind, depth, via, alt) => {
+        const mint = mints[kind];
+        const source = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          harness.pot,
+          AMOUNT,
+          PROGRAMS[kind],
+        );
+        const delegate = randomAddress();
+        const transaction = await signed(
+          [...prepends(), potApproval(fn, kind, source, delegate, depth, via)],
+          alt ? [harness.pot, source] : undefined,
+        );
+        expect(staticAccounts(transaction).includes(source)).toBe(!alt);
+
+        const measured = await measure(transaction);
+        expect({
+          unmeasured: measured.unmeasured,
+          approvals: plain(measured.approvals),
+          ...(await guarded(limited(mint), transaction)),
+        }).toEqual({
+          unmeasured: {},
+          approvals: [{ token: mint, spender: delegate, amount: "1000000", decimals: DECIMALS }],
+          ...refused(`tokens.${mint}`, `this transaction approves ${delegate} for 1000 ${mint}`),
+        });
+
+        // And the cook does approve it: the delegate is set on the Pot's account.
+        expectOk(sendSigned(harness, transaction));
+        expect(keyAt(source, 76)).toBe(delegate);
+      },
+    );
+
+    it.each(["spl", "token2022"] as const)(
+      "the wallet's %s token account handed to another key: its whole balance leaves the wallet",
+      async (kind) => {
+        const mint = mints[kind];
+        const source = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          wallet,
+          AMOUNT,
+          PROGRAMS[kind],
+        );
+        const other = randomAddress();
+        const transaction = await signed([setAuthority(PROGRAMS[kind], source, "owner", other)]);
+
+        const measured = await measure(transaction);
+        expect({
+          unmeasured: measured.unmeasured,
+          tokens: plain(measured.tokens),
+          ...(await guarded(limited(mint), transaction)),
+        }).toEqual({
+          unmeasured: {},
+          tokens: [{ token: mint, amount: "1000000", decimals: DECIMALS }],
+          ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1000 ${mint}`),
+        });
+
+        // Once it lands, the account and everything in it are the other key's.
+        expectOk(sendSigned(harness, transaction));
+        expect(keyAt(source, 32)).toBe(other);
+      },
+    );
+
+    it("counts a transfer out of the wallet's account for the wallet, when the same transaction hands the account away", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const send = transferChecked("spl", source, elsewhere, 5_000n, wallet);
+
+      // The transfer alone: 5 tokens, over the limit of 1.
+      const alone = await signed([send]);
+      expect({
+        tokens: plain((await measure(alone)).tokens),
+        ...(await guarded(limited(mint), alone)),
+      }).toEqual({
+        tokens: [{ token: mint, amount: "5000", decimals: DECIMALS }],
+        ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 5 ${mint}`),
+      });
+
+      // The same transfer, then the account handed to another key: the transfer and what is left.
+      const handedOff = await signed([
+        send,
+        setAuthority(TOKEN_PROGRAM, source, "owner", randomAddress()),
+      ]);
+      const measured = await measure(handedOff);
+      expect({
+        unmeasured: measured.unmeasured,
+        tokens: plain(measured.tokens),
+        ...(await guarded(limited(mint), handedOff)),
+      }).toEqual({
+        unmeasured: {},
+        tokens: [{ token: mint, amount: "1000000", decimals: DECIMALS }],
+        ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1000 ${mint}`),
+      });
+    });
+
+    it("refuses the wallet's token account with its close authority handed to another key, where the token is limited", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const closer = randomAddress();
+      const transaction = await signed([setAuthority(TOKEN_PROGRAM, source, "close", closer)]);
+
+      expect(await guarded(limited(mint), transaction)).toEqual(
+        refused(`tokens.${mint}`, `this transaction lets ${closer} close ${source}`),
+      );
+    });
+
+    it("counts the lamports of the wallet's wrapped SOL against native, when another key may close it", async () => {
+      const { account, held } = wrappedSol(wallet, 2_000_000_000n);
+      const closer = await generateKeyPairSigner();
+      harness.svm.airdrop(closer.address, lamports(1_000_000_000n));
+      const transaction = await signed([
+        setAuthority(TOKEN_PROGRAM, account, "close", closer.address),
+      ]);
+
+      const measured = await measure(transaction);
+      expect({
+        unmeasured: measured.unmeasured,
+        native: String(measured.native.amount),
+        ...(await guarded({ native: { perTransaction: "1" } }, transaction)),
+      }).toEqual({
+        unmeasured: {},
+        native: String(held + 5_000n), // And the signature fee.
+        ...refused("native.perTransaction", "native.perTransaction is 1 SOL"),
+      });
+
+      // Once it lands, the closer alone takes them: the wrapped SOL and the rent.
+      expectOk(sendSigned(harness, transaction));
+      const before = harness.svm.getBalance(closer.address) ?? 0n;
+      const close = await signed(
+        [
+          {
+            programAddress: TOKEN_PROGRAM,
+            accounts: [writable(account), writable(closer.address), signer(closer.address)],
+            data: Uint8Array.of(9),
+          },
+        ],
+        undefined,
+        closer,
+      );
+      expectOk(sendSigned(harness, close));
+      expect(String((harness.svm.getBalance(closer.address) ?? 0n) - before)).toBe(
+        String(held - 5_000n),
+      );
+    });
+
+    /** A cook in which the Pot hands `account`'s close authority to `closer`. */
+    const potCloser = (account: Address, closer: Address): Instruction =>
+      buildCookInstruction({
+        kitchen: harness.kitchen,
+        owner: wallet,
+        engineProgram: harness.programId,
+        potSalt: HARNESS_POT_SALT,
+        pot: harness.pot,
+        feeConfig: harness.feeConfig,
+        maxExecutionFee: 0n,
+        bytecode: compileSauceProgram(
+          "solana",
+          "function main(tokenProgram: Account, account: Account<Writable>, pot: Account<Writable, Signer>) {\n" +
+            `  svm.call(tokenProgram, [account, pot], hex\`060301${keyHex(closer)}\`);\n` +
+            "}",
+        ).bytecode,
+        tail: [readonly(TOKEN_PROGRAM), writable(account), writable(harness.pot)],
+      });
+
+    it("refuses a cook that hands the close authority of the Pot's token account to another key, where the token is limited", async () => {
+      const mint = mints.spl;
+      const account = setTokenAccount(harness, randomAddress(), mint, harness.pot, AMOUNT);
+      const closer = randomAddress();
+      const transaction = await signed([...prepends(), potCloser(account, closer)]);
+
+      expect(await guarded(limited(mint), transaction)).toEqual(
+        refused(`tokens.${mint}`, `this transaction lets ${closer} close ${account}`),
+      );
+      expectOk(sendSigned(harness, transaction));
+      expect(keyAt(account, 133)).toBe(closer);
+    });
+
+    it("counts the lamports of the Pot's wrapped SOL against native, when a cook lets another key close it", async () => {
+      const { account, held } = wrappedSol(harness.pot, 2_000_000_000n);
+      const closer = randomAddress();
+      const transaction = await signed([...prepends(), potCloser(account, closer)]);
+
+      const measured = await measure(transaction);
+      expect({
+        unmeasured: measured.unmeasured,
+        native: String(measured.native.amount),
+        ...(await guarded({ native: { perTransaction: "1" } }, transaction)),
+      }).toEqual({
+        unmeasured: {},
+        native: String(held + 5_000n), // And the signature fee.
+        ...refused("native.perTransaction", "native.perTransaction is 1 SOL"),
+      });
+      expectOk(sendSigned(harness, transaction));
+      expect(keyAt(account, 133)).toBe(closer);
+    });
+  },
+);
