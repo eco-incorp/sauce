@@ -222,7 +222,10 @@ now and as the simulation leaves it (`simulateTransaction`'s `accounts`). Each t
 balance change (SPL Token and Token-2022, in whole units by its mint's decimals, a mint the registry
 records by its symbol) and each account's lamports are listed, named by their `--account` names, as
 the owner, the Pot and the Kitchen's fee config; the owner's lamports include the transaction's fee.
-`--json` lists them as `tokenChanges` and `lamportChanges`.
+A token account's change is its owner's before the transaction; one the transaction hands to
+another owner says so, and names that owner, and one it closes and makes again at its address for
+another token shows as two changes, the old token emptied and the new one filled. `--json` lists
+them as `tokenChanges` (`owner`, and `ownerAfter` for an account handed over) and `lamportChanges`.
 
 #### In a local copy
 
@@ -258,7 +261,9 @@ still run out. A price that moves between building the cook and landing it can s
 ### Running on Solana
 
 `run` signs with `--wallet` or `--keypair`, confirms by polling the endpoint (no websocket to
-configure), and prints the signature, status and compute units, and the logs when it fails. A
+configure), and prints the signature, status and compute units, and the logs when it fails. What it
+simulates first, a swap's stops included, is simulated unsigned: the key signs each transaction
+only as it is sent, and a wallet's only once its policy let it go. A
 program too large for one transaction is staged in a Kitchen code buffer first, and the buffer is
 closed again after the cook, or when staging or the cook's simulation fails; if closing it fails,
 the run still prints the cook and warns with the buffer's address. A failure is named for the

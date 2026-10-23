@@ -200,11 +200,19 @@ Deploying the wallet's own Pot counts as a transaction to that Pot, so a `to` na
 run deploy it first. `native` and each token count what leaves the wallet or the Pot a transaction
 cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
 native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
-and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is sent.
-An ERC-20 approval above what a token's limit leaves room for is refused too. On Solana only balance
-changes count: a delegate approval (SPL Token `Approve` or `ApproveChecked`) is not limited, and the
-delegate can later move the approved amount without the wallet, so do not give a wallet with token
-limits a program that approves a delegate.
+and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is signed
+or sent. An ERC-20 approval above what a token's limit leaves room for is refused too. On Solana a
+delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of the wallet or
+the Pot counts as sent, per transaction and per day, and what the wallet spends as a delegate from
+an account it does not own counts as sent; a token account handed to another owner is a send of
+all it holds; and one whose close authority goes to another key, or a Token-2022 mint whose
+permanent delegate the wallet hands to another key, is refused where that token is limited. On
+Solana `native` counts every account the wallet controls (its token accounts, wrapped SOL among
+them, and nonce and stake accounts it is the authority of), net, so wrapping SOL into its own
+account, or paying the rent of its own token account, counts only the fee. A transaction is held to
+the policy of every wallet that signs it, whichever pays the fee. The measure errs toward counting,
+so a refusal may name more than actually leaves. A Token-2022 mint's permanent delegate the wallet
+never held needs no approval, and no policy limits it.
 With no policy, sends work, and each says no limits are set.
 
 ## The run, step by step

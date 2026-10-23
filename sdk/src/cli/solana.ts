@@ -102,6 +102,7 @@ import {
   lookupTableAddresses,
   GROWTH_STEP,
   MAX_POT_LEN,
+  prepareExecuteTransaction,
   resolveAccounts,
   resolveTokenProgramByOwner,
   type SauceSvmClient,
@@ -127,7 +128,7 @@ import {
 } from "./commands.js";
 import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
-import { guardOf } from "./policy.js";
+import { guardOf, type Reservation } from "./policy.js";
 import { keepLanded, sayKept } from "./keep.js";
 import type { PotRecord } from "./pot-store.js";
 import { svmPotsCreated, type InnerInstructions } from "./pots.js";
@@ -145,6 +146,7 @@ import {
   svmMovedJson,
   type SvmSetupCost,
   svmMovedLines,
+  unsignedWire,
   writableAccounts,
 } from "./svm-effects.js";
 import { linkLines, txLinks } from "./links.js";
@@ -516,22 +518,49 @@ async function confirmed(
 }
 
 /**
- * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). From a wallet
- * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`).
+ * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). Every wallet
+ * this process holds that the transaction needs a signature of (`--wallet`), its fee payer or not,
+ * holds it to its policy first (`policy.ts`), measured as that wallet's: one refusing is the whole
+ * send refused. Given `sign`, `transaction` is the one to measure, the wallets' signature slots
+ * empty, and `sign` makes the one sent: only once every policy lets it go, so nothing a wallet
+ * signed ever reaches an endpoint for a send its policy refuses. `sending` is told just before it
+ * goes out, once it is held to the policies and signed: from then on it can land.
  */
 export async function sendAndConfirm(
   rpc: Rpc,
   url: string,
   transaction: Transaction,
+  sign?: () => Promise<Transaction>,
+  sending?: () => void,
 ): Promise<SvmSent> {
-  const signature = getSignatureFromTransaction(transaction);
-  const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
-    .staticAccounts[0];
-  const reservation = payer === undefined ? undefined : await guardOf(payer)?.svm(rpc, transaction);
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
+  const signers = message.staticAccounts.slice(0, message.header.numSignerAccounts);
+  const reservations: Reservation[] = [];
+  const released = (why: string) => {
+    for (const reservation of reservations) reservation.released(why);
+  };
+  try {
+    for (const key of signers) {
+      const reservation = await guardOf(key)?.svm(rpc, transaction);
+      if (reservation !== undefined) reservations.push(reservation);
+    }
+  } catch (error) {
+    released("another wallet's policy refused it");
+    throw error;
+  }
+  let signed: Transaction;
+  try {
+    signed = sign === undefined ? transaction : await sign();
+  } catch (error) {
+    released("signing failed");
+    throw error;
+  }
+  const signature = getSignatureFromTransaction(signed);
+  sending?.();
   try {
     await ask(url, "sending the transaction", () =>
       rpc
-        .sendTransaction(getBase64EncodedWireTransaction(transaction), {
+        .sendTransaction(getBase64EncodedWireTransaction(signed), {
           encoding: "base64",
           // Every transaction here was simulated first; the node need not do it again.
           skipPreflight: true,
@@ -539,12 +568,14 @@ export async function sendAndConfirm(
         .send(),
     );
   } catch (error) {
-    reservation?.released("sending failed");
+    released("sending failed");
     throw error;
   }
 
   return svmLanded(rpc, url, signature, (ok) =>
-    ok ? reservation?.sent(signature) : reservation?.released(`${signature} failed`),
+    ok
+      ? reservations.forEach((reservation) => reservation.sent(signature))
+      : released(`${signature} failed`),
   );
 }
 
@@ -663,40 +694,65 @@ export async function svmLanded(
 
 /**
  * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
- * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, rehearses it as
- * signed and refuses it if it would fail, then sends it and waits until it is confirmed.
+ * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, once it is rehearsed
+ * unsigned (refused if it would fail) and the policy of every wallet it needs a signature of lets
+ * it go; then sends it and waits until it is confirmed. The fee payer is the one the transaction
+ * names: a `feePayer` said beside it that differs is refused.
  */
 export async function sendPlannedSvm(
   url: string,
   signer: KeyPairSigner,
   tx: { readonly feePayer: string; readonly transaction: string; readonly what: string },
 ): Promise<SvmSent> {
-  if (tx.feePayer !== signer.address) {
-    throw new CliError(
-      `${tx.what} is paid by ${tx.feePayer}, and the signer is ${signer.address}: build it for the signer`,
-    );
-  }
-  const rpc = createSolanaRpc(url);
   const decoded = getTransactionDecoder().decode(
     new Uint8Array(getBase64Encoder().encode(tx.transaction)),
   );
-  const signed = await signTransaction([signer.keyPair], decoded);
-  const wire = getBase64EncodedWireTransaction(signed);
-  const { value } = await ask(url, `a simulation of ${tx.what}`, () =>
-    rpc.simulateTransaction(wire, { encoding: "base64", sigVerify: true }).send(),
+  const named = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes)
+    .staticAccounts[0];
+  for (const payer of [tx.feePayer, named]) {
+    if (payer !== signer.address) {
+      throw new CliError(
+        `${tx.what} is paid by ${payer ?? "no one"}, and the signer is ${signer.address}: build it ` +
+          "for the signer",
+      );
+    }
+  }
+  const rpc = createSolanaRpc(url);
+  await rehearsed(rpc, url, decoded, tx.what, false);
+
+  return sendAndConfirm(rpc, url, decoded, () => signTransaction([signer.keyPair], decoded));
+}
+
+/**
+ * Simulates `transaction` with no signature (`sigVerify: false`; on the cluster's latest blockhash
+ * where `replace`), refusing it with the logs if it would fail.
+ */
+async function rehearsed(
+  rpc: Rpc,
+  url: string,
+  transaction: Transaction,
+  what: string,
+  replace: boolean,
+): Promise<void> {
+  const { value } = await ask(url, `a simulation of ${what}`, () =>
+    rpc
+      .simulateTransaction(unsignedWire(transaction), {
+        encoding: "base64",
+        sigVerify: false,
+        ...(replace ? { replaceRecentBlockhash: true } : {}),
+      })
+      .send(),
   );
   if (value.err !== null) {
     const logs = value.logs ?? [];
     throw new CliError(
-      `${tx.what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
+      `${what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
     );
   }
-
-  return sendAndConfirm(rpc, url, signed);
 }
 
 /** Builds, rehearses and sends `instructions` from `signer`, failing with the logs if the
- *  rehearsal fails. */
+ *  rehearsal fails: signed only once the rehearsal passed and the wallet's policy let it go. */
 async function sendInstructions(
   rpc: Rpc,
   url: string,
@@ -707,27 +763,10 @@ async function sendInstructions(
   const { value: latestBlockhash } = await ask(url, "the latest blockhash", () =>
     rpc.getLatestBlockhash().send(),
   );
-  const transaction = await buildExecuteTransaction({
-    payer: signer,
-    instructions,
-    latestBlockhash,
-  });
-  const { value } = await ask(url, `a simulation of ${what}`, () =>
-    rpc
-      .simulateTransaction(getBase64EncodedWireTransaction(transaction), {
-        encoding: "base64",
-        replaceRecentBlockhash: true,
-      })
-      .send(),
-  );
-  if (value.err !== null) {
-    const logs = value.logs ?? [];
-    throw new CliError(
-      `${what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
-    );
-  }
+  const prepared = prepareExecuteTransaction({ payer: signer, instructions, latestBlockhash });
+  await rehearsed(rpc, url, prepared.transaction, what, true);
 
-  return sendAndConfirm(rpc, url, transaction);
+  return sendAndConfirm(rpc, url, prepared.transaction, prepared.sign);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2650,10 +2689,11 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
 });
 
 /**
- * Builds a plan's transaction for `ctx.signer` on a fresh blockhash, signs it, rehearses it and
- * sends it, failing with the logs if the rehearsal fails: how this process sends every step.
- * `sending` is told the blockhash's lifetime once the rehearsal passed, before it goes out: from
- * then on, it can land.
+ * Builds a plan's transaction for `ctx.signer` on a fresh blockhash, rehearses it unsigned and
+ * sends it, failing with the logs if the rehearsal fails, signed only once the wallet's policy lets
+ * it go: how this process sends every step. `sending` is told the blockhash's lifetime just before
+ * it goes out, once the rehearsal and the policy passed and it is signed: from then on, it can land.
+ * A transaction the policy refuses never could, and `sending` never hears of it.
  */
 export async function sendPlanTx(
   ctx: StepContext,
@@ -2663,28 +2703,23 @@ export async function sendPlanTx(
   const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );
-  const transaction = await buildPlanTx(tx, ctx, latestBlockhash);
-  const { value } = await ask(ctx.url, `a simulation of ${tx.what}`, () =>
-    ctx.rpc
-      .simulateTransaction(getBase64EncodedWireTransaction(transaction), {
-        encoding: "base64",
-        replaceRecentBlockhash: true,
-      })
-      .send(),
-  );
-  if (value.err !== null) {
-    const logs = value.logs ?? [];
-    throw new CliError(
-      `${tx.what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
-    );
-  }
-  sending?.({
-    blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    slot: BigInt(context.slot),
-  });
+  const prepared = buildPlanTx(tx, ctx, latestBlockhash);
+  await rehearsed(ctx.rpc, ctx.url, prepared.transaction, tx.what, true);
 
-  return sendAndConfirm(ctx.rpc, ctx.url, transaction);
+  return sendAndConfirm(
+    ctx.rpc,
+    ctx.url,
+    prepared.transaction,
+    prepared.sign,
+    sending === undefined
+      ? undefined
+      : () =>
+          sending({
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            slot: BigInt(context.slot),
+          }),
+  );
 }
 
 /**
@@ -2820,7 +2855,9 @@ export async function svmTokenAccountsToCreate(
  */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
   requireSupported("sending the cook", [input.chain]);
-  let prepared = await prepare(input, files, input.signer);
+  // Prepared, and its swaps' stops checked, with no key at all: a rehearsal is unsigned, and the
+  // owner's key signs each transaction only once its policy let it go, just before it is sent.
+  let prepared = await prepare(input, files, unsignedSigner(input.owner));
   // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
   // would run out of compute units; one it still runs out with is refused here.
   const stopNotes: string[] = [];
@@ -2945,13 +2982,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const { value: latestBlockhash } = await ask(input.rpcUrl, "the latest blockhash", () =>
     prepared.rpc.getLatestBlockhash().send(),
   );
-  const transaction = await buildPlanTx(cookTx, ctx, latestBlockhash);
+  const built = buildPlanTx(cookTx, ctx, latestBlockhash);
   // What the cook moves: every account it may write, read before it is sent and once it lands.
-  const tracked = writableAccounts(transaction, cookTx.lookupTables ?? {});
+  const tracked = writableAccounts(built.transaction, cookTx.lookupTables ?? {});
   const before = await accountsNow(prepared.rpc, tracked).catch(() => undefined);
   let cook: SvmSent;
   try {
-    cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
+    cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, built.transaction, built.sign);
   } catch (error) {
     // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
     throw new CliError(
