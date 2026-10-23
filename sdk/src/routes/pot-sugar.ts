@@ -10,8 +10,9 @@
  *
  * `.<SYMBOL>` always means a registered token: a chain whose native coin is also a registered
  * token (Arc's USDC) reads the token, and the coin is `.balance`. A program that declares its own
- * `pot` owns the name. The old spellings — bare `self`, `self.<TOKEN>`, `Solana.self` and
- * `<holder>.<native symbol>` — are refused by name, each naming what to write instead.
+ * `pot`, or a compile that gives it one (a define, an ambient module's export), owns the name. The
+ * old spellings — bare `self`, `self.<TOKEN>`, `Solana.self` and `<holder>.<native symbol>` — are
+ * refused by name, each naming what to write instead.
  */
 
 /** The Pot, as a program spells it. */

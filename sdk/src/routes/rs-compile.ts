@@ -21,10 +21,11 @@ import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/res
 import { compile } from "../wasm-compiler.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
-const ENTRY = "main.js";
+/** The path the compiler gives the program's own source. */
+export const ENTRY = "main.js";
 
 /** v1/v12 both compile through the RS compiler's single EVM backend; svm maps 1:1. */
-function mapTarget(target: CompileTarget): RsTarget {
+export function mapTarget(target: CompileTarget): RsTarget {
   return target === "svm" ? "svm" : "evm";
 }
 
@@ -106,7 +107,7 @@ function toInlineContracts(
  * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
  * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
  */
-function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+export function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
 
   return (path) => {
@@ -121,7 +122,7 @@ function makeResolve(source: string, own: ResolveModule | undefined): ResolveMod
 }
 
 /** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
-function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
+export function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
   return (specifier, importer) =>
     resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
 }

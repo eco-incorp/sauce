@@ -349,6 +349,9 @@ const BINDINGS: ReadonlySet<string> = new Set(["at", "view", "lib"]);
 interface HolderScope {
   readonly tokens: TokenSymbols;
   readonly shadowed: ReadonlySet<string>;
+  /** The names the compile binds beside the source (a define, an ambient module's export): a
+   *  `pot` or `self` among them is the caller's value, never the Pot. */
+  readonly bound: ReadonlySet<string>;
   /** The names the program's imports bind, and of them those an ABI (a `.json` module) gives. */
   readonly imported: ReadonlySet<string>;
   readonly abis: ReadonlySet<string>;
@@ -431,13 +434,19 @@ function resolveHolder(
   switch (object.type) {
     case "Identifier": {
       const holder = (object as unknown as { name: string }).name;
-      if (holder === RETIRED_POT_NAME && !scope.shadowed.has(RETIRED_POT_NAME)) {
+      if (
+        holder === RETIRED_POT_NAME &&
+        !scope.shadowed.has(RETIRED_POT_NAME) &&
+        !scope.bound.has(RETIRED_POT_NAME)
+      ) {
         throw selfRefusal(
           scope.source.slice(member.start, member.end),
           `${POT_NAME}.${kind === "token" ? name : BALANCE_MEMBER}`,
         );
       }
-      if (holder === POT_NAME && !scope.shadowed.has(POT_NAME)) return { kind: "pot" };
+      if (holder === POT_NAME && !scope.shadowed.has(POT_NAME) && !scope.bound.has(POT_NAME)) {
+        return { kind: "pot" };
+      }
       // Reserved defensively -- no longer a compiler namespace root (address.* was dropped for
       // gated ctx.*), but a bare `address` holder is still excluded rather than re-opened.
       if (holder === "address" && !scope.shadowed.has("address")) return undefined;
@@ -543,6 +552,7 @@ function collectBalanceSites(
   program: AstNode,
   tokens: TokenSymbols,
   shadowed: ReadonlySet<string>,
+  bound: ReadonlySet<string>,
   excluded: ReadonlySet<AstNode>,
   source: string,
   native: NativeCoin | undefined,
@@ -574,6 +584,7 @@ function collectBalanceSites(
   const scope: HolderScope = {
     tokens,
     shadowed,
+    bound,
     imported: new Set(imported.keys()),
     abis,
     values,
@@ -871,11 +882,14 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
  * lowering and the disjointness argument. Purely textual surgery over the ORIGINAL source, driven by
  * parser ranges — never a re-print of the AST, so everything else (formatting, comments, unrelated
  * code) survives byte-for-byte. Prepend `tokenImportLines(result)` before compiling the result.
+ * `bound` names what the compile binds beside the source (a define, an ambient module's export): a
+ * `pot` or `self` among them is an ordinary holder, never the Pot.
  */
 export function rewriteTokenMembers(
   source: string,
   tokens: TokenSymbols,
   native?: NativeCoin,
+  bound: ReadonlySet<string> = new Set(),
 ): TokenRewriteResult {
   const none: TokenRewriteResult = {
     source,
@@ -893,7 +907,15 @@ export function rewriteTokenMembers(
   const writes = new Set<SafeWrite>();
   const members = collectMemberCallSites(program, tokens, shadowed, writes);
   const exclusions = collectValuePositionExclusions(program);
-  const balances = collectBalanceSites(program, tokens, shadowed, exclusions, source, native);
+  const balances = collectBalanceSites(
+    program,
+    tokens,
+    shadowed,
+    bound,
+    exclusions,
+    source,
+    native,
+  );
 
   const allSites = [...members.sites, ...balances.sites];
   if (allSites.length === 0) return none;

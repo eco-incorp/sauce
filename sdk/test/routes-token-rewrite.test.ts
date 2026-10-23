@@ -753,6 +753,85 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
   });
 });
 
+// --- a name the caller binds is the caller's ------------------------------------------------------
+
+describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", () => {
+  const HOLDER = "0x6666666666666666666666666666666666666666";
+  const hex = (source: string, options: Parameters<typeof compileSauceProgram>[2] = {}) =>
+    Buffer.from(compileSauceProgram("base", source, options).bytecode).toString("hex");
+  const served = (modules: Readonly<Record<string, string>>) => ({
+    resolve: (path: string) =>
+      modules[path] === undefined ? undefined : new TextEncoder().encode(modules[path]),
+  });
+  const main = (body: string) => `function main(): Uint256 { ${body} }`;
+
+  it.each(["pot", "self"])("a define of `%s` is what it reads", (name) => {
+    const defines = { [name]: BigInt(HOLDER) };
+    expect(hex(main(`return ${name};`), { defines })).toBe(hex(main(`return ${HOLDER};`)));
+  });
+
+  it.each(["pot", "self"])(
+    "a define of `%s` is the holder of its `.USDC` and `.balance`",
+    (name) => {
+      const defines = { [name]: BigInt(HOLDER) };
+      expect(hex(main(`return ${name}.USDC;`), { defines })).toBe(
+        hex(main(`return USDC.balanceOf(${HOLDER});`)),
+      );
+      expect(hex(main(`return ${name}.balance;`), { defines })).toBe(
+        hex(main(`return ctx.balance(${HOLDER});`)),
+      );
+    },
+  );
+
+  it.each(["pot", "self"])("an ambient module's export `%s` is what it reads", (name) => {
+    const options = {
+      ambient: ["./holder.ts"],
+      ...served({ "./holder.ts": `export const ${name} = ${HOLDER};` }),
+    };
+    expect(hex(main(`return ${name};`), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(hex(main(`return ${name}.USDC;`), options)).toBe(
+      hex(main(`return USDC.balanceOf(${HOLDER});`)),
+    );
+    expect(hex(main(`return ${name}.balance;`), options)).toBe(
+      hex(main(`return ctx.balance(${HOLDER});`)),
+    );
+  });
+
+  it("an ambient package's target arm is the module read", () => {
+    const options = {
+      ambient: ["@caller/holder"],
+      resolvePackage: (specifier: string) =>
+        specifier === "@caller/holder" ? "./holder/index.js" : undefined,
+      ...served({
+        "./holder/index.evm.js": `export const pot = ${HOLDER};`,
+        "./holder/index.js": "export const other = 1;",
+      }),
+    };
+    expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
+  });
+
+  it.each(["pot", "self"])("an imported `%s` is what it reads", (name) => {
+    const options = served({ "./constants.js": `export const ${name} = ${HOLDER};` });
+    const program = (body: string) => `import { ${name} } from "./constants.js";\n${main(body)}`;
+    expect(hex(program(`return ${name};`), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(hex(program(`return ${name}.USDC;`), options)).toBe(
+      hex(main(`return USDC.balanceOf(${HOLDER});`)),
+    );
+  });
+
+  it("the Pot's names are the Pot's where the caller binds neither", () => {
+    const defines = { other: BigInt(HOLDER), balance: 5n };
+    expect(hex(main("return pot;"), { defines })).toBe(hex(main("return ctx.self();")));
+    expect(hex(main("return pot.USDC;"), { defines })).toBe(
+      hex(main("return USDC.balanceOf(ctx.self());")),
+    );
+    // `.balance` is a member, which a define of `balance` is not: it reads the Pot's native coin.
+    expect(hex(main("return balance + pot.balance;"), { defines })).toBe(
+      hex(main("return 5 + ctx.selfBalance();")),
+    );
+  });
+});
+
 // --- `.balance` keeps every meaning it had --------------------------------------------------------
 
 describe("`.balance` is a field wherever it was one", () => {
