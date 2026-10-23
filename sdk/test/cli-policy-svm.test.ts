@@ -1047,13 +1047,28 @@ describeSvm(
 
       return getAddressDecoder().decode(new Uint8Array(account.data).subarray(at, at + 32));
     };
-    /** A wrapped SOL account of `owner`'s holding `amount`, beside the rent it keeps. */
-    const wrappedSol = (owner: Address, amount: bigint): { account: Address; held: bigint } => {
+    /** `data`, a token account's, with `delegate` standing for `allowance` of it. */
+    const allowing = (data: Uint8Array, delegate: Address, allowance: bigint): Uint8Array => {
+      const view = new DataView(data.buffer);
+      view.setUint32(72, 1, true); // delegate: Some
+      data.set(keyBytes(delegate), 76);
+      view.setBigUint64(121, allowance, true); // delegated_amount
+
+      return data;
+    };
+    /** A wrapped SOL account of `owner`'s holding `amount`, beside the rent it keeps, and the
+     *  allowance an outside key stands to move from it, where given. */
+    const wrappedSol = (
+      owner: Address,
+      amount: bigint,
+      standing?: { delegate: Address; allowance: bigint },
+    ): { account: Address; held: bigint } => {
       const data = tokenAccountData(NATIVE_MINT, owner, amount);
       const rent = harness.svm.minimumBalanceForRentExemption(BigInt(data.length));
       const view = new DataView(data.buffer);
       view.setUint32(109, 1, true); // is_native: Some(the rent it keeps)
       view.setBigUint64(113, rent, true);
+      if (standing !== undefined) allowing(data, standing.delegate, standing.allowance);
       const account = randomAddress();
       harness.svm.setAccount({
         address: account,
@@ -1563,6 +1578,30 @@ describeSvm(
       expect(await nativeVerdict("1", transaction)).toEqual({
         unmeasured: {},
         native: String(balance),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
+    it("counts SOL the wallet wraps into its own account where an outside key stands to move it", async () => {
+      // An empty wrapped SOL account of the wallet's, with a standing allowance of 2 SOL to a key
+      // outside: whatever the wallet wraps into it is that key's to take.
+      const { account } = wrappedSol(wallet, 0n, {
+        delegate: randomAddress(),
+        allowance: 2_000_000_000n,
+      });
+      const transaction = await signed([
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [{ address: wallet, role: AccountRole.WRITABLE_SIGNER }, writable(account)],
+          data: Uint8Array.of(...u32(2), ...u64(2_000_000_000n)),
+        },
+        { programAddress: TOKEN_PROGRAM, accounts: [writable(account)], data: Uint8Array.of(17) },
+      ]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(2_000_000_000n + FEE),
         refusal: nativeRefusal,
         spend: undefined,
       });

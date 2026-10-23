@@ -112,6 +112,7 @@ import {
   movedBy,
   namesAnyOf,
   permanentDelegateOf,
+  tokenAccount,
   tokenTransition,
   unsignedWire,
   writableAccounts,
@@ -841,8 +842,6 @@ export async function measureSvm(
   const approved: Array<{ token: SvmAddress; spender: SvmAddress; amount: bigint }> = [];
   const handedOff = new Map<SvmAddress, bigint>();
   const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
-  // Wrapped SOL a delegate may move is native coin another key may take.
-  let delegatedLamports = 0n;
   // A Token-2022 mint whose permanent delegate goes from one of those keys to another key: that key
   // then moves any account's tokens of the mint, the wallet's included, with no approval.
   const delegating: Array<{ token: SvmAddress; delegate: SvmAddress }> = [];
@@ -869,7 +868,6 @@ export async function measureSvm(
       (is.delegate !== was?.delegate || is.delegatedAmount > (was?.delegatedAmount ?? 0n))
     ) {
       approved.push({ token: is.mint, spender: is.delegate, amount: is.delegatedAmount });
-      if (is.isNative) delegatedLamports += is.delegatedAmount;
     }
     if (!ours.has(is.owner) && is.amount > 0n) {
       handedOff.set(is.mint, (handedOff.get(is.mint) ?? 0n) + is.amount);
@@ -903,34 +901,51 @@ export async function measureSvm(
   // account owned by one, wrapped SOL among them, with no closer outside; a durable nonce account
   // or a stake account whose authority is one). What leaves that set counts, net of what enters it,
   // so wrapping SOL into the wallet's own account and unwrapping it move nothing, and closing,
-  // handing over or withdrawing from such an account to another key is a send. An account of a
-  // layout this does not read, that names one of those keys and loses lamports, may have been the
-  // wallet's to command: what it loses counts as sent unless it arrives in the set. The wallet or a
-  // Pot that the transaction gives to another program (System's Assign) leaves the set with all it
-  // holds: from then on that program, not the key, moves its lamports. (A Pot the Kitchen creates
-  // where lamports were sent ahead of it becomes the engine's: still the Pot, still in the set.)
+  // handing over or withdrawing from such an account to another key is a send. Only what the set
+  // holds alone counts as held: wrapped SOL an outside delegate may move is that key's to take,
+  // so it is not, whether it stood delegated before or the transaction wrapped it in after. An
+  // account of a layout this does not read, that names one of those keys and loses lamports, may
+  // have been the wallet's to command: what it loses counts as sent unless it arrives in the set.
+  // The wallet or a Pot that the transaction gives to another program (System's Assign) leaves
+  // the set with all it holds: from then on that program, not the key, moves its lamports. (A Pot
+  // the Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot,
+  // still in the set.)
   const keys = [...ours];
   const engine = v12SvmEngineProgramId();
-  const controlled = (
+  const held = (
     account: SvmAddress,
     state: SimulatedAccount | null,
     program: string | undefined,
-  ): boolean =>
-    state !== null &&
-    ((ours.has(account) &&
-      (program === undefined ||
+  ): bigint => {
+    if (state === null) return 0n;
+    if (ours.has(account)) {
+      return program === undefined ||
         state.owner === program ||
-        (account !== wallet && state.owner === engine))) ||
-      (lamportKeys(state)?.every((key) => ours.has(key)) ?? false));
-  let lamports = delegatedLamports;
+        (account !== wallet && state.owner === engine)
+        ? state.lamports
+        : 0n;
+    }
+    if (!(lamportKeys(state)?.every((key) => ours.has(key)) ?? false)) return 0n;
+    const token = tokenAccount(state);
+    const outside =
+      token?.isNative === true && token.delegate !== undefined && !ours.has(token.delegate)
+        ? token.delegatedAmount < token.amount
+          ? token.delegatedAmount
+          : token.amount
+        : 0n;
+
+    return state.lamports - outside;
+  };
+  let lamports = 0n;
   tracked.forEach((account, index) => {
     const was = before[index] ?? null;
     const is = after[index] ?? null;
-    if (controlled(account, was, undefined)) lamports += was!.lamports;
-    else if (was !== null && namesAnyOf(was, keys) && (is?.lamports ?? 0n) < was.lamports) {
-      lamports += was.lamports - (is?.lamports ?? 0n);
+    if (was !== null && !ours.has(account) && namesAnyOf(was, keys)) {
+      if ((is?.lamports ?? 0n) < was.lamports) lamports += was.lamports - (is?.lamports ?? 0n);
+    } else {
+      lamports += held(account, was, undefined);
     }
-    if (controlled(account, is, was?.owner)) lamports -= is!.lamports;
+    lamports -= held(account, is, was?.owner);
   });
   const byMint = new Map<
     string,
