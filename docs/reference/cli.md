@@ -1426,11 +1426,11 @@ Options:
 
 The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half
 as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,
-sauce_actions, sauce_tx, sauce_pot, sauce_reclaim, sauce_simulate, sauce_inspect and
-sauce_verify; sauce_send, which broadcasts what the caller signed; the agent skills as
-tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as resources, at
-sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also has the
-wallet tools and the
+sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim, sauce_simulate,
+sauce_inspect and sauce_verify; sauce_send, which broadcasts what the caller signed; the
+agent skills as tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as
+resources, at sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also
+has the wallet tools and the
 store tools (below). No tool takes a key or a password: a transaction comes back unsigned,
 for the user's own wallet, or is sent from one of the server's own wallets.
 
@@ -1447,14 +1447,15 @@ not find `sauce` on its PATH takes the absolute path `which sauce` prints as the
 Over stdio it serves the wallets of the wallet directory (--wallets, default
 ~/.sauce/wallets, the one sauce wallet uses; --no-wallets serves none): sauce_wallet_list
 and sauce_wallet_address read them with no password, and sauce_wallet_create,
-sauce_wallet_import and sauce_wallet_send work once the wallets are enabled. A password
-source given here enables them, read once at start: the variable an MCP client's config
-passes from the agent's .env, a file, or a command. Without one, the agent enables them
-with sauce_wallet_enable, naming where the password comes from (a variable of the
-server's environment, a file only you can read, an entry of such a .env file, or a new
-random one it writes to a file), never the password itself and never a command. No tool
-takes or returns a password or a key. sauce_wallet_send simulates what it is given and
-holds it to the wallet's policy (sauce wallet --help) before it sends.
+sauce_wallet_import, sauce_wallet_send and sauce_sign work once the wallets are enabled. A
+password source given here enables them, read once at start: the variable an MCP client's
+config passes from the agent's .env, a file, or a command. Without one, the agent enables
+them with sauce_wallet_enable, naming where the password comes from (a variable of the
+server's environment, which the server then reads, a file only you can read, an entry of
+such a .env file, or a new random one it writes to a file), never the password itself and
+never a command. No tool takes or returns a password or a key. sauce_wallet_send simulates
+what it is given and holds it to the wallet's policy (sauce wallet --help) before it sends,
+and sauce_sign holds a signed cook to it as sauce sign does.
 The HTTP server never signs: --wallets and the password flags are refused there, and it
 has no wallet tools.
 
