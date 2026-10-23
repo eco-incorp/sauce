@@ -22,17 +22,9 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import {
-  compileWithRs,
-  ENTRY,
-  makeResolve,
-  makeResolvePackage,
-  mapTarget,
-  type RsCompileResult,
-} from "./rs-compile.js";
-import { normalize, sdkStdPath } from "../embedded/resolve.js";
-import { collectPatternNames, type AstNode } from "./ast-walk.js";
-import { parseSauce } from "./parse.js";
+import { ambientNamesOf, compileWithRs, type RsCompileResult } from "./rs-compile.js";
+import { resolveSdkPackage } from "../embedded/resolve.js";
+import { POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import {
   rewriteTokenFactory,
   rewriteTokenMembers,
@@ -416,74 +408,6 @@ export function compileSauceProgram(
   };
 }
 
-/** What each SDK module exports, by path: its text is the SDK's own. */
-const sdkModuleExports = new Map<string, readonly string[]>();
-
-/**
- * The names the `ambient` modules broadcast into the program: every value each exports (a
- * SauceScript module exports only declarations: it has no `export { … }` list and no re-export),
- * each module found as the compiler finds it: a relative specifier (`./`, `../`) normalized, one
- * that climbs above the root refused; any other through `resolvePackage`, and as written where it
- * declines; then the path's per-target arm (`holder.evm.js`) before its neutral one, a path with
- * no extension as written. A module that resolves to nothing, or does not parse, adds nothing: the
- * compile reports it.
- */
-function ambientExports(
-  ambient: readonly string[],
-  target: CompileTarget,
-  resolve: ResolveModule | undefined,
-  resolvePackage: ResolvePackage | undefined,
-): ReadonlySet<string> {
-  const read = makeResolve("", resolve);
-  const bare = makeResolvePackage(resolvePackage);
-  const arm = `.${mapTarget(target)}`;
-  const names = new Set<string>();
-  for (const specifier of ambient) {
-    let path: string | undefined;
-    if (specifier.startsWith("./") || specifier.startsWith("../")) {
-      const normalized = normalize(specifier);
-      path = normalized === undefined ? undefined : `./${normalized}`;
-    } else {
-      path = bare(specifier, `./${ENTRY}`) ?? specifier;
-    }
-    if (path === undefined) continue;
-    const armed = path.replace(/(\.[^./]+)$/, `${arm}$1`);
-    let at = armed;
-    let bytes = read(at);
-    if ((bytes === undefined || bytes === null) && armed !== path) {
-      at = path;
-      bytes = read(at);
-    }
-    if (bytes === undefined || bytes === null) continue;
-    let exported = sdkModuleExports.get(at);
-    if (exported === undefined) {
-      let program: AstNode;
-      try {
-        program = parseSauce(new TextDecoder().decode(bytes));
-      } catch {
-        continue;
-      }
-      const own: string[] = [];
-      for (const statement of program.body as AstNode[]) {
-        const declaration = statement.declaration as AstNode | null | undefined;
-        if (statement.type !== "ExportNamedDeclaration" || !declaration) continue;
-        if (declaration.type === "VariableDeclaration") {
-          for (const declarator of declaration.declarations as AstNode[]) {
-            collectPatternNames(declarator.id, { add: (name: string) => own.push(name) });
-          }
-        } else if (declaration.type === "FunctionDeclaration") {
-          collectPatternNames(declaration.id, { add: (name: string) => own.push(name) });
-        }
-      }
-      if (sdkStdPath(at) !== undefined) sdkModuleExports.set(at, own);
-      exported = own;
-    }
-    for (const name of exported) names.add(name);
-  }
-
-  return names;
-}
-
 /**
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
  * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
@@ -534,13 +458,51 @@ function compileForChain(
   // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
   // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
-  // The names the compile binds beside the source: the caller's defines, its contract bindings and
-  // what its ambient modules export. A `pot` or `self` that is one of them is the caller's value,
+  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
+  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
+  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
+  // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the
+  // SAME registry, so the token symbols agree), and the caller's own defines over both.
+  const scoped = scope.chainDefines?.(chain);
+  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
+  // over as they are when the caller adds none, so the compile adapter converts them once.
+  const chainValues =
+    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
+  const defines: Readonly<Record<string, DefineValue>> | undefined =
+    chainValues === undefined
+      ? options.defines
+      : options.defines === undefined || Object.keys(options.defines).length === 0
+        ? chainValues
+        : { ...chainValues, ...options.defines };
+
+  // The names the compile binds beside the source: the caller's defines, its contract bindings and,
+  // of the Pot's two names, each a caller's ambient module exports. The compiler says which:
+  // `ambientNamesOf` asks it, with this compile's own options, so a module is found exactly where
+  // the compile finds it. It asks only where it can matter: the SDK's own packages (`@sauce/token`),
+  // which the SDK resolves ahead of any caller's mapping, export neither name, and a name the
+  // program does not mention bare — in a comment or a string too, but not as a member's name
+  // (`ctx.self()`) — it never reads. A `pot` or `self` that is one of them is the caller's value,
   // never the Pot.
+  const ambient = options.ambient ?? [];
   const bound = new Set([
     ...Object.keys(options.defines ?? {}),
     ...Object.keys(options.contracts ?? {}),
-    ...ambientExports(options.ambient ?? [], target, options.resolve, options.resolvePackage),
+    ...(ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
+      ? []
+      : ambientNamesOf(
+          {
+            target,
+            resolve: options.resolve,
+            resolvePackage: options.resolvePackage,
+            defines,
+            ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
+            contracts: options.contracts,
+            ambient,
+          },
+          [POT_NAME, RETIRED_POT_NAME].filter((name) =>
+            new RegExp(`(?<![\\w$])(?<![^.]\\.)${name}(?![\\w$])`).test(sauce),
+          ),
+        )),
   ]);
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
@@ -580,22 +542,6 @@ function compileForChain(
   }
 
   let contracts: ContractsConfig | undefined = options.contracts;
-  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
-  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
-  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
-  // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the
-  // SAME registry, so the token symbols agree), and the caller's own defines over both.
-  const scoped = scope.chainDefines?.(chain);
-  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
-  // over as they are when the caller adds none, so the compile adapter converts them once.
-  const chainValues =
-    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
-  const defines: Readonly<Record<string, DefineValue>> | undefined =
-    chainValues === undefined
-      ? options.defines
-      : options.defines === undefined || Object.keys(options.defines).length === 0
-        ? chainValues
-        : { ...chainValues, ...options.defines };
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
   // pass. The accessor pass's `pot` sugar rewrites a bare `pot` Identifier -> `ctx.self()`

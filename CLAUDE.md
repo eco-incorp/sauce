@@ -937,11 +937,15 @@ declare; never a name it binds to a value, which shadows an import of that name 
 `<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
 token's own contract is one (`WETH.balance`; on Solana a mint, its token accounts derived off its
 key), a `pot` the program does not declare where it is read (`lexical-scope.ts`), nor the compile
-binds (a `defines` key, a `contracts` binding, an ambient module's export, found as the compiler
-finds the module), or `ctx.self()`, is the Pot and any other `pot` an ordinary variable (as on
-Solana, and for the accessor pass's bare `pot`, which becomes `ctx.self()`; on Solana the lowering
-consumes every such `pot` itself, as the Pot slot's key, or its account where an `Account` is
-expected). `.<SYMBOL>` is always a registered token; the chain's native coin is `<holder>.balance`:
+binds (a `defines` key, a `contracts` binding, or a caller's ambient module's export, which the
+SDK never works out itself: `rs-compile.ts#ambientNamesOf` asks the compiler, compiling an empty
+`main` with the compile's own options and one more ambient module exporting `pot` and `self`, and
+reads each name the compiler refuses as exported twice; nothing of it is remembered between
+compiles, the compiler's own caches keep it cheap), or `ctx.self()`, is the Pot and any other
+`pot` an ordinary variable (as on Solana, and for the accessor pass's bare `pot`, which becomes
+`ctx.self()`; on Solana the lowering consumes every such `pot` itself, as the Pot slot's key, or
+its account where an `Account` is expected). `.<SYMBOL>` is always a registered token; the chain's
+native coin is `<holder>.balance`:
 `ctx.selfBalance()`/`ctx.balance(h)` on an EVM chain, `ctx.balance(<account>.address)` on Solana,
 so on Arc `pot.USDC` is the 6-decimal token and `pot.balance` the coin. `.balance` on a record, a
 list or a contract call's result (`market.userCollateral(a, b).balance`), `X.at(a).balance()` and a

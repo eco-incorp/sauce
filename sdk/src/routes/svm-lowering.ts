@@ -34,6 +34,7 @@ import { shadowed, walkScoped, type Scope } from "./lexical-scope.js";
 import { parseSauce } from "./parse.js";
 import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { applySplices, methodCall, type MethodCall, type Splice } from "./token-rewrite.js";
+import { blankLiterals } from "./rs-compile.js";
 import type { SvmTokenRow } from "./token-registry.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { STD_SOURCES } from "../embedded/sources.generated.js";
@@ -304,18 +305,14 @@ function bindersOf(program: AstNode): ReadonlySet<AstNode> {
 }
 
 /**
- * Every place the program reads `name`: an identifier in value position, not a member's name, a
+ * Every place the program reads a name: an identifier in value position, not a member's name, a
  * record's key, a label, an import's or export's name, or a name a declaration binds (`bindersOf`).
  */
-function readsOf(
-  program: AstNode,
-  parents: ReadonlyMap<AstNode, AstNode>,
-  name: string,
-): AstNode[] {
+function readsOf(program: AstNode, parents: ReadonlyMap<AstNode, AstNode>): AstNode[] {
   const reads: AstNode[] = [];
   const binders = bindersOf(program);
   walk(program, (n) => {
-    if (n.type !== "Identifier" || nameOf(n) !== name || binders.has(n)) return;
+    if (n.type !== "Identifier" || binders.has(n)) return;
     const parent = parents.get(n);
     if (parent === undefined) return;
     const computed = parent.computed === true;
@@ -618,6 +615,10 @@ export class SvmLowering {
   readonly main: AstNode | undefined;
   /** Each node's parent. */
   readonly parents: ReadonlyMap<AstNode, AstNode>;
+  /** Every place the program reads a name (`readsOf`). */
+  private readonly reads: readonly AstNode[];
+  /** The source with its strings and comments as spaces (`blankLiterals`), once a splice needs it. */
+  private blanked: string | undefined;
   /** Every read of `pot` where the program does not bind it (`owns`): the Pot. */
   readonly potReads: ReadonlySet<AstNode>;
   /** Every read of `self` where the program does not bind it: refused, naming `pot`. */
@@ -675,8 +676,9 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
-    /** The names the caller binds (its defines, the ambient modules' exports): a `pot` or `self`
-     *  among them is the caller's, and the accounts this adds are named apart from them. */
+    /** The names the caller binds (its defines, its contract bindings, and a `pot` or `self` an
+     *  ambient module exports): a `pot` or `self` among them is the caller's, and the accounts this
+     *  adds are named apart from them. */
     bound: ReadonlySet<string> = new Set(),
     /** The token symbols some chain registers and this one lacks, which the chain's names hold as
      *  zero (`chain-module.ts`): a read of one is the compiler's, which compiles it only in a branch
@@ -697,19 +699,24 @@ export class SvmLowering {
     for (const param of (this.main?.params as AstNode[] | undefined) ?? []) {
       collectPatternNames(param, this.mainParams);
     }
-    this.potReads = new Set(
-      bound.has(POT_NAME)
-        ? []
-        : readsOf(this.program, this.parents, POT_NAME).filter((n) => !this.owns(n, POT_NAME)),
-    );
-    this.selfReads = bound.has(RETIRED_POT_NAME)
-      ? []
-      : readsOf(this.program, this.parents, RETIRED_POT_NAME).filter(
-          (n) => !this.owns(n, RETIRED_POT_NAME),
-        );
+    this.reads = readsOf(this.program, this.parents);
+    const freeReads = (name: string): AstNode[] =>
+      bound.has(name) ? [] : this.reads.filter((n) => nameOf(n) === name && !this.owns(n, name));
+    this.potReads = new Set(freeReads(POT_NAME));
+    this.selfReads = freeReads(RETIRED_POT_NAME);
     this.authorityDerivation = this.potReads.size > 0 ? "pot" : "authority";
     this.index = rowIndex(rows);
-    this.slots = new Slots(new Set([...this.declared, ...bound]));
+    // The accounts this adds to `main` are named apart from every name the program declares, every
+    // name the caller binds, and every other name the program reads, which a parameter of `main`
+    // of that name would hide: an ambient module's export among them. The Pot's own `pot` is the
+    // one the Pot's account stands for.
+    this.slots = new Slots(
+      new Set([
+        ...this.declared,
+        ...bound,
+        ...this.reads.map(nameOf).filter((name) => name !== POT_NAME && name !== RETIRED_POT_NAME),
+      ]),
+    );
     walk(this.program, (n) => {
       if (n.type === "ExpressionStatement") this.statements.set(n.expression as AstNode, n);
       if (n.type === "Program" || n.type === "BlockStatement" || n.type === "StaticBlock") {
@@ -1116,9 +1123,10 @@ export class SvmLowering {
   }
 
   /**
-   * Replaces a call with `<prefix>…kept…<suffix>`, from its callee to the first argument kept and
+   * Replaces a call with `<prefix>…kept…<suffix>`, from its start to the first argument kept and
    * from the last kept to its end: the arguments kept stay in place, so a call inside one is lowered
-   * on its own.
+   * on its own. The parser leaves parentheses out of an expression's range, so the call's own range
+   * is taken, which a parenthesized callee's are inside, and each argument kept keeps its own.
    */
   spliceCall(
     site: MethodCall,
@@ -1127,9 +1135,22 @@ export class SvmLowering {
     prefix: string,
     suffix: string,
   ): void {
+    // Comments read as spaces, so none is taken for a parenthesis.
+    const code = (this.blanked ??= blankLiterals(this.source));
+    const opens: number[] = [];
+    for (let i = first.start - 1; i >= 0 && /[\s(]/.test(code[i]!); i--) {
+      if (code[i] === "(") opens.push(i);
+    }
+    // Before the call's first argument, the furthest is the call's own.
+    if (((site.call as { arguments?: AstNode[] }).arguments ?? [])[0] === first) opens.pop();
+    let end = last.end;
+    // Up to the call's own closing parenthesis, its last character.
+    for (let i = last.end; i < site.call.end - 1 && /[\s)]/.test(code[i]!); i++) {
+      if (code[i] === ")") end = i + 1;
+    }
     this.splices.push(
-      { start: site.callee.start, end: first.start, replacement: prefix },
-      { start: last.end, end: site.call.end, replacement: suffix },
+      { start: site.call.start, end: opens.at(-1) ?? first.start, replacement: prefix },
+      { start: end, end: site.call.end, replacement: suffix },
     );
   }
 
@@ -1338,7 +1359,7 @@ export class SvmLowering {
   private callsOf(name: string, used: ReadonlySet<string>): AstNode[] {
     const calls: AstNode[] = [];
     const what = `\`${name}\` uses accounts the lowering adds to main (${[...used].join(", ")}), which it takes as parameters, passed at each call`;
-    for (const read of readsOf(this.program, this.parents, name)) {
+    for (const read of this.reads.filter((n) => nameOf(n) === name)) {
       const parent = this.parents.get(read);
       if (parent?.type !== "CallExpression" || parent.callee !== read) {
         const callee = parent?.type === "CallExpression" ? (parent.callee as AstNode) : undefined;

@@ -715,14 +715,24 @@ export function rewriteProtocolAccessors(
   }
 
   const excluded = collectReadExclusions(program);
+  // A shorthand field's value (`{ pot }`) is a read spelled as its key: the field is written out.
+  const shorthand = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "Property" && n.shorthand === true) shorthand.add(n.value as AstNode);
+  });
   const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, bound);
-  if (retired !== undefined) throw selfRefusal(RETIRED_POT_NAME, POT_NAME);
+  if (retired !== undefined) {
+    throw selfRefusal(
+      RETIRED_POT_NAME,
+      shorthand.has(retired) ? `${RETIRED_POT_NAME}: ${POT_NAME}` : POT_NAME,
+    );
+  }
   const potSites: Splice[] =
     (opts.potSugar ?? true)
       ? bareReads(program, POT_NAME, excluded, bound).map((n) => ({
           start: n.start,
           end: n.end,
-          replacement: "ctx.self()",
+          replacement: shorthand.has(n) ? `${POT_NAME}: ctx.self()` : "ctx.self()",
         }))
       : [];
 
