@@ -802,7 +802,7 @@ export async function measureEvm(
     // none is kept at 0. What another key keeps counts as sent, with what the transaction moves of
     // the token, per transaction and in the day's total: it needs no later signature. One whose
     // allowance cannot be read exactly is not measured, and a limit naming its token refuses it.
-    // (The ERC-20 approval of Permit2 itself moves nothing without one, and is not counted.)
+    // (The ERC-20 approval of Permit2 itself is not counted: a limit on its token refuses it.)
     const kept = new Map<string, (typeof grants)[number]>();
     for (const each of grants) {
       kept.set(`${each.channel}/${each.owner}/${each.token}/${each.spender}`, each);
@@ -1617,7 +1617,16 @@ function spendOf(
     // counts against the limit together, approvals included.
     const permit2 = permit2Of(chain);
     for (const approval of measured.approvals.filter((each) => names(key, each))) {
-      if (approval.spender.toLowerCase() === permit2) continue;
+      // An approval of Permit2 makes every allowance the wallet gave through Permit2 before
+      // spendable again, none of which the transaction reports: no amount a limit can weigh.
+      if (approval.spender.toLowerCase() === permit2) {
+        refuse(
+          `tokens.${key}`,
+          `this transaction approves Permit2 (${approval.spender}) for ${approval.symbol ?? approval.token}, ` +
+            "which lets each standing Permit2 allowance of it be taken with no further signature, " +
+            `and tokens.${key} limits it`,
+        );
+      }
       // An approval in units that cannot be read gives an amount no limit can weigh: refused.
       if (approval.decimals === undefined) {
         refuse(

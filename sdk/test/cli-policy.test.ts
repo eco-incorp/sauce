@@ -683,7 +683,7 @@ describe("the guard", () => {
     });
   });
 
-  it("refuses an approval above the limit, but not one to Permit2", async () => {
+  it("refuses an approval above the limit", async () => {
     const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
     const unlimited = client([approval(USDC, WALLET, RECIPIENT, maxUint256)]);
     const refusal = await refused(guard.evm(unlimited, pay));
@@ -693,11 +693,38 @@ describe("the guard", () => {
       ),
     );
     await expect(
-      guard.evm(client([approval(USDC, WALLET, PERMIT2, maxUint256)]), pay),
-    ).resolves.toBeDefined();
-    await expect(
       guard.evm(client([approval(USDC, WALLET, RECIPIENT, parseUnits("10", 6))]), pay),
     ).resolves.toBeDefined();
+  });
+
+  it("refuses an approval of Permit2 for a limited token, which makes a standing Permit2 allowance of it spendable", async () => {
+    // The wallet's approval of Permit2 for USDC stood at 0, beside a Permit2 allowance of USDC it
+    // gave a spender before: approving Permit2 again lets that spender take it, and nothing in the
+    // transaction reports that allowance, so no amount of it can be weighed.
+    const restore = client([approval(USDC, WALLET, PERMIT2, maxUint256)]);
+    const verdict = (guard: SendGuard, moved: PublicClient) =>
+      guard.evm(moved, pay).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+
+    expect({
+      limited: await verdict(guarded({ tokens: { USDC: { perTransaction: "10" } } }), restore),
+      revoked: await verdict(
+        guarded({ tokens: { USDC: { perTransaction: "10" } } }),
+        client([approval(USDC, WALLET, PERMIT2, 0n)]),
+      ),
+      elsewhere: await verdict(
+        guarded({ tokens: { [OTHER_TOKEN]: { perTransaction: "1" } } }),
+        restore,
+      ),
+    }).toEqual({
+      limited: expect.stringContaining(
+        `this transaction approves Permit2 (${PERMIT2}) for USDC`,
+      ) as unknown,
+      revoked: "let through",
+      elsewhere: "let through",
+    });
   });
 
   it("holds a standing allowance granted through Permit2 to the token's limit", async () => {
@@ -970,8 +997,8 @@ describe("the guard", () => {
         (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
       );
     const limited = await verdict(byAddress, RECIPIENT);
-    // An approval of Permit2 still moves nothing without a later signature; another token's limit
-    // has nothing to say.
+    // An approval of Permit2 for a limited token is refused as well, for its own reason; another
+    // token's limit has nothing to say.
     const toPermit2 = await verdict(byAddress, PERMIT2);
     const elsewhere = await verdict(
       guarded({ tokens: { USDC: { perTransaction: "1" } } }),
@@ -981,7 +1008,9 @@ describe("the guard", () => {
       limited: expect.stringContaining(
         `the decimals of ${OTHER_TOKEN} could not be read, so it cannot be held to the limit`,
       ) as unknown,
-      toPermit2: "let through",
+      toPermit2: expect.stringContaining(
+        `this transaction approves Permit2 (${PERMIT2})`,
+      ) as unknown,
       elsewhere: "let through",
     });
   });
