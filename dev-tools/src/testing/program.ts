@@ -15,7 +15,7 @@ import {
   compileSauceProgram,
   decodeReturned,
   encodeEntryArguments,
-  mainReturnType,
+  entryReturnType,
   parseEntryType,
   type CanonicalChain,
   type CompiledSauceProgram,
@@ -206,7 +206,7 @@ export function compileProgram(
       { cause: error },
     );
   }
-  const returnType = mainReturnType(compiled.source) ?? mainReturnType(source);
+  const returnType = entryReturnType(compiled.entrySignature);
   const bytecode = bytesToHex(compiled.bytecode);
 
   return {

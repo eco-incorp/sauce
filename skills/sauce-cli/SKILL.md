@@ -249,7 +249,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 
    ```text
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
-   main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
+   main returns { pool: Address, spent: Uint256, bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
    Simulated with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
      1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet, so the simulation deploys it first, …
      2. the cook, from the owner <owner>, gas used 273670
@@ -303,7 +303,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    2,700 USDC per WETH first:
 
    ```text
-   main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 48361532981, bought: 18070827415775813107 }
+   main returns { pool: Address, spent: Uint256, bought: Uint256 }: { pool: <pool>, spent: 48361532981, bought: 18070827415775813107 }
    ```
 
    It spent 48,361.532981 USDC, and the 51,638.467019 left went to the recipient with the WETH.

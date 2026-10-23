@@ -1923,16 +1923,26 @@ describe("what main returned", () => {
     expect(decodeReturned("Address", mint.address, solana)).toBe(mint.mint);
   });
 
-  it("finds main's declared return type, an interface spelled out", async () => {
-    const { mainReturnType } = await import("../src/routes/entry.js");
-    expect(mainReturnType("function main(): Address {\n  return 0n;\n}\n")).toBe("Address");
-    expect(mainReturnType("function main() {\n}\n")).toBeUndefined();
-    expect(mainReturnType("function main(): void {\n}\n")).toBeUndefined();
+  it("reads main's declared return type off the compile, an interface spelled out", async () => {
+    const { entryReturnType } = await import("../src/routes/entry.js");
+    const returns = (text: string) =>
+      entryReturnType(compileSauceProgram("base", text).entrySignature);
+    expect(returns("function main(): Address {\n  return 0;\n}\n")).toBe("Address");
+    expect(returns("function main() {\n}\n")).toBeUndefined();
+    expect(returns("function main(): void {\n}\n")).toBeUndefined();
     expect(
-      mainReturnType(
+      returns(
         "interface Out { token: Address; out: Uint256 }\nfunction main(): Out[] {\n  return [];\n}\n",
       ),
     ).toBe("{ token: Address, out: Uint256 }[]");
+    // Compiled for its arguments, main still reports what it returns.
+    expect(
+      entryReturnType(
+        compileSauceProgram("base", "function main(a: Uint256): Uint256 {\n  return a;\n}\n", {
+          args: [5n],
+        }).entrySignature,
+      ),
+    ).toBe("Uint256");
   });
 });
 
