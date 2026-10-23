@@ -37,6 +37,7 @@ import {
   type KeyPairSigner,
   type Transaction,
 } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
@@ -912,6 +913,64 @@ describe("measuring token accounts from a simulation's account images", () => {
       const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
 
       expect(String(measured.native.amount)).toBe(sent);
+    },
+  );
+
+  /** A delegated stake account (the Stake program's, 200 bytes): its staker at byte 12, its
+   *  withdrawer, the key its lamports answer to, at byte 44. */
+  const stake = (lamports: bigint, staker: Address, withdrawer: Address): Image => {
+    const data = new Uint8Array(200);
+    const view = new DataView(data.buffer);
+    view.setUint32(0, 2, true); // StakeStateV2::Stake
+    view.setBigUint64(4, 2_282_880n, true); // its rent reserve
+    data.set(getAddressEncoder().encode(staker), 12);
+    data.set(getAddressEncoder().encode(withdrawer), 44);
+
+    return { lamports, owner: address("Stake11111111111111111111111111111111111111"), data };
+  };
+
+  it.each([
+    [
+      "withdrawn to another key, the wallet its withdrawer",
+      stake(2_002_282_880n, PROGRAM, WALLET),
+      stake(2_282_880n, PROGRAM, WALLET),
+      1_000_000_000n,
+      "2000000000",
+    ],
+    [
+      "withdrawn to the wallet, its withdrawer",
+      stake(2_002_282_880n, PROGRAM, WALLET),
+      stake(2_282_880n, PROGRAM, WALLET),
+      3_000_000_000n,
+      "0",
+    ],
+    [
+      "handed to another key, the wallet its withdrawer",
+      stake(2_002_282_880n, PROGRAM, WALLET),
+      stake(2_002_282_880n, PROGRAM, PROGRAM),
+      1_000_000_000n,
+      "2002282880",
+    ],
+    [
+      "withdrawn to another key, the wallet only its staker",
+      stake(2_002_282_880n, WALLET, PROGRAM),
+      stake(2_282_880n, WALLET, PROGRAM),
+      1_000_000_000n,
+      "0",
+    ],
+  ] as const)(
+    "counts a stake account's lamports as its withdrawer's: %s",
+    async (_, was, is, walletAfter, sent) => {
+      const { rpc, transaction } = simulated(
+        { [WALLET]: wallet(1_000_000_000n), [ACCOUNT]: was },
+        { [WALLET]: wallet(walletAfter), [ACCOUNT]: is },
+      );
+      const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+      expect({ native: String(measured.native.amount), unmeasured: measured.unmeasured }).toEqual({
+        native: sent,
+        unmeasured: {},
+      });
     },
   );
 
@@ -1849,6 +1908,159 @@ describeSvm(
         spend: { native: { amount: String(FEE), decimals: 9 } },
       };
       expect({ wrapped, unwrapped }).toEqual({ wrapped: fee, unwrapped: fee });
+    });
+
+    it("counts the rent of a token account the wallet creates for itself as its own, and of one it creates for another key as sent", async () => {
+      const ASSOCIATED_TOKEN_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+      /** The Associated Token program's CreateIdempotent (1): `holder`'s account, the wallet paying. */
+      const create = async (holder: Address) => {
+        const [account] = await findAssociatedTokenPda({
+          owner: holder,
+          mint: mints.spl,
+          tokenProgram: TOKEN_PROGRAM,
+        });
+        const instruction: Instruction = {
+          programAddress: ASSOCIATED_TOKEN_PROGRAM,
+          accounts: [
+            { address: wallet, role: AccountRole.WRITABLE_SIGNER },
+            writable(account),
+            readonly(holder),
+            readonly(mints.spl),
+            readonly(SYSTEM_PROGRAM),
+            readonly(TOKEN_PROGRAM),
+          ],
+          data: Uint8Array.of(1),
+        };
+
+        return { account, instruction };
+      };
+      const own = await create(wallet);
+      const theirs = await create(randomAddress());
+      const rent = harness.svm.minimumBalanceForRentExemption(165n);
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const elsewhere = await nativeVerdict("0.001", await signed([theirs.instruction]));
+      const mine = await signed([own.instruction]);
+
+      expect({ mine: await nativeVerdict("0.001", mine), elsewhere }).toEqual({
+        mine: {
+          unmeasured: {},
+          native: String(FEE),
+          refusal: ALLOWED,
+          spend: { native: { amount: String(FEE), decimals: 9 } },
+        },
+        elsewhere: {
+          unmeasured: {},
+          native: String(rent + FEE),
+          refusal: nativeRefusal,
+          spend: undefined,
+        },
+      });
+      // It lands: the account is the wallet's, its rent with it.
+      expectOk(sendSigned(harness, mine));
+      expect(keyAt(own.account, 32)).toBe(wallet);
+    });
+
+    it("counts nothing leaving when the wallet funds the Pot it cooks on in that transaction, and the funding as sent with no cook", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const potAccount = setTokenAccount(harness, randomAddress(), mint, harness.pot, 0n);
+      const fund = transferChecked("spl", source, potAccount, AMOUNT, wallet);
+      const cook = buildCookInstruction({
+        kitchen: harness.kitchen,
+        owner: wallet,
+        engineProgram: harness.programId,
+        potSalt: HARNESS_POT_SALT,
+        pot: harness.pot,
+        feeConfig: harness.feeConfig,
+        maxExecutionFee: 0n,
+        tail: [],
+        bytecode: compileSauceProgram("solana", "function main(): Uint256 {\n  return 1;\n}")
+          .bytecode,
+      });
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const alone = await signed([fund]);
+      const sent = {
+        tokens: plain((await measure(alone)).tokens),
+        ...(await guarded(limited(mint), alone)),
+      };
+      const cooked = await signed([...prepends(), fund, cook]);
+
+      expect({
+        cooked: {
+          tokens: plain((await measure(cooked)).tokens),
+          refusal: (await guarded(limited(mint), cooked)).refusal,
+        },
+        alone: sent,
+      }).toEqual({
+        cooked: { tokens: [], refusal: ALLOWED },
+        alone: {
+          tokens: [{ token: mint, amount: "1000000", decimals: DECIMALS }],
+          ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1000 ${mint}`),
+        },
+      });
+      expectOk(sendSigned(harness, cooked));
+      expect(String(tokenAmount(harness, potAccount))).toBe(String(AMOUNT));
+    });
+
+    it("counts nothing leaving when the Pot's cook pays the wallet, and what it pays another key as sent", async () => {
+      const mint = mints.spl;
+      const bytecode = compileSauceProgram(
+        "solana",
+        'import { transferChecked } from "@sauce/token";\n' +
+          "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, " +
+          "dest: Account<Writable>, pot: Account<Writable, Signer>) {\n" +
+          `  transferChecked(0x${keyHex(mint)}n, tokenProgram, source, mint, dest, pot, ${AMOUNT}, ${DECIMALS});\n` +
+          "}",
+      ).bytecode;
+      const staged = await stageProgram(harness, bytecode, 401n);
+      const pays = (source: Address, dest: Address) =>
+        signed([
+          ...prepends(),
+          buildCookFromAccountInstruction({
+            kitchen: harness.kitchen,
+            owner: wallet,
+            engineProgram: harness.programId,
+            potSalt: HARNESS_POT_SALT,
+            pot: harness.pot,
+            feeConfig: harness.feeConfig,
+            maxExecutionFee: 0n,
+            tail: [
+              readonly(TOKEN_PROGRAM),
+              writable(source),
+              readonly(mint),
+              writable(dest),
+              writable(harness.pot),
+            ],
+            ...staged,
+            pin: staged.sha256,
+          }),
+        ]);
+      const toWallet = setTokenAccount(harness, randomAddress(), mint, wallet, 0n);
+      const toOther = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const fromPot = setTokenAccount(harness, randomAddress(), mint, harness.pot, AMOUNT);
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const away = await pays(fromPot, toOther);
+      const sent = {
+        tokens: plain((await measure(away)).tokens),
+        ...(await guarded(limited(mint), away)),
+      };
+      const home = await pays(fromPot, toWallet);
+
+      expect({
+        home: {
+          tokens: plain((await measure(home)).tokens),
+          refusal: (await guarded(limited(mint), home)).refusal,
+        },
+        away: sent,
+      }).toEqual({
+        home: { tokens: [], refusal: ALLOWED },
+        away: {
+          tokens: [{ token: mint, amount: "1000000", decimals: DECIMALS }],
+          ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1000 ${mint}`),
+        },
+      });
+      expectOk(sendSigned(harness, home));
+      expect(String(tokenAmount(harness, toWallet))).toBe(String(AMOUNT));
     });
 
     it("counts the lamports of the wallet's wrapped SOL against native, when another key may close it", async () => {
