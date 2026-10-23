@@ -232,6 +232,38 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
     ).not.toThrow();
   });
 
+  it("so is a contract binding under any name: an alias, an alias of one, a field, an `.at(…)`", () => {
+    for (const [chain, body, expression] of [
+      ["optimism", "const a = UniswapV3.Factory;\nreturn a || 0;", "a || 0"],
+      ["base", "const a = UniswapV3.Factory;\nreturn a || 0;", "a || 0"],
+      ["base", "const a = UniswapV3.Factory;\nconst b = a;\nlet c = b;\nreturn 0 || c;", "0 || c"],
+      ["base", "const r = { f: UniswapV3.Factory };\nreturn r.f && 1;", "r.f && 1"],
+      ["base", "return IERC20.at(x) || y;", "IERC20.at(x) || y"],
+      ["base", "return 1 && UniswapV3.Pool.at(x);", "1 && UniswapV3.Pool.at(x)"],
+    ] as const) {
+      const message = refusal(chain, `function main(x: Address, y: Address) {\n${body}\n}`);
+      expect(message).toMatch(
+        new RegExp(`\`${expression.replace(/[.|&!()]/g, "\\$&")}\` is a value here`),
+      );
+      expect(message).toMatch(/write `.+ \? .+ : .+`/);
+      const line = body.split("\n").findIndex((l) => l.includes(expression));
+      const column = body.split("\n")[line]!.indexOf(expression) + 1;
+      expect(message).toMatch(new RegExp(`--> main\\.js:${line + 2}:${column}`));
+    }
+    // A test of one is a test, and `&&`/`||` of anything else is the bool they always give.
+    for (const body of [
+      "const a = UniswapV3.Factory;\nconst b = a;\nif (b || x != 0) { return 1; }\nreturn 0;",
+      "const a = UniswapV3.Factory;\nreturn !a ? 1 : 2;",
+      "const a = UniswapV3.Factory;\nrequire(a && UniswapV3.QuoterV2);\nreturn 1;",
+      "const ok = x != 0 || y != 0;\nreturn ok ? 1 : 0;",
+      "const both = (x == y) && true;\nreturn both ? 1 : 0;",
+    ]) {
+      expect(() =>
+        hex("base", `function main(x: Address, y: Address): Uint256 {\n${body}\n}`),
+      ).not.toThrow();
+    }
+  });
+
   it("a token the chain lacks, used: a transfer, a balance, an argument", () => {
     for (const body of [
       "USDT.transfer(0x1234, 1);",

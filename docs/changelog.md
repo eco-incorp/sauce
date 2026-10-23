@@ -191,7 +191,11 @@ remain available and explicitly report that deployment availability has not been
   `import … from "@sauce/chain"`, and any path or package mapping that reaches them, is refused.
   `&&` and `||` give true or false, so a contract under them is a test: where the whole is a value
   (`const e: Address = PancakeswapV3.Factory || UniswapV3.Factory`), it is refused on every chain,
-  naming `X ? X : Y` for the first the chain has.
+  naming `X ? X : Y` for the first the chain has. That holds for a contract binding under any name:
+  an alias (`const a = UniswapV3.Factory; return a || 0;`, and an alias of an alias), a record
+  field holding one, and an `<Abi>.at(x)` the program writes. This also closes an older deviation
+  from the language reference ("true or false, never one of the operands"): `IERC20.at(x) || y`
+  as a value returned the operand's address, on every release before this one.
 - **Changed (both): a use of a name the chain lacks is refused at the use, naming the chain.**
   Outside a branch a test of it rules out, such a name would be address zero. The SDK refuses it
   before compiling and gives the file, line and column: "`PancakeswapV3.Factory` is not deployed

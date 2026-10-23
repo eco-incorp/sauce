@@ -547,8 +547,12 @@ zero that is unusable at run time, so `routes/absent-names.ts#checkNames` reads 
 every module the caller's resolver serves) before any rewrite and refuses, located and naming the
 chain, every use of a name the chain lacks outside a branch a test of it rules out, a `require`
 such a name makes false, a registry name no chain has, the Pot's balance of an absent token, and a
-contract under `&&`/`||` where the whole is a value (the language gives a bool, but 2.6.0 hands a
-contract binding back as the whole). It also reports the code a test rules out (`dead`: an `if`
+contract binding under `&&`/`||` where the whole is a value (the language gives a bool, but 2.6.0
+hands a binding back as the whole: measured, a names-module contract, a record field holding
+`<Abi>.at(…)`, an inline `<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of
+aliases, resolved by `lexical-bindings.ts` per scope; a local initialized to `<Abi>.at(…)`, a `?:`,
+a call or a parameter give a bool; an import is refused as unsure). It also reports the code a test
+rules out (`dead`: an `if`
 arm, a `?:` arm, the right side of a decided `&&`/`||`, the rest of a block after a decided `if`
 that always exits, its functions, types and module declarations kept), and `compileForChain`
 blanks it in place (`withoutDead`: spaces, newlines kept, an `if` arm `{ }`, an expression `0`)

@@ -60,6 +60,7 @@ import {
   shadowed,
   type Scope,
 } from "./lexical-scope.js";
+import { lexicalBindings } from "./lexical-bindings.js";
 import { parseSauce } from "./parse.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { BALANCE_MEMBER, POT_NAME } from "./pot-sugar.js";
@@ -531,6 +532,68 @@ export function checkNames(
     return undefined;
   };
 
+  const bindings = lexicalBindings(program);
+
+  /**
+   * Whether `node`, a side of `&&`/`||`, is a contract binding the compiler hands back as the whole
+   * (`binding`), may be one (`unsure`: an import or a field of one, whose module this pass does not
+   * read), or is not (`scalar`). Measured on 2.6.0: a contract the names module binds (or a record
+   * field holding `<Abi>.at(…)`), an inline `<Abi>.at(…)`, and a `const`/`let` alias of either,
+   * through any chain of aliases, are bindings; a local initialized to `<Abi>.at(…)`, a `?:`, a
+   * call's result, a parameter and any scalar give a bool.
+   */
+  const bindingKind = (
+    node: AstNode,
+    at: Scope | undefined,
+    seen: Set<AstNode> = new Set(),
+  ): "binding" | "unsure" | "scalar" => {
+    const target = unwrap(node);
+    if (target.type === "CallExpression") {
+      const callee = unwrap(prop(target, "callee"));
+      return callee.type === "MemberExpression" &&
+        !prop<boolean>(callee, "computed") &&
+        prop<AstNode>(callee, "property").type === "Identifier" &&
+        nameOf(prop(callee, "property")) === "at"
+        ? "binding"
+        : "scalar";
+    }
+    if (target.type !== "Identifier" && target.type !== "MemberExpression") return "scalar";
+    if (quietReference(target, at)?.kind === "contract") return "binding";
+    if (target.type === "MemberExpression") {
+      // A field of a record the program declares: what the field holds.
+      const object = unwrap(prop(target, "object"));
+      const property = prop<AstNode>(target, "property");
+      if (object.type !== "Identifier" || prop<boolean>(target, "computed")) return "scalar";
+      const declaration = bindings.declarationOf(object);
+      if (declaration === undefined || seen.has(declaration)) return "scalar";
+      if (declaration.type !== "VariableDeclarator") return "unsure";
+      const init = unwrap(prop(declaration, "init"));
+      if (init.type !== "ObjectExpression" || property.type !== "Identifier") return "scalar";
+      const field = prop<AstNode[]>(init, "properties").find(
+        (p) =>
+          p.type === "Property" &&
+          !prop<boolean>(p, "computed") &&
+          (prop<AstNode>(p, "key") as Node)["name"] === nameOf(property),
+      );
+      return field === undefined
+        ? "scalar"
+        : bindingKind(
+            prop(field, "value"),
+            bindings.scopeAt(field),
+            new Set([...seen, declaration]),
+          );
+    }
+    if (shadowed(at, nameOf(target), target.start) === false) return "scalar";
+    const declaration = bindings.declarationOf(target);
+    if (declaration === undefined || seen.has(declaration)) return "scalar";
+    if (declaration.type !== "VariableDeclarator") return "unsure";
+    // An alias holds what its initializer is, but a local initialized to `<Abi>.at(…)` itself is
+    // an address to the compiler, and so is a `?:`.
+    const init = unwrap(prop(declaration, "init"));
+    if (init.type !== "Identifier" && init.type !== "MemberExpression") return "scalar";
+    return bindingKind(init, bindings.scopeAt(init), new Set([...seen, declaration]));
+  };
+
   /** `referenceOf` for a decision: a name that is no registry name decides nothing, and an error
    *  is the visit's to raise, where it is reached. */
   const quietReference = (node: AstNode, at: Scope | undefined): Reference | undefined => {
@@ -774,13 +837,11 @@ export function checkNames(
           return;
         }
         // `&&` and `||` give true or false, never one of their sides, so each side is a test. But
-        // the compiler gives a contract's binding back as the whole (`0 || UniswapV3.Factory` is
-        // its address): a contract under them, where the whole is a value, is refused on every
-        // chain, naming the `?:` that says which side is meant.
+        // 2.6.0 gives a contract binding back as the whole (`0 || UniswapV3.Factory` is its
+        // address): where the whole is a value, a side that is one (`bindingKind`) is refused on
+        // every chain, naming the `?:` that says which side is meant.
         if (mode === "value") {
-          const contract = [left, right].find(
-            (side) => quietReference(side, at)?.kind === "contract",
-          );
+          const contract = [left, right].find((side) => bindingKind(side, at) !== "scalar");
           if (contract !== undefined) {
             const [l, r] = [left, right].map((side) => source.slice(side.start, side.end));
             fail(
