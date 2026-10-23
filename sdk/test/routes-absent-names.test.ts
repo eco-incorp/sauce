@@ -461,6 +461,14 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     );
     expect(() => build("base", "require(PancakeswapV3.Factory != 0);")).not.toThrow();
   });
+
+  it("require's condition is a test: `require(X && Y)` holds the program to both", () => {
+    const both = "require(UniswapV3.Factory && PancakeswapV3.Factory);\nreturn 1;";
+    expect(() => build("base", both)).not.toThrow();
+    expect(refusal("optimism", `function main() {\n${both}\n}`)).toMatch(
+      /fails on optimism whatever the program does: `PancakeswapV3\.Factory` is not deployed on optimism/,
+    );
+  });
 });
 
 describe("what a chain can lack", () => {

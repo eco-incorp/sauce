@@ -829,14 +829,15 @@ export function checkNames(
         ) {
           fail(node, "`available(X)` is removed: test the name itself, `if (X)`.");
         }
-        // `require(X != 0)` on a chain without `X` fails whatever the program does: refused here.
+        // `require(c)` tests `c`. On a chain without `X`, `require(X != 0)` fails whatever the
+        // program does: refused here.
         const [condition] = prop<AstNode[]>(node, "arguments");
-        const absent =
+        const required =
           target.type === "Identifier" &&
           nameOf(target) === "require" &&
-          !shadowed(at, "require", target.start) &&
-          condition !== undefined &&
-          valueOf(condition, at) === false
+          !shadowed(at, "require", target.start);
+        const absent =
+          required && condition !== undefined && valueOf(condition, at) === false
             ? absentIn(condition, at)
             : undefined;
         if (absent !== undefined) {
@@ -862,7 +863,7 @@ export function checkNames(
           visit(callee, mode, "callee", at);
         }
         for (const argument of prop<AstNode[]>(node, "arguments")) {
-          visit(argument, "value", "value", at);
+          visit(argument, required && argument === condition ? "test" : "value", "value", at);
         }
         return;
       }
