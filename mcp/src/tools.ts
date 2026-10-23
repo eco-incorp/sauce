@@ -1326,7 +1326,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "take: each chain's slug, numeric id, name, kind (evm or svm) and aliases, `support`, " +
         `and \`endpoint\`. \`support\` is "supported" for ${supportedChainNames()}, where this ` +
         'release builds transactions, and "preview" for every other chain: programs compile ' +
-        "and simulate there, but the tools that build a transaction refuse it (`refused` says " +
+        "there, and globals, price, pools and pot's prediction read, but simulate does not run and " +
+        "the tools that build or send a transaction refuse it (`refused` says " +
         "how to request the chain). `endpoint` is where this server reads the chain without the " +
         'call\'s rpcUrl: "config", its operator\'s endpoint; "public", a built-in public one, ' +
         'which can be slow or rate-limited; "none", only through the call\'s rpcUrl. Reads ' +
