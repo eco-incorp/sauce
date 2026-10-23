@@ -150,6 +150,29 @@ remain available and explicitly report that deployment availability has not been
   a helper takes the accounts it uses as parameters, at every call. A helper used as a value (a
   `.catch` handler) is refused, saying why. Compiled for Solana, a program that names `pot` derives
   the Pot's accounts (`pot`, `pot:USDC`), so cooked `--via engine`, which has no Pot, it is refused.
+- **Breaking (both): every registry name is declared on every chain, and `available(X)` is
+  removed.** Each protocol namespace, family aliases included, and each token symbol some chain
+  registers is a name of every program. A contract the chain has is bound at its address, one with
+  no ABI is its address, and a contract or token the chain lacks is zero. Where you wrote
+  `available(X)`, test the name itself. `if (X)`, `!X`, `X != 0`, `X == 0`, `?:`, `&&` and `||` are
+  decided as the program compiles, and the branch a test rules out is not compiled, even when it
+  calls the absent contract, reads `pot.<TOKEN>` of the absent token, or holds EVM-only code on
+  Solana. Such a program compiles to the bytes `available(X)` produced. A call to `available(...)`
+  is refused with "`available(X)` is removed: test the name itself, `if (X)`.", and TypeScript no
+  longer declares it. A decision held in a variable is live code: in
+  `const has = USDT != 0; if (has) { … }` the branch is checked as if it runs. A program's own
+  declaration of a name wins in the block it is declared in, from the declaration on.
+- **Changed (both): a use of a name the chain lacks is refused at the use, naming the chain.**
+  Outside a branch a test of it rules out, such a name would be address zero. The SDK refuses it
+  before compiling and gives the file, line and column: "`PancakeswapV3.Factory` is not deployed
+  on optimism. A contract the chain lacks is zero there, and only a test of it may use it:
+  `if (PancakeswapV3.Factory) { … }` compiles the branch only where the chain has it. It is
+  deployed on …". A token reads "`USDT` is not a token on arbitrum. Did you mean `USDC` or
+  `USDT0`? …", for the Pot's balance of it (`pot.USDT`) too. For a name another chain has, this
+  replaces "Contract 'X' (slug) is not deployed on 'chain'", "`X` is not a token or protocol on
+  chain" and the compiler's "is not a declared variable". `require(X != 0)` on a chain without `X`
+  is refused as well, since it fails whatever the program does. A name no chain has is an error on
+  every chain, tested or not.
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
   assignments on success, or rolls them all back before handling failure. Work before the block
   remains. A sole external-call block has the narrower `.catch()` boundary: successful-return

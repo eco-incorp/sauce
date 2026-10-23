@@ -210,6 +210,11 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     holds there, write `ctx.balance(x)`. In `--account` values and Solana derivations, `self` is
     `authority` (the Pot through the Kitchen, the owner with `--via engine`), and a program that
     names `pot` is refused with `--via engine`.
+11. **Test a name instead of calling `available(X)`.** A name the chain lacks is zero there.
+    Where you wrote `available(X)`, write `if (UniswapV3.Factory) { … }`, `if (!USDT) return 0;`,
+    `X != 0` or `X ? a : b`. The branch a test rules out is still not compiled, and the program's
+    bytes do not change. The call is refused, saying so. A use of the name outside such a branch,
+    and `require(X != 0)` on a chain without it, are refused at the use, naming the chain.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,
