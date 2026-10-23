@@ -87,6 +87,324 @@ function rpcError(err: unknown): unknown {
   return typeof err === "number" ? (FIELDLESS[err] ?? String(err)) : String(err);
 }
 
+/** SPL Token and Token-2022: the programs whose instructions a node parses as `spl-token`. */
+const PARSED_TOKEN_PROGRAMS: Readonly<Record<string, true>> = {
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: true,
+  TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb: true,
+};
+/** `AuthorityType`'s first four, the ones SPL Token has, by the name `setAuthority` reports. */
+const AUTHORITY_TYPES = ["mintTokens", "freezeAccount", "accountOwner", "closeAccount"] as const;
+
+/** `amount` in `decimals` as a node writes it: whole and fraction, no trailing zeros. */
+function uiAmountString(amount: bigint, decimals: number): string {
+  const digits = amount.toString().padStart(decimals + 1, "0");
+  const whole = digits.slice(0, digits.length - decimals);
+  const fraction = digits.slice(digits.length - decimals).replace(/0+$/, "");
+
+  return fraction === "" ? whole : `${whole}.${fraction}`;
+}
+
+/**
+ * A token program's instruction as a node parses it (Agave's transaction-status
+ * `parse_token.rs`): the `parsed` of a JsonParsed inner instruction, its `type` and `info` with the
+ * node's field names, given the instruction's `accounts` by address. `undefined` where the node
+ * would not parse it either (too few accounts, a short body) and for the instructions this shim
+ * does not spell out (the extensions', and the extensions' authorities), which it leaves
+ * partially decoded.
+ */
+function parsedToken(
+  data: Uint8Array,
+  accounts: readonly string[],
+): { type: string; info: Record<string, unknown> } | undefined {
+  const tag = data[0];
+  if (tag === undefined) return undefined;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const key = (at: number) => getBase58Decoder().decode(data.subarray(at, at + 32));
+  /** `info` with the authority at `accounts[last]`, or the multisig there and its signers after. */
+  const withAuthority = (
+    info: Record<string, unknown>,
+    last: number,
+    owner: string,
+    multisig: string,
+  ): Record<string, unknown> =>
+    accounts.length > last + 1
+      ? { ...info, [multisig]: accounts[last], signers: accounts.slice(last + 1) }
+      : { ...info, [owner]: accounts[last] };
+  /** The checked instructions' amount, a u64 after the tag, in the decimals at byte 9. */
+  const tokenAmount = () => {
+    const amount = view.getBigUint64(1, true);
+    const shown = uiAmountString(amount, data[9]!);
+
+    return {
+      amount: amount.toString(),
+      decimals: data[9]!,
+      uiAmount: Number(shown),
+      uiAmountString: shown,
+    };
+  };
+  /** A `COption<Pubkey>` at `at`: the key after a 1, null for a 0, `undefined` where it is cut. */
+  const optionalKey = (at: number): string | null | undefined =>
+    data[at] === 1 && data.length >= at + 33 ? key(at + 1) : data[at] === 0 ? null : undefined;
+  const enough = (count: number, length: number) =>
+    accounts.length >= count && data.length >= length;
+
+  switch (tag) {
+    case 0:
+    case 20: {
+      const rent = tag === 0;
+      const freeze = optionalKey(34);
+      if (!enough(rent ? 2 : 1, 35) || freeze === undefined) return undefined;
+
+      return {
+        type: rent ? "initializeMint" : "initializeMint2",
+        info: {
+          mint: accounts[0],
+          decimals: data[1],
+          mintAuthority: key(2),
+          ...(rent ? { rentSysvar: accounts[1] } : {}),
+          ...(freeze === null ? {} : { freezeAuthority: freeze }),
+        },
+      };
+    }
+    case 1:
+      return enough(4, 1)
+        ? {
+            type: "initializeAccount",
+            info: {
+              account: accounts[0],
+              mint: accounts[1],
+              owner: accounts[2],
+              rentSysvar: accounts[3],
+            },
+          }
+        : undefined;
+    case 16:
+      return enough(3, 33)
+        ? {
+            type: "initializeAccount2",
+            info: {
+              account: accounts[0],
+              mint: accounts[1],
+              owner: key(1),
+              rentSysvar: accounts[2],
+            },
+          }
+        : undefined;
+    case 18:
+      return enough(2, 33)
+        ? {
+            type: "initializeAccount3",
+            info: { account: accounts[0], mint: accounts[1], owner: key(1) },
+          }
+        : undefined;
+    case 2:
+      return enough(3, 2)
+        ? {
+            type: "initializeMultisig",
+            info: {
+              multisig: accounts[0],
+              rentSysvar: accounts[1],
+              signers: accounts.slice(2),
+              m: data[1],
+            },
+          }
+        : undefined;
+    case 19:
+      return enough(2, 2)
+        ? {
+            type: "initializeMultisig2",
+            info: { multisig: accounts[0], signers: accounts.slice(1), m: data[1] },
+          }
+        : undefined;
+    case 3:
+      return enough(3, 9)
+        ? {
+            type: "transfer",
+            info: withAuthority(
+              {
+                source: accounts[0],
+                destination: accounts[1],
+                amount: view.getBigUint64(1, true).toString(),
+              },
+              2,
+              "authority",
+              "multisigAuthority",
+            ),
+          }
+        : undefined;
+    case 4:
+      return enough(3, 9)
+        ? {
+            type: "approve",
+            info: withAuthority(
+              {
+                source: accounts[0],
+                delegate: accounts[1],
+                amount: view.getBigUint64(1, true).toString(),
+              },
+              2,
+              "owner",
+              "multisigOwner",
+            ),
+          }
+        : undefined;
+    case 5:
+      return enough(2, 1)
+        ? {
+            type: "revoke",
+            info: withAuthority({ source: accounts[0] }, 1, "owner", "multisigOwner"),
+          }
+        : undefined;
+    case 6: {
+      const authorityType = AUTHORITY_TYPES[data[1] ?? AUTHORITY_TYPES.length];
+      const newAuthority = optionalKey(2);
+      if (!enough(2, 3) || authorityType === undefined || newAuthority === undefined) {
+        return undefined;
+      }
+      // A mint's authorities, MintTokens and FreezeAccount, name the mint; the rest the account.
+      const owned = data[1]! < 2 ? "mint" : "account";
+
+      return {
+        type: "setAuthority",
+        info: withAuthority(
+          { [owned]: accounts[0], authorityType, newAuthority },
+          1,
+          "authority",
+          "multisigAuthority",
+        ),
+      };
+    }
+    case 7:
+      return enough(3, 9)
+        ? {
+            type: "mintTo",
+            info: withAuthority(
+              {
+                mint: accounts[0],
+                account: accounts[1],
+                amount: view.getBigUint64(1, true).toString(),
+              },
+              2,
+              "mintAuthority",
+              "multisigMintAuthority",
+            ),
+          }
+        : undefined;
+    case 8:
+      return enough(3, 9)
+        ? {
+            type: "burn",
+            info: withAuthority(
+              {
+                account: accounts[0],
+                mint: accounts[1],
+                amount: view.getBigUint64(1, true).toString(),
+              },
+              2,
+              "authority",
+              "multisigAuthority",
+            ),
+          }
+        : undefined;
+    case 9:
+      return enough(3, 1)
+        ? {
+            type: "closeAccount",
+            info: withAuthority(
+              { account: accounts[0], destination: accounts[1] },
+              2,
+              "owner",
+              "multisigOwner",
+            ),
+          }
+        : undefined;
+    case 10:
+    case 11:
+      return enough(3, 1)
+        ? {
+            type: tag === 10 ? "freezeAccount" : "thawAccount",
+            info: withAuthority(
+              { account: accounts[0], mint: accounts[1] },
+              2,
+              "freezeAuthority",
+              "multisigFreezeAuthority",
+            ),
+          }
+        : undefined;
+    case 12:
+      return enough(4, 10)
+        ? {
+            type: "transferChecked",
+            info: withAuthority(
+              {
+                source: accounts[0],
+                mint: accounts[1],
+                destination: accounts[2],
+                tokenAmount: tokenAmount(),
+              },
+              3,
+              "authority",
+              "multisigAuthority",
+            ),
+          }
+        : undefined;
+    case 13:
+      return enough(4, 10)
+        ? {
+            type: "approveChecked",
+            info: withAuthority(
+              {
+                source: accounts[0],
+                mint: accounts[1],
+                delegate: accounts[2],
+                tokenAmount: tokenAmount(),
+              },
+              3,
+              "owner",
+              "multisigOwner",
+            ),
+          }
+        : undefined;
+    case 14:
+      return enough(3, 10)
+        ? {
+            type: "mintToChecked",
+            info: withAuthority(
+              { mint: accounts[0], account: accounts[1], tokenAmount: tokenAmount() },
+              2,
+              "mintAuthority",
+              "multisigMintAuthority",
+            ),
+          }
+        : undefined;
+    case 15:
+      return enough(3, 10)
+        ? {
+            type: "burnChecked",
+            info: withAuthority(
+              { account: accounts[0], mint: accounts[1], tokenAmount: tokenAmount() },
+              2,
+              "authority",
+              "multisigAuthority",
+            ),
+          }
+        : undefined;
+    case 17:
+      return enough(1, 1) ? { type: "syncNative", info: { account: accounts[0] } } : undefined;
+    case 21:
+      // With extension types after the tag it names them too, which this shim does not spell out.
+      return accounts.length >= 1 && data.length === 1
+        ? { type: "getAccountDataSize", info: { mint: accounts[0] } }
+        : undefined;
+    case 22:
+      return enough(1, 1)
+        ? { type: "initializeImmutableOwner", info: { account: accounts[0] } }
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
 interface Landed {
   readonly err: unknown;
   readonly logs: string[];
@@ -345,10 +663,12 @@ export function solanaShim(
         const wantsInner =
           (params[1] as { innerInstructions?: boolean } | undefined)?.innerInstructions === true;
         // As a cluster reports them: a group per top-level instruction that made CPIs, each inner
-        // instruction keyed by `programId`. A mainnet node gives a program it has no parser for —
-        // the Kitchen, the engine — partially decoded (accounts by address, data in base58, stack
-        // height), and System and SPL Token parsed, with no accounts or data; here every program
-        // comes partially decoded, which is all a reader of the Kitchen's calls needs.
+        // instruction keyed by `programId`. A mainnet node gives SPL Token's and Token-2022's
+        // instructions parsed, `{ program: "spl-token", programId, parsed: { type, info },
+        // stackHeight }` with no accounts or data, and a program it has no parser for — the
+        // Kitchen, the engine — partially decoded (accounts by address, data in base58, stack
+        // height). Here the token programs come parsed as it parses them, and every other program
+        // partially decoded (a node parses System and a few more too, which no reader here needs).
         const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
           staticAccounts: readonly string[];
           addressTableLookups?: readonly {
@@ -380,13 +700,21 @@ export function solanaShim(
             index,
             instructions: group.map((each) => {
               const compiled = each.instruction();
+              const programId = keys[compiled.programIdIndex()]!;
+              const accounts = Array.from(compiled.accounts()).map((at) => keys[at]!);
+              const parsed =
+                PARSED_TOKEN_PROGRAMS[programId] === true
+                  ? parsedToken(compiled.data(), accounts)
+                  : undefined;
 
-              return {
-                programId: keys[compiled.programIdIndex()],
-                accounts: Array.from(compiled.accounts()).map((at) => keys[at]),
-                data: getBase58Decoder().decode(compiled.data()),
-                stackHeight: each.stackHeight(),
-              };
+              return parsed === undefined
+                ? {
+                    programId,
+                    accounts,
+                    data: getBase58Decoder().decode(compiled.data()),
+                    stackHeight: each.stackHeight(),
+                  }
+                : { program: "spl-token", programId, parsed, stackHeight: each.stackHeight() };
             }),
           }))
           .filter((group) => group.instructions.length > 0);
