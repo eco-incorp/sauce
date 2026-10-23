@@ -1,35 +1,29 @@
 /**
- * Resolve EVM protocol accessors against the destination chain's descriptor registry.
+ * The protocol names a module cannot hold, lowered before the compiler reads the program.
  *
- * For example, a Base route's `Uniswap.UniversalRouter.execute(...)` becomes
- * `IUniswapV4_UniversalRouter.at(<base-address>).execute(...)`, with the descriptor's ABI supplied
- * as a compiler binding. Bare `pot` is rewritten to `ctx.self()` in the same pass, and a bare `self`
- * (the Pot's old name) is refused, naming `pot`.
- *
- * Recognized call shapes:
- *   (A) `<Protocol>.<Contract>.<method>(...)`        — enclosing chain
- *   (B) `<Protocol>.<method>(...)`                   — enclosing chain, single default contract
- *   (C) `<Chain>.<Protocol>.<Contract>.<method>(...)` — explicitly named chain
- *   (D) `<Chain>.<Protocol>.<method>(...)`            — named chain, single default contract
+ * A chain's contracts are its names module (`chain-module.ts`): `UniswapV3.Factory.getPool(…)`,
+ * `Base.UniswapV3.Factory` and a contract's address in value position are the compiler's, with no
+ * rewrite. What needs a function as a value stays here:
+ *   (B) `<Protocol>.<method>(...)`            — a protocol's one contract with an ABI, its default,
+ *       called through the namespace: written `<Protocol>.<Default>.<method>(...)`, which the names
+ *       module holds, so the chain decides it like any other contract;
+ *   (D) `<Chain>.<Protocol>.<method>(...)`    — the same, on a chain by name;
  *   (E) `<Protocol>.<Contract>.at(<address>).<method>(...)` — the contract's ABI at another
  *       address: how an interface (an ABI with no fixed address, `Erc4626.Vault`) is called, and
- *       how a deployed contract's ABI reaches another deployment
+ *       how a deployed contract's ABI reaches another deployment;
  *   (F) `<Protocol>.<Interface>(<address>).<method>(...)` — an interface called with the address
  *       it is bound to, the same as shape E: `UniswapV3.Pool(pool).liquidity()`. Only an
- *       interface binds this way; a deployed contract's name called with an address is refused
- * and, in value position, `<Protocol>.<Contract>` / `<Chain>.<Protocol>.<Contract>` is the
- * contract's address on that chain — an address-only contract included.
+ *       interface binds this way; a deployed contract's name called with an address is refused.
+ * Bare `pot` is rewritten to `ctx.self()` in the same pass, and a bare `self` (the Pot's old name)
+ * is refused, naming `pot`.
  *
- * Chain qualification chooses an address; it does not change the execution chain. `chainScope`
- * optionally restricts the chains that may be named.
- *
- * This pass returns a parsed-ABI `contracts` map. The route compiler merges it with caller
+ * Shapes E and F return a parsed-ABI `contracts` map. The route compiler merges it with caller
  * bindings, and `rs-compile.ts` adapts the map to the published compiler's `inlineContracts`
  * option. No temporary ABI files or filesystem imports are needed for these bindings.
  *
  * Unrecognized or shadowed root names are left untouched. Once a registry root is recognized,
- * unsupported contracts, missing deployments/methods, widened ABIs, ambiguous family aliases,
- * binding collisions, and out-of-scope chains produce explicit errors.
+ * unsupported contracts, missing methods, widened ABIs, ambiguous family aliases, binding
+ * collisions, and out-of-scope chains produce explicit errors.
  */
 import type { Address } from "viem";
 import type { ContractsConfig } from "./compile-types.js";
@@ -37,7 +31,6 @@ import type { ContractsConfig } from "./compile-types.js";
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
-import { formatBigint } from "../deposit/format.js";
 import { walk, collectDeclaredNames, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
 import {
@@ -56,8 +49,8 @@ export interface ProtocolRewriteOptions {
    *  `descriptor.coverage.caveats`, since rewriting it would compile cleanly and then revert on
    *  chain. */
   allowWidenedSelectors?: boolean;
-  /** Restricts a chain-QUALIFIED accessor (shapes C/D) to a named allowlist. Default: any canonical
-   *  chain. */
+  /** Restricts a chain-QUALIFIED name (`Base.UniswapV3.Factory`) to a named allowlist. Default: any
+   *  canonical chain. */
   chainScope?: readonly ChainRef[];
   /** Rewrites bare `pot` -> `ctx.self()` in read position. Default `true`. A bare `self` is refused
    *  either way. */
@@ -66,9 +59,10 @@ export interface ProtocolRewriteOptions {
    *  silently collide with (a same-name entry with a DIFFERENT ABI throws). */
   existingContracts?: Readonly<ContractsConfig>;
   /**
-   * Told each contract reference the rewrite resolved — a call (`UniswapV3.Factory.getPool(…)`) or a
-   * value (`Cctp.TokenMessenger`) — with the reference as written and what it resolved to: which
-   * chain's deployment, and its address.
+   * Told each deployed contract the program uses — a call (`UniswapV3.Factory.getPool(…)`) or a
+   * value (`Cctp.TokenMessenger`), not a test of it — with the reference as written and what it
+   * resolved to: which chain's deployment, and its address. The route compiler's name check
+   * (`absent-names.ts`) tells it, before this pass runs.
    */
   onContract?: (reference: string, target: AccessorTarget) => void;
 }
@@ -79,12 +73,12 @@ export interface ProtocolRewriteResult {
   readonly rewrote: boolean;
   /** One entry per REFERENCED descriptor -- merge straight into `compile()`'s own `contracts`. */
   readonly contracts: ContractsConfig;
-  /** Count of accessor call sites rewritten (excludes `pot` sites) -- for tests/diagnostics. */
+  /** Count of contract bindings rewritten, shapes E and F (excludes `pot` sites). */
   readonly accessorSites: number;
+  /** Count of `<Protocol>.<method>(...)` calls written through the protocol's default contract. */
+  readonly defaultSites: number;
   /** Count of bare `pot` sites rewritten. */
   readonly potSites: number;
-  /** Count of bare `<Protocol>.<Contract>` VALUE-position sites resolved to an address literal. */
-  readonly valueAccessSites: number;
 }
 
 interface Splice {
@@ -121,18 +115,20 @@ export function decomposeMemberChain(
   };
 }
 
-interface AccessorCandidate {
+/** A call through a protocol's default contract: shape B, `<Protocol>.<method>(...)`, or shape D,
+ *  `<Chain>.<Protocol>.<method>(...)`. */
+interface DefaultCandidate {
   readonly calleeStart: number;
   readonly calleeEnd: number;
   readonly head: string;
   readonly path: readonly string[];
 }
 
-function collectAccessorCandidates(
+function collectDefaultCandidates(
   program: AstNode,
   shadowed: ReadonlySet<string>,
-): AccessorCandidate[] {
-  const out: AccessorCandidate[] = [];
+): DefaultCandidate[] {
+  const out: DefaultCandidate[] = [];
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
     const callee = (n as { callee?: AstNode }).callee;
@@ -140,16 +136,16 @@ function collectAccessorCandidates(
     const decomposed = decomposeMemberChain(callee);
     if (decomposed === undefined) return;
     const { head, path } = decomposed;
-    if (path.length < 1 || (path.length > 2 && !isChainKey(head))) return;
     if (shadowed.has(head)) return;
     // Only a recognized head (namespace key or chain key) is a candidate at all -- an unrecognized
     // head is left completely untouched (isolation).
-    if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
-    if (path.length < 1 || path.length > 3) return;
-    // `<…>.<Contract>.at(<address>)`: shape E, and `<…>.<Interface>(<address>)`: shape F, which
-    // `collectBoundCandidates` owns.
-    if (path.length >= 2 && path[path.length - 1] === "at") return;
+    const chainKey = isChainKey(head);
+    if (!chainKey && resolveNamespace(head) === undefined) return;
+    // `<Protocol>.<method>` or `<Chain>.<Protocol>.<method>`: anything longer names a contract,
+    // which the names module holds.
+    if (path.length !== (chainKey ? 2 : 1)) return;
     const named = namedContractKind(head, path);
+    // `<…>.<Interface>(<address>)`: shape F, which `collectBoundCandidates` owns.
     if (named === "interface") return;
     if (named !== undefined) {
       const shown = `${head}.${path.join(".")}`;
@@ -230,71 +226,6 @@ function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>)
     });
   });
   return out;
-}
-
-/**
- * Collects bare `<Protocol|Family>.<Contract>` accessors used in VALUE position -- e.g. the spender
- * of `USDC.approve(Cctp.TokenMessenger, amount)`, where `Cctp.TokenMessenger` is an ADDRESS, not a
- * `.method(...)` call. The CALL pass above only ever owns a member chain that is a call's callee, so
- * without this a bare accessor value reached the compiler as an unresolved property access and
- * failed (`property 'TokenMessenger' access not supported`). Each resolved site becomes the SAME
- * on-chain address literal the call path binds `.at(...)` to, so the dot spelling is now usable as a
- * value everywhere the underscore ambient define (`Cctp_TokenMessenger`, ambient.ts#chainDefines)
- * already was -- the two are equivalent, dot is just the accessor-consistent spelling.
- *
- * A "value" site is a terminal 2-segment member access: NOT the object of a longer chain and NOT a
- * call's callee (both of which the CALL pass -- or a genuine `.method` chain -- already own). Only a
- * recognized namespace head is ever touched (isolation); an unresolvable-but-recognized head still
- * fails closed with the same named errors as the call path (unknown/undeployed/interface contract).
- */
-function collectValueAccessSites(
-  program: AstNode,
-  shadowed: ReadonlySet<string>,
-  enclosingChain: CanonicalChain,
-  chainScope: ReadonlySet<number> | undefined,
-  allowWidenedSelectors: boolean,
-  onContract?: ProtocolRewriteOptions["onContract"],
-): Splice[] {
-  // A node that is the `.object` of a member access, or a call's `.callee`, is part of a longer
-  // chain the CALL pass (or an ordinary `.method` access) already owns -- never a terminal value.
-  const nonTerminal = new Set<AstNode>();
-  walk(program, (n) => {
-    if (n.type === "MemberExpression" && !(n as { computed?: boolean }).computed) {
-      const object = (n as { object?: AstNode }).object;
-      if (object) nonTerminal.add(object);
-    }
-    if (n.type === "CallExpression") {
-      const callee = (n as { callee?: AstNode }).callee;
-      if (callee) nonTerminal.add(callee);
-    }
-  });
-
-  const sites: Splice[] = [];
-  walk(program, (n) => {
-    if (n.type !== "MemberExpression" || (n as { computed?: boolean }).computed) return;
-    if (nonTerminal.has(n)) return; // object of a longer chain / a call callee -> not a terminal value
-    const decomposed = decomposeMemberChain(n);
-    if (decomposed === undefined) return;
-    const { head, path } = decomposed;
-    if (shadowed.has(head)) return;
-    // Isolation: only a recognized head (chain key or protocol/family namespace) is ever claimed.
-    const chainKey = isChainKey(head);
-    if (!chainKey && resolveNamespace(head) === undefined) return;
-    // Shape gate mirroring the call collector, minus the method: a protocol head is exactly
-    // `<Protocol>.<Contract>` (path 1); a chain head is `<Chain>.<Protocol>[.<Contract>]` (path 1-2).
-    if (chainKey ? path.length < 1 || path.length > 2 : path.length !== 1) return;
-    const target = resolveAccessorTarget(
-      head,
-      path,
-      false,
-      enclosingChain,
-      chainScope,
-      allowWidenedSelectors,
-    );
-    onContract?.([head, ...path].join("."), target);
-    sites.push({ start: n.start, end: n.end, replacement: formatBigint(BigInt(target.address)) });
-  });
-  return sites;
 }
 
 /** Resolves a (protocol slug, contract name) pair against `resolveNamespace`'s namespace -- for a
@@ -574,44 +505,23 @@ export function resolveProtocolContract(
   );
 }
 
-function resolveCandidate(
-  candidate: AccessorCandidate,
-  enclosingChain: CanonicalChain,
-  chainScope: ReadonlySet<number> | undefined,
-  allowWidenedSelectors: boolean,
-  onContract?: ProtocolRewriteOptions["onContract"],
-): ResolvedSite {
+/**
+ * `<Protocol>.<method>` written `<Protocol>.<Default>.<method>`: the protocol's default contract,
+ * which the chain's names module holds like any other, so whether the chain has it is decided there.
+ */
+function throughDefault(candidate: DefaultCandidate): Splice {
   const { head, path } = candidate;
+  const chainKey = isChainKey(head);
+  const namespaceHead = chainKey ? path[0]! : head;
+  const ns = resolveNamespace(namespaceHead);
+  if (ns === undefined) fail(`'${namespaceHead}' is not a known protocol or family alias`);
+  const { contract } = resolveContractDescriptor(ns, undefined, namespaceHead);
   const method = path[path.length - 1]!;
-
-  const target = resolveAccessorTarget(
-    head,
-    path,
-    true,
-    enclosingChain,
-    chainScope,
-    allowWidenedSelectors,
-  );
-  const { protocol, contract, descriptor, address } = target;
-
-  const methodDescriptor = methodByName(descriptor, method);
-  if (methodDescriptor === undefined) {
-    const known = descriptor.methods.map((m) => m.name).join(", ");
-    fail(`'${method}' is not in ${protocol}.${contract}'s vendored ABI (known methods: ${known})`);
-  }
-
-  onContract?.([head, ...path.slice(0, -1)].join("."), target);
-  const bindingName = `I${pascalOfSlug(protocol)}_${contract}`;
-  const bindingOp = bindingOpFor(methodDescriptor);
-  const addressLiteral = formatBigint(BigInt(address));
-  const replacement = `${bindingName}.${bindingOp}(${addressLiteral}).${method}`;
 
   return {
     start: candidate.calleeStart,
     end: candidate.calleeEnd,
-    replacement,
-    bindingName,
-    descriptor,
+    replacement: `${chainKey ? `${head}.` : ""}${namespaceHead}.${contract}.${method}`,
   };
 }
 
@@ -699,18 +609,11 @@ export function rewriteProtocolAccessors(
     ? new Set(opts.chainScope.map((ref) => requireChain(ref).id))
     : undefined;
 
-  const candidates = collectAccessorCandidates(program, shadowed);
+  const defaults = collectDefaultCandidates(program, shadowed).map(throughDefault);
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
-  // A bound contract (`.at(<address>)`) is the program's own address with a registry ABI, not a
-  // deployment, so `onContract` hears only the accessors that resolve to one.
-  const resolved = [
-    ...candidates.map((c) =>
-      resolveCandidate(c, chain, chainScope, allowWidenedSelectors, opts.onContract),
-    ),
-    ...collectBoundCandidates(program, shadowed).map((c) =>
-      resolveBound(c, chain, chainScope, allowWidenedSelectors),
-    ),
-  ];
+  const resolved = collectBoundCandidates(program, shadowed).map((c) =>
+    resolveBound(c, chain, chainScope, allowWidenedSelectors),
+  );
 
   const contracts: ContractsConfig = { ...(opts.existingContracts ?? {}) };
   for (const site of resolved) {
@@ -752,27 +655,15 @@ export function rewriteProtocolAccessors(
         }))
       : [];
 
-  // Bare `<Protocol>.<Contract>` / `<Chain>.<Protocol>[.<Contract>]` in value position -> its
-  // on-chain address literal. Terminal by construction (never a call callee), so it can't overlap a
-  // `resolved` call-site splice.
-  const valueSites = collectValueAccessSites(
-    program,
-    shadowed,
-    chain,
-    chainScope,
-    allowWidenedSelectors,
-    opts.onContract,
-  );
-
-  const allSites = [...resolved, ...potSites, ...valueSites];
+  const allSites = [...defaults, ...resolved, ...potSites];
   if (allSites.length === 0) {
     return {
       source,
       rewrote: false,
       contracts: {},
       accessorSites: 0,
+      defaultSites: 0,
       potSites: 0,
-      valueAccessSites: 0,
     };
   }
 
@@ -787,7 +678,7 @@ export function rewriteProtocolAccessors(
     rewrote: true,
     contracts,
     accessorSites: resolved.length,
+    defaultSites: defaults.length,
     potSites: potSites.length,
-    valueAccessSites: valueSites.length,
   };
 }

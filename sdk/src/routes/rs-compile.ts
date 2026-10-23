@@ -13,11 +13,13 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
+  CompileResult as RsResult,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
+import { chainModuleText } from "./chain-module.js";
 import { compile } from "../wasm-compiler.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
@@ -102,28 +104,43 @@ function toInlineContracts(
  *
  * The compiler hands `resolve` a specifier already joined against its importer's directory (a
  * relative import two hops deep arrives as `./sub/b.js`), so no importer directory is re-derived
- * here. The SDK's standard library is never offered to the caller's `resolve`: `@sauce/token`
- * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
- * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
+ * here. The SDK's standard library and the chain's names modules are never offered to the caller's
+ * `resolve`: `@sauce/token` resolves to the SDK's copy whatever the caller supplies. Every other
+ * path reaches the caller's `resolve` before the SDK's embedded ABIs, so a caller can serve its own
+ * `./artifacts/IERC20.json`. `check` reads each SauceScript module the caller serves.
  */
-function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+function makeResolve(
+  source: string,
+  own: ResolveModule | undefined,
+  check: ((path: string, bytes: Uint8Array) => void) | undefined,
+): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
+  const utf8 = new TextEncoder();
 
   return (path) => {
     if (path === ENTRY) return entryBytes;
+    const names = chainModuleText(path);
+    if (names !== undefined) return utf8.encode(names);
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
-      if (bytes !== undefined && bytes !== null) return bytes;
+      if (bytes !== undefined && bytes !== null) {
+        if (!path.endsWith(".json")) check?.(path, bytes);
+        return bytes;
+      }
     }
 
     return resolveSdkModule(path);
   };
 }
 
-/** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
-function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
+/** Bare specifiers: the compile's own (the chain's names), the SDK's standard library, then the
+ *  caller's `resolvePackage`. */
+function makeResolvePackage(
+  own: ResolvePackage | undefined,
+  packages: Readonly<Record<string, string>> | undefined,
+): ResolvePackage {
   return (specifier, importer) =>
-    resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
+    packages?.[specifier] ?? resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
 }
 
 /**
@@ -198,6 +215,12 @@ export interface RsCompileInput {
   ambient?: string[];
   /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
   args?: readonly (bigint | boolean | string)[];
+  /** Bare specifiers the compile serves itself, ahead of the standard library and the caller's:
+   *  the chain's names modules (`@sauce/chain`), by the path `chainModuleText` serves. */
+  packages?: Readonly<Record<string, string>>;
+  /** Reads each SauceScript module the caller's `resolve` serves, by its path and text, and throws
+   *  to refuse it: the entry is the caller's to read before it compiles. */
+  checkModule?: (path: string, text: string) => void;
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -221,16 +244,36 @@ export interface RsCompileResult extends CompileResult {
  * returns none, and an SVM caller that needs the attach contract compiles through `svm/` directly.
  */
 export function compileWithRs(input: RsCompileInput): RsCompileResult {
-  const result = compile({
-    target: mapTarget(input.target),
-    entry: ENTRY,
-    resolve: makeResolve(input.source, input.resolve),
-    resolvePackage: makeResolvePackage(input.resolvePackage),
-    inlineContracts: toInlineContracts(input.contracts),
-    ambient: input.ambient,
-    defines: toRsDefines(input.defines, input.baseDefines),
-    ...(input.args === undefined ? {} : { args: [...input.args] }),
-  });
+  // A module refused while the compiler resolves it is refused once the compile ends, whatever the
+  // compiler made of it: an error thrown inside `resolve` would be the compiler's to word.
+  let refused: unknown;
+  const check =
+    input.checkModule === undefined
+      ? undefined
+      : (path: string, bytes: Uint8Array): void => {
+          if (refused !== undefined) return;
+          try {
+            input.checkModule!(path, new TextDecoder().decode(bytes));
+          } catch (error) {
+            refused = error;
+          }
+        };
+  let result: RsResult;
+  try {
+    result = compile({
+      target: mapTarget(input.target),
+      entry: ENTRY,
+      resolve: makeResolve(input.source, input.resolve, check),
+      resolvePackage: makeResolvePackage(input.resolvePackage, input.packages),
+      inlineContracts: toInlineContracts(input.contracts),
+      ambient: input.ambient,
+      defines: toRsDefines(input.defines, input.baseDefines),
+      ...(input.args === undefined ? {} : { args: [...input.args] }),
+    });
+  } catch (error) {
+    throw refused ?? error;
+  }
+  if (refused !== undefined) throw refused;
 
   const compiled: RsCompileResult = {
     bytecode: [result.bytecode],

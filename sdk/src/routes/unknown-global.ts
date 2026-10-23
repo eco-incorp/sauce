@@ -9,9 +9,10 @@
  *
  * Consulted only once the compiler has refused the program (`sauce-route.ts`), on the source it
  * refused. So a program the compiler accepts is never refused here, and a name only the compiler
- * knows — an export of an ambient module — cannot be mistaken for an unknown one. By then a
- * registered token is a define, and every protocol namespace and chain key the registry knows has
- * been resolved, or refused with the protocol rewrite's own error.
+ * knows — an export of an ambient module — cannot be mistaken for an unknown one. By then every
+ * registry name, a token some chain has or a protocol namespace, is the chain's names module's, and
+ * a use of one the chain lacks was refused before the compile (`absent-names.ts`): what is left
+ * here is a name no chain has, called as a contract, which the compiler reports without naming it.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
@@ -138,12 +139,47 @@ export function unknownGlobalError(
       ? ""
       : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
   const compiler = headline(cause);
-  return new Error(
+  return locatedError(
+    source,
+    "main.js",
+    unknown,
     `compileSauceRoute: \`${name}\` is not a token or protocol on ${chain.slug}.${suggestion} ` +
       "A token the registry does not carry is `Token(address)`, or a `tokens` entry in the " +
       "compile options; a contract binding needs its ABI imported, or passed as `contracts`." +
       (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
-    { cause },
+    cause,
+  );
+}
+
+/**
+ * `message` at `node` of `source`, the module `file`, located as the compiler locates a diagnostic:
+ * the line and column, the line quoted and the node marked under it.
+ */
+export function locatedError(
+  source: string,
+  file: string,
+  node: AstNode,
+  message: string,
+  cause?: unknown,
+): Error {
+  const before = source.slice(0, node.start);
+  const line = before.split("\n").length;
+  const start = before.lastIndexOf("\n") + 1;
+  const end = source.indexOf("\n", start);
+  const text = source.slice(start, end === -1 ? undefined : end).replace(/\r$/, "");
+  const column = node.start - start + 1;
+  const width = Math.max(1, Math.min(node.end - node.start, text.length - column + 1));
+  const gutter = " ".repeat(String(line).length);
+
+  return new Error(
+    [
+      message,
+      `${gutter}--> ${file}:${line}:${column}`,
+      `${gutter} |`,
+      `${line} | ${text}`,
+      `${gutter} | ${" ".repeat(column - 1)}${"^".repeat(width)}`,
+    ].join("\n"),
+    cause === undefined ? undefined : { cause },
   );
 }
 

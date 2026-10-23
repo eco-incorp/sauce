@@ -34,7 +34,14 @@ import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { rewriteAvailability } from "./available.js";
+import { checkNames } from "./absent-names.js";
+import {
+  CHAIN_MODULE,
+  CHAIN_MODULE_ROOT,
+  chainKeyModule,
+  chainKeyModulePath,
+  chainNames,
+} from "./chain-module.js";
 import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
@@ -454,9 +461,24 @@ function compileForChain(
   // statements are the entry. The compiler tells the two apart; nothing here has to.
   let source = sauce;
 
-  // `available(...)` FIRST: it removes the branches that name a contract or token this chain lacks,
-  // before any other pass resolves a name in them (see available.ts).
-  source = rewriteAvailability(source, chain, tokenMap).source;
+  // FIRST, before any pass rewrites it: every use of a name this chain lacks must be one a test of
+  // the name rules out, which the compiler then leaves uncompiled (see absent-names.ts). The names
+  // are the module the compiler is handed (chain-module.ts).
+  const accessorOpts: ProtocolRewriteOptions =
+    typeof options.accessors === "object" ? options.accessors : {};
+  const defined = new Set(Object.keys(options.defines ?? {}));
+  const names = chainNames(chain, {
+    ...(options.tokens === undefined ? {} : { tokens: tokenMap }),
+    defined,
+    namespaces: options.accessors !== false,
+    allowWidenedSelectors: accessorOpts.allowWidenedSelectors === true,
+  });
+  const checks = {
+    defined,
+    ...(accessorOpts.chainScope === undefined ? {} : { chainScope: accessorOpts.chainScope }),
+    ...(accessorOpts.onContract === undefined ? {} : { onContract: accessorOpts.onContract }),
+  };
+  const named = checkNames(source, names, checks);
 
   // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
   // a `const` holding one) becomes the spelling that names the contract the result is
@@ -557,14 +579,17 @@ function compileForChain(
   }
 
   if (options.accessors !== false) {
-    const accessorOpts: ProtocolRewriteOptions =
-      typeof options.accessors === "object" ? options.accessors : {};
     const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
       ...accessorOpts,
       existingContracts: contracts,
     });
     if (rewrittenAccessors.rewrote) {
-      if (chain.kind === "svm") {
+      // A call through a protocol's default contract is a name the module holds, and decided on any
+      // chain; a binding or `pot` is EVM only.
+      if (
+        chain.kind === "svm" &&
+        (rewrittenAccessors.accessorSites > 0 || rewrittenAccessors.potSites > 0)
+      ) {
         throw new Error(
           `compileSauceRoute: destination '${chain.slug}' is svm — the protocol-accessor rewrite ` +
             "(options.accessors) is EVM-only; contract bindings are not supported on target 'svm'.",
@@ -575,9 +600,12 @@ function compileForChain(
     }
   }
 
-  let rs: RsCompileResult;
-  try {
-    rs = compileWithRs({
+  // The chain's names: a module the compiler is handed with the program (`@sauce/chain`), and one
+  // per chain the program names by key (`@sauce/chain-base`). A module the caller serves is read
+  // by the same check as the entry, since the names reach every module.
+  const keys = new Map(named.chainKeys.map((on) => [on.id, on]));
+  const compileOnce = (): RsCompileResult =>
+    compileWithRs({
       source,
       target,
       resolve: options.resolve,
@@ -585,12 +613,41 @@ function compileForChain(
       defines,
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
-      ambient: options.ambient,
+      ambient: [...(options.ambient ?? []), CHAIN_MODULE, ...[...keys.values()].map(chainKeyModule)],
+      packages: {
+        [CHAIN_MODULE]: `${CHAIN_MODULE_ROOT}/${names.path}`,
+        ...Object.fromEntries(
+          [...keys.values()].map((on) => [
+            chainKeyModule(on),
+            `${CHAIN_MODULE_ROOT}/${chainKeyModulePath(on)}`,
+          ]),
+        ),
+      },
+      checkModule: (path, text) => {
+        for (const on of checkNames(text, names, { ...checks, file: path }).chainKeys) {
+          keys.set(on.id, on);
+        }
+      },
       ...(args === undefined ? {} : { args }),
     });
+
+  let rs: RsCompileResult;
+  try {
+    const before = keys.size;
+    let first: RsCompileResult | undefined;
+    let failure: unknown;
+    try {
+      first = compileOnce();
+    } catch (error) {
+      failure = error;
+    }
+    // A module the entry imports named a chain the entry does not: compile again with its names.
+    if (keys.size !== before) rs = compileOnce();
+    else if (first === undefined) throw failure;
+    else rs = first;
   } catch (error) {
-    // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower. Asked only of a program the compiler refused.
+    // A token or protocol name no chain has, reported as one rather than as the call the compiler
+    // could not lower. Asked only of a program the compiler refused.
     throw (
       unknownBalanceError(source, chain, { tokens: tokenMap.keys() }, error) ??
       unknownGlobalError(
