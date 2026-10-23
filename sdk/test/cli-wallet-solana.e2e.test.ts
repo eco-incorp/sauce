@@ -139,6 +139,19 @@ describeSvm("sauce run --wallet on Solana, through the released Kitchen", () => 
     expect(done.stdout + done.stderr + deployed.stderr).not.toContain(password);
   }, 120_000);
 
+  /**
+   * What the endpoint was handed from `index` on that carries `key`'s signature, by method: a
+   * transaction with it is one anyone running the endpoint could send.
+   */
+  const signedBy = (key: Address, index: number): string[] =>
+    shim.handed.slice(index).flatMap(({ method, transaction }) => {
+      const signature = (transaction.signatures as Record<string, Uint8Array | null>)[key];
+
+      return signature !== null && signature !== undefined && signature.some((byte) => byte !== 0)
+        ? [method]
+        : [];
+    });
+
   it("refuses a sweep above a mint's limit, and a native limit below the fee, sending nothing", async () => {
     writeFileSync(
       join(wallets, "sol.policy.json"),
@@ -146,6 +159,7 @@ describeSvm("sauce run --wallet on Solana, through the released Kitchen", () => 
       { mode: 0o600 },
     );
     const sentBefore = shim.sent.length;
+    const handedBefore = shim.handed.length;
     const over = sweepOf(1_000n, 400n);
     const refused = await over.run;
     expect(refused.code).toBe(1);
@@ -156,11 +170,15 @@ describeSvm("sauce run --wallet on Solana, through the released Kitchen", () => 
     );
     expect(tokenAmount(harness, over.source)).toBe(1_000n);
     expect(shim.sent.length).toBe(sentBefore);
+    // Nothing the wallet signed reached the endpoint: it was rehearsed and measured unsigned.
+    expect(signedBy(wallet, handedBefore)).toEqual([]);
 
-    // Within the limit, it goes.
+    // Within the limit, it goes: signed once the policy lets it, and only to be sent.
+    const handedWithin = shim.handed.length;
     const within = sweepOf(1_000n, 300n);
     expect((await within.run).code).toBe(0);
     expect(tokenAmount(harness, within.dest)).toBe(300n);
+    expect(signedBy(wallet, handedWithin)).toEqual(["sendTransaction"]);
 
     // The fee alone is above a native limit of 1000 lamports.
     writeFileSync(
@@ -175,5 +193,28 @@ describeSvm("sauce run --wallet on Solana, through the released Kitchen", () => 
       /native\.perTransaction is 0\.000001 SOL, and this transaction sends 0\.\d+ SOL/,
     );
     expect(shim.sent.length).toBe(sentNow);
+  }, 120_000);
+
+  it("refuses a Pot's deployment above the wallet's native limit with nothing it signed sent anywhere", async () => {
+    const created = await sauce("wallet", "new", "capped", "--solana", ...PASSWORD, "--json");
+    expect(created.code).toBe(0);
+    const capped = address((JSON.parse(created.stdout) as { address: string }).address);
+    harness.svm.airdrop(capped, lamports(5_000_000_000n));
+    writeFileSync(
+      join(wallets, "capped.policy.json"),
+      JSON.stringify({ native: { perTransaction: "1000n" } }),
+      { mode: 0o600 },
+    );
+    const handedBefore = shim.handed.length;
+    const deployed = await sauce(
+      ...["pot", "--deploy", "--chain", "solana", "--rpc-url", RPC_URL, "--wallet", "capped"],
+      ...PASSWORD,
+    );
+
+    expect({
+      code: deployed.code,
+      refused: /refused by the policy of wallet capped/.test(deployed.stderr),
+      signed: signedBy(capped, handedBefore),
+    }).toEqual({ code: 1, refused: true, signed: [] });
   }, 120_000);
 });

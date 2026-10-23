@@ -63,7 +63,6 @@ import { join } from "node:path";
 import {
   address as solanaAddress,
   getBase58Encoder,
-  getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   isAddress as isSolanaAddress,
@@ -86,17 +85,38 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
-import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
+import {
+  v12KitchenAddress,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
+import {
+  fetchAlt,
+  KITCHEN_DISCRIMINATORS,
+  svmPublicKey,
+  type SimulatedAccount,
+} from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { accountsNow, messageAccounts, movedBy, writableAccounts } from "./svm-effects.js";
+import {
+  accountsNow,
+  lamportKeys,
+  messageAccounts,
+  mintFacts,
+  movedBy,
+  namesAnyOf,
+  permanentDelegateOf,
+  tokenAccount,
+  tokenTransition,
+  unsignedWire,
+  writableAccounts,
+} from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -336,10 +356,24 @@ interface Outflow {
    */
   readonly limitDecimals?: number;
   readonly amount: bigint;
+  /**
+   * Solana: how much of `amount` is allowances the transaction approves another key, which counts
+   * as sent when it is approved, since the delegate needs no later signature to move it.
+   */
+  readonly delegated?: bigint;
 }
 
 interface Approval extends Outflow {
   readonly spender: string;
+}
+
+/** A Solana token account the transaction lets another key close, in its owner's stead. */
+interface Closer {
+  /** The account's mint. */
+  readonly token: string;
+  readonly symbol?: string;
+  readonly account: string;
+  readonly closer: string;
 }
 
 /** What one transaction spends, as measured. */
@@ -352,6 +386,22 @@ export interface Measured {
   readonly native: Outflow;
   readonly tokens: readonly Outflow[];
   readonly approvals: readonly Approval[];
+  /** Solana: the token accounts of the wallet's or its Pots' it lets another key close. */
+  readonly closers?: readonly Closer[];
+  /**
+   * Solana: the mints of what it lets another key take (an approval, an account handed over) whose
+   * decimals could not be read, which a limit naming one of them cannot hold.
+   */
+  readonly undecided?: readonly string[];
+  /**
+   * Solana: the Token-2022 mints whose permanent delegate goes from the wallet (or a Pot it cooks
+   * on) to another key, which then moves any account's tokens of the mint with no approval.
+   */
+  readonly permanentDelegates?: readonly {
+    readonly token: string;
+    readonly symbol?: string;
+    readonly delegate: string;
+  }[];
   /** Why native or token movements could not be measured, when they could not. */
   readonly unmeasured: { readonly native?: string; readonly tokens?: string };
 }
@@ -633,7 +683,10 @@ type InnerInstruction = Readonly<{
  * What a signed Solana `transaction` moves out of `wallet` and the Pots it cooks on, as a
  * simulation that reports its writable accounts shows it; a transaction that would fail is refused.
  * A cook counts wherever it runs: called by the transaction, or by a program it calls (a signer's
- * signature passes through a CPI, and the Kitchen takes a cook at any depth).
+ * signature passes through a CPI, and the Kitchen takes a cook at any depth). So does what it gives
+ * another key over a token account of theirs: a delegate's allowance is an approval, the account
+ * handed over is a send of what it holds, and the right to close it is refused where the token is
+ * limited, and for wrapped SOL is a send of its lamports.
  */
 export async function measureSvm(
   rpc: Rpc,
@@ -710,7 +763,8 @@ export async function measureSvm(
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
-  const wire = getBase64EncodedWireTransaction(transaction);
+  // Simulated with no signature: an endpoint shown the wallet's could send it, policy or not.
+  const wire = unsignedWire(transaction);
   const { value } = await rpc
     .simulateTransaction(wire, {
       encoding: "base64",
@@ -781,27 +835,240 @@ export async function measureSvm(
   );
   const moved = await movedBy(rpc, chain, tracked, before, after, new Map(), wallet);
   const ours = new Set<string>([wallet, ...pots]);
-  const lamports = moved.lamports
-    .filter((change) => ours.has(change.account))
-    .reduce((sum, change) => sum + change.before - change.after, 0n);
-  const byMint = new Map<string, { amount: bigint; symbol?: string; decimals?: number }>();
-  for (const change of moved.tokens) {
-    if (!ours.has(change.owner)) continue;
-    const seen = byMint.get(change.mint) ?? {
-      amount: 0n,
-      ...(change.symbol === undefined ? {} : { symbol: change.symbol }),
-      ...(change.decimals === undefined ? {} : { decimals: change.decimals }),
+  // What it gives another key over a token account of the wallet's or a Pot's, which counts for
+  // whose the account was before it (whose it is, for one it creates), as its balance does: a
+  // delegate's allowance, new or raised; the account itself; or the right to close it. A delegate,
+  // owner or closer that is the wallet or a Pot it cooks on is no other key.
+  const approved: Array<{ token: SvmAddress; spender: SvmAddress; amount: bigint }> = [];
+  const handedOff = new Map<SvmAddress, bigint>();
+  const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
+  // A Token-2022 mint whose permanent delegate goes from one of those keys to another key: that key
+  // then moves any account's tokens of the mint, the wallet's included, with no approval.
+  const delegating: Array<{ token: SvmAddress; delegate: SvmAddress }> = [];
+  // What the wallet (or a Pot) moves out of an account it does not own, as that account's delegate:
+  // a Pot's account delegated to the wallet, spent from a transaction that cooks on no Pot. The
+  // owner is outside this transaction's set, so the balance it loses is the delegate's spend, which
+  // is the wallet's own send: as much of the drop as the allowance fell by, by mint.
+  const spentAsDelegate = new Map<SvmAddress, bigint>();
+  tracked.forEach((account, index) => {
+    const delegateBefore = permanentDelegateOf(before[index] ?? null);
+    const delegateAfter = permanentDelegateOf(after[index] ?? null);
+    if (
+      delegateBefore !== undefined &&
+      ours.has(delegateBefore) &&
+      delegateAfter !== undefined &&
+      !ours.has(delegateAfter)
+    ) {
+      delegating.push({ token: account, delegate: delegateAfter });
+    }
+    // An account made again at its address for another asset is a new one: the old one's balance
+    // is counted as it leaves.
+    const { was, is, replaced } = tokenTransition(before[index] ?? null, after[index] ?? null);
+    const old = was ?? replaced;
+    if (
+      old !== undefined &&
+      !ours.has(old.owner) &&
+      old.delegate !== undefined &&
+      ours.has(old.delegate)
+    ) {
+      const left = was === undefined ? undefined : is;
+      const allowanceLeft = left?.delegate === old.delegate ? left.delegatedAmount : 0n;
+      const drop = old.amount - (left?.amount ?? 0n);
+      const fell = old.delegatedAmount - allowanceLeft;
+      const spent = drop < fell ? drop : fell;
+      if (spent > 0n) spentAsDelegate.set(old.mint, (spentAsDelegate.get(old.mint) ?? 0n) + spent);
+    }
+    // An account it closes gives nothing more away: its balance is counted as it leaves.
+    if (is === undefined || !ours.has((was ?? is).owner)) return;
+    // An allowance is approved when its delegate is new, or it grew. It may also have grown and been
+    // spent in the same transaction, ending below where it began: the delegate can take only what
+    // its allowance allowed, so where the allowance moved and what it allows now plus what left the
+    // account is more than it allowed before, it was raised. (Conservative: an owner's spend beside
+    // a delegate's reads as one too, and counts the allowance left as approved again.)
+    const raised =
+      was !== undefined &&
+      is.delegate === was.delegate &&
+      (is.delegatedAmount > was.delegatedAmount ||
+        (is.delegatedAmount !== was.delegatedAmount &&
+          is.delegatedAmount + was.amount - is.amount > was.delegatedAmount));
+    if (
+      is.delegate !== undefined &&
+      !ours.has(is.delegate) &&
+      is.delegatedAmount > 0n &&
+      (is.delegate !== was?.delegate || raised)
+    ) {
+      approved.push({ token: is.mint, spender: is.delegate, amount: is.delegatedAmount });
+    }
+    if (!ours.has(is.owner) && is.amount > 0n) {
+      handedOff.set(is.mint, (handedOff.get(is.mint) ?? 0n) + is.amount);
+    }
+    if (
+      is.closeAuthority !== undefined &&
+      !ours.has(is.closeAuthority) &&
+      is.closeAuthority !== was?.closeAuthority
+    ) {
+      closable.push({ token: is.mint, account, closer: is.closeAuthority });
+    }
+  });
+  // A balance it held before is in its mint's decimals before the transaction; one it holds after,
+  // or an allowance it leaves, in the mint's decimals after (a mint made again may have others).
+  const imagesOf = (states: readonly (SimulatedAccount | null)[]) =>
+    new Map(tracked.map((account, index) => [account, states[index] ?? null]));
+  const [then, facts] = await Promise.all([
+    mintFacts(rpc, chain, [...spentAsDelegate.keys()], imagesOf(before)),
+    mintFacts(
+      rpc,
+      chain,
+      [
+        ...approved.map((each) => each.token),
+        ...handedOff.keys(),
+        ...closable.map((each) => each.token),
+        ...delegating.map((each) => each.token),
+      ],
+      imagesOf(after),
+    ),
+  ]);
+  // A limit holds an amount only in its token's decimals: where a mint's cannot be read, a limit
+  // naming that mint cannot stand behind what the transaction lets another key take of it.
+  const undecided = [
+    ...new Set([
+      ...[...approved.map((each) => each.token), ...handedOff.keys()].filter(
+        (mint) => facts.get(mint)?.decimals === undefined,
+      ),
+      ...[...spentAsDelegate.keys()].filter((mint) => then.get(mint)?.decimals === undefined),
+    ]),
+  ];
+  // The native coin the wallet controls is more than its own account's: the lamports of the Pots it
+  // cooks on, and of every account whose layout gives them to one of those keys alone (a token
+  // account owned by one, wrapped SOL among them, with no closer outside; a durable nonce account
+  // or a stake account whose authority is one). What leaves that set counts, net of what enters it,
+  // so wrapping SOL into the wallet's own account and unwrapping it move nothing, and closing,
+  // handing over or withdrawing from such an account to another key is a send. Only what the set
+  // holds alone counts as held: wrapped SOL an outside delegate may move is that key's to take,
+  // so it is not, whether it stood delegated before or the transaction wrapped it in after. An
+  // account of a layout this does not read, that names one of those keys and loses lamports, may
+  // have been the wallet's to command: what it loses counts as sent unless it arrives in the set.
+  // The wallet or a Pot that the transaction gives to another program (System's Assign) leaves
+  // the set with all it holds: from then on that program, not the key, moves its lamports. So does
+  // one the transaction turns into an account whose layout names another key over its lamports (a
+  // durable nonce account, still the System program's, with an outside authority). (A Pot the
+  // Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot, still
+  // in the set.)
+  const keys = [...ours];
+  const engine = v12SvmEngineProgramId();
+  const held = (
+    account: SvmAddress,
+    state: SimulatedAccount | null,
+    program: string | undefined,
+  ): bigint => {
+    if (state === null) return 0n;
+    if (ours.has(account)) {
+      const commanded = lamportKeys(state)?.every((key) => ours.has(key)) ?? true;
+
+      return commanded &&
+        (program === undefined ||
+          state.owner === program ||
+          (account !== wallet && state.owner === engine))
+        ? state.lamports
+        : 0n;
+    }
+    if (!(lamportKeys(state)?.every((key) => ours.has(key)) ?? false)) return 0n;
+    const token = tokenAccount(state);
+    const outside =
+      token?.isNative === true && token.delegate !== undefined && !ours.has(token.delegate)
+        ? token.delegatedAmount < token.amount
+          ? token.delegatedAmount
+          : token.amount
+        : 0n;
+
+    return state.lamports - outside;
+  };
+  let lamports = 0n;
+  tracked.forEach((account, index) => {
+    const was = before[index] ?? null;
+    const is = after[index] ?? null;
+    if (was !== null && !ours.has(account) && namesAnyOf(was, keys)) {
+      if ((is?.lamports ?? 0n) < was.lamports) lamports += was.lamports - (is?.lamports ?? 0n);
+    } else {
+      lamports += held(account, was, undefined);
+    }
+    lamports -= held(account, is, was?.owner);
+  });
+  // What leaves, by mint: each part in its own decimals, summed at the finest of them.
+  const byMint = new Map<
+    string,
+    { symbol?: string; parts: Array<{ amount: bigint; decimals?: number }>; delegated: bigint }
+  >();
+  const add = (
+    mint: string,
+    amount: bigint,
+    about: { readonly symbol?: string; readonly decimals?: number } | undefined,
+    delegated = 0n,
+  ): void => {
+    const seen = byMint.get(mint) ?? {
+      ...(about?.symbol === undefined ? {} : { symbol: about.symbol }),
+      parts: [],
+      delegated: 0n,
     };
-    byMint.set(change.mint, { ...seen, amount: seen.amount + change.before - change.after });
+    seen.parts.push({
+      amount,
+      ...(about?.decimals === undefined ? {} : { decimals: about.decimals }),
+    });
+    seen.delegated += delegated;
+    byMint.set(mint, seen);
+  };
+  for (const change of moved.tokens) {
+    if (ours.has(change.owner)) add(change.mint, change.before - change.after, change);
   }
+  for (const [mint, amount] of handedOff) add(mint, amount, facts.get(mint));
+  for (const [mint, amount] of spentAsDelegate) add(mint, amount, then.get(mint));
+  // An allowance counts as sent when it is approved: the delegate moves it with no later signature
+  // of the wallet's, so a limit holds it now, per transaction and in the day's total.
+  for (const { token, amount } of approved) add(token, amount, facts.get(token), amount);
+  const outflows = [...byMint].flatMap(([token, { symbol, parts, delegated }]) => {
+    const places = parts.map((part) => part.decimals);
+    const decimals = places.every((each) => each !== undefined) ? Math.max(...places) : undefined;
+    const amount = parts.reduce(
+      (sum, part) =>
+        sum +
+        (decimals === undefined
+          ? part.amount
+          : part.amount * 10n ** BigInt(decimals - part.decimals!)),
+      0n,
+    );
+    if (amount <= 0n) return [];
+    // Every allowance is in the mint's decimals after; scaled with the rest.
+    const after = facts.get(token)?.decimals;
+    const scale =
+      decimals === undefined || after === undefined ? 1n : 10n ** BigInt(decimals - after);
+
+    return [
+      {
+        token,
+        ...(symbol === undefined ? {} : { symbol }),
+        ...(decimals === undefined ? {} : { decimals }),
+        amount,
+        ...(delegated === 0n ? {} : { delegated: delegated * scale }),
+      },
+    ];
+  });
 
   return {
     ...base,
     native: native(lamports > 0n ? lamports : 0n),
-    tokens: [...byMint]
-      .filter(([, out]) => out.amount > 0n)
-      .map(([token, out]) => ({ token, ...out })),
-    approvals: [],
+    tokens: outflows,
+    approvals: approved.map((each) => ({ ...each, ...facts.get(each.token) })),
+    closers: closable.map((each) => {
+      const symbol = facts.get(each.token)?.symbol;
+
+      return symbol === undefined ? each : { ...each, symbol };
+    }),
+    permanentDelegates: delegating.map((each) => {
+      const symbol = facts.get(each.token)?.symbol;
+
+      return symbol === undefined ? each : { ...each, symbol };
+    }),
+    undecided,
     unmeasured: unseen === undefined ? {} : { native: unseen, tokens: unseen },
   };
 }
@@ -915,7 +1182,7 @@ async function locked<T>(path: string, body: () => T): Promise<T> {
 }
 
 /** Whether the policy's token key `key` names `outflow` on its chain. */
-function names(key: string, outflow: Outflow): boolean {
+function names(key: string, outflow: Pick<Outflow, "token" | "symbol">): boolean {
   if (outflow.token === "native") return false;
   if (key.startsWith("0x")) return outflow.token.toLowerCase() === key;
   if (isSolanaAddress(key)) return outflow.token === key;
@@ -926,9 +1193,12 @@ function names(key: string, outflow: Outflow): boolean {
 const shown = (amount: bigint, outflow: Pick<Outflow, "decimals" | "symbol" | "token">): string =>
   `${outflow.decimals === undefined ? `${amount} base units` : formatUnits(amount, outflow.decimals)} ${outflow.symbol ?? outflow.token}`;
 
-/** The registry's Permit2 on `chain`, lowercase; `undefined` where it has none. */
+/**
+ * The registry's Permit2 on `chain`, lowercase; `undefined` where it has none, and on a chain that
+ * is not an EVM chain, so that no other chain's key can ever match it.
+ */
 function permit2Of(chain: CanonicalChain): string | undefined {
-  const descriptor = getDescriptor("permit2", "Permit2");
+  const descriptor = chain.kind === "evm" ? getDescriptor("permit2", "Permit2") : undefined;
 
   return descriptor === undefined ? undefined : addressOn(descriptor, chain)?.toLowerCase();
 }
@@ -976,7 +1246,7 @@ function spendOf(
     limitName: string,
     limit: Limit,
     amount: bigint,
-    unit: Pick<Outflow, "decimals" | "limitDecimals" | "symbol" | "token">,
+    unit: Pick<Outflow, "decimals" | "limitDecimals" | "symbol" | "token" | "delegated">,
   ): void => {
     if (unit.decimals === undefined) {
       refuse(
@@ -986,12 +1256,17 @@ function spendOf(
     }
     const value = scaled(amount, unit.decimals!);
     const text = (at: bigint) => `${whole(at)} ${unit.symbol ?? unit.token}`;
+    const sends =
+      shown(amount, unit) +
+      (unit.delegated === undefined || unit.delegated === 0n
+        ? ""
+        : ` (${shown(unit.delegated, unit)} of it as allowances it approves)`);
     if (limit.perTransaction !== undefined) {
       const cap = limitScaled(limit.perTransaction, unit.limitDecimals ?? unit.decimals!);
       if (value > cap) {
         refuse(
           `${limitName}.perTransaction`,
-          `${limitName}.perTransaction is ${text(cap)}, and this transaction sends ${shown(amount, unit)}`,
+          `${limitName}.perTransaction is ${text(cap)}, and this transaction sends ${sends}`,
         );
       }
     }
@@ -1002,7 +1277,7 @@ function spendOf(
         refuse(
           `${limitName}.perDay`,
           `${limitName}.perDay is ${text(cap)}; ${text(before)} went in the last 24 hours, and ` +
-            `this transaction sends ${shown(amount, unit)}`,
+            `this transaction sends ${sends}`,
         );
       }
     }
@@ -1018,8 +1293,15 @@ function spendOf(
     if (measured.unmeasured.tokens !== undefined) {
       refuse(`tokens.${key}`, `tokens.${key} is limited, and ${measured.unmeasured.tokens}`);
     }
-    const matching = measured.tokens.filter((outflow) => names(key, outflow));
-    for (const outflow of matching) hold(`tokens.${key}`, limit, outflow.amount, outflow);
+    for (const mint of (measured.undecided ?? []).filter((each) => names(key, { token: each }))) {
+      refuse(
+        `tokens.${key}`,
+        `tokens.${key} is limited, and the decimals of mint ${mint} could not be read, so what the ` +
+          "transaction lets another key take of it cannot be held to a limit",
+      );
+    }
+    // Each approval on its own first, so the refusal names it; then everything the transaction
+    // counts against the limit together (on Solana, approvals included).
     const permit2 = permit2Of(chain);
     for (const approval of measured.approvals.filter((each) => names(key, each))) {
       if (approval.spender.toLowerCase() === permit2 || approval.decimals === undefined) continue;
@@ -1041,6 +1323,25 @@ function spendOf(
         );
       }
     }
+    // A permanent delegate moves any account's tokens of its mint: no amount bounds what it takes.
+    for (const handed of (measured.permanentDelegates ?? []).filter((each) => names(key, each))) {
+      refuse(
+        `tokens.${key}`,
+        `this transaction makes ${handed.delegate} the permanent delegate of ${handed.token}, ` +
+          `which moves any account's ${handed.symbol ?? handed.token} with no approval, and ` +
+          `tokens.${key} limits it`,
+      );
+    }
+    // A token account another key may close holds no amount a limit can weigh: refused outright.
+    for (const handed of (measured.closers ?? []).filter((each) => names(key, each))) {
+      refuse(
+        `tokens.${key}`,
+        `this transaction lets ${handed.closer} close ${handed.account}, an account of ` +
+          `${handed.symbol ?? handed.token}, which tokens.${key} limits`,
+      );
+    }
+    const matching = measured.tokens.filter((outflow) => names(key, outflow));
+    for (const outflow of matching) hold(`tokens.${key}`, limit, outflow.amount, outflow);
   }
 
   return spend;

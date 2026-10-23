@@ -70,6 +70,7 @@ import {
   buildCreateCodeBufferInstruction,
   buildCreatePotInstruction,
   buildExecuteTransaction,
+  type BuildExecuteTransactionInput,
   buildFinalizeCodeBufferInstruction,
   buildGrowCodeBufferInstruction,
   buildHeapFramePrepend,
@@ -90,12 +91,14 @@ import {
   lookupTableBatches,
   MAX_CODE_LEN,
   MAX_POT_LEN,
+  prepareExecuteTransaction,
+  type PreparedExecuteTransaction,
   recommendedComputeUnitLimit,
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { failureReason, svmTokenAccountsToCreate } from "./solana.js";
-import { messageAccounts } from "./svm-effects.js";
+import { messageAccounts, unsignedWire } from "./svm-effects.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -1210,17 +1213,18 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
   const withPot = plan.pot === "inline" && !(await exists(ctx, await potOf(plan), "the Pot"));
   const lookupTables = Object.keys(tables).length === 0 ? undefined : tables;
   const build = async (unitLimit: number, latestBlockhash: typeof PLACEHOLDER_BLOCKHASH) =>
-    buildExecuteTransaction({
+    prepareExecuteTransaction({
       payer: ctx.signer,
       instructions: await cookInstructions(plan, ctx.signer, fee, unitLimit, withPot),
       latestBlockhash,
       ...(lookupTables === undefined ? {} : { lookupTables }),
-    });
-  // Rehearsed at the most compute, for what it takes.
+    }).transaction;
+  // Rehearsed at the most compute, for what it takes, and unsigned: an endpoint shown the owner's
+  // signature could send it, whatever a policy would say.
   const { value: latest } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );
-  const rehearsal = getBase64EncodedWireTransaction(await build(ENGINE_GAS_LIMIT_CU, latest));
+  const rehearsal = unsignedWire(await build(ENGINE_GAS_LIMIT_CU, latest));
   // An endpoint that does not simulate leaves the cook unrehearsed: built at the most compute.
   const value = await ask(ctx.url, "a simulation of the cook", () =>
     ctx.rpc
@@ -1644,26 +1648,29 @@ export interface SignableTx {
   readonly feePayer: Address;
 }
 
-/** `tx`, built for `ctx.signer` on `latestBlockhash`: signed, where the signer signs. */
-export async function buildPlanTx(
+/**
+ * `tx`, built for `ctx.signer` on `latestBlockhash`: compiled with no signature, and signed (where
+ * the signer signs) only when `sign` is called.
+ */
+export function buildPlanTx(
   tx: PlanTx,
   ctx: StepContext,
-  latestBlockhash: Parameters<typeof buildExecuteTransaction>[0]["latestBlockhash"],
-): Promise<Transaction> {
-  const transaction = await buildExecuteTransaction({
+  latestBlockhash: BuildExecuteTransactionInput["latestBlockhash"],
+): PreparedExecuteTransaction {
+  const prepared = prepareExecuteTransaction({
     payer: ctx.signer,
     instructions: tx.instructions,
     latestBlockhash,
     ...(tx.lookupTables === undefined ? {} : { lookupTables: tx.lookupTables }),
   });
-  const size = getTransactionSize(transaction);
+  const size = getTransactionSize(prepared.transaction);
   if (size > TRANSACTION_SIZE_LIMIT) {
     throw new CliError(
       `${tx.what} is a ${size}-byte transaction, past Solana's ${TRANSACTION_SIZE_LIMIT}`,
     );
   }
 
-  return transaction;
+  return prepared;
 }
 
 /**
@@ -1685,7 +1692,7 @@ export async function signableTransactions(
   const transactions = await Promise.all(
     txs.map(async (tx) => ({
       what: tx.what,
-      transaction: getBase64EncodedWireTransaction(await buildPlanTx(tx, ctx, latest)),
+      transaction: getBase64EncodedWireTransaction(await buildPlanTx(tx, ctx, latest).sign()),
       feePayer: ctx.signer.address,
     })),
   );
