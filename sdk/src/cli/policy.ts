@@ -598,7 +598,15 @@ async function allowancesAfter(
       ],
       validation: false,
     });
-    const answers = (block?.calls ?? []).slice(calls.length);
+    const results = block?.calls ?? [];
+    // A read is of the state the transaction leaves only where every call of it ran again as it did:
+    // a call that is missing or failed here leaves the state before it, which says nothing of what
+    // it allows. Then nothing read stands, and what the transaction reported counts.
+    const replayed =
+      results.length >= calls.length + reads.length &&
+      results.slice(0, calls.length).every((each) => each.status === "success");
+    if (!replayed) return permissions.map(() => undefined);
+    const answers = results.slice(calls.length);
 
     return permissions.map((_, index) => {
       const answer = answers[index];

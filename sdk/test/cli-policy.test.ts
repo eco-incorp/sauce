@@ -89,27 +89,34 @@ const ALLOWANCE_READS = [
  *  such function answers with no data, as viem reports it; a read of a contract in `unreadable`
  *  fails at the endpoint instead, before any contract answers. An `allowance` read in a rehearsal
  *  answers `remaining` (the allowance the transaction leaves), or fails where it is `null`; left
- *  out, it answers no data. */
+ *  out, it answers no data. Where `replayFails`, a rehearsal that reads an allowance fails each of
+ *  the transaction's own calls in it (its reads still answer, now of the state before them). */
 function client(
   logs: Log[] | null,
   decimals: number | null = 18,
   unreadable: readonly Address[] = [],
   remaining?: bigint | null,
+  replayFails = false,
 ): PublicClient {
+  const isRead = (call: { data?: Hex }) =>
+    ALLOWANCE_READS.some((read) => call.data?.toLowerCase().startsWith(read));
+
   return {
     getChainId: async () => BASE.id,
     simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: Array<{ data?: Hex }> }> }) => {
       if (logs === null) throw new Error("the method eth_simulateV1 does not exist");
+      const reading = blocks[0]!.calls.some(isRead);
 
       return [
         {
           calls: blocks[0]!.calls.map((call) =>
-            remaining !== undefined &&
-            ALLOWANCE_READS.some((read) => call.data?.toLowerCase().startsWith(read))
+            remaining !== undefined && isRead(call)
               ? remaining === null
                 ? { status: "failure", logs: [], data: "0x" }
                 : { status: "success", logs: [], data: word(remaining) }
-              : { status: "success", logs, data: "0x" },
+              : replayFails && reading
+                ? { status: "failure", logs: [], data: "0x" }
+                : { status: "success", logs, data: "0x" },
           ),
         },
       ];
@@ -675,8 +682,8 @@ describe("the guard", () => {
       value: 0n,
     };
     const guard = guarded({ tokens: { USDC: { perTransaction: "7" } } });
-    const verdict = (logs: Log[], remaining?: bigint | null) =>
-      guard.evm(client(logs, 18, [], remaining), cook).then(
+    const verdict = (logs: Log[], remaining?: bigint | null, replayFails = false) =>
+      guard.evm(client(logs, 18, [], remaining, replayFails), cook).then(
         () => "let through",
         (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
       );
@@ -700,6 +707,9 @@ describe("the guard", () => {
       ),
       // Where the allowance after cannot be read, the last one reported counts.
       unread: await verdict([approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("6"))], null),
+      // Where the transaction fails in the rehearsal its read follows, the read is of the state
+      // before it: 0 there says nothing of the 20 it allows, which still counts.
+      replayFailed: await verdict([approval(USDC, POT, SPENDER, usdc("20"))], 0n, true),
     }).toEqual({
       pulledWhole: "let through",
       pulledPart: "let through",
@@ -707,6 +717,7 @@ describe("the guard", () => {
       lockedDown: "let through",
       revoked: "let through",
       unread: "tokens.USDC.perTransaction",
+      replayFailed: "tokens.USDC",
     });
   });
 
