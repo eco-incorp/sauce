@@ -26,6 +26,7 @@ import {
   getBase64EncodedWireTransaction,
   getCompiledTransactionMessageDecoder,
   pipe,
+  partiallySignTransaction,
   lamports,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
@@ -1445,6 +1446,84 @@ describeSvm(
 
       return account;
     };
+
+    it("holds a planned transaction another key pays for to the policy of each wallet it signs for, whatever its fee payer is said to be", async () => {
+      const mint = mints.spl;
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      // Paid for, and already signed, by another key; the wallet signs as the transfer's authority.
+      const payer = await generateKeyPairSigner();
+      harness.svm.airdrop(payer.address, lamports(1_000_000_000n));
+      harness.svm.expireBlockhash();
+      const built = await partiallySignTransaction(
+        [payer.keyPair],
+        compileTransaction(
+          pipe(
+            createTransactionMessage({ version: 0 }),
+            (message) => setTransactionMessageFeePayer(payer.address, message),
+            (message) =>
+              setTransactionMessageLifetimeUsingBlockhash(
+                {
+                  blockhash: harness.svm.latestBlockhash() as Blockhash,
+                  lastValidBlockHeight: 1_000_000n,
+                },
+                message,
+              ),
+            (message) =>
+              appendTransactionMessageInstruction(
+                {
+                  programAddress: TOKEN_PROGRAM,
+                  accounts: [
+                    writable(source),
+                    readonly(mint),
+                    writable(elsewhere),
+                    { address: wallet, role: AccountRole.READONLY_SIGNER },
+                  ],
+                  data: transferCheckedData(AMOUNT, DECIMALS),
+                },
+                message,
+              ),
+          ),
+        ),
+      );
+      const from = shim.handed.length;
+      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-cosigner-"));
+      const info: WalletInfo = {
+        name: "agent",
+        kind: "solana",
+        address: wallet,
+        path: join(dir, "agent.json"),
+        policyPath: join(dir, "agent.policy.json"),
+      };
+      try {
+        writeFileSync(info.policyPath, JSON.stringify(limited(mint)), { mode: 0o600 });
+        guardWallet(info, readPolicy(info));
+        const outcome = await sendPlannedSvm(RPC_URL, harness.payer, {
+          // Said to be the wallet's to pay: the transaction itself names another payer.
+          feePayer: wallet,
+          transaction: getBase64EncodedWireTransaction(built),
+          what: "a co-signed transfer",
+        }).then(
+          (sent) => (sent.ok ? "sent" : "failed"),
+          (error: unknown) =>
+            error instanceof PolicyRefusal ? `refused: ${error.limit}` : String(error),
+        );
+        const signed = shim.handed.slice(from).flatMap(({ method, transaction }) => {
+          const signature = (transaction.signatures as Record<string, Uint8Array | null>)[wallet];
+
+          return signature?.some((byte) => byte !== 0) === true ? [method] : [];
+        });
+
+        expect({ outcome, signed, held: String(tokenAmount(harness, source)) }).toEqual({
+          outcome: expect.stringMatching(/^(refused: tokens\.|.*paid by)/) as unknown,
+          signed: [],
+          held: String(AMOUNT),
+        });
+      } finally {
+        guardWallet(info, undefined);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
 
     it("hands the endpoint nothing the wallet signed before its policy lets a planned transaction go, and nothing at all for one it refuses", async () => {
       const mint = mints.spl;

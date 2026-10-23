@@ -128,7 +128,7 @@ import {
 } from "./commands.js";
 import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
-import { guardOf } from "./policy.js";
+import { guardOf, type Reservation } from "./policy.js";
 import { keepLanded, sayKept } from "./keep.js";
 import type { PotRecord } from "./pot-store.js";
 import { svmPotsCreated, type InnerInstructions } from "./pots.js";
@@ -518,12 +518,13 @@ async function confirmed(
 }
 
 /**
- * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). From a wallet
- * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`). Given
- * `sign`, `transaction` is the one to measure, its fee payer's signature slot empty, and `sign` makes
- * the one sent: only once the policy lets it go, so nothing the wallet signed ever reaches an
- * endpoint for a send its policy refuses. `sending` is told just before it goes out, once it is
- * held to the policy and signed: from then on it can land.
+ * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). Every wallet
+ * this process holds that the transaction needs a signature of (`--wallet`), its fee payer or not,
+ * holds it to its policy first (`policy.ts`), measured as that wallet's: one refusing is the whole
+ * send refused. Given `sign`, `transaction` is the one to measure, the wallets' signature slots
+ * empty, and `sign` makes the one sent: only once every policy lets it go, so nothing a wallet
+ * signed ever reaches an endpoint for a send its policy refuses. `sending` is told just before it
+ * goes out, once it is held to the policies and signed: from then on it can land.
  */
 export async function sendAndConfirm(
   rpc: Rpc,
@@ -532,14 +533,26 @@ export async function sendAndConfirm(
   sign?: () => Promise<Transaction>,
   sending?: () => void,
 ): Promise<SvmSent> {
-  const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
-    .staticAccounts[0];
-  const reservation = payer === undefined ? undefined : await guardOf(payer)?.svm(rpc, transaction);
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
+  const signers = message.staticAccounts.slice(0, message.header.numSignerAccounts);
+  const reservations: Reservation[] = [];
+  const released = (why: string) => {
+    for (const reservation of reservations) reservation.released(why);
+  };
+  try {
+    for (const key of signers) {
+      const reservation = await guardOf(key)?.svm(rpc, transaction);
+      if (reservation !== undefined) reservations.push(reservation);
+    }
+  } catch (error) {
+    released("another wallet's policy refused it");
+    throw error;
+  }
   let signed: Transaction;
   try {
     signed = sign === undefined ? transaction : await sign();
   } catch (error) {
-    reservation?.released("signing failed");
+    released("signing failed");
     throw error;
   }
   const signature = getSignatureFromTransaction(signed);
@@ -555,12 +568,14 @@ export async function sendAndConfirm(
         .send(),
     );
   } catch (error) {
-    reservation?.released("sending failed");
+    released("sending failed");
     throw error;
   }
 
   return svmLanded(rpc, url, signature, (ok) =>
-    ok ? reservation?.sent(signature) : reservation?.released(`${signature} failed`),
+    ok
+      ? reservations.forEach((reservation) => reservation.sent(signature))
+      : released(`${signature} failed`),
   );
 }
 
@@ -680,23 +695,29 @@ export async function svmLanded(
 /**
  * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
  * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, once it is rehearsed
- * unsigned (refused if it would fail) and its wallet's policy lets it go; then sends it and waits
- * until it is confirmed.
+ * unsigned (refused if it would fail) and the policy of every wallet it needs a signature of lets
+ * it go; then sends it and waits until it is confirmed. The fee payer is the one the transaction
+ * names: a `feePayer` said beside it that differs is refused.
  */
 export async function sendPlannedSvm(
   url: string,
   signer: KeyPairSigner,
   tx: { readonly feePayer: string; readonly transaction: string; readonly what: string },
 ): Promise<SvmSent> {
-  if (tx.feePayer !== signer.address) {
-    throw new CliError(
-      `${tx.what} is paid by ${tx.feePayer}, and the signer is ${signer.address}: build it for the signer`,
-    );
-  }
-  const rpc = createSolanaRpc(url);
   const decoded = getTransactionDecoder().decode(
     new Uint8Array(getBase64Encoder().encode(tx.transaction)),
   );
+  const named = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes)
+    .staticAccounts[0];
+  for (const payer of [tx.feePayer, named]) {
+    if (payer !== signer.address) {
+      throw new CliError(
+        `${tx.what} is paid by ${payer ?? "no one"}, and the signer is ${signer.address}: build it ` +
+          "for the signer",
+      );
+    }
+  }
+  const rpc = createSolanaRpc(url);
   await rehearsed(rpc, url, decoded, tx.what, false);
 
   return sendAndConfirm(rpc, url, decoded, () => signTransaction([signer.keyPair], decoded));
