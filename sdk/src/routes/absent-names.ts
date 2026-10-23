@@ -25,14 +25,15 @@
  * The same read refuses what no chain can have: a contract a namespace does not have, an interface
  * used as a deployment, a family alias's contract more than one member has, a protocol used as a
  * contract, and `available(X)`, which is removed. A name the program declares is its own where the
- * compiler reads it so, and nowhere else (`Scope`): a block's `const` hides a registry name only in
- * that block and from its declaration on, so a use of the name after the block is the registry's.
+ * compiler reads it so, and nowhere else (`lexical-scope.ts`): a block's `const` hides a registry
+ * name only in that block and from its declaration on, so a use of the name after the block is the
+ * registry's.
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import type { AccessorTarget } from "./protocol-rewrite.js";
 
 import { CANONICAL_CHAINS, requireChain } from "../chains/canonical.js";
-import { collectPatternNames, isTypeDeclaration, TYPE_KEYS, type AstNode } from "./ast-walk.js";
+import { isTypeDeclaration, type AstNode } from "./ast-walk.js";
 import {
   CHAIN_MODULE,
   CHAIN_MODULE_ROOT,
@@ -43,6 +44,18 @@ import {
   type NamespaceEntry,
 } from "./chain-module.js";
 import { pascalOfSlug } from "./builder.js";
+import {
+  blockScope,
+  catchScope,
+  childrenOf,
+  forOfBodyScope,
+  forScope,
+  functionScope,
+  isFunction,
+  moduleScope,
+  shadowed,
+  type Scope,
+} from "./lexical-scope.js";
 import { parseSauce } from "./parse.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { BALANCE_MEMBER, POT_NAME } from "./pot-sugar.js";
@@ -72,126 +85,6 @@ type Role = "value" | "callee" | "at" | `.${string}`;
 type Node = AstNode & Record<string, unknown>;
 const prop = <T = Node>(node: AstNode, key: string): T => (node as Node)[key] as T;
 const nameOf = (node: AstNode): string => prop<string>(node, "name");
-
-/**
- * A scope, and where each name it declares starts to hide a registry name. The module's names and a
- * function's parameters hide one everywhere in it: the compiler reads a module's declarations in any
- * order. A `let` or `const` of a block (a function's body, a branch, a loop's) hides one from the end
- * of its declarator to the end of the block, and a loop's or a `catch` clause's binding only in the
- * loop or the clause: the compiler scopes each to its block and reads a name before its local
- * declaration as the outer one (and refuses `var`).
- */
-interface Scope {
-  readonly names: ReadonlyMap<string, number>;
-  readonly parent?: Scope;
-}
-
-/** Whether `name`, read at `position`, is a name the program declares there. */
-const shadowed = (scope: Scope | undefined, name: string, position: number): boolean => {
-  for (let s = scope; s !== undefined; s = s.parent) {
-    const from = s.names.get(name);
-    if (from !== undefined && from <= position) return true;
-  }
-  return false;
-};
-
-/** A scope of `bindings`, each a pattern and the position it hides its names from. */
-function scopeOf(
-  bindings: readonly (readonly [AstNode | null | undefined, number])[],
-  parent: Scope | undefined,
-): Scope {
-  const names = new Map<string, number>();
-  for (const [pattern, from] of bindings) {
-    const bound = new Set<string>();
-    collectPatternNames(pattern, bound);
-    for (const name of bound) names.set(name, Math.min(from, names.get(name) ?? from));
-  }
-  return { names, parent };
-}
-
-const isFunction = (node: AstNode): boolean =>
-  node.type === "FunctionDeclaration" ||
-  node.type === "FunctionExpression" ||
-  node.type === "ArrowFunctionExpression";
-
-/** The child nodes of `node` in source order, types left out. */
-function childrenOf(node: AstNode): AstNode[] {
-  const out: AstNode[] = [];
-  for (const [key, value] of Object.entries(node)) {
-    if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range") {
-      continue;
-    }
-    if (TYPE_KEYS.has(key)) continue;
-    for (const item of Array.isArray(value) ? value : [value]) {
-      if (item !== null && typeof item === "object" && typeof (item as AstNode).type === "string") {
-        if (!isTypeDeclaration((item as AstNode).type)) out.push(item as AstNode);
-      }
-    }
-  }
-  return out.sort((a, b) => a.start - b.start);
-}
-
-/** The module's scope: everything it declares at its top level, everywhere in it. */
-function moduleScope(program: AstNode): Scope {
-  const bindings: [AstNode | null | undefined, number][] = [];
-  for (const statement of prop<AstNode[]>(program, "body")) {
-    const declaration =
-      (statement.type === "ExportNamedDeclaration" ||
-        statement.type === "ExportDefaultDeclaration") &&
-      prop<AstNode | null>(statement, "declaration")
-        ? prop<AstNode>(statement, "declaration")
-        : statement;
-    if (declaration.type === "VariableDeclaration") {
-      for (const declarator of prop<AstNode[]>(declaration, "declarations")) {
-        bindings.push([prop(declarator, "id"), 0]);
-      }
-    } else if (
-      declaration.type === "FunctionDeclaration" ||
-      declaration.type === "ClassDeclaration"
-    ) {
-      bindings.push([prop(declaration, "id"), 0]);
-    } else if (
-      declaration.type === "ImportDeclaration" &&
-      prop<string>(declaration, "importKind") !== "type"
-    ) {
-      // A type-only import (`import type { X }`, `import { type X }`) is erased by the compiler: it
-      // binds no value, so it hides no registry name.
-      for (const specifier of prop<AstNode[]>(declaration, "specifiers")) {
-        if (prop<string>(specifier, "importKind") !== "type") {
-          bindings.push([prop(specifier, "local"), 0]);
-        }
-      }
-    }
-  }
-  return scopeOf(bindings, undefined);
-}
-
-/** A function's scope: its parameters, and a function expression's own name, everywhere in it. */
-function functionScope(fn: AstNode, parent: Scope | undefined): Scope {
-  return scopeOf(
-    [
-      ...(fn.type === "FunctionExpression" ? [[prop<AstNode>(fn, "id"), 0] as const] : []),
-      ...(prop<AstNode[]>(fn, "params") ?? []).map((param) => [param, 0] as const),
-    ],
-    parent,
-  );
-}
-
-/** A statement list's scope: each `let`/`const` from the end of its declarator, a function or class
- *  everywhere in the list. */
-function blockScope(list: readonly AstNode[], parent: Scope | undefined): Scope {
-  const bindings: [AstNode | null | undefined, number][] = [];
-  for (const statement of list) {
-    if (statement.type === "VariableDeclaration") {
-      for (const declarator of prop<AstNode[]>(statement, "declarations")) {
-        bindings.push([prop(declarator, "id"), declarator.end]);
-      }
-    } else if (statement.type === "FunctionDeclaration" || statement.type === "ClassDeclaration") {
-      bindings.push([prop(statement, "id"), 0]);
-    }
-  }
-  return scopeOf(bindings, parent);
-}
 
 /** `0` or `0n`, as written. */
 function isZero(node: AstNode): boolean {
@@ -781,9 +674,7 @@ export function checkNames(
         visit(prop(node, "body"), "value", "value", at);
         return;
       case "ForStatement": {
-        // A `let`/`const` of the loop's head is the loop's, from its declarator on.
-        const init = prop<AstNode | null>(node, "init");
-        const loop = init?.type === "VariableDeclaration" ? blockScope([init], at) : at;
+        const loop = forScope(node, at);
         for (const key of ["init", "update"]) {
           const part = prop<AstNode | null>(node, key);
           if (part) visit(part, "value", "value", loop);
@@ -793,29 +684,15 @@ export function checkNames(
         return;
       }
       case "ForOfStatement":
-      case "ForInStatement": {
-        // Its binding is the body's: what it iterates is read outside it.
-        const left = prop<AstNode>(node, "left");
-        const loop =
-          left.type === "VariableDeclaration"
-            ? scopeOf(
-                prop<AstNode[]>(left, "declarations").map(
-                  (declarator) => [prop<AstNode>(declarator, "id"), 0] as const,
-                ),
-                at,
-              )
-            : at;
-        visit(left, "value", "value", at);
+      case "ForInStatement":
+        visit(prop(node, "left"), "value", "value", at);
         visit(prop(node, "right"), "value", "value", at);
-        visit(prop(node, "body"), "value", "value", loop);
+        visit(prop(node, "body"), "value", "value", forOfBodyScope(node, at));
         return;
-      }
-      case "CatchClause": {
-        const param = prop<AstNode | null>(node, "param");
-        defaults(param, at);
-        visit(prop(node, "body"), "value", "value", scopeOf([[param, 0]], at));
+      case "CatchClause":
+        defaults(prop<AstNode | null>(node, "param"), at);
+        visit(prop(node, "body"), "value", "value", catchScope(node, at));
         return;
-      }
       case "UnaryExpression":
         visit(
           prop(node, "argument"),
