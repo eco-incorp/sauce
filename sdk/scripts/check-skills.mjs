@@ -437,6 +437,14 @@ const UNDECLARED_NAMES = {
     wallet_addresses:
       "Phantom MCP's tool that gives its wallet's addresses, a third-party MCP server's, not the package's",
   },
+  "sauce-protocols": {
+    executeOperation:
+      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why Aave's flash loan does not port",
+  },
+  "sauce-swaps": {
+    executeOperation:
+      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",
+  },
   "sauce-chains": {
     getAccountInfo:
       "Solana's JSON-RPC method that reads an account, a node's API, not the package's",
@@ -571,6 +579,9 @@ const KNOWN_ADDRESSES = new Set();
     }
     if (typeof value === "object") for (const v of Object.values(value)) collect(v, depth + 1);
   };
+  // The zero address names no contract: it is the value a field takes for none (a V4 pool's hooks,
+  // native ETH as a currency).
+  KNOWN_ADDRESSES.add(`0x${"0".repeat(40)}`);
   collect(sdk.routes.TOKEN_REGISTRY);
   const modules = await Promise.all(
     sdk.listProtocolSlugs().map((slug) => load(`${PKG}/protocols/${slug}`).catch(() => ({}))),
