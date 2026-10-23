@@ -144,15 +144,20 @@ Wallet policies close further ways past their limits, on both kinds of chain. On
 allowance another key keeps (an ERC-20's, or a standing allowance granted through Permit2, whose
 events were not read before) now counts as sent with the transaction's transfers of the token, per
 transaction and in the day's total, where an approval was only checked alone and never reserved.
-It counts as the chain holds it once the transaction has run, read in the same simulation, so one
-spent or locked down in the transaction counts what is left; each allowance is its own permission,
-on the token or through Permit2 and the wallet's or its Pot's, and they add up. An approval of a
+It counts as the chain holds it once the transaction has run, each read in a simulation of its own
+that runs the transaction's calls again, so one spent or locked down in the transaction counts what
+is left, and one that cannot be read so is refused where its token is limited; each allowance is
+its own permission, on the token or through Permit2 and the wallet's or its Pot's, and they add up.
+An approval of Permit2 for a limited token is refused: it makes the wallet's earlier Permit2
+allowances of the token spendable again, which the transaction does not report. An approval of a
 token whose decimals cannot be read is refused where it is limited, and the wallet's own Pot is no
 longer a spender that counts. A cook's calldata makes a contract the wallet's Pot only where the
 chain shows it is: sent to any other address, or to another owner's Pot, what the wallet pays
-counts, and where the endpoint cannot read the Pot's owner a native or token limit refuses the
-cook. On Arc, native USDC sent and a USDC allowance left are held to the `USDC` limit together.
-`run --fund` and `simulate --fund` sign and send only for the wallet's own Pot, after its policy's
+counts, and where the endpoint cannot read the Pot's owner (a failed request, or an error of the
+endpoint's own rather than the contract's revert) a native or token limit refuses the cook. On
+Arc, native USDC sent and a USDC allowance left are held to the `USDC` limit together, and a USDC
+allowance counts against `native` too. `run --fund`, and `simulate --fund` given the owner's key,
+sign and send only for the wallet's own Pot, after its policy's
 `chains` and `to`: a contract that names the wallet as its owner is no longer enough. On Solana,
 wrapped SOL is measured by its lamports, synced into its amount or not, and what the wallet spends
 of it as a delegate counts against `native` too; an allowance raised and spent back to where it

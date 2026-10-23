@@ -119,8 +119,8 @@ could loosen it.
   table) counts, as does the fee. A wallet the transaction gives to another program, or makes a
   durable nonce account another key commands, counts all it holds. On Arc, whose native coin is
   also the `USDC` token (one balance), what leaves as either counts against `native` and the
-  `USDC` limit both, and native USDC sent and a USDC allowance left are held to the `USDC` limit
-  together.
+  `USDC` limit both: native USDC sent and a USDC allowance left are held together, and a USDC
+  allowance another key keeps counts against `native` as well as the `USDC` limit.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
   leaves the wallet or its Pot. A token the policy does not name is not limited.
 - An allowance the transaction leaves another key counts as sent, at the whole allowance, per
@@ -132,14 +132,24 @@ could loosen it.
   leaves the others as they are, and they add up. Where a limited token's decimals cannot be read,
   an approval of it is refused, as a transfer of it is.
 - On an EVM chain, that is the allowance each spender keeps once the transaction is done, read from
-  the chain as the transaction leaves it (where that read fails, the last allowance the transaction
-  reported counts): an ERC-20's, and one granted through Permit2 (its `approve`, or a `permit` the
-  wallet signed), which lets the spender take the token wherever the wallet approved Permit2 for
-  it; Permit2's `lockdown` clears one. The ERC-20 approval of Permit2 itself is not counted: what
-  Permit2 lets a spender take is, when it is granted. A transaction counts the wallet's Pot as its
-  own only where it is: a Pot the plan deploys for the wallet, or one whose owner the chain shows to
-  be the wallet. A cook's calldata sent anywhere else is a payment like any other, and a cook on a
-  Pot whose owner the endpoint cannot read is refused where a native or token limit needs it.
+  the chain as the transaction leaves it, each in a simulation of its own that runs the
+  transaction's calls again: an ERC-20's, and one granted through Permit2 (its `approve`, or a
+  `permit` the wallet signed), which lets the spender take the token wherever the wallet approved
+  Permit2 for it; Permit2's `lockdown` clears one. An allowance that cannot be read so (the
+  endpoint or the token does not answer, or the calls do not run again as they ran) is not
+  measured, and is refused where its token is limited. The wallet's approval of Permit2 for a
+  limited token is refused: it makes spendable again every Permit2 allowance of that token the
+  wallet gave before, which the transaction does not report. Under such a limit, fund with
+  `--fund-mode permit`, `allowance` or `transfer`, or approve Permit2 from a wallet without the
+  limit. A transaction counts the wallet's Pot as its own only where it is: a Pot the plan deploys
+  for the wallet, or one whose owner the chain shows to be the wallet. A cook's calldata sent
+  anywhere else is a payment like any other, and a cook on a Pot whose owner the endpoint cannot
+  read (the request fails, or the endpoint answers with an error of its own rather than the
+  contract's revert) is refused where a native or token limit needs it.
+- The rule behind these: an allowance of a limited token (on Arc, of USDC under a `native` limit
+  too) to any spender but the wallet or its own Pot counts only where it is measured exactly, and
+  is refused where it is not. A refusal a closer measurement could have spared is the price; an
+  allowance let through unmeasured is not.
 - On an EVM chain an allowance is seen where the transaction reports it (a token's `Approval`, or
   Permit2's own events): a token that sets one with no event is not seen. A Permit2 grant counts at
   its amount, whatever its expiration, and only the registry's Permit2 is read.
