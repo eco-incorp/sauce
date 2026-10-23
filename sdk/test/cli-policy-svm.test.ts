@@ -790,10 +790,14 @@ describe("measuring token accounts from a simulation's account images", () => {
     return { lamports: 1_461_600n, owner: program, data };
   };
   /**
-   * The wallet calling PROGRAM with ACCOUNT writable, against an endpoint that holds `now` and
-   * whose simulation leaves `after`.
+   * The wallet calling PROGRAM with ACCOUNT (and `also`) writable, against an endpoint that holds
+   * `now` and whose simulation leaves `after`.
    */
-  const simulated = (now: Record<string, Image>, after: Record<string, Image>) => {
+  const simulated = (
+    now: Record<string, Image>,
+    after: Record<string, Image>,
+    also: readonly Address[] = [],
+  ) => {
     const transaction = compileTransaction(
       pipe(
         createTransactionMessage({ version: 0 }),
@@ -810,7 +814,10 @@ describe("measuring token accounts from a simulation's account images", () => {
           appendTransactionMessageInstruction(
             {
               programAddress: PROGRAM,
-              accounts: [{ address: ACCOUNT, role: AccountRole.WRITABLE }],
+              accounts: [ACCOUNT, ...also].map((key) => ({
+                address: key,
+                role: AccountRole.WRITABLE,
+              })),
               data: new Uint8Array([1]),
             },
             message,
@@ -906,6 +913,30 @@ describe("measuring token accounts from a simulation's account images", () => {
       expect(String(measured.native.amount)).toBe(sent);
     },
   );
+
+  it("counts a balance in its mint's decimals before the transaction, where the transaction makes the mint again with others", async () => {
+    // The wallet's account holds 1000 of a mint of 0 decimals: 1000 tokens. The transaction empties
+    // and closes it, then makes the mint again with 9 decimals.
+    const { rpc, transaction } = simulated(
+      { [ACCOUNT]: held(SPL, MINT_A, WALLET, 1_000n), [MINT_A]: minted(SPL, 0) },
+      { [ACCOUNT]: null, [MINT_A]: minted(SPL, 9) },
+      [MINT_A],
+    );
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+    expect({
+      tokens: plain(measured.tokens),
+      ...(await verdictOf(
+        rpc,
+        WALLET,
+        { tokens: { [MINT_A]: { perTransaction: "1" } } },
+        transaction,
+      )),
+    }).toEqual({
+      tokens: [{ token: MINT_A, symbol: "USDC", amount: "1000", decimals: 0 }],
+      ...refused(`tokens.${MINT_A}.perTransaction`, "this transaction sends 1000 USDC"),
+    });
+  });
 });
 
 // What a token account lets another key do once a transaction lands: spend from it as its delegate,

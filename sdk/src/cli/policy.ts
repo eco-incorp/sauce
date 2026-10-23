@@ -899,27 +899,34 @@ export async function measureSvm(
       closable.push({ token: is.mint, account, closer: is.closeAuthority });
     }
   });
-  const facts = await mintFacts(
-    rpc,
-    chain,
-    [
-      ...approved.map((each) => each.token),
-      ...handedOff.keys(),
-      ...closable.map((each) => each.token),
-      ...delegating.map((each) => each.token),
-      ...spentAsDelegate.keys(),
-    ],
-    new Map(tracked.map((account, index) => [account, after[index] ?? null])),
-  );
+  // A balance it held before is in its mint's decimals before the transaction; one it holds after,
+  // or an allowance it leaves, in the mint's decimals after (a mint made again may have others).
+  const imagesOf = (states: readonly (SimulatedAccount | null)[]) =>
+    new Map(tracked.map((account, index) => [account, states[index] ?? null]));
+  const [then, facts] = await Promise.all([
+    mintFacts(rpc, chain, [...spentAsDelegate.keys()], imagesOf(before)),
+    mintFacts(
+      rpc,
+      chain,
+      [
+        ...approved.map((each) => each.token),
+        ...handedOff.keys(),
+        ...closable.map((each) => each.token),
+        ...delegating.map((each) => each.token),
+      ],
+      imagesOf(after),
+    ),
+  ]);
   // A limit holds an amount only in its token's decimals: where a mint's cannot be read, a limit
   // naming that mint cannot stand behind what the transaction lets another key take of it.
   const undecided = [
     ...new Set([
-      ...approved.map((each) => each.token),
-      ...handedOff.keys(),
-      ...spentAsDelegate.keys(),
+      ...[...approved.map((each) => each.token), ...handedOff.keys()].filter(
+        (mint) => facts.get(mint)?.decimals === undefined,
+      ),
+      ...[...spentAsDelegate.keys()].filter((mint) => then.get(mint)?.decimals === undefined),
     ]),
-  ].filter((mint) => facts.get(mint)?.decimals === undefined);
+  ];
   // The native coin the wallet controls is more than its own account's: the lamports of the Pots it
   // cooks on, and of every account whose layout gives them to one of those keys alone (a token
   // account owned by one, wrapped SOL among them, with no closer outside; a durable nonce account
@@ -971,40 +978,69 @@ export async function measureSvm(
     }
     lamports -= held(account, is, was?.owner);
   });
+  // What leaves, by mint: each part in its own decimals, summed at the finest of them.
   const byMint = new Map<
     string,
-    { amount: bigint; symbol?: string; decimals?: number; delegated?: bigint }
+    { symbol?: string; parts: Array<{ amount: bigint; decimals?: number }>; delegated: bigint }
   >();
-  for (const change of moved.tokens) {
-    if (!ours.has(change.owner)) continue;
-    const seen = byMint.get(change.mint) ?? {
-      amount: 0n,
-      ...(change.symbol === undefined ? {} : { symbol: change.symbol }),
-      ...(change.decimals === undefined ? {} : { decimals: change.decimals }),
+  const add = (
+    mint: string,
+    amount: bigint,
+    about: { readonly symbol?: string; readonly decimals?: number } | undefined,
+    delegated = 0n,
+  ): void => {
+    const seen = byMint.get(mint) ?? {
+      ...(about?.symbol === undefined ? {} : { symbol: about.symbol }),
+      parts: [],
+      delegated: 0n,
     };
-    byMint.set(change.mint, { ...seen, amount: seen.amount + change.before - change.after });
+    seen.parts.push({
+      amount,
+      ...(about?.decimals === undefined ? {} : { decimals: about.decimals }),
+    });
+    seen.delegated += delegated;
+    byMint.set(mint, seen);
+  };
+  for (const change of moved.tokens) {
+    if (ours.has(change.owner)) add(change.mint, change.before - change.after, change);
   }
-  for (const [mint, amount] of [...handedOff, ...spentAsDelegate]) {
-    const seen = byMint.get(mint) ?? { amount: 0n, ...facts.get(mint) };
-    byMint.set(mint, { ...seen, amount: seen.amount + amount });
-  }
+  for (const [mint, amount] of handedOff) add(mint, amount, facts.get(mint));
+  for (const [mint, amount] of spentAsDelegate) add(mint, amount, then.get(mint));
   // An allowance counts as sent when it is approved: the delegate moves it with no later signature
   // of the wallet's, so a limit holds it now, per transaction and in the day's total.
-  for (const { token, amount } of approved) {
-    const seen = byMint.get(token) ?? { amount: 0n, ...facts.get(token) };
-    byMint.set(token, {
-      ...seen,
-      amount: seen.amount + amount,
-      delegated: (seen.delegated ?? 0n) + amount,
-    });
-  }
+  for (const { token, amount } of approved) add(token, amount, facts.get(token), amount);
+  const outflows = [...byMint].flatMap(([token, { symbol, parts, delegated }]) => {
+    const places = parts.map((part) => part.decimals);
+    const decimals = places.every((each) => each !== undefined) ? Math.max(...places) : undefined;
+    const amount = parts.reduce(
+      (sum, part) =>
+        sum +
+        (decimals === undefined
+          ? part.amount
+          : part.amount * 10n ** BigInt(decimals - part.decimals!)),
+      0n,
+    );
+    if (amount <= 0n) return [];
+    // Every allowance is in the mint's decimals after; scaled with the rest.
+    const after = facts.get(token)?.decimals;
+    const scale =
+      decimals === undefined || after === undefined ? 1n : 10n ** BigInt(decimals - after);
+
+    return [
+      {
+        token,
+        ...(symbol === undefined ? {} : { symbol }),
+        ...(decimals === undefined ? {} : { decimals }),
+        amount,
+        ...(delegated === 0n ? {} : { delegated: delegated * scale }),
+      },
+    ];
+  });
 
   return {
     ...base,
     native: native(lamports > 0n ? lamports : 0n),
-    tokens: [...byMint]
-      .filter(([, out]) => out.amount > 0n)
-      .map(([token, out]) => ({ token, ...out })),
+    tokens: outflows,
     approvals: approved.map((each) => ({ ...each, ...facts.get(each.token) })),
     closers: closable.map((each) => {
       const symbol = facts.get(each.token)?.symbol;

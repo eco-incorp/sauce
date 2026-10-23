@@ -422,7 +422,10 @@ export async function mintFacts(
  * (a token account the cook created starts at 0, one it closed ends at 0, and one it closed and
  * made again at the same address for another asset is both), and every account's lamports. A
  * balance change counts for whose the account was before (the transaction may hand it to another
- * key after moving what it holds), and each mint's decimals and symbol are {@link mintFacts}'.
+ * key after moving what it holds), and each mint's decimals and symbol are {@link mintFacts}': a
+ * balance it held before in the mint's decimals before the transaction, one it holds after in its
+ * decimals after. Where those differ (the transaction made the mint again with others), the change
+ * is two: the old balance emptied, the new one filled.
  */
 export async function movedBy(
   rpc: Rpc,
@@ -466,15 +469,33 @@ export async function movedBy(
       });
     }
   });
-  const facts = await mintFacts(
-    rpc,
-    chain,
-    tokens.map((change) => change.mint),
-    new Map(tracked.map((account, index) => [account, after[index] ?? null])),
-  );
+  const mints = tokens.map((change) => change.mint);
+  const [then, now] = await Promise.all([
+    mintFacts(
+      rpc,
+      chain,
+      mints,
+      new Map(tracked.map((account, index) => [account, before[index] ?? null])),
+    ),
+    mintFacts(
+      rpc,
+      chain,
+      mints,
+      new Map(tracked.map((account, index) => [account, after[index] ?? null])),
+    ),
+  ]);
 
   return {
-    tokens: tokens.map((change) => ({ ...change, ...facts.get(change.mint) })),
+    tokens: tokens.flatMap((change) => {
+      const old = then.get(change.mint);
+      const fresh = now.get(change.mint);
+      if (old?.decimals === fresh?.decimals) return [{ ...change, ...fresh }];
+
+      return [
+        ...(change.before === 0n ? [] : [{ ...change, after: 0n, ...old }]),
+        ...(change.after === 0n ? [] : [{ ...change, before: 0n, ...fresh }]),
+      ];
+    }),
     lamports,
     labels,
     payer,
