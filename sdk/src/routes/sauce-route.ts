@@ -530,7 +530,8 @@ function compileForChain(
   // What a test rules out the compiler never compiles, and no pass below may read: a token write,
   // a balance, a venue call or a binding there would add an account, a check or a binding of its
   // own. Blanked in place, so every position the passes and the compiler report is the program's.
-  source = withoutDead(source, named.dead);
+  // A contract binding under `&&`/`||` as a value is made the bool the language gives, `!!(…)`.
+  source = withoutDead(source, named.dead, named.bindingSides);
 
   // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
   // a `const` holding one) becomes the spelling that names the contract the result is

@@ -79,6 +79,9 @@ export interface NameCheck {
   readonly chainKeys: readonly CanonicalChain[];
   /** What a test of names rules out, in source order, none inside another (`withoutDead`). */
   readonly dead: readonly DeadCode[];
+  /** Each side of a `&&`/`||` whose whole is a value that is, or may be, a contract binding, in
+   *  source order: `withoutDead` makes it `!!(…)`, so the whole is the bool the language says. */
+  readonly bindingSides: readonly { readonly start: number; readonly end: number }[];
 }
 
 /**
@@ -96,19 +99,43 @@ export interface DeadCode {
  * `source` with the code `dead` names blanked, every other character where it was: a statement of
  * a dead tail becomes spaces, an `if` arm `{ }` and an expression `0`, each padded with spaces, its
  * newlines kept. The compiler folds a decided test whichever way it reads, so the program compiles
- * as it did; the SDK's rewrites, which run after the check, then see only code that compiles.
+ * as it did; the SDK's rewrites, which run after the check, then see only code that compiles. Each
+ * of `bindingSides` becomes `!!(…)`: 2.6.0 gives a contract binding under `&&`/`||` back as the
+ * whole, where the language gives true or false, and `!!` is that bool (a constant folds to the
+ * same bytes). These are the only characters that move.
  */
-export function withoutDead(source: string, dead: readonly DeadCode[]): string {
-  if (dead.length === 0) return source;
+export function withoutDead(
+  source: string,
+  dead: readonly DeadCode[],
+  bindingSides: readonly { readonly start: number; readonly end: number }[] = [],
+): string {
+  if (dead.length === 0 && bindingSides.length === 0) return source;
   const blank = (text: string): string => text.replace(/[^\n]/g, " ");
+  const edits = [
+    ...dead.map(({ start, end, kind }) => {
+      const text = source.slice(start, end);
+      return {
+        start,
+        end,
+        text:
+          kind === "tail"
+            ? blank(text)
+            : kind === "expression"
+              ? `0${blank(text.slice(1))}`
+              : text.length < 2
+                ? text
+                : `{${blank(text.slice(1, -1))}}`,
+      };
+    }),
+    ...bindingSides.flatMap(({ start, end }) => [
+      { start, end: start, text: "!!(" },
+      { start: end, end, text: ")" },
+    ]),
+  ].sort((a, b) => a.start - b.start || a.end - b.end);
   const out: string[] = [];
   let cursor = 0;
-  for (const { start, end, kind } of dead) {
-    const text = source.slice(start, end);
-    out.push(source.slice(cursor, start));
-    if (kind === "tail") out.push(blank(text));
-    else if (kind === "expression") out.push(`0${blank(text.slice(1))}`);
-    else out.push(text.length < 2 ? text : `{${blank(text.slice(1, -1))}}`);
+  for (const { start, end, text } of edits) {
+    out.push(source.slice(cursor, start), text);
     cursor = end;
   }
   out.push(source.slice(cursor));
@@ -203,6 +230,7 @@ export function checkNames(
   const scope = options.chainScope?.map((ref) => requireChain(ref).id);
   const chainKeys = new Map<number, CanonicalChain>();
   const dead: DeadCode[] = [];
+  const bindingSides: { start: number; end: number }[] = [];
 
   const fail = (node: AstNode, message: string): never => {
     throw locatedError(source, options.file ?? "main.js", node, `compileSauceRoute: ${message}`);
@@ -838,31 +866,22 @@ export function checkNames(
         }
         // `&&` and `||` give true or false, never one of their sides, so each side is a test. But
         // 2.6.0 gives a contract binding back as the whole (`0 || UniswapV3.Factory` is its
-        // address): where the whole is a value, a side that is one (`bindingKind`) is refused on
-        // every chain, naming the `?:` that says which side is meant.
-        if (mode === "value") {
-          const contract = [left, right].find((side) => bindingKind(side, at) !== "scalar");
-          if (contract !== undefined) {
-            const [l, r] = [left, right].map((side) => source.slice(side.start, side.end));
-            fail(
-              node,
-              `\`${source.slice(node.start, node.end)}\` is a value here, and \`${operator}\` gives ` +
-                "true or false, never one of its sides: a contract under it is only a test. " +
-                (operator === "||"
-                  ? `For the first the chain has, write \`${l} ? ${l} : ${r}\`; for whether it ` +
-                    `has either, \`${l} != 0 || ${r} != 0\`.`
-                  : `For the second where the chain has the first, write \`${l} ? ${r} : 0\`; for ` +
-                    `whether it has both, \`${l} != 0 && ${r} != 0\`.`),
-            );
-          }
-        }
+        // address): where the whole is a value, a side that is, or may be, one (`bindingKind`) is
+        // made a bool with `!!` (`withoutDead`), as the language has it. A scalar side is left.
         // Where the left side decides the whole, the right side is not compiled. A side that is
-        // itself `&&` or `||` is read as the whole is, so a contract under it is refused too.
+        // itself `&&` or `||` is read as the whole is.
         const sideMode = (side: AstNode): Mode =>
           mode === "value" && unwrap(side).type === "LogicalExpression" ? "value" : "test";
+        const normalize = (side: AstNode): void => {
+          if (mode === "value" && bindingKind(side, at) !== "scalar") {
+            bindingSides.push({ start: side.start, end: side.end });
+          }
+        };
         const decided = valueOf(left, at);
+        normalize(left);
         visit(left, sideMode(left), "value", at);
         if (decided === undefined || decided !== (operator === "||")) {
+          normalize(right);
           visit(right, sideMode(right), "value", at);
         } else dead.push({ start: right.start, end: right.end, kind: "expression" });
         return;
@@ -1011,5 +1030,6 @@ export function checkNames(
   return {
     chainKeys: [...chainKeys.values()],
     dead: dead.sort((a, b) => a.start - b.start),
+    bindingSides: bindingSides.sort((a, b) => a.start - b.start),
   };
 }

@@ -197,70 +197,73 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
     expect(message).toMatch(/--> main\.js:\d+:\d+/);
   });
 
-  it("`X || Y` and `X && Y` give true or false, so a contract under them is only a test: as a value it is refused on every chain", () => {
-    for (const [body, expression] of [
+  it("`X || Y` and `X && Y` give true or false: a contract under them, as a value, is made the bool", () => {
+    // 2.6.0 hands a contract binding under `&&`/`||` back as the whole; the SDK writes each such
+    // side `!!(…)`, the bool the language gives, so the program reads as written with `!!`.
+    const factory = (chain: number) =>
+      getDescriptor("uniswap-v3", "Factory")!.perChainAddress[chain]!.slice(2).toLowerCase();
+    for (const [chain, id, body, normalized] of [
       [
-        "const either: Address = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn either;",
-        "PancakeswapV3.Factory || UniswapV3.Factory",
-      ],
-      ["const either: Address = 0 || UniswapV3.Factory;\nreturn either;", "0 || UniswapV3.Factory"],
-      [
-        "const both = PancakeswapV3.Factory && UniswapV3.Factory;\nreturn both;",
-        "PancakeswapV3.Factory && UniswapV3.Factory",
-      ],
-      [
-        "return UniswapV3.Factory.at(UniswapV3.Factory && PancakeswapV3.Factory).getPool(USDC, WETH, 500);",
-        "UniswapV3.Factory && PancakeswapV3.Factory",
+        "optimism",
+        10,
+        "const a = UniswapV3.Factory;\nreturn a || 0;",
+        "const a = UniswapV3.Factory;\nreturn !!(a) || 0;",
       ],
       [
-        "USDC.approve(!UniswapV3.Factory || PancakeswapV3.Factory, 1);",
-        "!UniswapV3.Factory || PancakeswapV3.Factory",
+        "base",
+        8453,
+        "const a = UniswapV3.Factory;\nreturn a || 0;",
+        "const a = UniswapV3.Factory;\nreturn !!(a) || 0;",
       ],
+      [
+        "base",
+        8453,
+        "const a = UniswapV3.Factory;\nconst b = a;\nlet c = b;\nreturn 0 || c;",
+        "const a = UniswapV3.Factory;\nconst b = a;\nlet c = b;\nreturn 0 || !!(c);",
+      ],
+      [
+        "base",
+        8453,
+        "const r = { f: UniswapV3.Factory };\nreturn r.f && 1;",
+        "const r = { f: UniswapV3.Factory };\nreturn !!(r.f) && 1;",
+      ],
+      [
+        "optimism",
+        10,
+        "const both = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn both;",
+        "const both = !!(PancakeswapV3.Factory) || !!(UniswapV3.Factory);\nreturn both;",
+      ],
+      ["base", 8453, "return 1 && UniswapV3.Factory;", "return 1 && !!(UniswapV3.Factory);"],
     ] as const) {
-      for (const chain of ["optimism", "base"]) {
-        const message = refusal(chain, `function main() {\n${body}\n}`);
-        expect(message).toMatch(
-          new RegExp(`\`${expression.replace(/[.|&!]/g, "\\$&")}\` is a value here`),
-        );
-        expect(message).toMatch(/gives true or false, never one of its sides/);
-        expect(message).toMatch(new RegExp(`--> main\\.js:2:${body.indexOf(expression) + 1}`));
-      }
+      const program = hex(chain, `function main() {\n${body}\n}`);
+      expect(program).toBe(hex(chain, `function main() {\n${normalized}\n}`));
+      expect(program).not.toContain(factory(id));
     }
-    // A test of either is a test: `if`, `?:`, `!`, a comparison with zero.
-    expect(() =>
-      build("optimism", "if (PancakeswapV3.Factory || UniswapV3.Factory) { return 1; }\nreturn 0;"),
-    ).not.toThrow();
-  });
-
-  it("so is a contract binding under any name: an alias, an alias of one, a field, an `.at(…)`", () => {
-    for (const [chain, body, expression] of [
-      ["optimism", "const a = UniswapV3.Factory;\nreturn a || 0;", "a || 0"],
-      ["base", "const a = UniswapV3.Factory;\nreturn a || 0;", "a || 0"],
-      ["base", "const a = UniswapV3.Factory;\nconst b = a;\nlet c = b;\nreturn 0 || c;", "0 || c"],
-      ["base", "const r = { f: UniswapV3.Factory };\nreturn r.f && 1;", "r.f && 1"],
-      ["base", "return IERC20.at(x) || y;", "IERC20.at(x) || y"],
-      ["base", "return 1 && UniswapV3.Pool.at(x);", "1 && UniswapV3.Pool.at(x)"],
-    ] as const) {
-      const message = refusal(chain, `function main(x: Address, y: Address) {\n${body}\n}`);
-      expect(message).toMatch(
-        new RegExp(`\`${expression.replace(/[.|&!()]/g, "\\$&")}\` is a value here`),
-      );
-      expect(message).toMatch(/write `.+ \? .+ : .+`/);
-      const line = body.split("\n").findIndex((l) => l.includes(expression));
-      const column = body.split("\n")[line]!.indexOf(expression) + 1;
-      expect(message).toMatch(new RegExp(`--> main\\.js:${line + 2}:${column}`));
-    }
-    // A test of one is a test, and `&&`/`||` of anything else is the bool they always give.
+    // A binding the program writes too (`<Abi>.at(x)`, an ABI it imports), and the whole is a bool
+    // wherever a value goes: an Address is refused by the compiler, as `&&`/`||` of anything else
+    // always was.
+    const user = "function main(x: Address, y: Address) {\nreturn IERC20.at(x) || y;\n}";
+    const { bindingSides } = checkNames(user, chainNames(requireChain("base")));
+    expect(withoutDead(user, [], bindingSides)).toBe(
+      "function main(x: Address, y: Address) {\nreturn !!(IERC20.at(x)) || y;\n}",
+    );
+    expect(
+      refusal(
+        "optimism",
+        "function main(): Address {\nconst either: Address = PancakeswapV3.Factory || UniswapV3.Factory;\nreturn either;\n}",
+      ),
+    ).toMatch(/expected a number, found a bool/);
+    // A test of one is a test, left as written, and a scalar side is never rewritten.
     for (const body of [
       "const a = UniswapV3.Factory;\nconst b = a;\nif (b || x != 0) { return 1; }\nreturn 0;",
       "const a = UniswapV3.Factory;\nreturn !a ? 1 : 2;",
       "const a = UniswapV3.Factory;\nrequire(a && UniswapV3.QuoterV2);\nreturn 1;",
       "const ok = x != 0 || y != 0;\nreturn ok ? 1 : 0;",
-      "const both = (x == y) && true;\nreturn both ? 1 : 0;",
     ]) {
-      expect(() =>
-        hex("base", `function main(x: Address, y: Address): Uint256 {\n${body}\n}`),
-      ).not.toThrow();
+      const source = `function main(x: Address, y: Address): Uint256 {\n${body}\n}`;
+      const { bindingSides } = checkNames(source, chainNames(requireChain("base")));
+      expect(bindingSides).toEqual([]);
+      expect(() => hex("base", source)).not.toThrow();
     }
   });
 

@@ -189,13 +189,14 @@ remain available and explicitly report that deployment availability has not been
   declaration of a name wins in the block it is declared in, from the declaration on; a type-only
   import (`import type { USDT }`) declares none. The names are no module a program imports:
   `import … from "@sauce/chain"`, and any path or package mapping that reaches them, is refused.
-  `&&` and `||` give true or false, so a contract under them is a test: where the whole is a value
-  (`const e: Address = PancakeswapV3.Factory || UniswapV3.Factory`), it is refused on every chain,
-  naming `X ? X : Y` for the first the chain has. That holds for a contract binding under any name:
-  an alias (`const a = UniswapV3.Factory; return a || 0;`, and an alias of an alias), a record
-  field holding one, and an `<Abi>.at(x)` the program writes. This also closes an older deviation
-  from the language reference ("true or false, never one of the operands"): `IERC20.at(x) || y`
-  as a value returned the operand's address, on every release before this one.
+  `&&` and `||` give true or false, never one of their sides, and now do on a contract too:
+  compiler 2.6.0 hands a contract binding under them back as the whole, so the SDK makes each such
+  side the bool (`!!`) where the whole is a value: a registry contract, an alias of one
+  (`const a = UniswapV3.Factory; return a || 0;` returns `true`, as it did before this release),
+  an alias of an alias, a record field holding one, and an `<Abi>.at(x)` the program writes. Its
+  bytes are those of the program written with `!!`, and a scalar side is left as written. Fixed:
+  a program's own `IERC20.at(x) || y` as a value returned the operand's address on every earlier
+  release, against the language reference; it is the bool now.
 - **Changed (both): a use of a name the chain lacks is refused at the use, naming the chain.**
   Outside a branch a test of it rules out, such a name would be address zero. The SDK refuses it
   before compiling and gives the file, line and column: "`PancakeswapV3.Factory` is not deployed

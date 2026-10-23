@@ -546,16 +546,17 @@ branch it rules out; that is the whole presence mechanism, and `available(X)` is
 zero that is unusable at run time, so `routes/absent-names.ts#checkNames` reads the program (and
 every module the caller's resolver serves) before any rewrite and refuses, located and naming the
 chain, every use of a name the chain lacks outside a branch a test of it rules out, a `require`
-such a name makes false, a registry name no chain has, the Pot's balance of an absent token, and a
-contract binding under `&&`/`||` where the whole is a value (the language gives a bool, but 2.6.0
-hands a binding back as the whole: measured, a names-module contract, a record field holding
-`<Abi>.at(…)`, an inline `<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of
-aliases, resolved by `lexical-bindings.ts` per scope; a local initialized to `<Abi>.at(…)`, a `?:`,
-a call or a parameter give a bool; an import is refused as unsure). It also reports the code a test
-rules out (`dead`: an `if`
-arm, a `?:` arm, the right side of a decided `&&`/`||`, the rest of a block after a decided `if`
-that always exits, its functions, types and module declarations kept), and `compileForChain`
-blanks it in place (`withoutDead`: spaces, newlines kept, an `if` arm `{ }`, an expression `0`)
+such a name makes false, a registry name no chain has, and the Pot's balance of an absent token. It
+also reports the code a test rules out (`dead`: an `if` arm, a `?:` arm, the right side of a
+decided `&&`/`||`, the rest of a block after a decided `if` that always exits, its functions, types
+and module declarations kept), and each side of a `&&`/`||` whose whole is a value that is, or may
+be, a contract binding (`bindingSides`): the language gives a bool, but 2.6.0 hands a binding back
+as the whole — measured, a names-module contract, a record field holding `<Abi>.at(…)`, an inline
+`<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of aliases, resolved per scope by
+`lexical-bindings.ts`; a local initialized to `<Abi>.at(…)`, a `?:`, a call or a parameter give a
+bool, and an import is taken as one. `compileForChain` applies both in one pass before every rewrite
+(`withoutDead`: dead code blanked in place, spaces, newlines kept, an `if` arm `{ }`, an expression
+`0`; a binding side written `!!(…)`, which is the bool, the same bytes for a constant)
 before every rewrite, so the token, venue, account and accessor passes never lower ruled-out code
 — on Solana they would add its accounts and checks to `main`, which `available(X)`, removing the
 branch from the source, never did. A module the caller serves is only checked: no rewrite reads it.
