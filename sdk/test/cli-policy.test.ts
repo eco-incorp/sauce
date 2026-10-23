@@ -508,6 +508,38 @@ describe("the guard", () => {
         /tokens.USDC.perDay is 5 USDC; 4 USDC went in the last 24 hours, and this transaction sends 2 USDC/,
       );
     });
+
+    it("holds native USDC sent and a USDC allowance left together, as one token", async () => {
+      // 6 USDC sent as value and 6 more left allowed on the ERC-20: one balance, so 12 against 10.
+      const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+      const sent = parseUnits("6", 18);
+      const moved = onArc([
+        transfer(NATIVE, WALLET, RECIPIENT, sent),
+        transfer(CHAIN, WALLET, RECIPIENT, sent),
+        approval(ARC_USDC, WALLET, SPENDER, parseUnits("6", 6)),
+      ]);
+      const call = { to: RECIPIENT, data: "0x" as Hex, value: sent };
+      const capped = await guarded({ tokens: { USDC: { perTransaction: "10" } } })
+        .evm(moved, call)
+        .then(
+          () => "let through",
+          (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+        );
+      // With room for both, the day's total records both.
+      rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+      (await guarded({ tokens: { USDC: { perDay: "20" } } }).evm(moved, call)).sent("0xaa");
+      const spend = ledger().find((line) => line.state === "reserved")?.spend as Record<
+        string,
+        { amount: string; decimals: number }
+      >;
+
+      expect({ capped, spend: spend["tokens.USDC"] }).toEqual({
+        capped: expect.stringContaining(
+          "tokens.USDC.perTransaction is 10 USDC, and this transaction sends 12 USDC",
+        ) as unknown,
+        spend: { amount: String(parseUnits("12", 18)), decimals: 18 },
+      });
+    });
   });
 
   it("refuses an approval above the limit, but not one to Permit2", async () => {

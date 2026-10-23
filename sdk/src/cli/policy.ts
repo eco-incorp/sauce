@@ -795,7 +795,9 @@ export async function measureEvm(
     const untraced = !traced && (call.value > 0n || cook !== undefined);
     const nativeOut = untraced ? call.value + native : native;
     // Where the native coin is also an ERC-20 (Arc's USDC), it is one balance: whatever leaves as
-    // either is held to the token's limit as well as to the native one.
+    // either is held to the token's limit as well as to the native one. What leaves as the native
+    // coin and what the token reports (an allowance it leaves) are one row of that token, in the
+    // native coin's 18 decimals, so a limit holds them together and the day records their sum.
     const erc20 = nativeErc20(chain.id);
     const known = new Map<string, { symbol?: string; decimals?: number }>();
     const info = async (token: Address) => {
@@ -803,27 +805,32 @@ export async function measureEvm(
 
       return known.get(token)!;
     };
+    const coin = erc20 === undefined || nativeOut === 0n ? undefined : getAddress(erc20.address);
+    const toWei = erc20 === undefined ? 1n : 10n ** BigInt(18 - erc20.decimals);
     measured.push({
       ...base,
       native: nativeOf(nativeOut),
       tokens: [
         ...(await Promise.all(
-          [...tokens].map(async ([token, amount]) => ({
-            token,
-            ...(await info(token as Address)),
-            amount,
-            ...(delegated.has(token) ? { delegated: delegated.get(token)! } : {}),
-          })),
+          [...tokens]
+            .filter(([token]) => token !== coin)
+            .map(async ([token, amount]) => ({
+              token,
+              ...(await info(token as Address)),
+              amount,
+              ...(delegated.has(token) ? { delegated: delegated.get(token)! } : {}),
+            })),
         )),
-        ...(erc20 === undefined || nativeOut === 0n
+        ...(coin === undefined
           ? []
           : [
               {
-                token: getAddress(erc20.address),
-                symbol: (await info(getAddress(erc20.address))).symbol ?? nativeSymbol(chain),
+                token: coin,
+                symbol: (await info(coin)).symbol ?? nativeSymbol(chain),
                 decimals: 18,
-                limitDecimals: erc20.decimals,
-                amount: nativeOut,
+                limitDecimals: erc20!.decimals,
+                amount: nativeOut + (tokens.get(coin) ?? 0n) * toWei,
+                ...(delegated.has(coin) ? { delegated: delegated.get(coin)! * toWei } : {}),
               },
             ]),
       ],
