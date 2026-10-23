@@ -42,27 +42,49 @@ export interface BuildExecuteTransactionInput {
   lookupTables?: AddressesByLookupTableAddress;
 }
 
-/** Builds and fully signs a v0 transaction, optionally compressed through address lookup tables. */
-export async function buildExecuteTransaction({
+/**
+ * The transaction {@link buildExecuteTransaction} builds, compiled with every signature slot empty,
+ * and how to sign it: for a caller that simulates or checks it before anything is signed. Signing
+ * compiles the same message, so the signed transaction's bytes are these.
+ */
+export interface PreparedExecuteTransaction {
+  readonly transaction: Transaction;
+  sign(): Promise<SignedExecuteTransaction>;
+}
+
+/** {@link buildExecuteTransaction}'s transaction, compiled now and signed only when asked. */
+export function prepareExecuteTransaction({
   payer,
   instructions,
   latestBlockhash,
   lookupTables,
-}: BuildExecuteTransactionInput): Promise<SignedExecuteTransaction> {
+}: BuildExecuteTransactionInput): PreparedExecuteTransaction {
   const message = pipe(
     createTransactionMessage({ version: 0 }),
     (m) => setTransactionMessageFeePayerSigner(payer, m),
     (m) => appendTransactionMessageInstructions(instructions, m),
     (m) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
   );
-
   const compressed = lookupTables
     ? compressTransactionMessageUsingAddressLookupTables(message, lookupTables)
     : message;
-  const transaction = await signTransactionMessageWithSigners(compressed);
-  assertIsTransactionWithBlockhashLifetime(transaction);
 
-  return transaction;
+  return {
+    transaction: compileTransaction(compressed),
+    sign: async () => {
+      const transaction = await signTransactionMessageWithSigners(compressed);
+      assertIsTransactionWithBlockhashLifetime(transaction);
+
+      return transaction;
+    },
+  };
+}
+
+/** Builds and fully signs a v0 transaction, optionally compressed through address lookup tables. */
+export async function buildExecuteTransaction(
+  input: BuildExecuteTransactionInput,
+): Promise<SignedExecuteTransaction> {
+  return prepareExecuteTransaction(input).sign();
 }
 
 /** A blockhash for a transaction only measured: its size and its accounts do not depend on it. */

@@ -1,7 +1,8 @@
 /**
  * What a simulated Solana cook moved, from account states alone (`cli/svm-effects.ts`): token
  * account layouts read and refused, a registered mint named by its symbol, created and closed
- * accounts, and lamports. Executing a cook and reading its accounts back is `cli-solana.e2e.test.ts`.
+ * accounts, accounts handed to another key, and lamports. Executing a cook and reading its accounts
+ * back is `cli-solana.e2e.test.ts`.
  */
 import { address, getAddressEncoder, type Address } from "@solana/kit";
 
@@ -13,6 +14,7 @@ import {
   svmLeftInPotLines,
   svmMovedJson,
   svmMovedLines,
+  tokenAccount as readTokenAccount,
 } from "../src/cli/svm-effects.js";
 import type { SimulatedAccount } from "../src/svm/index.js";
 
@@ -182,6 +184,110 @@ describe("what a Solana cook moved", () => {
       expect.objectContaining({ account: SOURCE, after: 1_000_000n }),
     ]);
     expect(svmLeftInPotLines(svmLeftInPot(moved, MINTED), "the owner's wallet")).toEqual([]);
+  });
+
+  it.each([
+    ["another mint", OTHER_MINT, TOKEN_PROGRAM],
+    ["the same mint under the other token program", USDC, TOKEN_2022],
+  ] as const)(
+    "counts a token account replaced at its address with %s as the old one emptied and a new one filled",
+    async (_, mint, program) => {
+      const moved = await movedBy(
+        mintRpc({ [USDC]: 6 }),
+        SOLANA,
+        [SOURCE],
+        [account(tokenAccount(USDC, OWNER, 1_500_000n))],
+        [account(tokenAccount(mint, OWNER, 1_500_000n), program)],
+        labels,
+        OWNER,
+      );
+
+      // As strings: a failing BigInt comparison cannot cross Jest's worker boundary.
+      expect(
+        moved.tokens.map((change) => ({
+          mint: change.mint,
+          delta: String(change.after - change.before),
+        })),
+      ).toEqual([
+        { mint: USDC, delta: "-1500000" },
+        { mint, delta: "1500000" },
+      ]);
+    },
+  );
+
+  it("counts a balance change for whose the account was, and says whom the transaction handed it to", async () => {
+    // The owner's account pays 1 USDC and is handed to MINTED; an empty one of the owner's is
+    // filled and handed to the Pot.
+    const tracked = [SOURCE, POT_USDC];
+    const moved = await movedBy(
+      mintRpc({ [USDC]: 6 }),
+      SOLANA,
+      tracked,
+      [account(tokenAccount(USDC, OWNER, 1_500_000n)), account(tokenAccount(USDC, OWNER, 0n))],
+      [account(tokenAccount(USDC, MINTED, 500_000n)), account(tokenAccount(USDC, POT, 1_000_000n))],
+      labels,
+      OWNER,
+    );
+
+    expect(svmMovedJson(moved).tokenChanges).toEqual([
+      expect.objectContaining({
+        account: SOURCE,
+        owner: OWNER,
+        ownerAfter: MINTED,
+        delta: "-1000000",
+      }),
+      expect.objectContaining({
+        account: POT_USDC,
+        owner: OWNER,
+        ownerAfter: POT,
+        delta: "1000000",
+      }),
+    ]);
+    expect(svmMovedLines(moved).slice(0, 2)).toEqual([
+      "Token balance changes:",
+      `  ${SOURCE} (source), owned by ${OWNER} (the owner), handed to ${MINTED} by the transaction: -1 USDC`,
+    ]);
+    // What is left in the Pot is what the Pot holds after it.
+    expect(svmLeftInPot(moved, POT).map((change) => change.account)).toEqual([POT_USDC]);
+    expect(svmLeftInPot(moved, OWNER)).toEqual([]);
+  });
+
+  it("reads a token account's delegate, close authority and wrapped SOL, in either program", () => {
+    const encode = (key: Address) => getAddressEncoder().encode(key);
+    const data = tokenAccount(WSOL, OWNER, 5n, 170);
+    data[165] = 2;
+    const view = new DataView(data.buffer);
+    view.setUint32(72, 1, true);
+    data.set(encode(DEST), 76);
+    view.setUint32(109, 1, true);
+    view.setBigUint64(113, 2_039_280n, true);
+    view.setBigUint64(121, 3n, true);
+    view.setUint32(129, 1, true);
+    data.set(encode(MINTED), 133);
+    // As strings: a failing BigInt comparison cannot cross Jest's worker boundary.
+    const plain = (value: unknown) =>
+      JSON.parse(
+        JSON.stringify(value, (_, each: unknown) => (typeof each === "bigint" ? `${each}` : each)),
+      );
+
+    expect(plain(readTokenAccount(account(data, TOKEN_2022)))).toEqual({
+      program: TOKEN_2022,
+      mint: WSOL,
+      owner: OWNER,
+      amount: "5",
+      delegate: DEST,
+      delegatedAmount: "3",
+      closeAuthority: MINTED,
+      isNative: true,
+    });
+    expect(plain(readTokenAccount(account(tokenAccount(USDC, OWNER, 1n))))).toEqual({
+      program: TOKEN_PROGRAM,
+      mint: USDC,
+      owner: OWNER,
+      amount: "1",
+      delegatedAmount: "0",
+      isNative: false,
+    });
   });
 
   it("reads no balance out of a mint, or an extended Token-2022 mint", async () => {

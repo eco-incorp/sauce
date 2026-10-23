@@ -17,7 +17,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { address, createKeyPairSignerFromBytes, getAddressDecoder, lamports } from "@solana/kit";
+import {
+  address,
+  createKeyPairSignerFromBytes,
+  getAddressDecoder,
+  getCompiledTransactionMessageDecoder,
+  lamports,
+} from "@solana/kit";
 import type { Address, KeyPairSigner } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 import { Rent } from "litesvm";
@@ -299,6 +305,68 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     expect(bought).toBeGreaterThan(0n);
     expect(BigInt(rehearsed.returned as string)).toBe(bought);
     expect(tokenAmount(harness, potUsdc)).toBe(before - amount);
+  }, 300_000);
+
+  it("signs, with the owner's key, only what the run sends, a swap's stop checked in a rehearsal first", async () => {
+    restoreVenues(harness.svm);
+    const file = program(
+      "orca-signed",
+      "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n" +
+        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}\n",
+    );
+    const orca = pool("orca-whirlpool-sol-usdc");
+    const args = ["--args", orca.pool, String(10n ** 6n), String(priceAbove(orca.name))];
+    // Every ed25519 signature made while the run runs, with the bytes it signs: those the owner's
+    // key made are what it signed, whoever held it.
+    const subtle = globalThis.crypto.subtle;
+    const original = subtle.sign.bind(subtle);
+    const made: Array<{ data: Uint8Array<ArrayBuffer>; signature: ArrayBuffer }> = [];
+    subtle.sign = (async (algorithm, key, data) => {
+      const signature = await original(algorithm, key, data);
+      const bytes = ArrayBuffer.isView(data)
+        ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+        : new Uint8Array(data);
+      made.push({ data: Uint8Array.from(bytes), signature });
+
+      return signature;
+    }) as typeof subtle.sign;
+    const sentBefore = shim.sent.length;
+    let out: Record<string, unknown>;
+    try {
+      out = json(await run(file, ...args));
+    } finally {
+      subtle.sign = original;
+    }
+    expect(out).toMatchObject({ cook: { status: "success" } });
+    expect((out.computeStops as unknown[]).length).toBe(1);
+    // A transaction's message, which the key signed: not the bytes a keypair's own check signs as
+    // it is loaded, which are no message.
+    const isMessage = (data: Uint8Array): boolean => {
+      try {
+        getCompiledTransactionMessageDecoder().decode(data);
+
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const owned = [];
+    for (const { data, signature } of made) {
+      if (
+        isMessage(data) &&
+        (await subtle.verify("Ed25519", owner.signer.keyPair.publicKey, signature, data))
+      ) {
+        owned.push(Buffer.from(data).toString("hex"));
+      }
+    }
+    const sent = new Set(
+      shim.sent.slice(sentBefore).map((tx) => Buffer.from(tx.messageBytes).toString("hex")),
+    );
+
+    expect({
+      signed: owned.length,
+      unsent: owned.filter((message) => !sent.has(message)).length,
+    }).toEqual({ signed: sent.size, unsent: 0 });
   }, 300_000);
 
   it("Raydium.CLMM.swap then forwards what arrived; past its limit it skips, moving nothing", async () => {
