@@ -259,8 +259,8 @@ too, and the compiler emits the same code for either type; the id is still decla
 because it is not an address, and at the program's edge an `Address` is 20 bytes: `--args` refuses a
 32-byte value for an `Address` parameter. A V4 pool id taken as an input or returned is a `Uint256`.
 
-**The chains it compiles on.** Naming a venue a chain lacks is a compile error (`Contract
-'CLFactoryGaugesV3' (aerodrome-slipstream) is not deployed on 'ethereum'`).
+**The chains it compiles on.** A venue a chain lacks is zero there, and calling it is a compile
+error (`` `AerodromeSlipstream.CLFactoryGaugesV3` is not deployed on ethereum. ``).
 `AerodromeSlipstream.CLFactoryGaugesV3` is on Base alone, and so is SPCXc, so this program compiles
 for Base. For another chain, write the loops for the venues that chain has and name its own token:
 Ethereum has `UniswapV3.Factory` and `UniswapV4.StateView`, no Slipstream, and SpaceX as `SPCXon`
