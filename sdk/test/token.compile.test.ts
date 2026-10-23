@@ -155,8 +155,7 @@ describe("Token: SVM source compiles through the public compiler without route a
     const result = compileDirect({
       target: "svm",
       entry: "main.ts",
-      // Deliberately serve the exact generated source: compileSource's ensureVoidMain shim
-      // concealed that transfer/approval programs could not be compiled directly by consumers.
+      // Deliberately serve the exact generated source, as a consumer compiling it directly would.
       resolve: (path) => (path === "main.ts" ? Buffer.from(source) : undefined),
     });
 

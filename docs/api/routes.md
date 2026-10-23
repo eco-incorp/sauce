@@ -37,25 +37,26 @@ The program gets the chain's names with no import: its token symbols (`USDC`), p
 unchanged, for every chain where its names exist; a name the chain lacks fails the compile. The
 result is a `CompiledSauceProgram`:
 
-| Field                              | Contents                                                                                            |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `chain`                            | The canonical chain record                                                                          |
-| `bytecode`                         | The program, a `Uint8Array`                                                                         |
-| `entryEncoding`                    | Always `"abi-v1"`                                                                                   |
-| `entryParams`                      | `main`'s run-time parameters in order, each `{ name, type }`; on Solana without the `Account` slots |
-| `manifest`                         | On Solana, the accounts to attach, in order. Absent on EVM                                          |
-| `derivedAccounts`, `derivedValues` | On Solana, the accounts and `Uint256` values the SDK added to `main`, and how each is worked out    |
-| `stoppable`, `stoppableRuns`       | On Solana, the venue swaps at a price that a stop could hold, and how often each runs               |
-| `source`                           | The source after the SDK's token and protocol rewrites                                              |
+| Field                              | Contents                                                                                                                                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain`                            | The canonical chain record                                                                                                                                                                                       |
+| `bytecode`                         | The program, a `Uint8Array`                                                                                                                                                                                      |
+| `entryEncoding`                    | Always `"abi-v1"`                                                                                                                                                                                                |
+| `entryParams`                      | `main`'s run-time parameters in order, each `{ name, type }`; on Solana without the `Account` slots                                                                                                              |
+| `manifest`                         | On Solana, the accounts to attach, in order. Absent on EVM                                                                                                                                                       |
+| `derivedAccounts`, `derivedValues` | On Solana, the accounts and `Uint256` values the SDK added to `main`, and how each is worked out                                                                                                                 |
+| `stoppable`, `stoppableRuns`       | On Solana, the venue swaps at a price that a stop could hold, and how often each runs                                                                                                                            |
+| `entrySignature`                   | `main`'s signature as the compiler reports it: `params` (each `{ name, type, abi? }`, bound ones and Solana `Account` slots included) and `returns`, its declared return type (`"void"` when it returns nothing) |
+| `source`                           | The source after the SDK's token and protocol rewrites                                                                                                                                                           |
 
 `SauceProgramOptions` are `SauceCompileOptions` plus two fields:
 
-- `args` binds `main`'s arguments into the program as constants, in order. Each must be one word: an
-  integer (`Uint256` or `Int256`), an address or a `bool`. The program then takes none at run time. Leave it out to
-  compile `main` taking its arguments as it runs. A bound `Uint256`, `Address` or `bool` holds its
-  value in the whole program, so it may not share its name with anything the module declares or
-  with one of the chain's values (a token symbol, `chainId`, a protocol address): that is refused.
-  A bound `Int256` is a local of `main`.
+- `args` binds `main`'s arguments into the program as constants, in order: the compiler's own
+  `args`. Each must be one word: an integer (`Uint256` or `Int256`), an address or a `bool`; on
+  Solana an `Account` parameter takes none. The program then takes none at run time. A bound
+  parameter is a constant of `main` alone, as the parameter was, so one named like something the
+  module declares or like one of the chain's values (a token symbol, `chainId`) leaves that value
+  as it is outside `main`. Leave it out to compile `main` taking its arguments as it runs.
 - `stops`, on Solana, names the venue swaps at a price to hold to a stop, each by its derivation
   from `stoppable`.
 

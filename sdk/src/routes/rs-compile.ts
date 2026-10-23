@@ -11,6 +11,7 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 // The RS compiler's own option/result types, from the package `wasm-compiler.ts` loads -- a
 // hand-written mirror of them would drift with nothing to catch it.
 import type {
+  AbiParameter,
   AccountManifest,
   ResolveModule,
   ResolvePackage,
@@ -18,6 +19,7 @@ import type {
 } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
+import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
 const ENTRY = "main.js";
 
@@ -157,7 +159,7 @@ function endOfComment(source: string, open: number): number {
 /**
  * `source` with every string, template literal and comment replaced by spaces (newlines kept).
  * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
- * lets the brace search in `mainBody` run on the blanked copy.
+ * lets a search for `main` run on the blanked copy.
  */
 export function blankLiterals(source: string): string {
   const blank = (text: string): string => text.replace(/[^\n]/g, " ");
@@ -179,59 +181,6 @@ export function blankLiterals(source: string): string {
   return blanked.join("");
 }
 
-/**
- * `main`'s OWN body — its opening brace to the matching close — taken from an ALREADY-blanked
- * `code`. Stopping at the closing brace keeps a helper declared AFTER `main` out of the `return`
- * scan below, and the blanking keeps a thrown `"…return…"` message from reading as code.
- */
-function mainBody(code: string, from: number): string {
-  const open = code.indexOf("{", from);
-  if (open === -1) return "";
-
-  let depth = 0;
-  for (let i = open; i < code.length; i++) {
-    const ch = code[i];
-    if (ch === "{") depth++;
-    else if (ch === "}" && --depth === 0) return code.slice(open, i + 1);
-  }
-
-  return code.slice(open);
-}
-
-/**
- * Declare `main` void when it falls off the end.
- *
- * The compiler requires a function's return type to be declared rather than inferred. A route body
- * and the SDK's own generated sources are allowed to leave a `main` that returns nothing
- * unannotated, so the annotation is added here, at the single compile seam, after every rewrite
- * pass has run.
- */
-export function ensureVoidMain(source: string): string {
-  // EVERY search below runs on the blanked copy, never the raw source: an earlier string or comment
-  // containing `function main()` would otherwise be the match, and a paren inside a parameter's
-  // default-value string would close the param list early — either one lands `: void` mid-source.
-  // Blanking is length-preserving, so every index still names the same character in `source`.
-  const code = blankLiterals(source);
-  const signature = /function(\s+)main(\s*)\(/.exec(code);
-  if (signature === null) return source;
-
-  // Walk to the signature's closing paren — a param list can nest (`Account<Writable>`), but never
-  // parens, so counting them is enough.
-  let depth = 0;
-  let i = signature.index + signature[0].length - 1;
-  for (; i < code.length; i++) {
-    if (code[i] === "(") depth++;
-    else if (code[i] === ")" && --depth === 0) break;
-  }
-  // Already annotated: leave it alone.
-  if (/^\s*:/.test(code.slice(i + 1))) return source;
-  // It returns a value: leave it alone. Scanned over `mainBody` rather than the rest of the FILE,
-  // which would also see a helper declared after `main`.
-  if (/(^|[^.\w])return(\s|;)/.test(mainBody(code, i + 1))) return source;
-
-  return `${source.slice(0, i + 1)}: void${source.slice(i + 1)}`;
-}
-
 export interface RsCompileInput {
   source: string;
   target: CompileTarget;
@@ -247,6 +196,8 @@ export interface RsCompileInput {
   /** Module specifiers broadcast into every module with no `import` line -- see this file's own
    *  header for why this option only exists here, not on the TS path. */
   ambient?: string[];
+  /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
+  args?: readonly (bigint | boolean | string)[];
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -254,6 +205,10 @@ export interface RsCompileInput {
 export interface RsCompileResult extends CompileResult {
   entryEncoding: "abi-v1";
   manifest?: AccountManifest;
+  /** `main`'s parameters as the compiler reports them: an ABI signature, `Account`s left out. */
+  entryParams: readonly AbiParameter[];
+  /** `main`'s signature, as far as the compile reports it. */
+  entrySignature: EntrySignature;
 }
 
 /**
@@ -269,17 +224,20 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(ensureVoidMain(input.source), input.resolve),
+    resolve: makeResolve(input.source, input.resolve),
     resolvePackage: makeResolvePackage(input.resolvePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),
+    ...(input.args === undefined ? {} : { args: [...input.args] }),
   });
 
   const compiled: RsCompileResult = {
     bytecode: [result.bytecode],
     warnings: [],
     entryEncoding: result.entryEncoding,
+    entryParams: result.entryParams,
+    entrySignature: entrySignatureOf(result.entrySignature),
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 
