@@ -14,14 +14,15 @@ simulate) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.
 
 ## When to use
 
-| Task                                                             | Here | Elsewhere      |
-| ---------------------------------------------------------------- | ---- | -------------- |
-| A service compiles a program and builds its cook                 | yes  |                |
-| The raw compiler, ABI-v1 arguments, a custom resolver, a browser | yes  |                |
-| The registry, actions, verification or Solana from code          | yes  |                |
-| Tests that run programs on a forked EVM chain or Solana          | yes  |                |
-| Writing the program                                              |      | `sauce-script` |
-| Running it by hand                                               |      | `sauce-cli`    |
+| Task                                                             | Here | Elsewhere                |
+| ---------------------------------------------------------------- | ---- | ------------------------ |
+| A service compiles a program and builds its cook                 | yes  |                          |
+| A cook the owner signs for another account to send               | yes  | the command: `sauce-cli` |
+| The raw compiler, ABI-v1 arguments, a custom resolver, a browser | yes  |                          |
+| The registry, actions, verification or Solana from code          | yes  |                          |
+| Tests that run programs on a forked EVM chain or Solana          | yes  |                          |
+| Writing the program                                              |      | `sauce-script`           |
+| Running it by hand                                               |      | `sauce-cli`              |
 
 ## Core model
 
@@ -41,6 +42,7 @@ simulate) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.
 | ------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Compile for a chain, encode arguments | `routes` from `@eco-incorp/sauce`                                                           |
 | The Pot and its cook                  | `v12PredictPot`, `DEFAULT_POT_SALT`, `kitchenExecutionFee` (root); `v12Pot` (`/evm/engine`) |
+| A cook the owner signs, anyone sends  | `signedCookTypedData`, `encodeCookSigned`, `checkSignedCookPot` (`/evm/engine`)             |
 | Release addresses                     | `@eco-incorp/sauce/deployments`                                                             |
 | The raw compiler                      | `@eco-incorp/sauce/compiler`                                                                |
 | The protocol registry                 | root (`getProtocol`, `contracts`), `@eco-incorp/sauce/protocols/<slug>`                     |
@@ -107,6 +109,78 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
+
+## A cook the owner signs and another account sends
+
+A Private Pot's owner can sign a cook as EIP-712 typed data (domain `Sauce Pot`, the chain and the
+Pot) for any account to send with the Pot's `cookSigned`, paying the gas. The signature covers the
+engine, the program with its arguments, the value the sender sends, the most of the Kitchen's fee
+the Pot pays (`maxExecutionFee`), a nonce, an inclusive deadline and the one account allowed to send
+it (zero, the default: anyone). The Pot pays the fee from its balance, which includes the value; the
+sender sends exactly the signed value. It is what `sauce sign` builds.
+
+```ts
+import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
+import {
+  checkSignedCookPot,
+  cookNonceMasks,
+  encodeCookSigned,
+  encodeInvalidateNonces,
+  randomCookNonce,
+  signedCookTypedData,
+  verifySignedCook,
+  type SignedCookExecution,
+} from "@eco-incorp/sauce/evm/engine";
+import { getAddress, type Address, type Hex, type PublicClient, type WalletClient } from "viem";
+
+export async function signCook(
+  client: PublicClient, // the chain's
+  wallet: WalletClient, // the Pot owner's
+  owner: Address,
+  pot: Address,
+  program: Hex, // the bytecode with main's arguments appended
+  maxExecutionFee: bigint, // at least the Kitchen's executionFee() now
+) {
+  const check = await checkSignedCookPot(client, pot);
+  if (!check.ok) throw new Error(check.reason); // no code, not a Pot, Shared, or too old
+  const cook: SignedCookExecution = {
+    chainId: await client.getChainId(),
+    pot,
+    engine: getAddress(v12EngineAddress()),
+    program,
+    value: 0n, // what the sender sends; the Pot pays the Kitchen's fee from its balance
+    maxExecutionFee,
+    nonce: randomCookNonce(),
+    deadline: (await client.getBlock()).timestamp + 600n, // inclusive
+    // submitter left out: anyone may send it
+  };
+  const signature = await wallet.signTypedData({ account: owner, ...signedCookTypedData(cook) });
+  if (!(await verifySignedCook({ ...cook, signature, owner: check.owner }, client))) {
+    throw new Error("not the Pot owner's signature");
+  }
+  const send = encodeCookSigned({ ...cook, signature }); // { to, data, value }, for any account
+  const cancel = cookNonceMasks([cook.nonce]).map(({ word, mask }) => ({
+    to: pot,
+    data: encodeInvalidateNonces(word, mask), // from the owner
+    value: 0n,
+  }));
+
+  return { cook, signature, send, cancel };
+}
+```
+
+- `checkSignedCookPot` refuses a Pot with no code, a Shared Pot (no owner to sign) and a Pot
+  created before signed cooks, which has no `cookSigned`: a cook sent to it reverts.
+- `signedCookTypedDataJson` is the same typed data for `eth_signTypedData_v4` (numbers as decimal
+  strings), and `signedCookDigest` its hash, for a signer that is not viem.
+- `verifySignedCook` applies the Pot's own rules: a 65-byte signature in the low-`s` form, or,
+  given a client and an owner with code (a Safe, an EIP-7702 account), its `isValidSignature`.
+- Each nonce runs once, in any order; a cook that reverts leaves it unused, so the signature can be
+  sent again until the deadline by anyone holding it. `randomCookNonce` never collides with another
+  signature out; `cookNonceWordBit`, `cookNonceUsed` and `cookNonceSlot` read and place one.
+  `invalidateNonces`, from the owner or from a cook the Pot runs, cancels.
+- A program the Pot cooks can write the nonce record: sign short deadlines, and cook only programs
+  you have read.
 
 ## The raw compiler
 

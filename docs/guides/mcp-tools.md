@@ -37,39 +37,41 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 
 How many tools a server has depends on how it runs:
 
-| Server                                 | Tools | Left out                                                  |
-| -------------------------------------- | ----- | --------------------------------------------------------- |
-| Over stdio (what an agent starts)      | 25    | nothing                                                   |
-| Over stdio with `--no-wallets`         | 19    | the six `sauce_wallet_*` tools                            |
-| Over stdio with `--no-stores`, or HTTP | 17    | the wallet tools, `sauce_pot_list` and `sauce_pot_import` |
+| Server                                 | Tools | Left out                                                                |
+| -------------------------------------- | ----- | ----------------------------------------------------------------------- |
+| Over stdio (what an agent starts)      | 27    | nothing                                                                 |
+| Over stdio with `--no-wallets`         | 20    | the six `sauce_wallet_*` tools and `sauce_sign`                         |
+| Over stdio with `--no-stores`, or HTTP | 18    | the wallet tools, `sauce_sign`, `sauce_pot_list` and `sauce_pot_import` |
 
-| Tool                   | Like                   | Returns                                                                                                                                                                                                                                                                                                        |
-| ---------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sauce_skills`         | —                      | Every agent skill with when to use it and its files' sizes, the package version, and `latest` when a newer one is published                                                                                                                                                                                    |
-| `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                                                                            |
-| `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                                                                |
-| `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                      |
-| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and where the server reads it (`endpoint`: `config`, `public` or `none`); `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                    |
-| `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                                   |
-| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and, each direction, the distributed swap's `priceLimit` and `maxAvgPrice` (input per output) and a single swap's `minAvgPrice` (output per input); with `slippageBps`, the `limits` ([Prices and pools](#prices-and-pools))               |
-| `sauce_pools`          | `sauce pools`          | A pair's price-limit pools on the chain at one `block`, deepest first, each with its price both ways and its depth; `empty`, the pools with no liquidity ([Prices and pools](#prices-and-pools))                                                                                                               |
-| `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding` (`abi-v1`), defines and their provenance, called `contracts`, `compiler`, `engine`, SVM `manifest`; with `args`, the `payload`                                                                                                                              |
-| `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                                |
-| `sauce_tx`             | `sauce tx`             | The unsigned cook on the Pot, with who signs it and the Kitchen's fee; while the Pot has no code, its deployment first. On Solana a base64 transaction, or the first step of a plan ([What it returns](#what-sauce_tx-returns))                                                                                |
-| `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                 |
-| `sauce_reclaim`        | `sauce reclaim`        | Solana: an owner's open code buffers and Sauce lookup tables, the rent they hold, and the unsigned `transactions` that close the ones not in use                                                                                                                                                               |
-| `sauce_simulate`       | `sauce simulate`       | `ok`, then `leftInPot` (what the Pot holds after the cook of what it moved, with a note when that is anything), the `path` taken, each transaction's gas (`transactions`), what `main` returns, `moves` by role, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts          |
-| `sauce_send`           | `sauce send`           | Signed transactions simulated as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash`, `status`, `explorer` and `trace`, and for a cook what moved; with a plan's `cursor`, `next` ([`sauce_send`](#sauce_send))                                                                    |
-| `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                                 |
-| `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                          |
-| `sauce_wallet_enable`  | —                      | Over stdio: the wallets enabled for the server's life by the password source it names (`env`, `file`, `dotenv` and `variable`, or `generate`), never the password: `dir`, `source`, the `wallets` there, and with `generate` the new `passwordFile`                                                            |
-| `sauce_wallet_create`  | `sauce wallet new`     | Over stdio, once the wallets are enabled: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                |
-| `sauce_wallet_import`  | `sauce wallet import`  | Over stdio, once the wallets are enabled: the key in a file given by its `path` (a keystore, a Solana keypair file or a hex key), as a new wallet: its `name`, `kind`, `address` and `policy`, never its key                                                                                                   |
-| `sauce_wallet_list`    | `sauce wallet list`    | Over stdio, with no password: the wallet `dir`, whether the wallets are `enabled` and by which `source`, and each wallet's name, kind, address and policy                                                                                                                                                      |
-| `sauce_wallet_address` | `sauce wallet address` | Over stdio, with no password: one wallet's `name`, `kind`, `address` and `policy`                                                                                                                                                                                                                              |
-| `sauce_wallet_send`    | —                      | Over stdio, once the wallets are enabled: another tool's result (or a transaction, or a list; a Solana plan sent step by step) simulated, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, and for a cook `moves`, `leftInPot` and `summary`; or the refusal |
-| `sauce_pot_list`       | `sauce pot list`       | Over stdio, where the server keeps the Pot store: each recorded Pot's chain, address, owner, salt, kind, Kitchen, `release` and `engine`, and the `deployment` that made it                                                                                                                                    |
-| `sauce_pot_import`     | `sauce pot import`     | Over stdio, where the server keeps the Pot store: the Pot `pot` names (EVM), or an `owner`'s at its salt, read from the chain and recorded; the records, as `sauce_pot_list` gives them                                                                                                                        |
+| Tool                   | Like                   | Returns                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sauce_skills`         | —                      | Every agent skill with when to use it and its files' sizes, the package version, and `latest` when a newer one is published                                                                                                                                                                                                                             |
+| `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                                                                                                                     |
+| `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                                                                                                         |
+| `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                                                               |
+| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and where the server reads it (`endpoint`: `config`, `public` or `none`); `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                                                             |
+| `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                                                                            |
+| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and, each direction, the distributed swap's `priceLimit` and `maxAvgPrice` (input per output) and a single swap's `minAvgPrice` (output per input); with `slippageBps`, the `limits` ([Prices and pools](#prices-and-pools))                                                        |
+| `sauce_pools`          | `sauce pools`          | A pair's price-limit pools on the chain at one `block`, deepest first, each with its price both ways and its depth; `empty`, the pools with no liquidity ([Prices and pools](#prices-and-pools))                                                                                                                                                        |
+| `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding` (`abi-v1`), defines and their provenance, called `contracts`, `compiler`, `engine`, SVM `manifest`; with `args`, the `payload`                                                                                                                                                                       |
+| `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                                                                         |
+| `sauce_tx`             | `sauce tx`             | The unsigned cook on the Pot, with who signs it and the Kitchen's fee; while the Pot has no code, its deployment first. On Solana a base64 transaction, or the first step of a plan ([What it returns](#what-sauce_tx-returns))                                                                                                                         |
+| `sauce_signed_cook`    | `sauce sign`           | Signs nothing: the cook for the Pot's owner to sign, as `typedData` (`eth_signTypedData_v4`) and its `digest`, with what it binds; given a `signature`, checked against the owner, the `cook` any account sends; with `cancel`, the owner's unsigned `invalidateNonces` calls ([A signed cook](#a-signed-cook))                                         |
+| `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                                                          |
+| `sauce_reclaim`        | `sauce reclaim`        | Solana: an owner's open code buffers and Sauce lookup tables, the rent they hold, and the unsigned `transactions` that close the ones not in use                                                                                                                                                                                                        |
+| `sauce_simulate`       | `sauce simulate`       | `ok`, then `leftInPot` (what the Pot holds after the cook of what it moved, with a note when that is anything), the `path` taken, each transaction's gas (`transactions`), what `main` returns, `moves` by role, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                   |
+| `sauce_send`           | `sauce send`           | Signed transactions simulated as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash`, `status`, `explorer` and `trace`, and for a cook what moved; with a plan's `cursor`, `next` ([`sauce_send`](#sauce_send))                                                                                                             |
+| `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                                                                          |
+| `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                                                                   |
+| `sauce_wallet_enable`  | —                      | Over stdio: the wallets enabled for the server's life by the password source it names (`env`, `file`, `dotenv` and `variable`, or `generate`), never the password: `dir`, `source`, the `wallets` there, and with `generate` the new `passwordFile`                                                                                                     |
+| `sauce_wallet_create`  | `sauce wallet new`     | Over stdio, once the wallets are enabled: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                                         |
+| `sauce_wallet_import`  | `sauce wallet import`  | Over stdio, once the wallets are enabled: the key in a file given by its `path` (a keystore, a Solana keypair file or a hex key), as a new wallet: its `name`, `kind`, `address` and `policy`, never its key                                                                                                                                            |
+| `sauce_wallet_list`    | `sauce wallet list`    | Over stdio, with no password: the wallet `dir`, whether the wallets are `enabled` and by which `source`, and each wallet's name, kind, address and policy                                                                                                                                                                                               |
+| `sauce_wallet_address` | `sauce wallet address` | Over stdio, with no password: one wallet's `name`, `kind`, `address` and `policy`                                                                                                                                                                                                                                                                       |
+| `sauce_wallet_send`    | —                      | Over stdio, once the wallets are enabled: another tool's result (or a transaction, or a list; a Solana plan sent step by step; a signed cook's `cook`, from any wallet) simulated, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, and for a cook `moves`, `leftInPot` and `summary`; or the refusal |
+| `sauce_sign`           | `sauce sign --wallet`  | Over stdio, once the wallets are enabled: `sauce_signed_cook`'s result signed by a wallet, as the Pot's owner, with its `signature` and `cook`; refused, naming the limit, by a policy with `native` or `tokens` limits ([Signed cooks](signed-cooks.md))                                                                                               |
+| `sauce_pot_list`       | `sauce pot list`       | Over stdio, where the server keeps the Pot store: each recorded Pot's chain, address, owner, salt, kind, Kitchen, `release` and `engine`, and the `deployment` that made it                                                                                                                                                                             |
+| `sauce_pot_import`     | `sauce pot import`     | Over stdio, where the server keeps the Pot store: the Pot `pot` names (EVM), or an `owner`'s at its salt, read from the chain and recorded; the records, as `sauce_pot_list` gives them                                                                                                                                                                 |
 
 ## Inputs
 
@@ -123,6 +125,12 @@ it, as the server's instructions also list:
 | `--per-venue`             | `perVenue`        |
 | `--slots`                 | `slots`           |
 | `--expect-revert`         | `expectRevert`    |
+| `--max-fee`               | `maxExecutionFee` |
+| `--nonce`                 | `nonce`           |
+| `--deadline`              | `deadline`        |
+| `--within`                | `within`          |
+| `--submitter`             | `submitter`       |
+| `--cancel`                | `cancel`          |
 
 Error messages and notes are the `sauce` command's, in the tools' words: a flag is named as the
 tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line as the tool
@@ -140,9 +148,10 @@ The compiling tools take the program as text:
 | `modules`         | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
 | `chain`, `target` | The chain, by slug, alias or id. `target: "svm"` alone is Solana                                                       |
 
-`path` is taken by `sauce_compile`, `sauce_simulate` and `sauce_tx`, read with its relative imports
-beside it. A server over HTTP reads no file and refuses `path`. Each of the three returns
-`sourceSha256`, the sha256 of the program's text, which ties a simulation to the file it came from.
+`path` is taken by `sauce_compile`, `sauce_simulate` and `sauce_tx`, and by `sauce_signed_cook` and
+`sauce_sign`, read with its relative imports beside it. A server over HTTP reads no file and refuses
+`path`. Each of the first three returns `sourceSha256`, the sha256 of the program's text, which ties
+a simulation to the file it came from.
 
 `sauce_compile` also takes:
 
@@ -194,6 +203,25 @@ deploys the Pot, funds it and cooks with one approval.
   block;
 - `summary`, which returns only `ok` or the revert reason, what `main` returned, `leftInPot`, the
   balance changes, the transfers, each transaction's gas and the block.
+
+### A signed cook
+
+`sauce_signed_cook` and `sauce_sign` take the program, `chain`, `args` and the Pot (`owner` with
+`salt` or `saltHex`, or `pot`) as a cook does, and what the owner signs, as `sauce sign` takes it
+([Signed cooks](signed-cooks.md)):
+
+- `value` in wei: what the sender must send, 0 by default. The Pot pays the Kitchen's fee itself.
+- `maxExecutionFee` in wei: the most of the Kitchen's fee the Pot pays. The default is the fee now,
+  read from the chain.
+- `nonce`, as a decimal string; random by default.
+- `deadline` (unix seconds) or `within` (seconds from the chain's latest block; an hour by default).
+- `submitter`: the only address that may send it; anyone by default.
+- `rpcUrl`.
+
+`sauce_signed_cook` also takes `signature`, made elsewhere over the `typedData` it returned, to
+check and build `cook`; and `cancel`, a list of nonces, for the owner's `invalidateNonces` calls
+instead of a cook. `sauce_sign` takes `wallet`, the owner's, and signs. Both are refused on a
+preview chain and on Solana.
 
 ### Token amounts
 
@@ -304,7 +332,7 @@ On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_act
 `sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`
 and `sauce_pot`'s prediction and reads. So an agent can prototype any protocol on any chain.
 
-`sauce_tx` is refused there, before any endpoint is reached.
+`sauce_tx`, `sauce_signed_cook` and `sauce_sign` are refused there, before any endpoint is reached.
 
 A refused call is an error result (`isError: true`) whose structured content is the refusal, also
 given as its text:

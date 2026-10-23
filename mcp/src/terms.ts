@@ -68,6 +68,12 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["per-venue"], input: "perVenue" },
   { flags: ["slots"], input: "slots" },
   { flags: ["expect-revert"], input: "expectRevert" },
+  { flags: ["max-fee"], input: "maxExecutionFee" },
+  { flags: ["nonce"], input: "nonce" },
+  { flags: ["deadline"], input: "deadline" },
+  { flags: ["within"], input: "within" },
+  { flags: ["submitter"], input: "submitter" },
+  { flags: ["cancel"], input: "cancel" },
 ];
 
 /** What the mapping does not show flag by flag: a command is its tool, and a file its text. */
@@ -110,6 +116,10 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     "a signed run (sign sauce_tx's transactions with any signer, then sauce_send them)",
   ],
   [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|pools)"), "sauce_$1"],
+  // `sauce sign --cancel …` is the cancel input: sauce_signed_cook builds it, sauce_sign sends it.
+  [command("sauce sign --cancel"), "sauce_signed_cook with cancel (sauce_sign, from a wallet)"],
+  // A signed cook's one signature (`sauce sign --signature <hex>`): sauce_signed_cook's signature.
+  [/--signature <hex>/g, "signature"],
   // A wallet's commands are its tools; `wallet new` is sauce_wallet_create.
   [/`?sauce wallet new(?: [a-z0-9][a-z0-9_-]*)?`?/g, "sauce_wallet_create"],
   [/`?sauce wallet (list|address|import)`?/g, "sauce_wallet_$1"],

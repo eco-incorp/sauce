@@ -89,6 +89,13 @@ import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
 import { reclaimCommand } from "./reclaim.js";
 import { sendCommand, signedChain } from "./send.js";
+import {
+  cancelCommand,
+  parseUint256,
+  refuseSignInput,
+  signCommand,
+  SIGNED_COOKS_ARE_EVM,
+} from "./sign.js";
 import { simulateCommand } from "./simulate.js";
 import { previewChainsNote, requireSupported, supportedChainNames } from "./support.js";
 import { parsePin, verifyCommand } from "./verify.js";
@@ -549,6 +556,69 @@ const FORMAT: FlagSpecs = {
     type: "string",
     value: "<json|cast>",
     help: "json (default), or a `cast send` line with placeholders",
+  },
+};
+
+/** `sauce sign`'s own: what the owner signs beside the program, and `--cancel`. */
+const SIGN: FlagSpecs = {
+  value: {
+    type: "string",
+    value: "<wei>",
+    help: "What the submitter sends with the cook, signed exactly (default 0)",
+  },
+  "max-fee": {
+    type: "string",
+    value: "<wei>",
+    help: "The most of the Kitchen's fee the Pot pays, signed (default: the fee read now)",
+  },
+  nonce: { type: "string", value: "<n>", help: "The nonce it runs once under (default: random)" },
+  within: {
+    type: "string",
+    value: "<seconds>",
+    help: "How long it can be submitted, from now: the chain's latest block (default 3600)",
+  },
+  deadline: {
+    type: "string",
+    value: "<unix seconds>",
+    help: "Or the last second it can be submitted, exactly (inclusive)",
+  },
+  submitter: {
+    type: "string",
+    value: "<address>",
+    help: "The only account that may submit it (default: anyone)",
+  },
+  signature: {
+    type: "string",
+    multiple: true,
+    value: "<hex>",
+    help: "The owner's signature of the typed data, made elsewhere: checked, then the cook built",
+  },
+  cancel: {
+    type: "string",
+    multiple: true,
+    value: "<nonce>",
+    help: "Instead, cancel this nonce (repeatable): invalidateNonces on the Pot, from its owner",
+  },
+};
+
+/** The EVM signers, which `sauce sign` signs as the Pot's owner with. */
+const EVM_SIGNER: FlagSpecs = {
+  wallet: {
+    type: "string",
+    value: "<name>",
+    help: "Sign as the Pot's owner with an EVM wallet of the wallet directory (sauce wallet)",
+  },
+  ...WALLETS,
+  ...PASSWORD,
+  keystore: {
+    type: "string",
+    value: "<path>",
+    help: "Or with a JSON keystore (v3), with a password source",
+  },
+  "private-key": {
+    type: "string",
+    value: "<hex>",
+    help: "Or with a raw key (lands in shell history)",
   },
 };
 
@@ -2022,6 +2092,155 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         },
         io,
       );
+    },
+  },
+  sign: {
+    unsigned: true,
+    usage: [
+      "sauce sign <file | -> --chain <slug|id> (--wallet <name> | --keystore <path> | --private-key <hex> | --owner <address> | --pot <address>) [--salt <label> | --salt-hex <bytes32>] [--within <seconds> | --deadline <unix seconds>] [--submitter <address>] [--max-fee <wei>] [--value <wei>] [--nonce <n>] [--signature <hex>] [--rpc-url <url> | --config <file> | --offline] [--json] [--args …]",
+      "sauce sign --cancel <nonce> [--cancel <nonce>]… --chain <slug|id> (--wallet <name> | --keystore <path> | --private-key <hex> | --owner <address> | --pot <address>) [--rpc-url <url> | --config <file> | --offline] [--json]",
+    ],
+    summary: "Sign a cook on your Pot that anyone (or one account) may submit",
+    flags: {
+      ...PROGRAM,
+      owner: {
+        type: "string",
+        value: "<address>",
+        help: "The Pot's owner, which derives the Pot with the salt (default: the signer)",
+      },
+      pot: { type: "string", value: "<address>", help: "Or the Pot itself, by address" },
+      ...SALT,
+      "args-json": COOK["args-json"]!,
+      ...SIGN,
+      ...EVM_SIGNER,
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+      ...ARGS,
+    },
+    details: [
+      "Compiles the file with main's arguments, as tx does, and prints what the Pot's owner signs",
+      "so that another account can submit the cook, with the Pot's own cookSigned: { chainId, pot,",
+      "owner, engine, program, value, maxExecutionFee, nonce, deadline, submitter, typedData,",
+      "digest, signature, cook, deployPot }. typedData is EIP-712 (eth_signTypedData_v4): Cook",
+      "{ engine, program, value, maxExecutionFee, nonce, deadline, submitter } under the Pot's",
+      "domain, for this chain alone. program is the bytecode with the arguments appended, all of",
+      "it signed. Numbers are decimal strings.",
+      "",
+      "With a signer (the Pot's owner: --wallet, --keystore or --private-key) it signs, and cook",
+      "is the transaction to submit, { chainId, to: the Pot, data: cookSigned(…), value }, as tx",
+      "spells one. Without one it prints the typed data for any wallet to sign; given that",
+      "signature with --signature, it checks it is the owner's (a contract wallet's through",
+      "ERC-1271, with an endpoint) and builds cook. The submitter sends cook with exactly the",
+      "signed value, and pays gas, nothing else: sign it with any wallet, or sauce send it signed.",
+      "",
+      "What is signed: --value (default 0); --max-fee, the most of the Kitchen's fee the Pot pays",
+      "(default: the fee read now; with --offline, required); --nonce (default random, so two",
+      "outstanding signatures never collide; one you allocate densely costs less gas); the",
+      "deadline, --deadline or now plus --within (default 3600 seconds), now being the chain's",
+      "latest block (else this clock); --submitter, the only account that may submit it (default",
+      "anyone). The Pot pays the Kitchen's fee itself, from its balance and the cook's value: keep",
+      "native coin in it. Whoever holds the signature may submit it until the deadline, once; a",
+      "cook that reverts leaves its nonce unused, to be submitted again.",
+      "",
+      "With an endpoint it reads the Pot first. One with no code that --owner (or the signer) and",
+      "the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any",
+      "account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot",
+      "and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the",
+      "Pot's balance, and warns when they do not cover the fee. --offline reads nothing.",
+      "",
+      "--cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce",
+      "word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a",
+      "signer they are printed unsigned, for the owner to sign and sauce send.",
+      "",
+      "From a wallet with a policy (sauce wallet --help), the policy's chains and to (the Pot)",
+      "apply, and a native or tokens limit refuses the signature: what a signed cook moves is",
+      "known only when it is submitted, which a limit cannot measure now. On Solana there is no",
+      "signed cook: the owner signs the cook transaction, and any fee payer may sponsor it.",
+      ...SUPPORTED_ONLY("Signs and cancels"),
+      "",
+      "Examples:",
+      "  sauce sign pay.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD \\",
+      "    --within 600 --args <recipient> 1000000",
+      "  sauce sign pay.sauce.ts --chain base --owner <owner> --submitter <relayer> --args <recipient> 5",
+      "  sauce sign pay.sauce.ts --chain base --owner <owner> --signature <hex> --args <recipient> 5",
+      "  sauce sign --cancel <nonce> --chain base --keystore ~/.keys/me.json",
+    ].join("\n"),
+    trailing: "args",
+    run: async (args, io, trailing) => {
+      const cancel = repeatedFlag(args, "cancel");
+      const signatures = repeatedFlag(args, "signature");
+      if (signatures.length > 1) throw new UsageError("give one --signature");
+      // A Solana wallet signs no EVM cook: refused by name, never read as no signer.
+      const wallet = walletGiven(args, io);
+      if (wallet !== undefined) evmAddressOf(wallet);
+      if (cancel.length > 0) {
+        if (args.positionals.length > 0) {
+          throw new UsageError(
+            `--cancel cancels nonces, and signs no program: leave out ${args.positionals[0]}`,
+          );
+        }
+        const signing = [
+          ...["args-json", "value", "max-fee", "nonce", "within", "deadline", "submitter"],
+          ...["define", "defines", "source-dir", "target"],
+        ].find((flag) => args.values[flag] !== undefined);
+        if (signing !== undefined || signatures.length > 0 || trailing !== undefined) {
+          throw new UsageError(
+            `--${signing ?? (trailing === undefined ? "signature" : "args")} signs a cook, and ` +
+              "--cancel signs none",
+          );
+        }
+        const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+        if (chain.kind !== "evm") throw new UsageError(SIGNED_COOKS_ARE_EVM);
+        // Before any endpoint or key.
+        requireSupported("cancelling signed cooks", [chain]);
+        const signer = hasSigner(args, io) ? await signerOf(args, io) : undefined;
+        const rpcUrl = endpoint(args, io, chain);
+
+        return cancelCommand(
+          {
+            chain,
+            target: potInput(args, signer?.address),
+            nonces: cancel.map((nonce) => parseUint256("cancel", nonce)),
+            ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          },
+          signer,
+        );
+      }
+      const program = await programOperand(args, io, "signing a cook");
+      const [signature] = signatures;
+      if (signature !== undefined && !/^0x(?:[0-9a-fA-F]{2})+$/.test(signature)) {
+        throw new UsageError(`--signature: '${signature.slice(0, 20)}…' is not 0x-prefixed hex`);
+      }
+      const submitter = stringFlag(args, "submitter");
+      const rpcUrl = endpoint(args, io, program.chain);
+      const signed = Object.fromEntries(
+        (
+          [
+            ["max-fee", "maxExecutionFee"],
+            ["nonce", "nonce"],
+            ["deadline", "deadline"],
+            ["within", "within"],
+          ] as const
+        ).flatMap(([flag, field]) => {
+          const raw = stringFlag(args, flag);
+
+          return raw === undefined ? [] : [[field, parseUint256(flag, raw)]];
+        }),
+      ) as { maxExecutionFee?: bigint; nonce?: bigint; deadline?: bigint; within?: bigint };
+      const given = {
+        chain: program.chain,
+        ...signed,
+        ...(submitter === undefined ? {} : { submitter: parseAddress("submitter", submitter) }),
+        ...(signature === undefined ? {} : { signature: signature as `0x${string}` }),
+        ...(rpcUrl === undefined ? {} : { rpcUrl }),
+      };
+      // Before any key is unlocked.
+      refuseSignInput(given, hasSigner(args, io));
+      const signer = hasSigner(args, io) ? await signerOf(args, io) : undefined;
+      const input = cookInput(args, io, trailing, signer?.address, program);
+
+      return signCommand({ ...input, ...given }, io, signer);
     },
   },
   send: {
