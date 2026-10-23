@@ -237,6 +237,11 @@ build's output does not move.
 skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
 results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances.
 The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
+`official-examples.mainnet` (`test:mainnet`) runs the protocols' own Solidity examples ported to
+Sauce (each header's `Ported from` line names the official file at a pinned commit; the generator's
+`PORTED_EXAMPLES` lists them for the manual's `docs/guides/solidity-examples.md`) through `sauce
+simulate` and `sauce run` on Ethereum state, each result held to the protocol's own quoter or
+accounts and to the balances it moved.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -322,8 +327,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
-  `-base`, `-optimism`) ~80, ~35 and ~25 KB, and the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each.
+  `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
+  (`cookbook-{ethereum,base}`) ~135 KB each, and the ported examples' `official-ethereum` ~630 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -1361,10 +1366,11 @@ beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`,
   `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
   issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
   byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
-  rendered as a guide, and `docs/guides/solana-distributed-swap.md`, the
+  rendered as a guide, `docs/guides/solana-distributed-swap.md`, the
   `sauce-solana-distributed-swap` skill and its venues reference rendered the same way (each
   example's whole file in place of the code the skill quotes, and the agent-only sections, When to
-  use and Files, left out: `AGENT_SECTIONS`). The two
+  use and Files, left out: `AGENT_SECTIONS`), and `docs/guides/solidity-examples.md`, the ported
+  examples (`PORTED_EXAMPLES`) with their sources and line counts. The two
   renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
   manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
   never sent into `skills/`, nor an agent into `docs/`. And each manual page opens with the
