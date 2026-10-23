@@ -1639,29 +1639,112 @@ describeSvm(
       }
     });
 
-    it.each(["an approval", "a handoff"] as const)(
-      "refuses %s of a token whose decimals cannot be read, where a token is limited",
-      async (what) => {
-        // A mint with no account, which the registry does not record: neither Approve nor
-        // SetAuthority reads it.
-        const mint = randomAddress();
-        const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
-        const transaction = await signed([
+    /** A token whose mint has no account and which the registry does not record, with an
+     *  account of the wallet's: neither Approve nor SetAuthority reads the mint. */
+    const unreadable = (what: "an approval" | "a handoff") => {
+      const mint = randomAddress();
+      const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+
+      return {
+        mint,
+        instruction:
           what === "an approval"
             ? approve(source, randomAddress(), AMOUNT)
             : setAuthority(TOKEN_PROGRAM, source, "owner", randomAddress()),
-        ]);
+      };
+    };
+
+    it.each(["an approval", "a handoff"] as const)(
+      "refuses %s of a token whose decimals cannot be read, where that token is limited",
+      async (what) => {
+        const { mint, instruction } = unreadable(what);
+        const transaction = await signed([instruction]);
         const why = `the decimals of mint ${mint} could not be read`;
 
         const measured = await measure(transaction);
         expect({
           unmeasured: measured.unmeasured,
+          undecided: measured.undecided,
           ...(await guarded(limited(mint), transaction)),
         }).toEqual({
-          unmeasured: { tokens: expect.stringContaining(why) as unknown },
+          unmeasured: {},
+          undecided: [mint],
           ...refused(`tokens.${mint}`, `tokens.${mint} is limited, and ${why}`),
         });
       },
     );
+
+    it.each(["an approval", "a handoff"] as const)(
+      "lets %s of a token whose decimals cannot be read through, where only another token is limited",
+      async (what) => {
+        const { instruction } = unreadable(what);
+        const transaction = await signed([instruction]);
+
+        expect((await guarded(limited(mints.spl), transaction)).refusal).toBe(
+          "none: the guard let it through",
+        );
+      },
+    );
+
+    it("reads the decimals of a mint the transaction creates from what the simulation leaves", async () => {
+      const mint = await generateKeyPairSigner();
+      const account = await generateKeyPairSigner();
+      const delegate = randomAddress();
+      const create = (made: KeyPairSigner, space: bigint): Instruction => ({
+        programAddress: address("11111111111111111111111111111111"),
+        accounts: [
+          { address: wallet, role: AccountRole.WRITABLE_SIGNER },
+          { address: made.address, role: AccountRole.WRITABLE_SIGNER, signer: made },
+        ] as AccountSignerMeta[],
+        data: Uint8Array.of(
+          0,
+          0,
+          0,
+          0,
+          ...u64(harness.svm.minimumBalanceForRentExemption(space)),
+          ...u64(space),
+          ...keyBytes(TOKEN_PROGRAM),
+        ),
+      });
+      const transaction = await signed([
+        create(mint, 82n),
+        // InitializeMint2: 3 decimals, the wallet minting, no freeze authority.
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(mint.address)],
+          data: Uint8Array.of(20, DECIMALS, ...keyBytes(wallet), 0),
+        },
+        create(account, 165n),
+        // InitializeAccount3, held by the wallet; then MintTo the whole amount into it.
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(account.address), readonly(mint.address)],
+          data: Uint8Array.of(18, ...keyBytes(wallet)),
+        },
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(mint.address), writable(account.address), signer(wallet)],
+          data: Uint8Array.of(7, ...u64(AMOUNT)),
+        },
+        approve(account.address, delegate, AMOUNT),
+      ]);
+
+      const measured = await measure(transaction);
+      expect({
+        undecided: measured.undecided,
+        approvals: plain(measured.approvals),
+        ...(await guarded(limited(mint.address), transaction)),
+      }).toEqual({
+        undecided: [],
+        approvals: [
+          { token: mint.address, spender: delegate, amount: "1000000", decimals: DECIMALS },
+        ],
+        ...refused(
+          `tokens.${mint.address}`,
+          `this transaction approves ${delegate} for 1000 ${mint.address}`,
+        ),
+      });
+      expectOk(sendSigned(harness, transaction));
+    });
   },
 );

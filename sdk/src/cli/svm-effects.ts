@@ -292,13 +292,15 @@ export interface MintFacts {
 }
 
 /**
- * Each of `mints`' decimals, read from the cluster, else taken from the registry, which also names
- * a mint it records.
+ * Each of `mints`' decimals and the registry's symbol for it. The decimals are read from the mint
+ * as `images` holds it (what a simulation leaves of an account the transaction writes, which a mint
+ * it creates has nowhere else), else from the cluster, else taken from the registry.
  */
 export async function mintFacts(
   rpc: Rpc,
   chain: CanonicalChain,
   mints: readonly Address[],
+  images: ReadonlyMap<string, SimulatedAccount | null> = new Map(),
 ): Promise<Map<string, MintFacts>> {
   const facts = new Map<string, MintFacts>();
   const unique = [...new Set(mints)];
@@ -306,7 +308,7 @@ export async function mintFacts(
   const read = await accountsNow(rpc, unique).catch(() => unique.map(() => null));
   const registered = sourceGlobals(chain).tokens;
   unique.forEach((mint, index) => {
-    const account = read[index] ?? null;
+    const account = images.get(mint) ?? read[index] ?? null;
     const row = registryRow(registered, mint);
     const decimals =
       account !== null && account.data.length > MINT_DECIMALS_AT
@@ -374,6 +376,7 @@ export async function movedBy(
     rpc,
     chain,
     tokens.map((change) => change.mint),
+    new Map(tracked.map((account, index) => [account, after[index] ?? null])),
   );
 
   return {

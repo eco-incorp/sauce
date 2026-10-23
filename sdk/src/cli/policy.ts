@@ -366,6 +366,11 @@ export interface Measured {
   readonly approvals: readonly Approval[];
   /** Solana: the token accounts of the wallet's or its Pots' it lets another key close. */
   readonly closers?: readonly Closer[];
+  /**
+   * Solana: the mints of what it lets another key take (an approval, an account handed over) whose
+   * decimals could not be read, which a limit naming one of them cannot hold.
+   */
+  readonly undecided?: readonly string[];
   /** Why native or token movements could not be measured, when they could not. */
   readonly unmeasured: { readonly native?: string; readonly tokens?: string };
 }
@@ -827,16 +832,21 @@ export async function measureSvm(
       if (is.isNative) closableLamports += after[index]!.lamports;
     }
   });
-  const facts = await mintFacts(rpc, chain, [
-    ...approved.map((each) => each.token),
-    ...handedOff.keys(),
-    ...closable.map((each) => each.token),
-  ]);
-  // A limit holds an amount only in its token's decimals: where they cannot be read, no token
-  // limit can stand behind what the transaction lets another key take.
-  const undecided = [...approved.map((each) => each.token), ...handedOff.keys()].find(
-    (mint) => facts.get(mint)?.decimals === undefined,
+  const facts = await mintFacts(
+    rpc,
+    chain,
+    [
+      ...approved.map((each) => each.token),
+      ...handedOff.keys(),
+      ...closable.map((each) => each.token),
+    ],
+    new Map(tracked.map((account, index) => [account, after[index] ?? null])),
   );
+  // A limit holds an amount only in its token's decimals: where a mint's cannot be read, a limit
+  // naming that mint cannot stand behind what the transaction lets another key take of it.
+  const undecided = [
+    ...new Set([...approved.map((each) => each.token), ...handedOff.keys()]),
+  ].filter((mint) => facts.get(mint)?.decimals === undefined);
   const lamports =
     moved.lamports
       .filter((change) => ours.has(change.account))
@@ -868,14 +878,8 @@ export async function measureSvm(
 
       return symbol === undefined ? each : { ...each, symbol };
     }),
-    unmeasured:
-      unseen !== undefined
-        ? { native: unseen, tokens: unseen }
-        : undecided !== undefined
-          ? {
-              tokens: `the decimals of mint ${undecided} could not be read, so what the transaction lets another key take of it cannot be held to a limit`,
-            }
-          : {},
+    undecided,
+    unmeasured: unseen === undefined ? {} : { native: unseen, tokens: unseen },
   };
 }
 
@@ -1088,6 +1092,13 @@ function spendOf(
   for (const [key, limit] of policy.tokens) {
     if (measured.unmeasured.tokens !== undefined) {
       refuse(`tokens.${key}`, `tokens.${key} is limited, and ${measured.unmeasured.tokens}`);
+    }
+    for (const mint of (measured.undecided ?? []).filter((each) => names(key, { token: each }))) {
+      refuse(
+        `tokens.${key}`,
+        `tokens.${key} is limited, and the decimals of mint ${mint} could not be read, so what the ` +
+          "transaction lets another key take of it cannot be held to a limit",
+      );
     }
     const matching = measured.tokens.filter((outflow) => names(key, outflow));
     for (const outflow of matching) hold(`tokens.${key}`, limit, outflow.amount, outflow);
