@@ -18,6 +18,7 @@ import {
   createTransactionMessage,
   createSolanaRpc,
   getAddressEncoder,
+  getBase58Decoder,
   getCompiledTransactionMessageDecoder,
   pipe,
   lamports,
@@ -39,6 +40,7 @@ import {
   buildExecuteTransaction,
   buildHeapFramePrepend,
   derivePotPda,
+  KITCHEN_DISCRIMINATORS,
 } from "../src/svm/index.js";
 import { memoizedCreateProgramAddress } from "../src/svm/venues/pda-memo.js";
 import {
@@ -142,6 +144,9 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
   const UNREADABLE_CALL =
     "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
   const UNNAMED = "the endpoint reported a program its programs call that cannot be named";
+  /** A cook's instruction data as a node reports it: base58, the discriminator then a salt and bump. */
+  const cookData = (head: Uint8Array) =>
+    getBase58Decoder().decode(new Uint8Array([...head, ...new Uint8Array(33)]));
   /** The wallet calling PROGRAM with the Kitchen among its accounts (as a CPI to it needs), which
    *  the simulation says made `inner`, given each account's index in the message. */
   const calling = (inner: (at: (key: Address) => number) => unknown) => {
@@ -200,6 +205,46 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
       "a call to the Kitchen comes parsed, without its data",
       () => [
         { index: 0, instructions: [{ programId: KITCHEN, accounts: [WALLET], stackHeight: 2 }] },
+      ],
+      UNREADABLE_CALL,
+    ],
+    [
+      "a cook from the Kitchen is reported with its accounts cut short before the Pot",
+      () => [
+        {
+          index: 0,
+          instructions: [
+            { programId: KITCHEN, accounts: [WALLET], data: cookData(KITCHEN_DISCRIMINATORS.cook) },
+          ],
+        },
+      ],
+      UNREADABLE_CALL,
+    ],
+    [
+      "a staged cook from the Kitchen is reported with its accounts cut short before the Pot",
+      () => [
+        {
+          index: 0,
+          instructions: [
+            {
+              programId: KITCHEN,
+              accounts: [WALLET, PROGRAM, PROGRAM, PROGRAM],
+              data: cookData(KITCHEN_DISCRIMINATORS.cookFromAccount),
+            },
+          ],
+        },
+      ],
+      UNREADABLE_CALL,
+    ],
+    [
+      "a cook from the Kitchen is reported with no accounts at all",
+      () => [
+        {
+          index: 0,
+          instructions: [
+            { programId: KITCHEN, accounts: [], data: cookData(KITCHEN_DISCRIMINATORS.cook) },
+          ],
+        },
       ],
       UNREADABLE_CALL,
     ],

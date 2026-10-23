@@ -743,6 +743,18 @@ export async function measureSvm(
         "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
       continue;
     }
+    // A cook reported without its owner or Pot account (a truncated report) is not "not a cook":
+    // whether it is the wallet's, and which Pot it signs for, cannot be read, so it is refused.
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+    if (
+      cook !== undefined &&
+      keys.length <= cook.pot &&
+      (keys.length === 0 || keys[0] === wallet)
+    ) {
+      unseen =
+        "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+      continue;
+    }
     const pot = cookPot(program, data, keys);
     if (pot !== undefined) pots.push(pot);
   }
