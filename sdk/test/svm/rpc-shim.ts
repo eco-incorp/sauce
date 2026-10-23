@@ -115,6 +115,11 @@ export interface SolanaShim {
   readonly url: string;
   /** Every transaction sent, in order, decoded. */
   readonly sent: Transaction[];
+  /**
+   * Every transaction the endpoint was handed, to simulate or to send, in order, decoded: what
+   * anyone running the endpoint would hold.
+   */
+  readonly handed: Array<{ readonly method: string; readonly transaction: Transaction }>;
   /** Makes every blockhash handed out so far expire, as a minute's wait would on a cluster. */
   expire(): void;
   install(): void;
@@ -136,6 +141,7 @@ export function solanaShim(
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
   const sent: Transaction[] = [];
+  const handed: SolanaShim["handed"] = [];
   // Every blockhash handed out, and the slot it was: a cluster takes a transaction on any of them
   // for BLOCKHASH_SLOTS slots, where the bank takes only its latest.
   const issued = new Map<string, bigint>();
@@ -207,6 +213,9 @@ export function solanaShim(
       method: string;
       params: unknown[];
     };
+    if (method === "simulateTransaction" || method === "sendTransaction") {
+      handed.push({ method, transaction: decode(params[0] as string) });
+    }
     switch (method) {
       case "getLatestBlockhash": {
         // A cluster's latest blockhash is a recent one: the bank's, moved on where it is old.
@@ -492,6 +501,7 @@ export function solanaShim(
   return {
     url,
     sent,
+    handed,
     expire: () => {
       issued.clear();
       svm.expireBlockhash();

@@ -479,10 +479,12 @@ const CODE_BUFFER_LEN = 91n;
 
 /**
  * What each transaction `plan` has still to send takes out of the owner's lamports, as far as it can
- * be known before any is sent: the rent of what it creates (the Pot, token accounts, the code buffer
- * and its code account, the lookup table and each address added to it), each transaction's fee, and
- * the cook's execution fee. What the cook's program moves cannot be known until its setup is on the
- * cluster: it is measured when the cook is sent.
+ * be known before any is sent, counted as the policy measures each when it is sent: the rent of what
+ * it creates (the Pot, token accounts, the code buffer and its code account, the lookup table and
+ * each address added to it), each transaction's fee, and the cook's execution fee. Rent that stays
+ * in what the wallet controls does not count: a token account the owner holds, and the Pot a cook
+ * creates ahead of itself, which that cook then runs on. What the cook's program moves cannot be
+ * known until its setup is on the cluster: it is measured when the cook is sent.
  */
 async function planOutflows(
   plan: SvmPlan,
@@ -514,7 +516,8 @@ async function planOutflows(
     let lamports = SIGNATURE_FEE;
     if (tx.kind === "pot") lamports += rent(BigInt(MAX_POT_LEN));
     if (tx.kind === "accounts") {
-      lamports += BigInt(tx.accounts?.length ?? 0) * rent(TOKEN_ACCOUNT_LEN);
+      const others = (tx.accounts ?? []).filter((account) => account.holder !== owner.address);
+      lamports += BigInt(others.length) * rent(TOKEN_ACCOUNT_LEN);
     }
     if (tx.kind === "buffer" && tx.what === "creating the code buffer") {
       lamports += rent(CODE_BUFFER_LEN) + rent(BigInt(plan.staged?.length ?? 0));
@@ -530,9 +533,7 @@ async function planOutflows(
         tableBytes += added;
       }
     }
-    if (tx.kind === "cook") {
-      lamports += fee + (tx.createsPot === true ? rent(BigInt(MAX_POT_LEN)) : 0n);
-    }
+    if (tx.kind === "cook") lamports += fee;
 
     return {
       chain,
