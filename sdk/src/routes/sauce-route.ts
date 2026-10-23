@@ -25,6 +25,8 @@ import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from ".
 import { ambientNamesOf, compileWithRs, firstAnswers, type RsCompileResult } from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
 import { POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { walk, type AstNode } from "./ast-walk.js";
+import { parseSauce } from "./parse.js";
 import {
   rewriteTokenFactory,
   rewriteTokenMembers,
@@ -473,9 +475,8 @@ function compileForChain(
   // `ambientNamesOf` asks it, with this compile's own options, so a module is found exactly where
   // the compile finds it. It asks only where it can matter: the SDK's own packages (`@sauce/token`),
   // which the SDK resolves ahead of any caller's mapping, export neither name, and a name the
-  // program does not mention bare — in a comment or a string too, but not as a member's name
-  // (`ctx.self()`) — it never reads. A `pot` or `self` that is one of them is the caller's value,
-  // never the Pot.
+  // program does not read (`potNamesRead`) is none the rewrites touch. A `pot` or `self` that is one
+  // of them is the caller's value, never the Pot.
   const ambient = options.ambient ?? [];
   // The caller's resolvers, as this compile reads them: each answers a question as it first did, so
   // the probe and the compile read the same modules (`firstAnswers`). The next compile asks afresh.
@@ -497,9 +498,7 @@ function compileForChain(
             contracts: options.contracts,
             ambient,
           },
-          [POT_NAME, RETIRED_POT_NAME].filter((name) =>
-            new RegExp(`(?<![\\w$])(?<![^.]\\.)${name}(?![\\w$])`).test(sauce),
-          ),
+          potNamesRead(sauce),
         )),
   ]);
 
@@ -685,4 +684,36 @@ function svmTokenValues(
   for (const [name, value] of own) values.set(name, value as bigint);
 
   return values;
+}
+
+/**
+ * The Pot's names (`pot`, `self`) among the identifiers `sauce` reads, as the parser every rewrite
+ * reads it with (`parseSauce`) names them: an escaped spelling (`p\u006ft`) is the name it spells,
+ * and a member's name (`ctx.self()`) is none. A program that does not parse reads none: no rewrite
+ * reads it either.
+ */
+function potNamesRead(sauce: string): string[] {
+  let program: AstNode;
+  try {
+    program = parseSauce(sauce);
+  } catch {
+    return [];
+  }
+  const members = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "MemberExpression" && n.computed !== true) members.add(n.property as AstNode);
+  });
+  const names = new Set<string>();
+  walk(program, (n) => {
+    const name = (n as { name?: unknown }).name;
+    if (
+      n.type === "Identifier" &&
+      !members.has(n) &&
+      (name === POT_NAME || name === RETIRED_POT_NAME)
+    ) {
+      names.add(name);
+    }
+  });
+
+  return [...names];
 }

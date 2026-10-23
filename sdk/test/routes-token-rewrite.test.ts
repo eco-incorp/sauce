@@ -1173,6 +1173,23 @@ describe.each([
     expect(message).toBe(refusal("function main(): Uint256 { return 7; }", throwing()));
   });
 
+  it("an escaped spelling of `pot` or `self` is the name it spells, bound or free", () => {
+    const spelled = { pot: "p\\u006ft", self: "s\\u0065lf" };
+    const both: Options = {
+      ambient: ["./holder.js"],
+      ...served({ "./holder.js": `${POT}\nexport const self = ${holder};` }),
+    };
+    for (const name of ["pot", "self"] as const) {
+      expect(build(`function main(): Address { return ${spelled[name]}; }`, both)).toEqual(
+        callers(),
+      );
+    }
+    expect(build(`function main(): Address { return ${spelled.pot}; }`)).toEqual(pots());
+    expect(() => build(`function main(): Address { return ${spelled.self}; }`)).toThrow(
+      "the Pot is `pot`, not `self`",
+    );
+  });
+
   it("a define of `pot` and an import of it are the caller's; a define of another name is not", () => {
     expect(build(PROGRAM, { defines: { pot: BigInt(holder) } })).toEqual(callers());
     expect(

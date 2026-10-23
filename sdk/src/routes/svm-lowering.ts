@@ -582,8 +582,13 @@ export function isCtxSelf(node: AstNode, declared: ReadonlySet<string>): boolean
   );
 }
 
-/** Whether `source` has an identifier that `wanted` takes, stopping at the first. */
+/**
+ * Whether `source` may have an identifier that `wanted` takes, stopping at the first. An identifier
+ * may spell a character as an escape (`p\u006ft`), which only the parse reads as the name it spells,
+ * so a source with an escape is taken to have any.
+ */
 export function namesAny(source: string, wanted: (name: string) => boolean): boolean {
+  if (source.includes("\\u")) return true;
   for (const [name] of source.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)) {
     if (wanted(name)) return true;
   }
