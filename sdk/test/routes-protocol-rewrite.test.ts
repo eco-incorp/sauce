@@ -602,6 +602,21 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
     ).not.toContain(".address");
   });
 
+  it("shape G follows a local holding a local that holds the contract", () => {
+    // 2.6.0 keeps both unannotated locals the binding, so the scalar method needs `.address` on
+    // the last one too.
+    const literal = bytes(
+      "base",
+      `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesBe(32).toBe(); }`,
+    );
+    for (const body of [
+      "const a = AaveV3.Pool;\nconst b = a;\nreturn b.toBytesBe(32).toBe();",
+      "const a = AaveV3.Pool;\nconst b = a;\nconst c = b;\nreturn c.toBytesBe(32).toBe();",
+    ]) {
+      expect(bytes("base", `function main(): Uint256 {\n${body}\n}`)).toEqual(literal);
+    }
+  });
+
   it("tells onContract each contract a program uses: as written, with its chain and address -- and not a test of one", () => {
     const heard: Array<[string, string, string, string]> = [];
     compileSauceProgram(

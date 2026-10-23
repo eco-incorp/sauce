@@ -238,8 +238,9 @@ const SCALAR_METHODS: ReadonlySet<string> = new Set(["toBytesBe", "toBytesLe"]);
 /**
  * Shape G: `.address` before a scalar method whose receiver is a contract the names module binds
  * (`AaveV3.Pool.toBytesBe(32)`, `Base.UniswapV3.Factory.toBytesBe(32)`) or a local initialized to
- * one (`const pool = AaveV3.Pool; pool.toBytesBe(32)`). On the EVM `.address` is the address itself
- * on any scalar, so a local of that name holding a number elsewhere compiles as written.
+ * one, directly or through other such locals (`const a = AaveV3.Pool; const b = a;
+ * b.toBytesBe(32)`). On the EVM `.address` is the address itself on any scalar, so a local of that
+ * name holding a number elsewhere compiles as written.
  */
 function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): Splice[] {
   const nameOf = (node: AstNode): string => (node as unknown as { name: string }).name;
@@ -251,13 +252,25 @@ function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): S
     return namedContractKind(decomposed.head, decomposed.path) === "singleton";
   };
   const locals = new Set<string>();
+  const holds = (node: AstNode | null | undefined): boolean =>
+    isBinding(node) || (node?.type === "Identifier" && locals.has(nameOf(node)));
+  const declarators: AstNode[] = [];
   walk(program, (n) => {
-    if (n.type !== "VariableDeclarator") return;
-    const id = (n as { id?: AstNode }).id;
-    if (id?.type === "Identifier" && isBinding((n as { init?: AstNode | null }).init)) {
-      locals.add(nameOf(id));
+    if (n.type === "VariableDeclarator" && (n as { id?: AstNode }).id?.type === "Identifier") {
+      declarators.push(n);
     }
   });
+  // Each pass adds the locals initialized to one found before; none left to add is the fixpoint.
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const n of declarators) {
+      const name = nameOf((n as { id?: AstNode }).id!);
+      if (!locals.has(name) && holds((n as { init?: AstNode | null }).init)) {
+        locals.add(name);
+        grew = true;
+      }
+    }
+  }
   const out: Splice[] = [];
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
@@ -266,7 +279,7 @@ function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): S
     const property = (callee as { property?: AstNode }).property;
     if (property?.type !== "Identifier" || !SCALAR_METHODS.has(nameOf(property))) return;
     const object = (callee as { object?: AstNode }).object!;
-    if (isBinding(object) || (object.type === "Identifier" && locals.has(nameOf(object)))) {
+    if (holds(object)) {
       out.push({ start: object.end, end: object.end, replacement: ".address" });
     }
   });
