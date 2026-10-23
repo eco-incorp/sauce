@@ -358,8 +358,9 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   (`svmEnginePath(cluster, path)`, `svmKitchenPath(path)`, `svmKitchenIdlPath(path)`) and otherwise
   returns the packaged binary; `sdk/test/svm/engine-harness.ts` and `dev-tools/test/svm-local.test.ts`
   read CI's `SAUCE_*` paths and pass them in. Shipped code reads no environment — but for the `sauce`
-  command's one deliberate read, of the variable `--password-env <NAME>` names (see "Agent
-  wallets" below): configuration is passed by the developer, and a browser has no `process.env`. **Nothing about the engine is
+  command's one deliberate read, of the variable `--password-env <NAME>` or the MCP server's
+  `sauce_wallet_enable { env }` names (see "Agent wallets" below): configuration is passed by the
+  developer, and a browser has no `process.env`. **Nothing about the engine is
   source-controlled.**
   There used to be a vendored `artifacts/svm/engine.so` — a `release/beta` build predating every
   v12-svm release, with no `JUMP`/`JUMP_I` — and it was the DEFAULT, so anything with control flow was
@@ -1082,7 +1083,8 @@ decoder: the cook is
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
-names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
+(or, in `sauce mcp`, `sauce_wallet_enable`'s `env`) names, reaches a network only through
+`--rpc-url`, a `--config` file's entry for the chain, or
 else the built-in public endpoints (none with `--offline`) — and the npm registry, its one other
 network access, named and read in `npm-registry.ts` alone, by `sauce update` when it runs and by
 the update check, and npm itself, with the user's npm configuration, where the command runs it
@@ -1175,7 +1177,9 @@ call over (`keep.ts`), saying what it kept in the call's notes. So a Pot a `sauc
 `createSauceServer` refuses stores beside a guard (`pots.e2e.test.ts`, `transports.test.ts`).
 
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
-input that looks like one, nested fields included), and the server reads no environment. It signs
+input that looks like one, nested fields included), and the server reads the environment only
+through the CLI's one read: over stdio, the variable `--password-env` or `sauce_wallet_enable`'s
+`env` names; over HTTP, none. It signs
 only over stdio, where it serves the wallet tools by default (`--no-wallets` turns them off, and
 `--no-stores` with the other stores: the directory is `McpStores.wallets`), and
 only once the wallets are enabled (`mcp/src/wallets.ts`, see "Agent wallets"); over HTTP it never
@@ -1209,18 +1213,25 @@ CI). A
 Solana wallet is the same envelope around the keypair's 64 bytes, marked `"kind": "solana"`, which
 `--keystore` refuses. The address is in the clear, so `list`, `address` and `signerAddress` need no
 password. `export` writes the key to `/dev/tty` itself (`terminal.ts#writeToTerminal`), past
-stdout and the scrubbing, after the user types the wallet's name; there is no MCP twin.
+stdout and the scrubbing, after the user types the wallet's name; there is no MCP twin. That keeps
+it out of pipes and logs only: a program that runs `export` in a pseudo-terminal answers the prompt
+and reads the key.
 
 A password comes from exactly one source (`password.ts`): `--password-env <NAME>`,
 `--password-file` (refused when its mode lets group or others in: `chmod 600`), `--password-command`
 (run through the shell with no stdin; a failure reports its exit status, never its output), else
 the prompt (asked twice for a new wallet; 8 characters at least). `--keystore` takes the same
 sources, so a password file a test passes must be 0600 (`cli-anvil.ts#KEYSTORE_PASSWORD_FILE` copies
-the committed fixture). There is no `--password <value>`. `--password-env` is THE COMMAND'S ONE READ
-OF THE ENVIRONMENT, `nodeIo().readEnv`, and `no-embedded-rpc.test.ts` allows exactly that line
-(`DELIBERATE_ENV_READ`) and no other; do not add a second.
+the committed fixture). There is no `--password <value>`. `nodeIo().readEnv` is THE COMMAND'S ONE
+READ OF THE ENVIRONMENT, and `no-embedded-rpc.test.ts` allows exactly that line
+(`DELIBERATE_ENV_READ`) and no other; do not add a second. Two things name its variable:
+`--password-env <NAME>`, and over stdio an agent's `sauce_wallet_enable { env }` (below), which may
+name any variable the server's environment holds; the value is used only as a password.
 
-A wallet unlocked is GUARDED (`policy.ts#guardWallet`, by address): `chain.ts#sendAndWait` and
+A wallet unlocked is GUARDED (`policy.ts#guardWallet`, by address, called only from
+`wallet-commands.ts#openWallet`: `--wallet` and the MCP server's wallet tools; `--keystore`,
+`--private-key` and `--keypair` register no guard, even on a wallet's own file, so no policy applies
+to them): `chain.ts#sendAndWait` and
 `solana.ts`'s `sendAndConfirm` — the two places every send of the command passes — consult
 `guardOf(sender)` before sending. The guard calls the release gate (`requireSupported("sending from
 a wallet", …)`) and, when `<name>.policy.json` exists, MEASURES what the transaction moves out of the
@@ -1240,7 +1251,8 @@ CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the
 be started with, is the default; `--no-wallets` serves none), always REGISTERED rather than added
 when enabled (not every client handles `tools/list_changed`): `sauce_wallet_enable`,
 `sauce_wallet_create`, `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`,
-`sauce_wallet_send` (`create` is `sauce wallet new`'s twin; the names predate the parity). List and
+`sauce_wallet_send` and `sauce_sign` (`create` is `sauce wallet new`'s twin; the names predate the
+parity). List and
 address need no password. Create, import and send need the wallets ENABLED, else they refuse naming
 `sauce_wallet_enable` and its four sources. A password flag at start (`--password-env|-file|
 -command`, no longer needing `--wallets`) enables them: `sdk/src/cli/mcp.ts` reads it once, before

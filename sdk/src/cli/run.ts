@@ -2118,7 +2118,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...SIGN,
       ...EVM_SIGNER,
       ...ENDPOINT,
-      ...JSON_FLAG,
+      json: {
+        type: "boolean",
+        help: "Changes nothing: the JSON is on stdout and the notes on stderr either way",
+      },
       ...HELP,
       ...ARGS,
     },

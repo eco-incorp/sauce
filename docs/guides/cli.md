@@ -20,7 +20,8 @@ sauce --version
 ```
 
 `sauce --version` prints the version. The command needs no other tool and no configuration, and it
-reads no environment variable you did not name. Every command takes `--help`, which prints what it
+reads no environment variable but one named as a password's source: by `--password-env`, or in
+`sauce mcp` by an agent's `sauce_wallet_enable`. Every command takes `--help`, which prints what it
 does and every flag it takes.
 
 ### Run it from a project

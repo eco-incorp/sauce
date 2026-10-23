@@ -689,7 +689,7 @@ Options:
       --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                     Read no chain: no endpoint, not even a built-in one
-      --json                        Print one JSON object instead
+      --json                        Changes nothing: the JSON is on stdout and the notes on stderr either way
   -h, --help                        Show this help
       --no-update-check             No notice of a newer sauce, and no registry read for one
       --args <value>…               main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
