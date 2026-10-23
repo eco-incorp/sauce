@@ -203,7 +203,7 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
       owner: address(OWNER),
       pot: address(out.pot as string),
     };
-    for (const derivation of ["self:USDC", "@to:USDC"]) {
+    for (const derivation of ["authority:USDC", "@to:USDC"]) {
       const { value } = await resolveSvmAccountName(derivation, {
         ...named,
         args: { to: address(to) },

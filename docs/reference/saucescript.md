@@ -776,7 +776,7 @@ Rules and errors:
 function main(recipient: Address, amount: Uint256, floor: Uint256): void {
   try {
     USDC.transfer(recipient, amount);
-    require(self.USDC >= floor, "keep the reserve");
+    require(pot.USDC >= floor, "keep the reserve");
   } catch (error) {
     // A failed reserve check undoes the transfer too; nothing in this try was committed.
     log(error);

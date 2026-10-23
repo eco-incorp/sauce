@@ -297,7 +297,8 @@ const COOK = {
     .describe(
       "Solana only: each Account parameter main takes, by name: an address (base58, or its 32 " +
         "bytes as 0x hex), `pot` (the " +
-        "Pot, signed for by the Kitchen), `owner`, `system` (the System Program), `pot:USDC` or `owner:USDC` (that holder's " +
+        "Pot, signed for by the Kitchen), `owner`, `authority` (the account that signs the engine " +
+        "call: the Pot, or the owner with via engine), `system` (the System Program), `pot:USDC` or `owner:USDC` (that holder's " +
         "associated account for a token, by symbol or mint), `@to:USDC` (that of main's " +
         "argument `to`), `mint:USDC` (the mint), `program:USDC` (its token program) or " +
         "`slot:@pool:USDC.vaultA` (a pool's account, read from the pool), " +
@@ -314,7 +315,8 @@ const COOK = {
       "Solana only: how the cook reaches the engine. kitchen (the default) is the Kitchen's cook " +
         "on the owner's Pot: the program can hold and spend what the Pot owns. engine is the " +
         "engine's own paid cook, with no Kitchen and no Pot: the owner signs as the authority the " +
-        "program acts with (accounts `owner` where it needs one; `pot` cannot sign there) and pays " +
+        "program acts with (accounts `owner` or `authority` where it needs one; no `pot` form, " +
+        "and no program that uses `pot`, cooks there) and pays " +
         "the fee, and the program's own calls get one more level of CPI depth. Both pay the same " +
         "execution fee.",
     ),

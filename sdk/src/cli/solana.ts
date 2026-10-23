@@ -60,6 +60,7 @@ import {
   isSvmAccountName,
   resolveSvmAccountName,
   SvmAccountNameError,
+  svmNamesPot,
   svmPublicKey,
   SYSTEM_HOLDER,
   type ResolvedSvmAccountName,
@@ -738,8 +739,9 @@ async function sendInstructions(
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 
 /**
- * `--account name=<value>`, parsed: an address, `pot`, `owner`, `self`, `@<argument>`, or a token's
- * account (`pot:USDC`, `@to:USDC`, `mint:USDC`, `program:USDC`) — `svm/account-names.ts`'s language.
+ * `--account name=<value>`, parsed: an address, `pot`, `owner`, `authority`, `@<argument>`, or a
+ * token's account (`pot:USDC`, `@to:USDC`, `mint:USDC`, `program:USDC`) — `svm/account-names.ts`'s
+ * language.
  */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
   const accounts: Record<string, string> = {};
@@ -749,7 +751,7 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
     const value = raw.slice(at + 1).trim();
     if (at <= 0 || value === "") {
       throw new UsageError(
-        `--account: expected NAME=<address | pot | owner | pot:<token>>, got '${raw}'`,
+        `--account: expected NAME=<address | pot | owner | authority | pot:<token>>, got '${raw}'`,
       );
     }
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
@@ -757,7 +759,7 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
       throw new UsageError(`--account ${name}=${SYSTEM_HOLDER(value)}`);
     if (!isSvmAccountName(value)) {
       throw new UsageError(
-        `--account ${name}: '${value}' is not an address, pot, owner, system, or a token's account: ` +
+        `--account ${name}: '${value}' is not an address, pot, owner, authority, system, or a token's account: ` +
           "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
           "owner's, @to:USDC that of main's argument to, mint:USDC the mint, program:USDC its " +
           'token program, and pda:<program>:"seed",@to,u64:7 an address a program derives',
@@ -852,8 +854,8 @@ export const svmAccountsWanted = (
 
 /**
  * Each `--account` value resolved (`svm/account-names.ts`): `pot` and `owner` as they are (and
- * `self` as one of them), `pot:USDC`, `owner:<mint>` and `@to:USDC` the holder's associated token
- * account for the mint, under the token program that owns the mint; `mint:USDC` the mint;
+ * `authority` as one of them), `pot:USDC`, `owner:<mint>` and `@to:USDC` the holder's associated
+ * token account for the mint, under the token program that owns the mint; `mint:USDC` the mint;
  * `program:USDC` that token program; `@to` main's argument `to` — the accounts `@sauce/token`'s
  * writes take. A symbol is one of the cluster's registered mints, whose row records its program;
  * any other mint is given by its base58 address, and its program is read with `programOf`.
@@ -935,14 +937,17 @@ export interface SvmAccountToGive {
 /**
  * The values that suit a slot of `requires`, as `--account` takes them, the likeliest first: its
  * name only orders them (`tokenProgram`, a program; `mint`, a mint), as the program alone says what
- * the account is.
+ * the account is. `authority` is the account that signs the engine call: the Pot through the
+ * Kitchen, the owner cooked directly, where there is no Pot and so no `pot` form.
  */
 function formsFor(name: string, requires: string, via: CookVia): string[] {
-  if (/signer/.test(requires)) return via === "engine" ? ["owner"] : ["pot", "owner"];
+  if (/signer/.test(requires)) {
+    return via === "engine" ? ["owner", "authority"] : ["pot", "owner", "authority"];
+  }
   const holders =
     via === "engine"
-      ? ["owner:<token>", "@<argument>:<token>"]
-      : ["pot:<token>", "owner:<token>", "@<argument>:<token>"];
+      ? ["owner:<token>", "authority:<token>", "@<argument>:<token>"]
+      : ["pot:<token>", "owner:<token>", "authority:<token>", "@<argument>:<token>"];
   if (requires === "writable") return [...holders, "<address>"];
   if (/system/i.test(name)) return ["system", "<address>"];
   if (/program$/i.test(name)) return ["program:<token>", "<address>"];
@@ -981,7 +986,9 @@ export function svmAccountsToGive(
 const FORM_MEANS: Readonly<Record<string, string>> = {
   pot: "the Pot, which the Kitchen signs for",
   owner: "the signer",
+  authority: "the account that signs the engine call: the Pot, or the owner with --via engine",
   "pot:<token>": "the Pot's account for a token",
+  "authority:<token>": "that account's account for a token",
   system: "the System Program",
   "program:<token>": "a token's program",
   "mint:<token>": "a token's mint",
@@ -1011,14 +1018,47 @@ export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): 
     "Give each with --account NAME=<value>, or all at once with --accounts <file>, a JSON object " +
     `of each name to its value: ${file}\n` +
     "A token is a symbol (sauce globals --chain solana) or a mint's address. Or name the account " +
-    "where the program uses it, and every cook derives it: USDC.accountOf(Solana.self).writable(), " +
+    "where the program uses it, and every cook derives it: USDC.accountOf(pot).writable(), " +
     "USDC.mint, USDC.tokenProgram, Solana.pda(program, [seeds])."
   );
 }
 
 /**
+ * Refuses, cooked directly on the engine, where there is no Pot: a program whose own accounts are
+ * the Pot's (it uses `pot`: `derived` names `pot`, `pot:<token>`, or an address derived from it),
+ * whatever `--account` gives in their place, and the Pot given for a slot that must sign, which
+ * only the Kitchen signs for. Any other `pot` given is refused as it resolves
+ * (`svm/account-names.ts`).
+ */
+function refusePotOnEngine(
+  manifest: AccountManifest,
+  derived: Readonly<Record<string, string>> | undefined,
+  given: Readonly<Record<string, string>>,
+  via: CookVia,
+): void {
+  if (via !== "engine") return;
+  for (const slot of manifest.accounts) {
+    if (slot.kind !== "slot" || given[slot.name] !== "pot" || !/signer/.test(slot.requires)) {
+      continue;
+    }
+    throw new UsageError(
+      `--account ${slot.name}=pot: ${slot.name} must sign (${slot.requires}), and cooked ` +
+        "directly to the engine (--via engine) nothing signs for the Pot — only a Kitchen cook " +
+        `does. Give ${slot.name} a signer (owner), or cook --via kitchen.`,
+    );
+  }
+  const pot = Object.entries(derived ?? {}).filter(([, value]) => svmNamesPot(value));
+  if (pot.length === 0) return;
+  throw new UsageError(
+    `the program uses the Pot (${pot.map(([name, value]) => `${name}: ${value}`).join(", ")}), ` +
+      "and --via engine cooks with no Pot, so there is no Pot to attach: cook through the Kitchen",
+  );
+}
+
+/**
  * Refuses a cook whose `--account`s name an account the program does not take, or leave out one
- * nothing derives — before anything is read from a cluster, so the refusal needs no endpoint.
+ * nothing derives, or that uses the Pot cooked with none — before anything is read from a cluster,
+ * so the refusal needs no endpoint.
  */
 export function requireSvmAccounts(
   manifest: AccountManifest,
@@ -1034,14 +1074,15 @@ export function requireSvmAccounts(
         (names.length === 0 ? "" : `; it takes ${names.join(", ")}`),
     );
   }
+  refusePotOnEngine(manifest, derived, given, via);
   const missing = svmAccountsToGive(manifest, derived, given, via);
   if (missing.length > 0) throw new UsageError(svmAccountsToGiveMessage(missing));
 }
 
 /**
  * Each slot of the manifest resolved from `--account`. The Pot goes in unsigned: the Kitchen signs
- * for it — and, cooked directly (`via` engine), nothing does, so a slot that must sign cannot be
- * the Pot. The owner signs when the slot asks for a signer — with `signer` when there is one.
+ * for it — and, cooked directly (`via` engine), there is no Pot (`refusePotOnEngine`). The owner
+ * signs when the slot asks for a signer — with `signer` when there is one.
  */
 function resolution(
   manifest: AccountManifest,
@@ -1062,13 +1103,6 @@ function resolution(
   const resolved: AccountResolution = {};
   for (const slot of slots) {
     const value = given[slot.name]!;
-    if (via === "engine" && value === "pot" && /signer/.test(slot.requires)) {
-      throw new UsageError(
-        `--account ${slot.name}=pot: ${slot.name} must sign (${slot.requires}), and cooked ` +
-          "directly to the engine (--via engine) nothing signs for the Pot — only a Kitchen cook " +
-          `does. Give ${slot.name} a signer (owner), or cook --via kitchen.`,
-      );
-    }
     const at = value === "pot" ? pot : value === "owner" ? owner : address(value);
     resolved[slot.name] =
       at === pot ? { address: pot, signer: false } : at === owner ? { address: owner, signer } : at;
@@ -1219,7 +1253,7 @@ async function walletHints(prepared: Prepared, input: SvmCookInput): Promise<str
       entry.kind === "slot" && /writable/.test(entry.requires) ? [entry.name] : [],
     ),
   );
-  // Each as given and as resolved: `self` is the Pot through the Kitchen, the owner directly.
+  // Each as given and as resolved: `authority` is the Pot through the Kitchen, the owner directly.
   const plain = Object.entries(input.accounts).flatMap(([name, value]) => {
     const resolved = prepared.given.accounts[name];
     if (!writable.has(name) || prepared.derived.has(name) || prepared.given.named.has(name)) {
@@ -1771,8 +1805,10 @@ export async function svmCookSize(
   const pot = await potOf(target);
   const chain = requireChain("solana");
   // The accounts the SDK added to the program, as each is derived where it can be with no cluster
-  // and no arguments (`self` is the Pot, a program id is itself); one derived from an argument is a
-  // distinct account of its own, as it is in a real cook.
+  // and no arguments (`pot` is the Pot, a program id is itself); one derived from an argument is a
+  // distinct account of its own, as it is in a real cook. A program that uses the Pot is refused
+  // cooked directly on the engine, as a cook is.
+  refusePotOnEngine(manifest, derived, accountsNamed, via);
   const given: Record<string, string> = { ...accountsNamed };
   for (const [name, value] of Object.entries(derived)) {
     if (Object.hasOwn(given, name)) continue;

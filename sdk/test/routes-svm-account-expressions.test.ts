@@ -1,8 +1,8 @@
 /**
- * Accounts as expressions on Solana (`svm-account-expressions.ts`): `Solana.pda(…)`,
- * `Solana.account(…)`, `Solana.self`, `Solana.owner`, the program accounts, `USDC.accountOf(…)`,
- * `USDC.mint` and `USDC.tokenProgram`, each lowered to a parameter added to `main` with how it is
- * derived, its role from `.writable()`/`.signer()`. Compiled through the real compiler; executed in
+ * Accounts as expressions on Solana (`svm-account-expressions.ts`): `pot`, `Solana.pda(…)`,
+ * `Solana.account(…)`, `Solana.owner`, the program accounts, `USDC.accountOf(…)`, `USDC.mint` and
+ * `USDC.tokenProgram`, each lowered to a parameter added to `main` with how it is derived, its role
+ * from `.writable()`/`.signer()`. Compiled through the real compiler; executed in
  * `cli-solana-token-methods.e2e.test.ts`.
  */
 import { getAddressCodec } from "@solana/kit";
@@ -38,8 +38,8 @@ describe("accounts as expressions on Solana", () => {
     expect(program.derivedAccounts).toEqual({
       programAccount: "@program",
       statePda: 'pda:@program:"state",@owner',
-      potUSDC: "self:USDC",
-      pot: "self",
+      potUSDC: "authority:USDC",
+      pot: "authority",
       systemProgram: "11111111111111111111111111111111",
     });
     expect(roles(program)).toEqual({
@@ -94,14 +94,14 @@ describe("accounts as expressions on Solana", () => {
     const program = compile(
       "function main(owner: Address, index: Uint256): Uint256 {\n" +
         "  const vault = Solana.pda(Solana.associatedTokenProgram, [\n" +
-        '    "vault-state", owner, Solana.self, Solana.owner, ctx.self(), USDC, USDC.mint,\n' +
+        '    "vault-state", owner, pot, Solana.owner, ctx.self(), USDC, USDC.mint,\n' +
         `    Solana.tokenProgram, index.toBytesLe(8), (7).toBytesLe(2), ${key}, hex\`0102\`,\n` +
         "  ]);\n" +
         "  return vault.dataLen;\n}\n",
     );
     expect(program.derivedAccounts).toMatchObject({
       vaultPda:
-        'pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:"vault-state",@owner,self,owner,self,' +
+        'pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:"vault-state",@owner,pot,owner,pot,' +
         `mint:USDC,mint:USDC,TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA,u64:@index,u16:7,${base58},0x0102`,
     });
   });
@@ -120,12 +120,12 @@ describe("accounts as expressions on Solana", () => {
   it("is one parameter however often it is written, its role every role any use gives it", () => {
     const program = compile(
       "function main(owner: Address): Uint256 {\n" +
-        "  const a = Solana.self.signer();\n" +
-        "  const b = Solana.self.writable();\n" +
-        "  return Solana.self.dataLen + USDC.accountOf(owner).dataLen + USDC.accountOf(owner).dataLen;\n" +
+        "  const a = pot.signer();\n" +
+        "  const b = pot.writable();\n" +
+        "  return pot.dataLen + USDC.accountOf(owner).dataLen + USDC.accountOf(owner).dataLen;\n" +
         "}\n",
     );
-    expect(program.derivedAccounts).toEqual({ pot: "self", ownerUSDC: "@owner:USDC" });
+    expect(program.derivedAccounts).toEqual({ pot: "pot", ownerUSDC: "@owner:USDC" });
     expect(roles(program)).toEqual({ pot: "writable_signer", ownerUSDC: "readonly" });
   });
 
@@ -145,15 +145,15 @@ describe("accounts as expressions on Solana", () => {
     const program = compile(
       "function main(): Uint256 {\n" +
         "  return PYUSD.tokenProgram.dataLen + PYUSD.accountOf(Solana.owner).dataLen +\n" +
-        "    PYUSD.accountOf(Solana.self).dataLen;\n}\n",
+        "    PYUSD.accountOf(pot).dataLen;\n}\n",
     );
     // Each holder's key, which the check compares with, is an account too: the owner and the Pot.
     expect(program.derivedAccounts).toEqual({
       token2022Program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       ownerPYUSD: "owner:PYUSD",
       owner: "owner",
-      potPYUSD: "self:PYUSD",
-      pot: "self",
+      potPYUSD: "pot:PYUSD",
+      pot: "pot",
     });
   });
 
@@ -221,12 +221,16 @@ describe("accounts as expressions on Solana", () => {
       );
     });
 
-    it("an account written in a helper", () => {
+    it("an account written in a function inside another", () => {
       expect(() =>
         compile(
-          "function size(): Uint256 {\n  return Solana.systemProgram.dataLen;\n}\nfunction main(): Uint256 {\n  return size();\n}\n",
+          "function main(): Uint256 {\n  const size = program((): Uint256 => Solana.systemProgram.dataLen);\n  return 1;\n}\n",
         ),
-      ).toThrow("on Solana stands in `size`: the accounts an account moves through");
+      ).toThrow(
+        "`Solana.systemProgram` on Solana stands in a function inside another: the accounts an " +
+          "account moves through are added to main and passed to each top-level function that " +
+          "uses them, which a function inside another cannot take.",
+      );
     });
   });
 

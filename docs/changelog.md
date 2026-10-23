@@ -127,12 +127,12 @@ remain available and explicitly report that deployment availability has not been
 - **Breaking (both): the Pot is `pot`, and a holder's native coin is `.balance`.** One spelling
   each, with no alias:
 
-  | Before                                         | Now                | What it reads                                                         |
-  | ---------------------------------------------- | ------------------ | --------------------------------------------------------------------- |
-  | `self`                                         | `pot`              | the Pot's address (on Solana its account too: `pot.signer()`)         |
-  | `self.USDC`                                    | `pot.USDC`         | the Pot's balance of a token the chain registers                      |
-  | `self.ETH`, `recipient.ETH`, `recipient.SOL`   | `pot.balance`, `recipient.balance` | the holder's native coin, in wei on an EVM chain and lamports on Solana |
-  | `Solana.self`                                  | `pot`              | the Pot's account on Solana                                           |
+  | Before                                       | Now                                | What it reads                                                           |
+  | -------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
+  | `self`                                       | `pot`                              | the Pot's address (on Solana its account too: `pot.signer()`)           |
+  | `self.USDC`                                  | `pot.USDC`                         | the Pot's balance of a token the chain registers                        |
+  | `self.ETH`, `recipient.ETH`, `recipient.SOL` | `pot.balance`, `recipient.balance` | the holder's native coin, in wei on an EVM chain and lamports on Solana |
+  | `Solana.self`                                | `pot`                              | the Pot's account on Solana                                             |
 
   The old spellings no longer compile, and each error names the new one: `self` (unless the
   program declares its own), `Solana.self`, and `<holder>.<native symbol>` such as `who.ETH` or
@@ -143,6 +143,7 @@ remain available and explicitly report that deployment availability has not been
   for the native coin of such a value write `ctx.balance(x)`. `.ETH` on a record is an ordinary
   field now. A program that declares its own `pot` owns the name. `ctx.self()`, `ctx.balance(x)`
   and `ctx.selfBalance()` are unchanged.
+
 - **Added (Solana):** `pot` works as on an EVM chain. Bare `pot` is the Pot's key, and its account
   wherever an `Account` is taken. A script with no `main` and a helper function can use `pot.USDC`,
   `pot.balance` and the token methods: a script is given the `main` its accounts are added to, and

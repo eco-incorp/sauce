@@ -535,7 +535,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     const orca =
       "  bought += Orca.Whirlpool.swap(\n" +
       "    Orca.Whirlpool.pool(USDC, SPCX_US, 64, 1025),\n" +
-      "    USDC,\n    SPCX_US,\n    self.USDC - kept,\n    priceLimit,\n    0,\n  );\n";
+      "    USDC,\n    SPCX_US,\n    pot.USDC - kept,\n    priceLimit,\n    0,\n  );\n";
     const at = source.indexOf("  bought += Byreal.CLMM.swap(");
     const withOrcaSource = `${source.slice(0, at)}${orca}${source.slice(at)}`;
     const withOrca = compileSauceProgram("solana", withOrcaSource);

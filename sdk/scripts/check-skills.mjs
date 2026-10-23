@@ -1540,7 +1540,7 @@ for (const file of [
   if (existsSync(file)) keys(JSON.parse(read(file)));
 }
 // SauceScript keywords and builtins, JavaScript keywords, and tool names.
-for (const word of `main require throw ctx evm svm abi hex Math self pot balance catch at owner dataLen Uint256 Int256 fromBits program
+for (const word of `main require throw ctx evm svm abi hex Math pot balance catch at owner dataLen Uint256 Int256 fromBits program
   Address Account Writable Signer bytes bool string void true false null undefined bigint number
   boolean const let function return if else for while break continue of in new import from export
   default interface type await async typeof pnpm node npm npx tsc git cast sauce`.split(/\s+/))

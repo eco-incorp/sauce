@@ -197,8 +197,8 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
           : `Tokens (${listed.length})`;
     text.push(
       "",
-      `${what}: USDC.transfer(to, amount), USDC.balanceOf(ctx.self()); the symbol alone is the ` +
-        "mint's 32-byte key, a value for the @sauce/token functions: balanceOf(USDC, account)",
+      `${what}: USDC.transfer(to, amount), pot.USDC, USDC.balanceOf(who); the symbol alone is ` +
+        "the mint's 32-byte key, a value for the @sauce/token functions: balanceOf(USDC, account)",
       ...listed.map((token) => `  ${line(token)}`),
       ...(search === undefined && input.stocks !== true && stocks.length > 0
         ? [
@@ -214,7 +214,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
           ]),
       "  Any other mint: Token(mint), with mint an Address argument of main, passed as its base58",
       "  key. A token method's accounts are added to main and derived when the cook is built, so",
-      "  its holders are known then: ctx.self() (the Pot), an Address argument of main, or a key.",
+      "  its holders are known then: pot (the Pot), an Address argument of main, or a key.",
     );
   } else if (showTokens) {
     const what =

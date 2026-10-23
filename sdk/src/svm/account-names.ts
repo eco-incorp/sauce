@@ -3,9 +3,10 @@
  * `sauce --account NAME=<value>` takes, in which the SDK also writes how each account it adds to a
  * program is derived (`CompiledSauceProgram.derivedAccounts`, for the token methods).
  *
- *   pot | owner          the cook's Pot, or its owner (the signer)
- *   self                 the authority the program acts with: the Pot, cooked through the Kitchen;
- *                        the owner, cooked directly on the engine (`via: "engine"`)
+ *   pot | owner          the cook's Pot, or its owner (the signer). There is no Pot cooked directly
+ *                        on the engine (`via: "engine"`), so there every `pot` form is refused
+ *   authority            the account that signs the engine call: the Pot, cooked through the
+ *                        Kitchen; the owner, cooked directly on the engine (`via: "engine"`)
  *   <key>                that address: base58, or its 32 bytes as `0x` and 64 hex digits — the
  *                        spelling a program holds a key in, and `sauce globals` prints a mint's
  *                        `address` and the release its `key` in (`svmPublicKey`); wherever a name
@@ -13,8 +14,8 @@
  *   system               the System program
  *   @<param>             the key given as main's argument `<param>`
  *   <holder>:<token>     the holder's associated token account for the mint, under the token
- *                        program that owns the mint; a holder is `pot`, `owner`, `self`, `@<param>`
- *                        or a base58 address
+ *                        program that owns the mint; a holder is `pot`, `owner`, `authority`,
+ *                        `@<param>` or a base58 address
  *   mint:<token>         the mint
  *   program:<token>      the token program that owns the mint
  *   slot:<pool>:<token>.<part>
@@ -32,7 +33,7 @@
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
- *                          pot | owner | self | @<param> | <base58>: that key's 32 bytes
+ *                          pot | owner | authority | @<param> | <base58>: that key's 32 bytes
  *                          mint:<token>: the mint's key
  *                          u8:<n> | u16:<n> | u32:<n> | u64:<n> | u128:<n>: the integer `n` (or
  *                          `@<param>`, main's integer argument), little-endian, in that many bits
@@ -41,6 +42,9 @@
  * A token is a symbol the chain registers (`USDC`, a stock's `TSLAx`, matched without regard to
  * case), a mint's base58 address, or `@<param>`, a mint given as main's argument. A registered
  * mint's program is the registry's; any other is read from the cluster through `programOf`.
+ *
+ * `self` (and `self:<token>`, and `self` as a seed) is the name `authority` had: refused, naming
+ * `pot` through the Kitchen and `authority` on the engine.
  *
  * The derivation is the ADDRESS the transaction attaches; what a program does with the account is
  * its own to check (the token methods check each holder's account on chain).
@@ -128,7 +132,7 @@ export class SvmAccountNameError extends Error {
 }
 
 type Holder =
-  | { readonly kind: "pot" | "owner" | "self" }
+  | { readonly kind: "pot" | "owner" | "authority" | "self" }
   | { readonly kind: "arg"; readonly param: string }
   | { readonly kind: "address"; readonly key: string };
 
@@ -196,7 +200,9 @@ export function svmPublicKey(text: string): Address | undefined {
 }
 
 function parseHolder(text: string): Holder | undefined {
-  if (text === "pot" || text === "owner" || text === "self") return { kind: text };
+  if (text === "pot" || text === "owner" || text === "authority" || text === "self") {
+    return { kind: text };
+  }
   const param = PARAM.exec(text);
   if (param !== null) return { kind: "arg", param: param[1]! };
   const key = svmPublicKey(text);
@@ -310,7 +316,48 @@ const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 /** Why `system:<token>` names nothing: `system` is no holder. */
 export const SYSTEM_HOLDER = (value: string): string =>
   `${value}: system is the System Program, which holds no token account: name the holder, pot, ` +
-  "owner, self, @<argument> or a base58 key";
+  "owner, authority, @<argument> or a base58 key";
+
+/** Every holder a parsed name names: its own, its account's, a derived address's and its seeds'. */
+function holdersIn(parsed: Parsed): Holder[] {
+  switch (parsed.kind) {
+    case "holder":
+    case "account":
+      return [parsed.holder];
+    case "pda":
+      return [
+        parsed.program,
+        ...parsed.seeds.flatMap((seed) => (seed.kind === "key" ? [seed.holder] : [])),
+      ];
+    case "slot":
+      return parsed.pool.kind === "keyed" ? [] : [parsed.pool];
+    default:
+      return [];
+  }
+}
+
+/**
+ * The refusal of `self`, the name `authority` had: through the Kitchen it names `pot` (and
+ * `authority`), cooked directly `authority`, each written in the name given.
+ */
+function selfRefusal(value: string, via: SvmAccountNameContext["via"]): SvmAccountNameError {
+  const as = (word: string): string => value.replace(/(^|[:,])self(?=$|[:,])/g, `$1${word}`);
+
+  return new SvmAccountNameError(
+    via === "engine"
+      ? `'${value}' names no account: self is retired. Write '${as("authority")}' (the account ` +
+          "that signs the engine call, the owner with --via engine)"
+      : `'${value}' names no account: self is retired. Write '${as("pot")}' (the Pot), or ` +
+          `'${as("authority")}' (the account that signs the engine call: the Pot through the ` +
+          "Kitchen, the owner with --via engine)",
+  );
+}
+
+/** Why `pot`, as a name or a seed, has nothing to stand for cooked directly on the engine. */
+const POT_ON_ENGINE =
+  "--via engine cooks with no Pot, so there is no Pot to pass: give the account by its address " +
+  "(owner for the owner, authority for the account that signs the engine call), or cook through " +
+  "the Kitchen";
 
 function parse(value: string): Parsed | undefined {
   if (value === "system")
@@ -333,6 +380,17 @@ function parse(value: string): Parsed | undefined {
 /** Whether `value` is a name this language has (it says nothing of whether it resolves). */
 export function isSvmAccountName(value: string): boolean {
   return parse(value) !== undefined;
+}
+
+/**
+ * Whether `value` names the Pot: `pot`, a `pot:<token>` account, or an address derived from `pot`.
+ * A program's derivations name it where the program uses `pot`, and cooked directly on the engine
+ * (`via: "engine"`) there is no Pot.
+ */
+export function svmNamesPot(value: string): boolean {
+  const parsed = parse(value);
+
+  return parsed !== undefined && holdersIn(parsed).some((holder) => holder.kind === "pot");
 }
 
 /** The name a person reads for a token program. */
@@ -426,17 +484,19 @@ function holderOf(
       if (engine) {
         throw new SvmAccountNameError(
           "--via engine cooks with no Pot, so there is no Pot's token account to pass: give the " +
-            `account the program reads by its address (owner:${token} for the owner's), or cook ` +
-            "through the Kitchen",
+            `account the program reads by its address (owner:${token} or authority:${token} for ` +
+            "the owner's), or cook through the Kitchen",
         );
       }
       return { key: ctx.pot, whose: "the Pot's" };
     case "owner":
       return { key: ctx.owner, whose: "the owner's" };
-    case "self":
+    case "authority":
       return engine
         ? { key: ctx.owner, whose: "the owner's" }
         : { key: ctx.pot, whose: "the Pot's" };
+    case "self":
+      throw selfRefusal(`self:${token}`, ctx.via);
     case "arg":
       return { key: argument(holder.param, ctx), whose: `main's argument ${holder.param}'s` };
     case "address":
@@ -472,24 +532,34 @@ function plan(value: string, ctx: SvmAccountNameContext): Planned {
     throw new SvmAccountNameError(SYSTEM_HOLDER(value));
   if (parsed === undefined) {
     throw new SvmAccountNameError(
-      `'${value}' is not an address, pot, owner, self, @<argument>, or a token's account: ` +
+      `'${value}' is not an address, pot, owner, authority, @<argument>, or a token's account: ` +
         "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
         "owner's, @to:USDC main's argument to's, mint:USDC the mint, program:USDC its token " +
         'program, and pda:<program>:"seed",@to,u64:7 an address a program derives',
     );
   }
+  const holders = holdersIn(parsed);
+  if (holders.some((holder) => holder.kind === "self")) throw selfRefusal(value, ctx.via);
+  if (
+    ctx.via === "engine" &&
+    parsed.kind !== "account" &&
+    holders.some((one) => one.kind === "pot")
+  ) {
+    throw new SvmAccountNameError(POT_ON_ENGINE);
+  }
   const done = (resolved: ResolvedSvmAccountName): Planned => ({ kind: "done", resolved });
   if (parsed.kind === "holder") {
     const { holder } = parsed;
+    const engine = ctx.via === "engine";
     switch (holder.kind) {
       case "pot":
         return done({ value: "pot", kind: "pot" });
       case "owner":
         return done({ value: "owner", kind: "owner" });
+      case "authority":
+        return done(engine ? { value: "owner", kind: "owner" } : { value: "pot", kind: "pot" });
       case "self":
-        return done(
-          ctx.via === "engine" ? { value: "owner", kind: "owner" } : { value: "pot", kind: "pot" },
-        );
+        throw selfRefusal(value, ctx.via);
       case "arg":
         return done({
           value: argument(holder.param, ctx),
@@ -542,10 +612,11 @@ function tokenName(
 }
 
 /**
- * Resolves one name to the account a cook attaches. `pot` and `owner` stay as they are (and `self`
- * becomes one of them), so the cook gives each its signing role; every other name becomes an
- * address. Throws `SvmAccountNameError` for a name the language does not have, a symbol the chain
- * does not register, the Pot's token account cooked with no Pot, or an argument not given.
+ * Resolves one name to the account a cook attaches. `pot` and `owner` stay as they are (and
+ * `authority` becomes one of them), so the cook gives each its signing role; every other name
+ * becomes an address. Throws `SvmAccountNameError` for a name the language does not have (`self`
+ * among them, naming what to write), a symbol the chain does not register, any `pot` form cooked
+ * with no Pot (`via: "engine"`), or an argument not given.
  */
 export async function resolveSvmAccountName(
   value: string,
@@ -723,8 +794,10 @@ function pdaSeeds(
         return ctx.pot;
       case "owner":
         return ctx.owner;
-      case "self":
+      case "authority":
         return ctx.via === "engine" ? ctx.owner : ctx.pot;
+      case "self":
+        throw selfRefusal(parsed.text, ctx.via);
       case "arg":
         return argument(holder.param, ctx);
       case "address":
