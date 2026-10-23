@@ -55,6 +55,7 @@ import {
 import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
+import { requireSolanaRelease, type ProgramName, type ReadProgram } from "./solana-release.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
   isSvmAccountName,
@@ -169,6 +170,23 @@ import {
 /** The released programs, from the release record the SDK ships. */
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
 const engine = (): Address => address(v12SvmEngineProgramId());
+
+/** The program `account` on the cluster `rpc` serves, as the release check reads it. */
+const programReader =
+  (rpc: Rpc, url: string): ReadProgram =>
+  async (account) => {
+    const { value } = await ask(url, `the program ${account}`, () =>
+      rpc.getAccountInfo(address(account), { encoding: "base64" }).send(),
+    );
+
+    return value === null
+      ? undefined
+      : { owner: value.owner, data: new Uint8Array(Buffer.from(value.data[0], "base64")) };
+  };
+
+/** Refuses a cook or a Pot on a cluster without the released programs `needs` names. */
+const requireReleased = (rpc: Rpc, url: string, needs: readonly ProgramName[]): Promise<void> =>
+  requireSolanaRelease(programReader(rpc, url), needs, requireChain("solana").slug);
 
 /**
  * A Solana public key from a flag, in base58 or as the 32 bytes of hex the command prints a key in
@@ -1656,6 +1674,9 @@ async function prepare(
         "nothing was signed or sent",
     );
   }
+  // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
+  // or sent. A cook straight to the engine needs no Kitchen.
+  await requireReleased(rpc, input.rpcUrl, via === "engine" ? ["engine"] : ["engine", "Kitchen"]);
   // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
   const client = await createSauceSvmClient({
     rpcUrl: input.rpcUrl,
@@ -3313,6 +3334,7 @@ export async function svmPotDeployCommand(
   const predicted = await svmPotCommand(target);
   const pot = predicted.json.pot as Address;
   const rpc = createSolanaRpc(target.rpcUrl);
+  await requireReleased(rpc, target.rpcUrl, ["engine", "Kitchen"]);
   if (await exists(rpc, target.rpcUrl, pot, "the Pot")) {
     const json = { ...predicted.json, deployed: true };
 

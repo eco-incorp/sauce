@@ -227,6 +227,16 @@ another owner says so, and names that owner, and one it closes and makes again a
 another token shows as two changes, the old token emptied and the new one filled. `--json` lists
 them as `tokenChanges` (`owner`, and `ownerAfter` for an account handed over) and `lamportChanges`.
 
+#### The release, checked first
+
+Before it simulates, builds or sends a cook, and before `pot --deploy` creates a Pot, the command
+reads the engine and the Kitchen at the release's addresses and holds each to the release's own
+program, byte for byte. A cluster with either missing, or with another build there, is refused, as
+an EVM chain without the release's contracts is: `the released Kitchen <id> is not deployed on
+solana: this SDK's cook cannot run there`. A cook with `--via engine` needs the engine alone. This
+holds for the local copy below too, which runs the release's own programs and so could otherwise
+succeed where the cluster would not.
+
 #### In a local copy
 
 Solana's `simulateTransaction` takes no account overrides, so a plain simulation runs on the

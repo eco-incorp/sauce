@@ -2147,4 +2147,65 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(rehearsed.stdout).toContain("Simulated in a local copy (LiteSVM)");
     expect(rehearsed.stdout).toMatch(/1 USDC/);
   }, 120_000);
+
+  it("refuses every cook and Pot on a cluster whose Kitchen or engine is not the release's, sending nothing", async () => {
+    // Another build at the release's own address: what mainnet's Kitchen was, its bytes not the release's.
+    const swapped = async (account: Address, run: () => Promise<void>) => {
+      const original = harness.svm.getAccount(account);
+      if (!original.exists) throw new Error(`no account ${account}`);
+      const data = new Uint8Array(original.data);
+      data[data.length - 1] ^= 0xff;
+      harness.svm.setAccount({ ...original, address: account, data });
+      try {
+        await run();
+      } finally {
+        harness.svm.setAccount({ ...original, address: account });
+      }
+    };
+    const { flags } = accountsFor(await potOf(hexToBytes(potSalt("refused"))), 1n);
+    const commands = [
+      ["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ["tx", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ["run", sweep, "--define", mintDefine, "--keypair", owner.path, "--yes"],
+    ];
+    const refusesAll = async (name: string, program: string) => {
+      const sentBefore = rpc.sent.length;
+      for (const argv of commands) {
+        const out = await sauce(
+          ...argv,
+          ...["--salt", "refused", "--rpc-url", RPC_URL, ...flags, "--args", "1"],
+        );
+        expect([argv[0], out.code]).toEqual([argv[0], 1]);
+        expect(out.stderr).toContain(
+          `the released ${name} ${program} is not deployed on solana: this SDK's cook cannot run there`,
+        );
+      }
+      const pot = await sauce(
+        ...["pot", "--deploy", "--chain", "solana", "--salt", "refused"],
+        ...["--rpc-url", RPC_URL, "--keypair", owner.path],
+      );
+      expect(pot.code).toBe(1);
+      expect(pot.stderr).toContain(`the released ${name} ${program} is not deployed on solana`);
+      expect(rpc.sent.length).toBe(sentBefore);
+    };
+
+    const { address: kitchenData } = await deriveProgramDataPda(harness.kitchen);
+    await swapped(kitchenData, () => refusesAll("Kitchen", KITCHEN));
+    const engineId = address(v12SvmEngineProgramId());
+    const engineAccount = harness.svm.getAccount(engineId);
+    const engineHolds =
+      engineAccount.exists && engineAccount.data.length === 36
+        ? (await deriveProgramDataPda(engineId)).address
+        : engineId;
+    await swapped(engineHolds, () => refusesAll("engine", engineId));
+    // Restored, the cluster runs the release again.
+    expect(
+      (
+        await sauce(
+          ...commands[0]!,
+          ...["--salt", "refused", "--rpc-url", RPC_URL, ...flags, "--args", "1"],
+        )
+      ).stderr,
+    ).not.toContain("is not deployed on solana");
+  }, 120_000);
 });
