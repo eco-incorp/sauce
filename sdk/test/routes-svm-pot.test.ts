@@ -149,6 +149,26 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     });
   });
 
+  it("a pot or self the caller binds (a define, an ambient module's export) is the caller's", () => {
+    const lower = (source: string) =>
+      rewriteSvmTokenSyntax(
+        source,
+        resolveTokenMap(SOLANA),
+        svmTokenRows(SOLANA),
+        undefined,
+        undefined,
+        undefined,
+        new Set(["pot", "self"]),
+      );
+    for (const name of ["pot", "self"]) {
+      const source = `function main(): Address {\n  return ${name};\n}\n`;
+      expect(lower(source).source).toBe(source);
+    }
+    // The Pot's own slot, which a token write signs with, is named apart from the caller's `pot`.
+    const write = lower("function main(to: Address) {\n  USDC.transfer(to, 1);\n}\n");
+    expect(write.derived).toMatchObject({ pot2: "authority", potUSDC: "authority:USDC" });
+  });
+
   it("a local bound to bare pot holds what its declared type says: the Pot's key, else its account", () => {
     // An `Address` alias, annotated or not, is the Pot's key: its `.balance` the lamports there.
     for (const declared of [": Address", ""]) {

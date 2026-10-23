@@ -641,6 +641,9 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
+    /** The names the caller binds (its defines, the ambient modules' exports): a `pot` or `self`
+     *  among them is the caller's, and the accounts this adds are named apart from them. */
+    bound: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -653,14 +656,17 @@ export class SvmLowering {
     if (this.main !== undefined) this.paramsByFunction.set(this.main, paramsOf(this.main));
     for (const [name, fn] of topLevel) this.paramsByFunction.set(fn, paramsOf(fn, name));
     this.potReads = new Set(
-      this.declared.has(POT_NAME) ? [] : readsOf(this.program, this.parents, POT_NAME),
+      this.declared.has(POT_NAME) || bound.has(POT_NAME)
+        ? []
+        : readsOf(this.program, this.parents, POT_NAME),
     );
-    this.selfReads = this.declared.has(RETIRED_POT_NAME)
-      ? []
-      : readsOf(this.program, this.parents, RETIRED_POT_NAME);
+    this.selfReads =
+      this.declared.has(RETIRED_POT_NAME) || bound.has(RETIRED_POT_NAME)
+        ? []
+        : readsOf(this.program, this.parents, RETIRED_POT_NAME);
     this.authorityDerivation = this.potReads.size > 0 ? "pot" : "authority";
     this.index = rowIndex(rows);
-    this.slots = new Slots(new Set(this.declared));
+    this.slots = new Slots(new Set([...this.declared, ...bound]));
     walk(this.program, (n) => {
       if (n.type === "ExpressionStatement") this.statements.set(n.expression as AstNode, n);
       if (n.type === "Program" || n.type === "BlockStatement" || n.type === "StaticBlock") {

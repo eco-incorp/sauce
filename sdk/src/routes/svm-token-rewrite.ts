@@ -146,6 +146,8 @@ export function rewriteSvmTokenSyntax(
   native?: string,
   /** The swaps at a price to hold to a stop (`SvmLowering`'s `stopped`). */
   stopped?: ReadonlySet<string>,
+  /** The names the caller binds: a `pot` or `self` among them is its own (`SvmLowering`'s `bound`). */
+  bound?: ReadonlySet<string>,
 ): SvmTokenRewriteResult {
   // Before parsing: a program that names neither `Token`, a symbol, a venue, the Pot nor a balance
   // has nothing to lower. The scan stops at the first it meets; a mention in a comment only costs
@@ -167,7 +169,7 @@ export function rewriteSvmTokenSyntax(
     return { source, rewrote: false, derived: {} };
   }
   const lower = (text: string): SvmLowering => {
-    const lowering = new SvmLowering(text, tokens, rows, keys, native, stopped);
+    const lowering = new SvmLowering(text, tokens, rows, keys, native, stopped, bound);
     refuseRetiredPot(lowering);
     collectTokenMethods(lowering);
     collectVenueMethods(lowering);
