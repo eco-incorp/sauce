@@ -36,7 +36,7 @@ On Ethereum, `Aevo` is a namespace: its contracts need no import.
 
 ```ts
 function main() {
-  // Ethereum's depositContract, `0x4082C9647c098a6493Fb499EaE63b5ce3259C574`.
+  // Ethereum's depositContract, `0x4082C9647c098a6493fb499EaE63b5ce3259c574`.
   require(Aevo.DepositContract != 0);
 }
 ```
@@ -45,7 +45,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../chains/ethereum.md) | depositContract | `0x4082C9647c098a6493Fb499EaE63b5ce3259C574` | `Aevo.DepositContract` |
+| [Ethereum](../chains/ethereum.md) | depositContract | `0x4082C9647c098a6493fb499EaE63b5ce3259c574` | `Aevo.DepositContract` |
 
 ## ABI
 

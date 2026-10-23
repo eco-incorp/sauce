@@ -30,7 +30,10 @@
 //   payer: Address        who receives the profit, in `tokenIn`
 //
 // On Ethereum, 1 WETH's worth of USDC borrowed from the 0.05% pool and sold back for WETH in the
-// 0.3% pool:
+// 0.3% pool. It is an arbitrage, as PairFlash's is: it pays only while the 0.3% pool gives more
+// than 1 WETH for that USDC, after another trade has moved one pool's price. Where the two pools
+// agree, the cycle loses both fees and the whole transaction reverts, moving nothing; simulate it
+// first:
 //
 //   sauce run uniswap-v3-pair-flash.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \

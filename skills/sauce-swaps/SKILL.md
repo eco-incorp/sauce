@@ -81,13 +81,17 @@ floor and the recipient.
 
 **Each function has a `try` form** (`tryUniswapV2`, `tryCurve`, `tryBalancerV2`, `tryDodoV2`,
 `tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
-`tryInfinityBin`) with the same arguments, returning `0`, having moved nothing, where the plain
-form would revert. A swap that ran returns at least 1, so `0` always means nothing moved.
+`tryInfinityBin`) with the same arguments, returning `0`, having moved nothing, in the cases the
+table lists. A swap that ran returns at least 1, so `0` always means nothing moved. Anything else
+reverts as the plain form does: arguments that contradict each other (the same token in and out at
+a venue paid first, tokens other than the pair a DODO V2 or LB call names, a V2 fee of 100% or
+more) and a contract that has code but is not a V2 or LB pair, whose view `tryUniswapV2` and
+`tryTraderJoeLB` read uncaught.
 
-| `try` forms of            | Skip without moving anything                                                                                                                                                                                                                             |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| venues paid first         | a failing check of the pool's own view first (the V2 reserves, LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote`, WooPPV2's `query`), or the pool's failure caught and the approval reset (`tryCurve`, `tryBalancerV2`); a pool with no code |
-| venues through the Router | the Router's call caught: a pool with no code, a pool for another pair, a key no pool has, a swap the pool or Router refuses; a swap that ran in a pool with no liquidity in range returns `0`                                                           |
+| `try` forms of            | Skip without moving anything                                                                                                                                                                                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| venues paid first         | a pool or Vault with no code; a failing check of the pool's own view first (the V2 reserves, LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote`, WooPPV2's `query`, the last two also when the view reverts), or the pool's failure caught and the approval reset (`tryCurve`, `tryBalancerV2`) |
+| venues through the Router | the Router's call caught: a pool with no code, a pool for another pair, a key no pool has, a swap the pool or Router refuses; a swap that ran in a pool with no liquidity in range returns `0`                                                                                                             |
 
 A Router-form swap that ran must still deliver `minOut`, and at least 1, or the whole program
 reverts: an input the pool kept (dust it takes as its fee) cannot be given back. With no price

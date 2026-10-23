@@ -79,9 +79,10 @@ export function chooseTerminal(choice: TerminalChoice): Terminal | undefined {
 }
 
 /**
- * Writes `text` to the controlling terminal itself — never to stdout, where a pipe or an agent could
- * capture it — or, where there is no `/dev/tty` (Windows), to stdout only while stdout is a
- * terminal. False where there is no terminal at all. What `sauce wallet export` shows a key with.
+ * Writes `text` to the controlling terminal itself — never to stdout, where a pipe or a redirect
+ * would capture it — or, where there is no `/dev/tty` (Windows), to stdout only while stdout is a
+ * terminal. False where there is no terminal at all. What `sauce wallet export` shows a key with. A
+ * program that runs the command in a pseudo-terminal is that terminal, and reads what is written.
  */
 export function writeToTerminal(text: string): boolean {
   let fd: number;

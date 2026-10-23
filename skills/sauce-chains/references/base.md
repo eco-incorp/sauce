@@ -111,7 +111,7 @@ address.
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
 | [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
 | [Seamless](../../sauce-protocols/references/registry/seamless.md) | pool | `0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7` | `Seamless.Pool` |
-| [Seamless](../../sauce-protocols/references/registry/seamless.md) | poolAddressesProvider | `0x0E02EB705be564c2bF0067928A8f8DD89a82B26E` | `Seamless.PoolAddressesProvider` |
+| [Seamless](../../sauce-protocols/references/registry/seamless.md) | poolAddressesProvider | `0x0e02eB705Be564c2bF0067928A8f8DD89A82B26E` | `Seamless.PoolAddressesProvider` |
 | [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
 | [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
 | [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
@@ -123,15 +123,15 @@ address.
 | [Synthetix V3](../../sauce-protocols/references/registry/synthetix-v3.md) | coreProxy | `0x32C222A9A159782aFD7529c87FA34b96CA72C696` | `SynthetixV3.CoreProxy` |
 | [Synthetix V3](../../sauce-protocols/references/registry/synthetix-v3.md) | perpsMarketProxy | `0x0A2AF931eFFd34b81ebcc57E3d3c9B1E1dE1C9Ce` | `SynthetixV3.PerpsMarketProxy` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6` | `UniswapV2.Factory` |
-| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |
+| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` | `UniswapV3.Factory` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1` | `UniswapV3.NonfungiblePositionManager` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x2626664c2603336E57B271c5C0b26F421741e481` | `UniswapV3.SwapRouter02` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x498581ff718922c3f8e6a244956af099b2652b2b` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x7c5f5a4bbd8fd63184577525326123b519429bdc` | `UniswapV4.PositionManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xa3c0c9b65bad0b08107aa264b0f3db444b867a71` | `UniswapV4.StateView` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x6ff5693b99212da76ad316178a184ab56d299b43` | `UniswapV4.UniversalRouter` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x498581fF718922c3f8e6A244956aF099B2652b2b` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x7C5f5A4bBd8fD63184577525326123B519429bDc` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71` | `UniswapV4.StateView` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x6fF5693b99212Da76ad316178A184AB56D299b43` | `UniswapV4.UniversalRouter` |
 | [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6` | `Wormhole.CoreBridge` |
 | [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | tokenBridge | `0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627` | `Wormhole.TokenBridge` |
 | [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |

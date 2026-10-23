@@ -41,7 +41,7 @@ On Ethereum, `Dodo` is a namespace: its contracts need no import.
 
 ```ts
 function main() {
-  // Ethereum's dodoV2Proxy, `0xa356867fDCeA8e71AEaf87805808803806231FDc`.
+  // Ethereum's dodoV2Proxy, `0xa356867fDCEa8e71AEaF87805808803806231FdC`.
   require(Dodo.DODOV2Proxy != 0);
 }
 ```
@@ -50,8 +50,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../chains/ethereum.md) | dodoV2Proxy | `0xa356867fDCeA8e71AEaf87805808803806231FDc` | `Dodo.DODOV2Proxy` |
-| [BNB Chain](../chains/bsc.md) | dodoV2Proxy | `0x8F8Dd7DB1bDA5eD3da8C9dAf3bFA471c12d58486` | `Dodo.DODOV2Proxy` |
+| [Ethereum](../chains/ethereum.md) | dodoV2Proxy | `0xa356867fDCEa8e71AEaF87805808803806231FdC` | `Dodo.DODOV2Proxy` |
+| [BNB Chain](../chains/bsc.md) | dodoV2Proxy | `0x8F8Dd7DB1bDA5eD3da8C9daf3bfa471c12d58486` | `Dodo.DODOV2Proxy` |
 
 ## ABI
 

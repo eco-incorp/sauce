@@ -7,7 +7,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 1,
     chainName: "Ethereum",
     addresses: {
-      uniProxy: "0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599",
+      uniProxy: "0xF5BFA20F4A77933fEE0C7bB7F39E7642A070d599",
     },
   },
   {

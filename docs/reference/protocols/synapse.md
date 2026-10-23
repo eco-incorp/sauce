@@ -43,11 +43,11 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Ethereum](../chains/ethereum.md) | cctpRouter | `0x12715a66773BD9C54534a01aBF01d05F6B4Bd35E` | `Synapse.CctpRouter` |
-| [Ethereum](../chains/ethereum.md) | synapseBridge | `0x2796317b0fF8538F253012862c06787Adfb8cEB6` | `Synapse.SynapseBridge` |
+| [Ethereum](../chains/ethereum.md) | synapseBridge | `0x2796317b0fF8538F253012862c06787Adfb8cEb6` | `Synapse.SynapseBridge` |
 | [Optimism](../chains/optimism.md) | synapseBridge | `0xAf41a65F786339e7911F4acDAD6BD49426F2Dc6b` | `Synapse.SynapseBridge` |
 | [Polygon](../chains/polygon.md) | synapseBridge | `0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280` | `Synapse.SynapseBridge` |
 | [Base](../chains/base.md) | synapseBridge | `0xf07d1C752fAb503E47FEF309bf14fbDD3E867089` | `Synapse.SynapseBridge` |
-| [Arbitrum One](../chains/arbitrum.md) | synapseBridge | `0x6F4e8eba4d337f874AB57478AcC2Cb5BacDc19c9` | `Synapse.SynapseBridge` |
+| [Arbitrum One](../chains/arbitrum.md) | synapseBridge | `0x6F4e8eBa4D337f874Ab57478AcC2Cb5BACdc19c9` | `Synapse.SynapseBridge` |
 | [Avalanche C-Chain](../chains/avalanche.md) | synapseBridge | `0xC05e61d0E7a63D27546389B7aD62FdFf5A91aACE` | `Synapse.SynapseBridge` |
 
 ## ABI
