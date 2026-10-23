@@ -21,7 +21,9 @@
  *
  * `ETH:<amount>` (the chain's native currency) needs none of it: it is sent as the cook's value.
  *
- * Signatures are made locally by the signer (EIP-712), and the key is never printed.
+ * Signatures are made locally by the signer (EIP-712), and the key is never printed. Each names
+ * the Pot, as an approval or a transfer does, so nothing is signed or sent until the Pot is shown
+ * to be the signer's own, and the wallet's policy allows funding it (`requireOwnPot`).
  */
 import {
   encodeFunctionData,
@@ -39,6 +41,7 @@ import {
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
+import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { mainSignature } from "../routes/entry.js";
@@ -50,6 +53,8 @@ import { CliError, UsageError } from "./args.js";
 import { sendAndWait, type Sent, type TxRequest } from "./chain.js";
 import { wordsOf } from "../evm/effects.js";
 import type { Approver } from "./commands.js";
+import { guardOf } from "./policy.js";
+import { authenticatePot } from "./pots.js";
 
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;
 export type FundMode = (typeof FUND_MODES)[number];
@@ -185,6 +190,11 @@ export interface FundingInput {
    *  not given. */
   readonly nonce?: bigint;
   readonly deadline?: bigint;
+  /**
+   * The salt the Pot is deployed at first, by this run or in this rehearsal, when it has no code
+   * yet: it is then the signer's own exactly when it is the signer's `v12PredictPot` at that salt.
+   */
+  readonly deploySalt?: Hex;
   /** May the run approve and transfer before the cook (`run`), or only report (`simulate`)? */
   readonly send: boolean;
   /** Who approves the approvals a send makes first. */
@@ -542,10 +552,39 @@ const literal = (value: bigint): string => `${value}n`;
 const word = (value: bigint): string => `0x${value.toString(16)}n`;
 
 /**
- * The funding a run with `--fund` needs: balances checked, approvals asked for and sent, signatures
- * made, and the wrapper that pulls, runs and sweeps.
+ * Refuses, before `signer` signs or sends anything for it, funding a Pot that is not its own. What
+ * funding makes names the Pot as the one that may take the signer's tokens (the spender of a
+ * Permit2 transfer, a permit or an approval; the recipient of a transfer), so whoever controls that
+ * address could take them: a contract that answers `owner()` with the signer shows nothing. The
+ * wallet's policy first (`SendGuard.authorizeFunding`), then the chain: the Pot the same run deploys
+ * first is the signer's when its address is the signer's `v12PredictPot` at that salt, and any other
+ * must show it is (`authenticatePot`: its owner the signer, and its address the CREATE2 of that
+ * owner and its salt under a Kitchen a release records). Where that cannot be read, it is refused.
+ */
+async function requireOwnPot(input: FundingInput, signer: Address): Promise<void> {
+  const pot = getAddress(input.pot);
+  guardOf(signer)?.authorizeFunding(input.chain, pot);
+  if (input.deploySalt !== undefined && pot === v12PredictPot(signer, input.deploySalt)) return;
+  const found = await authenticatePot(input.client, signer, pot);
+  if (found === "own") return;
+  const nothing =
+    "--fund signs and sends only for the signer's own Pot, and did neither for this one";
+  throw new CliError(
+    found === "not"
+      ? `Pot ${pot} is not ${signer}'s own Pot of a release this sauce records: on ` +
+          `${input.chain.slug}, its owner(), userSalt() and kitchen() do not show a recorded ` +
+          `Kitchen minting it there for ${signer}. ${nothing}`
+      : `could not tell whether Pot ${pot} is ${signer}'s own: its owner(), userSalt() or ` +
+          `kitchen() could not be read from the endpoint on ${input.chain.slug}. ${nothing}`,
+  );
+}
+
+/**
+ * The funding a run with `--fund` needs: the Pot shown to be the signer's own, balances checked,
+ * approvals asked for and sent, signatures made, and the wrapper that pulls, runs and sweeps.
  */
 export async function planFunding(input: FundingInput): Promise<Funding> {
+  if (input.account !== undefined) await requireOwnPot(input, getAddress(input.account.address));
   const { tokens, native, notes } = await amounts(input);
   const needs: string[] = [];
   const beforeCook: BeforeCook[] = [];

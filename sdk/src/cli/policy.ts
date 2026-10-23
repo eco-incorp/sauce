@@ -1703,6 +1703,36 @@ export class SendGuard {
       refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
   }
 
+  /**
+   * Authorizes this wallet to fund its Pot `pot`, on `chain`, for a cook (`sauce run --fund`,
+   * `sauce simulate --fund`): the release's gate, then the policy's `chains` and `to` (the Pot),
+   * checked as written, before any permit is signed or any approval or transfer is sent for it.
+   *
+   * Why `native` and `tokens` are not refused here, as {@link authorizeSignedCook} refuses them:
+   * what funding signs or sends names only the wallet's own Pot, which `--fund` authenticates first
+   * (`pots.ts#authenticatePot`, or the Pot the same run deploys at the wallet's `v12PredictPot`).
+   * A Permit2 transfer is spendable by that Pot alone, and an EIP-2612 permit or an approval lets
+   * that Pot alone pull; the Pot moves anything only in a cook, which only the wallet sends
+   * (`cook` is onlyOwner, and that send is measured and reserved against every limit) or signs for
+   * another to send (refused where a limit is set, above). An approval or transfer funding sends is
+   * itself a send, measured by {@link evm}. A wallet with no policy funds.
+   */
+  authorizeFunding(chain: CanonicalChain, pot: Address): void {
+    this.gate(chain);
+    const policy = this.policy;
+    if (policy === undefined) return;
+    const refuse = refuseBy(this.wallet.name, policy);
+    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
+      refuse(
+        "chains",
+        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this funding is on ${chain.slug}`,
+      );
+    }
+    if (policy.to !== undefined && !policy.to.includes(pot.toLowerCase())) {
+      refuse("to", `to allows ${policy.to.length} address(es), and this funding is for Pot ${pot}`);
+    }
+  }
+
   /** Measures and reserves one EVM transaction, just before it is sent. */
   async evm(client: PublicClient, tx: TxRequest): Promise<Reservation> {
     const chain = requireChain(await client.getChainId());
