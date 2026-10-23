@@ -472,21 +472,24 @@ function compileForChain(
 
   // The names the compile binds beside the source: the caller's defines, its contract bindings and,
   // of the Pot's two names, each a caller's ambient module exports. The compiler says which:
-  // `ambientNamesOf` asks it, with this compile's own options, so a module is found exactly where
-  // the compile finds it. It asks only where it can matter: the SDK's own packages (`@sauce/token`),
-  // which the SDK resolves ahead of any caller's mapping, export neither name, and a name the
-  // program does not read (`potNamesRead`) is none the rewrites touch. A `pot` or `self` that is one
-  // of them is the caller's value, never the Pot.
+  // `ambientNamesOf` asks it, with this compile's own options and the program's own imports, so a
+  // module is found exactly where the compile finds it. It asks only where it can matter: the SDK's
+  // own packages (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export
+  // neither name, and a name the program does not read (`probeQuestions`) is none the rewrites
+  // touch. A `pot` or `self` that is one of them is the caller's value, never the Pot.
   const ambient = options.ambient ?? [];
   // The caller's resolvers, as this compile reads them: each answers a question as it first did, so
   // the probe and the compile read the same modules (`firstAnswers`). The next compile asks afresh.
   const resolve = options.resolve === undefined ? undefined : firstAnswers(options.resolve);
   const resolvePackage =
     options.resolvePackage === undefined ? undefined : firstAnswers(options.resolvePackage);
+  const probe = ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
+    ? undefined
+    : probeQuestions(sauce);
   const bound = new Set([
     ...Object.keys(options.defines ?? {}),
     ...Object.keys(options.contracts ?? {}),
-    ...(ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
+    ...(probe === undefined
       ? []
       : ambientNamesOf(
           {
@@ -498,7 +501,8 @@ function compileForChain(
             contracts: options.contracts,
             ambient,
           },
-          potNamesRead(sauce),
+          probe.names,
+          probe.imports,
         )),
   ]);
 
@@ -687,17 +691,21 @@ function svmTokenValues(
 }
 
 /**
- * The Pot's names (`pot`, `self`) among the identifiers `sauce` reads, as the parser every rewrite
- * reads it with (`parseSauce`) names them: an escaped spelling (`p\u006ft`) is the name it spells,
- * and a member's name (`ctx.self()`) is none. A program that does not parse reads none: no rewrite
- * reads it either.
+ * What the probe asks about `sauce`, from the parse every rewrite reads it with (`parseSauce`): the
+ * Pot's names (`pot`, `self`) among the identifiers it reads, as the parser names them (an escaped
+ * spelling, `p\u006ft`, is the name it spells; a member's name, `ctx.self()`, is none), and its
+ * import declarations as written, which the probe's entry repeats so that the compiler loads the
+ * modules the compile does. A program that does not parse asks nothing: no rewrite reads it either.
  */
-function potNamesRead(sauce: string): string[] {
+function probeQuestions(sauce: string): {
+  readonly names: readonly string[];
+  readonly imports: readonly string[];
+} {
   let program: AstNode;
   try {
     program = parseSauce(sauce);
   } catch {
-    return [];
+    return { names: [], imports: [] };
   }
   const members = new Set<AstNode>();
   walk(program, (n) => {
@@ -714,6 +722,9 @@ function potNamesRead(sauce: string): string[] {
       names.add(name);
     }
   });
+  const imports = (program.body as AstNode[])
+    .filter((statement) => statement.type === "ImportDeclaration")
+    .map((statement) => sauce.slice(statement.start, statement.end));
 
-  return [...names];
+  return { names: [...names], imports };
 }

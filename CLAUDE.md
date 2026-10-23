@@ -895,11 +895,14 @@ declare; never a name it binds to a value, which shadows an import of that name 
 token's own contract is one (`WETH.balance`; on Solana a mint, its token accounts derived off its
 key), a `pot` the program does not declare where it is read (`lexical-scope.ts`), nor the compile
 binds (a `defines` key, a `contracts` binding, or a caller's ambient module's export, which the
-SDK never works out itself: `rs-compile.ts#ambientNamesOf` asks the compiler, compiling an empty
-`main` with the compile's own options and one more ambient module exporting `pot` and `self`, and
-reads each name the compiler refuses as exported twice; both read the caller's resolvers through
-one snapshot per compile, `firstAnswers`, so they read the same modules; nothing of it is
-remembered between compiles, the compiler's own caches keep it cheap), or `ctx.self()`, is the Pot
+SDK never works out itself: `rs-compile.ts#ambientNamesOf` asks the compiler, compiling the
+program's own imports, as written, before a `main` that reads nothing and an uncalled closure (so
+the compiler loads the modules the compile does and lowers nothing), with the compile's own
+options and one more ambient module exporting the `pot` and `self` the parse reads, and reads each
+name the compiler refuses as exported twice; any other refusal leaves both the caller's, and the
+compile reports it; both read the caller's resolvers through one snapshot per compile,
+`firstAnswers`; nothing of it is remembered between compiles, the compiler's own caches keep it
+cheap), or `ctx.self()`, is the Pot
 and any other `pot` an ordinary variable (as on Solana, and for the accessor pass's bare `pot`,
 which becomes `ctx.self()`; on Solana the lowering consumes every such `pot` itself, as the Pot
 slot's key, or

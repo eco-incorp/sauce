@@ -1228,13 +1228,67 @@ describe.each([
     expect(build(PROGRAM, { ambient: [specifier], ...served(modules) })).toEqual(callers());
   });
 
+  // The program imports a dependency that imports a package the compile also takes as ambient, which
+  // `resolvePackage` maps by importer. The compiler loads an entry's imports before the ambient
+  // modules and a module once, so the ambient package is the module the dependency's import loaded.
+  const DEPENDENT =
+    'import { dep } from "./dep.js";\nfunction main(): Address { require(dep() > 0); return pot; }';
+  const byImporter = (fromDependency: string, fromEntry: string | undefined): Options => ({
+    ambient: ["holder"],
+    resolvePackage: (specifier: string, importer: string) => {
+      if (specifier !== "holder") return undefined;
+      if (importer.endsWith("dep.js")) return "./dep-holder.js";
+      if (fromEntry === undefined) throw new Error("holder is not installed for the program");
+      return "./app-holder.js";
+    },
+    ...served({
+      "./dep.js": 'import { base } from "holder";\nexport function dep(): Uint256 { return base; }',
+      "./dep-holder.js": fromDependency,
+      ...(fromEntry === undefined ? {} : { "./app-holder.js": fromEntry }),
+    }),
+  });
+  const BASE = "export const base = 1;";
+  const theirs = DEPENDENT.replace("return pot", `return ${holder}`);
+
+  it.each([
+    ["only the dependency's", `${BASE}\n${POT}`, BASE],
+    ["the dependency's, the program's own mapping refused", `${BASE}\n${POT}`, undefined],
+  ])("a `pot` %s package exports is the caller's", (_, fromDependency, fromEntry) => {
+    const options = byImporter(fromDependency, fromEntry);
+    expect(build(DEPENDENT, options)).toEqual(build(theirs, options));
+  });
+
+  it("a `pot` only the program's own mapping exports, which the compile never loads, is the Pot", () => {
+    const options = byImporter(BASE, `${BASE}\n${POT}`);
+    expect(build(DEPENDENT, options)).toEqual(build(DEPENDENT, { ...options, ambient: [] }));
+  });
+
+  // A compile with a closure lowers only what `main` reaches; the probe of one must not lower the
+  // rest, which may be a function only another target's program can compile.
+  it("a program with a closure is probed as it compiles, lowering only what it reaches", () => {
+    const elsewhere =
+      arm === "evm"
+        ? "export function elsewhere(a: Account): Uint256 { return svm.sload(a, 0, 8).toLe(); }"
+        : "export function elsewhere(): Uint256 { return evm.sload(0); }";
+    const program =
+      "function main(): Address { const code = program(() => 1).code; require(code.length > 0); return pot; }";
+    const holding = (text: string): Options => ({
+      ambient: ["./holder.js"],
+      ...served({ "./holder.js": `${text}\n${elsewhere}` }),
+    });
+    expect(build(program, holding(OTHER))).toEqual(build(program));
+    expect(build(program, holding(POT))).toEqual(
+      build(program.replace("return pot", `return ${holder}`), holding(POT)),
+    );
+  });
+
   it("the SDK's own ambient modules export neither of the Pot's names", () => {
     const ambient = [
       ...chainAmbient(requireChain(chain)),
       ...(arm === "evm" ? ["@sauce/router"] : []),
     ];
     expect(
-      ambientNamesOf({ target: arm === "svm" ? "svm" : "v12", ambient }, ["pot", "self"]),
+      ambientNamesOf({ target: arm === "svm" ? "svm" : "v12", ambient }, ["pot", "self"], []),
     ).toEqual(new Set());
   });
 });
