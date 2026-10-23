@@ -38,7 +38,7 @@ import { requireChain, type CanonicalChain, type ChainRef } from "../chains/cano
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
 import { formatBigint } from "../deposit/format.js";
-import { walk, collectDeclaredNames, type AstNode } from "./ast-walk.js";
+import { walk, collectDeclaredNames, collectPatternBinders, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
 import {
   chainSlugForKey,
@@ -619,24 +619,27 @@ function resolveCandidate(
 // -- pot-sugar: bare `pot` -> `ctx.self()` in genuine read position --------------------------------
 
 /** Collects, by node identity, every Identifier node that must NEVER be treated as a READ of a name
- *  (`pot`, or the refused `self`): a declarator id, a function/arrow parameter, a non-computed
- *  member property, a non-computed object-literal key, an assignment target, an update-expression
- *  operand, or a name in an import or export specifier (`import { pot as holder }` names a
- *  module's export, and binds `holder`). */
+ *  (`pot`, or the refused `self`): a name a declarator, a function/arrow parameter or a `catch`
+ *  clause binds, however its pattern destructures (`const [pot] = t`, `catch (pot)`), a
+ *  non-computed member property, a non-computed object-literal key, an assignment target, an
+ *  update-expression operand, or a name in an import or export specifier (`import { pot as
+ *  holder }` names a module's export, and binds `holder`). */
 function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
+  const exclude = (node: AstNode): void => {
+    excluded.add(node);
+  };
   walk(program, (n) => {
-    if (n.type === "VariableDeclarator") {
-      const id = (n as { id?: AstNode }).id;
-      if (id?.type === "Identifier") excluded.add(id);
-    }
+    if (n.type === "VariableDeclarator") collectPatternBinders(n.id, exclude);
+    if (n.type === "CatchClause") collectPatternBinders(n.param, exclude);
     if (
       n.type === "FunctionDeclaration" ||
       n.type === "FunctionExpression" ||
       n.type === "ArrowFunctionExpression"
     ) {
-      const params = (n as { params?: AstNode[] }).params ?? [];
-      for (const p of params) if (p.type === "Identifier") excluded.add(p);
+      for (const param of (n.params as AstNode[] | undefined) ?? []) {
+        collectPatternBinders(param, exclude);
+      }
     }
     if (n.type === "MemberExpression" && !(n as { computed?: boolean }).computed) {
       const property = (n as { property?: AstNode }).property;

@@ -6,7 +6,7 @@
 import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { getDescriptor } from "../src/descriptors/query.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 
@@ -234,6 +234,56 @@ describe("rewriteProtocolAccessors: an import's names are never a read of the Po
         route("base", `function main(): Uint256 { return ${value}; }`).compiled.bytecode[0]!,
       ),
     );
+  });
+});
+
+describe("rewriteProtocolAccessors: a binder is never a read of the Pot", () => {
+  const bytes = (source: string) => Array.from(route("base", source).compiled.bytecode[0]!);
+
+  it.each([
+    [
+      "a destructured element",
+      "function main(): Uint256 { const t = { amount: 7 }; const [pot] = t; return pot; }",
+    ],
+    [
+      "a destructured element after a hole",
+      "function main(): Uint256 { const t = { a: 7, b: 8 }; const [, pot] = t; return pot; }",
+    ],
+    [
+      "a catch clause's parameter",
+      "function main(): Uint256 { try { return 1; } catch (pot) { return pot.length; } }",
+    ],
+  ])("%s named pot or self is the program's own", (_form, written) => {
+    for (const name of ["pot", "self"]) {
+      const source = written.replaceAll("pot", name);
+      expect(rewriteProtocolAccessors(source, BASE).source).toBe(source);
+      expect(bytes(source)).toEqual(bytes(written.replaceAll("pot", "held")));
+    }
+  });
+
+  it("a destructured object's binder is left as written", () => {
+    for (const source of [
+      "function main(): Uint256 { const t = { pot: 7 }; const { pot } = t; return pot; }",
+      "function main(): Uint256 { const t = { a: 7 }; const { a: pot } = t; return pot; }",
+    ]) {
+      expect(rewriteProtocolAccessors(source, BASE).source).toBe(source);
+    }
+  });
+
+  it("outside the binder's scope `pot` is the Pot", () => {
+    const program = (outside: string) =>
+      "function main(c: bool): Address {\n" +
+      "  if (c) { const t = { amount: 7 }; const [pot] = t; require(pot == 7); }\n" +
+      "  try { require(c); } catch (pot) { require(pot.length > 0); }\n" +
+      `  return ${outside};\n}`;
+    expect(rewriteProtocolAccessors(program("pot"), BASE).source).toBe(program("ctx.self()"));
+  });
+
+  it("on Solana, a PDA destructured into pot leaves the program as written", () => {
+    const source =
+      "function main(program: Address): Uint256 {\n" +
+      "  const [pot, bump] = crypto.findPDA(program, [hex`01`]);\n  return bump;\n}\n";
+    expect(compileSauceProgram("solana", source).source).toBe(source);
   });
 });
 

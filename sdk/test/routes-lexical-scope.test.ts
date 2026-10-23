@@ -1,7 +1,7 @@
 /**
  * `lexical-scope.ts`: where a name the program declares is its own, as the compiler scopes it.
  */
-import { walk, type AstNode } from "../src/routes/ast-walk.js";
+import { collectPatternBinders, walk, type AstNode } from "../src/routes/ast-walk.js";
 import { shadowed, walkScoped } from "../src/routes/lexical-scope.js";
 import { parseSauce } from "../src/routes/parse.js";
 
@@ -9,12 +9,16 @@ import { parseSauce } from "../src/routes/parse.js";
 function owned(source: string, name: string): boolean[] {
   const program = parseSauce(source);
   const bindings = new Set<AstNode>();
+  const bind = (node: AstNode): void => {
+    bindings.add(node);
+  };
   walk(program, (n) => {
-    if (n.type === "VariableDeclarator") bindings.add(n.id as AstNode);
-    if (n.type === "CatchClause" && n.param) bindings.add(n.param as AstNode);
-    for (const param of (n.params as AstNode[] | undefined) ?? []) bindings.add(param);
-    if (n.type === "FunctionDeclaration" && n.id) bindings.add(n.id as AstNode);
-    if (n.type === "ImportSpecifier") bindings.add(n.local as AstNode);
+    if (n.type === "VariableDeclarator") collectPatternBinders(n.id, bind);
+    if (n.type === "CatchClause") collectPatternBinders(n.param, bind);
+    for (const param of (n.params as AstNode[] | undefined) ?? [])
+      collectPatternBinders(param, bind);
+    if (n.type === "FunctionDeclaration" && n.id) bind(n.id as AstNode);
+    if (n.type === "ImportSpecifier") bind(n.local as AstNode);
   });
   const reads: [number, boolean][] = [];
   walkScoped(program, (n, at) => {
@@ -34,6 +38,13 @@ describe("lexical scope: where a declared name is the program's", () => {
     expect(owned('import { x } from "./m.js";\nfunction main() { return x; }', "x")).toEqual([
       true,
     ]);
+  });
+
+  it("a destructured element, from the end of its declarator, never its default or source", () => {
+    expect(
+      owned("function main(t) { if (t) { const [a, x] = x; return x; } return x; }", "x"),
+    ).toEqual([false, true, false]);
+    expect(owned("function main(t) { const [x = x] = t; return x; }", "x")).toEqual([false, true]);
   });
 
   it("a parameter, everywhere in its function and nowhere else", () => {
