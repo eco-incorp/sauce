@@ -22,7 +22,7 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { ambientNamesOf, compileWithRs, type RsCompileResult } from "./rs-compile.js";
+import { ambientNamesOf, compileWithRs, firstAnswers, type RsCompileResult } from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
 import { POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import {
@@ -477,6 +477,11 @@ function compileForChain(
   // (`ctx.self()`) — it never reads. A `pot` or `self` that is one of them is the caller's value,
   // never the Pot.
   const ambient = options.ambient ?? [];
+  // The caller's resolvers, as this compile reads them: each answers a question as it first did, so
+  // the probe and the compile read the same modules (`firstAnswers`). The next compile asks afresh.
+  const resolve = options.resolve === undefined ? undefined : firstAnswers(options.resolve);
+  const resolvePackage =
+    options.resolvePackage === undefined ? undefined : firstAnswers(options.resolvePackage);
   const bound = new Set([
     ...Object.keys(options.defines ?? {}),
     ...Object.keys(options.contracts ?? {}),
@@ -485,8 +490,8 @@ function compileForChain(
       : ambientNamesOf(
           {
             target,
-            resolve: options.resolve,
-            resolvePackage: options.resolvePackage,
+            resolve,
+            resolvePackage,
             defines,
             ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
             contracts: options.contracts,
@@ -616,8 +621,8 @@ function compileForChain(
     rs = compileWithRs({
       source,
       target,
-      resolve: options.resolve,
-      resolvePackage: options.resolvePackage,
+      resolve,
+      resolvePackage,
       defines,
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,

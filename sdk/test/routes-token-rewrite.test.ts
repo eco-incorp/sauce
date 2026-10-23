@@ -1085,6 +1085,94 @@ describe.each([
     },
   );
 
+  it("one compile reads a module's bytes as first served, though the resolver reuses its buffer", () => {
+    // Each module written into one buffer, the bytes returned a view of it: a later module's
+    // write changes an earlier one's bytes.
+    const scratch = new Uint8Array(256);
+    const texts: Record<string, string> = {
+      "./holder.js": POT,
+      "./other.js": "export const fee = 1;",
+    };
+    const resolve = (path: string) => {
+      const text = texts[path];
+      if (text === undefined) return undefined;
+      return scratch.subarray(0, new TextEncoder().encodeInto(text, scratch).written);
+    };
+    expect(build(PROGRAM, { ambient: ["./holder.js", "./other.js"], resolve })).toEqual(callers());
+  });
+
+  // A resolver that answers one way the first time it is asked and another way after. Within one
+  // compile, the probe of the names it binds and the compile read its first answer, so the program
+  // is the one that answer makes: the probe's and the compile's alike. The next compile asks again.
+  // `fee` makes each answer's bytecode its own.
+  const FEE = "function main(x: Uint256): Address { require(x > fee); return pot; }";
+  const NONE = "export const fee = 1;";
+  const LATER_POT = `export const fee = 2;\n${POT}`;
+  const FIRST_POT = `export const fee = 1;\n${POT}`;
+  const LATER_NONE = "export const fee = 2;";
+  const encode = (text: string) => new TextEncoder().encode(text);
+  it.each([
+    ["a module without `pot`, then with it", NONE, LATER_POT],
+    ["a module with `pot`, then without it", FIRST_POT, LATER_NONE],
+  ])("one compile reads a `resolve` that serves %s as it first answered", (_, first, later) => {
+    const asked = new Map<string, number>();
+    const resolve = (path: string) => {
+      if (path !== "./holder.js") return undefined;
+      const times = asked.get(path) ?? 0;
+      asked.set(path, times + 1);
+      return encode(times === 0 ? first : later);
+    };
+    const options: Options = { ambient: ["./holder.js"], resolve };
+    const serving = (text: string): Options => ({
+      ambient: ["./holder.js"],
+      ...served({ "./holder.js": text }),
+    });
+    expect(build(FEE, options)).toEqual(build(FEE, serving(first)));
+    expect(build(FEE, options)).toEqual(build(FEE, serving(later)));
+  });
+
+  it.each([
+    ["a module without `pot`, then one with it", NONE, LATER_POT],
+    ["a module with `pot`, then one without it", FIRST_POT, LATER_NONE],
+  ])(
+    "one compile reads a `resolvePackage` that maps to %s as it first answered",
+    (_, first, later) => {
+      let mapped = 0;
+      const modules = served({ "./first.js": first, "./later.js": later });
+      const options: Options = {
+        ambient: ["holder"],
+        resolvePackage: (specifier: string) =>
+          specifier === "holder" ? (mapped++ === 0 ? "./first.js" : "./later.js") : undefined,
+        ...modules,
+      };
+      const mapping = (path: string): Options => ({
+        ambient: ["holder"],
+        resolvePackage: (specifier: string) => (specifier === "holder" ? path : undefined),
+        ...modules,
+      });
+      expect(build(FEE, options)).toEqual(build(FEE, mapping("./first.js")));
+      expect(build(FEE, options)).toEqual(build(FEE, mapping("./later.js")));
+    },
+  );
+
+  it("a resolver that throws on its second call fails the compile with its error, as it is", () => {
+    const throwing = (): Options => {
+      let calls = 0;
+      return {
+        ambient: ["./holder.js"],
+        resolve: (path: string) => {
+          calls += 1;
+          if (calls === 2) throw new Error("the resolver failed on its second call");
+          return path === "./holder.js" ? encode(OTHER) : undefined;
+        },
+      };
+    };
+    const message = refusal(PROGRAM, throwing());
+    expect(message).toContain("the resolver failed on its second call");
+    // As a compile with nothing to probe fails.
+    expect(message).toBe(refusal("function main(): Uint256 { return 7; }", throwing()));
+  });
+
   it("a define of `pot` and an import of it are the caller's; a define of another name is not", () => {
     expect(build(PROGRAM, { defines: { pot: BigInt(holder) } })).toEqual(callers());
     expect(

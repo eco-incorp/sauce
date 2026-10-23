@@ -134,6 +134,38 @@ export function makeResolvePackage(own: ResolvePackage | undefined): ResolvePack
 }
 
 /**
+ * `fn`, answering each argument list as it first did: the same bytes or path, or the same error
+ * thrown again. One compile reads the caller's `resolve` and `resolvePackage` through one of these
+ * each, so its probe of the names they bind (`ambientNamesOf`) and the compile itself read the same
+ * modules, however the caller answers when asked again. Bytes are kept as a copy of what was first
+ * served, since a resolver may hand out one buffer and write the next module into it. It is the
+ * compile's own: the next compile makes its own, and asks the caller afresh.
+ */
+export function firstAnswers<A extends readonly string[], R>(
+  fn: (...args: A) => R,
+): (...args: A) => R {
+  const answers = new Map<string, { readonly value: R } | { readonly error: unknown }>();
+
+  return (...args) => {
+    const key = JSON.stringify(args);
+    let answer = answers.get(key);
+    if (answer === undefined) {
+      try {
+        const value = fn(...args);
+        // A copy of a `Uint8Array` is one, whatever its subclass (a Node `Buffer`'s `slice` is a view).
+        answer = { value: value instanceof Uint8Array ? (Uint8Array.from(value) as R) : value };
+      } catch (error) {
+        answer = { error };
+      }
+      answers.set(key, answer);
+    }
+    if ("error" in answer) throw answer.error;
+
+    return answer.value;
+  };
+}
+
+/**
  * Index of the closing quote of the string/template literal opening at `open`.
  *
  * Template interpolation does not nest here: `${…}` is scanned as ordinary string body, so a
