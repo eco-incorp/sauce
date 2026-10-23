@@ -217,20 +217,19 @@ function refuseRetiredPot(l: SvmLowering): void {
   };
   const [first] = l.selfReads;
   const solanaSelf: AstNode[] = [];
-  if (!l.declared.has(ACCOUNT_EXPRESSION_ROOT)) {
-    walk(l.program, (n) => {
-      if (
-        n.type === "MemberExpression" &&
-        n.computed !== true &&
-        (n.object as AstNode).type === "Identifier" &&
-        nameOf(n.object as AstNode) === ACCOUNT_EXPRESSION_ROOT &&
-        (n.property as AstNode).type === "Identifier" &&
-        nameOf(n.property as AstNode) === RETIRED_POT_NAME
-      ) {
-        solanaSelf.push(n);
-      }
-    });
-  }
+  walk(l.program, (n) => {
+    if (
+      n.type === "MemberExpression" &&
+      n.computed !== true &&
+      (n.object as AstNode).type === "Identifier" &&
+      nameOf(n.object as AstNode) === ACCOUNT_EXPRESSION_ROOT &&
+      !l.owns(n.object as AstNode, ACCOUNT_EXPRESSION_ROOT) &&
+      (n.property as AstNode).type === "Identifier" &&
+      nameOf(n.property as AstNode) === RETIRED_POT_NAME
+    ) {
+      solanaSelf.push(n);
+    }
+  });
   const earliest = [first, solanaSelf[0]]
     .filter((node): node is AstNode => node !== undefined)
     .sort((a, b) => a.start - b.start)[0];
@@ -424,17 +423,17 @@ function collectTokenMethods(l: SvmLowering): void {
     const site = methodCall(n);
     if (site === undefined || site.object.type !== "Identifier") return;
     const symbol = nameOf(site.object);
-    if (!l.isSymbol(symbol) || !REWRITABLE_METHODS.has(site.method)) return;
+    if (!l.isSymbol(symbol, site.object) || !REWRITABLE_METHODS.has(site.method)) return;
     l.site(n, () => lowerMethod(site, l.symbolToken(symbol), symbol));
   });
 
-  /** `Solana.<name>`, a member read, while the program declares no `Solana` of its own. */
+  /** `Solana.<name>`, a member read, where the program binds no `Solana` of its own. */
   const solanaMember = (node: AstNode): string | undefined =>
     node.type === "MemberExpression" &&
     (node as { computed?: boolean }).computed !== true &&
     (node.object as AstNode).type === "Identifier" &&
     nameOf(node.object as AstNode) === ACCOUNT_EXPRESSION_ROOT &&
-    !l.declared.has(ACCOUNT_EXPRESSION_ROOT) &&
+    !l.owns(node.object as AstNode, ACCOUNT_EXPRESSION_ROOT) &&
     (node.property as AstNode).type === "Identifier"
       ? nameOf(node.property as AstNode)
       : undefined;
@@ -448,10 +447,11 @@ function collectTokenMethods(l: SvmLowering): void {
     }
     return l.holderOf(node, "holder", spelled);
   };
-  /** The native coin's balance: the lamports of the holder's own account, which the cook attaches. */
-  const nativeText = (holder: Holder): string => {
+  /** The native coin's balance, read at `at`: the lamports of the holder's own account, which the
+   *  cook attaches. */
+  const nativeText = (holder: Holder, at: AstNode): string => {
     if (holder.kind === "authority") return `ctx.balance(${l.authority()}.address)`;
-    if (holder.kind === "key" && l.isSymbol(holder.value)) {
+    if (holder.kind === "key" && l.isSymbol(holder.value, at)) {
       l.mintAccount(l.symbolToken(holder.value));
       return `ctx.balance(${holder.value})`;
     }
@@ -481,7 +481,7 @@ function collectTokenMethods(l: SvmLowering): void {
     const holderText = source.slice(object.start, object.end);
     // `pot.signer()`, `pot.address` and the rest are its account's, whatever a token is called.
     if (l.isPot(object) && ACCOUNT_MEMBERS.has(name)) return;
-    if (!l.isBalanceName(name)) {
+    if (!l.isBalanceName(name, property)) {
       // On Solana the Pot has no member but its balances and its account's: say so, rather than
       // leave `pot` to a pass that cannot take it. A method is the value's (`pot.toBytesBe(32)`).
       const parent = l.parents.get(n);
@@ -512,7 +512,7 @@ function collectTokenMethods(l: SvmLowering): void {
       const holder = nameOf(object);
       if (isChainKey(holder) || resolveNamespace(holder) !== undefined) return;
     }
-    if (name !== BALANCE_MEMBER && !l.isSymbol(name)) {
+    if (name !== BALANCE_MEMBER && !l.isSymbol(name, property)) {
       // The native coin's symbol, which no token on Solana is: its balance is `.balance`. A record's
       // or a list's field of that name is its own.
       if (!solanaHolder(object) && readsField(object, shapes)) return;
@@ -525,7 +525,7 @@ function collectTokenMethods(l: SvmLowering): void {
           l.splices.push({
             start: n.start,
             end: n.end,
-            replacement: nativeText(balanceHolder(object, spelled)),
+            replacement: nativeText(balanceHolder(object, spelled), object),
           });
         });
         return;
@@ -555,12 +555,13 @@ function collectTokenMethods(l: SvmLowering): void {
         l.splices.push({
           start: n.start,
           end: n.end,
-          replacement: nativeText(l.holderOf(object, "holder", spelled)),
+          replacement: nativeText(l.holderOf(object, "holder", spelled), object),
         });
       });
       return;
     }
-    const what = notAnAddress(object, shapes);
+    // A holder of Solana's own is no record, whatever another scope binds its name to.
+    const what = solanaHolder(object) ? undefined : notAnAddress(object, shapes);
     if (what !== undefined) throw reservedNameError(spelled, holderText, what, name);
     l.site(n, () => {
       l.requirePlaced(n, spelled, "a token method");

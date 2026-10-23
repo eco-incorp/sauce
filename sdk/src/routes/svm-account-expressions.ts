@@ -187,9 +187,9 @@ function stemOf(text: string): string | undefined {
     .join("");
 }
 
-/** `Solana`, where the program declares no `Solana` of its own. */
+/** `Solana`, where the program does not bind a `Solana` of its own. */
 const solanaRoot = (l: SvmLowering, node: AstNode | undefined): boolean =>
-  !l.declared.has(SOLANA) && node?.type === "Identifier" && nameOf(node) === SOLANA;
+  node?.type === "Identifier" && nameOf(node) === SOLANA && !l.owns(node, SOLANA);
 
 /** `Solana.<name>`, a member read, and the name. */
 function solanaMemberOf(l: SvmLowering, node: AstNode): string | undefined {
@@ -274,14 +274,14 @@ export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<str
     return (
       site.method === "accountOf" &&
       site.object.type === "Identifier" &&
-      l.isSymbol(nameOf(site.object))
+      l.isSymbol(nameOf(site.object), site.object)
     );
   }
   return (
     at.type === "MemberExpression" &&
     (at as { computed?: boolean }).computed !== true &&
     (at.object as AstNode).type === "Identifier" &&
-    l.isSymbol(nameOf(at.object as AstNode)) &&
+    l.isSymbol(nameOf(at.object as AstNode), at.object as AstNode) &&
     (at.property as AstNode).type === "Identifier" &&
     TOKEN_MEMBERS.has(nameOf(at.property as AstNode))
   );
@@ -472,7 +472,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
       if (l.param(name)?.kind === "address") {
         return { derivation: `@${name}`, bytes: `${name}.toBytesBe(32)` };
       }
-      if (l.isSymbol(name)) return mint(name);
+      if (l.isSymbol(name, node)) return mint(name);
       throw refuse();
     }
     const site = methodCall(node);
@@ -519,11 +519,12 @@ export function collectAccountExpressions(l: SvmLowering): void {
     if (member !== undefined && PROGRAMS.has(member)) return program(KNOWN[member]!.derivation);
     // A token's mint, or the program a registered mint belongs to.
     if (node.type === "MemberExpression" && (node.object as AstNode).type === "Identifier") {
-      const symbol = nameOf(node.object as AstNode);
+      const object = node.object as AstNode;
+      const symbol = nameOf(object);
       const property =
         (node.property as AstNode).type === "Identifier" ? nameOf(node.property as AstNode) : "";
-      if (l.isSymbol(symbol) && property === "mint") return mint(symbol);
-      const id = l.isSymbol(symbol) ? l.symbolToken(symbol).row?.tokenProgram : undefined;
+      if (l.isSymbol(symbol, object) && property === "mint") return mint(symbol);
+      const id = l.isSymbol(symbol, object) ? l.symbolToken(symbol).row?.tokenProgram : undefined;
       if (property === "tokenProgram" && id !== undefined) return program(id);
     }
     const key = keyLiteral(node, l.source);
@@ -608,7 +609,8 @@ export function collectAccountExpressions(l: SvmLowering): void {
     if (parent?.type === "MemberExpression" && parent.object === n && parent.computed !== true) {
       const call = parents.get(parent);
       const called = call?.type === "CallExpression" && call.callee === parent;
-      if (l.isBalanceName(nameOf(parent.property as AstNode)) || !called) return;
+      const property = parent.property as AstNode;
+      if (l.isBalanceName(nameOf(property), property) || !called) return;
       l.site(n, () => {
         l.requirePlaced(n, `\`${text(parent)}\``, "an account");
         l.splices.push({ start: n.start, end: n.end, replacement: key() });
@@ -716,7 +718,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
         parent.object === n &&
         (parent as { computed?: boolean }).computed !== true &&
         (parent.property as AstNode).type === "Identifier" &&
-        l.isBalanceName(nameOf(parent.property as AstNode)) &&
+        l.isBalanceName(nameOf(parent.property as AstNode), parent.property as AstNode) &&
         (member === "owner" || nameOf(parent.property as AstNode) !== BALANCE_MEMBER)
       ) {
         return;
@@ -736,7 +738,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
     }
     if (site !== undefined && site.method === "accountOf" && site.object.type === "Identifier") {
       const symbol = nameOf(site.object);
-      if (!l.isSymbol(symbol)) return;
+      if (!l.isSymbol(symbol, site.object)) return;
       const spelled = `\`${symbol}.accountOf(…)\``;
       roots.push({
         node: n,
@@ -753,7 +755,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
       const object = n.object as AstNode;
       const property = n.property as AstNode;
       if (object.type !== "Identifier" || property.type !== "Identifier") return;
-      if (!l.isSymbol(nameOf(object)) || !TOKEN_MEMBERS.has(nameOf(property))) return;
+      if (!l.isSymbol(nameOf(object), object) || !TOKEN_MEMBERS.has(nameOf(property))) return;
       const parent = parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
       const symbol = nameOf(object);
