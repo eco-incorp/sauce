@@ -170,7 +170,8 @@ the owner rather than repeat it.
 
 - **Owns**: the names a program uses with no import. Token symbols and their methods (SafeERC20),
   `Token(address)`, the `@sauce/token` functions, tokenized stocks, protocol namespaces, interfaces
-  and family aliases, `available(...)`, chain names, the imports the package serves.
+  and family aliases, a name a chain may lack (zero there, tested with `if (X)`), chain names, the
+  imports the package serves.
 - **Holds**: generated indexes of every token, stock, protocol contract and chain name.
 - **Load**: to find a name, check it exists, or fix "is not a declared variable". Not for its
   address (`sauce-chains`).

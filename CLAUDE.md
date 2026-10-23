@@ -1358,7 +1358,9 @@ beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`,
   and what it pins). Each fact has one owning skill, and the others point at it rather than repeat
   it: which chains take transactions and the chain-support request links are `sauce-overview`'s,
   the program header `sauce-script`'s, Solana's accounts and running `sauce-solana`'s, namespace
-  members, aliases and `available(...)` `sauce-globals`'s, the units of each flag `sauce-cli`'s.
+  members, aliases and a name a chain lacks (zero there; a test of it, `if (X)`, decided while
+  compiling and its ruled-out branch not compiled; any other use refused at the use, naming the
+  chain) `sauce-globals`'s, the units of each flag `sauce-cli`'s.
   `sauce-overview` is the router: the model, the protocol with a user,
   the rules, the chain policy, and the skill map in layers (Start, Write, Build, Compose, Target,
   Run, Index) with routes by need. `skills:check` holds the first two and last two sections of
@@ -1470,7 +1472,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
   example and selector, with its reason); every value an example program reads having a visible
   source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
-  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `pot`), an import,
+  the language's (a builtin root from `builtins.json`, or `Token`, `pot`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
   `INPUT_EXCEPTIONS` entry, per example and name, with its reason); and the wording rules below.
@@ -1483,7 +1485,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover; Sauce
-  never described as a multicall; no pointer into the
+  never described as a multicall; no call to `available`, which is removed (a program tests the
+  name itself, `if (X)`); no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol

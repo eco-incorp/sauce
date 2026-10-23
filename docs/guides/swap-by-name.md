@@ -182,7 +182,7 @@ sauce compile router-swap.sauce.ts --chain base
 
 ```text
 sauce compile: router-swap.sauce.ts does not compile for base
-rewriteProtocolAccessors: Contract 'ThreePool' (curve) is not deployed on 'base' (available: ethereum)
+compileSauceRoute: `Curve.ThreePool` is not deployed on base. A contract the chain lacks is zero there, and only a test of it may use it: `if (Curve.ThreePool) { … }` compiles the branch only where the chain has it. It is deployed on ethereum.
 ```
 
 Base has USDC, WETH and Uniswap V2, but no Curve 3pool, and the compiler says so before anything is

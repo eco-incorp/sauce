@@ -37,7 +37,7 @@ not ship with.
 | Example | Ported from | Solidity lines (code) | Sauce lines (code) |
 | --- | --- | ---: | ---: |
 | [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 128 (84) |
-| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 75 (31) |
+| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 74 (30) |
 | [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 167 (121) |
 | [Aave V3: credit delegation](#aave-v3-credit-delegation) | [aave/code-examples-protocol, `MyV2CreditDelegation.sol`](https://github.com/aave/code-examples-protocol/blob/c343d266d04f210e1de9a7f008fdbc8ad63e5c22/V2/Credit%20Delegation/MyV2CreditDelegation.sol) | 83 (33) | 81 (42) |
 | [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 203 (141) |
@@ -184,7 +184,7 @@ function main(
 
 ## Uniswap V3: a flash, as a flash swap
 
-Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 75 lines, 31 of them code.
+Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 74 lines, 30 of them code.
 
 ```ts
 // Uniswap's flash example, ported: `PairFlash` borrows from one Uniswap V3 pool, trades the loan

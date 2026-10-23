@@ -51,12 +51,13 @@ At compile time, for the chain named by `--chain`, and nowhere else.
 
 - **Found:** the compile writes the chain's address in. `sauce compile --json` lists every name it
   applied, with its value and the chain it came from.
-- **Not found:** the compile fails and names the chain. A token the chain does not register is an
-  unknown name, with the closest names suggested. A protocol contract not deployed there is refused,
-  with the chains it is on. Nothing is sent, because nothing compiled.
-- **Maybe there:** `available(UniswapV3.Factory)` asks the registry, at compile time, whether the
-  chain has the contract. The branch it rules out is removed before its names are looked up, so one
-  program can use a venue only where it exists.
+- **Not found:** the compile fails and names the chain. A name the chain lacks is zero there, and
+  any use of it other than a test of it is refused at the use: a token the chain does not register,
+  and a protocol contract not deployed there, with the chains that have it. A name no chain has is
+  an unknown name, with the closest names suggested. Nothing is sent, because nothing compiled.
+- **Maybe there:** `if (UniswapV3.Factory) { … }` tests the name, at compile time, for the chain
+  the program is compiled for. The branch it rules out is not compiled, so one program can use a
+  venue only where it exists.
 
 From TypeScript, the same entries hang off each chain's export, `Base.USDC.address`, and do not
 exist as bare names at run time. Bare `USDC` is SauceScript, read by the compiler.

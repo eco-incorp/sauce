@@ -107,30 +107,32 @@ How a contract, an interface and a family get their names:
   and interfaces do not count, since neither can be called that way. This shortcut exists in
   programs only.
 
-A name existing does not mean the contract is deployed on your chain. Naming one that is not fails
-when the program compiles, or when TypeScript builds the call — the point at which you can still do
-something about it. Each protocol's page in the [reference](../reference/protocols.md) lists its
+A name existing does not mean the contract is deployed on your chain. Using one that is not, other
+than testing it, fails when the program compiles, or when TypeScript builds the call — the point at
+which you can still do something about it. Each protocol's page in the
+[reference](../reference/protocols.md) lists its
 contracts on every chain, and the [family aliases](../reference/protocols.md#family-aliases) what
 each alias resolves to where.
 
 ## Use a venue only where the chain has it
 
-`available(<name>)` asks, when the program is compiled, whether the chain it is compiled for has a
-contract or a token. A branch it rules out is removed before any name in it is resolved, so one
-program can name a venue some of its chains lack:
+Every registry name — each protocol namespace with every contract it has on any chain, each token
+symbol some chain registers — is declared on every chain. A name the chain a program is compiled for
+lacks is zero there. A test of the name is decided when the program is compiled, and the branch it
+rules out is not compiled at all, so one program can name a venue some of its chains lack:
 
 ```js
 // One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
 // from Uniswap V3 where it does not, and nothing where it has neither venue or lacks either token.
 //
-// `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
-// the branches it rules out are removed before anything in them is resolved.
+// A name the chain lacks is zero there. Each test of a name is decided when the program is compiled,
+// for the chain it is compiled for, and the branches it rules out are not compiled.
 function main() {
-  if (!available(USDC) || !available(WETH)) return 0;
+  if (!USDC || !WETH) return 0;
   let pool = 0;
-  if (available(PancakeswapV3.Factory)) {
+  if (PancakeswapV3.Factory) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
-  } else if (available(UniswapV3.Factory)) {
+  } else if (UniswapV3.Factory) {
     pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   }
   return pool;
@@ -140,20 +142,30 @@ function main() {
 Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, which has no
 PancakeSwap V3, it compiles to the Uniswap V3 lookup alone; compiled for a chain with neither, or
 without USDC or WETH, it returns 0 and calls nothing. The guard on the tokens is what makes it
-compile everywhere: a token the chain lacks is an unknown name in any branch that is kept.
+compile everywhere: a token the chain lacks is refused in any branch that is kept.
 [registry-names.ts](../examples/registry-names.ts) compiles it for Base and Optimism.
 
-- It takes a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
-  `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's
+- In a condition (`if`, `?:`, `!`, `require`), a test is `if (X)`, `if (!X) return 0;` (a guard
+  that returns removes the rest of its block where `X` is absent), `X != 0`, `X == 0`,
+  `X ? a : b`, `X && …` and `X || …`. `X` is a contract
+  (`UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
+  `Arbitrum.UniswapV3.Factory`) or a token symbol (`USDT`). A token is present where the chain's
   token map has it, which includes the `tokens` you pass.
-- It folds `if`/`else`, `?:`, `&&`, `||` and `!`. A guard that returns,
-  `if (!available(X)) return 0;`, removes the rest of its block where `X` is absent.
-- Anywhere else it is the literal `true` or `false`. A branch that depends on it only through a
-  runtime value (`const has = available(X); if (has) ...`) is live code, and every name in it must
-  still resolve.
-- A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
-  family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
-  own `available` keeps it.
+- Any other use of a name the chain lacks — a call on it, passing it, returning it,
+  `const a = X` — is refused when the program compiles, at the use, naming the chain:
+  "`UniswapV3.Factory` is not deployed on solana. A contract the chain lacks is zero there, and only
+  a test of it may use it: …". So a zero never reaches the chain as a contract address.
+  `require(X != 0)` on a chain without `X` is refused too: it would fail whatever the program does.
+- A decision is made only from registry names, `true`/`false`, `!`, `&&`, `||` and comparisons
+  with `0`. A branch behind any other value (`const has = X != 0; if (has) ...`) is live code, and
+  a name the chain lacks in it is refused. Outside a condition, `X && Y` is the value `X` or `Y`
+  itself, so it is a use of `X`; to keep a decision in a value, compare: `X != 0 && Y != 0`. A
+  helper function is checked as if it ran: it tests the name itself, or is refused on a chain that
+  lacks the name.
+- A name the registry does not know on any chain is an error, as are an ambiguous family name and
+  an interface, so a typo cannot quietly drop a branch.
+- The old `available` call is removed, and calling it is refused at the call: test the name
+  itself, `if (X)`. A program that declares its own function named `available` keeps it.
 
 A name used as a token or a protocol that the chain does not have at all fails when the program
 compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Base reports

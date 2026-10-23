@@ -1,6 +1,6 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses with no import, and what each means. Token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, … on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer, .approve and .transferFrom with SafeERC20 behaviour (USDT works), a balance as pot.USDC, the @sauce/token functions, the raw IERC20 import, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) with their deployed contracts, address-only contracts, interfaces and family aliases, available(...) for a contract a chain may lack, chain names and chainId, and the imports the package serves; with generated indexes of every token, stock, protocol contract and chain name, the lists sauce globals prints. Use when writing a program that moves tokens, calls a protocol or names a chain, when checking whether a name exists, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses with no import, and what each means. Token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, … on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer, .approve and .transferFrom with SafeERC20 behaviour (USDT works), a balance as pot.USDC, the @sauce/token functions, the raw IERC20 import, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) with their deployed contracts, address-only contracts, interfaces and family aliases, a name a chain may lack (zero there, tested with if (X)), chain names and chainId, and the imports the package serves; with generated indexes of every token, stock, protocol contract and chain name, the lists sauce globals prints. Use when writing a program that moves tokens, calls a protocol or names a chain, when checking whether a name exists, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Names a program uses
@@ -17,7 +17,7 @@ name. Where a name points on a given chain (its address, whether it exists there
 | ------------------------------------------------------------ | ---- | ---------------------------------------- |
 | Find a token's or a stock's symbol; check a name exists      | yes  |                                          |
 | Move, approve or read a token; USDT                          | yes  | on Solana, its accounts: `sauce-solana`  |
-| Name or call a protocol contract; an alias; `available(...)` | yes  | which protocol to use: `sauce-protocols` |
+| Call a protocol contract; an alias; a name a chain may lack  | yes  | which protocol to use: `sauce-protocols` |
 | A name's address on one chain, or a name one chain lacks     |      | `sauce-chains`                           |
 | A swap                                                       |      | `sauce-swaps`                            |
 
@@ -25,8 +25,9 @@ name. Where a name points on a given chain (its address, whether it exists there
 
 - A name resolves against **the chain the program is compiled for**: `USDC` compiled with
   `--chain base` is Base's USDC. They are program syntax, not JavaScript values.
-- A name the chain lacks (a token it does not register, a contract not deployed there) is a
-  **compile error**, never a wrong address at run time (`sauce-chains` quotes each refusal).
+- A name the chain lacks (a token it does not register, a contract not deployed there) is **zero**
+  there. A test of it is decided while compiling; any other use is a **compile error** naming the
+  chain, never a wrong address at run time (`sauce-chains` quotes each refusal).
 - Kinds of name: a **token symbol**, **`Token(address)`** for any other token, a **namespace
   contract** (`UniswapV3.Factory`), a **family alias** (`Uniswap.UniversalRouter`), a **chain name**
   (`Ethereum`), and **`chainId`**.
@@ -208,21 +209,33 @@ its address and ABI from the registry. A member is one of three kinds:
 [references/protocols.md](references/protocols.md) lists every member and alias; how a program
 calls one is `sauce-script`'s (Calling a contract).
 
-## `available(...)`
+## A name a chain may lack
 
-`available(<name>)` asks whether the chain has a contract or a token, decided when the program is
-compiled: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain has the
-contract and removes it, names and all, where it does not.
+Every name the registry has (each protocol namespace with every contract it has on any chain, each
+token symbol some chain registers) is declared on every chain. A name the chain being compiled for
+lacks is **zero** there.
 
-- It takes a contract or a token symbol (`available(USDT)`).
-- It folds `if`/`else`, `?:`, `&&`, `||` and `!`; a guard `if (!available(X)) { return 0; }` drops
-  the statements after it in the same block or function body.
-- A name no chain has is an error, not `false`, so a typo cannot quietly drop a branch.
-- Without it, a member is required: the program does not compile for a chain that lacks it.
+- A **test** of such a name in a condition (`if`, `?:`, `!`, `require`) is decided while the
+  program compiles, and the branch it rules out is not compiled at all, so it may call the absent
+  contract. The spelling to use is `if (X)`; `if (!X) { return 0; }` (a guard that returns drops
+  the rest of its block where `X` is absent), `X != 0`, `X == 0`, `X ? a : b`, `X && …` and
+  `X || …` are tests too.
+- Any **other** use of an absent name (a call on it, passing it, returning it, `const a = X`) is
+  refused when the program compiles, at the use, naming the chain, so a zero never reaches the
+  chain as a contract address. `require(X != 0)` on a chain without `X` is refused as well: it
+  would fail whatever the program does.
+- A decision is made only from registry names, `true`/`false`, `!`, `&&`, `||` and comparisons with
+  `0`. A branch behind any other value (`let has = X != 0; if (has) { … }`) is live code, and an
+  absent name in it is refused. Outside a condition `X && Y` is the value `X` or `Y` itself, a use
+  of `X`; a decision kept in a value compares, `X != 0 && Y != 0`. A helper function is checked as
+  if it ran: it tests the name itself, or is refused on a chain that lacks the name.
+- A name no chain has (`UniswapV3.Factroy`, `Uniswapp`) is refused where it is written, with the
+  names it is nearest, so a typo cannot quietly drop a branch.
+- There is no `available` call: test the name itself. Calling it is refused.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {
-  if (available(UniswapV3.Factory)) {
+  if (UniswapV3.Factory) {
     const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500);
     require(pool != 0, "no 0.05% pool");
   }
@@ -254,14 +267,14 @@ function main(tokenA: Address, tokenB: Address) {
   ticker on the chain you compile for.
 - **A rebasing or fee-charging token paid by its nominal amount.** Measure what arrived.
 - **A family alias two members share** (`Uniswap.Factory`). Name the member.
-- **A contract a chain may lack, named bare.** Wrap it in `available(...)` or compile only for
-  chains that have it.
+- **A contract a chain may lack, used outside a test.** It is refused where the chain lacks it:
+  put the use in `if (X) { … }` or compile only for chains that have it.
 
 ## Files
 
 - [examples/globals.sauce.ts](examples/globals.sauce.ts) uses each kind of name.
 - [examples/globals.mts](examples/globals.mts) compiles it and pins the SafeERC20 lowering, the
-  `IERC20` import rule, the family-alias rules and `available(...)`.
+  `IERC20` import rule, the family-alias rules and the rules for a name a chain lacks.
 - [references/tokens.md](references/tokens.md), [references/stocks.md](references/stocks.md),
   [references/protocols.md](references/protocols.md), [references/chains.md](references/chains.md):
   generated indexes, the lists `sauce globals` prints.

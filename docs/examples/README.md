@@ -29,7 +29,7 @@ is a preview chain.
 | [pay.sauce.ts](pay.sauce.ts)                                   | Beginner     | Base, Solana   | Pay someone USDC from your Pot, and stop if the Pot holds too little: the quick start's program                               |
 | [pay-list.sauce.ts](pay-list.sauce.ts)                         | Beginner     | Base           | Pay a list of recipients in turn, stop before a total limit, and return what was paid: the second tutorial's program          |
 | [router-swap.sauce.ts](router-swap.sauce.ts)                   | Intermediate | Ethereum       | Two swaps through `@sauce/router`, the second spending what the first returned                                                |
-| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | Intermediate | Any EVM chain  | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it                                        |
+| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | Intermediate | Any EVM chain  | One program for every chain, using PancakeSwap V3 only where the chain has it, `if (X)`                                       |
 | [registry-names.ts](registry-names.ts)                         | Intermediate | Optimism, Base | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)` |
 
 ## Protocols, tokens and swaps

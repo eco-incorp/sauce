@@ -27,8 +27,9 @@ const onBase = getProtocolsByChain(8453);
 check(getProtocol("pancakeswap-v3")?.slug === "pancakeswap-v3", "catalog lookup by slug");
 check(contracts.on("base").AaveV3.Pool.available, "AaveV3.Pool is a namespace on Base");
 
-// protocols.sauce.ts names PancakeSwap V3's factory by namespace, behind `available(...)`: the
-// program carries the factory where the chain has one, and compiles without it elsewhere.
+// protocols.sauce.ts names PancakeSwap V3's factory by namespace, inside `if (PancakeswapV3.Factory)`:
+// the program carries the factory where the chain has one, and compiles without it elsewhere, where
+// the name is zero and the test leaves its branch out.
 const source = readFileSync(new URL("./protocols.sauce.ts", import.meta.url), "utf8");
 const sizes: string[] = [];
 for (const [slug, hasPancake] of [
@@ -48,6 +49,38 @@ for (const [slug, hasPancake] of [
   );
   sizes.push(`${slug} ${program.bytecode.length} bytes`);
 }
+
+// Outside a test, a contract the chain lacks is refused, at the use, naming the chain; a contract no
+// chain has is refused even tested; and there is no `available` call: a program tests the name.
+const refusal = (slug: string, body: string): string => {
+  try {
+    routes.compileSauceProgram(slug, body);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  return "";
+};
+check(
+  refusal(
+    "optimism",
+    "function main(): Address { return PancakeswapV3.Factory.getPool(WETH, USDC, 500); }",
+  ).includes("`PancakeswapV3.Factory` is not deployed on optimism."),
+  "an untested call on PancakeswapV3.Factory is refused on Optimism, naming the chain",
+);
+check(
+  refusal(
+    "base",
+    "function main(): Uint256 { if (PancakeswapV3.Factroy) { return 1; } return 0; }",
+  ).includes("`PancakeswapV3.Factroy` is not a contract of PancakeswapV3"),
+  "a contract no chain has is an error, even tested",
+);
+check(
+  refusal(
+    "base",
+    "function main(): Uint256 { if (available(PancakeswapV3.Factory)) { return 1; } return 0; }",
+  ).includes("`available(X)` is removed"),
+  "a program tests the name itself",
+);
 
 // The per-protocol documents ship as this skill's references/, and `getProtocolSkill` returns the
 // same text. Every catalogued protocol has one.
