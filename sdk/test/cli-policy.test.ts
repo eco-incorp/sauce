@@ -110,14 +110,65 @@ const ALLOWANCE_READS = [
   toFunctionSelector("function allowance(address owner, address spender)"),
   toFunctionSelector("function allowance(address user, address token, address spender)"),
 ];
+const isAllowanceRead = (call: { data?: Hex }) =>
+  ALLOWANCE_READS.some((read) => call.data?.toLowerCase().startsWith(read));
+const PERMIT2_GRANTS = [
+  keccak256(toBytes("Approval(address,address,address,uint160,uint48)")),
+  keccak256(toBytes("Permit(address,address,address,uint160,uint48,uint48)")),
+];
+const PERMIT2_LOCKDOWN = keccak256(toBytes("Lockdown(address,address,address)"));
+
+/**
+ * The allowance `read` asks for, as a chain that reports every change of it holds it after `logs`:
+ * the last one they report of that permission, or 0 where they report none.
+ */
+function reported(logs: readonly Log[], read: { to?: Address; data?: Hex }): bigint {
+  const data = (read.data ?? "0x").toLowerCase();
+  const arg = (at: number): Hex => topic(getAddress(`0x${data.slice(34 + at * 64, 74 + at * 64)}`));
+  const same = (a: Hex | undefined, b: Hex) => a?.toLowerCase() === b.toLowerCase();
+  let amount = 0n;
+  for (const log of logs) {
+    if (data.startsWith(ALLOWANCE_READS[0]!)) {
+      if (
+        getAddress(log.address) === getAddress(read.to!) &&
+        same(log.topics[0], APPROVAL) &&
+        same(log.topics[1], arg(0)) &&
+        same(log.topics[2], arg(1))
+      ) {
+        amount = BigInt(log.data.slice(0, 66));
+      }
+      continue;
+    }
+    if (getAddress(log.address) !== PERMIT2) continue;
+    if (
+      PERMIT2_GRANTS.some((grant) => same(log.topics[0], grant)) &&
+      same(log.topics[1], arg(0)) &&
+      same(log.topics[2], arg(1)) &&
+      same(log.topics[3], arg(2))
+    ) {
+      amount = BigInt(log.data.slice(0, 66));
+    }
+    if (
+      same(log.topics[0], PERMIT2_LOCKDOWN) &&
+      same(log.topics[1], arg(0)) &&
+      same(topic(getAddress(`0x${log.data.slice(26, 66)}`)), arg(1)) &&
+      same(topic(getAddress(`0x${log.data.slice(90, 130)}`)), arg(2))
+    ) {
+      amount = 0n;
+    }
+  }
+
+  return amount;
+}
 
 /** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. Its
  *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. A contract with no
  *  such function answers with no data, as viem reports it; a read of a contract in `unreadable`
  *  fails at the endpoint instead, before any contract answers. An `allowance` read in a rehearsal
- *  answers `remaining` (the allowance the transaction leaves), or fails where it is `null`; left
- *  out, it answers no data. Where `replayFails`, a rehearsal that reads an allowance fails each of
- *  the transaction's own calls in it (its reads still answer, now of the state before them). */
+ *  answers what `logs` last report of it, or `remaining` (the allowance the transaction leaves)
+ *  where it is given, or fails where that is `null`. Where `replayFails`, a rehearsal that reads an
+ *  allowance fails each of the transaction's own calls in it (its reads still answer, now of the
+ *  state before them). */
 function client(
   logs: Log[] | null,
   decimals: number | null = 18,
@@ -125,22 +176,23 @@ function client(
   remaining?: bigint | null,
   replayFails = false,
 ): PublicClient {
-  const isRead = (call: { data?: Hex }) =>
-    ALLOWANCE_READS.some((read) => call.data?.toLowerCase().startsWith(read));
-
   return {
     getChainId: async () => BASE.id,
-    simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: Array<{ data?: Hex }> }> }) => {
+    simulateBlocks: async ({
+      blocks,
+    }: {
+      blocks: Array<{ calls: Array<{ to?: Address; data?: Hex }> }>;
+    }) => {
       if (logs === null) throw new Error("the method eth_simulateV1 does not exist");
-      const reading = blocks[0]!.calls.some(isRead);
+      const reading = blocks[0]!.calls.some(isAllowanceRead);
 
       return [
         {
           calls: blocks[0]!.calls.map((call) =>
-            remaining !== undefined && isRead(call)
+            isAllowanceRead(call)
               ? remaining === null
                 ? { status: "failure", logs: [], data: "0x" }
-                : { status: "success", logs: [], data: word(remaining) }
+                : { status: "success", logs: [], data: word(remaining ?? reported(logs, call)) }
               : replayFails && reading
                 ? { status: "failure", logs: [], data: "0x" }
                 : { status: "success", logs, data: "0x" },
@@ -741,6 +793,54 @@ describe("the guard", () => {
     });
   });
 
+  it("reads each allowance in a simulation of its own, so no other contract's read can change what it reads", async () => {
+    // The Pot allows a spender 20 USDC, and a contract it also allows that, read for its own
+    // allowance first, lowers the Pot's USDC allowance (it is a spender of USDC): read in the
+    // simulation USDC's read is in, it would hide the 20.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const MEDDLER = getAddress("0x9999999999999999999999999999999999999999");
+    const twenty = parseUnits("20", 6);
+    const logs = [approval(MEDDLER, POT, SPENDER, 1n), approval(USDC, POT, SPENDER, twenty)];
+    const meddled = {
+      ...client(logs),
+      simulateBlocks: async ({
+        blocks,
+      }: {
+        blocks: Array<{ calls: Array<{ to?: Address; data?: Hex }> }>;
+      }) => {
+        let lowered = false;
+
+        return [
+          {
+            calls: blocks[0]!.calls.map((call) => {
+              if (!isAllowanceRead(call)) return { status: "success", logs, data: "0x" };
+              if (getAddress(call.to!) === MEDDLER) {
+                lowered = true;
+
+                return { status: "success", logs: [], data: word(1n) };
+              }
+
+              return { status: "success", logs: [], data: word(lowered ? 0n : twenty) };
+            }),
+          },
+        ];
+      },
+    } as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const verdict = await guarded({ tokens: { USDC: { perTransaction: "10" } } })
+      .evm(meddled, cook)
+      .then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+
+    expect(verdict).toBe("tokens.USDC");
+  });
+
   it("counts the allowance a transaction leaves, as the chain holds it after, not the last it reported", async () => {
     // A spender pulls what it was allowed with no Approval of what is left (Permit2 never reports
     // one, nor do many tokens), or Permit2's lockdown zeroes it: the allowance after the transaction,
@@ -787,10 +887,11 @@ describe("the guard", () => {
         [approval(USDC, POT, SPENDER, usdc("20")), approval(USDC, POT, SPENDER, 0n)],
         0n,
       ),
-      // Where the allowance after cannot be read, the last one reported counts.
-      unread: await verdict([approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("6"))], null),
+      // Where the allowance after cannot be read, it is not measured: a limit on the token refuses
+      // it (2 allowed and pulled whole, which would count 2 if it were read).
+      unread: await verdict([approval(USDC, POT, SPENDER, usdc("2")), spent(usdc("2"))], null),
       // Where the transaction fails in the rehearsal its read follows, the read is of the state
-      // before it: 0 there says nothing of the 20 it allows, which still counts.
+      // before it: 0 there says nothing of the 20 it allows, which is not measured.
       replayFailed: await verdict([approval(USDC, POT, SPENDER, usdc("20"))], 0n, true),
     }).toEqual({
       pulledWhole: "let through",
@@ -798,7 +899,7 @@ describe("the guard", () => {
       throughPermit2: "let through",
       lockedDown: "let through",
       revoked: "let through",
-      unread: "tokens.USDC.perTransaction",
+      unread: "tokens.USDC",
       replayFailed: "tokens.USDC",
     });
   });
