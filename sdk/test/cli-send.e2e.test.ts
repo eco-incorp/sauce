@@ -24,6 +24,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AccountRole,
   address,
   generateKeyPairSigner,
   getAddressCodec,
@@ -62,6 +63,7 @@ import {
 } from "./cli-anvil.js";
 import {
   describeSvm,
+  fabricateAlt,
   ENGINE_SO,
   randomAddress,
   setMint,
@@ -483,6 +485,51 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
       expect.arrayContaining([expect.objectContaining({ account: recipient, delta: "1000000" })]),
     );
     expect(harness.svm.getBalance(recipient)).toBe(1_000_000n);
+  }, 120_000);
+
+  it("refuses a transaction loading a lookup index its endpoint's table does not hold, sending nothing", async () => {
+    // A table on the cluster holding the engine, and an endpoint whose read of it is from before it
+    // was extended: the index the transaction loads is not there yet.
+    const engine = address(v12SvmEngineProgramId());
+    const lookupTables = fabricateAlt(harness, [engine]);
+    const table = Object.keys(lookupTables)[0] as SvmAddress;
+    harness.svm.warpToSlot(harness.svm.getClock().slot + 2n);
+    const transfer = getTransferSolInstruction({
+      source: owner,
+      destination: randomAddress(),
+      amount: 1_000_000n,
+    });
+    const signed = await buildExecuteTransaction({
+      payer: owner,
+      instructions: [
+        {
+          ...transfer,
+          accounts: [...transfer.accounts, { address: engine, role: AccountRole.READONLY }],
+        },
+      ],
+      latestBlockhash: {
+        blockhash: harness.svm.latestBlockhash() as Blockhash,
+        lastValidBlockHeight: 1_000_000n,
+      },
+      lookupTables,
+    });
+    // Its header alone: the table before any address was added.
+    const held = harness.svm.getAccount(table);
+    if (!held.exists) throw new Error("no lookup table");
+    shim.staleRead(table, held.data.subarray(0, 56));
+    try {
+      const sentBefore = shim.sent.length;
+      const run = await sauce(
+        ...["send", getBase64EncodedWireTransaction(signed), "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain(
+        `loads index 0 of lookup table ${table}, which holds 0 addresses`,
+      );
+      expect(shim.sent.length).toBe(sentBefore);
+    } finally {
+      shim.staleRead(table, undefined);
+    }
   }, 120_000);
 
   it("builds no cook its simulation says would fail, and hands none out", async () => {

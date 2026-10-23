@@ -226,17 +226,33 @@ export async function transactionAddresses(
   transaction: Transaction,
 ): Promise<string[]> {
   const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
-    addressTableLookups?: readonly { lookupTableAddress: Address }[];
+    staticAccounts: readonly string[];
+    addressTableLookups?: readonly {
+      lookupTableAddress: Address;
+      writableIndexes: readonly number[];
+      readonlyIndexes: readonly number[];
+    }[];
   };
-  const tables: AddressesByLookupTableAddress = {};
-  for (const { lookupTableAddress } of message.addressTableLookups ?? []) {
-    Object.assign(
-      tables,
-      await ask(url, `lookup table ${lookupTableAddress}`, () => fetchAlt(rpc, lookupTableAddress)),
-    );
+  // Every address a lookup loads, or a refusal: an index the table does not hold yet could be
+  // filled by the time the transaction lands, with a program the check never saw.
+  const loaded: string[] = [];
+  for (const lookup of message.addressTableLookups ?? []) {
+    const table = lookup.lookupTableAddress;
+    // A table missing, or an account that is not one, fails here, naming it.
+    const held = (await ask(url, `lookup table ${table}`, () => fetchAlt(rpc, table)))[table] ?? [];
+    for (const index of [...lookup.writableIndexes, ...lookup.readonlyIndexes]) {
+      const entry = held[index];
+      if (entry === undefined) {
+        throw new CliError(
+          `the transaction loads index ${index} of lookup table ${table}, which holds ` +
+            `${held.length} addresses: what it would load cannot be checked, so nothing was sent`,
+        );
+      }
+      loaded.push(entry);
+    }
   }
 
-  return messageAccounts(transaction, tables);
+  return [...message.staticAccounts, ...loaded];
 }
 
 /**

@@ -19,6 +19,15 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import {
+  AccountRole,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  compressTransactionMessageUsingAddressLookupTables,
+  createTransactionMessage,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  type Blockhash,
   address,
   generateKeyPairSigner,
   getAddressCodec,
@@ -46,6 +55,7 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import {
   ENGINE_SO,
+  fabricateAlt,
   randomAddress,
   setMint,
   setTokenAccount,
@@ -748,6 +758,73 @@ describe(
         assert.equal(shim.sent.length, before);
       } finally {
         harness.svm.setAccount({ ...original, address: engineData });
+      }
+    });
+
+    it("refuses a serialized transaction loading a lookup index its endpoint's table does not hold, sending nothing", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-lookup", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      // A table on the cluster holding the engine, read by the endpoint as it was before it was
+      // extended: the index the transaction loads is not there yet.
+      const engine = address(v12SvmEngineProgramId());
+      const lookupTables = fabricateAlt(harness, [engine]);
+      const table = Object.keys(lookupTables)[0] as SvmAddress;
+      harness.svm.warpToSlot(harness.svm.getClock().slot + 2n);
+      // A plain transfer that names the engine, loaded from the table.
+      const data = new Uint8Array(12);
+      new DataView(data.buffer).setUint32(0, 2, true);
+      new DataView(data.buffer).setBigUint64(4, 1_000_000n, true);
+      const transfer = {
+        programAddress: address("11111111111111111111111111111111"),
+        accounts: [
+          { address: wallet, role: AccountRole.WRITABLE_SIGNER },
+          { address: randomAddress(), role: AccountRole.WRITABLE },
+          { address: engine, role: AccountRole.READONLY },
+        ],
+        data,
+      };
+      const transaction = getBase64EncodedWireTransaction(
+        compileTransaction(
+          compressTransactionMessageUsingAddressLookupTables(
+            pipe(
+              createTransactionMessage({ version: 0 }),
+              (message) => setTransactionMessageFeePayer(wallet, message),
+              (message) => appendTransactionMessageInstruction(transfer, message),
+              (message) =>
+                setTransactionMessageLifetimeUsingBlockhash(
+                  {
+                    blockhash: harness.svm.latestBlockhash() as Blockhash,
+                    lastValidBlockHeight: 1_000_000n,
+                  },
+                  message,
+                ),
+            ),
+            lookupTables,
+          ),
+        ),
+      );
+      // Its header alone: the table before any address was added.
+      const held = harness.svm.getAccount(table);
+      assert.ok(held.exists);
+      shim.staleRead(table, held.data.subarray(0, 56));
+      const before = shim.sent.length;
+      try {
+        assert.match(
+          failed(
+            await wallets.call("sauce_wallet_send", {
+              wallet: "sol-lookup",
+              transaction: { transaction, what: "the transfer", feePayer: wallet },
+              rpcUrl: SOLANA_URL,
+            }),
+          ),
+          new RegExp(`loads index 0 of lookup table ${table}, which holds 0 addresses`),
+        );
+        assert.equal(shim.sent.length, before);
+      } finally {
+        shim.staleRead(table, undefined);
       }
     });
 

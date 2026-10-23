@@ -122,6 +122,11 @@ export interface SolanaShim {
   readonly handed: Array<{ readonly method: string; readonly transaction: Transaction }>;
   /** Makes every blockhash handed out so far expire, as a minute's wait would on a cluster. */
   expire(): void;
+  /**
+   * Answers account reads of `key` with `data` in place of the bank's, as a node behind the
+   * cluster would; simulating and sending still run on the bank. `undefined` reads the bank again.
+   */
+  staleRead(key: Address, data: ReadonlyUint8Array | undefined): void;
   install(): void;
   restore(): void;
 }
@@ -175,10 +180,13 @@ export function solanaShim(
   const context = () => ({ apiVersion: "2.0.0", slot: Number(slot()) });
   const answer = (id: unknown, result: unknown): Response =>
     Response.json({ id, jsonrpc: "2.0", result });
+  const stale = new Map<string, ReadonlyUint8Array>();
   const account = (key: string) => {
     const found = svm.getAccount(address(key));
+    if (!found.exists) return null;
+    const data = stale.get(key);
 
-    return found.exists ? rpcAccount(found) : null;
+    return rpcAccount(data === undefined ? found : { ...found, data });
   };
 
   let synced = -1n;
@@ -505,6 +513,10 @@ export function solanaShim(
     expire: () => {
       issued.clear();
       svm.expireBlockhash();
+    },
+    staleRead: (key, data) => {
+      if (data === undefined) stale.delete(key);
+      else stale.set(key, data);
     },
     install: () => {
       globalThis.fetch = stub as unknown as typeof fetch;
