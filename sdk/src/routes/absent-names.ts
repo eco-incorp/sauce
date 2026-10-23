@@ -150,9 +150,16 @@ function moduleScope(program: AstNode): Scope {
       declaration.type === "ClassDeclaration"
     ) {
       bindings.push([prop(declaration, "id"), 0]);
-    } else if (declaration.type === "ImportDeclaration") {
+    } else if (
+      declaration.type === "ImportDeclaration" &&
+      prop<string>(declaration, "importKind") !== "type"
+    ) {
+      // A type-only import (`import type { X }`, `import { type X }`) is erased by the compiler: it
+      // binds no value, so it hides no registry name.
       for (const specifier of prop<AstNode[]>(declaration, "specifiers")) {
-        bindings.push([prop(specifier, "local"), 0]);
+        if (prop<string>(specifier, "importKind") !== "type") {
+          bindings.push([prop(specifier, "local"), 0]);
+        }
       }
     }
   }

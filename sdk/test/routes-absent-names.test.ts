@@ -304,6 +304,23 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     );
   });
 
+  it("a type-only import binds no value, so it hides no name the chain lacks", () => {
+    // The compiler erases `import type { X }` and `import { type X }`: `USDT` below is the chain's,
+    // which Base does not register, and a return of it would be the zero address.
+    const resolve = (path: string) =>
+      path === "./t.js" ? new TextEncoder().encode("export type USDT = Uint256;\n") : undefined;
+    for (const line of [
+      'import type { USDT } from "./t.js";',
+      'import { type USDT } from "./t.js";',
+    ]) {
+      const message = refusal("base", `${line}\nfunction main(): Address { return USDT; }`, {
+        resolve,
+      });
+      expect(message).toMatch(/`USDT` is not a token on base/);
+      expect(message).toMatch(/--> main\.js:2:35/);
+    }
+  });
+
   it("a module the program imports is read the same way", () => {
     const helper = `export function owed(): Address { return USDT; }`;
     const spender = `export function spend(): Uint256 { USDC.approve(PancakeswapV3.Factory, 1); return 0; }`;
