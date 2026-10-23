@@ -22,6 +22,7 @@
 import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 
 import {
+  collectPatternBinders,
   collectPatternNames,
   countDeclarations,
   isTypeDeclaration,
@@ -275,46 +276,36 @@ export function parentsOf(program: AstNode): Map<AstNode, AstNode> {
 }
 
 /**
- * Whether the identifier `n` is a name a declaration binds: a variable's, a function's or a
- * parameter's, a `catch` clause's, or one in a destructuring pattern of any of them (`[pot, bump]`,
- * `{ pot }`, `...pot`). A default's value (`[a = pot]`) and a computed key are read.
+ * Every identifier a declaration binds: a variable's, a function's own name or a parameter's, a
+ * `catch` clause's, through any destructuring pattern (`[pot, bump]`, `{ pot }`, `...pot`). A
+ * default's value (`[a = pot]`) and a computed key are reads, not binders.
  */
-function isBinder(n: AstNode, parents: ReadonlyMap<AstNode, AstNode>): boolean {
-  let at = n;
-  for (let parent = parents.get(at); parent !== undefined; parent = parents.get(at)) {
-    switch (parent.type) {
-      case "ArrayPattern":
-      case "ObjectPattern":
-        break;
-      case "RestElement":
-        if (parent.argument !== at) return false;
-        break;
-      case "AssignmentPattern":
-        if (parent.left !== at) return false;
-        break;
-      case "Property":
-        if (parent.value !== at || parents.get(parent)?.type !== "ObjectPattern") return false;
-        break;
-      case "VariableDeclarator":
-        return parent.id === at;
-      case "CatchClause":
-        return parent.param === at;
-      case "FunctionDeclaration":
-      case "FunctionExpression":
-      case "ArrowFunctionExpression":
-        return parent.id === at || (parent.params as AstNode[] | undefined)?.includes(at) === true;
-      default:
-        return false;
+function bindersOf(program: AstNode): ReadonlySet<AstNode> {
+  const binders = new Set<AstNode>();
+  const add = (node: AstNode): void => {
+    binders.add(node);
+  };
+  walk(program, (n) => {
+    if (n.type === "VariableDeclarator") collectPatternBinders(n.id, add);
+    if (n.type === "CatchClause") collectPatternBinders(n.param, add);
+    if (
+      n.type === "FunctionDeclaration" ||
+      n.type === "FunctionExpression" ||
+      n.type === "ArrowFunctionExpression"
+    ) {
+      collectPatternBinders(n.id, add);
+      for (const param of (n.params as AstNode[] | undefined) ?? []) {
+        collectPatternBinders(param, add);
+      }
     }
-    at = parent;
-  }
+  });
 
-  return false;
+  return binders;
 }
 
 /**
  * Every place the program reads `name`: an identifier in value position, not a member's name, a
- * record's key, a label, an import's or export's name, or a name a declaration binds (`isBinder`).
+ * record's key, a label, an import's or export's name, or a name a declaration binds (`bindersOf`).
  */
 function readsOf(
   program: AstNode,
@@ -322,8 +313,9 @@ function readsOf(
   name: string,
 ): AstNode[] {
   const reads: AstNode[] = [];
+  const binders = bindersOf(program);
   walk(program, (n) => {
-    if (n.type !== "Identifier" || nameOf(n) !== name) return;
+    if (n.type !== "Identifier" || nameOf(n) !== name || binders.has(n)) return;
     const parent = parents.get(n);
     if (parent === undefined) return;
     const computed = parent.computed === true;
@@ -347,7 +339,7 @@ function readsOf(
       case "ExportSpecifier":
         return;
     }
-    if (!isBinder(n, parents)) reads.push(n);
+    reads.push(n);
   });
 
   return reads;
