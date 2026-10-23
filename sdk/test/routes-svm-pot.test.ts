@@ -148,6 +148,35 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       selfUSDC: "@self:USDC",
     });
   });
+
+  it("a local bound to bare pot holds what its declared type says: the Pot's key, else its account", () => {
+    // An `Address` alias, annotated or not, is the Pot's key: its `.balance` the lamports there.
+    for (const declared of [": Address", ""]) {
+      const program = compile(
+        `function main(): Uint256 {\n  const holder${declared} = pot;\n  return holder.balance;\n}\n`,
+      );
+      expect(program.source).toBe(
+        `function main(pot: Account): Uint256 {\n  const holder${declared} = pot.address;\n  return ctx.balance(holder);\n}\n`,
+      );
+      expect(program.derivedAccounts).toEqual({ pot: "pot" });
+    }
+    // One declared `Account` is the Pot's account, its `.balance` read by its key.
+    expect(
+      compile(
+        "function main(): Uint256 {\n  const holder: Account = pot;\n  return holder.balance;\n}\n",
+      ).source,
+    ).toBe(
+      "function main(pot: Account): Uint256 {\n  const holder: Account = pot;\n  return ctx.balance(holder.address);\n}\n",
+    );
+    // A token balance needs a holder known when the transaction is built, which a local is not.
+    expect(
+      refusal(
+        "function main(): Uint256 {\n  const holder: Address = pot;\n  return holder.USDC;\n}\n",
+      ),
+    ).toMatch(
+      /^`holder\.USDC` on Solana: the holder must be known when the transaction is built, to attach its token account — `pot`, /,
+    );
+  });
 });
 
 describe("the retired spellings, refused naming what to write", () => {

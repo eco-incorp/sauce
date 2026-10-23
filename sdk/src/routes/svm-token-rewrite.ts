@@ -88,6 +88,7 @@ import {
   ACCOUNT_MEMBERS,
   collectAccountExpressions,
   isAccountValue,
+  isPotKey,
 } from "./svm-account-expressions.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { holderShapes, notAnAddress, readsField, reservedNameError } from "./balance-holder.js";
@@ -535,6 +536,13 @@ function collectTokenMethods(l: SvmLowering): void {
             { start: object.start, end: object.start, replacement: "ctx.balance(" },
             { start: object.end, end: n.end, replacement: ".address)" },
           );
+        });
+        return;
+      }
+      if (isPotKey(l, object)) {
+        // A local holding the Pot's key: the lamports at it, the Pot's, which the cook attaches.
+        l.site(n, () => {
+          l.splices.push({ start: n.start, end: n.end, replacement: `ctx.balance(${holderText})` });
         });
         return;
       }

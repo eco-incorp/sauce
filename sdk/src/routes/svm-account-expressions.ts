@@ -20,12 +20,12 @@
  * string, a token symbol, `pot`, `ctx.self()` or `Solana.owner`. A program builds an account from a
  * value only it knows by taking that account as an `Account` parameter of `main`.
  *
- * `pot` is the Pot's key where a value is wanted (`return pot`, `require(x == pot)`), and its
- * account where one is: with a role (`pot.signer()`), read for a field (`pot.address`, `pot.owner`,
- * `pot.dataLen`), and as `svm.call`'s program or one of its accounts, `svm.sload`'s and
- * `svm.sstore`'s account, and an argument a function declares `Account` (the program's own, and
- * `@sauce/token`'s and `@sauce/router`'s). Its balances are the token syntax's (`pot.USDC`,
- * `pot.balance`).
+ * `pot` is the Pot's key where a value is wanted (`return pot`, `require(x == pot)`,
+ * `const holder = pot`), and its account where one is: with a role (`pot.signer()`), read for a
+ * field (`pot.address`, `pot.owner`, `pot.dataLen`), as `svm.call`'s program or one of its
+ * accounts, `svm.sload`'s and `svm.sstore`'s account, a local declared `Account`, and an argument
+ * a function declares `Account` (the program's own, and `@sauce/token`'s and `@sauce/router`'s).
+ * Its balances are the token syntax's (`pot.USDC`, `pot.balance`).
  *
  * What an account expression lowers to is the parameter's name: `svm.call(Solana.systemProgram, …)`
  * becomes `svm.call(systemProgram, …)`, with `systemProgram: Account` added to `main`.
@@ -33,6 +33,7 @@
 import { walk, type AstNode } from "./ast-walk.js";
 import { methodCall } from "./token-rewrite.js";
 import {
+  annotatedType,
   base58,
   hexKey,
   isCtxSelf,
@@ -200,14 +201,50 @@ function solanaMemberOf(l: SvmLowering, node: AstNode): string | undefined {
   return nameOf(property);
 }
 
-/** The locals each lowering's program binds once to an account, by name. */
-const ACCOUNT_LOCALS = new WeakMap<SvmLowering, ReadonlyMap<string, AstNode>>();
+/** The locals each lowering's program binds once, by name: their declarators. */
+const LOCALS = new WeakMap<SvmLowering, ReadonlyMap<string, AstNode>>();
+
+/** The local `name` the program binds once, with a value: its declarator. */
+function localNamed(l: SvmLowering, name: string): AstNode | undefined {
+  let locals = LOCALS.get(l);
+  if (locals === undefined) {
+    const found = new Map<string, AstNode>();
+    walk(l.program, (n) => {
+      if (n.type !== "VariableDeclarator" || (n.id as AstNode).type !== "Identifier") return;
+      const id = nameOf(n.id as AstNode);
+      if (n.init !== null && l.declarations.get(id) === 1) found.set(id, n);
+    });
+    locals = found;
+    LOCALS.set(l, locals);
+  }
+
+  return locals.get(name);
+}
+
+/**
+ * Whether a bare name an account stands for (`pot`) is, at `n`, that account rather than its key:
+ * with a role (`pot.signer()`), read for a field (`pot.address`), or where an account is wanted
+ * (`wantsAccount`).
+ */
+function standsAsAccount(l: SvmLowering, n: AstNode): boolean {
+  const parent = l.parents.get(n);
+  if (parent?.type === "MemberExpression" && parent.object === n && parent.computed !== true) {
+    const name = nameOf(parent.property as AstNode);
+    const call = l.parents.get(parent);
+    const called = call?.type === "CallExpression" && call.callee === parent;
+
+    return (ROLES.has(name) && called) || ACCOUNT_FIELDS.has(name);
+  }
+
+  return wantsAccount(l, n);
+}
 
 /**
  * Whether `node` is an account: a bare name's (`pot`), an account expression (`Solana.pda(…)`,
  * `Solana.owner`, `USDC.accountOf(x)`, `USDC.mint`), `svm.remainingAccount(i)`, an `Account`
- * parameter, or a local bound once to one of them — with any roles chained on it. Its `.balance` is
- * its lamports, by its key.
+ * parameter, or a local bound once to one of them — with any roles chained on it. A local holds
+ * what its declared type says, else what its value is lowered to: `const holder = pot` holds the
+ * Pot's key. Its `.balance` is its lamports, by its key.
  */
 export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<string>()): boolean {
   let at = node;
@@ -215,26 +252,16 @@ export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<str
     at = site.object;
     site = methodCall(at);
   }
-  if (l.isPot(at)) return true;
+  if (l.isPot(at)) return seen.size === 0 || standsAsAccount(l, at);
   if (at.type === "Identifier") {
     const name = nameOf(at);
     if (l.paramAt(name, at)?.kind === "account") return true;
-    let locals = ACCOUNT_LOCALS.get(l);
-    if (locals === undefined) {
-      const found = new Map<string, AstNode>();
-      walk(l.program, (n) => {
-        if (n.type !== "VariableDeclarator" || (n.id as AstNode).type !== "Identifier") return;
-        const id = nameOf(n.id as AstNode);
-        const init = n.init as AstNode | null;
-        if (init !== null && l.declarations.get(id) === 1) found.set(id, init);
-      });
-      locals = found;
-      ACCOUNT_LOCALS.set(l, locals);
-    }
-    const init = locals.get(name);
-    if (init === undefined || seen.has(name)) return false;
+    const local = localNamed(l, name);
+    if (local === undefined || seen.has(name)) return false;
+    const declared = annotatedType(local.id as AstNode);
+    if (declared !== undefined) return declared === "Account";
     seen.add(name);
-    return isAccountValue(l, init, seen);
+    return isAccountValue(l, local.init as AstNode, seen);
   }
   const member = solanaMemberOf(l, at);
   if (member !== undefined) return Object.hasOwn(KNOWN, member);
@@ -261,13 +288,36 @@ export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<str
 }
 
 /**
+ * Whether `node` is a local bound once, by `const`, to the Pot's key: a bare `pot` where a value
+ * is wanted (`const holder: Address = pot`), or another such local. Its `.balance` is the lamports
+ * at that key, the Pot's, which the cook attaches.
+ */
+export function isPotKey(l: SvmLowering, node: AstNode, seen = new Set<string>()): boolean {
+  if (node.type !== "Identifier") return false;
+  const name = nameOf(node);
+  const local = localNamed(l, name);
+  if (local === undefined || seen.has(name) || l.paramAt(name, node) !== undefined) return false;
+  const declaration = l.parents.get(local) as { kind?: string } | undefined;
+  if (declaration?.kind !== "const" || annotatedType(local.id as AstNode) === "Account") {
+    return false;
+  }
+  const init = local.init as AstNode;
+  seen.add(name);
+
+  return l.isPot(init) ? !standsAsAccount(l, init) : isPotKey(l, init, seen);
+}
+
+/**
  * Whether `pot` at `node` stands where an account is wanted: `svm.call`'s program or one of its
- * accounts, `svm.sload`'s or `svm.sstore`'s account, or an argument the function it is passed to
- * declares an `Account` — the program's own top-level function, or one imported from (or ambient
- * in) `@sauce/token` or `@sauce/router`.
+ * accounts, `svm.sload`'s or `svm.sstore`'s account, the value of a local declared `Account`, or an
+ * argument the function it is passed to declares an `Account` — the program's own top-level
+ * function, or one imported from (or ambient in) `@sauce/token` or `@sauce/router`.
  */
 function wantsAccount(l: SvmLowering, node: AstNode): boolean {
   const parent = l.parents.get(node);
+  if (parent?.type === "VariableDeclarator") {
+    return parent.init === node && annotatedType(parent.id as AstNode) === "Account";
+  }
   if (parent?.type === "ArrayExpression") {
     const call = l.parents.get(parent);
     if (call?.type !== "CallExpression") return false;
@@ -545,38 +595,36 @@ export function collectAccountExpressions(l: SvmLowering): void {
   // Every account expression, before its role modifiers.
   const roots: Root[] = [];
   /**
-   * A bare name an account stands for (`pot`): its account where the program uses it as one (a
-   * role, a field, `wantsAccount`), else its key, `key()`. Its balances (`pot.USDC`, `pot.balance`)
-   * are the token syntax's, and a method on it (`pot.toBytesBe(32)`) is its key's.
+   * A bare name an account stands for (`pot`): its account where the program uses it as one
+   * (`standsAsAccount`), else its key, `key()`. Its balances (`pot.USDC`, `pot.balance`) are the
+   * token syntax's, and a method on it (`pot.toBytesBe(32)`) is its key's.
    */
   const collectBare = (n: AstNode, known: Known, key: () => string): void => {
+    if (standsAsAccount(l, n)) {
+      roots.push({ node: n, describe: () => ({ derivation: known.derivation, base: known.base }) });
+      return;
+    }
     const parent = parents.get(n);
     if (parent?.type === "MemberExpression" && parent.object === n && parent.computed !== true) {
-      const name = nameOf(parent.property as AstNode);
       const call = parents.get(parent);
       const called = call?.type === "CallExpression" && call.callee === parent;
-      if (!(ROLES.has(name) && called) && !ACCOUNT_FIELDS.has(name)) {
-        if (l.isBalanceName(name) || !called) return;
-        l.site(n, () => {
-          l.requirePlaced(n, `\`${text(parent)}\``, "an account");
-          l.splices.push({ start: n.start, end: n.end, replacement: key() });
-        });
-        return;
-      }
-    } else if (!wantsAccount(l, n)) {
+      if (l.isBalanceName(nameOf(parent.property as AstNode)) || !called) return;
       l.site(n, () => {
-        l.requirePlaced(n, `\`${text(n)}\``, "an account");
-        // `{ pot }` is `{ pot: <key> }`.
-        const shorthand = parent?.type === "Property" && parent.shorthand === true;
-        l.splices.push({
-          start: n.start,
-          end: n.end,
-          replacement: shorthand ? `${text(n)}: ${key()}` : key(),
-        });
+        l.requirePlaced(n, `\`${text(parent)}\``, "an account");
+        l.splices.push({ start: n.start, end: n.end, replacement: key() });
       });
       return;
     }
-    roots.push({ node: n, describe: () => ({ derivation: known.derivation, base: known.base }) });
+    l.site(n, () => {
+      l.requirePlaced(n, `\`${text(n)}\``, "an account");
+      // `{ pot }` is `{ pot: <key> }`.
+      const shorthand = parent?.type === "Property" && parent.shorthand === true;
+      l.splices.push({
+        start: n.start,
+        end: n.end,
+        replacement: shorthand ? `${text(n)}: ${key()}` : key(),
+      });
+    });
   };
   walk(l.program, (n) => {
     const site = methodCall(n);

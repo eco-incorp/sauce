@@ -180,6 +180,15 @@ export function hexKey(key: string): string {
   return `0x${[...getAddressEncoder().encode(address(key))].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** The type `node`'s annotation names, where it is one name: `Address`, `Account` (roles or not). */
+export function annotatedType(node: AstNode): string | undefined {
+  const annotation = (node as { typeAnnotation?: { typeAnnotation?: AstNode } }).typeAnnotation
+    ?.typeAnnotation;
+  const typeName = (annotation as { typeName?: AstNode } | undefined)?.typeName;
+
+  return typeName?.type === "Identifier" ? nameOf(typeName) : undefined;
+}
+
 /**
  * A function's `Address` and `Account` parameters, by name. Main's carry their roles (whether an
  * account is writable) and their type; a top-level function's account may declare no role (the
@@ -192,8 +201,7 @@ function paramsOf(fn: AstNode, helper?: string): ReadonlyMap<string, Param> {
     if (param.type !== "Identifier") continue;
     const annotation = (param as { typeAnnotation?: { typeAnnotation?: AstNode } }).typeAnnotation
       ?.typeAnnotation;
-    const typeName = (annotation as { typeName?: AstNode } | undefined)?.typeName;
-    const type = typeName?.type === "Identifier" ? nameOf(typeName) : undefined;
+    const type = annotatedType(param);
     const roles = (
       (annotation as { typeArguments?: { params?: AstNode[] } } | undefined)?.typeArguments
         ?.params ?? []
