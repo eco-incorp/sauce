@@ -82,7 +82,11 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
-import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
+import {
+  v12KitchenAddress,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
@@ -866,20 +870,32 @@ export async function measureSvm(
   // so wrapping SOL into the wallet's own account and unwrapping it move nothing, and closing,
   // handing over or withdrawing from such an account to another key is a send. An account of a
   // layout this does not read, that names one of those keys and loses lamports, may have been the
-  // wallet's to command: what it loses counts as sent unless it arrives in the set.
+  // wallet's to command: what it loses counts as sent unless it arrives in the set. The wallet or a
+  // Pot that the transaction gives to another program (System's Assign) leaves the set with all it
+  // holds: from then on that program, not the key, moves its lamports. (A Pot the Kitchen creates
+  // where lamports were sent ahead of it becomes the engine's: still the Pot, still in the set.)
   const keys = [...ours];
-  const controlled = (account: SvmAddress, state: SimulatedAccount | null): boolean =>
+  const engine = v12SvmEngineProgramId();
+  const controlled = (
+    account: SvmAddress,
+    state: SimulatedAccount | null,
+    program: string | undefined,
+  ): boolean =>
     state !== null &&
-    (ours.has(account) || (lamportKeys(state)?.every((key) => ours.has(key)) ?? false));
+    ((ours.has(account) &&
+      (program === undefined ||
+        state.owner === program ||
+        (account !== wallet && state.owner === engine))) ||
+      (lamportKeys(state)?.every((key) => ours.has(key)) ?? false));
   let lamports = delegatedLamports;
   tracked.forEach((account, index) => {
     const was = before[index] ?? null;
     const is = after[index] ?? null;
-    if (controlled(account, was)) lamports += was!.lamports;
+    if (controlled(account, was, undefined)) lamports += was!.lamports;
     else if (was !== null && namesAnyOf(was, keys) && (is?.lamports ?? 0n) < was.lamports) {
       lamports += was.lamports - (is?.lamports ?? 0n);
     }
-    if (controlled(account, is)) lamports -= is!.lamports;
+    if (controlled(account, is, was?.owner)) lamports -= is!.lamports;
   });
   const byMint = new Map<
     string,

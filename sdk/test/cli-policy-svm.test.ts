@@ -1434,6 +1434,25 @@ describeSvm(
       });
     });
 
+    it("counts the wallet's whole balance against native when the transaction gives the wallet to another program", async () => {
+      // System's Assign: from then on the program, not the wallet's key, moves its lamports.
+      const transaction = await signed([
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [{ address: wallet, role: AccountRole.WRITABLE_SIGNER }],
+          data: Uint8Array.of(...u32(1), ...keyBytes(randomAddress())),
+        },
+      ]);
+      const balance = harness.svm.getBalance(wallet)!;
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(balance),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
     it("counts only the fee when the wallet wraps SOL into its own account and unwraps it again", async () => {
       const { account } = wrappedSol(wallet, 0n);
       const wrap = await signed([
