@@ -455,6 +455,23 @@ export async function movedBy(
 ): Promise<SvmMoved> {
   const tokens: Array<Omit<TokenChange, "decimals" | "symbol">> = [];
   const lamports: LamportChange[] = [];
+  // A mint the transaction writes, whose decimals it changes (made again with others): a balance of
+  // it is worth another amount after, though its raw amount stays the same.
+  const where = new Map(tracked.map((account, index) => [account, index]));
+  const decimalsIn = (state: SimulatedAccount | null | undefined): number | undefined =>
+    state !== null && state !== undefined && state.data.length > MINT_DECIMALS_AT
+      ? state.data[MINT_DECIMALS_AT]
+      : undefined;
+  const remade = (mint: Address): boolean => {
+    const at = where.get(mint);
+
+    return (
+      at !== undefined &&
+      before[at] != null &&
+      after[at] != null &&
+      decimalsIn(before[at]) !== decimalsIn(after[at])
+    );
+  };
   tracked.forEach((account, index) => {
     const lamportsBefore = before[index]?.lamports ?? 0n;
     const lamportsAfter = after[index]?.lamports ?? 0n;
@@ -475,7 +492,7 @@ export async function movedBy(
     if (seen === undefined) return;
     const amountBefore = was?.amount ?? 0n;
     const amountAfter = is?.amount ?? 0n;
-    if (amountBefore !== amountAfter) {
+    if (amountBefore !== amountAfter || (amountBefore > 0n && remade(seen.mint))) {
       tokens.push({
         account,
         mint: seen.mint,
