@@ -1081,6 +1081,28 @@ describeSvm(
 
       return { account, held: rent + amount };
     };
+    /** A token account of `owner`'s holding `amount` of `mint`, with `delegate` standing for
+     *  `allowance` of it. */
+    const delegatedAccount = (
+      owner: Address,
+      mint: Address,
+      amount: bigint,
+      delegate: Address,
+      allowance: bigint,
+    ): Address => {
+      const account = randomAddress();
+      const data = allowing(tokenAccountData(mint, owner, amount), delegate, allowance);
+      harness.svm.setAccount({
+        address: account,
+        data,
+        executable: false,
+        lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+        programAddress: TOKEN_PROGRAM,
+        space: BigInt(data.length),
+      });
+
+      return account;
+    };
 
     /** The wallet's cook on its Pot approving `delegate` on `source`, at the top level or through
      *  the forwarder. */
@@ -1581,6 +1603,34 @@ describeSvm(
         refusal: nativeRefusal,
         spend: undefined,
       });
+    });
+
+    it("counts what the wallet moves out of a Pot's account it is the delegate of, with no cook", async () => {
+      // A Pot's account, the wallet its delegate for all of it (an approval that gave no outside
+      // key anything); then the wallet alone spends from it, no cook naming the Pot.
+      const mint = mints.spl;
+      const source = delegatedAccount(harness.pot, mint, AMOUNT, wallet, AMOUNT);
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const spend = (amount: bigint) =>
+        signed([transferChecked("spl", source, elsewhere, amount, wallet)]);
+
+      const over = await spend(5_000n);
+      expect({
+        tokens: plain((await measure(over)).tokens),
+        ...(await guarded(limited(mint), over)),
+      }).toEqual({
+        tokens: [{ token: mint, amount: "5000", decimals: DECIMALS }],
+        ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 5 ${mint}`),
+      });
+      const within = await spend(1_000n);
+      const { refusal, ledger } = await guarded(limited(mint), within);
+      expect({ refusal, spend: (JSON.parse(ledger || "{}") as { spend?: unknown }).spend }).toEqual(
+        {
+          refusal: "none: the guard let it through",
+          spend: { [`tokens.${mint}`]: { amount: "1000", decimals: DECIMALS } },
+        },
+      );
+      expectOk(sendSigned(harness, within));
     });
 
     it("counts SOL the wallet wraps into its own account where an outside key stands to move it", async () => {

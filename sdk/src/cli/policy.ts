@@ -845,6 +845,11 @@ export async function measureSvm(
   // A Token-2022 mint whose permanent delegate goes from one of those keys to another key: that key
   // then moves any account's tokens of the mint, the wallet's included, with no approval.
   const delegating: Array<{ token: SvmAddress; delegate: SvmAddress }> = [];
+  // What the wallet (or a Pot) moves out of an account it does not own, as that account's delegate:
+  // a Pot's account delegated to the wallet, spent from a transaction that cooks on no Pot. The
+  // owner is outside this transaction's set, so the balance it loses is the delegate's spend, which
+  // is the wallet's own send: as much of the drop as the allowance fell by, by mint.
+  const spentAsDelegate = new Map<SvmAddress, bigint>();
   tracked.forEach((account, index) => {
     const delegateBefore = permanentDelegateOf(before[index] ?? null);
     const delegateAfter = permanentDelegateOf(after[index] ?? null);
@@ -858,7 +863,21 @@ export async function measureSvm(
     }
     // An account made again at its address for another asset is a new one: the old one's balance
     // is counted as it leaves.
-    const { was, is } = tokenTransition(before[index] ?? null, after[index] ?? null);
+    const { was, is, replaced } = tokenTransition(before[index] ?? null, after[index] ?? null);
+    const old = was ?? replaced;
+    if (
+      old !== undefined &&
+      !ours.has(old.owner) &&
+      old.delegate !== undefined &&
+      ours.has(old.delegate)
+    ) {
+      const left = was === undefined ? undefined : is;
+      const allowanceLeft = left?.delegate === old.delegate ? left.delegatedAmount : 0n;
+      const drop = old.amount - (left?.amount ?? 0n);
+      const fell = old.delegatedAmount - allowanceLeft;
+      const spent = drop < fell ? drop : fell;
+      if (spent > 0n) spentAsDelegate.set(old.mint, (spentAsDelegate.get(old.mint) ?? 0n) + spent);
+    }
     // An account it closes gives nothing more away: its balance is counted as it leaves.
     if (is === undefined || !ours.has((was ?? is).owner)) return;
     if (
@@ -888,13 +907,18 @@ export async function measureSvm(
       ...handedOff.keys(),
       ...closable.map((each) => each.token),
       ...delegating.map((each) => each.token),
+      ...spentAsDelegate.keys(),
     ],
     new Map(tracked.map((account, index) => [account, after[index] ?? null])),
   );
   // A limit holds an amount only in its token's decimals: where a mint's cannot be read, a limit
   // naming that mint cannot stand behind what the transaction lets another key take of it.
   const undecided = [
-    ...new Set([...approved.map((each) => each.token), ...handedOff.keys()]),
+    ...new Set([
+      ...approved.map((each) => each.token),
+      ...handedOff.keys(),
+      ...spentAsDelegate.keys(),
+    ]),
   ].filter((mint) => facts.get(mint)?.decimals === undefined);
   // The native coin the wallet controls is more than its own account's: the lamports of the Pots it
   // cooks on, and of every account whose layout gives them to one of those keys alone (a token
@@ -960,7 +984,7 @@ export async function measureSvm(
     };
     byMint.set(change.mint, { ...seen, amount: seen.amount + change.before - change.after });
   }
-  for (const [mint, amount] of handedOff) {
+  for (const [mint, amount] of [...handedOff, ...spentAsDelegate]) {
     const seen = byMint.get(mint) ?? { amount: 0n, ...facts.get(mint) };
     byMint.set(mint, { ...seen, amount: seen.amount + amount });
   }
