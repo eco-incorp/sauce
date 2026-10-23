@@ -738,7 +738,8 @@ export async function measureSvm(
     } catch {
       data = undefined;
     }
-    if (data === undefined || keys.some((key) => key === undefined)) {
+    // Every Kitchen instruction opens with an 8-byte discriminator: shorter data is a cut report.
+    if (data === undefined || data.length < 8 || keys.some((key) => key === undefined)) {
       unseen =
         "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
       continue;

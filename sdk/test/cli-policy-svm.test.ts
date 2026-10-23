@@ -209,6 +209,27 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
       UNREADABLE_CALL,
     ],
     [
+      "a call to the Kitchen is reported with empty data",
+      () => [{ index: 0, instructions: [{ programId: KITCHEN, accounts: [WALLET], data: "" }] }],
+      UNREADABLE_CALL,
+    ],
+    [
+      "a call to the Kitchen is reported with data shorter than a discriminator",
+      () => [
+        {
+          index: 0,
+          instructions: [
+            {
+              programId: KITCHEN,
+              accounts: [WALLET],
+              data: getBase58Decoder().decode(KITCHEN_DISCRIMINATORS.cook.subarray(0, 7)),
+            },
+          ],
+        },
+      ],
+      UNREADABLE_CALL,
+    ],
+    [
       "a cook from the Kitchen is reported with its accounts cut short before the Pot",
       () => [
         {
@@ -308,7 +329,12 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
             stackHeight: 2,
           },
           { programIdIndex: at(PROGRAM), accounts: [0], data: "1", stackHeight: 2 },
-          { programId: KITCHEN, accounts: [WALLET], data: "1", stackHeight: 3 },
+          {
+            programId: KITCHEN,
+            accounts: [WALLET],
+            data: getBase58Decoder().decode(KITCHEN_DISCRIMINATORS.createPot),
+            stackHeight: 3,
+          },
         ],
       },
     ]);
