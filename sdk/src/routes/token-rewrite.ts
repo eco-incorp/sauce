@@ -349,8 +349,8 @@ const BINDINGS: ReadonlySet<string> = new Set(["at", "view", "lib"]);
 interface HolderScope {
   readonly tokens: TokenSymbols;
   readonly shadowed: ReadonlySet<string>;
-  /** The names the compile binds beside the source (a define, an ambient module's export): a
-   *  `pot` or `self` among them is the caller's value, never the Pot. */
+  /** The names the compile binds beside the source (a define, a contract binding, an ambient
+   *  module's export): a `pot` or `self` among them is the caller's value, never the Pot. */
   readonly bound: ReadonlySet<string>;
   /** The names the program's imports bind, and of them those an ABI (a `.json` module) gives. */
   readonly imported: ReadonlySet<string>;
@@ -899,8 +899,8 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
  * lowering and the disjointness argument. Purely textual surgery over the ORIGINAL source, driven by
  * parser ranges — never a re-print of the AST, so everything else (formatting, comments, unrelated
  * code) survives byte-for-byte. Prepend `tokenImportLines(result)` before compiling the result.
- * `bound` names what the compile binds beside the source (a define, an ambient module's export): a
- * `pot` or `self` among them is an ordinary holder, never the Pot.
+ * `bound` names what the compile binds beside the source (a define, a contract binding, an ambient
+ * module's export): a `pot` or `self` among them is an ordinary holder, never the Pot.
  */
 export function rewriteTokenMembers(
   source: string,

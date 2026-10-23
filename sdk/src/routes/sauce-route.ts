@@ -527,10 +527,12 @@ function compileForChain(
   // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
   // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
-  // The names the compile binds beside the source: the caller's defines and what its ambient
-  // modules export. A `pot` or `self` that is one of them is the caller's value, never the Pot.
+  // The names the compile binds beside the source: the caller's defines, its contract bindings and
+  // what its ambient modules export. A `pot` or `self` that is one of them is the caller's value,
+  // never the Pot.
   const bound = new Set([
     ...Object.keys(options.defines ?? {}),
+    ...Object.keys(options.contracts ?? {}),
     ...ambientExports(options.ambient ?? [], target, options.resolve, options.resolvePackage),
   ]);
 

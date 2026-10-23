@@ -693,10 +693,10 @@ function bareReads(
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
  * `opts.potSugar === false`, every bare `pot` read where the program declares no `pot`
  * (`lexical-scope.ts`), over `source` for the enclosing/destination `chain`; refuses a bare `self`
- * read where the program declares no `self` (the Pot is `pot`). A `pot` or `self`
- * in `bound` — a name the compile gives a value beside the source: a define, an ambient module's
- * export — is that value, so neither is touched. Edits use parser ranges over the original source,
- * preserving unrelated formatting, comments, and code byte-for-byte.
+ * read where the program declares no `self` (the Pot is `pot`). A `pot` or `self` in `bound` — a
+ * name the compile gives a value beside the source: a define, a contract binding, an ambient
+ * module's export — is that value, so neither is touched. Edits use parser ranges over the original
+ * source, preserving unrelated formatting, comments, and code byte-for-byte.
  */
 export function rewriteProtocolAccessors(
   source: string,

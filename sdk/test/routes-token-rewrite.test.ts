@@ -872,6 +872,23 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     );
   });
 
+  it.each(["pot", "self"])("a contract binding the caller names `%s` is its own", (name) => {
+    const erc20: Abi = [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "account", type: "address" }],
+        outputs: [{ name: "", type: "uint256" }],
+      },
+    ];
+    const program = (binding: string) =>
+      `function main(token: Address, holder: Address): Uint256 { return ${binding}.at(token).balanceOf(holder); }`;
+    expect(hex(program(name), { contracts: { [name]: { abi: erc20 } } })).toBe(
+      hex(program("Other"), { contracts: { Other: { abi: erc20 } } }),
+    );
+  });
+
   it("the Pot's names are the Pot's where the caller binds neither", () => {
     const defines = { other: BigInt(HOLDER), balance: 5n };
     expect(hex(main("return pot;"), { defines })).toBe(hex(main("return ctx.self();")));
