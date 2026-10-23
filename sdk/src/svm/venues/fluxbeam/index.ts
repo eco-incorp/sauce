@@ -333,7 +333,7 @@ export async function fetchFluxBeamPoolConfig(
   };
 }
 
-/** The FluxBeam venue: a constant-product AMM with spl-token-swap's layout, Token-2022 on both legs. */
+/** The FluxBeam venue: a constant-product AMM with spl-token-swap's layout, Token-2022-capable on both legs. */
 export const fluxbeam = {
   slug: SLUG,
   programId: FLUXBEAM_PROGRAM_ID,

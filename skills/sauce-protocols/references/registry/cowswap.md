@@ -2,7 +2,7 @@
 
 # CoW Swap (`cowswap`)
 
-MEV-protected DEX aggregator using batch auctions and Coincidence of Wants (CoW) to find optimal prices while protecting users from frontrunning.
+MEV-protected DEX aggregator using batch auctions and Coincidence of Wants (CoW) and protects users from frontrunning.
 
 | Fact | Value |
 | --- | --- |

@@ -2,7 +2,7 @@
 
 # SyncSwap (`syncswap`)
 
-The leading DEX on zkSync Era with optimized gas efficiency. Supports classic constant product and stable pools with native account abstraction.
+DEX on zkSync Era. Supports classic constant product and stable pools with native account abstraction.
 
 | Fact | Value |
 | --- | --- |

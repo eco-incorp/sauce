@@ -2,7 +2,7 @@
 
 # Instadapp (`instadapp`)
 
-Flash loan aggregator that routes across Aave, Maker, Balancer and other sources to find the cheapest flash loan.
+Flash loan aggregator that routes across Aave, Maker, Balancer and other sources for a flash loan.
 
 | Fact | Value |
 | --- | --- |

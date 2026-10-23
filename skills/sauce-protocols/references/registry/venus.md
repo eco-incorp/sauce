@@ -2,7 +2,7 @@
 
 # Venus (`venus`)
 
-Leading lending and borrowing protocol on BNB Chain. Fork of Compound V2 with additional features including VAI stablecoin minting.
+Lending and borrowing protocol on BNB Chain. Fork of Compound V2 with additional features including VAI stablecoin minting.
 
 | Fact | Value |
 | --- | --- |

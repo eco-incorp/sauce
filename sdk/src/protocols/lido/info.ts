@@ -5,7 +5,7 @@ export const protocolInfo: ProtocolInfo = {
   name: "Lido",
   slug: "lido",
   description:
-    "The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a liquid staking token that accrues staking rewards.",
+    "Liquid staking protocol for Ethereum. Stake ETH and receive stETH, a liquid staking token that accrues staking rewards.",
   website: "https://lido.fi",
   github: "https://github.com/lidofinance",
   category: "liquid-staking",

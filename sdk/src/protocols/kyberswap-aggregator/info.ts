@@ -4,8 +4,7 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "KyberSwap Aggregator",
   slug: "kyberswap-aggregator",
-  description:
-    "Meta aggregator that routes through multiple aggregators and DEXes for optimal swap execution.",
+  description: "Meta aggregator that routes through multiple aggregators and DEXes for a swap.",
   website: "https://kyberswap.com",
   github: "https://github.com/KyberNetwork",
   npm: "@kyberswap/ks-sdk-core",
