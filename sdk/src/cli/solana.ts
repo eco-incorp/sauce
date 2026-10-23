@@ -2855,7 +2855,9 @@ export async function svmTokenAccountsToCreate(
  */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
   requireSupported("sending the cook", [input.chain]);
-  let prepared = await prepare(input, files, input.signer);
+  // Prepared, and its swaps' stops checked, with no key at all: a rehearsal is unsigned, and the
+  // owner's key signs each transaction only once its policy let it go, just before it is sent.
+  let prepared = await prepare(input, files, unsignedSigner(input.owner));
   // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
   // would run out of compute units; one it still runs out with is refused here.
   const stopNotes: string[] = [];
