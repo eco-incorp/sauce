@@ -1359,15 +1359,22 @@ function spendOf(
     // counts against the limit together (on Solana, approvals included).
     const permit2 = permit2Of(chain);
     for (const approval of measured.approvals.filter((each) => names(key, each))) {
-      if (approval.spender.toLowerCase() === permit2 || approval.decimals === undefined) continue;
-      const value = scaled(approval.amount, approval.decimals);
+      if (approval.spender.toLowerCase() === permit2) continue;
+      // An approval in units that cannot be read gives an amount no limit can weigh: refused.
+      if (approval.decimals === undefined) {
+        refuse(
+          `tokens.${key}`,
+          `the decimals of ${approval.symbol ?? approval.token} could not be read, so it cannot be held to the limit`,
+        );
+      }
+      const value = scaled(approval.amount, approval.decimals!);
       const caps = [
         limit.perTransaction === undefined
           ? undefined
-          : limitScaled(limit.perTransaction, approval.decimals),
+          : limitScaled(limit.perTransaction, approval.decimals!),
         limit.perDay === undefined
           ? undefined
-          : limitScaled(limit.perDay, approval.decimals) - (totals.get(`tokens.${key}`) ?? 0n),
+          : limitScaled(limit.perDay, approval.decimals!) - (totals.get(`tokens.${key}`) ?? 0n),
       ].filter((cap): cap is bigint => cap !== undefined);
       const cap = caps.length === 0 ? undefined : caps.reduce((a, b) => (a < b ? a : b));
       if (cap !== undefined && value > cap) {

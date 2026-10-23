@@ -74,8 +74,9 @@ const approval = (token: Address, owner: Address, spender: Address, amount: bigi
 
 type Log = ReturnType<typeof transfer>;
 
-/** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. */
-function client(logs: Log[] | null, decimals = 18): PublicClient {
+/** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. Its
+ *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. */
+function client(logs: Log[] | null, decimals: number | null = 18): PublicClient {
   return {
     getChainId: async () => BASE.id,
     simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: unknown[] }> }) => {
@@ -84,7 +85,7 @@ function client(logs: Log[] | null, decimals = 18): PublicClient {
       return [{ calls: blocks[0]!.calls.map(() => ({ status: "success", logs, data: "0x" })) }];
     },
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
-      if (functionName === "decimals") return decimals;
+      if (functionName === "decimals" && decimals !== null) return decimals;
       // A Pot answers for itself: its owner, its salt (the default) and its Kitchen.
       const owner = POT_OWNERS[getAddress(address)];
       if (owner !== undefined && functionName === "owner") return owner;
@@ -465,6 +466,34 @@ describe("the guard", () => {
     expect((await refused(guard.evm(over, pay))).limit).toBe(
       `tokens.${OTHER_TOKEN.toLowerCase()}.perTransaction`,
     );
+  });
+
+  it("refuses an approval of a token whose decimals cannot be read, where that token is limited", async () => {
+    // A token outside the registry, named by address, whose decimals() reads nothing: a limit
+    // cannot weigh what its approval gives, so it refuses it rather than let it through.
+    const approves = (spender: Address) =>
+      client([approval(OTHER_TOKEN, WALLET, spender, maxUint256)], null);
+    const byAddress = guarded({ tokens: { [OTHER_TOKEN]: { perTransaction: "1" } } });
+    const verdict = (guard: SendGuard, spender: Address) =>
+      guard.evm(approves(spender), pay).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+    const limited = await verdict(byAddress, RECIPIENT);
+    // An approval of Permit2 still moves nothing without a later signature; another token's limit
+    // has nothing to say.
+    const toPermit2 = await verdict(byAddress, PERMIT2);
+    const elsewhere = await verdict(
+      guarded({ tokens: { USDC: { perTransaction: "1" } } }),
+      RECIPIENT,
+    );
+    expect({ limited, toPermit2, elsewhere }).toEqual({
+      limited: expect.stringContaining(
+        `the decimals of ${OTHER_TOKEN} could not be read, so it cannot be held to the limit`,
+      ) as unknown,
+      toPermit2: "let through",
+      elsewhere: "let through",
+    });
   });
 
   it("refuses a token limit an endpoint without eth_simulateV1 cannot measure", async () => {
