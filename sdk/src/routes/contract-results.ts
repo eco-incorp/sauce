@@ -357,9 +357,11 @@ export function rewriteContractResults(
     if (reference(object) !== undefined || bound(object) !== undefined) return;
     const output = result(object);
     if (output === undefined || outputAt(output.method, output.path)?.type !== "address") return;
-    const span = n.end - object.start;
+    // Over the whole member, as `token-rewrite.ts#balanceSplices` does: a parenthesized receiver's
+    // `(` and `)` lie outside `object`, between it and the member's own bounds.
+    const span = n.end - n.start;
     inserts.push(
-      { at: object.start, span, text: "ctx.balance(" },
+      { at: n.start, span, text: "ctx.balance(", cut: object.start - n.start },
       { at: object.end, span, text: ")", cut: n.end - object.end },
     );
   });
