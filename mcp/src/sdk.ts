@@ -75,6 +75,14 @@ export { PotStore } from "../../sdk/dist/cli/pot-store.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
+export {
+  cancelCommand,
+  parseUint256,
+  refuseSignInput,
+  signCommand,
+  SIGNED_COOKS_ARE_EVM,
+  type SignInput,
+} from "../../sdk/dist/cli/sign.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,
@@ -100,7 +108,12 @@ export {
   sendPlan,
   sendSvmPlan,
 } from "../../sdk/dist/cli/wallet-send.js";
-export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
+export {
+  noPolicyNote,
+  PolicyRefusal,
+  readPolicy,
+  type SendGuard,
+} from "../../sdk/dist/cli/policy.js";
 export {
   generatedPasswordFile,
   generatePasswordFile,

@@ -68,6 +68,10 @@ async function exercise(
     tools.map((tool) => tool.name),
     toolsOf(local),
   );
+  // A signed cook is built on every transport; only a server with wallets signs one.
+  const names = tools.map((tool) => tool.name);
+  assert.ok(names.includes("sauce_signed_cook"));
+  assert.equal(names.includes("sauce_sign"), local.wallets === true);
   const compiled = structured(
     await client.callTool({ name: "sauce_compile", arguments: { source: PROGRAM, chain: "base" } }),
   );

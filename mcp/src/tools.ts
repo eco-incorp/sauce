@@ -18,6 +18,7 @@ import { createHash } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { formatUnits, type Address, type Hex } from "viem";
+import type { PrivateKeyAccount } from "viem/accounts";
 import * as z from "zod";
 
 import type { Endpoints } from "./config.js";
@@ -31,6 +32,7 @@ import {
   actionsProgram,
   addressDefinesOf,
   assumedBalances,
+  cancelCommand,
   CANONICAL_CHAINS,
   type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
@@ -70,6 +72,7 @@ import {
   parseSalt,
   parseV4Key,
   parseVia,
+  parseUint256,
   parseWei,
   plannedTransactions,
   poolsCommand,
@@ -86,10 +89,14 @@ import {
   type ProgramInput,
   readPoolAt,
   reclaimCommand,
+  refuseSignInput,
   TABLES_PER_RUN,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
+  signCommand,
+  SIGNED_COOKS_ARE_EVM,
+  type SignInput,
   simulateCommand,
   supportedChainNames,
   svmAssumedBalances,
@@ -328,6 +335,107 @@ const COOK = {
     ),
   rpcUrl: RPC_URL,
 };
+
+/** What a signed cook's owner signs beside its program (`sauce sign`'s flags), and `cancel`. */
+const SIGNED_COOK = {
+  value: integer
+    .optional()
+    .describe(
+      "What the submitter sends with the cook, in wei, signed exactly: the Pot refuses any other " +
+        "amount. Default 0: the Pot pays the Kitchen's fee itself, from its balance.",
+    ),
+  maxExecutionFee: integer
+    .optional()
+    .describe(
+      "The most of the Kitchen's fee the Pot pays for this cook, in wei, signed. Default: the fee " +
+        "read from the chain now (which needs an endpoint: rpcUrl or the server's).",
+    ),
+  nonce: integer
+    .optional()
+    .describe(
+      "The nonce the cook runs once under. Default: random, so two outstanding signatures never " +
+        "collide; nonces the owner allocates densely cost the submitter less gas.",
+    ),
+  deadline: integer
+    .optional()
+    .describe("The last unix second the cook may be submitted, inclusive. Or within, not both."),
+  within: integer
+    .optional()
+    .describe(
+      "How many seconds from now (the chain's latest block, else this server's clock) the cook " +
+        "may be submitted. Default 3600.",
+    ),
+  submitter: z
+    .string()
+    .max(64)
+    .optional()
+    .describe("The only account that may submit the cook, a 0x address. Default: anyone."),
+  cancel: z
+    .array(integer)
+    .min(1)
+    .max(LIMITS.entries)
+    .optional()
+    .describe(
+      "Instead of a program: nonces to cancel, so no signature for them ever runs. One " +
+        "invalidateNonces per nonce word, on the Pot, from its owner.",
+    ),
+};
+
+/** The owner's signature of a signed cook, made elsewhere: `sauce_signed_cook`'s alone. */
+const SIGNATURE = z
+  .string()
+  .min(4)
+  .max(LIMITS.hex)
+  .optional()
+  .describe(
+    "The owner's signature of typedData, made elsewhere, as 0x hex: 65 bytes r‖s‖v, or what a " +
+      "contract wallet's isValidSignature takes. Checked against the Pot's owner (needs owner, or " +
+      "an endpoint to read it), then `cook` is built.",
+  );
+
+/** What a signed cook's result holds: the typed data and the cook, or a cancellation. */
+export const SIGNED_COOK_OUTPUT = {
+  chainId: z.number(),
+  pot: z.string(),
+  owner: z.string(),
+  engine: z.string(),
+  program: z.string(),
+  value: z.string(),
+  maxExecutionFee: z.string(),
+  nonce: z.string(),
+  deadline: z.string(),
+  submitter: z.string(),
+  typedData: z.looseObject({}),
+  digest: z.string(),
+  signature: z.string(),
+  cook: z.looseObject({ to: z.string(), data: z.string(), value: z.string() }),
+  deployPot: z.looseObject({ to: z.string(), data: z.string(), value: z.string() }),
+  nonces: z.array(z.string()),
+  transactions: z.array(z.looseObject({ what: z.string() })),
+  from: z.string(),
+  sent: z.array(z.looseObject({ hash: z.string(), status: z.string() })),
+};
+
+/**
+ * A signed cook's inputs: `source` optional on either transport (a cancellation has no program),
+ * and over stdio (`local`) `path` instead. Typed with `path` either way, as `sourceInputs` is.
+ */
+export function signedCookInputs(local: boolean) {
+  return {
+    ...PROGRAM,
+    ...((local
+      ? { source: PROGRAM.source.optional(), path: PATH.optional() }
+      : { source: PROGRAM.source.optional() }) as {
+      source: z.ZodOptional<typeof PROGRAM.source>;
+      path: z.ZodOptional<typeof PATH>;
+    }),
+    ...POT,
+    pot: z.string().max(64).optional().describe("Or the Pot itself, by its 0x address."),
+    args: ARGS,
+    ...SIGNED_COOK,
+    rpcUrl: RPC_URL,
+  };
+}
 
 const TOKEN_AMOUNTS = z
   .array(z.string().min(3).max(200))
@@ -712,6 +820,99 @@ async function cookTransaction(
   );
 }
 
+/** A signed cook's call, as `sauce_signed_cook` and `sauce_sign` take it. */
+export interface SignedCookArgs extends Omit<ProgramArgs, "source"> {
+  readonly source?: string | undefined;
+  readonly path?: string | undefined;
+  readonly owner?: string | undefined;
+  readonly salt?: string | undefined;
+  readonly saltHex?: string | undefined;
+  readonly pot?: string | undefined;
+  readonly args?: readonly unknown[] | undefined;
+  readonly value?: string | number | undefined;
+  readonly maxExecutionFee?: string | number | undefined;
+  readonly nonce?: string | number | undefined;
+  readonly deadline?: string | number | undefined;
+  readonly within?: string | number | undefined;
+  readonly submitter?: string | undefined;
+  readonly signature?: string | undefined;
+  readonly cancel?: readonly (string | number)[] | undefined;
+  readonly rpcUrl?: string | undefined;
+}
+
+/**
+ * `sauce sign` for a call: the typed data of the cook it names and, given the owner's signature (or
+ * signed by `signer`, `sauce_sign`'s wallet), the cook anyone submits; with `cancel`, the owner's
+ * `invalidateNonces`, sent when `signer` signs. The wallet is unlocked only once the call is past
+ * the release's gate and what refuses it before any read.
+ */
+export async function signedCookCall(
+  args: SignedCookArgs,
+  local: boolean,
+  reach: Reach,
+  signer?: { readonly address: Address; readonly unlock: () => Promise<PrivateKeyAccount> },
+): Promise<ToolOutput> {
+  const named = { pot: args.pot, owner: args.owner, salt: args.salt, saltHex: args.saltHex };
+  if (args.cancel !== undefined) {
+    const signing = (
+      [
+        ...["source", "path", "file", "modules", "defines", "target", "args", "value"],
+        ...["maxExecutionFee", "nonce", "deadline", "within", "submitter", "signature"],
+      ] as const
+    ).find((name) => args[name] !== undefined);
+    if (signing !== undefined)
+      throw new UsageError(`${signing} signs a cook, and cancel signs none`);
+    if (args.chain === undefined) throw new UsageError("missing chain: the chain the Pot is on");
+    const chain = parseChain(String(args.chain), "chain");
+    if (chain.kind !== "evm") throw new UsageError(SIGNED_COOKS_ARE_EVM);
+    requireSupported("cancelling signed cooks", [chain]);
+    const target = potTarget(named, signer?.address);
+    const nonces = args.cancel.map((nonce) => parseUint256("cancel", integerText(nonce, "cancel")));
+    const account = await signer?.unlock();
+    const rpcUrl =
+      account === undefined
+        ? await reach.endpoint(chain, args.rpcUrl)
+        : await reach.require(chain, args.rpcUrl, "Sending the cancellation");
+
+    return fromCommand(
+      await cancelCommand(
+        { chain, target, nonces, ...(rpcUrl === undefined ? {} : { rpcUrl }) },
+        account,
+      ),
+    );
+  }
+  const program = programFrom(args, local);
+  const chain = program.input.chain;
+  if (chain.kind !== "evm") throw new UsageError(SIGNED_COOKS_ARE_EVM);
+  requireSupported("signing a cook", [chain]);
+  const signed = Object.fromEntries(
+    (["maxExecutionFee", "nonce", "deadline", "within"] as const).flatMap((name) => {
+      const raw = args[name];
+
+      return raw === undefined ? [] : [[name, parseUint256(name, integerText(raw, name))]];
+    }),
+  ) as Pick<SignInput, "maxExecutionFee" | "nonce" | "deadline" | "within">;
+  const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
+  const input: SignInput = {
+    ...program.input,
+    target: potTarget(named, signer?.address),
+    ...argsOf(args),
+    ...signed,
+    ...(args.value === undefined
+      ? {}
+      : { value: parseWei("value", integerText(args.value, "value")) }),
+    ...(args.submitter === undefined
+      ? {}
+      : { submitter: parseAddress("submitter", args.submitter) }),
+    ...(args.signature === undefined ? {} : { signature: hexArg(args.signature, "signature") }),
+    ...(rpcUrl === undefined ? {} : { rpcUrl }),
+  };
+  // Before the wallet is unlocked.
+  refuseSignInput(input, signer !== undefined);
+
+  return fromCommand(await signCommand(input, program.files, await signer?.unlock()));
+}
+
 /** `sauce compile --json`: the command's own report, its defines among it. */
 async function compiled(program: {
   readonly input: CompileInput;
@@ -990,6 +1191,7 @@ export const TOOL_NAMES = [
   "sauce_compile",
   "sauce_actions",
   "sauce_tx",
+  "sauce_signed_cook",
   "sauce_pot",
   "sauce_reclaim",
   "sauce_simulate",
@@ -1918,6 +2120,37 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ],
       };
     },
+  );
+
+  tool(
+    "sauce_signed_cook",
+    {
+      title: "Build a signed cook: what a Pot's owner signs for anyone to submit",
+      description:
+        "A Private Pot's owner can sign a cook that another account submits, with the Pot's own " +
+        "cookSigned: a relayer, a keeper, a solver, or anyone (submitter left out). This " +
+        "compiles the program with its args, as sauce_tx does, and returns `typedData`, the " +
+        "EIP-712 data the owner signs (eth_signTypedData_v4; any wallet's signTypedData): Cook " +
+        "{ engine, program, value, maxExecutionFee, nonce, deadline, submitter } under the " +
+        "Pot's domain, for this chain alone, every field signed, and `digest`. Given the owner's " +
+        "`signature`, it checks it is theirs (a contract wallet's through ERC-1271, with an " +
+        "endpoint) and returns `cook`, { chainId, to: the Pot, data: cookSigned(…), value }, " +
+        "which the submitter sends with exactly `value` (wei, hex) and pays gas for, nothing " +
+        "else: the Pot pays the Kitchen's fee itself, from its balance. value defaults to 0, " +
+        "maxExecutionFee to the fee read now, nonce to a random one, the deadline to now plus " +
+        "within (3600 seconds), submitter to anyone. With an endpoint it reads the Pot: one with " +
+        "no code that owner (and salt) name still signs, and `deployPot`, Kitchen.deployPot, " +
+        "comes with it for any account to send first; a Pot minted before signed cooks, a " +
+        "Shared Pot or a contract that is not a Pot is refused. `notes` say who may submit it " +
+        "and until when, the fee, and how to cancel it. With `cancel` (nonces) instead of a " +
+        "program it returns the owner's invalidateNonces, one per nonce word, so those " +
+        "signatures never run. EVM chains only. " +
+        `${UNSIGNED} ${SUPPORTED_ONLY}`,
+      input: { ...signedCookInputs(local), signature: SIGNATURE },
+      output: refusable(SIGNED_COOK_OUTPUT),
+      annotations: READS_CHAIN,
+    },
+    (args, reach) => signedCookCall(args, local, reach),
   );
 
   tool(

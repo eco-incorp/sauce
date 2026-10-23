@@ -10,7 +10,8 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { decodeFunctionData, getAddress, type Hex } from "viem";
+import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import {
   v12EngineAddress,
@@ -18,7 +19,7 @@ import {
   v12SvmKitchenProgramId,
 } from "../../sdk/dist/deployments/index.js";
 import { potSalt, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
+import { signedCookTypedData, v12PotAbi } from "../../sdk/dist/evm/engine.js";
 import {
   SETTLE_REJECTIONS,
   SETTLE_VECTORS,
@@ -118,6 +119,7 @@ describe("the sauce command's flags as the tools' inputs", () => {
       ["simulate"],
       ["run"],
       ["tx"],
+      ["sign"],
       ["send"],
       ["reclaim"],
       ["pot"],
@@ -1133,6 +1135,170 @@ describe("sauce_tx", () => {
       await mcp.call("sauce_tx", { source: PAY, chain: "base", value: 0, args: [RECIPIENT, 1] }),
     );
     assert.match(potless, /give owner \(.*to simulate, any address will do\) or pot/);
+  });
+});
+
+describe("sauce_signed_cook", () => {
+  // A throwaway owner, signing here as a wallet elsewhere would.
+  const owner = privateKeyToAccount(generatePrivateKey());
+  const fields = {
+    chain: "base",
+    owner: owner.address,
+    maxExecutionFee: "1234",
+    nonce: "7",
+    deadline: "2000000000",
+    submitter: RECIPIENT,
+  };
+  const ARGS = [RECIPIENT, "1000000"];
+
+  /** `sauce sign` of the same program with the same fields, offline: what the tool must return. */
+  async function command(...extra: string[]): Promise<Record<string, unknown>> {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-mcp-sign-"));
+    try {
+      const file = join(dir, "pay.sauce.ts");
+      writeFileSync(file, PAY);
+      let stdout = "";
+      const io = { ...nodeIo(), stdout: (text: string) => void (stdout += text), stderr: () => {} };
+      const code = await runCli(
+        [
+          ...["sign", file, "--chain", "base", "--owner", owner.address, "--offline", "--json"],
+          ...["--max-fee", "1234", "--nonce", "7", "--deadline", "2000000000"],
+          ...["--submitter", RECIPIENT, ...extra, "--args", ...ARGS],
+        ],
+        io,
+      );
+      assert.equal(code, 0);
+
+      return JSON.parse(stdout) as Record<string, unknown>;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("returns what sauce sign prints: the typed data, and from the owner's signature the cook", async () => {
+    const typed = ok(await mcp.call("sauce_signed_cook", { source: PAY, ...fields, args: ARGS }));
+    const expected = await command();
+    for (const key of [
+      ...["chainId", "pot", "owner", "engine", "program", "value", "maxExecutionFee"],
+      ...["nonce", "deadline", "submitter", "typedData", "digest"],
+    ]) {
+      assert.deepEqual(typed[key], expected[key], key);
+    }
+    assert.equal(typed.cook, undefined);
+    assert.ok(
+      (typed.notes as string[]).some((note) => note.includes(`Only ${getAddress(RECIPIENT)} may`)),
+    );
+
+    // The owner signs elsewhere; the tool checks it and builds the cook the command builds.
+    const execution = {
+      chainId: 8453,
+      pot: typed.pot as Address,
+      engine: typed.engine as Address,
+      program: typed.program as Hex,
+      maxExecutionFee: 1234n,
+      nonce: 7n,
+      deadline: 2_000_000_000n,
+      submitter: getAddress(RECIPIENT),
+    };
+    const signature = await owner.signTypedData(signedCookTypedData(execution));
+    const built = ok(
+      await mcp.call("sauce_signed_cook", { source: PAY, ...fields, args: ARGS, signature }),
+    );
+    assert.deepEqual(built.cook, (await command("--signature", signature)).cook);
+    const cook = built.cook as { to: Address; data: Hex; value: string };
+    assert.deepEqual([cook.to, cook.value], [execution.pot, "0x0"]);
+    const call = decodeFunctionData({ abi: v12PotAbi, data: cook.data });
+    assert.equal(call.functionName, "cookSigned");
+    assert.deepEqual(call.args, [
+      execution.engine,
+      execution.program,
+      1234n,
+      7n,
+      2_000_000_000n,
+      execution.submitter,
+      signature,
+    ]);
+
+    // Anyone else's signature is refused, and no cook is built.
+    const stranger = await privateKeyToAccount(generatePrivateKey()).signTypedData(
+      signedCookTypedData(execution),
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_signed_cook", {
+          source: PAY,
+          ...fields,
+          args: ARGS,
+          signature: stranger,
+        }),
+      ),
+      new RegExp(`the signature given is not ${owner.address}'s over this cook`),
+    );
+  });
+
+  it("returns the owner's invalidateNonces for cancel, one per nonce word, as one batch", async () => {
+    const out = ok(
+      await mcp.call("sauce_signed_cook", { chain: "base", owner: OWNER, cancel: ["1", 2, "300"] }),
+    ) as {
+      pot: Address;
+      transactions: Array<{ to: Address; data: Hex; value: string }>;
+      sendCalls?: { calls: unknown[] };
+    };
+    assert.equal(out.pot, v12PredictPot(OWNER));
+    assert.deepEqual(
+      out.transactions.map((tx) => {
+        assert.deepEqual([tx.to, tx.value], [out.pot, "0x0"]);
+
+        return decodeFunctionData({ abi: v12PotAbi, data: tx.data }).args;
+      }),
+      [
+        [0n, 6n],
+        [1n, 1n << 44n],
+      ],
+    );
+    assert.equal(out.sendCalls?.calls.length, 2);
+    assert.match(
+      failed(
+        await mcp.call("sauce_signed_cook", {
+          chain: "base",
+          owner: OWNER,
+          cancel: ["1"],
+          source: PAY,
+        }),
+      ),
+      /source signs a cook, and cancel signs none/,
+    );
+  });
+
+  it("refuses what it cannot sign: no fee ceiling and no endpoint, Solana, both deadlines", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_signed_cook", {
+          source: PAY,
+          chain: "base",
+          owner: OWNER,
+          args: ARGS,
+        }),
+      ),
+      /missing maxExecutionFee <wei>: the most of the Kitchen's fee the Pot pays/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_signed_cook", {
+          source: SVM_PAY,
+          chain: "solana",
+          owner: SOLANA_OWNER,
+          maxExecutionFee: "1",
+        }),
+      ),
+      /signed cooks are the EVM Pot's \(Pot\.cookSigned\)/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_signed_cook", { source: PAY, ...fields, args: ARGS, within: 60 }),
+      ),
+      /give within or deadline, not both/,
+    );
   });
 });
 
