@@ -345,7 +345,7 @@ export async function requireCookContracts(
     if (!contract.deployed) {
       throw new CliError(
         `the released ${name} ${contract.address} is not deployed on ${chain.slug}: ` +
-          "this SDK's cook cannot run there. No transaction was sent",
+          "this SDK's cook cannot run there",
       );
     }
   }

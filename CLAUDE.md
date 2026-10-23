@@ -804,9 +804,9 @@ where the data says it; the slot forms write `minOut` at least 1. Every exact-in
 instructions (`test/svm/router-accounts-exact-in.test.ts`), and in `router-data.ts`'s `EXACT_IN`
 table (`routerSvmDataTemplate`: `prefix ‖ u64le(amountIn) ‖ suffix`, divisor 1, its options the
 account order's `aToB`, `minOut` and the venue's own fields), held byte for byte to every vector
-(`test/svm/router-data-exact-in.test.ts`). Two compiler facts shape it, both
-measured on compiler 2.5.0 and the released engine: a function other than `main` cannot build an
-account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
+(`test/svm/router-data-exact-in.test.ts`). Two historical measurements shaped these forms,
+on compiler 2.5.0 and the then-released engine (not remeasured for compiler 2.6.0 / v12-svm 1.4.0):
+a function other than `main` cannot build an account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
 Array(n)` holds only numbers, a function cannot return accounts, and account arrays cannot be
 concatenated), so a venue whose swap takes more accounts has only its `Cpi` and `Data` forms; and
 each account read out of an array argument and passed to `svm.call` costs ~1.4k compute units more
@@ -857,8 +857,8 @@ t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** ar
 token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
 `import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
 write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.3.0 through 2.5.0, accepts `import { a as b }` and emits
-byte-identical code), which is what keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
+is ALIASED (the pinned compiler, 2.6.0, accepts `import { a as b }`), which keeps a program's own
+`transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
 and a program declaring one is refused by name. It is an explicit import, not the ambient module,
 because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
 method on `Token(...)`) stays on the typed `IERC20.at(...)` binding — a `uint256` is always there.

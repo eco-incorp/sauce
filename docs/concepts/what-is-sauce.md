@@ -57,7 +57,7 @@ the cook, unsigned
      │  simulate              run it on a copy of the chain: free, nothing is sent
      │  sign and send         your wallet signs
      ▼
-your Pot                      checks the cook is from its owner, pays the Kitchen,
+your Pot                      checks the owner's authorization, pays the Kitchen,
                               and has the engine run the program: every step, or none
 ```
 
