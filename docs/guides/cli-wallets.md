@@ -119,27 +119,38 @@ could loosen it.
   table) counts, as does the fee. A wallet the transaction gives to another program, or makes a
   durable nonce account another key commands, counts all it holds. On Arc, whose native coin is
   also the `USDC` token (one balance), what leaves as either counts against `native` and the
-  `USDC` limit both.
+  `USDC` limit both, and native USDC sent and a USDC allowance left are held to the `USDC` limit
+  together.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
   leaves the wallet or its Pot. A token the policy does not name is not limited.
 - An allowance the transaction leaves another key counts as sent, at the whole allowance, per
   transaction and in the day's total, with what the transaction moves of the token: the spender
   needs no later signature. An approval above what a token's limit leaves room for is refused,
   naming it. A revoke, an allowance spent within the transaction (it counts as what it moved), and a
-  spender that is the wallet or its Pot are none. Where a limited token's decimals cannot be read,
+  spender that is the wallet or its Pot (on Solana, a Pot the transaction cooks on) are none. Each
+  allowance is its own permission, whoever gives it and on which contract it stands: changing one
+  leaves the others as they are, and they add up. Where a limited token's decimals cannot be read,
   an approval of it is refused, as a transfer of it is.
-- On an EVM chain, that is the allowance each spender keeps once the transaction is done: an
-  ERC-20's, and one granted through Permit2 (its `approve`, or a `permit` the wallet signed), which
-  lets the spender take the token wherever the wallet approved Permit2 for it. The ERC-20 approval
-  of Permit2 itself moves nothing without a later signature and is not counted. A transaction counts
-  the wallet's Pot as its own only where it is: a Pot the plan deploys for the wallet, or one whose
-  owner the chain shows to be the wallet. A cook's calldata sent anywhere else is a payment like
-  any other.
+- On an EVM chain, that is the allowance each spender keeps once the transaction is done, read from
+  the chain as the transaction leaves it (where that read fails, the last allowance the transaction
+  reported counts): an ERC-20's, and one granted through Permit2 (its `approve`, or a `permit` the
+  wallet signed), which lets the spender take the token wherever the wallet approved Permit2 for
+  it; Permit2's `lockdown` clears one. The ERC-20 approval of Permit2 itself is not counted: what
+  Permit2 lets a spender take is, when it is granted. A transaction counts the wallet's Pot as its
+  own only where it is: a Pot the plan deploys for the wallet, or one whose owner the chain shows to
+  be the wallet. A cook's calldata sent anywhere else is a payment like any other, and a cook on a
+  Pot whose owner the endpoint cannot read is refused where a native or token limit needs it.
+- On an EVM chain an allowance is seen where the transaction reports it (a token's `Approval`, or
+  Permit2's own events): a token that sets one with no event is not seen. A Permit2 grant counts at
+  its amount, whatever its expiration, and only the registry's Permit2 is read.
 - On Solana that is a delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token
   account of the wallet or the Pot. An allowance raised and partly spent in the same transaction
-  counts what it spent and what is left, also where it ends where it began. Wrapped SOL a delegate
-  outside may move counts against `native` too, synced into its amount or not (anyone may sync it),
-  and SOL the wallet sends into such an account is not its own once it is there.
+  counts what it spent and what is left, also where it ends where it began, whether the wallet's
+  own instruction raises it or a call a program makes (a Pot's cook, inside a token `Batch` too).
+  A token program's call the endpoint reports so that an approval in it cannot be read refuses
+  where a native or token limit applies. Wrapped SOL a delegate outside may move counts against
+  `native` too, synced into its amount or not (anyone may sync it), and SOL the wallet sends into
+  such an account is not its own once it is there.
 - On Solana what the wallet spends as a delegate from a token account it does not own counts as
   sent, against `native` too for wrapped SOL: from a Pot's account with no cook in the transaction,
   and from any other key's.
@@ -170,7 +181,8 @@ transfers out of the wallet and its Pot are counted. A Solana transaction is sim
 accounts it writes reported. Every simulation of a transaction a wallet signs is unsigned, a swap's
 stops in `sauce run` included: the wallet signs only a transaction its policy has let go, so an
 endpoint never holds one it could send itself. (`sauce send` sends what was signed elsewhere, and
-simulates it as it was signed; it unlocks no wallet.) On Solana a transaction is held to the policy
+simulates it first: on Solana the signed transaction itself, on an EVM chain its call, with the
+signed gas checked against it; it unlocks no wallet.) On Solana a transaction is held to the policy
 of every wallet it needs a signature from that the command has unlocked, whichever of them pays its
 fee, and a planned transaction another tool built must be paid for by the wallet that sends it. A
 limit that cannot be measured on the endpoint (one without `eth_simulateV1`, for one) refuses the
@@ -183,6 +195,13 @@ simulation when you sign cannot measure what it will move. A wallet whose policy
 any `tokens` limit therefore refuses to sign one, naming the limit. `chains` and `to` still apply:
 the cook's chain, and its Pot as the address. Sign from a wallet without those limits, or from the
 key elsewhere ([Signed cooks](signed-cooks.md#wallet-spending-limits)).
+
+### Know what a policy does to `--fund`
+
+Before `--fund` signs a pull, or sends an approval or a transfer to the Pot, a wallet's policy holds
+it to `chains` and to `to` (the Pot as written), and the Pot must be the wallet's own
+([Run a program](cli-run.md)). What the funding lets the Pot take, only a cook on the wallet's own
+Pot spends, and that cook is measured and held to the `native` and `tokens` limits when it is sent.
 
 ## Passwords without a prompt
 

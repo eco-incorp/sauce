@@ -133,9 +133,9 @@ decimals cannot be read refuses only the limits that name it. A transaction is h
 of every wallet unlocked to sign it, whichever pays its fee, and a planned one sent from a wallet
 must be paid by it. Every simulation of a transaction a wallet signs is unsigned, a swap's stops
 in `sauce run` included, and the wallet signs only a transaction its policy has let go.
-`sauce_wallet_send` checks a whole plan against the policy before sending any, counting the rent
-of the wallet's own token account and of a Pot a cook creates as the wallet's, as the send's own
-measurement does. `sauce simulate` and `sauce run` on Solana count a token account's change for its
+`sauce_wallet_send` checks a Solana plan's setup (its rent and fees) against the policy before
+sending any of it, counting the rent of the wallet's own token account and of a Pot a cook creates
+as the wallet's, as the send's own measurement does. `sauce simulate` and `sauce run` on Solana count a token account's change for its
 owner before the transaction, and name the new owner of one handed over (`ownerAfter` in
 `tokenChanges`). The SDK adds `prepareExecuteTransaction`, which compiles a transaction now and
 signs it when asked. See [wallets](guides/cli-wallets.md).
@@ -143,16 +143,25 @@ signs it when asked. See [wallets](guides/cli-wallets.md).
 Wallet policies close further ways past their limits, on both kinds of chain. On an EVM chain an
 allowance another key keeps (an ERC-20's, or a standing allowance granted through Permit2, whose
 events were not read before) now counts as sent with the transaction's transfers of the token, per
-transaction and in the day's total, where an approval was only checked alone and never reserved;
-an approval of a token whose decimals cannot be read is refused where it is limited, and the
-wallet's own Pot is no longer a spender that counts. A cook's calldata makes a contract the
-wallet's Pot only where the chain shows it is: sent to any other address, or to another owner's
-Pot, what the wallet pays counts. On Solana, wrapped SOL is measured by its lamports, synced into
-its amount or not, and what the wallet spends of it as a delegate counts against `native` too; an
-allowance raised and spent back to where it began counts what it spent and what is left; a
-balance whose mint is made again with other decimals counts at the same raw amount; and a
-transaction that burns a balance of such a mint is measured rather than refused for an error. See
-[wallets](guides/cli-wallets.md).
+transaction and in the day's total, where an approval was only checked alone and never reserved.
+It counts as the chain holds it once the transaction has run, read in the same simulation, so one
+spent or locked down in the transaction counts what is left; each allowance is its own permission,
+on the token or through Permit2 and the wallet's or its Pot's, and they add up. An approval of a
+token whose decimals cannot be read is refused where it is limited, and the wallet's own Pot is no
+longer a spender that counts. A cook's calldata makes a contract the wallet's Pot only where the
+chain shows it is: sent to any other address, or to another owner's Pot, what the wallet pays
+counts, and where the endpoint cannot read the Pot's owner a native or token limit refuses the
+cook. On Arc, native USDC sent and a USDC allowance left are held to the `USDC` limit together.
+`run --fund` and `simulate --fund` sign and send only for the wallet's own Pot, after its policy's
+`chains` and `to`: a contract that names the wallet as its owner is no longer enough. On Solana,
+wrapped SOL is measured by its lamports, synced into its amount or not, and what the wallet spends
+of it as a delegate counts against `native` too; an allowance raised and spent back to where it
+began counts what it spent and what is left, whether the wallet's own instruction or a call a
+program makes (a Pot's cook, reported parsed as a node reports it, or in a token `Batch`) raised
+it, and a token program's call reported so that an approval in it cannot be read refuses where a
+native or token limit applies; a balance whose mint is made again with other decimals counts at the
+same raw amount; and a transaction that burns a balance of such a mint is measured rather than
+refused for an error. See [wallets](guides/cli-wallets.md).
 
 Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
 deployments instead of reporting success on an address with no code. Offline unsigned builders

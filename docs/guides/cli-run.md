@@ -285,6 +285,12 @@ names the Pot as its spender; cooking on a private Pot requires the owner's auth
 (including for a signed cook on new EVM Pots). A revert inside Permit2 is reported by name: `SignatureExpired(…)` for a passed deadline,
 `InvalidNonce()` for a nonce already spent.
 
+`--fund` signs and sends only for your own Pot: one the chain shows is yours (its owner you, its
+address the one a known release's Kitchen gives your owner and salt), or the one the run deploys
+first. Any other `--pot`, or one whose owner the endpoint cannot read, is refused before anything
+is signed or sent, by `sauce run` and by `sauce simulate` alike. A wallet with a policy holds the
+funding to its `chains` and its `to` (the Pot) first ([Wallets](cli-wallets.md)).
+
 ### Simulate a funded run
 
 `sauce simulate` takes `--fund` and `--sweep` too. Given the owner's wallet, it asks for the
