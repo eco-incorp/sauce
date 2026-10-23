@@ -787,5 +787,60 @@ describe(
       const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
       assert.notDeepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
     });
+
+    it("keeps a wallet's cursor usable when its policy refuses the cook it built: nothing went out", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-capped", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const mint = setMint(harness, randomAddress(), 6);
+      const pot = (
+        await derivePotPda(address(v12SvmKitchenProgramId()), wallet, new Uint8Array(32))
+      ).address;
+      const source = setTokenAccount(harness, randomAddress(), mint, pot, 1_000n);
+      const dest = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: SWEEP,
+          chain: "solana",
+          owner: wallet,
+          defines: { MINT: bytesToHex(new Uint8Array(getAddressCodec().encode(mint))) },
+          accounts: { tokenProgram: TOKEN_PROGRAM, source, dest, authority: "pot" },
+          args: ["400"],
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { cursor: string };
+      // The plan with its cook not handed out yet: the wallet builds it, and its policy refuses it.
+      const { cook: _, ...unsent } = decodeCursor(planned.cursor);
+      const policy = join(dir, "wallets", "sol-capped.policy.json");
+      writeFileSync(policy, JSON.stringify({ tokens: { [mint]: { perTransaction: "0.0003" } } }), {
+        mode: 0o600,
+      });
+      const before = shim.sent.length;
+      const refused = await wallets.call("sauce_wallet_send", {
+        wallet: "sol-capped",
+        transaction: { cursor: encodeCursor(unsent) },
+        rpcUrl: SOLANA_URL,
+      });
+      assert.equal(shim.sent.length, before);
+      assert.match(failed(refused), /tokens\..*\.perTransaction is 0\.0003/);
+
+      // Room for it: the same cursor cooks at once, with no handed-out cook to wait out.
+      writeFileSync(policy, JSON.stringify({ tokens: { [mint]: { perTransaction: "1" } } }), {
+        mode: 0o600,
+      });
+      const sent = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol-capped",
+          transaction: { cursor: encodeCursor(unsent) },
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean; sent: Array<{ what: string; status: string; returned?: unknown }> };
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      assert.equal(sent.sent.at(-1)!.returned, "400");
+      assert.equal(tokenAmount(harness, dest), 400n);
+      rmSync(policy);
+    });
   },
 );

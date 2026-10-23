@@ -522,13 +522,15 @@ async function confirmed(
  * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`). Given
  * `sign`, `transaction` is the one to measure, its fee payer's signature slot empty, and `sign` makes
  * the one sent: only once the policy lets it go, so nothing the wallet signed ever reaches an
- * endpoint for a send its policy refuses.
+ * endpoint for a send its policy refuses. `sending` is told just before it goes out, once it is
+ * held to the policy and signed: from then on it can land.
  */
 export async function sendAndConfirm(
   rpc: Rpc,
   url: string,
   transaction: Transaction,
   sign?: () => Promise<Transaction>,
+  sending?: () => void,
 ): Promise<SvmSent> {
   const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
     .staticAccounts[0];
@@ -541,6 +543,7 @@ export async function sendAndConfirm(
     throw error;
   }
   const signature = getSignatureFromTransaction(signed);
+  sending?.();
   try {
     await ask(url, "sending the transaction", () =>
       rpc
@@ -2667,8 +2670,9 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
 /**
  * Builds a plan's transaction for `ctx.signer` on a fresh blockhash, rehearses it unsigned and
  * sends it, failing with the logs if the rehearsal fails, signed only once the wallet's policy lets
- * it go: how this process sends every step. `sending` is told the blockhash's lifetime once the
- * rehearsal passed, before it goes out: from then on, it can land.
+ * it go: how this process sends every step. `sending` is told the blockhash's lifetime just before
+ * it goes out, once the rehearsal and the policy passed and it is signed: from then on, it can land.
+ * A transaction the policy refuses never could, and `sending` never hears of it.
  */
 export async function sendPlanTx(
   ctx: StepContext,
@@ -2680,13 +2684,21 @@ export async function sendPlanTx(
   );
   const prepared = buildPlanTx(tx, ctx, latestBlockhash);
   await rehearsed(ctx.rpc, ctx.url, prepared.transaction, tx.what, true);
-  sending?.({
-    blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    slot: BigInt(context.slot),
-  });
 
-  return sendAndConfirm(ctx.rpc, ctx.url, prepared.transaction, prepared.sign);
+  return sendAndConfirm(
+    ctx.rpc,
+    ctx.url,
+    prepared.transaction,
+    prepared.sign,
+    sending === undefined
+      ? undefined
+      : () =>
+          sending({
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            slot: BigInt(context.slot),
+          }),
+  );
 }
 
 /**
