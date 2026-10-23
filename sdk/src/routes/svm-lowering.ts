@@ -275,8 +275,46 @@ export function parentsOf(program: AstNode): Map<AstNode, AstNode> {
 }
 
 /**
+ * Whether the identifier `n` is a name a declaration binds: a variable's, a function's or a
+ * parameter's, a `catch` clause's, or one in a destructuring pattern of any of them (`[pot, bump]`,
+ * `{ pot }`, `...pot`). A default's value (`[a = pot]`) and a computed key are read.
+ */
+function isBinder(n: AstNode, parents: ReadonlyMap<AstNode, AstNode>): boolean {
+  let at = n;
+  for (let parent = parents.get(at); parent !== undefined; parent = parents.get(at)) {
+    switch (parent.type) {
+      case "ArrayPattern":
+      case "ObjectPattern":
+        break;
+      case "RestElement":
+        if (parent.argument !== at) return false;
+        break;
+      case "AssignmentPattern":
+        if (parent.left !== at) return false;
+        break;
+      case "Property":
+        if (parent.value !== at || parents.get(parent)?.type !== "ObjectPattern") return false;
+        break;
+      case "VariableDeclarator":
+        return parent.id === at;
+      case "CatchClause":
+        return parent.param === at;
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+      case "ArrowFunctionExpression":
+        return parent.id === at || (parent.params as AstNode[] | undefined)?.includes(at) === true;
+      default:
+        return false;
+    }
+    at = parent;
+  }
+
+  return false;
+}
+
+/**
  * Every place the program reads `name`: an identifier in value position, not a member's name, a
- * record's key, a label, or a name a declaration binds.
+ * record's key, a label, an import's or export's name, or a name a declaration binds (`isBinder`).
  */
 function readsOf(
   program: AstNode,
@@ -286,7 +324,7 @@ function readsOf(
   const reads: AstNode[] = [];
   walk(program, (n) => {
     if (n.type !== "Identifier" || nameOf(n) !== name) return;
-    const parent = parents.get(n) as (AstNode & Record<string, unknown>) | undefined;
+    const parent = parents.get(n);
     if (parent === undefined) return;
     const computed = parent.computed === true;
     switch (parent.type) {
@@ -308,16 +346,8 @@ function readsOf(
       case "ImportNamespaceSpecifier":
       case "ExportSpecifier":
         return;
-      case "VariableDeclarator":
-        if (parent.id === n) return;
-        break;
-      case "FunctionDeclaration":
-      case "FunctionExpression":
-      case "ArrowFunctionExpression":
-        if (parent.id === n || (parent.params as AstNode[] | undefined)?.includes(n)) return;
-        break;
     }
-    reads.push(n);
+    if (!isBinder(n, parents)) reads.push(n);
   });
 
   return reads;
