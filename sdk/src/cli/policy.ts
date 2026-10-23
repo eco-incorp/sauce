@@ -117,6 +117,7 @@ import {
   tokenTransition,
   unsignedWire,
   writableAccounts,
+  type TokenAccountState,
 } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
@@ -859,6 +860,9 @@ export async function measureSvm(
   // against `native` as well.
   const spentAsDelegate = new Map<SvmAddress, bigint>();
   let lamportsAsDelegate = 0n;
+  /** What a token account holds: wrapped SOL by its lamports above its rent, synced or not. */
+  const worth = (token: TokenAccountState): bigint =>
+    token.isNative ? (token.wrapped ?? token.amount) : token.amount;
   tracked.forEach((account, index) => {
     const delegateBefore = permanentDelegateOf(before[index] ?? null);
     const delegateAfter = permanentDelegateOf(after[index] ?? null);
@@ -882,7 +886,9 @@ export async function measureSvm(
     ) {
       const left = was === undefined ? undefined : is;
       const allowanceLeft = left?.delegate === old.delegate ? left.delegatedAmount : 0n;
-      const drop = old.amount - (left?.amount ?? 0n);
+      // Wrapped SOL by its lamports: the delegate may sync what was sent in unsynced and spend it,
+      // leaving the amount where it began.
+      const drop = worth(old) - (left === undefined ? 0n : worth(left));
       const fell = old.delegatedAmount - allowanceLeft;
       const spent = drop < fell ? drop : fell;
       if (spent > 0n) spentAsDelegate.set(old.mint, (spentAsDelegate.get(old.mint) ?? 0n) + spent);
@@ -959,7 +965,8 @@ export async function measureSvm(
   // so wrapping SOL into the wallet's own account and unwrapping it move nothing, and closing,
   // handing over or withdrawing from such an account to another key is a send. Only what the set
   // holds alone counts as held: wrapped SOL an outside delegate may move is that key's to take,
-  // so it is not, whether it stood delegated before or the transaction wrapped it in after. An
+  // so it is not, whether it stood delegated before or the transaction wrapped it in after, synced
+  // into its amount or not (anyone may sync it, with no signature). An
   // account of a layout this does not read, that names one of those keys and loses lamports, may
   // have been the wallet's to command: what it loses counts as sent unless it arrives in the set.
   // The wallet or a Pot that the transaction gives to another program (System's Assign) leaves
@@ -990,9 +997,9 @@ export async function measureSvm(
     const token = tokenAccount(state);
     const outside =
       token?.isNative === true && token.delegate !== undefined && !ours.has(token.delegate)
-        ? token.delegatedAmount < token.amount
+        ? token.delegatedAmount < worth(token)
           ? token.delegatedAmount
-          : token.amount
+          : worth(token)
         : 0n;
 
     return state.lamports - outside;

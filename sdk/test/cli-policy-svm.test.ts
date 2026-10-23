@@ -2017,6 +2017,60 @@ describeSvm(
       expectOk(sendSigned(harness, within));
     });
 
+    it("counts SOL sent into the wallet's wrapped SOL account unsynced, where an outside key stands to move it", async () => {
+      // As below, but with no SyncNative: the account's amount stays 0 while its lamports grow by
+      // 2 SOL. SyncNative needs no signature, so the outside delegate syncs it and takes them.
+      const { account } = wrappedSol(wallet, 0n, {
+        delegate: randomAddress(),
+        allowance: 2_000_000_000n,
+      });
+      const transaction = await signed([
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [{ address: wallet, role: AccountRole.WRITABLE_SIGNER }, writable(account)],
+          data: Uint8Array.of(...u32(2), ...u64(2_000_000_000n)),
+        },
+      ]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(2_000_000_000n + FEE),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
+    it("counts the unsynced wrapped SOL the wallet syncs and pays as the delegate of a Pot's account against native", async () => {
+      // The Pot's wrapped SOL account holds 2 SOL in lamports its amount does not show yet, all of
+      // it delegated to the wallet. The wallet syncs it and pays it out: its amount ends where it
+      // began, at 0, and 2 SOL left.
+      const { account: source } = wrappedSol(harness.pot, 0n, {
+        delegate: wallet,
+        allowance: 2_000_000_000n,
+      });
+      const present = harness.svm.getAccount(source);
+      if (!present.exists) throw new Error("the wrapped SOL account was not made");
+      harness.svm.setAccount({ ...present, lamports: lamports(present.lamports + 2_000_000_000n) });
+      const { account: dest } = wrappedSol(randomAddress(), 0n);
+      const transaction = await signed([
+        { programAddress: TOKEN_PROGRAM, accounts: [writable(source)], data: Uint8Array.of(17) },
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(source), writable(dest), signer(wallet)],
+          data: Uint8Array.of(3, ...u64(2_000_000_000n)),
+        },
+      ]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(2_000_000_000n + FEE),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+      expectOk(sendSigned(harness, transaction));
+      expect(String(tokenAmount(harness, dest))).toBe("2000000000");
+    });
+
     it("counts SOL the wallet wraps into its own account where an outside key stands to move it", async () => {
       // An empty wrapped SOL account of the wallet's, with a standing allowance of 2 SOL to a key
       // outside: whatever the wallet wraps into it is that key's to take.

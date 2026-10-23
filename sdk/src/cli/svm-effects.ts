@@ -103,6 +103,12 @@ export interface TokenAccountState {
   readonly closeAuthority?: Address;
   /** Wrapped SOL: its amount is lamports it holds above its rent. */
   readonly isNative: boolean;
+  /**
+   * Wrapped SOL: the lamports it holds above the rent it keeps, whether its amount shows them yet or
+   * not. Lamports sent in with no `SyncNative` are not in the amount until anyone (no signature
+   * needed) syncs it.
+   */
+  readonly wrapped?: bigint;
 }
 
 /**
@@ -293,6 +299,8 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
     view.getUint32(at, true) === 1 ? decoder.decode(data.subarray(at + 4, at + 36)) : undefined;
   const delegate = key(DELEGATE_AT);
   const closeAuthority = key(CLOSE_AUTHORITY_AT);
+  const isNative = view.getUint32(IS_NATIVE_AT, true) === 1;
+  const reserve = isNative ? view.getBigUint64(IS_NATIVE_AT + 4, true) : 0n;
 
   return {
     program: account.owner,
@@ -302,7 +310,8 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
     ...(delegate === undefined ? {} : { delegate }),
     delegatedAmount: view.getBigUint64(DELEGATED_AMOUNT_AT, true),
     ...(closeAuthority === undefined ? {} : { closeAuthority }),
-    isNative: view.getUint32(IS_NATIVE_AT, true) === 1,
+    isNative,
+    ...(isNative ? { wrapped: account.lamports > reserve ? account.lamports - reserve : 0n } : {}),
   };
 }
 
