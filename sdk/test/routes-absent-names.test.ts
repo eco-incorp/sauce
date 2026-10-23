@@ -9,7 +9,12 @@
 import { requireChain } from "../src/chains/canonical.js";
 import { getDescriptor } from "../src/descriptors/query.js";
 import { checkNames, withoutDead } from "../src/routes/absent-names.js";
-import { chainNames } from "../src/routes/chain-module.js";
+import {
+  CHAIN_MODULE_ROOT,
+  chainNames,
+  INSTALLED_CHAIN_MODULE,
+} from "../src/routes/chain-module.js";
+import { compileWithRs, makeResolve } from "../src/routes/rs-compile.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 /** Compiles `body` (a `main` body) for `chain`, returning the bytecode as hex. */
@@ -364,19 +369,88 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     ).not.toThrow();
   });
 
-  it("the chain's names are never imported under a name of the program's own", () => {
+  it("the chain's names are never imported under a name of the program's own, however spelled", () => {
     for (const [specifier, name] of [
       ["@sauce/chain", "USDT"],
+      ["@sauce/chain/", "USDT"],
       ["@sauce/chain-optimism", "Optimism"],
       ["/@eco-incorp/sauce/chain/base.js", "USDT"],
+      ["./@eco-incorp/sauce/./chain/base.js", "USDT"],
+      ["./x/../@eco-incorp//sauce/chain/base.js", "USDT"],
     ] as const) {
-      expect(
-        refusal(
-          "base",
-          `import { ${name} as missing } from "${specifier}";\nfunction main(): Address { return missing; }`,
-        ),
-      ).toMatch(/is the chain's names, which a program reads with no import/);
+      const message = refusal(
+        "base",
+        `import { ${name} as missing } from "${specifier}";\nfunction main(): Address { return missing; }`,
+      );
+      expect(message).toMatch(/is the chain's names, which a program reads with no import/);
+      expect(message).toMatch(/--> main\.js:1:1/);
     }
+    // A module the caller serves, which reaches them by a path relative to itself.
+    const served = (modules: Record<string, string>) => (path: string) => {
+      const text = modules[path.replace(/^\.\//, "")];
+      return text === undefined ? undefined : new TextEncoder().encode(text);
+    };
+    const message = refusal(
+      "base",
+      `import { owed } from "./lib/helper.js";\nfunction main(): Address { return owed(); }`,
+      {
+        resolve: served({
+          "lib/helper.js": `import { USDT as missing } from "../@eco-incorp/sauce/chain/base.js";\nexport function owed(): Address { return missing; }`,
+        }),
+      },
+    );
+    expect(message).toMatch(/is the chain's names, which a program reads with no import/);
+    expect(message).toMatch(/--> \.\/lib\/helper\.js:1:1/);
+  });
+
+  it("nor reached by an import whose name says nothing: the caller's resolvePackage may not map one there", () => {
+    for (const path of ["/@eco-incorp/sauce/chain/base.js", "./@eco-incorp/sauce/chain/base.js"]) {
+      const message = refusal(
+        "base",
+        `import { USDT as missing } from "names";\nfunction main(): Address { return missing; }`,
+        { resolvePackage: (specifier: string) => (specifier === "names" ? path : undefined) },
+      );
+      expect(message).toMatch(/`names` resolves to `[^`]+`, the chain's names/);
+      expect(message).toMatch(/--> main\.js:1:1/);
+    }
+    // The names themselves, and a chain's by its name, are the compile's as ever.
+    expect(() =>
+      hex("base", "function main(): Address { return UniswapV3.Factory; }"),
+    ).not.toThrow();
+    expect(
+      hex("optimism", "function main(): Address { return Base.UniswapV3.Factory; }"),
+    ).toContain(
+      getDescriptor("uniswap-v3", "Factory")!.perChainAddress[8453]!.slice(2).toLowerCase(),
+    );
+  });
+
+  it("the compile serves them to its own installation alone, whatever the check reads", () => {
+    // Installed under a name of this process's own, which no program can write: `@sauce/chain`
+    // finds nothing, even compiled with no check.
+    expect(INSTALLED_CHAIN_MODULE).toMatch(/^@sauce\/chain-[0-9a-f]{32}$/);
+    const names = chainNames(requireChain("base"));
+    const installed = {
+      target: "v12" as const,
+      ambient: [INSTALLED_CHAIN_MODULE],
+      packages: { [INSTALLED_CHAIN_MODULE]: `${CHAIN_MODULE_ROOT}/${names.path}` },
+    };
+    expect(() =>
+      compileWithRs({ ...installed, source: "function main(): bool { return USDT == 0; }" }),
+    ).not.toThrow();
+    expect(() =>
+      compileWithRs({
+        ...installed,
+        source: `import { USDT as missing } from "@sauce/chain";\nfunction main(): Address { return missing; }`,
+      }),
+    ).toThrow();
+    // A path into them, relative to any module, finds nothing and is refused.
+    const refused: Error[] = [];
+    const resolve = makeResolve("", undefined, undefined, (error) => refused.push(error));
+    expect(resolve(`.${CHAIN_MODULE_ROOT}/${names.path}`)).toBeUndefined();
+    expect(refused.map((error) => error.message)).toEqual([
+      expect.stringMatching(/is the chain's names, which a program reads with no import/),
+    ]);
+    expect(resolve(`${CHAIN_MODULE_ROOT}/${names.path}`)).toBeDefined();
   });
 
   it("require(X != 0) on a chain without X fails whatever the program does, and is refused", () => {

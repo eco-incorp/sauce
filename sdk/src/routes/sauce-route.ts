@@ -46,7 +46,7 @@ import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { checkNames, withoutDead } from "./absent-names.js";
 import {
-  CHAIN_MODULE,
+  INSTALLED_CHAIN_MODULE,
   CHAIN_MODULE_ROOT,
   chainKeyModule,
   chainKeyModulePath,
@@ -684,9 +684,10 @@ function compileForChain(
     }
   }
 
-  // The chain's names: a module the compiler is handed with the program (`@sauce/chain`), and one
-  // per chain the program names by key (`@sauce/chain-base`). A module the caller serves is read
-  // by the same check as the entry, since the names reach every module.
+  // The chain's names: a module the compiler is handed with the program, and one per chain the
+  // program names by key (`Base`), each under a specifier only this process knows, so no import
+  // reaches them (`chain-module.ts#INSTALLED_CHAIN_MODULE`, `rs-compile.ts`). A module the caller
+  // serves is read by the same check as the entry, since the names reach every module.
   const keys = new Map(named.chainKeys.map((on) => [on.id, on]));
   const compileOnce = (): RsCompileResult =>
     compileWithRs({
@@ -699,11 +700,11 @@ function compileForChain(
       contracts,
       ambient: [
         ...(options.ambient ?? []),
-        CHAIN_MODULE,
+        INSTALLED_CHAIN_MODULE,
         ...[...keys.values()].map(chainKeyModule),
       ],
       packages: {
-        [CHAIN_MODULE]: `${CHAIN_MODULE_ROOT}/${names.path}`,
+        [INSTALLED_CHAIN_MODULE]: `${CHAIN_MODULE_ROOT}/${names.path}`,
         ...Object.fromEntries(
           [...keys.values()].map((on) => [
             chainKeyModule(on),

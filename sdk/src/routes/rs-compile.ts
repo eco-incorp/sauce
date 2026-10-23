@@ -18,8 +18,11 @@ import type {
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
+import type { AstNode } from "./ast-walk.js";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
-import { chainModuleText } from "./chain-module.js";
+import { chainModuleText, inChainModuleRoot, namesRefusal } from "./chain-module.js";
+import { parseSauce } from "./parse.js";
+import { locatedError } from "./unknown-global.js";
 import { compile } from "../wasm-compiler.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
@@ -109,11 +112,16 @@ function toInlineContracts(
  * `resolve`: `@sauce/token` resolves to the SDK's copy whatever the caller supplies. Every other
  * path reaches the caller's `resolve` before the SDK's embedded ABIs, so a caller can serve its own
  * `./artifacts/IERC20.json`. `check` reads each SauceScript module the caller serves.
+ *
+ * The chain's names are served to their installed specifier alone: a relative import that reaches
+ * one (`./@eco-incorp/sauce/./chain/base.js`, from any module) is told to `refuse` and finds
+ * nothing, since a name the chain lacks imported under the program's own name escapes the check.
  */
 export function makeResolve(
   source: string,
   own: ResolveModule | undefined,
   check?: (path: string, bytes: Uint8Array) => void,
+  refuse?: (error: Error) => void,
 ): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
   const utf8 = new TextEncoder();
@@ -122,6 +130,10 @@ export function makeResolve(
     if (path === ENTRY) return entryBytes;
     const names = chainModuleText(path);
     if (names !== undefined) return utf8.encode(names);
+    if (path.startsWith("./") && inChainModuleRoot(path)) {
+      refuse?.(new Error(`compileSauceRoute: ${namesRefusal(`\`${path}\` is`)}`));
+      return undefined;
+    }
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
       if (bytes !== undefined && bytes !== null) {
@@ -134,17 +146,39 @@ export function makeResolve(
   };
 }
 
-/** Bare specifiers: the compile's own (the chain's names), the SDK's standard library, then the
- *  caller's `resolvePackage`. */
+/**
+ * Bare specifiers: the compile's own (the chain's names), the SDK's standard library, then the
+ * caller's `resolvePackage`, which may map none to the chain's names: such a mapping is told to
+ * `refuse`, with the specifier and its importer, and declined.
+ */
 export function makeResolvePackage(
   own: ResolvePackage | undefined,
   packages?: Readonly<Record<string, string>>,
+  refuse?: (specifier: string, importer: string, path: string) => void,
 ): ResolvePackage {
-  return (specifier, importer) =>
-    packages?.[specifier] ??
-    resolveSdkPackage(specifier) ??
-    own?.(specifier, importer) ??
-    undefined;
+  return (specifier, importer) => {
+    const sdk = packages?.[specifier] ?? resolveSdkPackage(specifier);
+    if (sdk !== undefined) return sdk;
+    const path = own?.(specifier, importer);
+    if (path === undefined || path === null) return undefined;
+    if (inChainModuleRoot(path)) {
+      refuse?.(specifier, importer, path);
+      return undefined;
+    }
+
+    return path;
+  };
+}
+
+/** The import or re-export of `program` from `specifier`. */
+function importOf(program: AstNode, specifier: string): AstNode | undefined {
+  return (program.body as AstNode[]).find(
+    (statement) =>
+      (statement.type === "ImportDeclaration" ||
+        statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportAllDeclaration") &&
+      (statement.source as { value?: unknown } | null)?.value === specifier,
+  );
 }
 
 /**
@@ -251,24 +285,44 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   // A module refused while the compiler resolves it is refused once the compile ends, whatever the
   // compiler made of it: an error thrown inside `resolve` would be the compiler's to word.
   let refused: unknown;
-  const check =
-    input.checkModule === undefined
-      ? undefined
-      : (path: string, bytes: Uint8Array): void => {
-          if (refused !== undefined) return;
-          try {
-            input.checkModule!(path, new TextDecoder().decode(bytes));
-          } catch (error) {
-            refused = error;
-          }
-        };
+  const refuse = (error: unknown): void => {
+    refused ??= error;
+  };
+  // The text of each module the program and the caller wrote, by the path an importer is reported
+  // by, to locate an import refused while it resolves.
+  const texts = new Map<string, string>([[`./${ENTRY}`, input.source]]);
+  const check = (path: string, bytes: Uint8Array): void => {
+    const text = new TextDecoder().decode(bytes);
+    texts.set(path, text);
+    if (refused !== undefined || input.checkModule === undefined) return;
+    try {
+      input.checkModule(path, text);
+    } catch (error) {
+      refuse(error);
+    }
+  };
+  const refusePackage = (specifier: string, importer: string, path: string): void => {
+    const message = `compileSauceRoute: ${namesRefusal(`\`${specifier}\` resolves to \`${path}\`,`)}`;
+    const text = texts.get(importer);
+    let at: AstNode | undefined;
+    try {
+      at = text === undefined ? undefined : importOf(parseSauce(text), specifier);
+    } catch {
+      at = undefined;
+    }
+    refuse(
+      at === undefined
+        ? new Error(message)
+        : locatedError(text!, importer === `./${ENTRY}` ? ENTRY : importer, at, message),
+    );
+  };
   let result: RsResult;
   try {
     result = compile({
       target: mapTarget(input.target),
       entry: ENTRY,
-      resolve: makeResolve(input.source, input.resolve, check),
-      resolvePackage: makeResolvePackage(input.resolvePackage, input.packages),
+      resolve: makeResolve(input.source, input.resolve, check, refuse),
+      resolvePackage: makeResolvePackage(input.resolvePackage, input.packages, refusePackage),
       inlineContracts: toInlineContracts(input.contracts),
       ambient: input.ambient,
       defines: toRsDefines(input.defines, input.baseDefines),

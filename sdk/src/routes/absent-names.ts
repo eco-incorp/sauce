@@ -39,7 +39,8 @@ import { CANONICAL_CHAINS, requireChain } from "../chains/canonical.js";
 import { isTypeDeclaration, type AstNode } from "./ast-walk.js";
 import {
   CHAIN_MODULE,
-  CHAIN_MODULE_ROOT,
+  inChainModuleRoot,
+  namesRefusal,
   chainNamespaces,
   chainOfKey,
   type ChainNames,
@@ -674,18 +675,17 @@ export function checkNames(
         return;
       case "ImportDeclaration": {
         // The chain's names are read with no import. Imported under a name of the program's own,
-        // a name the chain lacks would be the program's, and no check would see its uses.
+        // a name the chain lacks would be the program's, and no check would see its uses. The
+        // compile never serves them to an import (`rs-compile.ts`); this names the import, as the
+        // compiler would read it: a package with a trailing slash, a path with `.`, `..`, `//`.
         const specifier = String(prop<Node>(node, "source")["value"] ?? "");
+        const bare = /^[./]/.test(specifier) ? specifier : specifier.replace(/\/$/, "");
         if (
-          specifier === CHAIN_MODULE ||
-          specifier.startsWith(`${CHAIN_MODULE}-`) ||
-          specifier.includes(CHAIN_MODULE_ROOT.slice(1))
+          bare === CHAIN_MODULE ||
+          bare.startsWith(`${CHAIN_MODULE}-`) ||
+          inChainModuleRoot(specifier)
         ) {
-          fail(
-            node,
-            `\`${specifier}\` is the chain's names, which a program reads with no import: write ` +
-              "`UniswapV3.Factory`, `USDC`, `Base.UniswapV3.Factory` as they are.",
-          );
+          fail(node, namesRefusal(`\`${specifier}\` is`));
         }
         return;
       }

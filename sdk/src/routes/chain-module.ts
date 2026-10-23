@@ -51,13 +51,45 @@ import {
 import { pascalOfSlug } from "./builder.js";
 import { resolveTokenMap } from "./token-registry.js";
 
-/** The ambient module of the chain a program is compiled for. */
+/** The chain's names as a program would import them, and as a refusal names them: no import of
+ *  them resolves (`absent-names.ts`, `rs-compile.ts`). */
 export const CHAIN_MODULE = "@sauce/chain";
-/** The ambient module of a chain a program names (`Base.UniswapV3.Factory`): `@sauce/chain-base`. */
-export const chainKeyModule = (chain: CanonicalChain): string => `${CHAIN_MODULE}-${chain.slug}`;
+
+/**
+ * The specifier the SDK hands the compiler the names under: `@sauce/chain` and a suffix drawn once
+ * per process, which no program, and no module it imports, can write. Imported, a name the chain
+ * lacks would be the program's own, and the check would see none of its uses.
+ */
+export const INSTALLED_CHAIN_MODULE = `${CHAIN_MODULE}-${Array.from(
+  globalThis.crypto.getRandomValues(new Uint8Array(16)),
+  (byte) => byte.toString(16).padStart(2, "0"),
+).join("")}`;
+/** The names of a chain a program names (`Base.UniswapV3.Factory`), installed the same way. */
+export const chainKeyModule = (chain: CanonicalChain): string =>
+  `${INSTALLED_CHAIN_MODULE}-${chain.slug}`;
 
 /** Where every module and the ABIs they import are served: a name, never read from a disk. */
 export const CHAIN_MODULE_ROOT = "/@eco-incorp/sauce/chain";
+
+/**
+ * Whether `path`, its `.` and `..` segments and repeated slashes resolved (a leading `..` taken as
+ * the root), lies under {@link CHAIN_MODULE_ROOT}: `./@eco-incorp/sauce/./chain/base.js` does.
+ */
+export function inChainModuleRoot(path: string): boolean {
+  const parts: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+
+  return `/${parts.join("/")}`.startsWith(`${CHAIN_MODULE_ROOT}/`);
+}
+
+/** Why an import that reaches the chain's names is refused, after what reaches them. */
+export const namesRefusal = (reaches: string): string =>
+  `${reaches} the chain's names, which a program reads with no import: write ` +
+  "`UniswapV3.Factory`, `USDC`, `Base.UniswapV3.Factory` as they are.";
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
@@ -146,11 +178,14 @@ const MODULE_TEXT = new Map<string, string>();
 
 /**
  * The bytes of `path` when it names a chain module or an ABI one imports, as the compiler asks for
- * them: the absolute path a specifier resolved to, or a relative import joined to its importer's
- * directory and prefixed with `.` (`./@eco-incorp/sauce/chain/abi/…`).
+ * them. A module only by the absolute path its installed specifier resolves to, which no import
+ * can write (the compiler refuses an absolute import); an ABI also by a relative import joined to
+ * its importer's directory and prefixed with `.` (`./@eco-incorp/sauce/chain/abi/…`), the way a
+ * module imports it.
  */
 export function chainModuleText(path: string): string | undefined {
-  const absolute = path.startsWith(`.${CHAIN_MODULE_ROOT}/`) ? path.slice(1) : path;
+  const relative = path.startsWith(`.${CHAIN_MODULE_ROOT}/`);
+  const absolute = relative ? path.slice(1) : path;
   if (!absolute.startsWith(`${CHAIN_MODULE_ROOT}/`)) return undefined;
   const parts: string[] = [];
   for (const part of absolute.slice(CHAIN_MODULE_ROOT.length + 1).split("/")) {
@@ -162,7 +197,7 @@ export function chainModuleText(path: string): string | undefined {
   }
   const key = parts.join("/");
 
-  return ABI_TEXT.get(key) ?? MODULE_TEXT.get(key);
+  return ABI_TEXT.get(key) ?? (relative ? undefined : MODULE_TEXT.get(key));
 }
 
 const widened = (descriptor: ContractDescriptor): string =>
