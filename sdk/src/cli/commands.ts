@@ -448,8 +448,9 @@ export function priceLimitNotes(
   if (args !== undefined) {
     params.forEach((param, index) => {
       const raw = args.values[index];
-      if (!LIMIT_NAME.test(param.name) || param.type.trim() !== "Uint256") return;
-      if (typeof raw === "string" && /^(\d+|0x[0-9a-fA-F]+)n?$/.test(raw)) {
+      const type = param.type.trim();
+      if (!LIMIT_NAME.test(param.name) || (type !== "Uint256" && type !== "Int256")) return;
+      if (typeof raw === "string" && /^(-?\d+|0x[0-9a-fA-F]+)n?$/.test(raw)) {
         values.push([param.name, BigInt(raw.replace(/n$/, ""))]);
       } else if (typeof raw === "number" && Number.isSafeInteger(raw)) {
         values.push([param.name, BigInt(raw)]);

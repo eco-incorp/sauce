@@ -184,6 +184,7 @@ Base(() => {
   require();
   log();
   ctx.origin();
+  Int256.fromBits(1n, 2n);
 }, OPTIONS);
 `;
 
@@ -273,7 +274,7 @@ describe("a typed closure using SauceScript's builtins", () => {
   });
 
   it("still rejects a wrong call shape", () => {
-    expect(diagnostics("WRONG_SHAPES")).toHaveLength(7);
+    expect(diagnostics("WRONG_SHAPES")).toHaveLength(8);
   });
 
   it.each(Object.keys(ENVIRONMENTS) as Environment[])("typechecks with %s", (environment) => {

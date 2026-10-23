@@ -52,7 +52,10 @@ result is a `CompiledSauceProgram`:
 
 - `args` binds `main`'s arguments into the program as constants, in order. Each must be one word: an
   integer (`Uint256` or `Int256`), an address or a `bool`. The program then takes none at run time. Leave it out to
-  compile `main` taking its arguments as it runs.
+  compile `main` taking its arguments as it runs. A bound `Uint256`, `Address` or `bool` holds its
+  value in the whole program, so it may not share its name with anything the module declares or
+  with one of the chain's values (a token symbol, `chainId`, a protocol address): that is refused.
+  A bound `Int256` is a local of `main`.
 - `stops`, on Solana, names the venue swaps at a price to hold to a stop, each by its derivation
   from `stoppable`.
 

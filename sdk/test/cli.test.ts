@@ -9,7 +9,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { getAddressEncoder, address as svmAddress, type Address } from "@solana/kit";
+import {
+  getAddressEncoder,
+  getProgramDerivedAddress,
+  address as svmAddress,
+  type Address,
+} from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   bytesToHex,
@@ -51,6 +56,7 @@ import {
   parseAccounts,
   resolveTokenAccounts,
   svmArgumentKey,
+  svmKeyArguments,
   svmPayload,
 } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
@@ -484,6 +490,22 @@ describe("sauce compile", () => {
     );
     expect(units.code).toBe(0);
     expect(units.stderr).toBe("");
+  });
+
+  it("names an Int256 price limit as it names a Uint256 one, a negative one included", async () => {
+    const program = file(
+      "signed-limit.sauce.ts",
+      "function main(sqrtPriceLimitX96: Int256) {\n  require(sqrtPriceLimitX96 != 7);\n}\n",
+    );
+    const noted = async (value: string): Promise<string> => {
+      const run = await sauce("compile", program, "--chain", "base", "--args", value);
+      expect(run.code).toBe(0);
+
+      return run.stderr;
+    };
+    expect(await noted("4295128739")).toContain("sqrtPriceLimitX96 = 4295128739 is MIN_SQRT_RATIO");
+    expect(await noted("-5")).toContain("sqrtPriceLimitX96 = -5 is below MIN_SQRT_RATIO");
+    expect(await noted("4295128740")).toBe("");
   });
 
   it("compiles for Solana, reporting the account manifest", async () => {
@@ -1675,6 +1697,33 @@ describe("sauce pot", () => {
     );
   });
 
+  it("derives a Solana seed from main's Int256 argument, and refuses a negative one by name", async () => {
+    const solana = requireChain("solana");
+    const owner = svmAddress("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    const pot = svmAddress("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T");
+    const program = compileSauceProgram(
+      "solana",
+      "function main(index: Int256): Int256 {\n  return index;\n}\n",
+    );
+    const seeded = (value: string) =>
+      resolveTokenAccounts(
+        parseAccounts([`slot=pda:${TOKEN_2022_PROGRAM_ID}:u64:@index`]),
+        owner,
+        pot,
+        solana,
+        "kitchen",
+        undefined,
+        svmKeyArguments(program, { from: "--args", values: [value] }),
+      );
+    const [expected] = await getProgramDerivedAddress({
+      programAddress: svmAddress(TOKEN_2022_PROGRAM_ID),
+      seeds: [Uint8Array.from([5, 0, 0, 0, 0, 0, 0, 0])],
+    });
+    expect((await seeded("5")).accounts).toEqual({ slot: expected });
+    // Never its two's-complement bytes: a u64 seed holds no sign.
+    await expect(seeded("-5")).rejects.toThrow("seed u64:-5 does not fit 8 bytes");
+  });
+
   it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {
     const owner = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
     const out = JSON.parse(
@@ -1768,6 +1817,18 @@ describe("flags in any order", () => {
     );
     expect(escaped.code).toBe(2);
     expect(escaped.stderr).toMatch(/--args: .*amount/);
+  });
+
+  it("takes a negative Int256 after --args with no --, as its help says", async () => {
+    const program = file("signed.sauce.ts", "function main(x: Int256): Int256 {\n  return x;\n}\n");
+    const run = await sauce(
+      ...["tx", program, "--chain", "base", "--owner", OWNER, "--value", "0"],
+      ...["--args", "-5"],
+    );
+    expect(run.code).toBe(0);
+    // The cook's data carries -5 as its two's-complement word.
+    expect(run.stdout).toContain(numberToHex(BigInt.asUintN(256, -5n), { size: 32 }).slice(2));
+    expect((await sauce("tx", "--help")).stdout).toMatch(/--args .*negative too \(-5\)/);
   });
 
   it("names a flag the command does not take, and why, instead of an unknown option", async () => {
