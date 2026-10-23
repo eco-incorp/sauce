@@ -57,7 +57,7 @@ node compile.ts
 
 ```text
 main takes: to: Address, amount: Uint256
-bytecode: 250 bytes
+bytecode: 223 bytes
 ```
 
 `routes.compileSauceProgram(chain, source)` is what `sauce compile` runs. It compiles the program
@@ -68,13 +68,24 @@ the package's version.
 ## 3. Build and simulate the cook
 
 A cook is one transaction from the Pot's owner to the Pot, carrying the program and `main`'s
-arguments. Save this as `cook.ts`:
+arguments. This live step requires the release pinned by your SDK to be deployed and active on
+Base: the engine and Router must have code, and the Kitchen must predict the same Pot as the SDK.
+The checks below refuse an incomplete rollout rather than treating a call to an empty address as
+a successful cook. Deterministic [release addresses](../reference/deployments.md) alone do not
+prove those prerequisites. For an offline run with the full released pair deployed locally, use
+the [testing kit](testing.md).
+
+Save this as `cook.ts`:
 
 ```ts
 import { readFileSync } from "node:fs";
 import { kitchenExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
-import { v12Pot } from "@eco-incorp/sauce/evm/engine";
+import {
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12RouterAddress,
+} from "@eco-incorp/sauce/deployments";
+import { v12KitchenAbi, v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, concatHex, createPublicClient, getAddress, hexToString, http } from "viem";
 import { base } from "viem/chains";
 
@@ -98,6 +109,24 @@ const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), payload);
 
 // 4. The cook's value is the Kitchen's fee, read from Base.
 const client = createPublicClient({ chain: base, transport: http() });
+const engine = getAddress(v12EngineAddress());
+const router = getAddress(v12RouterAddress());
+const [engineCode, routerCode] = await Promise.all([
+  client.getCode({ address: engine }),
+  client.getCode({ address: router }),
+]);
+const unavailable =
+  "The release pinned by this SDK is not active on Base; its deployment must be completed before this live example can run.";
+if (!engineCode || engineCode === "0x" || !routerCode || routerCode === "0x") {
+  throw new Error(unavailable);
+}
+const kitchenPot = await client.readContract({
+  address: getAddress(v12KitchenAddress()),
+  abi: v12KitchenAbi,
+  functionName: "predictPot",
+  args: [owner, salt],
+});
+if (kitchenPot.toLowerCase() !== pot.toLowerCase()) throw new Error(unavailable);
 const feeRead = kitchenExecutionFee();
 const answer = await client.call({ to: feeRead.to, data: feeRead.data });
 const fee = feeRead.decode(answer.data ?? "0x");
@@ -116,28 +145,29 @@ console.log("Cook:", cook.status, "using", cook.gasUsed.toString(), "gas");
 if (cook.status === "failure") console.log("Reason:", hexToString(cook.data));
 ```
 
-Run it to pay 1 USDC:
+After the deployment checks pass, run it to simulate paying 1 USDC. With an unfunded Pot, expect a
+failure such as the illustration below; the gas used depends on the active release and chain state:
 
 ```sh
 node cook.ts
 ```
 
 ```text
-Pot: 0x2032…641b
-Cook: failure using 70756 gas
+Pot: 0x6c91…D3Fe
+Cook: failure using <gas used> gas
 Reason: not enough USDC
 ```
 
-The owner's Pot holds no USDC, so the program's `require` stopped the cook, and its message came
-back as the reason. That is the same answer `sauce simulate` gives. Now ask it to pay nothing:
+In that unfunded-Pot case, the program's `require` stops the cook and returns its message as the
+reason, just as `sauce simulate` does. Once the same deployment checks pass, ask it to pay nothing:
 
 ```sh
 node cook.ts 0
 ```
 
 ```text
-Pot: 0x2032…641b
-Cook: success using 89085 gas
+Pot: 0x6c91…D3Fe
+Cook: success using <gas used> gas
 ```
 
 Your gas figures may differ. Step by step:
@@ -181,8 +211,8 @@ node chains.ts
 ```
 
 ```text
-base: 250 bytes, main takes to: Address, amount: Uint256
-ethereum: 250 bytes, main takes to: Address, amount: Uint256
+base: 223 bytes, main takes to: Address, amount: Uint256
+ethereum: 223 bytes, main takes to: Address, amount: Uint256
 solana: 695 bytes, main takes to: Address, amount: Uint256
 ```
 

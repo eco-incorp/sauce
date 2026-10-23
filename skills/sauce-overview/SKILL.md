@@ -69,8 +69,8 @@ bridge protocol (`sauce-protocols`).
    the user chose, return unspent input, and approve exactly what the next call spends.
 2. **A swap leg never strands input.** Exact input, a minimum output it `require`s, and what a
    price limit leaves unspent returned (`sauce-swaps`).
-3. **Every check is in the program.** A failed `require` reverts the whole transaction; that
-   atomicity is the safety mechanism.
+3. **Every check is in the program.** An uncaught failed `require` reverts the transaction. On EVM,
+   an atomic `try` rolls back its own work and may recover; catch only failures the user intends to tolerate.
 4. **No endpoint, key or password in a program or a committed file.** The package reads no
    environment variable but the one a `--password-env` flag names (`sauce-cli`).
 5. **Every address comes from the registry or the user**, never invented: write the name

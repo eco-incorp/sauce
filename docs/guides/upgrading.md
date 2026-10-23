@@ -134,6 +134,65 @@ The package pins one compiler and ships the engines that compiler pairs with
   an engine paired with another compiler, naming the one it needs
   ([Which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
 
+## Moving from compiler 2.5 to 2.6
+
+This SDK moves the complete pair: compiler **2.6.0**, EVM engine/Kitchen **1.3.0**,
+SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
+
+1. **Recompile every stored program and rebuild every transaction.** Inputs are ABI-v1 only.
+   Remove `compactArgs`, `--compact-args`, `entrySchema`, compact codec imports and `scalarWidth`
+   options. Use `routes.encodeEntryArguments` for SDK programs. A raw compile now supplies
+   `entryParams`; honor `indirect: true` for top-level fixed-size tuple parameters.
+2. **Migrate signed values.** Negative literals, `Math.signExtend` and ABI `intN` outputs are
+   `Int256`. Replace the removed `Math.sDiv`, `sMod`, `sShr`, `sLt`, `sGt`, `sLte`, `sGte` with
+   ordinary signed operators. Give signed helpers `: Int256` returns.
+   - `Uint256` and `Int256` are reserved type names: rename locals, parameters, constants,
+     imports and functions that used either name.
+   - Negative literals cannot initialize a `Uint256`: write `const delta: Int256 = -10`,
+     not `const delta: Uint256 = -10`. Change unsigned negation `-amount` to `-Int256(amount)`.
+   - At a signed ABI input, use signed values: for an `int256` argument write `-1`, not the
+     unsigned word `~0`. A two's-complement word such as `2 ** 256 - 10` is not signed `-10`;
+     write `-10` or, for an intentional runtime bit reinterpretation, `Int256.fromBits(word)`.
+     Raw compiler `args` is a separate word-based API ([Compiler API](../api/compiler.md#closure-entries-and-bound-arguments)).
+   - Containers must match their ABI integer kinds: `Int256[]` for `intN[]`, `Uint256[]` for
+     `uintN[]`, and matching signed/unsigned tuple fields. Converting a scalar does not convert
+     an entire container.
+   - `Int256(value)` and `Uint256(value)` are checked numeric conversions. Assigning a negative
+     `Int256` or `Math.signExtend` result to `Uint256` reverts; so does `Uint256(-1)`.
+     Use `.fromBits(value)` only when preserving the bit pattern rather than its numeric value.
+     Mixed arithmetic needs an explicit conversion. Narrow ABI inputs and read outputs are
+     range-checked; dirty/out-of-range words now fail.
+3. **Review discarded contract-call results.** A result nothing reads now skips all output decode
+   and validation, even in an unused variable. A successful empty/malformed reply or no-code target
+   can pass. Check `ctx.isContract` where required and keep checked SDK token writes. Reading any
+   part still decodes all declared outputs. An explicit `abi.decode` remains checked.
+4. **Choose recovery boundaries deliberately.** Multi-statement EVM `try` rolls back its whole
+   block before running `catch`; assignments roll back too, unlike JavaScript. A sole-call `try`
+   or `.catch` catches only that external call's failure, not successful-return decoding.
+   Error bytes may be empty/truncated (256-byte cap); validate before decoding them. SVM has no
+   catch support.
+5. **Keep old funds on their old pairing until you move them.** New EVM Pots have new addresses;
+   the new engine refuses old Pots. Use the earlier SDK/compiler/engine to manage an old Pot,
+   and review the destination before moving funds. An upgrade never migrates balances.
+   Signed cooks are new: only newly created Pots support the exposed `cookSigned` and
+   `invalidateNonces` ABI methods; old Pots do not acquire them. There is no high-level SDK
+   signed-cook helper. See [signed cooks](../concepts/kitchen-pot-cook.md#signed-cooks).
+   For Router comparisons use `v12RouterAddress()`; `v12RouterGeneration()` is removed.
+   The quote Router remains separate.
+6. **Rebuild Solana cooks with the new SDK.** The engine program id and Kitchen instruction
+   format changed. Do not replay serialized old cook/staged-cook instructions. High-level builders
+   keep the same call shape; they supply the release's required account derivations.
+
+The [language reference](../reference/saucescript.md) documents the new language forms, and the
+[compiler API](../api/compiler.md) covers closure entries, scalar argument binding,
+`entrySignature`, nested `programs` reports and diagnostic `code`.
+
+**Compiler 2.6 limitation:** statement-form `.catch()` on a bound method with narrow integer
+outputs, such as `uint128`, can be refused during compilation. For a method with one scalar
+output, use the value form and read its result: `const value = call.catch(() => { return 0; });`.
+Successful-return decoding remains outside that single-call catch. Use a general `try` block
+when recovery needs to cover a multi-step operation instead.
+
 ## Check settlement pins
 
 If your application verifies settlement programs, a compiler upgrade can change a program's bytes
@@ -143,6 +202,10 @@ SDK's pins rather than copying their values, and keep an older pin only for a ve
 decided to accept (`sauce verify --pin <hash:bytes>` on the command line).
 [Verifying settlement programs](verification.md#compiler-upgrades-and-historical-pins) lists the
 historical pins.
+
+Compiler 2.6 recompiles the bundled settlement program to 410 bytes with a new hash. The default
+validator accepts that new pin only. To keep accepting a 2.4/2.5 payload, add its 435-byte
+`{ hash, bytes }` record explicitly; do not weaken hash validation.
 
 ## Next
 

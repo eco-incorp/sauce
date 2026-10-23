@@ -40,13 +40,13 @@ function main(
       receiverDst: receiver,
       givePatchAuthoritySrc: ctx.msgSender(),
       orderAuthorityAddressDst: receiver,
-      allowedTakerDst: 0x00,
-      externalCall: 0x00,
-      allowedCancelBeneficiarySrc: 0x00,
+      allowedTakerDst: hex``,
+      externalCall: hex``,
+      allowedCancelBeneficiarySrc: hex``,
     },
-    0x00,
+    hex``,
     0,
-    0x00,
+    hex``,
   );
 }
 ```
@@ -59,9 +59,9 @@ function main(
 - `receiver`: Recipient address on destination chain (as bytes)
 - `givePatchAuthoritySrc`: Address allowed to increase give amount (set to `msg.sender`)
 - `orderAuthorityAddressDst`: Address that can cancel/modify order on destination (set to `receiver`)
-- `allowedTakerDst`: Restrict which market maker can fill (empty `0x00` = any taker)
+- `allowedTakerDst`: Restrict which market maker can fill (empty ` hex`` ` = any taker)
 - `externalCall`: Optional calldata to execute on destination after fill
-- `allowedCancelBeneficiarySrc`: Restrict who receives refund on cancellation (empty `0x00` = order creator)
+- `allowedCancelBeneficiarySrc`: Restrict who receives refund on cancellation (empty ` hex`` ` = order creator)
 - Requires ERC-20 approval to DlnSource
 
 ## Deployments and ABI

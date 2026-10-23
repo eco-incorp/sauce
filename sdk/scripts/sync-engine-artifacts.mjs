@@ -160,7 +160,7 @@ const V12_ENGINE_WIRE_MAINNET = pin("v12-svm", "engine-wire-mainnet.json");
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = pin("kitchen-evm", "abis.json");
-// Generation 4 only swaps; generation 3 remains the token-free quote service.
+// The current execution Router only swaps; generation 3 remains the token-free quote service.
 const QUOTE_ROUTER_ABIS = {
   tag: `kitchen-evm-v${RELEASE_TABLE.quoteRouter.version}`,
   asset: "abis.json",
@@ -811,10 +811,8 @@ try {
 const DEPLOYMENTS_DEST = "V12Deployments.json";
 const tagVersion = (tag) => tag.replace(/^.*-v(?=\d)/, "");
 
-// The Router's GENERATION, read off its CREATE3 salt: a fixed-address salt is
-// `deployer ‖ 00 ‖ "Router" NUL-padded to 8 bytes ‖ 00 00 G` (v12's `evm-create3-salt.mjs --fixed`),
-// so G is the salt's last byte. Recorded because a swap on a Synthra/UnitFlow pool needs generation 3
-// and a Pot on an older Router cannot pay one; the SDK names the generation, never a Router address.
+// Only the historical quote service has a fixed-address generation. The current execution Router
+// is content-addressed and keeps its release metadata verbatim rather than inventing a generation.
 const ROUTER_SALT = /^0x[0-9a-f]{40}00526f7574657200000000(?<generation>[0-9a-f]{2})$/;
 const routerGeneration = (router) => {
   const match = ROUTER_SALT.exec(String(router?.rawSalt).toLowerCase());
@@ -866,10 +864,7 @@ try {
       deployer: kitchenEvm.deployer,
       contracts: {
         engine: evm.contracts.engine,
-        router: {
-          ...kitchenEvm.contracts.router,
-          generation: routerGeneration(kitchenEvm.contracts.router),
-        },
+        router: kitchenEvm.contracts.router,
         quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) },
         kitchen: kitchenEvm.contracts.kitchen,
         kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,

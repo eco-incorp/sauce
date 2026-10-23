@@ -53,7 +53,7 @@ How many tools a server has depends on how it runs:
 | `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                                   |
 | `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and, each direction, the distributed swap's `priceLimit` and `maxAvgPrice` (input per output) and a single swap's `minAvgPrice` (output per input); with `slippageBps`, the `limits` ([Prices and pools](#prices-and-pools))               |
 | `sauce_pools`          | `sauce pools`          | A pair's price-limit pools on the chain at one `block`, deepest first, each with its price both ways and its depth; `empty`, the pools with no liquidity ([Prices and pools](#prices-and-pools))                                                                                                               |
-| `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`                                                                                            |
+| `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding` (`abi-v1`), defines and their provenance, called `contracts`, `compiler`, `engine`, SVM `manifest`; with `args`, the `payload`                                                                                                                              |
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                                |
 | `sauce_tx`             | `sauce tx`             | The unsigned cook on the Pot, with who signs it and the Kitchen's fee; while the Pot has no code, its deployment first. On Solana a base64 transaction, or the first step of a plan ([What it returns](#what-sauce_tx-returns))                                                                                |
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                 |
@@ -104,7 +104,6 @@ it, as the server's instructions also list:
 | `--keep-tables`           | `keepTables`      |
 | `--keep`                  | `keep`            |
 | `--via`                   | `via`             |
-| `--compact-args`          | `compactArgs`     |
 | `--chain`                 | `chain`           |
 | `--target`                | `target`          |
 | `--rpc-url`               | `rpcUrl`          |
@@ -140,7 +139,6 @@ The compiling tools take the program as text:
 | `file`            | Its name, for messages and relative imports (default `program.sauce.ts`)                                               |
 | `modules`         | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
 | `chain`, `target` | The chain, by slug, alias or id. `target: "svm"` alone is Solana                                                       |
-| `compactArgs`     | Encode `main`'s arguments as compact-v1                                                                                |
 
 `path` is taken by `sauce_compile`, `sauce_simulate` and `sauce_tx`, read with its relative imports
 beside it. A server over HTTP reads no file and refuses `path`. Each of the three returns

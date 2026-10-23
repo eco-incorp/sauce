@@ -42,7 +42,7 @@ It reads how much USDC your Pot holds, stops if that is less than `amount`, and 
   program serves every payment.
 - **`USDC` is a name, not an address.** Sauce knows where USDC lives on each chain it runs on, and
   the same file runs on Base and on Solana.
-- **`require` is a check.** When it fails, the whole transaction stops and nothing moves.
+- **`require` is a check.** A failed check stops and undoes the cook unless an EVM `try` catches it.
 
 ## How a program becomes one transaction
 
@@ -73,8 +73,8 @@ your Pot                      checks the cook is from its owner, pays the Kitche
    the `sauce` command signs it with a wallet on your computer or hands it to another one.
 5. **Run.** Your Pot checks that the cook comes from its owner, pays the Kitchen, and has the engine
    run the program as the Pot. Every call the program makes comes from your Pot, and what it
-   receives lands there. If any step fails, the whole transaction reverts: nothing moves, and only
-   the network's fee for the attempt, the gas, is spent.
+   receives lands there. An uncaught failure reverts the transaction: nothing moves, and only
+   the network fee is spent. EVM `try` blocks can roll back one attempt and run a recovery path.
 
 ## Why one transaction matters
 

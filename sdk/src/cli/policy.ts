@@ -84,7 +84,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda, fetchAlt, svmPublicKey } from "../svm/index.js";
+import { derivePotPda, fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
@@ -562,10 +562,7 @@ export async function measureEvm(
 }
 
 /** The Kitchen's two cooks, whose data starts with the Pot's salt. */
-const KITCHEN_COOKS = [
-  [147, 233, 205, 239, 200, 21, 190, 159],
-  [247, 166, 195, 248, 78, 176, 147, 84],
-];
+const KITCHEN_COOKS = [KITCHEN_DISCRIMINATORS.cook, KITCHEN_DISCRIMINATORS.cookFromAccount];
 /** The compute-budget program: a transaction's plumbing, not where it goes. */
 const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
 

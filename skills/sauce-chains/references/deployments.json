@@ -2,7 +2,7 @@
   "about": "The Sauce deployment, the same on every chain: one address per contract on every EVM chain, and one id per program on every Solana cluster. An address is where the contract is deployed, not proof that it is there: before relying on one, confirm it has code on the chain (eth_getCode returns more than 0x; on Solana, getAccountInfo returns an executable account).",
   "evm": {
     "engine": {
-      "address": "0xcF7A92abCC7Ede43277AcCBAfda910b8829bF9AD",
+      "address": "0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67",
       "about": "The engine, the interpreter that runs a program. A cook is the Pot's cook(engine, program), sent by the Pot's owner."
     },
     "kitchen": {
@@ -10,11 +10,11 @@
       "about": "The Kitchen: deployPot(owner, salt) creates a Pot, and executionFee() is the fee every cook pays, in the chain's native coin."
     },
     "kitchenImplementation": {
-      "address": "0xC8419328dC889C312CbcDf09d939eF93D590d9d5",
+      "address": "0xDDAEf9AFa92F86Bd89132F18FCA79B10Ed25e99c",
       "about": "The implementation behind the Kitchen, an upgradeable proxy. Call the Kitchen, never this."
     },
     "router": {
-      "address": "0x0542D51Fc0b7666B4FF7Ea12646BF30d1D2C4E49",
+      "address": "0x4dF3b7C7d63261368489b330C36913cEee5D0044",
       "about": "The Router a new Pot starts on. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2) run through the Pot's Router."
     },
     "quoteRouter": {
@@ -23,14 +23,14 @@
     },
     "pot": {
       "address": "CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)",
-      "initCodeHash": "0xb4f700d3ee5e337e97dbf06e283bd19b35a9267b601c735c24ced66813d5d520",
+      "initCodeHash": "0xe8e1f54a0a3c700fedc0e0019c5a7dc7ca08e676862db576b864e744186cd7f2",
       "about": "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen."
     }
   },
   "svm": {
     "engine": {
-      "programId": "2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT",
-      "key": "0x130739ec93130b575cec4892d3e56cb416a3f5b7c530200070a6922610d31c70",
+      "programId": "53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW",
+      "key": "0x3c1c3c1e1b25a58a15a88145bcc823446ec88fec133af645d0621bacfcdb0303",
       "about": "The engine program, which owns every Pot: ctx.self() in a program on Solana. key is the 32-byte value a program holds."
     },
     "kitchen": {

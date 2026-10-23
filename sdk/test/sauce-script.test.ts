@@ -218,6 +218,27 @@ describe("SauceScript in an editor", () => {
     expect(shown).toEqual([]);
   });
 
+  it("types signed integers, bit reinterpretation and a nested program with plain arguments", () => {
+    const { shown } = plain(
+      "signed",
+      "function main(word: Uint256): Int256 {\n" +
+        "  const delta: Int256 = Int256.fromBits(word);\n" +
+        "  const signed = Math.signExtend(word, 2);\n" +
+        '  const nested = program((divisor: Int256): Int256 => delta / divisor, 2, { target: "evm" });\n' +
+        "  require(eval(nested.code.concat(nested.args)).length > 0);\n" +
+        "  const bits: Uint256 = Uint256.fromBits(signed);\n" +
+        "  const magnitude = Uint256(Int256(bits));\n" +
+        "  evm.static(ctx.self(), hex``).gas(50000).catch((error) => { require(error.length <= 256); });\n" +
+        "  return (delta % 3) >> 1;\n}\n",
+    );
+    expect(shown).toEqual([]);
+  });
+
+  it("retains signed ABI results in the generated editor declarations", () => {
+    expect(sauceScriptDeclarations()).toContain("readonly answer: Int256");
+    expect(sauceScriptDeclarations()).toContain("SauceCall<Int256>");
+  });
+
   it("checks every builtin's example in the SauceScript reference with no error", () => {
     const reference = JSON.parse(
       readFileSync(join(ROOT, "skills/sauce-script/references/builtins.json"), "utf8"),
@@ -272,6 +293,9 @@ describe("SauceScript in an editor", () => {
     const cases: Array<[string, string, readonly number[]]> = [
       ["slef", "function main() { const me = ctx.slef(); }\n", missing],
       ["mulDiv", "function main() { const x = Math.mulDiv(1n, 2n); }\n", [2554]],
+      ["integerCast", "function main() { return Int256(); }\n", [2554]],
+      ["integerBits", "function main() { return Uint256.fromBits(true); }\n", [2345]],
+      ["integerMember", "function main() { return Int256.fromBit(1); }\n", missing],
       ["getPol", "function main() { UniswapV3.Factory.getPol(1n, 2n, 3n); }\n", missing],
       [
         "swapV9",

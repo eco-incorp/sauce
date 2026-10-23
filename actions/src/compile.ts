@@ -18,17 +18,8 @@ import { resolveSdkModule, resolveSdkPackage } from "./registry.js";
 
 const ENTRY = "main.js";
 
-export interface EvmCompileOptions {
-  /** Encode `main`'s arguments compact-v1 instead of ABI-v1. */
-  readonly compactArgs?: boolean;
-}
-
 /** Compiles a generated SauceScript program, and the ABI bindings it names, for the EVM. */
-export function compileEvm(
-  source: string,
-  contracts: ActionContracts = {},
-  options: EvmCompileOptions = {},
-): CompileResult {
+export function compileEvm(source: string, contracts: ActionContracts = {}): CompileResult {
   const bytes = new TextEncoder().encode(source);
   const inlineContracts = Object.entries(contracts).map(
     ([name, { abi }]) => [name, JSON.stringify(abi)] as [string, string],
@@ -40,6 +31,5 @@ export function compileEvm(
     resolve: (path) => (path === ENTRY ? bytes : resolveSdkModule(path)),
     resolvePackage: (specifier) => resolveSdkPackage(specifier),
     inlineContracts: inlineContracts.length > 0 ? inlineContracts : undefined,
-    compactArgs: options.compactArgs,
   });
 }

@@ -51,8 +51,8 @@ Read these before anything else. [What Sauce is](what-is-sauce.md) puts them tog
 | **Simulate**    | A dry run                                   | `sauce simulate` runs your program on a copy of the chain as it is right now. It needs no key and no money, and changes nothing.                                                                         |
 
 A program is a recipe, your Pot is your own counter on the blockchain, a cook is one go at the
-recipe, and the Kitchen is the shop that builds counters and charges for each go. If any step of the
-recipe fails, nothing happens at all: as if you never started.
+recipe, and the Kitchen is the shop that builds counters and charges for each go. An uncaught failure
+undoes the cook; on EVM a failed atomic `try` undoes its own work and runs its handler instead.
 
 ## Chain words
 
@@ -93,7 +93,7 @@ where the names come from.
 | **`@sauce/token`**     | A standard library for tokens | The functions that move and read tokens safely. `USDC.transfer(to, amount)` calls it for you.                                                                                                                 |
 | **`@sauce/router`**    | A standard library for swaps  | One function per kind of pool, for swapping inside a program.                                                                                                                                                 |
 | **Compile**            | Build                         | Turning a program into bytecode for one chain. `sauce compile` does it.                                                                                                                                       |
-| **`require`**          | An assertion                  | `require(condition, "message")` stops the whole cook when the condition is false. Nothing moves, and the message tells you why.                                                                               |
+| **`require`**          | An assertion                  | `require(condition, "message")` reverts when false. Uncaught it undoes the cook; inside an EVM atomic `try`, its failure rolls back that block before `catch` runs.                                           |
 | **Actions**            | A recipe written as JSON      | A list of steps (swap here, supply there) as a JSON document, which Sauce turns into a program.                                                                                                               |
 | **Lowering**           | Translating                   | Turning something into the SauceScript program that runs: an actions document, or a token write such as `USDC.transfer(...)` into its `@sauce/token` call.                                                    |
 | **Defines**            | Build-time constants          | Values fixed into a program when it compiles. A chain's names (its token symbols, its protocols' contracts, its chain id) reach a program this way. A value you supply each run is a `main` argument instead. |

@@ -12,7 +12,6 @@ import {
   type Hex,
 } from "viem";
 
-import { encodeCompactArguments } from "../src/compact-arguments.js";
 import { decodeEntryArguments, encodeEntryArguments, mainParams } from "../src/routes/entry.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
@@ -68,15 +67,13 @@ describe("compileSauceProgram", () => {
     ).toThrow();
   });
 
-  it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {
-    const compact = compileSauceProgram("base", SPLIT, { compactArgs: true });
-    expect(compact.entryEncoding).toBe("compact-v1");
-    expect(compact.entrySchema).toBeInstanceOf(Uint8Array);
+  it("reports ABI-v1, and on Solana the accounts apart from the arguments", () => {
+    expect(compileSauceProgram("base", SPLIT).entryEncoding).toBe("abi-v1");
     const svm = compileSauceProgram(
       "solana",
       "function main(vault: Account<Writable>, amount: Uint256) {\n  require(vault.dataLen > amount);\n}\n",
-      { compactArgs: true },
     );
+    expect(svm.entryEncoding).toBe("abi-v1");
     expect(svm.entryParams).toEqual([{ name: "amount", type: "Uint256" }]);
     expect(svm.manifest).toEqual({
       accounts: [{ kind: "slot", index: 0, name: "vault", requires: "writable" }],
@@ -223,23 +220,24 @@ describe("encodeEntryArguments", () => {
     );
   });
 
-  it("encodes compact-v1 against the program's own schema", () => {
+  it("encodes ABI-v1 against the compiled program's declared parameters", () => {
     const program = compileSauceProgram(
       "base",
       "function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: bool, leg: { amount: Uint256, to: Address }, memo: bytes) {}",
-      { compactArgs: true },
     );
     expect(program.entryParams).toEqual(params);
+    expect(program.entryEncoding).toBe("abi-v1");
     expect(encodeEntryArguments(program, values)).toEqual(
-      encodeCompactArguments(program.entrySchema!, [
-        RECIPIENT,
-        [RECIPIENT, CREATOR],
-        1000n,
-        true,
-        [5n, PROVER],
-        hexToBytes("0xbeef"),
-      ]),
+      encodeEntryArguments({ entryEncoding: "abi-v1", entryParams: params }, values),
     );
+    expect(decodeEntryArguments(program, encodeEntryArguments(program, values))).toEqual([
+      RECIPIENT,
+      [RECIPIENT, CREATOR],
+      1000n,
+      true,
+      { amount: 5n, to: PROVER },
+      "0xbeef",
+    ]);
   });
 
   it("reads a record type's fields separated by ;, as a formatter writes them", () => {

@@ -21,7 +21,7 @@
 //   - Uniswap V3 (and its forks), Uniswap V4, Maverick V2 and PancakeSwap Infinity (CL and bin) pools
 //     re-enter their caller mid-swap to be paid. A program cannot answer that call, so these
 //     functions call the Pot's Router (`ctx.self()`, whose fallback delegatecalls it), which can.
-//     Generation 4 pays only the named input token and only what the pool asks for, up to
+//     The execution Router pays only the named input token and only what the pool asks for, up to
 //     `amountIn`.
 //
 // Every token write is `@sauce/token`'s: OpenZeppelin `SafeERC20`, so a token that returns nothing
@@ -42,7 +42,7 @@
 //   - catching the pool's failure where the pool pulls the input and enforces the floor itself —
 //     `tryCurve` and `tryBalancerV2`, which also reset the approval to zero;
 //   - catching the Router's call where the Router pays the pool from inside it — `tryUniswapV3`,
-//     `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin`. The generation-4 Router
+//     `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin`. The execution Router
 //     takes no floor, so these hold a swap that ran to the floor afterwards — `minOut`, and at least
 //     1 — and revert below it: a swap that took input and delivered nothing (an input the pool rounds
 //     away, a hook that keeps it) cannot be undone, so it never reads as skipped. A swap that ran and
@@ -196,7 +196,7 @@ export function curve(
   if (uint256Indices) {
     CurveCryptoSwap.at(pool).exchange(i, j, amountIn, minOut);
   } else {
-    CurveStableSwap.at(pool).exchange(i, j, amountIn, minOut);
+    CurveStableSwap.at(pool).exchange(Int256(i), Int256(j), amountIn, minOut);
   }
   const out = balanceOf(tokenOut, ctx.self()) - before;
   if (recipient != ctx.self()) {
@@ -234,7 +234,7 @@ export function tryCurve(
       });
   } else {
     CurveStableSwap.at(pool)
-      .exchange(i, j, amountIn, floor)
+      .exchange(Int256(i), Int256(j), amountIn, floor)
       .catch(() => {
         failed = true;
       });
@@ -558,7 +558,7 @@ export function tryWoofi(
 // Through the Pot's Router: Uniswap V3, Uniswap V4, Maverick V2
 // ---------------------------------------------------------------------------------------------
 
-// A Uniswap V3 pool, or a fork's that keeps its `swap`, through generation 4's `swapV3`. A non-zero
+// A Uniswap V3 pool, or a fork's that keeps its `swap`, through the execution Router's `swapV3`. A non-zero
 // `sqrtPriceLimitX96` stops the swap at that price, and the Router then takes only what the pool
 // used; the rest stays in the Pot. The Router returns the input used and output sent.
 export function uniswapV3(
@@ -591,7 +591,7 @@ export function uniswapV3(
 // pool, or when its swap fails. The Router pays the pool from inside the call that is caught, so a
 // swap the pool or the Router refuses moves nothing. What a swap that ran delivered is the
 // recipient's `tokenOut` balance change, and it must reach the floor — `minOut`, and at least 1 — or
-// the program reverts: the generation-4 Router takes no floor of its own, so a swap below it cannot
+// the program reverts: the execution Router takes no floor of its own, so a swap below it cannot
 // be undone, and one that took input and delivered nothing (an input the pool rounds away) must not
 // read as skipped. One that ran and moved nothing at all (no liquidity in range: the Router paid
 // nothing and the recipient received nothing) returns `0n`. With no price limit, an empty pool costs
@@ -676,7 +676,7 @@ export function uniswapV4(
       currency0: currency0,
       currency1: currency1,
       fee: fee,
-      tickSpacing: tickSpacing,
+      tickSpacing: Int256(tickSpacing),
       hooks: hooks,
     },
     tokenIn,
@@ -738,7 +738,7 @@ export function tryUniswapV4(
         currency0: currency0,
         currency1: currency1,
         fee: fee,
-        tickSpacing: tickSpacing,
+        tickSpacing: Int256(tickSpacing),
         hooks: hooks,
       },
       tokenIn,
@@ -772,7 +772,7 @@ export function tryUniswapV4(
   return out;
 }
 
-// A Maverick V2 pool, through generation 4's `swapMaverickV2` over the pool's full tick range. The
+// A Maverick V2 pool, through the execution Router's `swapMaverickV2` over the pool's full tick range. The
 // Router pays exactly what the pool asks for, so if the pool runs out before taking all of
 // `amountIn`, the rest stays in the Pot. The Router returns the input it paid and the output.
 export function maverickV2(
@@ -862,7 +862,7 @@ export function tryMaverickV2(
 // Through the Pot's Router: PancakeSwap Infinity
 // ---------------------------------------------------------------------------------------------
 
-// A PancakeSwap Infinity CL pool, through generation 4's `swapInfinityCL` (`vault` is the Infinity
+// A PancakeSwap Infinity CL pool, through the execution Router's `swapInfinityCL` (`vault` is the Infinity
 // Vault, `poolManager` the CL pool manager the key names). The pool key is `tokenIn` and `tokenOut`
 // in sort order — native BNB/ETH is the zero address, which sorts first and which the Pot pays from
 // its own balance — with the pool's `fee`, `parameters` (its packed tick spacing and hook
@@ -995,7 +995,7 @@ export function tryInfinityCL(
   return out;
 }
 
-// A PancakeSwap Infinity bin pool, through generation 4's `swapInfinityBin` — `infinityCL`'s key and
+// A PancakeSwap Infinity bin pool, through the execution Router's `swapInfinityBin` — `infinityCL`'s key and
 // direction, with no price limit (a bin swap has none). Its amount is an `int128` to the pool, so an
 // input past `int128`'s positive range is refused.
 export function infinityBin(

@@ -34,6 +34,19 @@ type SauceTokenSource = import("../routes/source-globals.generated.js").SauceTok
 
 /** One unsigned 256-bit integer. */
 type Uint256 = bigint;
+/** One signed 256-bit integer, from -2**255 through 2**255 - 1. */
+type Int256 = bigint;
+
+/** Checked numeric conversions; `fromBits` preserves all 256 bits instead. */
+declare function Int256(value: SauceInt): Int256;
+declare namespace Int256 {
+  function fromBits(value: Uint256 | number): Int256;
+}
+declare function Uint256(value: SauceInt): Uint256;
+declare namespace Uint256 {
+  function fromBits(value: Int256 | number): Uint256;
+}
+
 /** An address: a number, on the EVM 20 bytes, on Solana a 32-byte key. */
 type Address = bigint;
 /** A bool. */
@@ -141,15 +154,8 @@ interface Math {
   mulDiv(x: SauceInt, y: SauceInt, d: SauceInt): bigint;
   addMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
   mulMod(a: SauceInt, b: SauceInt, n: SauceInt): bigint;
-  /** Signed (two's-complement) division. */
-  sDiv(a: SauceInt, b: SauceInt): bigint;
-  sMod(a: SauceInt, b: SauceInt): bigint;
-  sShr(value: SauceInt, bits: SauceInt): bigint;
-  signExtend(value: SauceInt, byte: SauceInt): bigint;
-  sLt(a: SauceInt, b: SauceInt): bigint;
-  sGt(a: SauceInt, b: SauceInt): bigint;
-  sLte(a: SauceInt, b: SauceInt): bigint;
-  sGte(a: SauceInt, b: SauceInt): bigint;
+  /** Interprets the low `byte + 1` bytes as a signed integer (byte 0 is least significant). */
+  signExtend(value: SauceInt, byte: SauceInt): Int256;
 }
 
 /** EVM: ABI encoding. */
@@ -161,9 +167,9 @@ declare const abi: {
 
 /** EVM: calls, storage and contract creation. */
 declare const evm: {
-  call(address: SauceInt, value: SauceInt, data: SauceData): SauceBytes;
-  static(address: SauceInt, data: SauceData): SauceBytes;
-  delegate(address: SauceInt, data: SauceData): SauceBytes;
+  call(address: SauceInt, value: SauceInt, data: SauceData, gas?: SauceInt): SauceCall<SauceBytes>;
+  static(address: SauceInt, data: SauceData, gas?: SauceInt): SauceCall<SauceBytes>;
+  delegate(address: SauceInt, data: SauceData, gas?: SauceInt): SauceCall<SauceBytes>;
   sload(slot: SauceInt): bigint;
   sstore(slot: SauceInt, value: SauceInt): void;
   tload(key: SauceInt): bigint;
@@ -193,6 +199,25 @@ declare function revert(data?: SauceData): never;
 declare function log(data: SauceData, ...topics: SauceInt[]): void;
 /** Runs another program, with arguments. */
 declare function eval(program: SauceData, ...args: SauceInt[]): SauceBytes;
+
+/** A closure compiled as its own program, plus its captured run-time values. */
+interface SauceClosureProgram {
+  readonly code: SauceBytes;
+  readonly args: SauceBytes;
+}
+interface SauceClosureProgramOptions {
+  readonly chain?: string;
+  readonly target?: "evm" | "svm";
+}
+type SauceClosureArguments<Args extends unknown[]> = {
+  [K in keyof Args]: Args[K] extends bigint ? SauceInt : Args[K];
+};
+/** The inline arrow's arguments, then optional chain/target options. */
+declare function program<Args extends unknown[]>(
+  closure: (...args: Args) => unknown,
+  ...args:
+    SauceClosureArguments<Args> | [...SauceClosureArguments<Args>, SauceClosureProgramOptions]
+): SauceClosureProgram;
 /** Bytes from hex digits: hex`a9059cbb`. */
 declare function hex(strings: TemplateStringsArray): SauceBytes;
 
@@ -201,8 +226,6 @@ interface BigInt {
   toBytesBe(width: SauceInt): SauceBytes;
   /** The value as `width` little-endian bytes. */
   toBytesLe(width: SauceInt): SauceBytes;
-  /** An external call's result — or, when the call fails, what the handler returns. */
-  catch(handler: () => unknown): bigint;
 }
 
 interface ArrayConstructor {

@@ -1,9 +1,9 @@
 export const createFlow = `
 import { CFAForwarderABI as ICFAForwarder } from "./abis";
 
-function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address, flowrate: Uint256): Uint256 {
+function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address, flowrate: Int256): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.createFlow(token, sender, receiver, flowrate, "");
+  forwarder.createFlow(token, sender, receiver, flowrate, hex\`\`);
   return 1;
 }
 `;
@@ -13,7 +13,7 @@ import { CFAForwarderABI as ICFAForwarder } from "./abis";
 
 function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.deleteFlow(token, sender, receiver, "");
+  forwarder.deleteFlow(token, sender, receiver, hex\`\`);
   return 1;
 }
 `;
@@ -21,9 +21,9 @@ function main(forwarderAddress: Address, token: Address, sender: Address, receiv
 export const updateFlow = `
 import { CFAForwarderABI as ICFAForwarder } from "./abis";
 
-function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address, flowrate: Uint256): Uint256 {
+function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address, flowrate: Int256): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.updateFlow(token, sender, receiver, flowrate, "");
+  forwarder.updateFlow(token, sender, receiver, flowrate, hex\`\`);
   return 1;
 }
 `;

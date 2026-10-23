@@ -268,6 +268,35 @@ run was a simulation, so nothing was spent.
 To run `pay-list.sauce.ts` for real, use `sauce run` with the same `--chain`, `--wallet` and
 `--args`, as its header's second line does and as in step 5 of the quick start.
 
+## Recover from one atomic attempt (EVM)
+
+The program above deliberately stops the entire cook if a payment fails. For an operation you
+want to attempt without losing earlier successful work, put the whole attempt in `try`:
+
+```sauce chain=base
+function main(to: Address, amount: Uint256, reserve: Uint256): bool {
+  let paid = false;
+  try {
+    USDC.transfer(to, amount);
+    require(self.USDC >= reserve, "keep the reserve");
+    paid = true;
+  } catch (error) {
+    log(error);
+  }
+  return paid;
+}
+```
+
+The transfer and reserve check succeed together, or both are undone. If the check fails, the
+recipient is not paid and `paid` stays `false`; the handler runs with the values from before the
+attempt. This is different from JavaScript's `try`: assignments roll back too.
+
+Keep safety requirements outside the catch when failure must stop the cook. A `try` with only a
+single external call is narrower: it catches that call's failure, not decoding a successful reply.
+An error binding contains at most 256 raw bytes, possibly empty or cut short; this example only
+logs them. The [reference](../reference/saucescript.md#13-contract-bindings-and-catch-evm) explains
+safe error decoding, nested recovery and the differences from `.catch()`. Solana has neither form.
+
 ## Next
 
 - The next tutorial: [Swap by name](swap-by-name.md), where a program trades through a protocol

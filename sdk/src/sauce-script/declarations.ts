@@ -62,6 +62,7 @@ function valueType(parameter: AbiParameter, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
+  if (/^int\d*$/.test(parameter.type)) return input ? "SauceInt" : "Int256";
   if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) return input ? "SauceInt" : "bigint";
   if (parameter.type === "bool") return "boolean";
   if (/^(bytes|string)$/.test(parameter.type)) return input ? "SauceData" : "SauceBytes";
@@ -126,6 +127,7 @@ function annotatedType(annotation: string | undefined, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
+  if (type === "Int256") return input ? "SauceInt" : "Int256";
   if (/^(Address|Uint256|u?int\d*|number|bigint)$/.test(type)) return input ? "SauceInt" : "bigint";
   if (/^(bool|boolean)$/.test(type)) return "boolean";
   if (/^(bytes|string)$/.test(type)) return input ? "SauceData" : "SauceBytes";
@@ -213,8 +215,8 @@ export function sauceScriptDeclarations(): string {
     '/// <reference path="./builtins.d.ts" />',
     '/// <reference path="../routes/source-globals.generated.d.ts" />',
     "",
-    "/** A contract call's result; `.catch(() => …)` gives a value for when the call fails. */",
-    "type SauceCall<R> = R & { catch<T>(handler: () => T): R | T };",
+    "/** An external call's result, with an optional gas cap and a failure handler. */",
+    "type SauceCall<R> = R & { gas(cap: SauceInt): SauceCall<R>; catch(handler: (error: SauceBytes) => unknown): SauceCall<R> };",
     "",
     "/** A contract an ABI types: its methods, called at an address. */",
     "interface SauceContractOf<B> {",

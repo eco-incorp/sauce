@@ -98,6 +98,10 @@ When something fails, [Troubleshooting](docs/guides/troubleshooting.md) says wha
 and what to do. The [changelog](docs/changelog.md) records what each SDK release changed in
 SauceScript, the compiler and the engines.
 
+Upgrading an existing project? [Move from compiler 2.5 to 2.6](docs/guides/upgrading.md#moving-from-compiler-25-to-26)
+covers signed `Int256` values, ABI-only inputs, EVM atomic `try`/`catch`, and the engine/Kitchen
+pairing. The [language reference](docs/reference/saucescript.md) is the source for exact semantics.
+
 ## Three words you will see
 
 Sauce borrows its words from a kitchen. Your program is a recipe.

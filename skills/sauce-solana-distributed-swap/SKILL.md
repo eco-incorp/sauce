@@ -285,8 +285,8 @@ nothing and sends the whole budget to the recipient, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 5.4 KB, past one transaction, so it runs from a code
-  buffer it is written into first; `sauce run` does that (`sauce-solana`).
+- **The program is staged.** Its compiled payload is larger than one transaction, so it runs from
+  a code buffer it is written into first; `sauce run` measures it and handles staging (`sauce-solana`).
 - **The accounts go through a lookup table.** The program names 46 accounts, every one derived: nine
   for each key, the Pot's, the mints', the programs' and the recipient's two. A key with no pool
   names the System program nine times, one account; each pool found brings eight of its own. The
@@ -378,7 +378,7 @@ addresses as placeholders:
 The cook succeeds from <owner>: 519966 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 34 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 5528-byte program staged into a code buffer in 9 transactions, as `sauce run` stages it
+  the <program-bytes>-byte program staged into a code buffer in <transactions> transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potUSDC, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC

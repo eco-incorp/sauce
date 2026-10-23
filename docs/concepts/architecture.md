@@ -31,14 +31,13 @@ pay.sauce.ts ─► the SDK       names become addresses on the chain, ABIs are 
              ─► the compiler  every line checked, bytecode out
              ─► the SDK       the cook built: to your Pot, the program, the Kitchen's fee
              ─► your wallet   signs and sends it
-             ─► the engine    runs the program inside your Pot, every step or none
+             ─► the engine    runs the program inside your Pot; uncaught failure reverts the cook
 ```
 
-What the engine does is simple enough to state in a sentence, and it is all you need to reason
-about: **it runs your program's steps in order, inside the surrounding transaction, and anything
-that reverts reverts the whole thing.** There is no partial execution, no retry, and no undoing of
-one step alone. The bytecode is Sauce's own, not a Solidity contract's code and not a Solana
-program, and only a Sauce engine runs it.
+Programs run their steps in order inside one transaction. **An uncaught failure reverts the
+whole transaction.** On EVM, an atomic `try` block can roll back only its own work and continue
+through `catch`; a single-call catch handles only that call's failure. SVM has no catch support.
+The compiled output is a Sauce program, not a contract or Solana program to deploy yourself.
 
 ## From a name to a contract call
 

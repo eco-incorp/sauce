@@ -42,24 +42,29 @@ of the wrong type fails the compile, with the line and column, before anything i
 
 ## Numbers are whole, and checked
 
-Every number is an unsigned 256-bit integer, the chain's own word. There are no fractions, so an
-amount is written in the token's smallest unit: USDC has 6 decimals, so 1 USDC is `1000000`, and
-1 ETH is `10 ** 18`. Write integers plainly: `3000`, never `3000n`.
+Integers are 256-bit: `Uint256` is unsigned, while `Int256` holds signed values. Amounts use the
+token's smallest units: 1 USDC is `1000000`, and 1 ETH is `10 ** 18`. Plain integer and bigint
+spellings are both accepted.
 
-Arithmetic is checked as the program runs. An overflow, an underflow or a division by zero reverts
-the whole transaction, so a sum never silently wraps around. A negative amount, which some
-protocols take, is written `-x`, and the `Math` builtins compare and divide signed values.
+Arithmetic is checked: overflow, underflow and division by zero revert rather than silently wrap.
+Negative literals are signed; negate an unsigned amount with `-Int256(amount)`, not `-amount`.
+Ordinary comparisons, division, remainder and right shift respect signedness. Convert values with
+`Int256(value)`/`Uint256(value)`; use `.fromBits(value)` only to reinterpret a raw word.
 
 `bool` is kept apart from numbers, and `bytes` and `string` are both byte strings: `"text"` is its
 UTF-8 bytes, and `` hex`a9059cbb` `` raw bytes.
 
 ## Failure is a revert
 
-A program has no exceptions to catch. `require(condition, "message")` stops the whole transaction
-when its condition is false, and so do `throw`, a failed call and any checked operation: nothing
-that ran before survives. That is what makes a program safe to write without cleanup code. The one
-failure a program can survive is a failed call to another contract on an EVM chain, with
-`.catch(() => { ... })`, the only arrow function the compiler takes.
+An uncaught `require(condition, "message")`, `throw`, failed call or checked operation reverts the
+transaction. On EVM, `try { … } catch (error) { … }` can recover from a failed atomic block:
+all effects inside it roll back, including earlier calls and assignments; earlier work outside it
+remains. This is not JavaScript's assignment-before-throw behavior.
+
+A single-call `try` or `.catch(...)` catches that external call's failure only, not a successful
+call's malformed output decoding. A handler receives at most 256 raw revert bytes, which may be
+empty or truncated; its own failures propagate. Solana has no catch support. The
+[language reference](../reference/saucescript.md#13-contract-bindings-and-catch-evm) defines the boundaries.
 
 ## How values reach a program
 
@@ -96,7 +101,7 @@ difference:
 | Calling a contract through its ABI                   | Yes                       | No: call a program with `svm.call`          |
 | `abi.encode`, `abi.decode`                           | Yes                       | No                                          |
 | Storage that lasts between runs                      | `evm.sload`, `evm.sstore` | `svm.sload`, `svm.sstore`, in account bytes |
-| Surviving a failed call with `.catch()`              | Yes                       | No                                          |
+| Atomic `try` blocks and single-call `.catch()`       | Yes                       | No                                          |
 | `main`'s parameters                                  | Yes                       | Yes, plus `Account` parameters              |
 
 Context reads differ where the chains do: a Solana key is wider than an EVM address, and
@@ -114,8 +119,8 @@ A program calls other code in three ways:
 - **Protocols by name.** `UniswapV3.Factory`, `AaveV3.Pool`: the chain's deployment, with its
   functions ready to call ([Names and registries](names-and-registries.md)).
 - **Any contract by its ABI.** `import ERC20 from "./erc20.abi.json"`, then
-  `ERC20.at(address).balanceOf(owner)`. Such a call decodes exactly what the ABI declares, so for
-  token writes, prefer `@sauce/token`.
+  `ERC20.at(address).balanceOf(owner)`. Reading the result decodes all outputs the ABI declares;
+  discarding it skips output checks. Prefer checked SDK token methods for writes.
 
 A file without `main` is a **script**: its top-level statements run as the program, and it takes no
 inputs. Declare `main` to take inputs or return a value.

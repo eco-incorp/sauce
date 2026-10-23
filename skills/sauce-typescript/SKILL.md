@@ -112,13 +112,16 @@ pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Po
 
 `compile({ target, entry, resolve, ... })` from `/compiler` compiles a program and resolves nothing
 for you: no registry names, no chain defines, no token syntax. Reach for it for full control of the
-source and resolver, and for compact arguments.
+source and resolver, closure entries, and compile-time scalar arguments.
 
-- ABI-v1 arguments by default: `abi.encode` of `main`'s parameters, except that a tuple parameter is
-  always behind an offset word, even one whose fields are all fixed-size. `encodeAbiParameters`
-  inlines that tuple instead; `routes.encodeEntryArguments` writes the layout `main` reads.
-- `compactArgs: true` returns an `entrySchema` for
-  `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).
+- ABI-v1 is the only entry encoding. The raw compiler returns `entryParams`, the ABI signature,
+  and `entrySignature`, the declared SauceScript types. A top-level fixed-size tuple parameter has
+  `indirect: true` and belongs behind an offset; plain `encodeAbiParameters` inlines it instead.
+  `routes.encodeEntryArguments` writes the SDK program's required layout.
+- `entryKind: "closure"` parses one function-expression string verbatim; raw `args` binds scalar
+  parameters at compilation. Runtime ABI inputs disappear from `entryParams` when bound.
+- `Int256` entry values are signed and range-checked. Encode negative values as signed ABI words;
+  use the typed SDK encoder rather than converting them to unsigned maxima.
 - `resolveSdkModule` and `resolveSdkPackage` serve `@sauce/token`, `@sauce/router`, the package's
   artifact ABIs (`./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json`) and every
   `./protocols/<slug>/<Export>.json` to your resolver.
@@ -235,7 +238,7 @@ rpcUrl })` forks a chain at a pinned block on a local anvil (replaying `state`, 
 
 - [examples/cook.mts](examples/cook.mts): the Pot, its deploy call and a cook with arguments, offline,
   and the packaged Solana binaries.
-- [examples/compiler.mts](examples/compiler.mts): the raw compiler, ABI-v1 and compact-v1 arguments,
+- [examples/compiler.mts](examples/compiler.mts): the raw compiler, ABI-v1 arguments,
   `@sauce/token` through the package's resolvers.
 - [examples/actions.mts](examples/actions.mts): the action-program pipeline: validation, runtime
   amounts, a quote.

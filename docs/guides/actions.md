@@ -113,7 +113,6 @@ sauce simulate swap.json --chain base --owner <owner> \
   paired compiler and engine, and `contracts`, the protocol contracts it calls), with the parsed
   `document`, the `source`, the ABI bindings it calls through (`bindings`) and the argument names
   (`parameters`).
-- `--compact-args` compiles the arguments compact-v1.
 
 ## Compile and run a program
 
@@ -320,14 +319,14 @@ export function reusableApproval(chain: string) {
 }
 ```
 
-Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileProgram(program, { chain, compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#pass-arguments-with-compact-v1) describes both encodings. On the command line, `sauce tx|simulate|run` take the arguments after `--args`, in the order the `argument` actions declare them.
+Arguments use ABI-v1: each action argument is a 32-byte word, and `argumentOffset(name)` is its fixed position in the payload. A fixed offset lets a caller splice a number measured later into an already-built payload. Compact arguments and `scalarWidth` options are removed; recompile historical action payloads. The [compiler guide](compiling.md#pass-arguments-with-abi-v1) describes the encoding. On the command line, `sauce tx|simulate|run` take values after `--args`, in declaration order.
 
 ## Quotes and split swaps
 
 `quoteAction(action, options)` returns the `eth_call` that prices a swap action at its own `amount`: `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance.
 
 - An action that names a token or a contract needs `options.chain`, the chain to resolve the names on, because the quote is calldata built here. A pool given by key is refused (see [pools by key](#pools-by-key)).
-- Venues that price through a separate contract take its address in `options`. `router` is the generation-3 quote service (`v12QuoteRouterAddress()` from `@eco-incorp/sauce/deployments`), for `uniswapV3Swap` and `uniswapV4Swap`; the generation-4 execution Router (`v12RouterAddress()`) has no quote method. The other options are `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`.
+- Venues that price through a separate contract take its address in `options`. `router` is the generation-3 quote service (`v12QuoteRouterAddress()`), for `uniswapV3Swap` and `uniswapV4Swap`; the content-addressed execution Router (`v12RouterAddress()`) has no quote method. Other options are `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`.
 - The rest price on the contract the action names: a Uniswap V2 pair's reserves, a Curve pool's `get_dy`, a DODO pool's `querySellBase`/`querySellQuote`, an LB pair's `getSwapOut` (zero when the pair cannot take the whole input, since the swap would revert), WooPPV2's `query`.
 - Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
 
@@ -342,11 +341,15 @@ Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(nam
 
 A swap at one of [`@sauce/router`](../api/router.md)'s venues becomes a call into that library, with the action's fields as its arguments; every other action becomes an ABI-bound call, `IBinding.at(address).method(...)`, the same form an SDK route body compiles to. The compiler derives each selector and argument encoding from the ABI. A name is emitted as the program global it is, and a pool by key as its factory's lookup. Inspect the result with `compileProgram(program, { chain }).source`, or `sauce actions`:
 
+Here is a complete, equivalent program for the first document, using registry accessors for the
+ABI-bound calls. The Pot must already hold the 1 ETH to wrap; compiling does not fund or execute it.
+
 ```js
 import { uniswapV3 } from "@sauce/router";
 
 function main(): void {
-  // … the wrap, whose output is t_out0 …
+  evm.call(WETH, 1000000000000000000, hex`d0e30db0`); // WETH.deposit(), with 1 ETH
+  let t_out0 = 1000000000000000000; // wrapping returns the same amount of WETH
   const pool1 = UniswapV3.Factory.getPool(WETH, USDC, 500); // the pool, read on chain
   require(pool1 != 0, "actions[1]: no pool under that key");
   const amt2 = uniswapV3(
@@ -359,13 +362,16 @@ function main(): void {
     ctx.self(), // recipient: the Pot, because a later action spends the output
   );
   let v_usdc = amt2;
-  // … the approve and the supply, spending v_usdc: IAaveV3Pool.at(AaveV3.Pool).supply(USDC, …) …
+  USDC.approve(AaveV3.Pool, v_usdc);
+  AaveV3.Pool.supply(USDC, v_usdc, 0x3000000000000000000000000000000000000001, 0);
 }
 ```
 
 - ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise.
-- A binding decodes only the outputs an action reads.
-- ERC-20 `transfer` and `approve` are checked writes, through the lowering every SDK token write uses, with their calldata encoded ahead of time where the values are literals. A token that returns nothing, such as USDT, works; a `false` return or an address with no code reverts the program. [Writes follow SafeERC20](protocols-and-tokens.md#writes-follow-safeerc20) says exactly what is checked.
+- Reading any bound-call result decodes all declared outputs; discarding the whole result skips output validation.
+- ERC-20 `transfer` and `approve` use checked SDK token writes: a token that returns nothing works,
+  while `false` or a no-code target reverts. [SafeERC20](protocols-and-tokens.md#writes-follow-safeerc20)
+  describes the checks.
 - A call carrying native value (`wrapETH`, the staking deposits, the Stargate and Hyperlane fees) is a raw `evm.call`, because a bound call cannot attach value. Its selector comes from the same ABI fragment. The bridges' fees are quoted on-chain, just before the call that pays them, and come from the Pot's balance.
 - Binding names start with `I` and contain no underscore, so they cannot collide with the route compiler's protocol namespaces or its own `IERC20`.
 
@@ -501,7 +507,7 @@ Every type is the JSON it describes:
 - Each action has its own type (`UniswapV3SwapAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction` (with `RouterSwapAction`, the nine `@sauce/router` swaps), `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`.
 - A field's type says what it takes: `Token` (a `TokenSymbol` or an address), `TokenOrNative`, `Contract` (a `ContractName`, `"Namespace.Contract"`, or an address) and `TokenContract`.
 - A swap that names its pool by key is a union: `UniswapV3SwapAction` is a pool, or a factory with a fee, or a factory with a tick spacing, and TypeScript refuses the mix the parser refuses.
-- `CompileOptions` carries `chain` and `compactArgs`.
+- `CompileOptions` carries `chain`; all entry arguments use ABI-v1.
 
 A document typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.
 

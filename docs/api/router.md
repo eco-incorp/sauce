@@ -93,7 +93,7 @@ Uniswap V3 and its forks, Uniswap V4, Maverick V2 and PancakeSwap Infinity pools
 caller mid-swap to be paid, which a program cannot answer. Those functions call the Pot's Router — `ctx.self()`, whose
 fallback delegatecalls it — and the Router answers the callback, paying from the Pot exactly what
 the pool asks for, up to `amountIn`. The library checks V3 and Maverick token pairs. These functions
-require generation 4, whose unsigned exact-input methods return `(amountInUsed, amountOut)`.
+use the paired execution Router, whose exact-input methods return `(amountInUsed, amountOut)`.
 It answers Synthra V3 and UnitFlow V3 callbacks too. A private Pot runs the Router it was minted
 with until its owner moves it, unless its Router was fixed at creation; see [the Pot's Router](../concepts/architecture.md#a-pots-router).
 
@@ -141,7 +141,7 @@ ways:
 - `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` catch the
   Router's call, inside which the Router pays the pool. A pool that has no code, is not the named
   pair's (V3, Maverick), or whose swap the pool or the Router refuses (a key no pool has, a price
-  limit behind the pool's price) is skipped. The generation-4 Router takes no floor, so a swap that
+  limit behind the pool's price) is skipped. The execution Router takes no floor, so a swap that
   ran is held to one afterwards: what the recipient's `tokenOut` balance gained (its native balance
   for the zero address) must reach `minOut`, and at least 1, or the program reverts, because a swap
   that took input and delivered nothing (an input the pool keeps as its fee) cannot be undone. A
@@ -165,8 +165,7 @@ other than the quote, and below the floor it reverts.
   `sqrtPriceLimitX96` stops the swap at that price.
 - **Uniswap V4**'s pool key is `tokenIn` and `tokenOut` in sort order — native ETH is the zero
   address, which sorts first and which the Pot pays from its own balance — with the pool's `fee`,
-  `tickSpacing` and `hooks`. Pass unsigned `amountIn`; the generation-4 Router handles V4's negative
-  exact-input convention internally.
+  `tickSpacing` and `hooks`. Pass unsigned `amountIn`; the Router handles the protocol's sign convention.
 - **Curve** calls the pool's 4-argument `exchange(i, j, dx, min_dy)`. `uint256Indices` picks the
   CryptoSwap spelling over the StableSwap and NG one (`int128` indices). The pool pays the Pot, which
   forwards the output when `recipient` is not the Pot.

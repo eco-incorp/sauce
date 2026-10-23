@@ -107,6 +107,11 @@ endpoint:
 node --test --test-timeout=120000 swap.test.ts
 ```
 
+On an EVM test chain, `run` sends the cook with the pending block's gas limit as its budget. It
+does not estimate gas or simulate the cook first, so a cheaper failure path caught by the program
+does not determine the budget. The result's `gasUsed` is the gas actually consumed; unused gas is
+not charged. Call `simulate` separately to try a cook without sending it.
+
 ## Test a program that calls nothing
 
 A program that calls no protocol and moves no token needs no copy of a real chain. `local()`

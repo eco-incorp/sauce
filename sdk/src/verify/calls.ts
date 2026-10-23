@@ -10,13 +10,8 @@
 // Same dependency contract as decode.ts: `viem` ONLY (no compiler, no node, no artifact resolution), so
 // this stays safe to import in a browser or edge runtime.
 //
-// IDENTIFICATION IS BY PROGRAM HASH. An ingredient is taken as the settle when its leading 435 bytes
-// hash to `SETTLE_WIRE.PROGRAM_HASH` and its tail is canonical — `validateSettleProgram`, not the
-// structural `decodeSettleProgram`. Under the v1 grammar the prologue's shape was itself the
-// signature; a length pin alone is a far weaker one, since ANY 435-byte prefix followed by a
-// well-formed tail would decode. The hash is both stronger and simpler, and it is available at all
-// only because the arguments left the program — so what these helpers return is now "the audited
-// settle, with these params", not "something settle-shaped, params unverified".
+// Identification uses the accepted program hash and a canonical argument tail, through
+// `validateSettleProgram`. Matching only a prefix length does not authenticate its behavior.
 //
 // The SVM analogue is `extractSvmSettleFromCalls` in `@eco-incorp/sauce/svm/verify`: an SVM call
 // wraps its settle CPI one layer deeper (the Eco Portal `CalldataWithAccounts` Borsh envelope), so that

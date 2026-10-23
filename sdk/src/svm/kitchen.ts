@@ -42,7 +42,10 @@ import type {
   Rpc,
 } from "@solana/kit";
 
-import { memoizedGetProgramDerivedAddressWithBump } from "./venues/pda-memo.js";
+import {
+  memoizedFindProgramAddressSync,
+  memoizedGetProgramDerivedAddressWithBump,
+} from "./venues/pda-memo.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
 
 /** One entry of a program's own account tail, in the shape a kit `Instruction` carries. */
@@ -52,8 +55,8 @@ export type TailAccount = AccountLookupMeta | AccountMeta;
 const DISCRIMINATOR = {
   closeCodeBuffer: new Uint8Array([195, 203, 47, 242, 198, 177, 247, 6]),
   closePot: new Uint8Array([214, 103, 62, 202, 132, 229, 27, 86]),
-  cook: new Uint8Array([147, 233, 205, 239, 200, 21, 190, 159]),
-  cookFromAccount: new Uint8Array([247, 166, 195, 248, 78, 176, 147, 84]),
+  cook: new Uint8Array([51, 57, 168, 9, 240, 151, 154, 1]),
+  cookFromAccount: new Uint8Array([241, 24, 247, 35, 76, 46, 240, 209]),
   createCodeBuffer: new Uint8Array([94, 72, 190, 83, 17, 60, 103, 35]),
   createPot: new Uint8Array([232, 45, 123, 181, 204, 121, 131, 9]),
   finalizeCodeBuffer: new Uint8Array([191, 246, 136, 59, 56, 1, 0, 48]),
@@ -368,6 +371,17 @@ function executionFeeAccounts(feeConfig: Address, feePayer: Address): AccountMet
   ];
 }
 
+/** The canonical bump shares the memo populated by `derivePotPda`, keeping builders synchronous. */
+function potBump(kitchen: Address, owner: Address, salt: Uint8Array): Uint8Array {
+  const [, bump] = memoizedFindProgramAddressSync(kitchen, [
+    utf8(POT_SEED),
+    getAddressEncoder().encode(owner),
+    salt,
+  ]);
+
+  return new Uint8Array([bump]);
+}
+
 // --- cook -------------------------------------------------------------------
 
 export interface CookInput {
@@ -377,8 +391,8 @@ export interface CookInput {
   /** Identifies the Pot to sign for. A program that writes Pot storage attaches it again in `tail`,
    *  writable and unsigned. */
   potSalt: Uint8Array;
-  /** `derivePotPda(kitchen, owner, potSalt)`. Passed rather than derived so this stays synchronous,
-   *  as `cook_from_account` already does for its buffer accounts. */
+  /** `derivePotPda(kitchen, owner, potSalt).address`. The canonical bump is derived internally
+   *  through the same memo, without making the instruction builder asynchronous. */
   pot: Address;
   /** `deriveExecutionFeeConfigPda(kitchen)`. */
   feeConfig: Address;
@@ -401,8 +415,8 @@ export interface CookInput {
  * opaque `ProgramFailedToComplete`. Use `buildHeapFramePrepend()` (`./prepends.js`). Pot and
  * code-buffer lifecycle instructions need no such thing; only the two cooks execute.
  *
- * Note there is no `pot` account here. The kitchen derives it from `pot_salt` and `owner` and signs
- * for it, so a Pot the program touches belongs in `tail` **unsigned**.
+ * The named readonly `pot` is validated using `potSalt` and its canonical bump (derived here).
+ * A Pot the program writes also belongs in `tail` **unsigned**.
  */
 export function buildCookInstruction({
   kitchen,
@@ -428,7 +442,13 @@ export function buildCookInstruction({
       ...executionFeeAccounts(feeConfig, feePayer),
       ...tail,
     ],
-    data: data(DISCRIMINATOR.cook, potSalt, borshBytes(bytecode), u64(maxExecutionFee)),
+    data: data(
+      DISCRIMINATOR.cook,
+      potSalt,
+      potBump(kitchen, owner, potSalt),
+      borshBytes(bytecode),
+      u64(maxExecutionFee),
+    ),
   };
 }
 
@@ -481,7 +501,13 @@ export function buildCookFromAccountInstruction({
       ...executionFeeAccounts(feeConfig, feePayer),
       ...tail,
     ],
-    data: data(DISCRIMINATOR.cookFromAccount, potSalt, borshOption32(pin), u64(maxExecutionFee)),
+    data: data(
+      DISCRIMINATOR.cookFromAccount,
+      potSalt,
+      potBump(kitchen, owner, potSalt),
+      borshOption32(pin),
+      u64(maxExecutionFee),
+    ),
   };
 }
 

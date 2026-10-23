@@ -28,7 +28,7 @@ function main(
 ): { guid: Uint256; nonce: Uint256; fee: { nativeFee: Uint256; lzTokenFee: Uint256 } } {
   const endpoint = IEndpointV2.at(endpointAddress);
   return endpoint.send(
-    { dstEid: dstEid, receiver: receiver, message: message, options: 0x00, payInLzToken: false },
+    { dstEid: dstEid, receiver: receiver, message: message, options: hex``, payInLzToken: false },
     ctx.msgSender(),
   );
 }
@@ -37,7 +37,7 @@ function main(
 - `dstEid`: LayerZero endpoint ID for destination chain (NOT the EVM chain ID)
 - `receiver`: Destination contract address as bytes32 (left-padded)
 - `message`: Arbitrary message payload
-- `options`: Execution options (gas limits, etc.). Use `0x00` for defaults
+- `options`: Execution options (gas limits, etc.). Use ` hex`` ` for defaults
 - `payInLzToken`: false = pay fees in native token, true = pay in ZRO token
 - Requires native token (ETH) for messaging fees (sent as msg.value)
 

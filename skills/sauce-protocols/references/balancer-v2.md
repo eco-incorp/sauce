@@ -44,7 +44,7 @@ function main(
       assetIn: assetIn,
       assetOut: assetOut,
       amount: amount,
-      userData: 0x00,
+      userData: hex``,
     },
     { sender: sender, fromInternalBalance: false, recipient: recipient, toInternalBalance: false },
     limit,
@@ -60,7 +60,7 @@ function main(
 - `limit`: Maximum input (GIVEN_OUT) or minimum output (GIVEN_IN) for slippage protection
 - `sender`: Address providing the input tokens (must have approved the Vault)
 - `recipient`: Address receiving the output tokens
-- `userData`: Extra data for the pool (usually `0x00` for swaps)
+- `userData`: Extra data for the pool (usually ` hex`` ` for swaps)
 - `fromInternalBalance` / `toInternalBalance`: Use Vault internal balances (set false for standard swaps)
 
 ### addLiquidity

@@ -15,23 +15,23 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 
 ## Find an import by goal
 
-| I want to                                   | Import                                                                                | Read                                                          |
-| ------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Compile a program to bytecode               | `compile` from `/compiler`                                                            | [Compiler](compiler.md)                                       |
-| Encode a program's arguments                | `encodeCompactArguments`, `decodeCompactArguments` from `/compiler`                   | [Compact argument codec](compiler.md#compact-argument-codec)  |
-| Compile a program for one chain, by name    | `routes.compileSauceProgram`, `routes.encodeEntryArguments` from `.`                  | [Programs and cooks](routes.md)                               |
-| Call a protocol or a token by name          | `Base.USDC`, `Base.UniswapV3.Factory`, `contracts` from `.`                           | [Contracts and tokens](contracts.md)                          |
-| Swap at a venue from a program              | `@sauce/router`, imported inside the program                                          | [`@sauce/router`](router.md)                                  |
-| Turn a JSON document into a program         | `compileProgram` and the rest of `/actions`                                           | [Actions](../guides/actions.md)                               |
-| Find out what a registry holds              | `getProtocol`, `listProtocols`, `routes.knownTokenSymbols`, `requireChain`            | [Coverage](coverage.md)                                       |
-| Predict a Pot and build a cook              | `v12PredictPot`, `routes.buildSauceEvmCall` from `.`; `v12Pot` from `/evm/engine`     | [Programs and cooks](routes.md#build-a-cook)                  |
-| Find the Kitchen and engine                 | `v12KitchenAddress()`, `v12EngineAddress()` from `/deployments`                       | [Deployments](../reference/deployments.md)                    |
-| Run on Solana from TypeScript               | `createSauceSvmClient`, `SOLANA_CLUSTERS`, `resolveAccounts` from `/svm`              | [Solana from TypeScript](../guides/solana-from-typescript.md) |
-| Check a settlement payload                  | `validateSettleProgram` from `/verify`; `verifySvmSettleExecution` from `/svm/verify` | [Verification](../guides/verification.md)                     |
-| Test a program on a local chain             | `fork`, `local` from `/testing`                                                       | [Testing kit](testing-kit.md)                                 |
-| Read a protocol's document as text          | `getProtocolSkill` from `/skills`                                                     | [Protocol resources](#protocol-resources)                     |
-| Type-check a `*.sauce.ts` file in an editor | `/sauce-script` (types only)                                                          | [In an editor](../guides/cli-programs.md#in-an-editor)        |
-| See what changed between releases           | none                                                                                  | [Changelog](../changelog.md)                                  |
+| I want to                                   | Import                                                                                | Read                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Compile a program to bytecode               | `compile` from `/compiler`                                                            | [Compiler](compiler.md)                                              |
+| Encode a program's arguments                | `routes.encodeEntryArguments`, `routes.decodeEntryArguments` from `.`                 | [Program arguments](routes.md#arguments-a-program-takes-at-run-time) |
+| Compile a program for one chain, by name    | `routes.compileSauceProgram`, `routes.encodeEntryArguments` from `.`                  | [Programs and cooks](routes.md)                                      |
+| Call a protocol or a token by name          | `Base.USDC`, `Base.UniswapV3.Factory`, `contracts` from `.`                           | [Contracts and tokens](contracts.md)                                 |
+| Swap at a venue from a program              | `@sauce/router`, imported inside the program                                          | [`@sauce/router`](router.md)                                         |
+| Turn a JSON document into a program         | `compileProgram` and the rest of `/actions`                                           | [Actions](../guides/actions.md)                                      |
+| Find out what a registry holds              | `getProtocol`, `listProtocols`, `routes.knownTokenSymbols`, `requireChain`            | [Coverage](coverage.md)                                              |
+| Predict a Pot and build a cook              | `v12PredictPot`, `routes.buildSauceEvmCall` from `.`; `v12Pot` from `/evm/engine`     | [Programs and cooks](routes.md#build-a-cook)                         |
+| Find the Kitchen and engine                 | `v12KitchenAddress()`, `v12EngineAddress()` from `/deployments`                       | [Deployments](../reference/deployments.md)                           |
+| Run on Solana from TypeScript               | `createSauceSvmClient`, `SOLANA_CLUSTERS`, `resolveAccounts` from `/svm`              | [Solana from TypeScript](../guides/solana-from-typescript.md)        |
+| Check a settlement payload                  | `validateSettleProgram` from `/verify`; `verifySvmSettleExecution` from `/svm/verify` | [Verification](../guides/verification.md)                            |
+| Test a program on a local chain             | `fork`, `local` from `/testing`                                                       | [Testing kit](testing-kit.md)                                        |
+| Read a protocol's document as text          | `getProtocolSkill` from `/skills`                                                     | [Protocol resources](#protocol-resources)                            |
+| Type-check a `*.sauce.ts` file in an editor | `/sauce-script` (types only)                                                          | [In an editor](../guides/cli-programs.md#in-an-editor)               |
+| See what changed between releases           | none                                                                                  | [Changelog](../changelog.md)                                         |
 
 ## Every import path
 

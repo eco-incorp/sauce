@@ -59,5 +59,5 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 - Pools call back `unitFlowV3SwapCallback`, not `uniswapV3SwapCallback`, so a contract that swaps against a pool directly must implement the renamed callback
 - The GitHub README lists testnet addresses; these mainnet addresses are the defaults in UnitFlow's own app build
-- From a Pot program, instead of the protocol's own router: `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` calls the Router's `swapV3`, requiring generation 4 and its `unitFlowV3SwapCallback` callback. A Pot for which `potRouterUpdate(client, pot)` returns nothing runs the Kitchen's Router, generation `v12RouterGeneration()`; otherwise its owner signs the update it returns
+- From a Pot program, `@sauce/router`'s `uniswapV3` uses the paired execution Router's `swapV3` and `unitFlowV3SwapCallback`. `potRouterUpdate(client, pot)` returns an owner-signed update when the Pot differs from its Kitchen's current Router. Compare addresses with `v12RouterAddress()`; Router releases are content-addressed, not generation-numbered.
 - `uniswapV3` is exact input: the Router caps what the callback may take at `amountIn`

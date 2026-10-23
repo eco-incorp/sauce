@@ -4,20 +4,18 @@
 // That is the whole job. Dependency closure is `viem` ONLY (no node:fs, no compiler, no @solana/*,
 // no artifact resolution, no program source on disk), so this surface is safe to import anywhere —
 // including a browser or an edge runtime. That closure is the reason this decodes rather than
-// recompiling-and-comparing: a recompile would put a 1.96 MB wasm compiler in every consumer's
-// dependency graph to answer a question `viem` alone answers with one `keccak256`.
+// recompiling-and-comparing: program identity needs only a hash, not a compiler dependency.
 //
 // WHICH PROGRAMS. The settle program this decodes is what the PUBLISHED RUST COMPILER emits for
 // `recipes/settle.sauce.ts` — the only compiler this package ships against. `main` takes
 // `(tokens, minOut, recipient)` as RUNTIME entry arguments, so the compiled program is a
-// 435-byte constant and the arguments ride the payload AFTER it, as 32-byte big-endian words the
-// engine reads back through CALLDATA. `SETTLE_VECTORS` is the conformance corpus and
-// `verify.compile.test.ts` recompiles the program and re-pins it on every run.
+// reusable constant and the arguments follow it as ABI-encoded data. `SETTLE_VECTORS` is the
+// conformance corpus; `verify.compile.test.ts` checks the pin against the current compiler.
 //
 // SCOPE, stated plainly, in two tiers:
 //   • `decodeSettleProgram` is STRUCTURAL. It pins the program's LENGTH and reads the argument tail,
 //     so it names the tokens, floor and recipient a payload carries and nothing about what those
-//     435 bytes do. It is strict about the encoding (§4 of decode.ts: the canonical tokens pointer,
+//     program bytes do. It is strict about the encoding (§4 of decode.ts: the canonical tokens pointer,
 //     no trailing slack, no dirty bytes above an address, a nonzero recipient), so an accepted
 //     payload is the UNIQUE byte encoding of the values it decodes to.
 //   • `validateSettleProgram` adds the authenticity half: one `keccak256` over the WHOLE program

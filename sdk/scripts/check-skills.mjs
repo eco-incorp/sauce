@@ -999,8 +999,8 @@ function sample(type) {
   return "1";
 }
 
-async function compileJson(file, chain, extra) {
-  const run = await sauce(["compile", file, "--chain", chain, ...extra, "--json"]);
+async function compileJson(file, chain) {
+  const run = await sauce(["compile", file, "--chain", chain, "--json"]);
   if (run.code !== 0) return { error: diagnostic(run.stderr || run.stdout) };
   return { json: JSON.parse(run.stdout) };
 }
@@ -1063,7 +1063,6 @@ async function runUsage(where, file, argv, chain, header = false) {
   const at = rest.indexOf("--args");
   const options = at < 0 ? rest : rest.slice(0, at);
   const args = at < 0 ? undefined : rest.slice(at + 1);
-  const kept = [];
   const accounts = [];
   // `--accounts <file>` gives every account in one JSON object, which a usage line names by file.
   let accountsFile = false;
@@ -1076,10 +1075,9 @@ async function runUsage(where, file, argv, chain, header = false) {
     } else if (flag === "--account") {
       accounts.push(value.split("=")[0]);
       i++;
-    } else if (flag === "--compact-args") kept.push(flag);
-    else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
+    } else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  const compiled = await compileJson(file, chain, kept);
+  const compiled = await compileJson(file, chain);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
     return;
@@ -1135,7 +1133,6 @@ async function runUsage(where, file, argv, chain, header = false) {
     file,
     "--chain",
     chain,
-    ...kept,
     "--owner",
     DEV,
     "--value",
@@ -1288,7 +1285,7 @@ try {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
         for (const chain of chains) {
-          const compiled = await compileJson(file, chain, []);
+          const compiled = await compileJson(file, chain);
           if (compiled.error !== undefined) errors.push(`${chain}: ${compiled.error}`);
         }
       } else {
@@ -1527,7 +1524,7 @@ for (const file of [
   if (existsSync(file)) keys(JSON.parse(read(file)));
 }
 // SauceScript keywords and builtins, JavaScript keywords, and tool names.
-for (const word of `main require throw ctx evm svm abi hex Math self catch at owner dataLen Uint256
+for (const word of `main require throw ctx evm svm abi hex Math self catch at owner dataLen Uint256 Int256 fromBits program
   Address Account Writable Signer bytes bool string void true false null undefined bigint number
   boolean const let function return if else for while break continue of in new import from export
   default interface type await async typeof pnpm node npm npx tsc git cast sauce`.split(/\s+/))

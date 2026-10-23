@@ -22,14 +22,14 @@ import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
 
 function main(bridgeAddress: Address): Uint256 {
   const bridge = IL1StandardBridge.at(bridgeAddress);
-  bridge.depositETH(200000, 0x00);
+  bridge.depositETH(200000, hex``);
   return 1;
 }
 ```
 
 - ETH amount is sent as `msg.value`
 - `_minGasLimit`: Minimum gas for the L2 deposit execution (200000 is a safe default)
-- `_extraData`: Optional extra data (typically `0x00`)
+- `_extraData`: Optional extra data (typically ` hex`` `)
 
 ### depositERC20
 
@@ -45,7 +45,7 @@ function main(
   amount: Uint256,
 ): Uint256 {
   const bridge = IL1StandardBridge.at(bridgeAddress);
-  bridge.depositERC20(l1Token, l2Token, amount, 200000, 0x00);
+  bridge.depositERC20(l1Token, l2Token, amount, 200000, hex``);
   return 1;
 }
 ```
@@ -54,7 +54,7 @@ function main(
 - `l2Token`: Corresponding token address on Base L2 (must be the official bridged representation)
 - `amount`: Amount of tokens to deposit
 - `_minGasLimit`: Minimum gas for L2 execution (200000 is a safe default)
-- `_extraData`: Optional extra data (typically `0x00`)
+- `_extraData`: Optional extra data (typically ` hex`` `)
 - Requires ERC-20 approval to the L1StandardBridge
 
 ## Deployments and ABI

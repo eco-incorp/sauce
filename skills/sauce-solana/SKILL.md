@@ -238,7 +238,7 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - **Scalar parameters are runtime arguments** (`--args`); `Account` parameters are not encoded. A
   32-byte key the program is given, such as a mint, is an `Address` argument passed as a base58
   public key (or its 0x hex), or as a registered token, `USDC` or `mint:USDC`, meaning its mint; it
-  is encoded as one ABI word (not with `--compact-args`). It is an `Account` parameter when the
+  is encoded as one ABI word. It is an `Account` parameter when the
   program reads or writes that account. A registered symbol (`USDC`) is mainnet's mint; for
   devnet's, pass the key `sauce globals --chain solana` lists.
 - **`ctx` on Solana**: `ctx.msgSender()` is the first signer among the accounts the engine receives
@@ -420,24 +420,19 @@ sauce run token-2022.sauce.ts --chain solana --keypair <keypair> \
 
 ## Transaction size
 
-A Solana transaction is at most **1,232 bytes**, and the cook carries the program and its
-arguments. The cook adds about 404 bytes and 33 more per account (538 with four accounts), so with
-four accounts a program and its arguments have about 694 bytes; a direct cook (`--via engine`)
-carries no Kitchen, Pot or salt and adds about 100 bytes less. What costs bytes:
+A Solana transaction is at most **1,232 bytes**. The final size includes the program, ABI
+arguments, accounts, signatures and transaction setup. Compiler/release changes can alter the
+program size, so budget from the current compiled artifact and serialized transaction, not a
+fixed per-operation estimate.
 
-| What                                               | About                                                                                     |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| each `require` message                             | its bytes                                                                                 |
-| a `@sauce/token` `transfer`                        | 280 bytes, a second 50                                                                    |
-| a `transferChecked`                                | 500                                                                                       |
-| a first read (`balanceOf`)                         | 260, a read of another kind 40 more (the reads share their checks)                        |
-| a token method (the function and its holder check) | `USDC.transfer(to, amount)` 360 bytes and four accounts; a Token-2022 mint's 585 and five |
-| each account                                       | 33                                                                                        |
-| arguments                                          | 32 a `Uint256`; `--compact-args` encodes it in 7                                          |
+Longer messages and more calls increase the program; additional accounts increase transaction
+metadata unless compressed through a lookup table. ABI scalar inputs take 32 bytes each;
+dynamic inputs add offsets, lengths and data. `sauce compile --json` reports program/payload size,
+and `sauce tx` reports whether the cook fits.
 
 A program that does not fit is **staged**: written into a code buffer first, then cooked from it.
-Only `sauce run` stages, and a program that moves a Token-2022 token and measures what arrived is
-already past one transaction.
+`sauce run` handles staging. Token-2022 account checks and larger multi-call programs can require it;
+use the current program's measured size rather than assuming every transfer fits.
 
 ## Running
 

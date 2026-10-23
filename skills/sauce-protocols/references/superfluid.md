@@ -27,10 +27,10 @@ function main(
   token: Address,
   sender: Address,
   receiver: Address,
-  flowrate: Uint256,
+  flowrate: Int256,
 ): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.createFlow(token, sender, receiver, flowrate, 0x00);
+  forwarder.createFlow(token, sender, receiver, flowrate, hex``);
   return 1;
 }
 
@@ -41,10 +41,10 @@ function main(
   token: Address,
   sender: Address,
   receiver: Address,
-  flowrate: Uint256,
+  flowrate: Int256,
 ): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.updateFlow(token, sender, receiver, flowrate, 0x00);
+  forwarder.updateFlow(token, sender, receiver, flowrate, hex``);
   return 1;
 }
 
@@ -57,7 +57,7 @@ function main(
   receiver: Address,
 ): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.deleteFlow(token, sender, receiver, 0x00);
+  forwarder.deleteFlow(token, sender, receiver, hex``);
   return 1;
 }
 ```

@@ -3,7 +3,7 @@
   "abis": {
     "ERC20": "[{\"type\":\"function\",\"name\":\"balanceOf\",\"stateMutability\":\"view\",\"inputs\":[{\"name\":\"owner\",\"type\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"totalSupply\",\"stateMutability\":\"view\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"transfer\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"to\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]},{\"type\":\"function\",\"name\":\"approve\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"spender\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[]}]"
   },
-  "count": 83,
+  "count": 82,
   "intrinsics": [
     {
       "name": "ctx.msgSender",
@@ -381,83 +381,53 @@
       }
     },
     {
-      "name": "Math.sDiv",
-      "group": "Math",
-      "signature": "Math.sDiv(a: Uint256, b: Uint256): Uint256",
+      "name": "Int256",
+      "group": "integer",
+      "signature": "Int256(value: integer): Int256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2); }",
-        "svm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2); }"
+        "evm": "function main(amount: Uint256): Int256 { return -Int256(amount); }",
+        "svm": "function main(amount: Uint256): Int256 { return -Int256(amount); }"
       }
     },
     {
-      "name": "Math.sMod",
-      "group": "Math",
-      "signature": "Math.sMod(a: Uint256, b: Uint256): Uint256",
+      "name": "Uint256",
+      "group": "integer",
+      "signature": "Uint256(value: integer): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3); }",
-        "svm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3); }"
+        "evm": "function main(delta: Int256): Uint256 { return Uint256(delta); }",
+        "svm": "function main(delta: Int256): Uint256 { return Uint256(delta); }"
       }
     },
     {
-      "name": "Math.sShr",
-      "group": "Math",
-      "signature": "Math.sShr(value: Uint256, bits: Uint256): Uint256",
+      "name": "Int256.fromBits",
+      "group": "integer",
+      "signature": "Int256.fromBits(value: Uint256): Int256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1); }",
-        "svm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1); }"
+        "evm": "function main(word: Uint256): Int256 { return Int256.fromBits(word) / 2; }",
+        "svm": "function main(word: Uint256): Int256 { return Int256.fromBits(word) / 2; }"
+      }
+    },
+    {
+      "name": "Uint256.fromBits",
+      "group": "integer",
+      "signature": "Uint256.fromBits(value: Int256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(delta: Int256): Uint256 { return Uint256.fromBits(delta); }",
+        "svm": "function main(delta: Int256): Uint256 { return Uint256.fromBits(delta); }"
       }
     },
     {
       "name": "Math.signExtend",
       "group": "Math",
-      "signature": "Math.signExtend(value: Uint256, byte: Uint256): Uint256",
+      "signature": "Math.signExtend(value: integer, byte: Uint256): Int256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2); }",
-        "svm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2); }"
-      }
-    },
-    {
-      "name": "Math.sLt",
-      "group": "Math",
-      "signature": "Math.sLt(a: Uint256, b: Uint256): Uint256",
-      "targets": ["evm", "svm"],
-      "example": {
-        "evm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0)) { return 1; } return 0; }",
-        "svm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0)) { return 1; } return 0; }"
-      }
-    },
-    {
-      "name": "Math.sGt",
-      "group": "Math",
-      "signature": "Math.sGt(a: Uint256, b: Uint256): Uint256",
-      "targets": ["evm", "svm"],
-      "example": {
-        "evm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGt(a, b); }",
-        "svm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGt(a, b); }"
-      }
-    },
-    {
-      "name": "Math.sLte",
-      "group": "Math",
-      "signature": "Math.sLte(a: Uint256, b: Uint256): Uint256",
-      "targets": ["evm", "svm"],
-      "example": {
-        "evm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sLte(a, b); }",
-        "svm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sLte(a, b); }"
-      }
-    },
-    {
-      "name": "Math.sGte",
-      "group": "Math",
-      "signature": "Math.sGte(a: Uint256, b: Uint256): Uint256",
-      "targets": ["evm", "svm"],
-      "example": {
-        "evm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGte(a, b); }",
-        "svm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGte(a, b); }"
+        "evm": "function main(raw: Uint256): Int256 { return Math.signExtend(raw, 2); }",
+        "svm": "function main(raw: Uint256): Int256 { return Math.signExtend(raw, 2); }"
       }
     },
     {
@@ -493,10 +463,10 @@
     {
       "name": "evm.call",
       "group": "evm",
-      "signature": "evm.call(address: Uint256, value: Uint256, data: bytes): bytes",
+      "signature": "evm.call(address: Uint256, value: Uint256, data: bytes, gas?: Uint256): bytes",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(weth: Address, amount: Uint256): bytes { return evm.call(weth, amount, hex`d0e30db0`); }"
+        "evm": "function main(weth: Address, amount: Uint256): bytes { return evm.call(weth, amount, hex`d0e30db0`, 50000); }"
       },
       "unavailable": {
         "svm": {
@@ -508,10 +478,10 @@
     {
       "name": "evm.static",
       "group": "evm",
-      "signature": "evm.static(address: Uint256, data: bytes): bytes",
+      "signature": "evm.static(address: Uint256, data: bytes, gas?: Uint256): bytes",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(pool: Address, query: bytes): bytes { return evm.static(pool, query); }"
+        "evm": "function main(pool: Address, query: bytes): bytes { return evm.static(pool, query, 50000); }"
       },
       "unavailable": {
         "svm": {
@@ -523,10 +493,10 @@
     {
       "name": "evm.delegate",
       "group": "evm",
-      "signature": "evm.delegate(address: Uint256, data: bytes): bytes",
+      "signature": "evm.delegate(address: Uint256, data: bytes, gas?: Uint256): bytes",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(library: Address, data: bytes): bytes { return evm.delegate(library, data); }"
+        "evm": "function main(library: Address, data: bytes): bytes { return evm.delegate(library, data, 50000); }"
       },
       "unavailable": {
         "svm": {
@@ -811,6 +781,16 @@
       }
     },
     {
+      "name": "program",
+      "group": "program",
+      "signature": "program(closure: function, ...args: value[]): { code: bytes, args: bytes }",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(delta: Int256): bytes { const nested = program((divisor: Int256): Int256 => delta / divisor, 2); return eval(nested.code.concat(nested.args)); }",
+        "svm": "function main(delta: Int256): bytes { const nested = program((divisor: Int256): Int256 => delta / divisor, 2); return eval(nested.code.concat(nested.args)); }"
+      }
+    },
+    {
       "name": ".slice",
       "group": "method",
       "signature": "bytes.slice(start: Uint256, end: Uint256): bytes",
@@ -991,11 +971,11 @@
     {
       "name": ".catch (statement)",
       "group": "binding",
-      "signature": "<external call>.catch(() => { ... })",
+      "signature": "<external call>.catch((error) => { ... })",
       "targets": ["evm"],
       "contracts": ["ERC20"],
       "example": {
-        "evm": "function main(token: Address, spender: Address, amount: Uint256): Uint256 { let approved = 1; ERC20.at(token).approve(spender, amount).catch(() => { approved = 0; }); return approved; }"
+        "evm": "function main(token: Address, spender: Address, amount: Uint256): Uint256 { let failedBytes = 0; ERC20.at(token).approve(spender, amount).catch((error) => { failedBytes = error.length; }); return failedBytes; }"
       }
     },
     {
@@ -1012,6 +992,16 @@
           "program": "function main(p: Account, d: bytes): Uint256 { return svm.call(p, [], d).toLe().catch(() => { return 0; }); }",
           "error": "`.catch()` is not available on the svm target"
         }
+      }
+    },
+    {
+      "name": ".gas",
+      "group": "binding",
+      "signature": "<external call>.gas(cap)",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(token: Address, who: Address): Uint256 { return ERC20.at(token).balanceOf(who).gas(50000).catch(() => { return 0; }); }"
       }
     },
     {
@@ -1037,11 +1027,11 @@
     {
       "name": "unary minus",
       "group": "construct",
-      "signature": "-x: Uint256",
+      "signature": "-x: Int256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(x: Uint256): Uint256 { return -x; }",
-        "svm": "function main(x: Uint256): Uint256 { return -x; }"
+        "evm": "function main(x: Int256): Int256 { return -x; }",
+        "svm": "function main(x: Int256): Int256 { return -x; }"
       }
     }
   ]

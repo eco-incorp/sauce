@@ -136,8 +136,7 @@ sauce compile pay.sauce.ts --chain base --json \
 It prints one JSON object. The parts you will read:
 
 - `entryParams`: `main`'s parameters, each with its `name` and `type`, in the order `--args` takes
-  them. `entryEncoding` is how they are appended to the program: `abi-v1` by default, or
-  `compact-v1` with `--compact-args`, which also reports `entrySchema`.
+  them. `entryEncoding` is always `abi-v1`: the encoded arguments are appended to the bytecode.
 - `size`, the program's bytes, and `payload`, the size of the program with `main`'s arguments
   appended (`size` and `argumentsSize`). It is `null` until you give `--args` or `--args-json`.
 - `defines`: each name the chain gave the program, with its value, its `kind` (a `token` symbol, a

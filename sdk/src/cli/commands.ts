@@ -151,8 +151,6 @@ export interface ProgramInput {
   /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
    *  report shows as one. */
   readonly addressDefines?: readonly string[];
-  /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
-  readonly compactArgs: boolean;
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
    * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
@@ -201,7 +199,6 @@ function compileOptions(
 
   return {
     defines: input.defines,
-    ...(input.compactArgs ? { compactArgs: true } : {}),
     ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
@@ -357,7 +354,6 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
       ...(program.derivedValues === undefined ? {} : { derivedValues: program.derivedValues }),
-      entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: mainReturnType(input.text) ?? null,
       defines,

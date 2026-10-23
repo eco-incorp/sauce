@@ -36,7 +36,7 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12RouterGeneration } from "../../src/deployments/index.js";
+import { v12DeployedAddresses } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
@@ -315,8 +315,8 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       );
     });
 
-    it("is the release's generation-4 Router, and it answers both renamed callbacks", () => {
-      expect(v12RouterGeneration()).toBe(4);
+    it("is the release's content-addressed Router, and it answers both renamed callbacks", () => {
+      expect(v12DeployedAddresses().evm.contracts.router.addressing).toBe("content");
       const answered = ISAUCE_ROUTER.abi
         .filter((item) => item.type === "function")
         .map((item) => (item as { name: string }).name);

@@ -65,6 +65,7 @@ import {
   deriveProgramDataPda,
   derivePotPda,
   getTransactionSize,
+  KITCHEN_DISCRIMINATORS,
   MAX_POT_LEN,
 } from "../src/svm/index.js";
 import { svmSettleSource } from "../src/svm/recipes/index.js";
@@ -121,6 +122,20 @@ async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<
   return { code: await runCli(argv, io), stdout, stderr };
 }
 const sauce = (...argv: string[]): Promise<Run> => sauceWith({}, ...argv);
+
+/** A live byte read keeps the whole constant in the program without returning a large blob. */
+const blobSource = (bytes: number, expectedByte = 0xab): string =>
+  [
+    "// @chain solana",
+    "function main(): Uint256 {",
+    `  const blob = hex\`${"ab".repeat(bytes)}\`;`,
+    `  const at = ctx.timestamp() % ${bytes};`,
+    "  const value = blob.slice(at, at + 1).toBe();",
+    `  require(value == ${expectedByte});`,
+    "  return value;",
+    "}",
+    "",
+  ].join("\n");
 
 const json = (run: Run): Record<string, unknown> => {
   if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}${run.stdout}`);
@@ -182,10 +197,10 @@ interface Landed {
 
 /** The Kitchen instruction a transaction makes, by its Anchor discriminator. */
 const KITCHEN_CALLS = {
-  cook: [147, 233, 205, 239, 200, 21, 190, 159],
-  cookFromAccount: [247, 166, 195, 248, 78, 176, 147, 84],
-  writeCodeBuffer: [205, 152, 182, 5, 148, 70, 20, 25],
-  closeCodeBuffer: [195, 203, 47, 242, 198, 177, 247, 6],
+  cook: KITCHEN_DISCRIMINATORS.cook,
+  cookFromAccount: KITCHEN_DISCRIMINATORS.cookFromAccount,
+  writeCodeBuffer: KITCHEN_DISCRIMINATORS.writeCodeBuffer,
+  closeCodeBuffer: KITCHEN_DISCRIMINATORS.closeCodeBuffer,
 } as const;
 type KitchenCall = keyof typeof KITCHEN_CALLS;
 
@@ -569,20 +584,10 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     }
   });
 
-  /** A program whose bytecode carries a `bytes`-byte constant, and checks its length is `length`. */
-  const blobProgram = (name: string, bytes: number, length = bytes): string => {
+  /** A program carrying `bytes` literal bytes and checking a runtime-selected byte. */
+  const blobProgram = (name: string, bytes: number, expectedByte = 0xab): string => {
     const path = join(work, name);
-    writeFileSync(
-      path,
-      [
-        "// @chain solana",
-        "function main() {",
-        `  const blob = hex\`${"ab".repeat(bytes)}\`;`,
-        `  require(blob.length == ${length});`,
-        "}",
-        "",
-      ].join("\n"),
-    );
+    writeFileSync(path, blobSource(bytes, expectedByte));
 
     return path;
   };
@@ -1428,18 +1433,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
 
   it("asks before creating a Pot whose creation does not fit in the cook's transaction; -y creates it", async () => {
     // A program staged in a buffer: its cook carries no program, but not the Pot's creation either.
-    const big = join(work, "big-fresh.sauce.ts");
-    writeFileSync(
-      big,
-      [
-        "// @chain solana",
-        "function main() {",
-        `  const blob = hex\`${"cd".repeat(1500)}\`;`,
-        "  require(blob.length == 1500);",
-        "}",
-        "",
-      ].join("\n"),
-    );
+    const big = blobProgram("big-fresh.sauce.ts", 1500);
     const pot = await potOf(hexToBytes(potSalt("fresh-big")));
     const argv = ["run", big, "--salt", "fresh-big", "--rpc-url", RPC_URL, "--keypair", owner.path];
     const noTerminal = await sauce(...argv);
@@ -1472,18 +1466,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
   }, 120_000);
 
   it("stages a program too large for one transaction, cooks it, and closes the buffer", async () => {
-    const big = join(work, "big.sauce.ts");
-    writeFileSync(
-      big,
-      [
-        "// @chain solana",
-        "function main() {",
-        `  const blob = hex\`${"ab".repeat(1500)}\`;`,
-        "  require(blob.length == 1500);",
-        "}",
-        "",
-      ].join("\n"),
-    );
+    const big = blobProgram("big.sauce.ts", 1500);
     const out = json(
       await sauce(
         "run",
@@ -1762,10 +1745,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       maxExecutionFee: FEE,
     });
     const sizes = async (bytes: number): Promise<[number, number]> => {
-      const { bytecode } = compileSauceProgram(
-        "solana",
-        `function main() {\n  const blob = hex\`${"ab".repeat(bytes)}\`;\n  require(blob.length == ${bytes});\n}\n`,
-      );
+      const { bytecode } = compileSauceProgram("solana", blobSource(bytes));
       const bare = await client.cookTransaction(bytecode, { accounts: [] }, {}, {});
       const limited = await client.cookTransaction(
         bytecode,
@@ -1778,14 +1758,18 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
 
       return [getTransactionSize(bare), getTransactionSize(limited)];
     };
-    let bytes = 600;
-    for (; ; bytes++) {
-      const [bare, limited] = await sizes(bytes);
-      if (limited > 1232) {
-        expect(bare).toBeLessThanOrEqual(1232);
-        break;
-      }
+    // The live literal grows with the source. Bracket the packet boundary explicitly so a
+    // fixture that stops retaining its bytes fails instead of searching forever.
+    let fits = 1;
+    let bytes = 1232;
+    expect((await sizes(fits))[1]).toBeLessThanOrEqual(1232);
+    expect((await sizes(bytes))[1]).toBeGreaterThan(1232);
+    while (bytes - fits > 1) {
+      const middle = Math.floor((fits + bytes) / 2);
+      if ((await sizes(middle))[1] > 1232) bytes = middle;
+      else fits = middle;
     }
+    expect((await sizes(bytes))[0]).toBeLessThanOrEqual(1232);
     // `sauce compile --json` measures that same transaction offline, on either side of the limit.
     for (const length of [bytes - 1, bytes]) {
       const [, limited] = await sizes(length);

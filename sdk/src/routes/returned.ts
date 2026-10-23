@@ -20,6 +20,7 @@ export type Returned =
 function wordsOf(type: EntryType): number | undefined {
   switch (type.kind) {
     case "uint":
+    case "int":
     case "address":
     case "bool":
     case "account":
@@ -64,7 +65,9 @@ function readValue(
       : getAddress(bytesToHex(word.subarray(12)));
   }
 
-  return BigInt(bytesToHex(word)).toString();
+  const value = BigInt(bytesToHex(word));
+
+  return (type.kind === "int" ? BigInt.asIntN(256, value) : value).toString();
 }
 
 /**

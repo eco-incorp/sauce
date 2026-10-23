@@ -37,18 +37,15 @@ From 0.99.2 on, every SDK release pins the compiler exactly.
 
 At 1.0 each package said what it promises to keep stable, and from then on a breaking change to it
 raises the major version; below 1.0 it raised the minor. The compiler promises its JavaScript API
-(`CompileOptions`, `CompileResult` and the resolver contract), v12-evm its instruction set and what
-each instruction does, v12-svm its wire contract (the instruction encoding, the account order and
-the instruction semantics), kitchen-evm its ABIs and how their addresses are derived, and
-kitchen-svm its Anchor IDL. No package promises the bytecode a program compiles to, or an address
+(`CompileOptions`, `CompileResult` and the resolver contract), the engines their supported program
+and transaction formats, kitchen-evm its public contract APIs and address derivation, and
+kitchen-svm its public instruction APIs. No package promises the bytecode a program compiles to, or an address
 derived from a version.
 
-A version number alone does not tell you whether Pot addresses moved: kitchen-evm 1.1.0 and 1.2.0
-changed the Pot address family as documented exceptions inside 1.x. Derive Pot addresses with the
-SDK rather than from a version. A cook names its engine, so an existing Pot keeps cooking on the
-engine it was made for, and nothing migrates. Every engine in the table below sits at an address
-that follows its version. [Deployments](reference/deployments.md) lists the addresses of the release
-the SDK pins.
+Pot addresses can change even within a 1.x release: kitchen-evm 1.1.0, 1.2.0 and 1.3.0 each changed
+the Pot address family. Derive addresses with the SDK rather than from a version number. Existing
+Pots and programs retain their original pairing; an upgrade does not move their funds or migrate
+them. [Deployments](reference/deployments.md) lists the SDK's current release addresses.
 
 The SDK is still below 1.0, and it has made breaking changes in patch releases. Read each release's
 **Now refused**, **Removed** and **Also breaking** items before you upgrade, even for a patch.
@@ -59,7 +56,7 @@ Each SDK release and the five releases it pins:
 
 | SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| Unreleased | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
 | 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
 | 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
@@ -97,14 +94,70 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 ## SDK Unreleased
 
-Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 1.0.0. Same compiler
-and engines as 0.99.15, so each change here comes from the SDK.
+Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0.
+Upgrade all five together; recompile programs and rebuild transactions. The
+[upgrade guide](guides/upgrading.md#moving-from-compiler-25-to-26) walks through the breaking changes.
 
 This release removes cross-chain intents from the SDK, the `sauce` command and the MCP server.
 Bridging is not an intent and does not change: the `acrossBridge`, `stargateBridge`, `cctpBridge`
 and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry stay.
 
+The EVM testing kit's `run` now uses the pending block's gas limit as its budget, without a
+gas estimate or a simulation before sending. A cheaper caught-failure path no longer sets the
+budget. The result's `gasUsed` remains the gas actually consumed, not the budget; unused gas is
+not charged. See the [testing kit](api/testing-kit.md#cookresult).
+
 ### SauceScript
+
+- **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
+  assignments on success, or rolls them all back before handling failure. Work before the block
+  remains. A sole external-call block has the narrower `.catch()` boundary: successful-return
+  decoding is outside it. `catch (error)` and `.catch((error) => { … })` receive at most 256 raw
+  revert bytes. There is no `finally`, and SVM has no catch support.
+- **Breaking (both): `Int256`.** Negative literals, ABI `intN` outputs and `Math.signExtend`
+  retain signedness. Use ordinary signed operators and checked `Int256(value)`/`Uint256(value)`
+  conversions; `.fromBits(value)` is explicit bit reinterpretation. Mixed integer arithmetic needs
+  conversion, narrow ABI integers are checked, and unsigned negation of a nonzero value now fails:
+  write `-Int256(amount)`. Signed helpers need a `: Int256` return annotation.
+- **Removed (both):** `Math.sDiv`, `sMod`, `sShr`, `sLt`, `sGt`, `sLte` and `sGte`. Use `/`, `%`,
+  `>>`, `<`, `>`, `<=`, `>=` on `Int256`; signed minimum divided by `-1` now overflows rather than wraps.
+- **Changed (EVM): unread bound-call outputs.** A discarded result or unused variable skips all
+  decoding and output checks, even without optimization. An empty/malformed successful reply, or
+  no-code target, can then pass. Reading any part still decodes the whole declared result; this
+  release does not add partial decoding. Explicit `abi.decode` remains checked. Prefer checked
+  SDK token writes; a discarded raw ERC-20 result does not enforce empty-or-true semantics.
+- **Added (both):** static objects/arrays can retain compile-time names and contract bindings;
+  known branches and helper arguments specialize at compilation. `program(closure, ...args)` builds
+  a separate program with explicit, read-only captures. EVM calls accept a gas cap through `.gas(n)`
+  or the final raw-call argument. See the [language reference](reference/saucescript.md).
+
+### Compiler and engines
+
+- **Compiler 2.5.0 → 2.6.0:** ABI-v1 is the only entry encoding. Compact options/codecs and
+  `entrySchema` are removed from the SDK. Raw compile results add `entryParams`, `entrySignature`
+  and nested `programs` reports; `isaRevision` is now the opaque label `"stack-v3"`.
+  `entryKind: "closure"` parses a function-expression string, and raw scalar `args` binds inputs at compile
+  time. Diagnostics can carry a stable `code`. Optimization can reduce code size or execution
+  work, but is not a runtime resource model; known PDA derivation also runs without optimization
+  and can increase SVM program size. [Compiler API](api/compiler.md) documents the contract.
+- **Settlement verification:** the bundled settlement program is recompiled with 2.6.0 and has a
+  new hash and length. Import `SETTLE_WIRE`; explicitly accept a historical `{ hash, bytes }` pin
+  if older payloads must remain valid. See [historical pins](guides/verification.md#compiler-upgrades-and-historical-pins).
+- **EVM engine and Kitchen 1.2.0 → 1.3.0:** pair with compiler 2.6.0. New Pots have different
+  addresses and old Pots do not run on the new engine. Existing funds stay at the old Pot; keep
+  its earlier SDK/compiler/engine pairing to manage them. The Pot ABI adds `cookSigned` and
+  `invalidateNonces`, the `SignedCook`/`NoncesInvalidated` events and signed-cook errors. Only Pots
+  created under the new release support these calls; old Pots do not gain them. The SDK exposes
+  the ABI, not a high-level signed-cook helper. The execution Router is now content-addressed,
+  not generation-numbered; use `v12RouterAddress()`, not the removed `v12RouterGeneration()`.
+  The separate quote Router is unchanged.
+- **SVM engine 1.3.0 → 1.4.0 and Kitchen 1.0.0 → 1.1.0:** pair with compiler 2.6.0. The engine
+  program id and Kitchen transaction format change; rebuild cooks/staged-cook instructions with
+  this SDK rather than reusing serialized transactions. Existing high-level builder calls need no
+  extra parameter. Catch support remains EVM-only.
+  Wallet spending limits recognize the updated cook format.
+
+### SDK removals
 
 - **Removed** (EVM): A program can no longer open a cross-chain intent. `Base(() => { … })`, with
   `.reward({ … })` or `.nest()`, for any chain, no longer compiles, whether its body is token
@@ -256,15 +309,11 @@ function main(vault: Address, to: Address, amount: Uint256): Uint256 {
 - **Changed** (Solana): A program compiled for Solana still cannot open an intent. The error now
   says to publish the file from a wallet instead, with `sauce intent publish <file> --chain solana`.
 
-```js
-function main(recipient: Address, amount: Uint256) {
-  Solana(() => {
-    USDC.transfer(recipient, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
-}
-```
-
-It compiles when `recipient` and `amount` are bound with `--args` as the file is published.
+In 0.99.15, an EVM-origin intent could transfer USDC on Solana when its recipient and amount were
+bound with `--args` at publication. Program-opened intents and the `intents` compile option are
+removed in the Unreleased SDK (compiler 2.6.0). Current programs can still bind entry arguments
+with `routes.compileSauceProgram(chain, source, { args })`; see
+[Programs and arguments](guides/cli-programs.md) for supported examples.
 
 #### MetaDAO on Solana
 
@@ -602,31 +651,19 @@ Compiler 2.4.0, v12-evm 1.1.0, kitchen-evm 1.1.0, v12-svm 1.3.0 and kitchen-svm 
   `Cctp.TokenMessenger.depositForBurn(...)` no longer decodes a return value the contract does not
   send, which made every call revert; 1inch `unoswap`'s fourth argument is a single word.
 
-```js
-function main() {
-  const to = ctx.msgSender();
-  const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
-    USDC.transfer(to, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
-}
-```
-
-The intent's deadline and creator come from the compile options.
+In 0.99.5, an EVM-origin program could capture its sender and USDC balance at run time and open
+an Arbitrum intent transferring that amount to the sender. Its deadline and creator came from
+the `intents` compile option. Program-opened intents and that option are removed in the
+Unreleased SDK (compiler 2.6.0); see [Programs and arguments](guides/cli-programs.md) for current
+single-chain programs.
 
 ### Compiler and engines
 
-- **Compiler 2.3.0 → 2.4.0:** Pairs with v12-evm 1.1.0, kitchen-evm 1.1.0 and v12-svm 1.3.0; the
-  first Changed item above says what that means for your programs. On an older Solana engine, 2.4.0
-  output fails loudly at the first spilled stack slot. The instruction-set label does not change, so
-  pair by exact version. EVM `abi.encode` and external-call arguments are compiled with a type list
-  from the compiler, so nested tuples that mix scalars and pointers work at any depth. The run-time
-  nesting limit of `abi.encode` is 146 levels, down from 204, and the compiler does not check it.
-  Solana output is smaller and cheaper to run.
-- **v12-evm 1.0.1 → 1.1.0:** Pairs with compiler 2.4.0. `abi.encode` and call arguments are read
-  from the compiler's type list, so a compiler and an engine from different releases disagree about
-  them. A plain number inside a tuple is no longer mistaken for a pointer, which is the Fixed (EVM)
-  item above. The Pot and Router changes that came with this engine are under kitchen-evm 1.1.0.
+- **Compiler 2.3.0 → 2.4.0:** Pairs with v12-evm 1.1.0, kitchen-evm 1.1.0 and v12-svm 1.3.0.
+  Pair by exact version even when an artifact's revision label stays the same. Nested EVM tuples
+  in `abi.encode` and call arguments are handled correctly. Solana output is smaller and cheaper.
+- **v12-evm 1.0.1 → 1.1.0:** Pairs with compiler 2.4.0. Recompile programs rather than mixing
+  compiler and engine releases; the nested tuple fix above changes the required pairing.
 - **kitchen-evm 1.0.0 → 1.1.0:** Pairs with compiler 2.4.0 and v12-evm 1.1.0. Every Pot made after
   the upgrade has a new address, for two reasons: a Pot is created with no constructor arguments,
   and the Router moves to generation 3 while the Kitchen stays at generation 2. Both shipped as a
@@ -637,16 +674,10 @@ The intent's deadline and creator come from the compile options.
   another Router. The Router accepts Synthra V3 and UnitFlow V3 callbacks, bounded Maverick V2 swaps
   take a tick limit, and swap callbacks are single-use and cannot be paid more than the swap's exact
   input.
-- **v12-svm 1.2.0 → 1.3.0:** Pairs with compiler 2.4.0. Compiler output and engine must match: older
-  compiler output fails with `InvalidOpcode` on this engine, and 2.4.0 output fails with
-  `ExpectedDescriptor` on older engines. The 1.2.x engine keeps running older programs. The stack
-  holds 1,056 words instead of 1,024. Every stack slot is an untyped 32-byte word, so compute falls
-  by 1.4% to 41% across the measured workloads and the program binary is 27.7% smaller. A program
-  the compiler produces is unaffected by the new return rule; hand-written Solana bytecode that ends
-  on a bare number fails with `InvalidDescriptor`, so box any number you return. Some scalars read
-  from a tuple, a compact argument or an object-literal field were misread, which changed
-  arithmetic, comparisons, hashes and call arguments; the engine fixes that, and programs compile to
-  the same bytes. Concatenation can no longer copy bytes from beyond the heap's allocation.
+- **v12-svm 1.2.0 → 1.3.0:** Pairs with compiler 2.4.0; older programs need their earlier engine.
+  Execution is cheaper across measured workloads, and the program binary is smaller. Fixes
+  incorrect scalar reads that could affect arithmetic, comparisons, hashes and call arguments;
+  existing affected programs compile to the same bytes. Concatenation rejects invalid data ranges.
 
 **Also breaking:** Pot addresses change with kitchen-evm 1.1.0. No RPC endpoints ship
 (`Chain.rpcUrls` is removed), and the SDK reads no environment variables. Chain accessors are named
@@ -715,7 +746,20 @@ Compiler 2.3.0, v12-evm 1.0.1, kitchen-evm 1.0.0, v12-svm 1.0.1 and kitchen-svm 
 - **Fixed** (EVM): `abi.encode` of an array of numbers could mis-encode an element, without
   reverting. Recompile programs built by an earlier compiler.
 
-Here `quoter.abi.json` is an ABI that declares `quote(uint256) returns (uint256)`:
+Here `quoter.abi.json` contains this ABI (serve it through `options.resolve` when compiling from
+source text rather than a file):
+
+```json
+[
+  {
+    "type": "function",
+    "name": "quote",
+    "stateMutability": "view",
+    "inputs": [{ "name": "amountIn", "type": "uint256" }],
+    "outputs": [{ "name": "amountOut", "type": "uint256" }]
+  }
+]
+```
 
 ```js
 import Quoter from "./quoter.abi.json";
@@ -748,8 +792,7 @@ function main(mint: Account): Uint256 {
   the compiler.
 - **v12-svm 1.0.0 → 1.0.1:** Adds `acct.dataLen`, an account's data length, which `@sauce/token`
   uses to check an SPL mint before it reads supply or decimals; compiler output that uses it needs
-  this engine. Stack operations are much cheaper: total compute fell 22% to 25% on the measured swap
-  programs.
+  this engine. Total compute fell 22% to 25% on the measured swap programs.
 
 **Also breaking:** The package needs Node.js 24 or newer. `IntentOptions` needs `execution`, or both
 `pot` and `engine`. The settle program shrinks from 362 to 356 bytes, with a new hash.
@@ -842,8 +885,8 @@ The [SauceScript reference](reference/saucescript.md) describes the language as 
 - **Compiler 2.2.0:** Compiles for EVM and Solana. The `compactArgs` option, off by default, encodes
   entry arguments in the compact encoding instead of the ABI; `CompileResult` carries `isaRevision`,
   `entryEncoding` and, with `compactArgs`, `entrySchema`, and arguments are encoded with that
-  schema. Its array and tuple element writes take three operands, so its output runs only on the
-  engines released with it, v12-evm 0.8.0 and v12-svm 0.8.0. Pair by exact version.
+  schema. Programs pair with the engines released beside it, v12-evm 0.8.0 and v12-svm 0.8.0;
+  pair by exact version. Compact arguments were subsequently removed in compiler 2.6.
 - **v12-evm 0.8.0:** The engine runs only when called from a Pot the Kitchen made, so call programs
   through the Kitchen and your Pot, never the engine directly. Element and field writes are checked
   before they write, and execution costs less. It decodes compact entry arguments. Nested `eval` is
