@@ -5,18 +5,19 @@
 **Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
 
 > Everything a program can name on ZetaChain: its tokens, and every protocol deployed there with the
-> name a program writes for each contract. ZetaChain is a preview chain: programs compile and
-> simulate here, and the `sauce` command sends nothing.
+> name a program writes for each contract. ZetaChain is a preview chain: programs compile here and
+> the reads work, but the released engine is not deployed here, so nothing is simulated or sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On ZetaChain a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `zetachain`; also `zeta` |
 | Chain id | 7000 |
 | Kind | EVM |
