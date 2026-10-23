@@ -30,7 +30,7 @@ function main() {
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | alETH | `0x0100546F2cD4C9D97f798fFC9755E47865FF7Ee6` | `Alchemix.AlETH` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | alUSD | `0xBC6DA0FE9aD5f3b0d58160288917AA56653660E9` | `Alchemix.AlUSD` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | alchemistAlETH | `0x062Bf725dC4cDF947aa79Ca2aaCCD4F385b13b5c` | `Alchemix.AlchemistAlETH` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | alchemistAlUSD | `0x5C6374a2ac4EBC38DeA0Fc1F8716e5Ea1ADD94dd` | `Alchemix.AlchemistAlUSD` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | alchemistAlUSD | `0x5C6374a2ac4EBC38DeA0Fc1F8716e5Ea1AdD94dd` | `Alchemix.AlchemistAlUSD` |
 
 ## ABI
 

@@ -47,7 +47,7 @@ function main(
 }
 ```
 
-- `routerAddress`: Thruster V3 SwapRouter on Blast (`0x337827814155ECBf24D20231fCA4444F530c0555`)
+- `routerAddress`: Thruster V3 SwapRouter on Blast (`0x337827814155ECBf24D20231fCA4444F530C0555`)
 - `tokenIn` / `tokenOut`: Input and output token addresses
 - `fee`: Pool fee tier (standard Uniswap V3 tiers: `500`, `3000`, `10000`)
 - `amountIn`: Exact input amount (in wei)
