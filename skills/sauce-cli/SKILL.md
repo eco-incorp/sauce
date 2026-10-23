@@ -197,14 +197,18 @@ run deploy it first. `native` and each token count what leaves the wallet or the
 cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
 native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
 and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is signed
-or sent. An ERC-20 approval above what a token's limit leaves room for is refused too. On Solana a
-delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of the wallet or
-the Pot counts as sent, per transaction and per day, and what the wallet spends as a delegate from
-an account it does not own counts as sent; a token account handed to another owner is a send of
-all it holds; and one whose close authority goes to another key, or a Token-2022 mint whose
-permanent delegate the wallet hands to another key, is refused where that token is limited. On
-Solana `native` counts every account the wallet controls (its token accounts, wrapped SOL among
-them, and nonce and stake accounts it is the authority of), net, so wrapping SOL into its own
+or sent. An allowance a transaction leaves another key counts as sent, per transaction and per
+day, with what the transaction moves of the token: an ERC-20's, one granted through Permit2 (the
+ERC-20 approval of Permit2 itself aside), and on Solana a delegate set or raised (SPL Token
+`Approve` or `ApproveChecked`) on a token account of the wallet or the Pot. A spender that is the
+wallet or its Pot is none, and an approval of a token whose decimals cannot be read is refused
+where it is limited. What the wallet spends as a delegate from an account it does not own counts
+as sent. A cook's calldata sent to anything but the wallet's own Pot is a payment like any other.
+On Solana a token account handed to another owner is a send of all it holds, and one whose close
+authority goes to another key, or a Token-2022 mint whose permanent delegate the wallet hands to
+another key, is refused where that token is limited. On Solana `native` counts every account the
+wallet controls (its token accounts, wrapped SOL among them, synced or not, nonce accounts it is
+the authority of and stake accounts it is the withdrawer of), net, so wrapping SOL into its own
 account, or paying the rent of its own token account, counts only the fee. A transaction is held to
 the policy of every wallet that signs it, whichever pays the fee. The measure errs toward counting,
 so a refusal may name more than actually leaves. A Token-2022 mint's permanent delegate the wallet

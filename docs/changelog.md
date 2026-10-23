@@ -125,20 +125,33 @@ it in the same transaction included, and so is one closed and made again at its 
 another token. A close authority given to another key, or a Token-2022 mint's permanent delegate
 handed from the wallet to another key, is refused where that token is limited. `native` counts
 every account the wallet controls, net: its token accounts (wrapped SOL among them, but not what an
-outside delegate may take from it) and the durable nonce and stake accounts it is the authority of,
-and all a wallet holds when the transaction gives it to another program or makes it a nonce
-account another key commands. A balance is counted in its mint's decimals as they were before the
-transaction, and what arrives as they are after it. A mint whose decimals cannot be read refuses
-only the limits that name it. A transaction is held to the policy of every wallet it needs a
-signature from, whichever pays its fee, and a planned one sent from a wallet must be paid by it.
-Every simulation is unsigned, a swap's stops in `sauce run` included, and the wallet signs only a
-transaction its policy has let go. `sauce_wallet_send` checks a whole plan against the policy
-before sending any, counting the rent of the wallet's own token account and of a Pot a cook
-creates as the wallet's, as the send's own measurement does. The measurement errs toward counting:
-wrapped SOL that both an outside delegate and an outside close authority may take counts twice.
-`sauce simulate` and `sauce run` on Solana count a token account's change for its owner before the
-transaction, and name the new owner of one handed over (`ownerAfter` in `tokenChanges`). The SDK
-adds `prepareExecuteTransaction`, which compiles a transaction now and signs it when asked. See
+outside delegate may take from it), the durable nonce accounts it is the authority of and the stake
+accounts it is the withdrawer of, and all a wallet holds when the transaction gives it to another
+program or makes it a nonce account another key commands. A balance is counted in its mint's
+decimals as they were before the transaction, and what arrives as they are after it. A mint whose
+decimals cannot be read refuses only the limits that name it. A transaction is held to the policy
+of every wallet unlocked to sign it, whichever pays its fee, and a planned one sent from a wallet
+must be paid by it. Every simulation of a transaction a wallet signs is unsigned, a swap's stops
+in `sauce run` included, and the wallet signs only a transaction its policy has let go.
+`sauce_wallet_send` checks a whole plan against the policy before sending any, counting the rent
+of the wallet's own token account and of a Pot a cook creates as the wallet's, as the send's own
+measurement does. `sauce simulate` and `sauce run` on Solana count a token account's change for its
+owner before the transaction, and name the new owner of one handed over (`ownerAfter` in
+`tokenChanges`). The SDK adds `prepareExecuteTransaction`, which compiles a transaction now and
+signs it when asked. See [wallets](guides/cli-wallets.md).
+
+Wallet policies close further ways past their limits, on both kinds of chain. On an EVM chain an
+allowance another key keeps (an ERC-20's, or a standing allowance granted through Permit2, whose
+events were not read before) now counts as sent with the transaction's transfers of the token, per
+transaction and in the day's total, where an approval was only checked alone and never reserved;
+an approval of a token whose decimals cannot be read is refused where it is limited, and the
+wallet's own Pot is no longer a spender that counts. A cook's calldata makes a contract the
+wallet's Pot only where the chain shows it is: sent to any other address, or to another owner's
+Pot, what the wallet pays counts. On Solana, wrapped SOL is measured by its lamports, synced into
+its amount or not, and what the wallet spends of it as a delegate counts against `native` too; an
+allowance raised and spent back to where it began counts what it spent and what is left; a
+balance whose mint is made again with other decimals counts at the same raw amount; and a
+transaction that burns a balance of such a mint is measured rather than refused for an error. See
 [wallets](guides/cli-wallets.md).
 
 Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
