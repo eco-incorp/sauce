@@ -20,8 +20,8 @@ Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through opti
 ## Notes
 
 - LI.FI is a bridge **aggregator** -- it routes through underlying bridges (Across, Stargate, Hop, cBridge, etc.)
-- Uses a Diamond proxy pattern (EIP-2535) so the contract address is the same across all chains
-- Same Diamond address (`0x1231DEB6...`) deployed on all supported chains
+- Uses a Diamond proxy pattern (EIP-2535)
+- The Diamond address is the same on every chain but Arc, whose address differs
 - Uses standard EVM chain IDs for `destinationChainId`
 - The `bridge` field in BridgeData specifies which underlying bridge to use
 - `hasSourceSwaps` / `hasDestinationCall` enable swap-then-bridge or bridge-then-execute patterns

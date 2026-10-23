@@ -26,7 +26,7 @@ Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrat
 ## Notes
 
 - Single contract holds ALL liquidity (similar to Balancer V2 Vault and Uniswap V4 PoolManager)
-- Same contract address on both Ethereum and Scroll
+- The contract address differs on Ethereum and Scroll
 - `poolIdx` identifies the pool type: different pool indices have different fee rates and tick spacing
 - Common pool indices: `420` (standard on Ethereum), `36000` (stable pairs on Scroll)
 - Exact-input: `isBuy: true, inBaseQty: true` specifies base paid; `isBuy: false, inBaseQty: false` specifies quote paid
