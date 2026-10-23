@@ -106,6 +106,17 @@ function shapeOfType(
   }
 }
 
+/** The shape of one `abi.decode` field, as its string spells it: `"Address"`, `"Uint256[]"`,
+ *  `"{Uint256, bool}"` (a record with unnamed fields). */
+function shapeOfDecoded(spelled: string): Shape {
+  const type = spelled.trim();
+  if (type.endsWith("]")) {
+    return { kind: "list", element: shapeOfDecoded(type.slice(0, type.lastIndexOf("["))) };
+  }
+
+  return type.startsWith("{") ? RECORD : SCALAR;
+}
+
 /** The shape a declarator's or parameter's annotation gives. */
 function annotated(id: AstNode, types: ReadonlyMap<string, AstNode>): Shape | undefined {
   const annotation = (id as { typeAnnotation?: { typeAnnotation?: AstNode } }).typeAnnotation;
@@ -151,12 +162,28 @@ function shapeOfValue(node: AstNode | null | undefined, shapes: HolderShapes): S
       const object = callee.object as AstNode;
       const property = callee.property as AstNode;
       if (object.type === "Identifier" && BUILTIN_ROOTS.has(nameOf(object))) {
-        // `abi.decode(data, [...])` gives its values as a tuple; the other builtins a number or bytes.
-        return nameOf(object) === "abi" &&
-          property.type === "Identifier" &&
-          nameOf(property) === "decode"
-          ? RECORD
-          : undefined;
+        if (
+          nameOf(object) !== "abi" ||
+          property.type !== "Identifier" ||
+          nameOf(property) !== "decode"
+        ) {
+          return undefined;
+        }
+        // `abi.decode(data, ["Address", "{Uint256, bool}"])` gives a record of those fields, by
+        // position; the other builtins a number or bytes.
+        const spelled = ((node.arguments as AstNode[] | undefined) ?? [])[1];
+        const fields = new Map<string, Shape | undefined>();
+        for (const element of spelled?.type === "ArrayExpression"
+          ? (spelled.elements as (AstNode | null)[])
+          : []) {
+          fields.set(
+            String(fields.size),
+            element?.type === "Literal" && typeof element.value === "string"
+              ? shapeOfDecoded(element.value)
+              : UNKNOWN,
+          );
+        }
+        return { kind: "record", fields };
       }
       // A contract's method (`market.userCollateral(a, b)`): its result may be a struct.
       return UNKNOWN;
@@ -164,7 +191,20 @@ function shapeOfValue(node: AstNode | null | undefined, shapes: HolderShapes): S
     case "MemberExpression": {
       const of = shapeOfValue(node.object as AstNode, shapes);
       if ((node as { computed?: boolean }).computed === true) {
-        return of?.kind === "list" ? of.element : undefined;
+        if (of?.kind === "list") return of.element;
+        // A record's field selected by its constant position: that field's shape. Any other index
+        // of a record, or of a value whose type the text does not show, is a value of unknown type.
+        if (of?.kind !== "record" && of?.kind !== "unknown") return undefined;
+        const index = node.property as AstNode;
+        const position =
+          index.type === "Literal" &&
+          (typeof index.value === "number" || typeof index.value === "bigint")
+            ? Number(index.value)
+            : undefined;
+        const fields = of.kind === "record" ? [...(of.fields?.values() ?? [])] : [];
+        return position !== undefined && position < fields.length
+          ? (fields[position] ?? SCALAR)
+          : UNKNOWN;
       }
       // A field: of a record whose declaration types it, that type; of a value whose type the text
       // does not show, or a record whose fields it does not name, a value of unknown type too.

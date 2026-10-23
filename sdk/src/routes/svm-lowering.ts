@@ -21,7 +21,15 @@
  */
 import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 
-import { countDeclarations, isTypeDeclaration, TYPE_KEYS, walk, type AstNode } from "./ast-walk.js";
+import {
+  collectPatternNames,
+  countDeclarations,
+  isTypeDeclaration,
+  TYPE_KEYS,
+  walk,
+  type AstNode,
+} from "./ast-walk.js";
+import { shadowed, walkScoped, type Scope } from "./lexical-scope.js";
 import { parseSauce } from "./parse.js";
 import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { applySplices, methodCall, type MethodCall, type Splice } from "./token-rewrite.js";
@@ -180,6 +188,15 @@ export function hexKey(key: string): string {
   return `0x${[...getAddressEncoder().encode(address(key))].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** The type `node`'s annotation names, where it is one name: `Address`, `Account` (roles or not). */
+export function annotatedType(node: AstNode): string | undefined {
+  const annotation = (node as { typeAnnotation?: { typeAnnotation?: AstNode } }).typeAnnotation
+    ?.typeAnnotation;
+  const typeName = (annotation as { typeName?: AstNode } | undefined)?.typeName;
+
+  return typeName?.type === "Identifier" ? nameOf(typeName) : undefined;
+}
+
 /**
  * A function's `Address` and `Account` parameters, by name. Main's carry their roles (whether an
  * account is writable) and their type; a top-level function's account may declare no role (the
@@ -192,8 +209,7 @@ function paramsOf(fn: AstNode, helper?: string): ReadonlyMap<string, Param> {
     if (param.type !== "Identifier") continue;
     const annotation = (param as { typeAnnotation?: { typeAnnotation?: AstNode } }).typeAnnotation
       ?.typeAnnotation;
-    const typeName = (annotation as { typeName?: AstNode } | undefined)?.typeName;
-    const type = typeName?.type === "Identifier" ? nameOf(typeName) : undefined;
+    const type = annotatedType(param);
     const roles = (
       (annotation as { typeArguments?: { params?: AstNode[] } } | undefined)?.typeArguments
         ?.params ?? []
@@ -403,7 +419,11 @@ const codeAndStrings = (text: string): string[] => text.split(/("(?:[^"\\]|\\.)*
 const identifiers = (text: string): string[] =>
   codeAndStrings(text).flatMap((part, i) => (i % 2 === 1 ? [] : (part.match(NAME) ?? [])));
 
-/** The text with each name `to` maps read as what it maps it to. */
+/**
+ * The text with each name `to` maps read as what it maps it to. A splice's text holds only what
+ * the program reads there, never a record's key (a shorthand `{ pot }` keeps its own key, and its
+ * splice is the value after it), so every name in it is a read.
+ */
 const substitute = (text: string, to: ReadonlyMap<string, string>): string =>
   codeAndStrings(text)
     .map((part, i) => (i % 2 === 1 ? part : part.replace(NAME, (name) => to.get(name) ?? name)))
@@ -576,9 +596,9 @@ export class SvmLowering {
   readonly main: AstNode | undefined;
   /** Each node's parent. */
   readonly parents: ReadonlyMap<AstNode, AstNode>;
-  /** Every read of `pot` where the program does not declare it: the Pot. */
+  /** Every read of `pot` where the program does not bind it (`owns`): the Pot. */
   readonly potReads: ReadonlySet<AstNode>;
-  /** Every read of `self` where the program does not declare it: refused, naming `pot`. */
+  /** Every read of `self` where the program does not bind it: refused, naming `pot`. */
   readonly selfReads: readonly AstNode[];
   /**
    * How the account the program acts with is derived: `pot` where the program names the Pot (in any
@@ -616,6 +636,10 @@ export class SvmLowering {
   private at: Place = { kind: "main" };
   /** The top-level function each splice a site made in one stands in. */
   private readonly spliceIn = new Map<Splice, AstNode>();
+  /** The scope each node is read in (`walkScoped`). */
+  private readonly scopes = new Map<AstNode, Scope | undefined>();
+  /** The names main's parameters bind, everywhere in main. */
+  private readonly mainParams = new Set<string>();
 
   constructor(
     readonly source: string,
@@ -629,6 +653,9 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
+    /** The names the caller binds (its defines, the ambient modules' exports): a `pot` or `self`
+     *  among them is the caller's, and the accounts this adds are named apart from them. */
+    bound: ReadonlySet<string> = new Set(),
     /** The token symbols some chain registers and this one lacks, which the chain's names hold as
      *  zero (`chain-module.ts`): a read of one is the compiler's, which compiles it only in a branch
      *  a test of the name rules out. */
@@ -644,15 +671,23 @@ export class SvmLowering {
     this.topLevel = topLevel;
     if (this.main !== undefined) this.paramsByFunction.set(this.main, paramsOf(this.main));
     for (const [name, fn] of topLevel) this.paramsByFunction.set(fn, paramsOf(fn, name));
+    walkScoped(this.program, (n, scope) => this.scopes.set(n, scope));
+    for (const param of (this.main?.params as AstNode[] | undefined) ?? []) {
+      collectPatternNames(param, this.mainParams);
+    }
     this.potReads = new Set(
-      this.declared.has(POT_NAME) ? [] : readsOf(this.program, this.parents, POT_NAME),
+      bound.has(POT_NAME)
+        ? []
+        : readsOf(this.program, this.parents, POT_NAME).filter((n) => !this.owns(n, POT_NAME)),
     );
-    this.selfReads = this.declared.has(RETIRED_POT_NAME)
+    this.selfReads = bound.has(RETIRED_POT_NAME)
       ? []
-      : readsOf(this.program, this.parents, RETIRED_POT_NAME);
+      : readsOf(this.program, this.parents, RETIRED_POT_NAME).filter(
+          (n) => !this.owns(n, RETIRED_POT_NAME),
+        );
     this.authorityDerivation = this.potReads.size > 0 ? "pot" : "authority";
     this.index = rowIndex(rows);
-    this.slots = new Slots(new Set(this.declared));
+    this.slots = new Slots(new Set([...this.declared, ...bound]));
     walk(this.program, (n) => {
       if (n.type === "ExpressionStatement") this.statements.set(n.expression as AstNode, n);
       if (n.type === "Program" || n.type === "BlockStatement" || n.type === "StaticBlock") {
@@ -673,23 +708,32 @@ export class SvmLowering {
     });
   }
 
-  /** Whether `name` is a registered symbol the program does not declare itself. */
-  isSymbol(name: string): boolean {
-    return this.tokens.has(name) && !this.declared.has(name);
+  /** Whether `name`, read at `node`, is a name the program binds there (`lexical-scope.ts`). */
+  owns(node: AstNode, name: string): boolean {
+    return shadowed(this.scopes.get(node), name, node.start);
   }
 
-  /** Whether `name` is a token some chain registers and this one lacks, undeclared. */
-  isAbsentToken(name: string): boolean {
-    return this.absent.has(name) && !this.declared.has(name);
+  /** Whether `name`, read at `at`, is a token some chain registers and this one lacks, which the
+   *  program binds not there. */
+  isAbsentToken(name: string, at: AstNode): boolean {
+    return this.absent.has(name) && !this.owns(at, name);
   }
 
-  /** Whether `<holder>.<name>` is the token syntax's: a registered symbol, `balance`, or the native
-   *  coin's symbol (refused, naming `balance`), undeclared. */
-  isBalanceName(name: string): boolean {
+  /**
+   * Whether `name`, read at `at`, is a registered symbol: one the program binds neither there nor
+   * as a parameter of main, at the top of which the checks of the accounts it names stand.
+   */
+  isSymbol(name: string, at: AstNode): boolean {
+    return this.tokens.has(name) && !this.owns(at, name) && !this.mainParams.has(name);
+  }
+
+  /** Whether `<holder>.<name>`, read at `at`, is the token syntax's: a registered symbol,
+   *  `balance`, or the native coin's symbol (refused, naming `balance`) the program binds not. */
+  isBalanceName(name: string, at: AstNode): boolean {
     return (
-      this.isSymbol(name) ||
+      this.isSymbol(name, at) ||
       name === BALANCE_MEMBER ||
-      (name === this.native && !this.declared.has(name))
+      (name === this.native && !this.owns(at, name))
     );
   }
 
@@ -854,7 +898,7 @@ export class SvmLowering {
     return undefined;
   }
 
-  /** Whether `node` reads the Pot: `pot`, where the program does not declare it. */
+  /** Whether `node` reads the Pot: `pot`, where the program does not bind it. */
   isPot(node: AstNode): boolean {
     return this.potReads.has(node);
   }
@@ -900,7 +944,7 @@ export class SvmLowering {
         return { kind: "key", name: base58(keyHex(key)), stem: name, value: name };
       }
       // A registered mint's own key: its associated token accounts derive off it as off any key.
-      if (this.isSymbol(name)) {
+      if (this.isSymbol(name, node)) {
         return {
           kind: "key",
           name: base58(keyHex(this.tokens.get(name)!)),
@@ -942,7 +986,7 @@ export class SvmLowering {
   tokenOf(node: AstNode, value: string, spelled: string): TokenRef {
     if (node.type === "Identifier") {
       const name = nameOf(node);
-      if (this.isSymbol(name)) return { ...this.symbolToken(name), value, spelled };
+      if (this.isSymbol(name, node)) return { ...this.symbolToken(name), value, spelled };
       if (this.param(name)?.kind === "address") {
         return { value, name: `@${name}`, stem: capitalized(name), param: name, spelled };
       }

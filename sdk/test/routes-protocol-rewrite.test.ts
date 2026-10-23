@@ -235,17 +235,65 @@ describe("rewriteProtocolAccessors: bare pot -> ctx.self()", () => {
     expect(rewrote).toBe(false);
   });
 
-  it("a declared `pot` suppresses the whole-program rewrite", () => {
+  it("a declared `pot` is the program's where it is in scope", () => {
     const source = `function main() { let pot = 5; return pot; }`;
     const { rewrote, source: out } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
     expect(out).toBe(source);
   });
 
+  it("an inner block's `pot` is that block's: outside it, and before it, `pot` is the Pot", () => {
+    const HOLDER = "0x6666666666666666666666666666666666666666";
+    const program = (inner: string, outer: string) =>
+      `function main(c: bool): Address {\n  const before = ${outer};\n` +
+      `  if (c) { const pot = ${HOLDER}; return ${inner}; }\n  return ${outer};\n}`;
+    const source = program("pot", "pot");
+    expect(rewriteProtocolAccessors(source, BASE).source).toBe(program("pot", "ctx.self()"));
+    expect(Array.from(route("base", source).compiled.bytecode[0]!)).toEqual(
+      Array.from(route("base", program("pot", "ctx.self()")).compiled.bytecode[0]!),
+    );
+    // A helper's own `pot` leaves another function's bare `pot` the Pot.
+    const helper = `function held(): Address { const pot = ${HOLDER}; return pot; }\n`;
+    expect(
+      rewriteProtocolAccessors(`${helper}function main(): Address { return pot; }`, BASE).source,
+    ).toBe(`${helper}function main(): Address { return ctx.self(); }`);
+  });
+
+  it("an inner block's `self` is that block's: outside it, `self` is refused", () => {
+    expect(() =>
+      rewriteProtocolAccessors(
+        "function main(c: bool): Uint256 { if (c) { const self = 1; return self; } return self; }",
+        BASE,
+      ),
+    ).toThrow("`self`: the Pot is `pot`, not `self`");
+  });
+
   it("potSugar: false opts out", () => {
     const source = `function main() { return pot; }`;
     const { rewrote } = rewriteProtocolAccessors(source, BASE, { potSugar: false });
     expect(rewrote).toBe(false);
+  });
+});
+
+describe("rewriteProtocolAccessors: an import's names are never a read of the Pot", () => {
+  const constants = {
+    resolve: (path: string) =>
+      path === "./constants.js"
+        ? new TextEncoder().encode("export const pot = 7;\nexport const self = 8;")
+        : undefined,
+  };
+
+  it.each([
+    ["pot", 7],
+    ["self", 8],
+  ])("`import { %s as held }` reads the module's value", (name, value) => {
+    const source = `import { ${name} as held } from "./constants.js";\nfunction main(): Uint256 { return held; }`;
+    expect(rewriteProtocolAccessors(source, BASE).source).toBe(source);
+    expect(Array.from(route("base", source, constants).compiled.bytecode[0]!)).toEqual(
+      Array.from(
+        route("base", `function main(): Uint256 { return ${value}; }`).compiled.bytecode[0]!,
+      ),
+    );
   });
 });
 

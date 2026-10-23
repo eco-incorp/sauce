@@ -148,6 +148,100 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       selfUSDC: "@self:USDC",
     });
   });
+
+  it("a pot, self, token symbol or Solana the program declares is its own in that scope only", () => {
+    const elsewhere = (name: string) =>
+      `function size(): Uint256 {\n  const ${name} = 5;\n  return ${name};\n}\n`;
+    // The Pot outside the function or block that declares a `pot`, its slot named apart from it.
+    expect(
+      compile(`${elsewhere("pot")}function main(): Address {\n  return pot;\n}\n`).source,
+    ).toBe(
+      `${elsewhere("pot")}function main(pot2: Account): Address {\n  return pot2.address;\n}\n`,
+    );
+    expect(
+      compile(
+        'function main(flag: bool): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot;\n}\n',
+      ).source,
+    ).toBe(
+      'function main(flag: bool, pot2: Account): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot2.address;\n}\n',
+    );
+    expect(refusal(`${elsewhere("self")}function main(): Address {\n  return self;\n}\n`)).toMatch(
+      /^`self`: the Pot is `pot`, not `self`/,
+    );
+    expect(
+      compile(`${elsewhere("USDC")}function main(): Uint256 {\n  return pot.USDC;\n}\n`).source,
+    ).toContain("return __sauce_svm_balance(USDC, potUSDC, pot.address);");
+    expect(
+      compile(
+        `${elsewhere("Solana")}function main(): Uint256 {\n  return Solana.owner.balance;\n}\n`,
+      ).source,
+    ).toContain("return ctx.balance(owner.address);");
+    // Another scope's record named `pot` does not make the Pot one.
+    const record =
+      "function size(): Uint256 {\n  const pot = { balance: 7 };\n  return pot.balance;\n}\n";
+    const shaped = compile(
+      `${record}function main(): Uint256 {\n  return pot.USDC + pot.balance;\n}\n`,
+    );
+    expect(shaped.source).toContain(
+      `${record}function main(potUSDC: Account, pot2: Account<Signer>): Uint256 {\n` +
+        "  return __sauce_svm_balance(USDC, potUSDC, pot2.address) + ctx.balance(pot2.address);\n}\n",
+    );
+    // A symbol main binds as a parameter is no token anywhere: its accounts' checks stand in main.
+    expect(
+      refusal(
+        "function held(): Uint256 {\n  return pot.USDC;\n}\nfunction main(USDC: Uint256): Uint256 {\n  return held() + USDC;\n}\n",
+      ),
+    ).toMatch(/^`pot\.USDC` on Solana: `USDC` is not a token solana registers\./);
+  });
+
+  it("a pot or self the caller binds (a define, an ambient module's export) is the caller's", () => {
+    const lower = (source: string) =>
+      rewriteSvmTokenSyntax(
+        source,
+        resolveTokenMap(SOLANA),
+        svmTokenRows(SOLANA),
+        undefined,
+        undefined,
+        undefined,
+        new Set(["pot", "self"]),
+      );
+    for (const name of ["pot", "self"]) {
+      const source = `function main(): Address {\n  return ${name};\n}\n`;
+      expect(lower(source).source).toBe(source);
+    }
+    // The Pot's own slot, which a token write signs with, is named apart from the caller's `pot`.
+    const write = lower("function main(to: Address) {\n  USDC.transfer(to, 1);\n}\n");
+    expect(write.derived).toMatchObject({ pot2: "authority", potUSDC: "authority:USDC" });
+  });
+
+  it("a local bound to bare pot holds what its declared type says: the Pot's key, else its account", () => {
+    // An `Address` alias, annotated or not, is the Pot's key: its `.balance` the lamports there.
+    for (const declared of [": Address", ""]) {
+      const program = compile(
+        `function main(): Uint256 {\n  const holder${declared} = pot;\n  return holder.balance;\n}\n`,
+      );
+      expect(program.source).toBe(
+        `function main(pot: Account): Uint256 {\n  const holder${declared} = pot.address;\n  return ctx.balance(holder);\n}\n`,
+      );
+      expect(program.derivedAccounts).toEqual({ pot: "pot" });
+    }
+    // One declared `Account` is the Pot's account, its `.balance` read by its key.
+    expect(
+      compile(
+        "function main(): Uint256 {\n  const holder: Account = pot;\n  return holder.balance;\n}\n",
+      ).source,
+    ).toBe(
+      "function main(pot: Account): Uint256 {\n  const holder: Account = pot;\n  return ctx.balance(holder.address);\n}\n",
+    );
+    // A token balance needs a holder known when the transaction is built, which a local is not.
+    expect(
+      refusal(
+        "function main(): Uint256 {\n  const holder: Address = pot;\n  return holder.USDC;\n}\n",
+      ),
+    ).toMatch(
+      /^`holder\.USDC` on Solana: the holder must be known when the transaction is built, to attach its token account — `pot`, /,
+    );
+  });
 });
 
 describe("the retired spellings, refused naming what to write", () => {
@@ -222,6 +316,22 @@ describe("where a site stands", () => {
         "function held(__sauce_accounts: Uint256): Uint256 {\n  return pot.USDC;\n}\nfunction main(): Uint256 {\n  return held(1);\n}\n",
       ),
     ).toContain("`__sauce_accounts` is reserved");
+  });
+
+  it("a shorthand { pot } keeps its key, in main and in a top-level function given the accounts", () => {
+    const record = "  const r = { size: 1, pot };\n  return r.pot;\n}\n";
+    expect(compile(`function main(): Address {\n${record}`).source).toBe(
+      "function main(pot: Account): Address {\n  const r = { size: 1, pot: pot.address };\n  return r.pot;\n}\n",
+    );
+    expect(
+      compile(
+        `function held(): Address {\n${record}function main(): Address {\n  return held();\n}\n`,
+      ).source,
+    ).toBe(
+      "function held(__sauce_accounts: Account[]): Address {\n" +
+        "  const r = { size: 1, pot: __sauce_accounts[0].address };\n  return r.pot;\n}\n" +
+        "function main(pot: Account): Address {\n  return held([pot]);\n}\n",
+    );
   });
 
   it("a token write in a helper: its checks where it stands, its accounts' checks at the top of main", () => {

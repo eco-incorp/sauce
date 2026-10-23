@@ -23,10 +23,11 @@ import { chainModuleText } from "./chain-module.js";
 import { compile } from "../wasm-compiler.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
-const ENTRY = "main.js";
+/** The path the compiler gives the program's own source. */
+export const ENTRY = "main.js";
 
 /** v1/v12 both compile through the RS compiler's single EVM backend; svm maps 1:1. */
-function mapTarget(target: CompileTarget): RsTarget {
+export function mapTarget(target: CompileTarget): RsTarget {
   return target === "svm" ? "svm" : "evm";
 }
 
@@ -109,10 +110,10 @@ function toInlineContracts(
  * path reaches the caller's `resolve` before the SDK's embedded ABIs, so a caller can serve its own
  * `./artifacts/IERC20.json`. `check` reads each SauceScript module the caller serves.
  */
-function makeResolve(
+export function makeResolve(
   source: string,
   own: ResolveModule | undefined,
-  check: ((path: string, bytes: Uint8Array) => void) | undefined,
+  check?: (path: string, bytes: Uint8Array) => void,
 ): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
   const utf8 = new TextEncoder();
@@ -135,9 +136,9 @@ function makeResolve(
 
 /** Bare specifiers: the compile's own (the chain's names), the SDK's standard library, then the
  *  caller's `resolvePackage`. */
-function makeResolvePackage(
+export function makeResolvePackage(
   own: ResolvePackage | undefined,
-  packages: Readonly<Record<string, string>> | undefined,
+  packages?: Readonly<Record<string, string>>,
 ): ResolvePackage {
   return (specifier, importer) =>
     packages?.[specifier] ??

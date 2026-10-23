@@ -22,7 +22,17 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
+import {
+  compileWithRs,
+  ENTRY,
+  makeResolve,
+  makeResolvePackage,
+  mapTarget,
+  type RsCompileResult,
+} from "./rs-compile.js";
+import { sdkStdPath } from "../embedded/resolve.js";
+import { collectPatternNames, type AstNode } from "./ast-walk.js";
+import { parseSauce } from "./parse.js";
 import {
   rewriteTokenFactory,
   rewriteTokenMembers,
@@ -406,6 +416,65 @@ export function compileSauceProgram(
   };
 }
 
+/** What each SDK module exports, by path: its text is the SDK's own. */
+const sdkModuleExports = new Map<string, readonly string[]>();
+
+/**
+ * The names the `ambient` modules broadcast into the program: every value each exports (a
+ * SauceScript module exports only declarations: it has no `export { … }` list and no re-export),
+ * each module resolved as the compiler resolves it — a bare specifier through `resolvePackage`, a
+ * path's per-target arm (`token.evm.js`) before its neutral one. A module that resolves to nothing,
+ * or does not parse, adds nothing: the compile reports it.
+ */
+function ambientExports(
+  ambient: readonly string[],
+  target: CompileTarget,
+  resolve: ResolveModule | undefined,
+  resolvePackage: ResolvePackage | undefined,
+): ReadonlySet<string> {
+  const read = makeResolve("", resolve);
+  const bare = makeResolvePackage(resolvePackage);
+  const arm = `.${mapTarget(target)}`;
+  const names = new Set<string>();
+  for (const specifier of ambient) {
+    const path = specifier.startsWith(".") ? specifier : bare(specifier, ENTRY);
+    if (path === undefined || path === null) continue;
+    let at = path.replace(/(\.[^./]+)$/, `${arm}$1`);
+    let bytes = read(at);
+    if (bytes === undefined || bytes === null) {
+      at = path;
+      bytes = read(at);
+    }
+    if (bytes === undefined || bytes === null) continue;
+    let exported = sdkModuleExports.get(at);
+    if (exported === undefined) {
+      let program: AstNode;
+      try {
+        program = parseSauce(new TextDecoder().decode(bytes));
+      } catch {
+        continue;
+      }
+      const own: string[] = [];
+      for (const statement of program.body as AstNode[]) {
+        const declaration = statement.declaration as AstNode | null | undefined;
+        if (statement.type !== "ExportNamedDeclaration" || !declaration) continue;
+        if (declaration.type === "VariableDeclaration") {
+          for (const declarator of declaration.declarations as AstNode[]) {
+            collectPatternNames(declarator.id, { add: (name: string) => own.push(name) });
+          }
+        } else if (declaration.type === "FunctionDeclaration") {
+          collectPatternNames(declaration.id, { add: (name: string) => own.push(name) });
+        }
+      }
+      if (sdkStdPath(at) !== undefined) sdkModuleExports.set(at, own);
+      exported = own;
+    }
+    for (const name of exported) names.add(name);
+  }
+
+  return names;
+}
+
 /**
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
  * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
@@ -456,6 +525,12 @@ function compileForChain(
   // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
   // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
+  // The names the compile binds beside the source: the caller's defines and what its ambient
+  // modules export. A `pot` or `self` that is one of them is the caller's value, never the Pot.
+  const bound = new Set([
+    ...Object.keys(options.defines ?? {}),
+    ...ambientExports(options.ambient ?? [], target, options.resolve, options.resolvePackage),
+  ]);
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. The compiler tells the two apart; nothing here has to.
@@ -552,6 +627,7 @@ function compileForChain(
       ),
       native,
       new Set(stops),
+      bound,
       names.absentTokens,
     );
     if (lowered.rewrote) {
@@ -573,6 +649,7 @@ function compileForChain(
         source,
         tokenMap,
         native === undefined ? undefined : { symbol: native, chain: chain.slug },
+        bound,
       ),
     );
     absorb(rewriteTokenFactory(source));
@@ -580,10 +657,12 @@ function compileForChain(
   }
 
   if (options.accessors !== false) {
-    const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
-      ...accessorOpts,
-      existingContracts: contracts,
-    });
+    const rewrittenAccessors = rewriteProtocolAccessors(
+      source,
+      chain,
+      { ...accessorOpts, existingContracts: contracts },
+      bound,
+    );
     if (rewrittenAccessors.rewrote) {
       // A call through a protocol's default contract is a name the module holds, and decided on any
       // chain; a binding or `pot` is EVM only.

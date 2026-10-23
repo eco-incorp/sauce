@@ -1,9 +1,9 @@
 /**
  * Shared AST plumbing for the routes/ source-rewrite passes (`token-rewrite.ts`,
- * `protocol-rewrite.ts`), over the tree `parse.ts` produces. Extracted verbatim from `token-rewrite.ts` (U4) so the two passes' whole-
- * program shadow semantics can never drift apart — see `token-rewrite.ts`'s own module doc for the
- * shadowing rationale (SauceScript shares scope across `if`/`while`/bare-block bodies, so this is
- * deliberately a coarser, whole-program-conservative check, not real lexical scoping).
+ * `protocol-rewrite.ts`), over the tree `parse.ts` produces. `collectDeclaredNames` is the
+ * whole-program set of names a program binds, for a rule that is deliberately coarser than the
+ * compiler's scoping (`Token`, the registry's namespaces, a name the lowering reserves); where a
+ * name is the program's own at one site — a token symbol, `pot` — is `lexical-scope.ts`'s.
  */
 export interface AstNode {
   type: string;
@@ -131,11 +131,14 @@ export function countDeclarations(program: AstNode): ReadonlyMap<string, number>
       case "CatchClause":
         collectPatternNames((n as { param?: unknown }).param, names);
         return;
-      case "ImportSpecifier":
-      case "ImportDefaultSpecifier":
-      case "ImportNamespaceSpecifier":
-        // `local` is the name brought into scope — `import { a as Token }` binds `Token`.
-        collectPatternNames((n as { local?: unknown }).local, names);
+      case "ImportDeclaration":
+        // `local` is the name brought into scope — `import { a as Token }` binds `Token`. A
+        // type-only import (`import type { X }`, `import { type X }`) is erased: it binds no value.
+        if ((n as { importKind?: string }).importKind === "type") return;
+        for (const specifier of (n as { specifiers?: AstNode[] }).specifiers ?? []) {
+          if ((specifier as { importKind?: string }).importKind === "type") continue;
+          collectPatternNames((specifier as { local?: unknown }).local, names);
+        }
         return;
       default:
         return;

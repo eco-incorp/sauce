@@ -45,6 +45,7 @@ import {
 } from "./accessor-index.js";
 import { parseSauce } from "./parse.js";
 import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
+import { shadowed as shadowedAt, walkScoped } from "./lexical-scope.js";
 
 export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
@@ -573,8 +574,9 @@ function throughDefault(candidate: DefaultCandidate): Splice {
 
 /** Collects, by node identity, every Identifier node that must NEVER be treated as a READ of a name
  *  (`pot`, or the refused `self`): a declarator id, a function/arrow parameter, a non-computed
- *  member property, a non-computed object-literal key, an assignment target, or an update-expression
- *  operand. */
+ *  member property, a non-computed object-literal key, an assignment target, an update-expression
+ *  operand, or a name in an import or export specifier (`import { pot as holder }` names a
+ *  module's export, and binds `holder`). */
 function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
   walk(program, (n) => {
@@ -606,24 +608,34 @@ function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
       const argument = (n as { argument?: AstNode }).argument;
       if (argument?.type === "Identifier") excluded.add(argument);
     }
+    if (
+      n.type === "ImportSpecifier" ||
+      n.type === "ImportDefaultSpecifier" ||
+      n.type === "ImportNamespaceSpecifier" ||
+      n.type === "ExportSpecifier"
+    ) {
+      walk(n, (name) => excluded.add(name));
+    }
   });
   return excluded;
 }
 
-/** The bare reads of `name` the program does not declare: every `pot` the sugar rewrites. */
+/** The bare reads of `name` where the program does not declare it (`lexical-scope.ts`), unless the
+ *  compile binds it (`bound`): every `pot` the sugar rewrites. */
 function bareReads(
   program: AstNode,
   name: string,
   excluded: ReadonlySet<AstNode>,
-  shadowed: ReadonlySet<string>,
+  bound: ReadonlySet<string>,
 ): AstNode[] {
-  if (shadowed.has(name)) return [];
+  if (bound.has(name)) return [];
   const reads: AstNode[] = [];
-  walk(program, (n) => {
+  walkScoped(program, (n, at) => {
     if (
       n.type === "Identifier" &&
       (n as unknown as { name: string }).name === name &&
-      !excluded.has(n)
+      !excluded.has(n) &&
+      !shadowedAt(at, name, n.start)
     ) {
       reads.push(n);
     }
@@ -633,15 +645,18 @@ function bareReads(
 
 /**
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
- * `opts.potSugar === false`, every bare `pot` read, over `source` for the enclosing/destination
- * `chain`; refuses a bare `self` the program does not declare (the Pot is `pot`). Edits use parser
- * ranges over the original source, preserving unrelated formatting, comments, and code
- * byte-for-byte.
+ * `opts.potSugar === false`, every bare `pot` read where the program declares no `pot`
+ * (`lexical-scope.ts`), over `source` for the enclosing/destination `chain`; refuses a bare `self`
+ * read where the program declares no `self` (the Pot is `pot`). A `pot` or `self`
+ * in `bound` — a name the compile gives a value beside the source: a define, an ambient module's
+ * export — is that value, so neither is touched. Edits use parser ranges over the original source,
+ * preserving unrelated formatting, comments, and code byte-for-byte.
  */
 export function rewriteProtocolAccessors(
   source: string,
   chain: CanonicalChain,
   opts: ProtocolRewriteOptions = {},
+  bound: ReadonlySet<string> = new Set(),
 ): ProtocolRewriteResult {
   // A module parse, annotations included -- this pass runs unconditionally (default ON), so it
   // must take whatever the compiler does, including a source that ALREADY carries a leading
@@ -689,11 +704,11 @@ export function rewriteProtocolAccessors(
   }
 
   const excluded = collectReadExclusions(program);
-  const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, shadowed);
+  const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, bound);
   if (retired !== undefined) throw selfRefusal(RETIRED_POT_NAME, POT_NAME);
   const potSites: Splice[] =
     (opts.potSugar ?? true)
-      ? bareReads(program, POT_NAME, excluded, shadowed).map((n) => ({
+      ? bareReads(program, POT_NAME, excluded, bound).map((n) => ({
           start: n.start,
           end: n.end,
           replacement: "ctx.self()",
