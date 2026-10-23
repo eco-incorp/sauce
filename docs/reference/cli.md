@@ -30,6 +30,7 @@ transaction for another wallet to sign.
   - `sauce wallet import`: Keep a key you have as a wallet: a private key, keystore or Solana keypair
   - `sauce wallet export`: Show a wallet's key at your terminal, once you confirm
 - [`sauce tx`](#sauce-tx): Print the unsigned cook transaction, for a wallet to sign
+- [`sauce sign`](#sauce-sign): Sign a cook on your Pot that anyone (or one account) may submit
 - [`sauce send`](#sauce-send): Broadcast transactions signed elsewhere, wait for them, and report what they did
 - [`sauce reclaim`](#sauce-reclaim): List the code buffers and lookup tables a Solana owner left open, and close them
 - [`sauce pot`](#sauce-pot): Predict a Pot's address, deploy it, and list the Pots you deployed
@@ -61,6 +62,7 @@ Commands:
   run       Compile, sign, send and wait for the cook on your Pot
   wallet    Create, list and import the wallets --wallet signs with
   tx        Print the unsigned cook transaction, for a wallet to sign
+  sign      Sign a cook on your Pot that anyone (or one account) may submit
   send      Broadcast transactions signed elsewhere, wait for them, and report what they did
   reclaim   List the code buffers and lookup tables a Solana owner left open, and close them
   pot       Predict a Pot's address, deploy it, and list the Pots you deployed
@@ -650,6 +652,101 @@ Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
   sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --offline
   sauce tx pay.sauce.ts --chain base --owner 0x… --fund USDC:100
+```
+
+## `sauce sign`
+
+```text
+Sign a cook on your Pot that anyone (or one account) may submit.
+
+Usage: sauce sign <file | -> --chain <slug|id> (--wallet <name> | --keystore <path> | --private-key <hex> | --owner <address> | --pot <address>) [--salt <label> | --salt-hex <bytes32>] [--within <seconds> | --deadline <unix seconds>] [--submitter <address>] [--max-fee <wei>] [--value <wei>] [--nonce <n>] [--signature <hex>] [--rpc-url <url> | --config <file> | --offline] [--json] [--args …]
+       sauce sign --cancel <nonce> [--cancel <nonce>]… --chain <slug|id> (--wallet <name> | --keystore <path> | --private-key <hex> | --owner <address> | --pot <address>) [--rpc-url <url> | --config <file> | --offline] [--json]
+
+Options:
+      --chain <slug|id>             Chain the program runs on (base, 8453, solana)
+      --target <evm|svm>            Checked against the chain; svm alone means solana
+      --source-dir <dir>            Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --owner <address>             The Pot's owner, which derives the Pot with the salt (default: the signer)
+      --pot <address>               Or the Pot itself, by address
+      --salt <label>                Name one of the owner's Pots: salt = keccak256(label)
+      --salt-hex <bytes32>          …or give its salt exactly
+      --args-json <json|file>       main's arguments as a JSON array, inline or in a file
+      --value <wei>                 What the submitter sends with the cook, signed exactly (default 0)
+      --max-fee <wei>               The most of the Kitchen's fee the Pot pays, signed (default: the fee read now)
+      --nonce <n>                   The nonce it runs once under (default: random)
+      --within <seconds>            How long it can be submitted, from now: the chain's latest block (default 3600)
+      --deadline <unix seconds>     Or the last second it can be submitted, exactly (inclusive)
+      --submitter <address>         The only account that may submit it (default: anyone)
+      --signature <hex>             The owner's signature of the typed data, made elsewhere: checked, then the cook built
+      --cancel <nonce>              Instead, cancel this nonce (repeatable): invalidateNonces on the Pot, from its owner
+      --wallet <name>               Sign as the Pot's owner with an EVM wallet of the wallet directory (sauce wallet)
+      --wallets [<dir>]             The wallet directory (default: ~/.sauce/wallets)
+      --password-env <NAME>         The password is the environment variable NAME (only that one is read)
+      --password-file <path>        …or a file only you can read (else it is asked for)
+      --password-command <command>  …or what this command prints (a secret manager's CLI)
+      --keystore <path>             Or with a JSON keystore (v3), with a password source
+      --private-key <hex>           Or with a raw key (lands in shell history)
+      --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
+      --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
+      --offline                     Read no chain: no endpoint, not even a built-in one
+      --json                        Print one JSON object instead
+  -h, --help                        Show this help
+      --no-update-check             No notice of a newer sauce, and no registry read for one
+      --args <value>…               main's arguments in order (JSON for an array or tuple); -- before one like a flag
+
+Low-level (a program's inputs are main's parameters, given with --args):
+      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
+      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
+
+Compiles the file with main's arguments, as tx does, and prints what the Pot's owner signs
+so that another account can submit the cook, with the Pot's own cookSigned: { chainId, pot,
+owner, engine, program, value, maxExecutionFee, nonce, deadline, submitter, typedData,
+digest, signature, cook, deployPot }. typedData is EIP-712 (eth_signTypedData_v4): Cook
+{ engine, program, value, maxExecutionFee, nonce, deadline, submitter } under the Pot's
+domain, for this chain alone. program is the bytecode with the arguments appended, all of
+it signed. Numbers are decimal strings.
+
+With a signer (the Pot's owner: --wallet, --keystore or --private-key) it signs, and cook
+is the transaction to submit, { chainId, to: the Pot, data: cookSigned(…), value }, as tx
+spells one. Without one it prints the typed data for any wallet to sign; given that
+signature with --signature, it checks it is the owner's (a contract wallet's through
+ERC-1271, with an endpoint) and builds cook. The submitter sends cook with exactly the
+signed value, and pays gas, nothing else: sign it with any wallet, or sauce send it signed.
+
+What is signed: --value (default 0); --max-fee, the most of the Kitchen's fee the Pot pays
+(default: the fee read now; with --offline, required); --nonce (default random, so two
+outstanding signatures never collide; one you allocate densely costs less gas); the
+deadline, --deadline or now plus --within (default 3600 seconds), now being the chain's
+latest block (else this clock); --submitter, the only account that may submit it (default
+anyone). The Pot pays the Kitchen's fee itself, from its balance and the cook's value: keep
+native coin in it. Whoever holds the signature may submit it until the deadline, once; a
+cook that reverts leaves its nonce unused, to be submitted again.
+
+With an endpoint it reads the Pot first. One with no code that --owner (or the signer) and
+the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any
+account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot
+and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the
+Pot's balance, and warns when they do not cover the fee. --offline reads nothing.
+
+--cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce
+word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a
+signer they are printed unsigned, for the owner to sign and sauce send.
+
+From a wallet with a policy (sauce wallet --help), the policy's chains and to (the Pot)
+apply, and a native or tokens limit refuses the signature: what a signed cook moves is
+known only when it is submitted, which a limit cannot measure now. On Solana there is no
+signed cook: the owner signs the cook transaction, and any fee payer may sponsor it.
+
+Signs and cancels only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a
+preview chain) it is refused before anything is read or signed, with the supported chains and
+the GitHub issue to ask for that chain with; compile and simulate work there.
+
+Examples:
+  sauce sign pay.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD \
+    --within 600 --args <recipient> 1000000
+  sauce sign pay.sauce.ts --chain base --owner <owner> --submitter <relayer> --args <recipient> 5
+  sauce sign pay.sauce.ts --chain base --owner <owner> --signature <hex> --args <recipient> 5
+  sauce sign --cancel <nonce> --chain base --keystore ~/.keys/me.json
 ```
 
 ## `sauce send`

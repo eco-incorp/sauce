@@ -1,7 +1,8 @@
 /**
  * Sending, from a wallet, transactions another step built unsigned: what `sauce_wallet_send` (the
- * local MCP server's) does with the result of `sauce_tx`, `sauce_pot` or `sauce_actions` — taken
- * as it comes back, whole.
+ * local MCP server's) does with the result of `sauce_tx`, `sauce_pot`, `sauce_actions` or
+ * `sauce_signed_cook`/`sauce_sign` (its `deployPot` and signed `cook`, or a cancellation's
+ * transactions) — taken as it comes back, whole.
  *
  * Nothing is sent before the whole plan is rehearsed and held to the wallet's policy. On an EVM
  * chain the transactions are rehearsed together in one `eth_simulateV1` block from the wallet (one
@@ -31,6 +32,7 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { v12PotAbi } from "../evm/engine.js";
 import { decodeReturned } from "../routes/returned.js";
 import { fetchExecutionFee, MAX_POT_LEN } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
@@ -71,7 +73,8 @@ export type PlannedTx =
 
 const SHAPES =
   "a transaction ({ to, data, value }, or a Solana { transaction } in base64), a list of them, or " +
-  "a tool's whole result that carries them (transactions, transaction)";
+  "a tool's whole result that carries them (transactions, transaction, or a signed cook's cook " +
+  "and deployPot)";
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 
@@ -91,12 +94,13 @@ function chainIdOf(raw: unknown, inherited: number | undefined): number | undefi
   return inherited;
 }
 
-/** One transaction object, or the plan around it. */
+/** One transaction object, or the plan around it; `label` names one that names itself nothing. */
 function collect(
   value: unknown,
   where: string,
   inherited: number | undefined,
   out: PlannedTx[],
+  label?: string,
 ): void {
   if (Array.isArray(value)) {
     value.forEach((each, index) => collect(each, `${where}[${index}]`, inherited, out));
@@ -113,7 +117,8 @@ function collect(
     );
   }
   const chainId = chainIdOf(fields.chainId, inherited);
-  const what = typeof fields.what === "string" ? fields.what : `transaction ${out.length + 1}`;
+  const what =
+    typeof fields.what === "string" ? fields.what : (label ?? `transaction ${out.length + 1}`);
   if (typeof fields.transaction === "string") {
     out.push({
       kind: "svm",
@@ -137,6 +142,22 @@ function collect(
       value: valueOf(fields.value, where),
       what,
     });
+
+    return;
+  }
+  // A signed cook (`sauce sign`): the Pot's deployment, where it has none yet, then the cook.
+  const deployPot =
+    fields.deployPot !== null && typeof fields.deployPot === "object"
+      ? fields.deployPot
+      : undefined;
+  const cook = fields.cook !== null && typeof fields.cook === "object" ? fields.cook : undefined;
+  if (deployPot !== undefined || cook !== undefined) {
+    const pot = typeof fields.pot === "string" ? ` ${fields.pot}` : "";
+    if (deployPot !== undefined) {
+      collect(deployPot, `${where}.deployPot`, chainId, out, `Kitchen.deployPot of Pot${pot}`);
+    }
+    if (cook !== undefined)
+      collect(cook, `${where}.cook`, chainId, out, `signed cook on Pot${pot}`);
 
     return;
   }
@@ -223,8 +244,14 @@ interface SentEntry {
   readonly pots?: readonly PotRecord[];
 }
 
-/** `cook(address,bytes)`: a transaction that runs a program on the Pot it is sent to. */
-const COOK = toFunctionSelector("function cook(address engine, bytes program)");
+/** `cook(address,bytes)` and a signed cook's `cookSigned(…)`: each runs a program on the Pot it is
+ *  sent to. */
+const COOKS = new Set<string>([
+  toFunctionSelector("function cook(address engine, bytes program)"),
+  toFunctionSelector(
+    v12PotAbi.find((item) => item.type === "function" && item.name === "cookSigned")!,
+  ),
+]);
 
 export interface PlanInput {
   readonly wallet: Unlocked;
@@ -349,7 +376,7 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
     const report =
       result.status === "success" &&
       result.receipt !== undefined &&
-      request.data.toLowerCase().startsWith(COOK)
+      COOKS.has(request.data.slice(0, 10).toLowerCase())
         ? // What was sent stands whatever reading its receipt back does.
           await cookReport(client, input.chain, result.receipt, {
             sender: account.address,
