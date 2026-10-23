@@ -452,6 +452,16 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
       assert.equal(await balanceOf(env, WETH, env.pot), MAX_UINT112);
       assert.equal(await balanceOf(env, USDC, env.pot), 0n);
     });
+
+    it("tryUniswapV2 skips a pair with no code, moving nothing; a contract that has code and is no pair still reverts", async () => {
+      await fund(WETH, ONE_ETH);
+      const args = v2(WETH, USDC, ONE_ETH);
+      args[0] = addr(CODELESS);
+      await assertSkips(env, CHAIN, "tryUniswapV2", values(args), watching(CODELESS, WETH, USDC));
+      // The check is for code, not for a pair: USDC has code and answers no `getReserves`.
+      args[0] = addr(USDC);
+      await assertReverts(env, CHAIN, "tryUniswapV2", values(args), watching(USDC, WETH, USDC));
+    });
   });
 
   describe("Curve", () => {
@@ -554,6 +564,14 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
       assert.equal(await balanceOf(env, USDC, env.pot), USDC_100, "the first moved nothing");
       assert.equal(await balanceOf(env, USDT, env.pot), 100_007_483n, "the second ran");
     });
+
+    it("tryCurve skips a pool with no code: 0 returned, the approval reset and nothing moved", async () => {
+      await fund(USDC, USDC_100);
+      const args = curve3pool(USDC, USDT, USDC_100);
+      args[0] = addr(CODELESS);
+      await assertSkips(env, CHAIN, "tryCurve", values(args), watching(CODELESS, USDC, USDT));
+      assert.equal(await allowance(env, USDC, env.pot, CODELESS), 0n);
+    });
   });
 
   describe("Balancer V2", () => {
@@ -598,6 +616,14 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
       assert.equal(receipt.status, "success");
       assert.equal(await allowance(env, WETH, env.pot, BALANCER_V2_VAULT), 0n);
       assert.equal(await balanceOf(env, WETH, env.pot), ONE_ETH);
+    });
+
+    it("tryBalancerV2 skips a Vault with no code: 0 returned, the approval reset and nothing moved", async () => {
+      await fund(WETH, ONE_ETH);
+      const args = balancer(ONE_ETH);
+      args[0] = addr(CODELESS);
+      await assertSkips(env, CHAIN, "tryBalancerV2", values(args), watching(CODELESS, WETH, USDC));
+      assert.equal(await allowance(env, WETH, env.pot, CODELESS), 0n);
     });
   });
 

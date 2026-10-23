@@ -685,14 +685,21 @@ per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
 the recipient received; plus a `try` form of each that returns `0n` having moved nothing, while a
 swap that ran returns at least 1, so a `0n` ALWAYS means nothing moved (sauce-recipes' EcoSwap
-executor drops a venue that returns 0 and re-offers its input). Three mechanisms: a check before
-anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
+executor drops a venue that returns 0 and re-offers its input). Every `try` form first skips a
+pool, Vault or PoolManager with no code (`ctx.codeSize`): a call to no code succeeds with empty
+data, which a catch does not see, so without it Curve's fails its own `out > 0` check, Balancer's
+decode reverts outside the catch, and V2's and LB's views revert. Then three mechanisms: a check
+before anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
 `querySellBase`/`querySellQuote`, `tryWoofi` WooPPV2's `query` — never its `tryQuery`, which prices
-past the reserve), a caught pool call that resets its approval (`tryCurve`, `tryBalancerV2`), or a
-caught Router call (`tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
-`tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
-afterwards to `minOut` and at least 1 and reverts below it (an input the pool keeps as its fee
-cannot be undone), except that one that moved nothing either way — the Router's `amountInUsed` and
+past the reserve; DODO's and WOOFi's views are caught, V2's and LB's return several words and are
+read uncaught, so a contract with code that is no pair reverts those two), a caught pool call that
+resets its approval (`tryCurve`, `tryBalancerV2`), or a caught Router call (`tryUniswapV3`,
+`tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`, `tryInfinityBin`). A `try` form still reverts on
+arguments that contradict each other, as its plain function does (a pay-first venue's same token in
+and out, DODO/LB tokens other than the named pair). The generation-4 Router takes no floor, so a
+caught Router call that ran is held afterwards to `minOut` and at least 1 and reverts below it (an
+input the pool keeps as its fee cannot be undone), except that one that moved nothing either way —
+the Router's `amountInUsed` and
 the recipient's `tokenOut` gain both 0, a pool with no liquidity in range — returns `0n`. The
 compiler carries only a scalar through `.catch()`, so the try forms call the Router through
 `sauce-router-paid.abi.json`, its methods declaring `amountInUsed` alone. An empty pool with no
