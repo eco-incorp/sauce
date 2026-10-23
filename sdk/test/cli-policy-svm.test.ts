@@ -1403,7 +1403,7 @@ describeSvm(
     });
 
     it.each(["spl", "token2022"] as const)(
-      "lets a %s approval within the limit through, and reserves nothing for it",
+      "lets a %s approval within the limit through, and reserves it in the day's total",
       async (kind) => {
         const mint = mints[kind];
         const source = setTokenAccount(
@@ -1431,10 +1431,73 @@ describeSvm(
         }).toEqual({
           approvals: [{ token: mint, spender: delegate, amount: "1000", decimals: DECIMALS }],
           refusal: "none: the guard let it through",
-          spend: {},
+          spend: { [`tokens.${mint}`]: { amount: "1000", decimals: DECIMALS } },
         });
       },
     );
+
+    it.each([
+      ["two approvals", "approve"],
+      ["a transfer and an approval", "transfer"],
+    ] as const)("holds %s each within the limit to the limit together", async (_, first) => {
+      const mint = mints.spl;
+      const one = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const two = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      // 600 base units each: 0.6 tokens, under the limit of 1; 1.2 together.
+      const transaction = await signed([
+        first === "approve"
+          ? approve(one, randomAddress(), 600n)
+          : transferChecked("spl", one, elsewhere, 600n, wallet),
+        approve(two, randomAddress(), 600n),
+      ]);
+
+      expect(await guarded(limited(mint), transaction)).toEqual(
+        refused(`tokens.${mint}.perTransaction`, `this transaction sends 1.2 ${mint}`),
+      );
+    });
+
+    it("counts each approval in the day's total, so approving again and again cannot pass it", async () => {
+      const mint = mints.spl;
+      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-allowance-"));
+      const info: WalletInfo = {
+        name: "agent",
+        kind: "solana",
+        address: wallet,
+        path: join(dir, "agent.json"),
+        policyPath: join(dir, "agent.policy.json"),
+      };
+      // One token to a new delegate each time, which may spend it before the next.
+      const approveOne = async () =>
+        signed([
+          approve(
+            setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT),
+            randomAddress(),
+            1_000n,
+          ),
+        ]);
+      try {
+        writeFileSync(info.policyPath, JSON.stringify({ tokens: { [mint]: { perDay: "1.5" } } }), {
+          mode: 0o600,
+        });
+        const guard = guardWallet(info, readPolicy(info));
+        (await guard.svm(rpc, await approveOne())).sent("the first approval");
+        const refusal = await guard.svm(rpc, await approveOne()).then(
+          () => "none: the guard let it through",
+          (error: unknown) =>
+            error instanceof PolicyRefusal
+              ? { limit: error.limit, message: error.message }
+              : String(error),
+        );
+
+        expect(refusal).toEqual({
+          limit: `tokens.${mint}`,
+          message: expect.stringContaining(`this transaction approves`) as unknown,
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
 
     it("counts a raised allowance at its new total, and not a lowered one, a revoke, or one spent down", async () => {
       const mint = mints.spl;

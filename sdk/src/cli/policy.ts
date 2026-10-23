@@ -339,6 +339,11 @@ interface Outflow {
    */
   readonly limitDecimals?: number;
   readonly amount: bigint;
+  /**
+   * Solana: how much of `amount` is allowances the transaction approves another key, which counts
+   * as sent when it is approved, since the delegate needs no later signature to move it.
+   */
+  readonly delegated?: bigint;
 }
 
 interface Approval extends Outflow {
@@ -851,7 +856,10 @@ export async function measureSvm(
     moved.lamports
       .filter((change) => ours.has(change.account))
       .reduce((sum, change) => sum + change.before - change.after, 0n) + closableLamports;
-  const byMint = new Map<string, { amount: bigint; symbol?: string; decimals?: number }>();
+  const byMint = new Map<
+    string,
+    { amount: bigint; symbol?: string; decimals?: number; delegated?: bigint }
+  >();
   for (const change of moved.tokens) {
     if (!ours.has(change.owner)) continue;
     const seen = byMint.get(change.mint) ?? {
@@ -864,6 +872,16 @@ export async function measureSvm(
   for (const [mint, amount] of handedOff) {
     const seen = byMint.get(mint) ?? { amount: 0n, ...facts.get(mint) };
     byMint.set(mint, { ...seen, amount: seen.amount + amount });
+  }
+  // An allowance counts as sent when it is approved: the delegate moves it with no later signature
+  // of the wallet's, so a limit holds it now, per transaction and in the day's total.
+  for (const { token, amount } of approved) {
+    const seen = byMint.get(token) ?? { amount: 0n, ...facts.get(token) };
+    byMint.set(token, {
+      ...seen,
+      amount: seen.amount + amount,
+      delegated: (seen.delegated ?? 0n) + amount,
+    });
   }
 
   return {
@@ -1051,7 +1069,7 @@ function spendOf(
     limitName: string,
     limit: Limit,
     amount: bigint,
-    unit: Pick<Outflow, "decimals" | "limitDecimals" | "symbol" | "token">,
+    unit: Pick<Outflow, "decimals" | "limitDecimals" | "symbol" | "token" | "delegated">,
   ): void => {
     if (unit.decimals === undefined) {
       refuse(
@@ -1061,12 +1079,17 @@ function spendOf(
     }
     const value = scaled(amount, unit.decimals!);
     const text = (at: bigint) => `${whole(at)} ${unit.symbol ?? unit.token}`;
+    const sends =
+      shown(amount, unit) +
+      (unit.delegated === undefined || unit.delegated === 0n
+        ? ""
+        : ` (${shown(unit.delegated, unit)} of it as allowances it approves)`);
     if (limit.perTransaction !== undefined) {
       const cap = limitScaled(limit.perTransaction, unit.limitDecimals ?? unit.decimals!);
       if (value > cap) {
         refuse(
           `${limitName}.perTransaction`,
-          `${limitName}.perTransaction is ${text(cap)}, and this transaction sends ${shown(amount, unit)}`,
+          `${limitName}.perTransaction is ${text(cap)}, and this transaction sends ${sends}`,
         );
       }
     }
@@ -1077,7 +1100,7 @@ function spendOf(
         refuse(
           `${limitName}.perDay`,
           `${limitName}.perDay is ${text(cap)}; ${text(before)} went in the last 24 hours, and ` +
-            `this transaction sends ${shown(amount, unit)}`,
+            `this transaction sends ${sends}`,
         );
       }
     }
@@ -1100,8 +1123,8 @@ function spendOf(
           "transaction lets another key take of it cannot be held to a limit",
       );
     }
-    const matching = measured.tokens.filter((outflow) => names(key, outflow));
-    for (const outflow of matching) hold(`tokens.${key}`, limit, outflow.amount, outflow);
+    // Each approval on its own first, so the refusal names it; then everything the transaction
+    // counts against the limit together (on Solana, approvals included).
     const permit2 = permit2Of(chain);
     for (const approval of measured.approvals.filter((each) => names(key, each))) {
       if (approval.spender.toLowerCase() === permit2 || approval.decimals === undefined) continue;
@@ -1131,6 +1154,8 @@ function spendOf(
           `${handed.symbol ?? handed.token}, which tokens.${key} limits`,
       );
     }
+    const matching = measured.tokens.filter((outflow) => names(key, outflow));
+    for (const outflow of matching) hold(`tokens.${key}`, limit, outflow.amount, outflow);
   }
 
   return spend;
