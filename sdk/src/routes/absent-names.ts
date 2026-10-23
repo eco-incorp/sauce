@@ -12,7 +12,10 @@
  * compares equal to zero, as `X == 0` needs, and is refused at run time. So without this check a use
  * of a name the chain lacks outside a branch its test rules out would compile to a call to, or a
  * transfer to, address zero. This check reads the program before anything rewrites it and refuses
- * such a use, at the use, naming the chain. It rewrites nothing: the compiler folds every test.
+ * such a use, at the use, naming the chain. The compiler folds every test; the check reports the
+ * code a test rules out (`dead`), which the route compiler blanks (`withoutDead`) before its own
+ * rewrites, so a ruled-out token write, balance read, venue call or binding adds no account, check
+ * or binding the program would not have.
  *
  * A use is allowed where it is a test — the condition of an `if`, `?:` or loop, the operand of `!`,
  * a side of a comparison with `0`, either side of `&&` and `||` in a condition — and anywhere in a
@@ -72,6 +75,43 @@ export interface NameCheckOptions {
 export interface NameCheck {
   /** The chains the program names by key, whose modules the compile is handed. */
   readonly chainKeys: readonly CanonicalChain[];
+  /** What a test of names rules out, in source order, none inside another (`withoutDead`). */
+  readonly dead: readonly DeadCode[];
+}
+
+/**
+ * Code a test of names rules out: an `if` arm (`statement`), a `?:` arm or the right side of a
+ * decided `&&`/`||` (`expression`), or a statement of a list after a decided `if` that always
+ * exits (`tail`).
+ */
+export interface DeadCode {
+  readonly start: number;
+  readonly end: number;
+  readonly kind: "statement" | "expression" | "tail";
+}
+
+/**
+ * `source` with the code `dead` names blanked, every other character where it was: a statement of
+ * a dead tail becomes spaces, an `if` arm `{ }` and an expression `0`, each padded with spaces, its
+ * newlines kept. The compiler folds a decided test whichever way it reads, so the program compiles
+ * as it did; the SDK's rewrites, which run after the check, then see only code that compiles.
+ */
+export function withoutDead(source: string, dead: readonly DeadCode[]): string {
+  if (dead.length === 0) return source;
+  const blank = (text: string): string => text.replace(/[^\n]/g, " ");
+  const out: string[] = [];
+  let cursor = 0;
+  for (const { start, end, kind } of dead) {
+    const text = source.slice(start, end);
+    out.push(source.slice(cursor, start));
+    if (kind === "tail") out.push(blank(text));
+    else if (kind === "expression") out.push(`0${blank(text.slice(1))}`);
+    else out.push(text.length < 2 ? text : `{${blank(text.slice(1, -1))}}`);
+    cursor = end;
+  }
+  out.push(source.slice(cursor));
+
+  return out.join("");
 }
 
 /** The function `available(X)` was. */
@@ -143,7 +183,7 @@ type Reference =
 /**
  * Refuses every use of a name `names.chain` lacks that a test of it does not rule out, and every
  * registry name no chain can have, before the compiler reads `source`. Returns the chains the
- * program names by key.
+ * program names by key, and the code a test rules out.
  */
 export function checkNames(
   source: string,
@@ -160,6 +200,7 @@ export function checkNames(
   const defined = options.defined ?? new Set<string>();
   const scope = options.chainScope?.map((ref) => requireChain(ref).id);
   const chainKeys = new Map<number, CanonicalChain>();
+  const dead: DeadCode[] = [];
 
   const fail = (node: AstNode, message: string): never => {
     throw locatedError(source, options.file ?? "main.js", node, `compileSauceRoute: ${message}`);
@@ -580,21 +621,34 @@ export function checkNames(
    *  always exits. */
   const statements = (list: readonly AstNode[], outer: Scope | undefined): void => {
     const at = blockScope(list, outer);
-    let dead = false;
+    let unreachable = false;
+    let ruledOut = false;
     for (const statement of list) {
-      if (dead) {
-        // A function declared in a dead tail is still declared: it may be called from before.
+      if (unreachable) {
+        // A function declared in a dead tail is still declared: it may be called from before. So
+        // is a type, and a module's import or export.
         if (statement.type === "FunctionDeclaration") visit(statement, "value", "value", at);
+        else if (
+          ruledOut &&
+          !isTypeDeclaration(statement.type) &&
+          statement.type !== "ImportDeclaration" &&
+          !statement.type.startsWith("Export")
+        ) {
+          dead.push({ start: statement.start, end: statement.end, kind: "tail" });
+        }
         continue;
       }
       visit(statement, "value", "value", at);
-      if (statement.type === "ReturnStatement" || statement.type === "ThrowStatement") dead = true;
+      if (statement.type === "ReturnStatement" || statement.type === "ThrowStatement") {
+        unreachable = true;
+      }
       if (
         statement.type === "IfStatement" &&
         valueOf(prop(statement, "test"), at) !== undefined &&
         exits(statement, at)
       ) {
-        dead = true;
+        unreachable = true;
+        ruledOut = true;
       }
     }
   };
@@ -656,16 +710,25 @@ export function checkNames(
       case "IfStatement": {
         visit(prop(node, "test"), "test", "value", at);
         const taken = valueOf(prop(node, "test"), at);
+        const consequent = prop<AstNode>(node, "consequent");
         const alternate = prop<AstNode | null>(node, "alternate");
-        if (taken !== false) visit(prop(node, "consequent"), "value", "value", at);
-        if (taken !== true && alternate) visit(alternate, "value", "value", at);
+        if (taken !== false) visit(consequent, "value", "value", at);
+        else dead.push({ start: consequent.start, end: consequent.end, kind: "statement" });
+        if (!alternate) return;
+        if (taken !== true) visit(alternate, "value", "value", at);
+        else dead.push({ start: alternate.start, end: alternate.end, kind: "statement" });
         return;
       }
       case "ConditionalExpression": {
         visit(prop(node, "test"), "test", "value", at);
         const taken = valueOf(prop(node, "test"), at);
-        if (taken !== false) visit(prop(node, "consequent"), mode, "value", at);
-        if (taken !== true) visit(prop(node, "alternate"), mode, "value", at);
+        for (const [arm, live] of [
+          [prop<AstNode>(node, "consequent"), taken !== false],
+          [prop<AstNode>(node, "alternate"), taken !== true],
+        ] as const) {
+          if (live) visit(arm, mode, "value", at);
+          else dead.push({ start: arm.start, end: arm.end, kind: "expression" });
+        }
         return;
       }
       case "WhileStatement":
@@ -723,6 +786,7 @@ export function checkNames(
         const shortCircuits = decided === (operator === "||");
         visit(left, shortCircuits ? mode : "test", "value", at);
         if (!shortCircuits) visit(right, mode, "value", at);
+        else dead.push({ start: right.start, end: right.end, kind: "expression" });
         return;
       }
       case "BinaryExpression": {
@@ -865,5 +929,8 @@ export function checkNames(
   const module = moduleScope(program);
   visit(program, "value", "value", module);
 
-  return { chainKeys: [...chainKeys.values()] };
+  return {
+    chainKeys: [...chainKeys.values()],
+    dead: dead.sort((a, b) => a.start - b.start),
+  };
 }

@@ -6,7 +6,10 @@
  * refused before the compiler runs, at the use, naming the chain (`routes/absent-names.ts`), so a
  * zero never reaches the chain as an address.
  */
+import { requireChain } from "../src/chains/canonical.js";
 import { getDescriptor } from "../src/descriptors/query.js";
+import { checkNames, withoutDead } from "../src/routes/absent-names.js";
+import { chainNames } from "../src/routes/chain-module.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 /** Compiles `body` (a `main` body) for `chain`, returning the bytecode as hex. */
@@ -698,5 +701,117 @@ describe("a test of the name compiles to the bytes available(X) did", () => {
   );
   it.each(cases)("%s", (_name, source, { chain, bytecode }) => {
     expect(hex(chain, source)).toBe(bytecode);
+  });
+});
+
+/**
+ * What `available(X)` compiled to (compiler 2.6.0, before it was removed) where the branch it ruled
+ * out holds what the SDK lowers itself: a token write, a balance, a venue call, a contract bound to
+ * an address, each in an `if` arm, a `?:` arm, the right side of `&&`, and the rest of a block after
+ * a guard. The bytes and the accounts the program asks for are those, in either spelling.
+ */
+const RULED_OUT: readonly {
+  chain: string;
+  available: string;
+  bytecode: string;
+  derivedAccounts: Readonly<Record<string, string>>;
+}[] = [
+  {
+    chain: "solana",
+    available:
+      "function main(): Uint256 { if (available(UniswapV3.Factory)) { return USDC.mint.address; } return 0; }",
+    bytecode: "010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(pool: Address): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Pool(pool).liquidity(); } return 0; }",
+    bytecode: "a502003fd1514702000eb19000b602001f01209554e0010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(to: Account): Uint256 { if (available(UniswapV3.Factory)) { USDC.transfer(to, 1); } return 0; }",
+    bytecode: "010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 { if (available(UniswapV3.Factory)) { return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1); } return 0; }",
+    bytecode:
+      "a5020091d1514702000eb19000b6d002003101209554e0d002005101209554e002007101209554e0010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(): Uint256 { if (available(UniswapV3.Factory)) { return pot.USDC; } return 0; }",
+    bytecode: "010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available: "function main(): Uint256 { return available(UniswapV3.Factory) ? pot.USDC : 0; }",
+    bytecode: "010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(): Uint256 { if (available(UniswapV3.Factory) && pot.USDC > 0) { return 1; } return 0; }",
+    bytecode: "010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(to: Account): Uint256 { if (!available(UniswapV3.Factory)) { return 0; } USDC.transfer(to, 1); return pot.USDC; }",
+    bytecode: "010001208ae1d18900",
+    derivedAccounts: {},
+  },
+  {
+    chain: "solana",
+    available:
+      "function main(): Uint256 { if (available(UniswapV3.Factory)) { return 1; } else { return pot.USDC; } }",
+    bytecode:
+      "02002d20c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d610100010177020034b001208ae1d1890002003ef1e3d302012ab0e101200120f1e3e4815443020064b1901477726f6e6720686f6c646572206163636f756e74b6e1b02006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9d1784302010bb1d0792006ddf6e1ee758fde18425dbce46ccddab61afc4d83b90d27febdf928d8a18bfcd278430200beb101000200f0b001a5d1430200ecb1020163d14401a5d2454d0200dab101000200e6b00102010101a5d4815543424242420200eeb00101424202010ab190136e6f74206120746f6b656e206163636f756e74b6e0e101200100f1e3815443020126b1900a77726f6e67206d696e74b60100e1b0020133f1d2020066b0e001080140f18155e1b0",
+    derivedAccounts: { potUSDC: "pot:USDC", pot: "pot" },
+  },
+  {
+    chain: "base",
+    available:
+      "function main(): Uint256 { if (!available(USDT)) { return 0; } USDT.transfer(0x1234, 1); return pot.USDT; }",
+    bytecode: "010001208ae1d1890520000000003100",
+    derivedAccounts: {},
+  },
+];
+
+describe("a branch a test rules out reaches none of the SDK's rewrites", () => {
+  const cases = RULED_OUT.flatMap((entry) =>
+    Object.entries(SPELLINGS).map(
+      ([spelling, spell]) =>
+        [
+          `${entry.chain}, ${spelling}: ${spell(entry.available)}`,
+          spell(entry.available),
+          entry,
+        ] as const,
+    ),
+  );
+  it.each(cases)("%s", (_name, source, { chain, bytecode, derivedAccounts }) => {
+    const program = compileSauceProgram(chain, source);
+    expect(Buffer.from(program.bytecode).toString("hex")).toBe(bytecode);
+    expect(program.derivedAccounts ?? {}).toEqual(derivedAccounts);
+  });
+
+  it("blanks it in place: every other character, and every line, where it was", () => {
+    const source =
+      "function main(): Uint256 {\n  if (UniswapV3.Factory) {\n    return pot.USDC;\n  }\n  return UniswapV3.Factory ? pot.USDC : 0;\n}\n";
+    const { dead } = checkNames(source, chainNames(requireChain("solana")));
+    expect(withoutDead(source, dead)).toBe(
+      "function main(): Uint256 {\n  if (UniswapV3.Factory) {\n                    \n  }\n  return UniswapV3.Factory ? 0        : 0;\n}\n",
+    );
   });
 });

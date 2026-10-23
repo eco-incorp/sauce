@@ -44,7 +44,7 @@ import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { checkNames } from "./absent-names.js";
+import { checkNames, withoutDead } from "./absent-names.js";
 import {
   CHAIN_MODULE,
   CHAIN_MODULE_ROOT,
@@ -554,6 +554,10 @@ function compileForChain(
     ...(accessorOpts.onContract === undefined ? {} : { onContract: accessorOpts.onContract }),
   };
   const named = checkNames(source, names, checks);
+  // What a test rules out the compiler never compiles, and no pass below may read: a token write,
+  // a balance, a venue call or a binding there would add an account, a check or a binding of its
+  // own. Blanked in place, so every position the passes and the compiler report is the program's.
+  source = withoutDead(source, named.dead);
 
   // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
   // a `const` holding one) becomes the spelling that names the contract the result is
