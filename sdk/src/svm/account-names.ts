@@ -393,6 +393,23 @@ export function svmNamesPot(value: string): boolean {
   return parsed !== undefined && holdersIn(parsed).some((holder) => holder.kind === "pot");
 }
 
+/**
+ * Whether the account `value` derives is the Pot's — the Pot, its token account, or an address
+ * seeded by it — cooked `via`: `pot` always, and `authority` through the Kitchen, where it is the
+ * Pot (cooked directly it is the owner). Such a slot must be the account its derivation gives: a
+ * program reads it as its own Pot.
+ */
+export function svmPotDerived(value: string, via: SvmAccountNameContext["via"]): boolean {
+  const parsed = parse(value);
+
+  return (
+    parsed !== undefined &&
+    holdersIn(parsed).some(
+      (holder) => holder.kind === "pot" || (holder.kind === "authority" && via !== "engine"),
+    )
+  );
+}
+
 /** The name a person reads for a token program. */
 const programName = (program: Address): string =>
   program === TOKEN_2022_PROGRAM_ID ? "Token-2022" : "SPL Token";

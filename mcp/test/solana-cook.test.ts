@@ -325,6 +325,51 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     }
   });
 
+  it("refuses another account in a slot derived from the Pot, through accounts, building nothing", async () => {
+    const source =
+      "function main(): Uint256 {\n" +
+      "  svm.call(Solana.systemProgram, [pot.signer()], hex`00`);\n" +
+      "  return pot.USDC + pot.balance;\n}\n";
+    for (const tool of ["sauce_tx", "sauce_simulate"]) {
+      for (const [name, given] of [
+        ["pot", OWNER],
+        ["pot", "owner"],
+        ["potUSDC", "owner:USDC"],
+      ] as const) {
+        asked.length = 0;
+        const refused = failed(
+          await mcp.call(tool, {
+            source,
+            chain: "solana",
+            owner: OWNER,
+            accounts: { [name]: given },
+            rpcUrl: url,
+          }),
+        );
+        assert.match(
+          refused,
+          new RegExp(
+            `^accounts ${name}=${given}: the account ${name} is derived from the Pot, as ` +
+              `${name === "pot" ? "pot" : "pot:USDC"} \\(`,
+          ),
+        );
+        assert.ok(!asked.includes("getLatestBlockhash"), `${tool} built nothing`);
+      }
+    }
+    // The Pot itself, by role, is its own slot: the cook is built.
+    asked.length = 0;
+    const out = ok(
+      await mcp.call("sauce_tx", {
+        source: "function main(): Address {\n  return pot;\n}\n",
+        chain: "solana",
+        owner: OWNER,
+        accounts: { pot: "pot" },
+        rpcUrl: url,
+      }),
+    );
+    assert.equal(typeof out.pot, "string");
+  });
+
   it("refuses via and maxExecutionFee on an EVM chain", async () => {
     for (const extra of [{ via: "engine" }, { maxExecutionFee: "5000" }]) {
       const refused = failed(
