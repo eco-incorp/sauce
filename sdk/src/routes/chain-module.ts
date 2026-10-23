@@ -1,7 +1,8 @@
 /**
  * A chain's names, written as the SauceScript module the compiler is handed with every program
  * compiled for the chain: `@sauce/chain`, an AMBIENT module, so its exports are globals of the
- * program with no `import`.
+ * program with no `import` — installed under a specifier only the SDK knows, so no import reaches
+ * it (`INSTALLED_CHAIN_MODULE`).
  *
  * ```js
  * // Base
@@ -31,7 +32,7 @@
  * check is the SDK's.
  *
  * A CHAIN BY NAME. `Base.UniswapV3.Factory` names Base's deployment from a program for any EVM
- * chain: the chain key is a module of its own (`@sauce/chain-<slug>`, exporting `Base`), the same
+ * chain: the chain key is a module of its own (`chainKeyModule`, exporting `Base`), the same
  * namespaces one level down, handed to the compile only when the program names that chain.
  *
  * What a module cannot hold stays a rewrite (`protocol-rewrite.ts`): an interface called with an
@@ -363,7 +364,7 @@ export function chainNames(chain: CanonicalChain, options: ChainNamesOptions = {
   return names;
 }
 
-/** The module `@sauce/chain-<slug>` serves: `<ChainKey>`, the chain's namespaces one level down. */
+/** The module `chainKeyModule(chain)` serves: `<ChainKey>`, the chain's namespaces one level down. */
 const keyModules = new Map<number, string>();
 export function chainKeyModulePath(chain: CanonicalChain): string {
   const path = `on/${chain.slug}.js`;

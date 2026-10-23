@@ -181,11 +181,17 @@ remain available and explicitly report that deployment availability has not been
   `available(X)`, test the name itself. `if (X)`, `!X`, `X != 0`, `X == 0`, `?:`, `&&` and `||` are
   decided as the program compiles, and the branch a test rules out is not compiled, even when it
   calls the absent contract, reads `pot.<TOKEN>` of the absent token, or holds EVM-only code on
-  Solana. Such a program compiles to the bytes `available(X)` produced. A call to `available(...)`
-  is refused with "`available(X)` is removed: test the name itself, `if (X)`.", and TypeScript no
-  longer declares it. A decision held in a variable is live code: in
+  Solana. Such a program compiles to the bytes `available(X)` produced, and on Solana asks for the
+  accounts it did: a ruled-out token write, balance, venue call or binding adds none. A call to
+  `available(...)` is refused with "`available(X)` is removed: test the name itself, `if (X)`.",
+  and TypeScript no longer declares it. A decision held in a variable is live code: in
   `const has = USDT != 0; if (has) { … }` the branch is checked as if it runs. A program's own
-  declaration of a name wins in the block it is declared in, from the declaration on.
+  declaration of a name wins in the block it is declared in, from the declaration on; a type-only
+  import (`import type { USDT }`) declares none. The names are no module a program imports:
+  `import … from "@sauce/chain"`, and any path or package mapping that reaches them, is refused.
+  `&&` and `||` give true or false, so a contract under them is a test: where the whole is a value
+  (`const e: Address = PancakeswapV3.Factory || UniswapV3.Factory`), it is refused on every chain,
+  naming `X ? X : Y` for the first the chain has.
 - **Changed (both): a use of a name the chain lacks is refused at the use, naming the chain.**
   Outside a branch a test of it rules out, such a name would be address zero. The SDK refuses it
   before compiling and gives the file, line and column: "`PancakeswapV3.Factory` is not deployed

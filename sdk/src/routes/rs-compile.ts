@@ -254,7 +254,7 @@ export interface RsCompileInput {
   /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
   args?: readonly (bigint | boolean | string)[];
   /** Bare specifiers the compile serves itself, ahead of the standard library and the caller's:
-   *  the chain's names modules (`@sauce/chain`), by the path `chainModuleText` serves. */
+   *  the chain's names modules (`INSTALLED_CHAIN_MODULE`), by the path `chainModuleText` serves. */
   packages?: Readonly<Record<string, string>>;
   /** Reads each SauceScript module the caller's `resolve` serves, by its path and text, and throws
    *  to refuse it: the entry is the caller's to read before it compiles. */

@@ -533,21 +533,37 @@ on ANY chain, bound (`ABI.at(address)`, the same bytes as the binding written by
 chain has it, its address where the registry has no ABI, and `0` where it lacks it; and every token
 symbol some chain registers and this one lacks as `export const X = 0`. The chain's own tokens,
 `chainId` and the `<Ns>_<Contract>` keys stay defines. A program that names a chain
-(`Base.UniswapV3.Factory`) gets `@sauce/chain-<slug>` too. Modules and ABIs are served from memory,
-never a disk. The compiler decides a test of a zero (`if (X)`, `!X`, `X != 0`, `?:`, `&&`, `||`)
-and does not compile the branch it rules out; that is the whole presence mechanism, and
-`available(X)` is gone. 2.6.0 has no zero that is unusable at run time, so
-`routes/absent-names.ts#checkNames` reads the program (and every module the caller's resolver
-serves) before any rewrite and refuses, located and naming the chain, every use of a name the
-chain lacks outside a branch a test of it rules out, a `require` such a name makes false, a
-registry name no chain has, and the Pot's balance of an absent token. Its scopes are the
-compiler's: the module's names and a function's parameters everywhere in them, a block's
-`let`/`const` from its declarator on, a loop's or `catch` clause's binding in it — a function-wide
-shadow set once let a use after an inner block reach the zero. What a module cannot hold stays a
-rewrite in `protocol-rewrite.ts`: an interface bound to an address, `.at(address)`, a protocol's
-default-contract call, and `.address` before a scalar method (`.toBytesBe`) on a binding, which
-2.6.0 takes only on an address. On Solana the module holds no EVM contract; `pot.<TOKEN>` of a
-token Solana lacks is left to the compiler as `ctx.self().<TOKEN>`, only ever under a test.
+(`Base.UniswapV3.Factory`) gets that chain's module too. Modules and ABIs are served from memory,
+never a disk, and only to the SDK's own installation: the compile hands them to the compiler as
+ambient modules under a specifier drawn once per process (`INSTALLED_CHAIN_MODULE`), which no
+program or module can write; `rs-compile.ts` serves a names module only at the absolute path that
+specifier resolves to (the compiler refuses an absolute import), refuses a relative path into the
+root, and refuses a caller `resolvePackage` that maps any specifier there, located at the import.
+Imported, a name the chain lacks would be the program's own and escape the check; `checkNames`
+still names the import, normalized as the compiler reads it, for the nicer message. The compiler
+decides a test of a zero (`if (X)`, `!X`, `X != 0`, `?:`, `&&`, `||`) and does not compile the
+branch it rules out; that is the whole presence mechanism, and `available(X)` is gone. 2.6.0 has no
+zero that is unusable at run time, so `routes/absent-names.ts#checkNames` reads the program (and
+every module the caller's resolver serves) before any rewrite and refuses, located and naming the
+chain, every use of a name the chain lacks outside a branch a test of it rules out, a `require`
+such a name makes false, a registry name no chain has, the Pot's balance of an absent token, and a
+contract under `&&`/`||` where the whole is a value (the language gives a bool, but 2.6.0 hands a
+contract binding back as the whole). It also reports the code a test rules out (`dead`: an `if`
+arm, a `?:` arm, the right side of a decided `&&`/`||`, the rest of a block after a decided `if`
+that always exits, its functions, types and module declarations kept), and `compileForChain`
+blanks it in place (`withoutDead`: spaces, newlines kept, an `if` arm `{ }`, an expression `0`)
+before every rewrite, so the token, venue, account and accessor passes never lower ruled-out code
+— on Solana they would add its accounts and checks to `main`, which `available(X)`, removing the
+branch from the source, never did. A module the caller serves is only checked: no rewrite reads it.
+Its scopes are `lexical-scope.ts`'s, the compiler's: the module's names (a type-only import binds
+none) and a function's parameters everywhere in them, a block's `let`/`const` from its declarator
+on, a loop's or `catch` clause's binding in it — a function-wide shadow set once let a use after an
+inner block reach the zero. What a module cannot hold stays a rewrite in `protocol-rewrite.ts`: an
+interface bound to an address, `.at(address)`, a protocol's default-contract call, and `.address`
+before a scalar method (`.toBytesBe`) on a binding or a local holding one through any chain of
+locals, which 2.6.0 takes only on an address. On Solana the module holds no EVM contract;
+`pot.<TOKEN>` of a token Solana lacks is left to the compiler as `ctx.self().<TOKEN>`, only ever
+under a test.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
