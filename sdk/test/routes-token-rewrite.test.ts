@@ -16,6 +16,8 @@ import {
   SVM_TOKEN_REGISTRY,
 } from "../src/routes/token-registry.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
+import { ambientNamesOf } from "../src/routes/rs-compile.js";
+import { chainAmbient } from "../src/routes/ambient.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -930,6 +932,213 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
         ...served({ holder: `export const pot = ${key};` }),
       }),
     ).toEqual(solana(`function main(): Address { return ${key}; }`));
+  });
+});
+
+// --- the compiler, not the SDK, finds a caller's ambient module ----------------------------------
+
+describe.each([
+  ["base", "evm", "0x6666666666666666666666666666666666666666"],
+  ["solana", "svm", `0x${"06".repeat(32)}`],
+])("on %s, the compiler says which `pot` the caller binds", (chain, arm, holder) => {
+  type Options = Parameters<typeof compileSauceProgram>[2];
+  const build = (source: string, options: Options = {}) => {
+    const compiled = compileSauceProgram(chain, source, options);
+    return {
+      bytecode: Buffer.from(compiled.bytecode).toString("hex"),
+      manifest: compiled.manifest,
+      derivedAccounts: compiled.derivedAccounts,
+    };
+  };
+  const served = (modules: Readonly<Record<string, string>>) => ({
+    resolve: (path: string) =>
+      modules[path] === undefined ? undefined : new TextEncoder().encode(modules[path]),
+  });
+  const refusal = (source: string, options: Options): string => {
+    try {
+      build(source, options);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    throw new Error("the compile was not refused");
+  };
+  const PROGRAM = "function main(): Address { return pot; }";
+  const POT = `export const pot = ${holder};`;
+  const OTHER = "export const other = 7;";
+  const callers = () => build(`function main(): Address { return ${holder}; }`);
+  const pots = () => build(PROGRAM);
+
+  // Each module exports the caller's `pot` where the compiler reads it, and the other module, which
+  // the compiler does not read, exports something else; then the other way round. The first is the
+  // caller's `pot`, the second the Pot.
+  // Every row has five columns: jest takes a test function with more parameters than its row has
+  // columns for one that calls `done`.
+  it.each<
+    [
+      string,
+      string,
+      ((specifier: string) => string | undefined) | undefined,
+      string,
+      string | undefined,
+    ]
+  >([
+    [
+      "a bare specifier with an empty subpath: `holder/` is `holder`",
+      "holder/",
+      (specifier) => (specifier === "holder" ? "./holder.js" : undefined),
+      "./holder.js",
+      "holder/",
+    ],
+    [
+      "a package entry with no per-target arm: `.cjs`",
+      "holder",
+      (specifier) => (specifier === "holder" ? "./holder.cjs" : undefined),
+      "./holder.cjs",
+      `./holder.${arm}.cjs`,
+    ],
+    ["a bare specifier only `resolve` serves", "holder", undefined, "holder", undefined],
+    [
+      "a bare specifier `resolvePackage` declines",
+      "@caller/holder",
+      () => undefined,
+      "@caller/holder",
+      undefined,
+    ],
+    [
+      "a package entry, at its per-target arm",
+      "@caller/holder",
+      (specifier) => (specifier === "@caller/holder" ? "./holder/index.js" : undefined),
+      `./holder/index.${arm}.js`,
+      "./holder/index.js",
+    ],
+    [
+      "a bare `.js` specifier, at its per-target arm",
+      "holder.js",
+      undefined,
+      `holder.${arm}.js`,
+      "holder.js",
+    ],
+    [
+      "a relative specifier, at its per-target arm",
+      "./holder.js",
+      undefined,
+      `./holder.${arm}.js`,
+      "./holder.js",
+    ],
+    ["a relative specifier with no arm", "./holder.js", undefined, "./holder.js", undefined],
+    [
+      "a relative specifier written with `..`",
+      "./sub/../holder.ts",
+      undefined,
+      "./holder.ts",
+      "./sub/holder.ts",
+    ],
+    [
+      "a relative specifier climbing twice",
+      "./a/b/../../holder.js",
+      undefined,
+      "./holder.js",
+      "./a/holder.js",
+    ],
+  ])("%s", (_form, specifier, resolvePackage, read, unread) => {
+    const options = (atRead: string, atUnread: string): Options => ({
+      ambient: [specifier],
+      ...(resolvePackage === undefined ? {} : { resolvePackage }),
+      ...served({ [read]: atRead, ...(unread === undefined ? {} : { [unread]: atUnread }) }),
+    });
+    expect(build(PROGRAM, options(POT, OTHER))).toEqual(callers());
+    expect(build(PROGRAM, options(OTHER, POT))).toEqual(pots());
+  });
+
+  it.each([
+    ["stops exporting `pot`", POT, OTHER, callers, pots],
+    ["starts exporting `pot`", OTHER, POT, pots, callers],
+  ])(
+    "one `resolve` whose module %s is asked again on the next compile",
+    (_, first, then, before, after) => {
+      const modules: Record<string, string> = { "./holder.js": first };
+      const options: Options = { ambient: ["./holder.js"], ...served(modules) };
+      expect(build(PROGRAM, options)).toEqual(before());
+      modules["./holder.js"] = then;
+      expect(build(PROGRAM, options)).toEqual(after());
+    },
+  );
+
+  it("a define of `pot` and an import of it are the caller's; a define of another name is not", () => {
+    expect(build(PROGRAM, { defines: { pot: BigInt(holder) } })).toEqual(callers());
+    expect(
+      build(`import { pot } from "./constants.js";\n${PROGRAM}`, served({ "./constants.js": POT })),
+    ).toEqual(callers());
+    expect(build(PROGRAM, { defines: { other: BigInt(holder) } })).toEqual(pots());
+  });
+
+  it("a refusal the probe meets is the compile's own, as it is", () => {
+    const unrelated = "function main(): Uint256 { return 7; }";
+    // A module above the root, a name two caller modules export, and a module at the probe's own
+    // path, which the SDK's standard library holds and no caller serves: refused either way.
+    for (const options of [
+      { ambient: ["../holder.js"], ...served({ "../holder.js": POT }) },
+      { ambient: ["./a.js", "./b.js"], ...served({ "./a.js": OTHER, "./b.js": OTHER }) },
+      {
+        ambient: ["./@eco-incorp/sauce/std/__sauce_probe.js"],
+        ...served({ "./@eco-incorp/sauce/std/__sauce_probe.js": POT }),
+      },
+    ]) {
+      expect(refusal(PROGRAM, options)).toBe(refusal(unrelated, options));
+    }
+  });
+
+  it.each([
+    ["is named like the probe's module", { "./__sauce_probe.js": POT }, "./__sauce_probe.js"],
+    [
+      "imports one named like it",
+      {
+        "./holder.js": `import { base } from "./__sauce_probe.js";\n${POT}`,
+        "./__sauce_probe.js": "export const base = 1;",
+      },
+      "./holder.js",
+    ],
+  ])("a caller's module that %s is the caller's own", (_, modules, specifier) => {
+    expect(build(PROGRAM, { ambient: [specifier], ...served(modules) })).toEqual(callers());
+  });
+
+  it("the SDK's own ambient modules export neither of the Pot's names", () => {
+    const ambient = [
+      ...chainAmbient(requireChain(chain)),
+      ...(arm === "evm" ? ["@sauce/router"] : []),
+    ];
+    expect(
+      ambientNamesOf({ target: arm === "svm" ? "svm" : "v12", ambient }, ["pot", "self"]),
+    ).toEqual(new Set());
+  });
+});
+
+describe("on Solana, the accounts the lowering adds are named apart from what the caller binds", () => {
+  const KEY = `0x${"06".repeat(32)}`;
+  const TRANSFER = "function main(to: Address) { USDC.transfer(to, 1); }";
+
+  it("a contract binding the caller names `pot`", () => {
+    expect(
+      compileSauceProgram("solana", TRANSFER, { contracts: { pot: { abi: [] } } }).derivedAccounts,
+    ).toMatchObject({ pot2: "authority", potUSDC: "authority:USDC" });
+  });
+
+  it("an ambient module's export the program reads", () => {
+    const compiled = compileSauceProgram(
+      "solana",
+      "function main(to: Address): Address { USDC.transfer(to, 1); return tokenProgram; }",
+      {
+        ambient: ["./consts.js"],
+        resolve: (path: string) =>
+          path === "./consts.js"
+            ? new TextEncoder().encode(`export const tokenProgram = ${KEY};`)
+            : undefined,
+      },
+    );
+    expect(compiled.derivedAccounts).toMatchObject({
+      tokenProgram2: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    });
+    expect(compiled.source).toContain("return tokenProgram; }");
   });
 });
 

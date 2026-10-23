@@ -304,18 +304,14 @@ function bindersOf(program: AstNode): ReadonlySet<AstNode> {
 }
 
 /**
- * Every place the program reads `name`: an identifier in value position, not a member's name, a
+ * Every place the program reads a name: an identifier in value position, not a member's name, a
  * record's key, a label, an import's or export's name, or a name a declaration binds (`bindersOf`).
  */
-function readsOf(
-  program: AstNode,
-  parents: ReadonlyMap<AstNode, AstNode>,
-  name: string,
-): AstNode[] {
+function readsOf(program: AstNode, parents: ReadonlyMap<AstNode, AstNode>): AstNode[] {
   const reads: AstNode[] = [];
   const binders = bindersOf(program);
   walk(program, (n) => {
-    if (n.type !== "Identifier" || nameOf(n) !== name || binders.has(n)) return;
+    if (n.type !== "Identifier" || binders.has(n)) return;
     const parent = parents.get(n);
     if (parent === undefined) return;
     const computed = parent.computed === true;
@@ -618,6 +614,8 @@ export class SvmLowering {
   readonly main: AstNode | undefined;
   /** Each node's parent. */
   readonly parents: ReadonlyMap<AstNode, AstNode>;
+  /** Every place the program reads a name (`readsOf`). */
+  private readonly reads: readonly AstNode[];
   /** Every read of `pot` where the program does not bind it (`owns`): the Pot. */
   readonly potReads: ReadonlySet<AstNode>;
   /** Every read of `self` where the program does not bind it: refused, naming `pot`. */
@@ -675,8 +673,9 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
-    /** The names the caller binds (its defines, the ambient modules' exports): a `pot` or `self`
-     *  among them is the caller's, and the accounts this adds are named apart from them. */
+    /** The names the caller binds (its defines, its contract bindings, and a `pot` or `self` an
+     *  ambient module exports): a `pot` or `self` among them is the caller's, and the accounts this
+     *  adds are named apart from them. */
     bound: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
@@ -693,19 +692,24 @@ export class SvmLowering {
     for (const param of (this.main?.params as AstNode[] | undefined) ?? []) {
       collectPatternNames(param, this.mainParams);
     }
-    this.potReads = new Set(
-      bound.has(POT_NAME)
-        ? []
-        : readsOf(this.program, this.parents, POT_NAME).filter((n) => !this.owns(n, POT_NAME)),
-    );
-    this.selfReads = bound.has(RETIRED_POT_NAME)
-      ? []
-      : readsOf(this.program, this.parents, RETIRED_POT_NAME).filter(
-          (n) => !this.owns(n, RETIRED_POT_NAME),
-        );
+    this.reads = readsOf(this.program, this.parents);
+    const freeReads = (name: string): AstNode[] =>
+      bound.has(name) ? [] : this.reads.filter((n) => nameOf(n) === name && !this.owns(n, name));
+    this.potReads = new Set(freeReads(POT_NAME));
+    this.selfReads = freeReads(RETIRED_POT_NAME);
     this.authorityDerivation = this.potReads.size > 0 ? "pot" : "authority";
     this.index = rowIndex(rows);
-    this.slots = new Slots(new Set([...this.declared, ...bound]));
+    // The accounts this adds to `main` are named apart from every name the program declares, every
+    // name the caller binds, and every other name the program reads, which a parameter of `main`
+    // of that name would hide: an ambient module's export among them. The Pot's own `pot` is the
+    // one the Pot's account stands for.
+    this.slots = new Slots(
+      new Set([
+        ...this.declared,
+        ...bound,
+        ...this.reads.map(nameOf).filter((name) => name !== POT_NAME && name !== RETIRED_POT_NAME),
+      ]),
+    );
     walk(this.program, (n) => {
       if (n.type === "ExpressionStatement") this.statements.set(n.expression as AstNode, n);
       if (n.type === "Program" || n.type === "BlockStatement" || n.type === "StaticBlock") {
@@ -1328,7 +1332,7 @@ export class SvmLowering {
   private callsOf(name: string, used: ReadonlySet<string>): AstNode[] {
     const calls: AstNode[] = [];
     const what = `\`${name}\` uses accounts the lowering adds to main (${[...used].join(", ")}), which it takes as parameters, passed at each call`;
-    for (const read of readsOf(this.program, this.parents, name)) {
+    for (const read of this.reads.filter((n) => nameOf(n) === name)) {
       const parent = this.parents.get(read);
       if (parent?.type !== "CallExpression" || parent.callee !== read) {
         const callee = parent?.type === "CallExpression" ? (parent.callee as AstNode) : undefined;
