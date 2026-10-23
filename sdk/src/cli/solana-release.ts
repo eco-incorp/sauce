@@ -18,9 +18,10 @@ import { v12ReleaseSet } from "../deployments/releases.js";
 import { svmEnginePath, svmKitchenPath } from "../svm/engine-artifacts.js";
 import { CliError } from "./args.js";
 
-/** A program account as the cluster holds it: its loader and its data. */
+/** A program account as the cluster holds it: its loader, whether it is executable, and its data. */
 export interface ProgramAccount {
   readonly owner: string;
+  readonly executable: boolean;
   readonly data: Uint8Array;
 }
 
@@ -45,18 +46,27 @@ const PROGRAMDATA_HEADER = 45;
 const tagOf = (data: Uint8Array): number | undefined =>
   data.length < 4 ? undefined : new DataView(data.buffer, data.byteOffset, 4).getUint32(0, true);
 
+/** The loaders whose own account holds the program: the BPF loaders before the upgradeable one. */
+const DIRECT_LOADERS: Record<string, true> = {
+  BPFLoader2111111111111111111111111111111111: true,
+  BPFLoader1111111111111111111111111111111111: true,
+};
+
 /**
  * The bytes a program runs from, as the cluster holds them — the zero padding of an account sized
- * past its program included. A program of the upgradeable loader is its programdata account past the
- * header; any other loader's account holds the program itself. `undefined` where there is none.
+ * past its program included. Only an executable account of a BPF loader is a program: an upgradeable
+ * one is its programdata account past the header, an older loader's account holds the program
+ * itself. Any other account, even one holding the release's bytes, is not a deployed program.
+ * `undefined` where there is none.
  */
 export async function deployedProgram(
   read: ReadProgram,
   program: string,
 ): Promise<Uint8Array | undefined> {
   const account = await read(program);
-  if (account === undefined) return undefined;
-  if (account.owner !== UPGRADEABLE_LOADER) return account.data;
+  if (account === undefined || !account.executable) return undefined;
+  if (DIRECT_LOADERS[account.owner] === true) return account.data;
+  if (account.owner !== UPGRADEABLE_LOADER) return undefined;
   if (account.data.length !== PROGRAM_ACCOUNT_SIZE || tagOf(account.data) !== 2) return undefined;
   const programData = await read(getAddressDecoder().decode(account.data.subarray(4)));
   if (

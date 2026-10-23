@@ -181,7 +181,11 @@ const programReader =
 
     return value === null
       ? undefined
-      : { owner: value.owner, data: new Uint8Array(Buffer.from(value.data[0], "base64")) };
+      : {
+          owner: value.owner,
+          executable: value.executable,
+          data: new Uint8Array(Buffer.from(value.data[0], "base64")),
+        };
   };
 
 /** Refuses a cook or a Pot on a cluster without the released programs `needs` names. */

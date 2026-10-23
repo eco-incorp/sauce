@@ -40,8 +40,9 @@ function upgradeable(program: Uint8Array, programData: string, padding = 0): Pro
   data.set(program, 45);
 
   return [
-    { owner: UPGRADEABLE, data: account },
-    { owner: UPGRADEABLE, data },
+    { owner: UPGRADEABLE, executable: true, data: account },
+    // The programdata account is not itself executable.
+    { owner: UPGRADEABLE, executable: false, data },
   ];
 }
 
@@ -134,8 +135,36 @@ describe("the Solana release check", () => {
 
   it("reads a program another loader holds in its own account", async () => {
     await expect(
-      deployedProgram(reader({ [ENGINE]: { owner: LOADER_V2, data: RELEASE.engine[0]! } }), ENGINE),
+      deployedProgram(
+        reader({ [ENGINE]: { owner: LOADER_V2, executable: true, data: RELEASE.engine[0]! } }),
+        ENGINE,
+      ),
     ).resolves.toEqual(RELEASE.engine[0]);
+  });
+
+  it("refuses the release's bytes in an account that is no program: not executable, or no BPF loader's", async () => {
+    for (const account of [
+      { owner: LOADER_V2, executable: false, data: RELEASE.engine[0]! },
+      { owner: "11111111111111111111111111111111", executable: true, data: RELEASE.engine[0]! },
+      {
+        owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        executable: false,
+        data: RELEASE.engine[0]!,
+      },
+    ]) {
+      await expect(deployedProgram(reader({ [ENGINE]: account }), ENGINE)).resolves.toBeUndefined();
+      await expect(
+        requireSolanaRelease(reader({ [ENGINE]: account }), ["engine"], "solana", RELEASE),
+      ).rejects.toThrow(refusal("engine", ENGINE));
+    }
+    // An upgradeable program account that is not executable is no program either.
+    const [program, programData] = upgradeable(RELEASE.engine[0]!, ENGINE_DATA);
+    await expect(
+      deployedProgram(
+        reader({ [ENGINE]: { ...program!, executable: false }, [ENGINE_DATA]: programData }),
+        ENGINE,
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it("compares by the release's length: zero padding passes, anything else past it does not", () => {
