@@ -275,7 +275,8 @@ check(
   "the program composes it so",
 );
 
-// minTokens to spend all of the budget or nothing: budget × 1e18 ÷ priceLimit, rounded up.
+// minTokens for at least what all of the budget buys at the limit: budget × 1e18 ÷ priceLimit,
+// rounded up. A fill below the limit can reach it with budget left over.
 const spend = 1000n * 10n ** BigInt(usdc.decimals);
 const allSpcxc = ceil(spend * E18, buySpcxc);
 check(allSpcxc === 666_666_667n, "minTokens for all of 1,000 USDC of SPCXc at 150");
