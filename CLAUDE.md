@@ -526,6 +526,29 @@ do not reintroduce a "rewrites cannot parse annotations" workaround. `main`'s si
 type and its void are the compiler's (`entrySignature`, `entryParams`, `args`): nothing reads `main`
 out of the program's text but `mainSignature`, for the `--fund` wrapper.
 
+**A chain's names are a module the compiler is handed, and `checkNames` guards its zeros.**
+`routes/chain-module.ts` writes, per chain, the ambient module `@sauce/chain`: every protocol
+namespace (family aliases included) as an object literal holding every contract the namespace has
+on ANY chain, bound (`ABI.at(address)`, the same bytes as the binding written by hand) where this
+chain has it, its address where the registry has no ABI, and `0` where it lacks it; and every token
+symbol some chain registers and this one lacks as `export const X = 0`. The chain's own tokens,
+`chainId` and the `<Ns>_<Contract>` keys stay defines. A program that names a chain
+(`Base.UniswapV3.Factory`) gets `@sauce/chain-<slug>` too. Modules and ABIs are served from memory,
+never a disk. The compiler decides a test of a zero (`if (X)`, `!X`, `X != 0`, `?:`, `&&`, `||`)
+and does not compile the branch it rules out; that is the whole presence mechanism, and
+`available(X)` is gone. 2.6.0 has no zero that is unusable at run time, so
+`routes/absent-names.ts#checkNames` reads the program (and every module the caller's resolver
+serves) before any rewrite and refuses, located and naming the chain, every use of a name the
+chain lacks outside a branch a test of it rules out, a `require` such a name makes false, a
+registry name no chain has, and the Pot's balance of an absent token. Its scopes are the
+compiler's: the module's names and a function's parameters everywhere in them, a block's
+`let`/`const` from its declarator on, a loop's or `catch` clause's binding in it — a function-wide
+shadow set once let a use after an inner block reach the zero. What a module cannot hold stays a
+rewrite in `protocol-rewrite.ts`: an interface bound to an address, `.at(address)`, a protocol's
+default-contract call, and `.address` before a scalar method (`.toBytesBe`) on a binding, which
+2.6.0 takes only on an address. On Solana the module holds no EVM contract; `pot.<TOKEN>` of a
+token Solana lacks is left to the compiler as `ctx.self().<TOKEN>`, only ever under a test.
+
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
 `test/fixtures/registry-abi/evidence.json`: the
@@ -1486,7 +1509,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover; Sauce
   never described as a multicall; no call to `available`, which is removed (a program tests the
-  name itself, `if (X)`); no pointer into the
+  name itself, `if (X)`), outside a runner that compiles it to pin its refusal; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
