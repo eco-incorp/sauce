@@ -563,9 +563,11 @@ line numbers in its errors.
 
 ## What a preview chain refuses
 
-On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `simulate`, `inspect`,
-`verify`, `price` and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its
-deployment out. Everything that leaves a transaction ready to sign, unsigned JSON included, or
+On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `inspect`, `verify`, `price`
+and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its deployment out.
+`sauce simulate` does not run there: the released engine is not deployed on a preview chain, so it
+stops with exit 1 (`the released engine … is not deployed on <chain>`); simulate on a supported
+chain. Everything that leaves a transaction ready to sign, unsigned JSON included, or
 sends one is refused before anything is read or signed: `tx`, `run`, `sign`, `pot --deploy` and
 `pot --format cast`. No flag overrides it. The refusal exits 1 and names the supported chains and
 the chain's request:

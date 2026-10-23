@@ -8,7 +8,8 @@ contracts have the same addresses on every EVM chain, and its programs the same 
 [deployments.json](deployments.json) lists them once.
 
 Sauce supports transactions on Ethereum, Base, Arc and Solana (`ethereum`, `base`, `arc`, `solana`). Every other chain is a preview chain:
-a program compiles and simulates there, but the `sauce` command and the MCP server build and
+a program compiles and the reads work there, but it does not simulate (the released engine is not
+deployed there), and the `sauce` command and the MCP server build and
 send no transaction, and say so with the supported chains and how to request that chain. To
 request one, look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to
 the chain's, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each

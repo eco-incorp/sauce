@@ -1306,8 +1306,8 @@ const SUPPORTED_ONLY = (what: string): string[] => [
   ...wrapped(
     `${what} only on a supported chain: ${supportedChainNames()}. On ` +
       "any other (a preview chain) it is refused before anything is read or signed, with the " +
-      "supported chains and the GitHub issue to ask for that chain with; compile and simulate " +
-      "work there.",
+      "supported chains and the GitHub issue to ask for that chain with; compile and the reads " +
+      "work there, but simulate does not: the released engine is not deployed there.",
   ),
 ];
 
@@ -1808,6 +1808,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "node traces, and each address's net change. An endpoint without eth_simulateV1 falls back",
       "to eth_call with state overrides, which gives the result and the gas but no logs. The",
       "output names the route it took.",
+      "",
+      "It runs only where the released engine is deployed: on a preview chain (any chain but",
+      `${supportedChainNames()}) it stops with exit 1, the engine not deployed there.`,
       "",
       "A Pot that is not deployed yet is deployed in the simulation first, from --owner (and",
       "--salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.",
