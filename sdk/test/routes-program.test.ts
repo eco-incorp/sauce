@@ -15,7 +15,9 @@ import {
 import {
   decodeEntryArguments,
   encodeEntryArguments,
+  entryReturnType,
   type EntryValue,
+  mainSignature,
 } from "../src/routes/entry.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
@@ -155,6 +157,158 @@ describe("main's signature", () => {
       1n,
     ]);
     expect(encoded.length).toBeGreaterThan(0);
+  });
+
+  it("reads the module's own main as the --fund wrapper does: not one nested in a function or bodyless, and past type parameters", () => {
+    const nested =
+      "function helper(): Uint256 {\n  function main(z: Address): Uint256 {\n    return 1;\n  }\n  return 2;\n}\n";
+    const overload = "function main(a: Address): Address;\n";
+    const own = "function main(b: Uint256): Uint256 {\n  return b;\n}\n";
+    for (const source of [
+      `${nested}${own}`,
+      `function helper(): Uint256 {function main(z: Address): Uint256 { return 1; } return 2; }\n${own}`,
+      `${overload}${own}`,
+      `declare ${overload}${own}`,
+      "function main<T>(b: Uint256): Uint256 {\n  return b;\n}\n",
+      `export ${own}`,
+      `// function main(z: Address) {}\n${own}`,
+    ]) {
+      expect(mainSignature(source)?.names).toEqual(["b"]);
+      expect(mainSignature(source)?.returnsValue).toBe(true);
+    }
+    expect(mainSignature(nested)).toBeUndefined();
+    expect(mainSignature(`${overload}const x: Uint256 = 1;\n`)).toBeUndefined();
+    // What the compiler takes of them, it reports as written.
+    for (const source of [`export ${own}`, `// function main(z: Address) {}\n${own}`]) {
+      const program = compileSauceProgram("base", source, {});
+      expect(program.entryParams).toEqual([{ name: "b", type: "Uint256" }]);
+      expect(entryReturnType(program.entrySignature)).toBe("Uint256");
+    }
+  });
+
+  it("reads each parameter's name and type, and the return type, past comments in the signature", () => {
+    const source = [
+      "function main(",
+      "  to: Address, // who is paid",
+      "  /* in base units, fees included */ amount /* : Address */: Uint256,",
+      "): /* what arrived */ Uint256 {",
+      "  return amount;",
+      "}",
+    ].join("\n");
+    const params = [
+      { name: "to", type: "Address" },
+      { name: "amount", type: "Uint256" },
+    ];
+    expect(mainSignature(source)?.names).toEqual(["to", "amount"]);
+    expect(mainSignature("function main(): /* nothing */ void {}")?.returnsValue).toBe(false);
+    const program = compileSauceProgram("base", source, {});
+    expect(program.entryParams).toEqual(params);
+    expect(entryReturnType(program.entrySignature)).toBe("Uint256");
+    expect(bytesToHex(encodeEntryArguments(program, [RECIPIENT, 5n]))).toBe(
+      encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [RECIPIENT, 5n]),
+    );
+    // Bound, it is the program that returns the amount.
+    expect(compileSauceProgram("base", source, { args: [RECIPIENT, 5n] }).bytecode).toEqual(
+      compileSauceProgram("base", "function main(): Uint256 {\n  return 5;\n}\n").bytecode,
+    );
+  });
+});
+
+describe("main's arguments bound by args", () => {
+  it("binds one the module declares too as main's alone, leaving the module's outside main", () => {
+    // `owed` reads the module's `fee`; `main`'s parameter shadows it in `main` alone.
+    const fee = [
+      "const fee: Uint256 = 30;",
+      "function owed(amount: Uint256): Uint256 {",
+      "  return (amount * fee) / 10000;",
+      "}",
+      "function main(amount: Uint256, fee: Uint256): Uint256 {",
+      "  return owed(amount) + fee;",
+      "}",
+    ].join("\n");
+    expect(compileSauceProgram("base", fee, { args: [10000n, 5n] }).bytecode).toEqual(
+      compileSauceProgram("base", "function main(): Uint256 {\n  return 35;\n}\n").bytecode,
+    );
+    const payee = [
+      `const payee: Address = ${CREATOR};`,
+      "function owner(): Address {",
+      "  return payee;",
+      "}",
+      "function main(payee: Address): Address {",
+      "  return owner();",
+      "}",
+    ].join("\n");
+    expect(compileSauceProgram("base", payee, { args: [RECIPIENT] }).bytecode).toEqual(
+      compileSauceProgram("base", `function main(): Address {\n  return ${CREATOR};\n}\n`).bytecode,
+    );
+    const signed = [
+      "const delta: Int256 = 30;",
+      "function start(): Int256 {",
+      "  return delta;",
+      "}",
+      "function main(delta: Int256): Int256 {",
+      "  return start() + delta;",
+      "}",
+    ].join("\n");
+    expect(compileSauceProgram("base", signed, { args: [-5n] }).bytecode).toEqual(
+      compileSauceProgram("base", "function main(): Int256 {\n  return 25;\n}\n").bytecode,
+    );
+  });
+
+  it("binds one named like a value of the chain as main's alone, leaving the chain's outside main", () => {
+    // `paid` reads the chain's USDC; `main`'s parameter shadows it in `main` alone.
+    const paid = "function paid(): Address {\n  return USDC;\n}\n";
+    const chainUsdc = compileSauceProgram(
+      "base",
+      "function main(): Address {\n  return USDC;\n}\n",
+    ).bytecode;
+    expect(
+      compileSauceProgram(
+        "base",
+        `${paid}function main(USDC: Address): Address {\n  return paid();\n}\n`,
+        { args: [RECIPIENT] },
+      ).bytecode,
+    ).toEqual(chainUsdc);
+    expect(
+      compileSauceProgram(
+        "base",
+        `${paid}function main(USDC: Int256): Address {\n  return paid();\n}\n`,
+        { args: [-5n] },
+      ).bytecode,
+    ).toEqual(chainUsdc);
+    expect(
+      compileSauceProgram(
+        "base",
+        "function c(): Uint256 {\n  return chainId;\n}\nfunction main(chainId: Uint256): Uint256 {\n  return c() + chainId;\n}\n",
+        { args: [5n] },
+      ).bytecode,
+    ).toEqual(
+      compileSauceProgram("base", "function main(): Uint256 {\n  return 8458;\n}\n").bytecode,
+    );
+    expect(
+      compileSauceProgram(
+        "base",
+        "function main(Asset: Address): Address {\n  return Asset;\n}\n",
+        {
+          args: [RECIPIENT],
+          tokens: { Asset: CREATOR },
+        },
+      ).bytecode,
+    ).toEqual(
+      compileSauceProgram("base", `function main(): Address {\n  return ${RECIPIENT};\n}\n`)
+        .bytecode,
+    );
+    expect(
+      compileSauceProgram(
+        "solana",
+        "function main(USDC: Uint256): Uint256 {\n  return USDC;\n}\n",
+        {
+          args: [5n],
+        },
+      ).bytecode,
+    ).toEqual(
+      compileSauceProgram("solana", "function main(): Uint256 {\n  return 5;\n}\n").bytecode,
+    );
   });
 });
 

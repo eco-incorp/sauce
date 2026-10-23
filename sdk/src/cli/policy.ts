@@ -33,8 +33,8 @@
  * transfers out of the wallet and its Pot are what count; a Solana one is simulated with the
  * accounts it writes reported, and the wallet's and its Pot's lamports and token accounts compared
  * before and after. What cannot be measured — an endpoint without `eth_simulateV1`, a cook whose
- * native transfers are not traced, a Solana transaction loading accounts from lookup tables — is
- * refused wherever a limit would need it.
+ * native transfers are not traced, or a Solana lookup table that cannot be read — is refused
+ * wherever a limit would need it.
  *
  * Every wallet unlocked is GUARDED, policy or not: {@link guardWallet} registers it by address, and
  * the two places every send of this command passes — `chain.ts#sendAndWait` on an EVM chain,
@@ -58,6 +58,7 @@ import { join } from "node:path";
 
 import {
   address as solanaAddress,
+  getBase58Encoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
@@ -86,12 +87,12 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda, fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
+import { fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
+import { accountsNow, messageAccounts, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -595,14 +596,34 @@ export async function measureEvm(
   return measured;
 }
 
-/** The Kitchen's two cooks, whose data starts with the Pot's salt. */
-const KITCHEN_COOKS = [KITCHEN_DISCRIMINATORS.cook, KITCHEN_DISCRIMINATORS.cookFromAccount];
+/** The Kitchen's cooks and the Pot's index among each one's accounts. */
+const KITCHEN_COOKS = [
+  { head: KITCHEN_DISCRIMINATORS.cook, pot: 2 },
+  { head: KITCHEN_DISCRIMINATORS.cookFromAccount, pot: 4 },
+];
 /** The compute-budget program: a transaction's plumbing, not where it goes. */
 const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
 
 /**
+ * A program the transaction calls through another (a CPI), as a simulation reports it. Mainnet
+ * nodes answer `simulateTransaction` with every inner instruction keyed by `programId`: parsed
+ * (`parsed`, `program`; no `accounts` or `data`) for a program they parse, such as System and SPL
+ * Token, and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
+ * Kitchen's and the engine's. `programIdIndex` and index `accounts` are the unparsed form a
+ * transaction's own report uses, taken here too.
+ */
+type InnerInstruction = Readonly<{
+  programId?: string;
+  programIdIndex?: number;
+  accounts?: readonly (string | number)[];
+  data?: string;
+}>;
+
+/**
  * What a signed Solana `transaction` moves out of `wallet` and the Pots it cooks on, as a
  * simulation that reports its writable accounts shows it; a transaction that would fail is refused.
+ * A cook counts wherever it runs: called by the transaction, or by a program it calls (a signer's
+ * signature passes through a CPI, and the Kitchen takes a cook at any depth).
  */
 export async function measureSvm(
   rpc: Rpc,
@@ -620,21 +641,10 @@ export async function measureSvm(
     addressTableLookups?: readonly unknown[];
   };
   const kitchen = solanaAddress(v12SvmKitchenProgramId());
-  const pots: SvmAddress[] = [];
   const programs = new Set<string>();
   for (const instruction of message.instructions) {
     const program = message.staticAccounts[instruction.programAddressIndex]!;
     if (program !== COMPUTE_BUDGET) programs.add(program);
-    const data = instruction.data ?? new Uint8Array();
-    const owner = message.staticAccounts[instruction.accountIndices?.[0] ?? -1];
-    if (
-      program === kitchen &&
-      owner === wallet &&
-      data.length >= 40 &&
-      KITCHEN_COOKS.some((head) => head.every((byte, at) => data[at] === byte))
-    ) {
-      pots.push((await derivePotPda(kitchen, wallet, data.slice(8, 40))).address);
-    }
   }
   const base = { chain, to: [...programs] };
   const native = (amount: bigint): Outflow => ({
@@ -663,6 +673,31 @@ export async function measureSvm(
       },
     };
   }
+  // Measure the Pot the cook names, not the salt's canonical PDA. The Kitchen checks that account
+  // against the owner, salt and supplied bump before signing; any off-curve bump can select it.
+  const accounts = messageAccounts(transaction, tables);
+  /** The Pot `program` signs for with `data` on `keys` (its accounts in order): the Kitchen's cook
+   *  by `wallet`, else nothing. */
+  const cookPot = (
+    program: string | undefined,
+    data: Uint8Array,
+    keys: readonly (string | undefined)[],
+  ): string | undefined => {
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+
+    return program === kitchen && cook !== undefined && keys[0] === wallet
+      ? keys[cook.pot]
+      : undefined;
+  };
+  const pots: string[] = [];
+  for (const instruction of message.instructions) {
+    const pot = cookPot(
+      accounts[instruction.programAddressIndex],
+      instruction.data ?? new Uint8Array(),
+      (instruction.accountIndices ?? []).map((at) => accounts[at]),
+    );
+    if (pot !== undefined) pots.push(pot);
+  }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
   const wire = getBase64EncodedWireTransaction(transaction);
@@ -670,11 +705,59 @@ export async function measureSvm(
     .simulateTransaction(wire, {
       encoding: "base64",
       sigVerify: false,
+      innerInstructions: true,
       accounts: { addresses: tracked, encoding: "base64" },
     })
     .send();
   if (value.err !== null) {
     throw new CliError("the transaction would fail in the simulation, so nothing was sent");
+  }
+  // The cooks its programs make: each inner instruction, at any depth, that calls the Kitchen.
+  const inner: readonly Readonly<{ instructions: readonly InnerInstruction[] }>[] | null =
+    value.innerInstructions ?? null;
+  let unseen: string | undefined =
+    inner === null
+      ? "the endpoint did not report the programs its programs call, so a cook among them is not seen"
+      : undefined;
+  for (const each of (inner ?? []).flatMap((group) => group.instructions)) {
+    const program =
+      each.programId ??
+      (each.programIdIndex === undefined ? undefined : accounts[each.programIdIndex]);
+    if (program === undefined) {
+      unseen = "the endpoint reported a program its programs call that cannot be named";
+      continue;
+    }
+    if (program !== kitchen) continue;
+    const keys = (each.accounts ?? []).map((key) =>
+      typeof key === "number" ? accounts[key] : key,
+    );
+    let data: Uint8Array | undefined;
+    try {
+      data =
+        each.data === undefined ? undefined : new Uint8Array(getBase58Encoder().encode(each.data));
+    } catch {
+      data = undefined;
+    }
+    // Every Kitchen instruction opens with an 8-byte discriminator: shorter data is a cut report.
+    if (data === undefined || data.length < 8 || keys.some((key) => key === undefined)) {
+      unseen =
+        "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+      continue;
+    }
+    // A cook reported without its owner or Pot account (a truncated report) is not "not a cook":
+    // whether it is the wallet's, and which Pot it signs for, cannot be read, so it is refused.
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+    if (
+      cook !== undefined &&
+      keys.length <= cook.pot &&
+      (keys.length === 0 || keys[0] === wallet)
+    ) {
+      unseen =
+        "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+      continue;
+    }
+    const pot = cookPot(program, data, keys);
+    if (pot !== undefined) pots.push(pot);
   }
   const after = (value.accounts ?? []).map((account) =>
     account === null
@@ -709,7 +792,7 @@ export async function measureSvm(
       .filter(([, out]) => out.amount > 0n)
       .map(([token, out]) => ({ token, ...out })),
     approvals: [],
-    unmeasured: {},
+    unmeasured: unseen === undefined ? {} : { native: unseen, tokens: unseen },
   };
 }
 

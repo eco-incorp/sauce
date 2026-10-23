@@ -208,11 +208,15 @@ export const expectOk = (result: unknown, what: string): void => {
   }
 };
 
-export const expectKitchenError = (result: unknown, name: keyof typeof KITCHEN_ERROR): void => {
+export const expectKitchenError = (result: unknown, name: keyof typeof KITCHEN_ERROR): void =>
+  expectErrorCode(result, KITCHEN_ERROR[name]);
+
+/** The transaction failed with the custom error `code`: one of the Kitchen's, or Anchor's own. */
+export const expectErrorCode = (result: unknown, code: number): void => {
   const err = (result as { err?: () => unknown }).err;
   const detail = typeof err === "function" ? String(err.call(result)) : String(err);
 
-  expect(detail).toContain(`InstructionErrorCustom { code: ${KITCHEN_ERROR[name]} }`);
+  expect(detail).toContain(`InstructionErrorCustom { code: ${code} }`);
 };
 
 /**

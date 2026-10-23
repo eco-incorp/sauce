@@ -15,6 +15,7 @@ import { join } from "node:path";
 import {
   createWalletClient,
   decodeFunctionData,
+  encodeFunctionData,
   getAddress,
   http,
   parseEther,
@@ -23,12 +24,20 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
+import potArtifact from "../src/artifacts/V12Pot.json" with { type: "json" };
+import kitchenArtifact from "../src/artifacts/V12Kitchen.json" with { type: "json" };
 import { gasEstimate, type Approver, type SetupStep } from "../src/cli/approvals.js";
-import { runCommand, txCommand, type RunInput } from "../src/cli/commands.js";
+import { cookOf, runCommand, txCommand, type RunInput } from "../src/cli/commands.js";
+import { simulateCommand } from "../src/cli/simulate.js";
+import { rehearse } from "../src/cli/rehearse.js";
 import type { CliIo } from "../src/cli/run.js";
 import { nodeIo } from "../src/cli/run.js";
 import { requireChain } from "../src/chains/canonical.js";
-import { v12KitchenAddress } from "../src/deployments/index.js";
+import {
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12KitchenImplementationAddress,
+} from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12KitchenAbi } from "../src/evm/engine.js";
 import { describeEvm, potOwner, sauceWith, startChain, type LocalChain } from "./cli-anvil.js";
@@ -78,6 +87,223 @@ describeEvm("a command deploys the Pot it needs", () => {
     expect(await local.publicClient.getTransactionCount({ address })).toBe(0);
     expect(await local.publicClient.getCode({ address: pot })).toBeUndefined();
   }
+
+  it.each([false, true])(
+    "refuses an absent engine before planning, simulating or sending (Pot deployed: %s)",
+    async (deployed) => {
+      const label = `engine-missing-${deployed}`;
+      const fresh = await owner(label);
+      if (deployed) {
+        await local.send(
+          local.deployer,
+          kitchen,
+          encodeFunctionData({
+            abi: v12KitchenAbi,
+            functionName: "deployPot",
+            args: [fresh.address, fresh.salt],
+          }),
+        );
+      }
+      const engine = getAddress(v12EngineAddress());
+      const code = await local.publicClient.getCode({ address: engine });
+      const balance = await local.publicClient.getBalance({ address: fresh.address });
+      await local.testClient.setCode({ address: engine, bytecode: "0x" });
+      try {
+        for (const command of ["tx", "simulate", "run"]) {
+          const result = await sauceWith(
+            NO_TERMINAL,
+            command,
+            program,
+            "--chain",
+            "ethereum",
+            "--rpc-url",
+            local.rpcUrl,
+            ...(command === "run"
+              ? ["--private-key", fresh.key, "--yes"]
+              : ["--owner", fresh.address]),
+            "--salt",
+            label,
+            "--value",
+            "1234",
+            "--args",
+            "41",
+          );
+          expect(result.code).toBe(1);
+          expect(result.stdout + result.stderr).toMatch(/engine.*not deployed/i);
+          expect(await local.publicClient.getTransactionCount({ address: fresh.address })).toBe(0);
+          expect(await local.publicClient.getBalance({ address: fresh.address })).toBe(balance);
+        }
+      } finally {
+        await local.testClient.setCode({ address: engine, bytecode: code! });
+      }
+    },
+    120_000,
+  );
+
+  it("refuses an online unsigned cook to an absent explicit Pot", async () => {
+    const fresh = await owner("explicit-missing");
+    const result = await sauceWith(
+      NO_TERMINAL,
+      ...["tx", program, "--chain", "ethereum", "--rpc-url", local.rpcUrl],
+      ...["--pot", fresh.pot, "--value", "1234", "--args", "41"],
+    );
+    expect(result.code).toBe(1);
+    expect(result.stdout + result.stderr).toMatch(/not deployed.*--pot/s);
+    await nothingSent(fresh.address, fresh.pot);
+  }, 120_000);
+
+  it("does not report a cook on an empty predicted address as success after deploying another Pot", async () => {
+    const fresh = await owner("wrong-prediction");
+    const wrong = await owner("empty-cook-target");
+    const input = {
+      file: program,
+      text: PROGRAM,
+      chain: local.chain,
+      defines: {},
+      target: { owner: fresh.address, salt: fresh.salt },
+      args: { from: "--args" as const, values: ["41"] },
+    };
+    const cook = cookOf(input, nodeIo());
+    const result = await rehearse(local.publicClient, {
+      owner: fresh.address,
+      kitchen,
+      pot: wrong.pot,
+      deploy: { salt: fresh.salt },
+      cook: { to: wrong.pot, data: cook.data, value: 1234n },
+      overrides: [],
+    });
+    expect(result).toMatchObject({ ok: false, stage: "deploy" });
+    await nothingSent(fresh.address, fresh.pot);
+    expect(await local.publicClient.getCode({ address: wrong.pot })).toBeUndefined();
+  }, 120_000);
+
+  it("rehearses a real undeployed Pot and returns the program's computed value without sending", async () => {
+    const fresh = await owner("valid-rehearsal");
+    const result = await simulateCommand(
+      {
+        file: program,
+        text: PROGRAM,
+        chain: local.chain,
+        defines: {},
+        target: { owner: fresh.address, salt: fresh.salt },
+        args: { from: "--args", values: ["41"] },
+        rpcUrl: local.rpcUrl,
+        assume: [],
+      },
+      nodeIo(),
+    );
+    expect(result.json).toMatchObject({ ok: true, returns: `0x${"0".repeat(62)}2a` });
+    await nothingSent(fresh.address, fresh.pot);
+  }, 120_000);
+
+  it("rejects a different Kitchen's new-Pot derivation but still cooks on an existing explicit Pot", async () => {
+    const existing = await owner("existing-before-factory-change");
+    await local.send(
+      local.deployer,
+      kitchen,
+      encodeFunctionData({
+        abi: v12KitchenAbi,
+        functionName: "deployPot",
+        args: [existing.address, existing.salt],
+      }),
+    );
+    const fresh = await owner("new-after-factory-change");
+    const implementation = getAddress(v12KitchenImplementationAddress());
+    // Change the embedded Pot creation code's metadata before deploying another real Kitchen.
+    // Its constructor computes the matching immutable hash; patching deployed runtime alone
+    // would leave the original hash baked into the getter and prediction.
+    const metadataBytes = Number.parseInt(potArtifact.bytecode.slice(-4), 16) + 2;
+    const metadata = potArtifact.bytecode.slice(-metadataBytes * 2);
+    const changed =
+      metadata.slice(0, -6) +
+      (Number.parseInt(metadata.slice(-6, -4), 16) ^ 1).toString(16).padStart(2, "0") +
+      metadata.slice(-4);
+    if (!kitchenArtifact.bytecode.includes(metadata)) {
+      throw new Error("the Kitchen fixture does not embed the Pot");
+    }
+    const beforeHash = await local.publicClient.readContract({
+      address: kitchen,
+      abi: v12KitchenAbi,
+      functionName: "potInitCodeHash",
+    });
+    const replacement = await local.plant(
+      kitchenArtifact.bytecode.replaceAll(metadata, changed) as Hex,
+    );
+    await local.send(
+      local.deployer,
+      kitchen,
+      encodeFunctionData({
+        abi: v12KitchenAbi,
+        functionName: "upgradeToAndCall",
+        args: [replacement, "0x"],
+      }),
+    );
+    try {
+      const afterHash = await local.publicClient.readContract({
+        address: kitchen,
+        abi: v12KitchenAbi,
+        functionName: "potInitCodeHash",
+      });
+      expect(afterHash).not.toBe(beforeHash);
+      const actualPot = await local.publicClient.readContract({
+        address: kitchen,
+        abi: v12KitchenAbi,
+        functionName: "predictPot",
+        args: [fresh.address, fresh.salt],
+      });
+      expect(actualPot).not.toBe(fresh.pot);
+      await local.send(
+        local.deployer,
+        kitchen,
+        encodeFunctionData({
+          abi: v12KitchenAbi,
+          functionName: "deployPot",
+          args: [fresh.address, fresh.salt],
+        }),
+      );
+      expect(await potOwner(local, actualPot)).toBe(fresh.address);
+      for (const command of ["tx", "simulate", "run"]) {
+        const flags =
+          command === "run" ? ["--private-key", fresh.key, "--yes"] : ["--owner", fresh.address];
+        const refused = await sauceWith(
+          NO_TERMINAL,
+          ...[command, program, "--chain", "ethereum", "--rpc-url", local.rpcUrl],
+          ...flags,
+          ...["--salt", "new-after-factory-change", "--args", "41"],
+        );
+        expect(refused.code).toBe(1);
+        expect(refused.stdout + refused.stderr).toContain("potInitCodeHash");
+      }
+      await nothingSent(fresh.address, fresh.pot);
+      for (const command of ["tx", "simulate", "run"]) {
+        const result = await sauceWith(
+          NO_TERMINAL,
+          ...[command, program, "--chain", "ethereum", "--rpc-url", local.rpcUrl],
+          ...["--pot", existing.pot],
+          ...(command === "run" ? ["--private-key", existing.key, "--yes"] : []),
+          ...(command === "tx" ? [] : ["--json"]),
+          ...["--args", "41"],
+        );
+        if (result.code !== 0) {
+          throw new Error(`${command} exited ${result.code}: ${result.stderr}${result.stdout}`);
+        }
+        if (command === "simulate") {
+          expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, returned: "42" });
+        }
+      }
+      expect(await local.publicClient.getTransactionCount({ address: existing.address })).toBe(1);
+    } finally {
+      await local.send(
+        local.deployer,
+        kitchen,
+        encodeFunctionData({
+          abi: v12KitchenAbi,
+          functionName: "upgradeToAndCall",
+          args: [implementation, "0x"],
+        }),
+      );
+    }
+  }, 120_000);
 
   it("sauce tx plans the Pot's deploy first, then the cook", async () => {
     const fresh = await owner("planned");

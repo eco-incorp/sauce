@@ -254,8 +254,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version (2.5.0 uses v12-evm 1.2.0 / v12-svm 1.3.0; 2.4.0 shares SVM 1.3.0 but uses EVM 1.1.0; 2.3.0 output must not reach them), and the SVM ISA revision does not move between them, so nothing else can tell
-  them apart. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
+  package version (2.6.0 uses v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
+  An ISA label is not a compatibility check. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
   Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
@@ -437,16 +437,16 @@ compile(options: CompileOptions): CompileResult
 
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
-`true`), `cache` (default `true`), and `compactArgs` (default `false`) are optional. All four manifests pin the
-compiler exactly to **2.5.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
-`isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
-`entrySchema: Uint8Array`, and optional `manifest: AccountManifest`. `manifest` is the SVM account
-contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
-and appended separately. With `compactArgs: true`, pass the returned schema and positional values
-to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
-`decodeCompactArguments`. Pair the artifact with an engine by exact version (`releases.json`,
-above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged`/`args` compile option; the SDK owns
-its SVM layout types (`sdk/src/svm/layout.ts`).
+`true`), `cache` (default `true`), `chain`, `chainProfiles`, `entryKind` and scalar `args` are optional.
+All four manifests pin the compiler exactly to **2.6.0**, matching the lockfile.
+`CompileResult` contains `bytecode: Uint8Array`, `isaRevision: "stack-v3"`,
+`entryEncoding: "abi-v1"`, `entryParams`, `entrySignature`, nested `programs` reports, and optional
+`manifest: AccountManifest`. `manifest` is the SVM account contract, absent on EVM.
+Compile-time values affect bytecode; runtime entry arguments are encoded and appended separately.
+Use `routes.encodeEntryArguments` for SDK programs; raw `entryParams` can mark top-level fixed-size
+tuples `indirect: true`, which an encoder must honor. Pair the artifact with an engine by exact
+version (`releases.json`, above). `entryKind: "closure"` accepts function-expression source text;
+raw scalar `args` binds inputs at compile time. The SDK owns its SVM layout types (`sdk/src/svm/layout.ts`).
 
 SVM settlement execution verification defaults to `wireFormat: "gated-v1"`: raw engine CPI
 data with the 65-byte owner/salt/bump gate header and the full accounts including the trailing Pot
@@ -458,8 +458,8 @@ locations; resolver and target-capability errors need not contain a source span.
 
 The route adapter is a separate contract: `compileSauceRoute` returns one program in
 `compiled.bytecode: Uint8Array[]`, an empty `warnings` array, rewritten source, and encoded calls.
-It does not expose `compactArgs` or retain the raw compiler's metadata/schema/manifest. Use the raw
-`/compiler` export for those. Both `/compiler` and route compilation run in Node and in a browser
+It retains the runtime entry metadata needed by SDK argument encoding; use the raw `/compiler`
+export for the complete compile report. Both `/compiler` and route compilation run in Node and in a browser
 through one code path, `sdk/src/wasm-compiler.ts`: in a browser `await ready()` (from the root or
 `/compiler`, forwarding to the compiler's `/ready`) before compiling; in Node nothing needs it.
 Nothing browser-facing reads the filesystem. The std sources, recipe programs, protocol ABI twins
@@ -805,9 +805,9 @@ where the data says it; the slot forms write `minOut` at least 1. Every exact-in
 instructions (`test/svm/router-accounts-exact-in.test.ts`), and in `router-data.ts`'s `EXACT_IN`
 table (`routerSvmDataTemplate`: `prefix ‖ u64le(amountIn) ‖ suffix`, divisor 1, its options the
 account order's `aToB`, `minOut` and the venue's own fields), held byte for byte to every vector
-(`test/svm/router-data-exact-in.test.ts`). Two compiler facts shape it, both
-measured on compiler 2.5.0 and the released engine: a function other than `main` cannot build an
-account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
+(`test/svm/router-data-exact-in.test.ts`). Two historical measurements shaped these forms,
+on compiler 2.5.0 and the then-released engine (not remeasured for compiler 2.6.0 / v12-svm 1.4.0):
+a function other than `main` cannot build an account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
 Array(n)` holds only numbers, a function cannot return accounts, and account arrays cannot be
 concatenated), so a venue whose swap takes more accounts has only its `Cpi` and `Data` forms; and
 each account read out of an array argument and passed to `svm.call` costs ~1.4k compute units more
@@ -858,8 +858,8 @@ t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** ar
 token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
 `import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
 write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.3.0 through 2.5.0, accepts `import { a as b }` and emits
-byte-identical code), which is what keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
+is ALIASED (the pinned compiler, 2.6.0, accepts `import { a as b }`), which keeps a program's own
+`transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
 and a program declaring one is refused by name. It is an explicit import, not the ambient module,
 because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
 method on `Token(...)`) stays on the typed `IERC20.at(...)` binding — a `uint256` is always there.
@@ -1007,7 +1007,7 @@ bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeE
 `view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
 amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
 return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` compiles standalone
-programs with runtime arguments (ABI-v1, or compact-v1 with fixed-width offsets). `to-quote.ts`
+programs with ABI-v1 runtime arguments. `to-quote.ts`
 builds the `eth_call`
 quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.
 `AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
@@ -1600,7 +1600,7 @@ what a Pot's swaps call back through). Its ABIs are synced into `sdk/{src,dist}/
 (`Router`, `ISauceRouter`). **There is no `SauceRouter` artifact any more**: it came from the engine
 repo's Solidity tree and no v12 release publishes it.
 
-**Generation 4 (Kitchen 1.2.0)** has one exact-input method per callback venue family:
+**The execution Router (Kitchen 1.3.0)** is content-addressed and has one exact-input method per callback venue family:
 `swapV3`, `swapV4`, `swapMaverickV2`, `swapInfinityCL`, `swapInfinityBin`. All take unsigned
 `amountIn`, pay from the Pot, and return `(amountInUsed, amountOut)`. There is no payer argument,
 unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
@@ -1614,9 +1614,9 @@ paid first and called directly by the program; their paths do not call the Route
 
 **Quoting remains on generation 3**, pinned separately as `quoteRouter` in `releases.json` and
 synced from the private kitchen-evm 1.1.0 package into `V12QuoteRouter.json`. Actions' existing
-`QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (generation 4).
-The old service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
-engine or execution Router. Captured-mainnet tests compare its quotes against swaps on generation 4.
+`QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (the execution Router).
+The quote service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
+engine or execution Router. Captured-mainnet tests compare its quotes against execution Router swaps.
 No chain deployment is implied by these release addresses.
 
 ## Publishing

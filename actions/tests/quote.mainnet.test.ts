@@ -25,7 +25,7 @@ import { quoteAction, type QuoteOptions } from "../src/index.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
 import { compileEvm } from "../src/compile.js";
-import { newEmitter } from "../src/emit.js";
+import { newEmitter, type Fragment } from "../src/emit.js";
 import { quoteCall } from "../src/to-quote.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { DEADLINE } from "./mainnet.js";
@@ -550,18 +550,28 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
     });
   }
 
-  it("a runtime V4 quote matches the venue's own quoter for a nonzero amount", async () => {
-    const candidate = cases.find(({ action }) => action.type === "uniswapV4Swap")!;
-    const dynamic = quoteCall(candidate.action, ONE_ETH, quoters).toSauceDynamic;
-    assert.ok(dynamic);
-    const fragment = dynamic(newEmitter(), "amount");
-    const compiled = compileEvm(
-      `function main(amount: Uint256): Uint256 {\n${fragment.stmts.join("\n")}\nreturn ${fragment.expr};\n}`,
-    );
-    const args = hexToBytes(encodeAbiParameters([{ type: "uint256" }], [ONE_ETH]));
-    const result = await env.returned(new Uint8Array([...compiled.bytecode, ...args]));
-    assert.equal(BigInt(result), await candidate.expected());
-  });
+  // An Ambient quote reads `int128` flows and a V4 quote writes a negative `int256 amountSpecified`:
+  // each on-chain form, run as a program with its amount fixed and with it a run-time argument,
+  // must quote what the venue's own quoter does.
+  for (const type of ["uniswapV4Swap", "ambientSwap"] as const) {
+    it(`${type}: its on-chain forms match the venue's own quoter`, async () => {
+      const { action, expected } = cases.find((c) => c.action.type === type)!;
+      assert.ok("amount" in action && typeof action.amount === "string");
+      const amount = BigInt(action.amount);
+      const { toSauce, toSauceDynamic } = quoteCall(action, amount, quoters);
+      assert.ok(toSauce && toSauceDynamic);
+      const args = hexToBytes(encodeAbiParameters([{ type: "uint256" }], [amount]));
+      const run = async (fragment: Fragment): Promise<bigint> => {
+        const compiled = compileEvm(
+          `function main(amount: Uint256): Uint256 {\n${fragment.stmts.join("\n")}\nreturn ${fragment.expr};\n}`,
+        );
+        return BigInt(await env.returned(new Uint8Array([...compiled.bytecode, ...args])));
+      };
+      const want = await expected();
+      assert.equal(await run(toSauce(newEmitter())), want, "fixed amount");
+      assert.equal(await run(toSauceDynamic(newEmitter(), "amount")), want, "run-time amount");
+    });
+  }
 
   it("quotes every swap action type", () => {
     const quoted = new Set<string>([...cases.map((c) => c.action.type), ...QUOTED_ELSEWHERE]);

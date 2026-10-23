@@ -111,6 +111,17 @@ Arc (chain 5042) is a supported chain, beside Ethereum, Base and Solana: the `sa
 MCP server build and send its cooks and Pot deployments, where before they only compiled and
 simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
 
+Wallet policies on Solana measure the actual Pot named by each cook, including non-canonical
+Pot addresses, accounts loaded through lookup tables and cooks a program the transaction calls
+makes, so SOL and token limits cannot miss those outflows. A transaction whose lookup tables or
+calls to the Kitchen the endpoint does not report readably is refused where a limit applies.
+On Solana a policy counts balance changes only: a delegate approval (SPL Token `Approve` or
+`ApproveChecked`) is not limited. See [wallets](guides/cli-wallets.md).
+
+Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
+deployments instead of reporting success on an address with no code. Offline unsigned builders
+remain available and explicitly report that deployment availability has not been checked.
+
 ### SauceScript
 
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
@@ -178,6 +189,22 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
 - **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
   eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
   an editor typed nothing on it.
+- **Changed**: `main`'s signature, arguments and return type come from the compiler. A compiled
+  program's `entryParams` is the compiler's ABI signature in SauceScript's spelling, and its new
+  `entrySignature` adds each parameter's ABI entry, the parameters bound with `args`, Solana's
+  `Account` slots and the declared return type, which `sauce compile`, `simulate` and `run` read
+  the cook's return data with. A comment in `main`'s signature is no longer read as part of a
+  parameter's name or type, so `encodeEntryArguments` and `--args` take the right values. Where the
+  `sauce` command still reads `main`'s text (the `--fund` wrapper), it reads the module's own
+  top-level `main`, past comments.
+- **Fixed**: `routes.compileSauceProgram`'s `args` are the compiler's own: a bound argument is a
+  constant of `main` alone, as the parameter was. One named like something the module declares, or
+  like one of the chain's values (a token symbol, `chainId`), now leaves that value as it is outside
+  `main`; bound as a define, it replaced the value everywhere, so a helper outside `main` read the
+  argument instead. A define named like a parameter given in `args` is still refused.
+- **Fixed**: The Ambient protocol document had the swap direction backwards. `isBuy: true` pays
+  base and receives quote, and `inBaseQty` names the side `qty` counts, as Ambient defines them and
+  as the `ambientSwap` action already sends them.
 
 **Also breaking:**
 
@@ -240,6 +267,14 @@ simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `
   unsigned transactions they print leave fees to the signer. `sauce send` and `sauce_send` refuse a
   transaction signed with a lower fee cap before sending it. `@eco-incorp/sauce/chains` records the
   floor as `minBaseFeePerGas` on Arc's chain.
+- **Fixed** (Solana): A Pot or account derived from `main`'s `Int256` argument (`u64:@index`) is
+  derived as from a `Uint256` one, where the command said the argument was not given. A negative
+  one is refused by name, and the SDK's account resolver refuses a negative seed instead of
+  deriving from its wrapped bytes.
+- **Fixed** (EVM): An `Int256` swap price limit gets the note a `Uint256` one gets, a negative one
+  included.
+- **Changed**: The `--args` help and the MCP server's `args` description say a negative `Int256`
+  is accepted, as `--args -5` with no `--` before it.
 
 ## SDK 0.99.15 — 2026-10-21
 
