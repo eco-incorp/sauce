@@ -1564,6 +1564,7 @@ try {
       "sauce_wallet_list",
       "sauce_wallet_address",
       "sauce_wallet_send",
+      "sauce_sign",
       "sauce_pot_list",
       "sauce_pot_import",
     ];
