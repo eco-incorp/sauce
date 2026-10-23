@@ -33,7 +33,6 @@ StableSwap AMM optimized for low-slippage swaps between pegged assets (stablecoi
 - `remove_liquidity_one_coin` is useful for single-sided withdrawal (higher slippage than proportional)
 - Each pool is a separate contract; use the AddressProvider or registry to discover pools
 - RouterNG enables cross-pool routing for multi-hop swaps across different pools
-- Curve excels at stablecoin swaps (much lower slippage than Uniswap for like-kind pairs)
 - The `get_virtual_price` never decreases and represents the LP token value growth over time
 - Tokens must be ERC20-approved to the pool contract (not a router) for direct pool swaps
 - For Router NG swaps, approve tokens to the Router NG contract

@@ -8,7 +8,7 @@
 > page lists the chains it is deployed on, the name a program writes for each of its contracts, and
 > the functions a program can call.
 
-Legacy algorithmic money market protocol on Ethereum. Pioneered cToken model where deposits mint interest-bearing tokens.
+Legacy algorithmic money market protocol on Ethereum. Uses a cToken model where deposits mint interest-bearing tokens.
 
 | Fact | Value |
 | --- | --- |

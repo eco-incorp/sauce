@@ -1,6 +1,6 @@
 # LayerZero
 
-Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT tokens and arbitrary message passing across 50+ chains.
+Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT tokens and arbitrary message passing.
 
 ## Category
 

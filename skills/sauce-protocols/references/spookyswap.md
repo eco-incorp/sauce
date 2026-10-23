@@ -2,7 +2,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
-The largest DEX on Fantom with UniV2-style constant product pools (x*y=k). Features yield farming, cross-chain bridges, and limit orders. The default trading venue on the Fantom network.
+DEX on Fantom with UniV2-style constant product pools (x*y=k). Features yield farming, cross-chain bridges, and limit orders.
 
 ## Category
 
@@ -113,7 +113,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 ## Notes
 
 - Standard Uniswap V2 fork interface; 0.2% fee per swap (lower than standard 0.3%)
-- Fantom-only deployment; the dominant DEX on Fantom
+- Fantom-only deployment
 - BOO token is the governance/staking token (stake for xBOO to earn fees)
 - SushiSwap is also deployed on Fantom as an alternative
 - Both tokens must be ERC20-approved to the Router before swap/addLiquidity

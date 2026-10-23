@@ -2,11 +2,11 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
-The most popular DEX on BNB Chain using the constant product AMM model (x*y=k). Forked from Uniswap V2 with additional features like yield farming and lottery.
+DEX on BNB Chain using the constant product AMM model (x*y=k). Forked from Uniswap V2 with additional features like yield farming and lottery.
 
 ## When to use it
 
-- A Uniswap V2 fork with a 0.25% fee, deepest on BNB Chain; the same Router interface.
+- A Uniswap V2 fork with a 0.25% fee; the same Router interface.
 
 ## Pitfalls for a program
 
@@ -148,5 +148,5 @@ an ABI import bound to the address), and the ABI functions are generated in
 - BSC Router address differs from other chains (BSC was the original deployment)
 - Arbitrum, Base, Linea, and opBNB share the same Factory and Router addresses
 - LP tokens can be staked in MasterChef for CAKE rewards
-- PancakeSwap is the default choice for BSC trading; use PancakeSwap V3 for concentrated liquidity
+- Use PancakeSwap V3 for concentrated liquidity
 - From a Pot program, `@sauce/router` trades a PancakeSwap V2 pair directly, with no router and no approval: `uniswapV2(pair, tokenIn, tokenOut, amountIn, 2500, minOut, recipient)` — 2500 ppm is PancakeSwap V2's 0.25% fee — reads the pair's `getReserves`, prices the output in the program with the pair's fee in parts per million, transfers the input to the pair and calls `pair.swap` with empty `data`, returning the amount out. The direction is the sort order of `tokenIn` and `tokenOut` (`token0` is the lower address), so there is no argument to get wrong. The swap consumes its whole input or reverts; there is no refund path. `tryUniswapV2` takes the same arguments and returns `0`, moving nothing, when the pair cannot fill the whole input at the floor. The `uniswapV2Swap` action is the same call

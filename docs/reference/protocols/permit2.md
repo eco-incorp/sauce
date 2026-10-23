@@ -8,7 +8,7 @@
 > deployed on, the name a program writes for each of its contracts, and the functions a program can
 > call.
 
-Universal token approval infrastructure by Uniswap. Provides a single approval contract for all DeFi protocols, improving security and UX.
+Universal token approval infrastructure by Uniswap. Provides a single approval contract for all DeFi protocols.
 
 | Fact | Value |
 | --- | --- |

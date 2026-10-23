@@ -22,7 +22,7 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
 ## When to use it
 
 - Concentrated-liquidity pools in fee tiers of 0.01%, 0.05%, 0.3% and 1% (`100`, `500`,
-  `3000`, `10000`): usually the deepest pools for liquid pairs.
+  `3000`, `10000`).
 - A Sauce program swaps a pool with `@sauce/router`'s `uniswapV3`, with a price limit; the
   Factory finds the pool, the position manager manages liquidity positions.
 

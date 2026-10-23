@@ -4,13 +4,13 @@
 
 **Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
 
-> CoW Swap is an exchange aggregator: it looks across many exchanges for the best price. This page
-> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
-> functions a program can call.
+> CoW Swap is an exchange aggregator: it routes a swap across many exchanges. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-MEV-protected DEX aggregator using batch auctions and Coincidence of Wants (CoW) to find optimal prices while protecting users from frontrunning.
+DEX aggregator using batch auctions and Coincidence of Wants (CoW) to match overlapping orders.
 
 | Fact | Value |
 | --- | --- |
@@ -26,7 +26,7 @@ MEV-protected DEX aggregator using batch auctions and Coincidence of Wants (CoW)
 
 ## Notes
 
-- MEV-protected: batch auctions match Coincidence of Wants (overlapping orders) first
+- Batch auctions match Coincidence of Wants (overlapping orders) first
 - Orders are typically signed off-chain and submitted to CoW Protocol API
 - setPreSignature is for smart contracts/multisigs that cannot produce ECDSA signatures
 - orderUid encodes: order hash + owner address + validTo timestamp

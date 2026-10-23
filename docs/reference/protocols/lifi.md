@@ -8,7 +8,7 @@
 > deployed on, the name a program writes for each of its contracts, and the functions a program can
 > call.
 
-Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through optimal bridges and DEXes for cross-chain swaps.
+Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through bridges and DEXes for cross-chain swaps.
 
 | Fact | Value |
 | --- | --- |

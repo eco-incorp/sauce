@@ -26,7 +26,7 @@ Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Bla
 ## Notes
 
 - Standard Uniswap V3 fork interface with identical parameter naming
-- Blast-only deployment; the primary concentrated liquidity DEX on Blast
+- Blast-only deployment
 - Leverages Blast's native yield: ETH and USDB in pools automatically earn native yield
 - Gas rebates from Blast's gas monetization feature benefit traders
 - Input token must be ERC20-approved to the V3 SwapRouter

@@ -1,6 +1,6 @@
 # Permit2
 
-Universal token approval infrastructure by Uniswap. Provides a single approval contract for all DeFi protocols, improving security and UX.
+Universal token approval infrastructure by Uniswap. Provides a single approval contract for all DeFi protocols.
 
 ## When to use it
 

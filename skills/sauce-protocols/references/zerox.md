@@ -36,4 +36,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Uses transformer pipeline architecture - each swap is a sequence of transformations
 - Route computation happens via 0x API - transformations array comes from API response
 - Approve inputToken to exchangeProxy before swapping
-- 0x API provides the optimal route, slippage protection, and transformer calldata
+- 0x API provides the route, slippage protection, and transformer calldata

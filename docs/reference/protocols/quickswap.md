@@ -10,7 +10,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-The leading DEX on Polygon with V2 (constant product, x*y=k) and V3 (Algebra-based concentrated liquidity with dynamic fees) pools. Low-fee trading powered by Polygon's infrastructure.
+DEX on Polygon with V2 (constant product, x*y=k) and V3 (Algebra-based concentrated liquidity with dynamic fees) pools.
 
 | Fact | Value |
 | --- | --- |
@@ -30,7 +30,7 @@ The leading DEX on Polygon with V2 (constant product, x*y=k) and V3 (Algebra-bas
 
 - V3 uses Algebra protocol (same as Camelot V3): dynamic fees that adjust based on volatility, NOT fixed fee tiers
 - V3 uses `limitSqrtPrice` instead of `sqrtPriceLimitX96`
-- Polygon-only deployment; the dominant DEX on Polygon alongside Uniswap V3
+- Polygon-only deployment
 - V2 uses standard Uniswap V2 interface with 0.3% fee
 - Prefer V3 for major pairs (better capital efficiency with dynamic fees)
 

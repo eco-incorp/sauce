@@ -1,6 +1,6 @@
 # GMX V2
 
-Next generation of GMX perpetual exchange with isolated markets, improved risk management, and GM liquidity tokens replacing GLP.
+Next generation of GMX perpetual exchange with isolated markets and GM liquidity tokens replacing GLP.
 
 ## Category
 

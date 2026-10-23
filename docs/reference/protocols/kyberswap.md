@@ -10,7 +10,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a meta-aggregation router that routes across multiple DEXes for best execution. Features dynamic fees and anti-sniping protection.
+Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a meta-aggregation router that routes across multiple DEXes. Features dynamic fees and anti-sniping protection.
 
 | Fact | Value |
 | --- | --- |
@@ -27,7 +27,7 @@ Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a m
 
 - Elastic Router naming differs from Uniswap V3: `minAmountOut` (not `amountOutMinimum`), `limitSqrtP` (not `sqrtPriceLimitX96`)
 - The Elastic Router address is the same on its 6 chains, and the Meta Agg Router address on all 8
-- Meta Aggregation Router routes across multiple DEXes (not just KyberSwap pools) for best execution price
+- Meta Aggregation Router routes across multiple DEXes (not just KyberSwap pools)
 - The `data` field in the Meta Agg Router swap must be pre-encoded from KyberSwap's API
 - Input token must be ERC20-approved to the Elastic Router for direct swaps
 - For Meta Agg swaps, approve to the `approveTarget` address returned by the API

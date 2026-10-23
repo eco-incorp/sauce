@@ -8,7 +8,7 @@
 > the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-Next generation of GMX perpetual exchange with isolated markets, improved risk management, and GM liquidity tokens replacing GLP.
+Next generation of GMX perpetual exchange with isolated markets and GM liquidity tokens replacing GLP.
 
 | Fact | Value |
 | --- | --- |

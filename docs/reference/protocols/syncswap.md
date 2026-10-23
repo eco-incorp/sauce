@@ -10,7 +10,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-The leading DEX on zkSync Era with optimized gas efficiency for the ZK rollup environment. Supports classic constant product pools and stable pools with native account abstraction support.
+DEX on zkSync Era. Supports classic constant product pools and stable pools with native account abstraction support.
 
 | Fact | Value |
 | --- | --- |
@@ -30,7 +30,7 @@ The leading DEX on zkSync Era with optimized gas efficiency for the ZK rollup en
 - Each path can have multiple steps (multi-hop), and you can include multiple paths in one transaction
 - Steps support callbacks for flash-swap-like patterns (set to zero address for standard swaps)
 - Pool addresses must be discovered off-chain (via SyncSwap's factory or API)
-- zkSync-only deployment; optimized for zkSync Era's unique execution environment
+- zkSync-only deployment
 - Input token must be ERC20-approved to the Router
 
 ## Its names in a program
