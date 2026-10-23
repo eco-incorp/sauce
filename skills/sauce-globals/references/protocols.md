@@ -390,14 +390,14 @@ other name, such as one that two members share, is ambiguous: name the versioned
 - `Synthra.NonfungiblePositionManager` → `SynthraV3.NonfungiblePositionManager`: arc
 - `Synthra.QuoterV2` → `SynthraV3.QuoterV2`: arc
 - `Synthra.SwapRouter02` → `SynthraV3.SwapRouter02`: arc
-- `Uniswap.NonfungiblePositionManager` → `UniswapV3.NonfungiblePositionManager`: ethereum, optimism, polygon, monad, arc, base, arbitrum
+- `Uniswap.NonfungiblePositionManager` → `UniswapV3.NonfungiblePositionManager`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche
 - `Uniswap.PoolManager` → `UniswapV4.PoolManager`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
 - `Uniswap.PositionManager` → `UniswapV4.PositionManager`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
-- `Uniswap.QuoterV2` → `UniswapV3.QuoterV2`: ethereum, monad, arc
+- `Uniswap.QuoterV2` → `UniswapV3.QuoterV2`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche
 - `Uniswap.Router` → `UniswapV2.Router`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora
 - `Uniswap.StateView` → `UniswapV4.StateView`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
 - `Uniswap.SwapRouter` → `UniswapV3.SwapRouter`: ethereum, optimism, polygon, arbitrum
-- `Uniswap.SwapRouter02` → `UniswapV3.SwapRouter02`: ethereum, bsc, monad, arc, base, celo, avalanche
+- `Uniswap.SwapRouter02` → `UniswapV3.SwapRouter02`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche
 - `Uniswap.UniversalRouter` → `UniswapV4.UniversalRouter`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
 - `Unitflow.Factory` → `UnitflowV3.Factory`: arc
 - `Unitflow.Quoter` → `UnitflowV3.Quoter`: arc

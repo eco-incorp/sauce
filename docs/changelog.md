@@ -112,6 +112,12 @@ and `hyperlaneBridge` actions and the bridge and CCTP protocols in the registry 
 - **Removed** (EVM): The `EcoRoutes` namespace, with `EcoRoutes.Portal`, `EcoRoutes.HyperProver` and
   `EcoRoutes.PolymerProver`, is no longer a name. The registry has 134 protocols and 313 contracts,
   where it had 135 and 316.
+- **Fixed** (EVM): `UniswapV3.QuoterV2` is a name on every chain where the registry has Uniswap V3:
+  Base, Arbitrum, Optimism, Polygon, BSC, Avalanche and Celo join Ethereum, Monad and Arc. It used to
+  fail on Base with "Contract 'QuoterV2' (uniswap-v3) is not deployed on 'base'", so a program had
+  to take the quoter's address as an argument. `UniswapV3.SwapRouter02` is a name on Arbitrum,
+  Optimism and Polygon too, and `UniswapV3.NonfungiblePositionManager` on BSC, Avalanche and Celo.
+  Each address is Uniswap's own, checked on chain.
 - **Fixed**: In an editor, a family alias on a chain (`Base.Uniswap`, `Ethereum.Aave` and the other
   eleven) is typed by the family's contracts. Its declaration named a type that did not exist, so
   an editor typed nothing on it.

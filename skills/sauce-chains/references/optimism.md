@@ -107,7 +107,9 @@ address.
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
+| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x9a13f98cb987694c9f086b1f5eb990eea8264ec3` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x3c3ea4b57a46241e54610e5f022e5c45859a1017` | `UniswapV4.PositionManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xc18a3169788f4f75a170290584eca6395c75ecdb` | `UniswapV4.StateView` |
