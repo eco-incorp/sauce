@@ -885,6 +885,83 @@ describe("`.balance` is a field wherever it was one", () => {
     );
   });
 
+  it("a record's field selected by its position", () => {
+    const program = (field: string, read: string) =>
+      `function main(row: { wallet: { ${field}: Uint256 }; to: Address }): Uint256 { return ${read}; }`;
+    untouched(program("balance", "row[0].balance"));
+    expect(hex(program("balance", "row[0].balance"))).toBe(
+      hex(program("amount", "row.wallet.amount")),
+    );
+    // The position names a field whose type is an address: its native coin.
+    expect(hex(program("balance", "row[1].balance"))).toBe(
+      hex(program("balance", "ctx.balance(row.to)")),
+    );
+  });
+
+  it("a list of records, and a list in a record, selected by position", () => {
+    const rows = (field: string, read: string) =>
+      `function main(rows: { wallet: { ${field}: Uint256 }; to: Address }[]): Uint256 { return ${read}; }`;
+    untouched(rows("balance", "rows[0][0].balance"));
+    expect(hex(rows("balance", "rows[0][0].balance"))).toBe(
+      hex(rows("amount", "rows[0].wallet.amount")),
+    );
+    expect(hex(rows("balance", "rows[0][1].balance"))).toBe(
+      hex(rows("balance", "ctx.balance(rows[0].to)")),
+    );
+    const legs = (field: string, read: string) =>
+      `interface Leg { ${field}: Uint256 }\n` +
+      `function main(row: { legs: Leg[] }): Uint256 { return ${read}; }`;
+    untouched(legs("balance", "row[0][0].balance"));
+    expect(hex(legs("balance", "row[0][0].balance"))).toBe(
+      hex(legs("amount", "row.legs[0].amount")),
+    );
+  });
+
+  it("an element of abi.decode's result, by its shape", () => {
+    untouched(
+      'function main(d: bytes): Uint256 { return abi.decode(d, ["{Uint256, Uint256}"])[0].balance; }',
+    );
+    untouched(
+      'function main(d: bytes): Uint256 { return abi.decode(d, ["{Uint256, Uint256}[]"])[0][0].balance; }',
+    );
+    expect(
+      hex('function main(d: bytes): Uint256 { return abi.decode(d, ["Address"])[0].balance; }'),
+    ).toBe(
+      hex(
+        'function main(d: bytes): Uint256 { return ctx.balance(abi.decode(d, ["Address"])[0]); }',
+      ),
+    );
+  });
+
+  it("an element of a contract call's result: a struct's field", () => {
+    const positions = (field: string): Abi => [
+      {
+        type: "function",
+        name: "positions",
+        stateMutability: "view",
+        inputs: [{ name: "account", type: "address" }],
+        outputs: [
+          {
+            name: "position",
+            type: "tuple",
+            components: [
+              { name: field, type: "uint128" },
+              { name: "other", type: "uint128" },
+            ],
+          },
+          { name: "count", type: "uint256" },
+        ],
+      },
+    ];
+    const program = (field: string) =>
+      `function main(market: Address, who: Address): Uint256 {\n` +
+      `  return Book.at(market).positions(who)[0].${field};\n}\n`;
+    untouched(program("balance"));
+    expect(hex(program("balance"), { Book: { abi: positions("balance") } })).toBe(
+      hex(program("amount"), { Book: { abi: positions("amount") } }),
+    );
+  });
+
   it("a struct a contract call returns, as Compound's userCollateral: the field", () => {
     const comet = (field: string): Abi => [
       {
