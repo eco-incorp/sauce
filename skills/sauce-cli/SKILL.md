@@ -195,10 +195,12 @@ run deploy it first. `native` and each token count what leaves the wallet or the
 cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
 native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
 and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is sent.
-An ERC-20 approval above what a token's limit leaves room for is refused too. On Solana only balance
-changes count: a delegate approval (SPL Token `Approve` or `ApproveChecked`) is not limited, and the
-delegate can later move the approved amount without the wallet, so do not give a wallet with token
-limits a program that approves a delegate.
+An approval above what a token's limit leaves room for is refused too: an ERC-20 approval, or on
+Solana a delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of the
+wallet or the Pot. On Solana a token account handed to another owner is a send of all it holds; one
+whose close authority goes to another key is refused where its token is limited, and wrapped SOL's
+lamports then count against `native`. A Token-2022 mint's permanent delegate needs no approval, and
+no policy limits it.
 With no policy, sends work, and each says no limits are set.
 
 ## The run, step by step

@@ -114,12 +114,18 @@ could loosen it.
   balance), what leaves as either counts against `native` and the `USDC` limit both.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
   leaves the wallet or its Pot. A token the policy does not name is not limited.
-- On an EVM chain, an ERC-20 approval above what the limit leaves room for is refused, an approval
-  of Permit2 aside, which moves nothing without a later signature. On Solana the policy counts
-  balance changes only: a delegate approval (SPL Token `Approve` or `ApproveChecked`), from the
-  wallet or from its Pot in a cook, moves nothing when it is made and is not limited, and the
-  delegate can later move up to the approved amount without the wallet signing. Do not give a
-  wallet with token limits a program that approves a delegate.
+- An approval above what a token's limit leaves room for is refused. On an EVM chain that is an
+  ERC-20 approval, an approval of Permit2 aside, which moves nothing without a later signature. On
+  Solana it is a delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token
+  account of the wallet or of the Pot the transaction cooks on, counted at the delegate's whole
+  allowance; a revoke, or a delegate spending what it was given, is none.
+- On Solana a token account of the wallet or the Pot handed to another owner is a send of all it
+  holds, and a transfer out of it in the same transaction counts too. A token account whose close
+  authority goes to another key is refused where its token is limited; for wrapped SOL its lamports
+  count against `native`, since closing it pays them out. Where a limited token's decimals cannot be
+  read, the transaction is refused.
+- A Token-2022 mint's permanent delegate moves tokens with no approval from the wallet: no policy
+  limits it.
 - `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside the
   wallet.
 
