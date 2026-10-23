@@ -15,7 +15,9 @@
 // rounded in. Its `decreaseLiquidityInHalf` sent the owner tokens the position had only credited,
 // not paid: here it collects them first. Position reads and the NFT's transfer are in
 // UniswapV3Positions.json beside this file, which the registry's ABI for the position manager
-// leaves out.
+// leaves out. DAI is not one of the `sauce` command's token symbols on Ethereum: `--fund` and
+// `--assume-balance` take it by its address, which `sauce globals --chain ethereum --protocol
+// Maker` prints as `Dai`.
 //
 //   sauce run uniswap-v3-liquidity-examples.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <step> <tokenId> <amount0> <amount1> <owner>

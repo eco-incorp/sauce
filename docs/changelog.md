@@ -321,6 +321,40 @@ remain available and explicitly report that deployment availability has not been
   included.
 - **Changed**: The `--args` help and the MCP server's `args` description say a negative `Int256`
   is accepted, as `--args -5` with no `--` before it.
+- **Fixed**: the MCP server keys a call's `modules` from the directory of `file`, as the input's
+  description says: for `file: "src/main.sauce.ts"` importing `./lib/math.sauce.ts`, the key is
+  `lib/math.sauce.ts`. It keyed them from the root before, so a program in a subdirectory found
+  none of its imports; a key written from the root (`src/lib/math.sauce.ts`) no longer resolves.
+- **Changed**: `sauce mcp --help` names `sauce_signed_cook` among every server's tools and
+  `sauce_sign` among the stdio wallet tools.
+- **Changed**: the manual and the skills say which signers a wallet policy applies to (`--wallet`
+  and the MCP server's wallet tools, never `--keystore`, `--private-key` or `--keypair`), that
+  `sauce wallet export` keeps a key out of pipes and logs but not from a program in a
+  pseudo-terminal, that the stdio MCP server reads the variable `sauce_wallet_enable`'s `env`
+  names, and that `sauce sign` prints the same JSON and notes with `--json` or without.
+
+### @sauce/router
+
+- **Fixed** (EVM): `tryUniswapV2`, `tryTraderJoeLB`, `tryCurve` and `tryBalancerV2` return 0,
+  having moved nothing, for a pool, pair or Vault with no code. They reverted the program, where
+  every other `try` form skipped it. A contract that has code but is not a V2 or LB pair still
+  reverts `tryUniswapV2` and `tryTraderJoeLB`, which read the pair's view uncaught.
+
+### The agent skills and the manual
+
+- **Added**: ten of the protocols' own Solidity examples, ported to Sauce (Uniswap V3's swap,
+  flash and liquidity examples, Uniswap V4's swap guide, Balancer V2's batch and flash swaps, Aave
+  V3 credit delegation, Compound III, Morpho Blue and Pendle), each beside the file it ports, in
+  `sauce-swaps` and `sauce-protocols` and in [From Solidity examples to Sauce](guides/solidity-examples.md).
+  The swaps, the liquidity examples and the flash swaps execute on Ethereum's state at a fixed
+  block; the PairFlash port runs once a trade has moved one of its two pools.
+
+### The registry
+
+- **Fixed**: every EVM address in the protocol registry is written EIP-55 checksummed. Fifteen were
+  mixed-case with a wrong checksum (Ethena's USDe on Ethereum among them), which viem's
+  `getAddress` refuses, and 52 were all lowercase. Only the letters' case changes, so every address
+  names the same contract.
 
 ### Protocol references
 

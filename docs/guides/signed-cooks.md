@@ -41,7 +41,8 @@ reason. `--offline` reads nothing, so it then needs `--max-fee`.
 
 ### What it prints
 
-`--json` prints only this; without it, the notes follow on stderr (abbreviated here):
+It prints this JSON on stdout, with `--json` or without, and its notes on stderr either way, the
+fee warning among them (abbreviated here):
 
 ```text
 {
