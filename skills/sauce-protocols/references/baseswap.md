@@ -114,5 +114,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 - Standard Uniswap V2 fork interface; 0.3% fee per swap
 - Base-only deployment
-- For most Base swaps, Aerodrome has higher liquidity; use BaseSwap for pairs where Aerodrome has less depth or when BSWAP farming rewards are active
 - Both tokens must be ERC20-approved to the Router before swap/addLiquidity

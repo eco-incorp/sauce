@@ -8,7 +8,7 @@
 > lists the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-Leading lending protocol on zkSync Era. Aave V3 fork optimized for zero-knowledge rollups with low transaction costs.
+Lending protocol on zkSync Era. Aave V3 fork.
 
 | Fact | Value |
 | --- | --- |

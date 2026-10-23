@@ -32,7 +32,7 @@ Proactive Market Maker (PMM) DEX with capital-efficient liquidity provision. Unl
 - `isIncentive`: Flag for DODO mining incentives, typically set to `false`
 - Pool discovery requires off-chain lookup via DODO's API or subgraph to find the right pool addresses
 - Input token must be ERC20-approved to the V2 Proxy contract
-- DODO also supports single-token LP (provide only one side of liquidity) which is unique among AMMs
+- DODO also supports single-token LP (provide only one side of liquidity)
 - From a Pot program, `@sauce/router` swaps at a DODO V2 pool (DVM, DPP or DSP) directly, with no proxy and no approval: `dodoV2(pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient)` transfers the input to the pool and calls `sellBase(to)` when `tokenIn` is the base, `sellQuote(to)` when it is the quote, returning the amount out. The side cannot come from address order, and the wrong one reverts nothing and donates the input, so the function takes the pool's `_BASE_TOKEN_()` and `_QUOTE_TOKEN_()` and reverts unless `tokenIn` and `tokenOut` are those two. The pool books its whole balance as its reserve, so the swap consumes its input or reverts; name a `minOut`, since a thin pool pays out at most its quote reserve for any input. `tryDodoV2`, with the same arguments, first reads the pool's own `querySellBase` or `querySellQuote` and returns 0, having moved nothing, when the quote is below `minOut` (or below 1) or the view reverts; the pool prices that view for the Pot's fee but charges the transaction's origin, so where its fee model tells the two apart the swap can deliver less than the quote and revert at the floor. The `dodoV2Swap` action is the same call; legacy V1 pairs are the `dodoV1Swap` action's, through the proxy
 
 ## Its names in a program
@@ -41,7 +41,7 @@ On Ethereum, `Dodo` is a namespace: its contracts need no import.
 
 ```ts
 function main() {
-  // Ethereum's dodoV2Proxy, `0xa356867fDCeA8e71AEaf87805808803806231FDc`.
+  // Ethereum's dodoV2Proxy, `0xa356867fDCEa8e71AEaF87805808803806231FdC`.
   require(Dodo.DODOV2Proxy != 0);
 }
 ```
@@ -50,8 +50,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../chains/ethereum.md) | dodoV2Proxy | `0xa356867fDCeA8e71AEaf87805808803806231FDc` | `Dodo.DODOV2Proxy` |
-| [BNB Chain](../chains/bsc.md) | dodoV2Proxy | `0x8F8Dd7DB1bDA5eD3da8C9dAf3bFA471c12d58486` | `Dodo.DODOV2Proxy` |
+| [Ethereum](../chains/ethereum.md) | dodoV2Proxy | `0xa356867fDCEa8e71AEaF87805808803806231FdC` | `Dodo.DODOV2Proxy` |
+| [BNB Chain](../chains/bsc.md) | dodoV2Proxy | `0x8F8Dd7DB1bDA5eD3da8C9daf3bfa471c12d58486` | `Dodo.DODOV2Proxy` |
 
 ## ABI
 

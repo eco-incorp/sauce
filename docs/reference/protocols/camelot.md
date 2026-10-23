@@ -29,10 +29,10 @@ Native Arbitrum DEX with dual AMM: V2 constant product pools (with native fee-on
 ## Notes
 
 - V2 router uses `swapExactTokensForTokensSupportingFeeOnTransferTokens` (not standard `swapExactTokensForTokens`) which natively handles rebasing/tax tokens
-- V2 router includes a `referrer` parameter for referral fee sharing (unique to Camelot)
+- V2 router includes a `referrer` parameter for referral fee sharing
 - V3 uses Algebra protocol (dynamic fees that adjust based on volatility, NOT fixed fee tiers like Uniswap V3)
 - V3 uses `limitSqrtPrice` instead of `sqrtPriceLimitX96`
-- Arbitrum-only deployment; the native DEX for Arbitrum ecosystem projects
+- Arbitrum-only deployment
 
 ## Its names in a program
 

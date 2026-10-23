@@ -29,10 +29,10 @@ function cleanPath(path: string, what: string): string {
 }
 
 /**
- * The program's file name and the `CliFiles` that serve it and its `modules` (keyed by path from
- * the same root as `file`). The commands resolve an import beside the program, against the
- * process's working directory; this answers for exactly the paths the call named, and for nothing
- * else.
+ * The program's file name and the `CliFiles` that serve it and its `modules`, each keyed by path
+ * from the directory of `file`: the program's tree, which no import climbs out of. The commands
+ * resolve an import beside the program, against the process's working directory; this answers for
+ * exactly the paths the call named, and for nothing else.
  */
 export function callFiles(
   file: string | undefined,
@@ -42,7 +42,7 @@ export function callFiles(
   const name = cleanPath(file ?? DEFAULT_FILE, "file");
   const served = new Map<string, string>([[name, text]]);
   for (const [path, source] of Object.entries(modules ?? {})) {
-    const key = cleanPath(path, "modules:");
+    const key = posix.join(posix.dirname(name), cleanPath(path, "modules:"));
     if (served.has(key)) throw new UsageError(`modules: '${path}' is given twice`);
     served.set(key, source);
   }

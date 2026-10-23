@@ -8,7 +8,7 @@
 > lists the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-Leading lending protocol on Base. Compound V2 fork with governance and safety module features.
+Lending protocol on Base. Compound V2 fork with governance and safety module features.
 
 | Fact | Value |
 | --- | --- |

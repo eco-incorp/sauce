@@ -310,7 +310,7 @@ export async function fetchManifestConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter, not in the v1 registry). */
+/** The Manifest venue: an on-chain central limit order book. */
 export const manifest = {
   slug: SLUG,
   programId: MANIFEST_PROGRAM_ID,

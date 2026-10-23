@@ -1,6 +1,6 @@
 # Socket
 
-Cross-chain bridge aggregator that finds optimal routes across multiple bridges and DEXes for token transfers.
+Cross-chain bridge aggregator that routes token transfers across multiple bridges and DEXes.
 
 ## Category
 
@@ -41,7 +41,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 ## Notes
 
 - Socket is a bridge **aggregator** -- routes through underlying bridges (Across, Stargate, Hop, cBridge, Connext, etc.)
-- Two-step process: (1) call Socket API to get optimal route + encoded `bridgeData`, (2) execute on-chain via `executeRoute()`
+- Two-step process: (1) call Socket API to get a route + encoded `bridgeData`, (2) execute on-chain via `executeRoute()`
 - There is no separate `bridge()` entry point: `executeRoute()` handles bridge, swap, and combined routes
 - Same Gateway address (`0x3a23F9...`) deployed across all supported chains
 - `routeId` identifies the specific bridge integration (each bridge has its own route handler contract)

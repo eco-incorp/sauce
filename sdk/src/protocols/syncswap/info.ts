@@ -5,7 +5,7 @@ export const protocolInfo: ProtocolInfo = {
   name: "SyncSwap",
   slug: "syncswap",
   description:
-    "The leading DEX on zkSync Era with optimized gas efficiency. Supports classic constant product and stable pools with native account abstraction.",
+    "DEX on zkSync Era. Supports classic constant product and stable pools with native account abstraction.",
   website: "https://syncswap.xyz",
   github: "https://github.com/syncswap",
   category: "dex",

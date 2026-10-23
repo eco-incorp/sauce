@@ -25,7 +25,7 @@ Official Scroll zkEVM bridge via L1ScrollMessenger and L1GatewayRouter. Deposits
 - `msg.value` must include gas fees for L2 execution (even for ERC-20 deposits)
 - L1 to L2 deposits finalize after ZK proof generation (~1-4 hours)
 - L2 to L1 withdrawals also require ZK proof finalization (~1-4 hours)
-- Canonical bridge -- no third-party risk, secured by Scroll's ZK proving system
+- Canonical bridge, secured by Scroll's ZK proving system
 - Audited
 
 ## Its names in a program

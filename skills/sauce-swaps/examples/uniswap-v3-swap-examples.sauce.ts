@@ -13,7 +13,9 @@
 // is a function here, with `msg.sender` as `recipient`. The original passes `amountOutMinimum: 0`
 // and says to choose a safer value in production: `limit` is that value. It also takes both hops
 // through 0.3% pools; DAI and USDC trade in the 0.01% pool now (the 0.3% one turns 1,000 DAI into
-// about 116 USDC), so the path takes that hop at 0.01%.
+// about 116 USDC), so the path takes that hop at 0.01%. DAI is not one of the `sauce` command's
+// token symbols on Ethereum: `--fund` and `--assume-balance` take it by its address, which
+// `sauce globals --chain ethereum --protocol Maker` prints as `Dai`.
 //
 //   sauce run uniswap-v3-swap-examples.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <multihop> <exactOutput> <amount> <limit> <recipient>

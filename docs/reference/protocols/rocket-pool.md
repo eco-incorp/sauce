@@ -24,7 +24,7 @@ Decentralised Ethereum liquid staking protocol. Stake ETH and receive rETH, a no
 
 ## Notes
 
-- TVL: $3B+. Most decentralized LST with permissionless node operators
+- TVL: $3B+. LST with permissionless node operators
 - rETH is non-rebasing: value increases over time relative to ETH
 - deposit() is payable - send ETH as msg.value, no parameters needed
 - burn() may fail if insufficient liquidity in the deposit pool

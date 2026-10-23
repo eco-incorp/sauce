@@ -57,5 +57,5 @@ an ABI import bound to the address), and the ABI functions are generated in
 - L1 to L2 deposits finalize in ~10-15 minutes (after L1 finality + sequencer inclusion)
 - L2 to L1 withdrawals require 7-day challenge period before funds can be claimed on L1
 - For ETH deposits, send ETH directly to the Arbitrum Delayed Inbox (no token approval needed)
-- Canonical bridge -- no third-party risk, secured by the Arbitrum rollup itself
+- Canonical bridge, secured by the Arbitrum rollup itself
 - Audited

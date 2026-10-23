@@ -79,11 +79,11 @@ address.
 | [Abracadabra](../../sauce-protocols/references/registry/abracadabra.md) | mim | `0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3` | `Abracadabra.Mim` |
 | [Across](../../sauce-protocols/references/registry/across.md) | hubPool | `0xc186fA914353c44b2E33eBE05f21846F1048bEda` | `Across.HubPool` |
 | [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5` | `Across.SpokePool` |
-| [Aevo](../../sauce-protocols/references/registry/aevo.md) | depositContract | `0x4082C9647c098a6493Fb499EaE63b5ce3259C574` | `Aevo.DepositContract` |
+| [Aevo](../../sauce-protocols/references/registry/aevo.md) | depositContract | `0x4082C9647c098a6493fb499EaE63b5ce3259c574` | `Aevo.DepositContract` |
 | [Alchemix](../../sauce-protocols/references/registry/alchemix.md) | alETH | `0x0100546F2cD4C9D97f798fFC9755E47865FF7Ee6` | `Alchemix.AlETH` |
 | [Alchemix](../../sauce-protocols/references/registry/alchemix.md) | alUSD | `0xBC6DA0FE9aD5f3b0d58160288917AA56653660E9` | `Alchemix.AlUSD` |
 | [Alchemix](../../sauce-protocols/references/registry/alchemix.md) | alchemistAlETH | `0x062Bf725dC4cDF947aa79Ca2aaCCD4F385b13b5c` | `Alchemix.AlchemistAlETH` |
-| [Alchemix](../../sauce-protocols/references/registry/alchemix.md) | alchemistAlUSD | `0x5C6374a2ac4EBC38DeA0Fc1F8716e5Ea1ADD94dd` | `Alchemix.AlchemistAlUSD` |
+| [Alchemix](../../sauce-protocols/references/registry/alchemix.md) | alchemistAlUSD | `0x5C6374a2ac4EBC38DeA0Fc1F8716e5Ea1AdD94dd` | `Alchemix.AlchemistAlUSD` |
 | [Ambient](../../sauce-protocols/references/registry/ambient.md) | crocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` | `Ambient.CrocSwapDex` |
 | [Arbitrum Native Bridge](../../sauce-protocols/references/registry/arbitrum-bridge.md) | l1GatewayRouter | `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef` | `ArbitrumBridge.L1GatewayRouter` |
 | [Arrakis Finance](../../sauce-protocols/references/registry/arrakis.md) | factory | `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9` | `Arrakis.Factory` |
@@ -120,7 +120,7 @@ address.
 | [Curve Finance](../../sauce-protocols/references/registry/curve.md) | threePool | `0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7` | `Curve.ThreePool` |
 | [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
 | [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
-| [DODO](../../sauce-protocols/references/registry/dodo.md) | dodoV2Proxy | `0xa356867fDCeA8e71AEaf87805808803806231FDc` | `Dodo.DODOV2Proxy` |
+| [DODO](../../sauce-protocols/references/registry/dodo.md) | dodoV2Proxy | `0xa356867fDCEa8e71AEaF87805808803806231FdC` | `Dodo.DODOV2Proxy` |
 | [EigenLayer](../../sauce-protocols/references/registry/eigenlayer.md) | cbETHStrategy | `0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc` | `Eigenlayer.CbETHStrategy` |
 | [EigenLayer](../../sauce-protocols/references/registry/eigenlayer.md) | delegationManager | `0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A` | `Eigenlayer.DelegationManager` |
 | [EigenLayer](../../sauce-protocols/references/registry/eigenlayer.md) | rETHStrategy | `0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2` | `Eigenlayer.RETHStrategy` |
@@ -129,7 +129,7 @@ address.
 | [ENS](../../sauce-protocols/references/registry/ens.md) | baseRegistrar | `0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85` | `Ens.BaseRegistrar` |
 | [ENS](../../sauce-protocols/references/registry/ens.md) | registry | `0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e` | `Ens.Registry` |
 | [Ethena](../../sauce-protocols/references/registry/ethena.md) | susde | `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497` | `Ethena.Susde` |
-| [Ethena](../../sauce-protocols/references/registry/ethena.md) | usde | `0x4c9EDD5852cd905f086C759E8383e09bff1e68b3` | `Ethena.USDe` |
+| [Ethena](../../sauce-protocols/references/registry/ethena.md) | usde | `0x4c9EDD5852cd905f086C759E8383e09bff1E68B3` | `Ethena.USDe` |
 | [ether.fi](../../sauce-protocols/references/registry/etherfi.md) | eETH | `0x35fA164735182de50811E8e2E824cFb9B6118ac2` | `Etherfi.EETH` |
 | [ether.fi](../../sauce-protocols/references/registry/etherfi.md) | liquidityPool | `0x308861A430be4cce5502d0A12724771Fc6DaF216` | `Etherfi.LiquidityPool` |
 | [ether.fi](../../sauce-protocols/references/registry/etherfi.md) | weETH | `0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee` | `Etherfi.WeETH` |
@@ -138,13 +138,13 @@ address.
 | [Frax Finance](../../sauce-protocols/references/registry/frax.md) | frax | `0x853d955aCEf822Db058eb8505911ED77F175b99e` | `Frax.Frax` |
 | [Frax Ether](../../sauce-protocols/references/registry/frax-ether.md) | frxETHMinter | `0xbAFA44EFE7901E04E39Dad13167D089C559c1138` | `FraxEther.FrxETHMinter` |
 | [Frax Ether](../../sauce-protocols/references/registry/frax-ether.md) | sfrxETH | `0xac3E018457B222d93114458476f3E3416Abbe38F` | `FraxEther.SfrxETH` |
-| [Gamma Strategies](../../sauce-protocols/references/registry/gamma.md) | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` | `Gamma.UniProxyLegacy` |
+| [Gamma Strategies](../../sauce-protocols/references/registry/gamma.md) | uniProxy | `0xF5BFA20F4A77933fEE0C7bB7F39E7642A070d599` | `Gamma.UniProxyLegacy` |
 | [Gelato Network](../../sauce-protocols/references/registry/gelato.md) | automate | `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0` | `Gelato.Automate` |
 | [GHO](../../sauce-protocols/references/registry/gho.md) | gho | `0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f` | `Gho.Gho` |
 | [Harvest Finance](../../sauce-protocols/references/registry/harvest.md) | controller | `0x222412af183BCeAdEFd72e4Cb1b71f1889953b1C` | `Harvest.Controller` |
 | [Harvest Finance](../../sauce-protocols/references/registry/harvest.md) | depositHelper | `0xF8ce90c2710713552fb564869694B2505Bfc0846` | `Harvest.DepositHelper` |
 | [Harvest Finance](../../sauce-protocols/references/registry/harvest.md) | farm | `0xa0246c9032bC3A600820415aE600c6388619A14D` | `Harvest.Farm` |
-| [Hop Protocol](../../sauce-protocols/references/registry/hop.md) | l1EthBridge | `0xb8901acb165ed027e32754e0ffe830802919727f` | `Hop.L1EthBridge` |
+| [Hop Protocol](../../sauce-protocols/references/registry/hop.md) | l1EthBridge | `0xb8901acB165ed027E32754E0FFe830802919727f` | `Hop.L1EthBridge` |
 | [Hop Protocol](../../sauce-protocols/references/registry/hop.md) | l1UsdcBridge | `0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a` | `Hop.L1UsdcBridge` |
 | [Hyperlane](../../sauce-protocols/references/registry/hyperlane.md) | mailbox | `0xc005dc82818d67AF737725bD4bf75435d065D239` | `Hyperlane.Mailbox` |
 | [Instadapp](../../sauce-protocols/references/registry/instadapp.md) | flashloanAggregator | `0xE6054aE0Dba269560061D736e7510Ce64fCD517d` | `Instadapp.FlashloanAggregator` |
@@ -197,7 +197,7 @@ address.
 | [Puffer Finance](../../sauce-protocols/references/registry/puffer.md) | pufferVault | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | `Puffer.PufETH` |
 | [Pyth Network](../../sauce-protocols/references/registry/pyth.md) | oracle | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` | `Pyth.Oracle` |
 | [Reflexer](../../sauce-protocols/references/registry/reflexer.md) | coinJoin | `0x0A5653CCa4DB1B6E265F47CAf6969e64f1CFdC45` | `Reflexer.CoinJoin` |
-| [Reflexer](../../sauce-protocols/references/registry/reflexer.md) | ethJoin | `0x2D3cD7b81c93f188F3CB8aD87c8Acc73d6226e3a` | `Reflexer.ETHJoin` |
+| [Reflexer](../../sauce-protocols/references/registry/reflexer.md) | ethJoin | `0x2D3cD7b81c93f188F3CB8aD87c8Acc73d6226e3A` | `Reflexer.ETHJoin` |
 | [Reflexer](../../sauce-protocols/references/registry/reflexer.md) | rai | `0x03ab458634910AaD20eF5f1C8ee96F1D6ac54919` | `Reflexer.Rai` |
 | [Reflexer](../../sauce-protocols/references/registry/reflexer.md) | safeEngine | `0xCC88a9d330da1133Df3A7bD823B95e52511A6962` | `Reflexer.SAFEEngine` |
 | [Renzo](../../sauce-protocols/references/registry/renzo.md) | ezETH | `0xbf5495Efe5DB9ce00f80364C8B423567e58d2110` | `Renzo.EzETH` |
@@ -212,7 +212,7 @@ address.
 | [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
 | [Silo](../../sauce-protocols/references/registry/silo.md) | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` | `Silo.SiloRepository` |
 | [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
-| [Sommelier](../../sauce-protocols/references/registry/sommelier.md) | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366d8f2` | `Sommelier.CellarRouter` |
+| [Sommelier](../../sauce-protocols/references/registry/sommelier.md) | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366D8f2` | `Sommelier.CellarRouter` |
 | [Spark](../../sauce-protocols/references/registry/spark.md) | pool | `0xC13e21B648A5Ee794902342038FF3aDAB66BE987` | `Spark.Pool` |
 | [Spark](../../sauce-protocols/references/registry/spark.md) | poolAddressesProvider | `0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE` | `Spark.PoolAddressesProvider` |
 | [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
@@ -228,7 +228,7 @@ address.
 | [Swell](../../sauce-protocols/references/registry/swell.md) | rswETH | `0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0` | `Swell.RswETH` |
 | [Swell](../../sauce-protocols/references/registry/swell.md) | swETH | `0xf951E335afb289353dc249e82926178EaC7DEd78` | `Swell.SwETH` |
 | [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | cctpRouter | `0x12715a66773BD9C54534a01aBF01d05F6B4Bd35E` | `Synapse.CctpRouter` |
-| [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0x2796317b0fF8538F253012862c06787Adfb8cEB6` | `Synapse.SynapseBridge` |
+| [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0x2796317b0fF8538F253012862c06787Adfb8cEb6` | `Synapse.SynapseBridge` |
 | [Tokemak](../../sauce-protocols/references/registry/tokemak.md) | autopoolRegistry | `0x7E5828a3A6Ae75426d739E798140513A2E2964E4` | `Tokemak.AutopoolRegistry` |
 | [Tokemak](../../sauce-protocols/references/registry/tokemak.md) | systemRegistry | `0x2218F90A98b0C070676f249EF44834686dAa4285` | `Tokemak.SystemRegistry` |
 | [Tokemak](../../sauce-protocols/references/registry/tokemak.md) | toke | `0x2e9d63788249371f1DFC918a52f8d799F4a38C94` | `Tokemak.Toke` |
@@ -240,11 +240,11 @@ address.
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x000000000004444c5dc75cB358380D2e3dE08A90` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e` | `UniswapV4.PositionManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x7ffe42c4a5deea5b0fec41c94c136cf115597227` | `UniswapV4.StateView` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x66a9893cc07d91d95644aedd05d03f95e1dba8af` | `UniswapV4.UniversalRouter` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227` | `UniswapV4.StateView` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af` | `UniswapV4.UniversalRouter` |
 | [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B` | `Wormhole.CoreBridge` |
 | [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | tokenBridge | `0x3ee18B2214AFF97000D974cf647E7C347E8fa585` | `Wormhole.TokenBridge` |
-| [Yearn V3](../../sauce-protocols/references/registry/yearn-v3.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F` | `YearnV3.VaultFactory` |
+| [Yearn V3](../../sauce-protocols/references/registry/yearn-v3.md) | vaultFactory | `0x770D0d1fB036483eD4ABB6D53C1C89FB277d812F` | `YearnV3.VaultFactory` |
 | [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
 | [zkSync Native Bridge](../../sauce-protocols/references/registry/zksync-bridge.md) | diamondProxy | `0x32400084C286CF3E17e7B677ea9583e60a000324` | `ZksyncBridge.DiamondProxy` |

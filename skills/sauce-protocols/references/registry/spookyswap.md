@@ -2,7 +2,7 @@
 
 # SpookySwap (`spookyswap`)
 
-The largest DEX on Fantom with UniV2-style constant product pools. Features yield farming, bridges, and limit orders.
+DEX on Fantom with UniV2-style constant product pools. Features yield farming, bridges, and limit orders.
 
 | Fact | Value |
 | --- | --- |

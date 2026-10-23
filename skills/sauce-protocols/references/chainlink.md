@@ -1,6 +1,6 @@
 # Chainlink
 
-Industry-standard decentralized oracle network providing price feeds, VRF randomness, automation, and cross-chain interoperability (CCIP).
+Decentralized oracle network providing price feeds, VRF randomness, automation, and cross-chain interoperability (CCIP).
 
 ## Category
 

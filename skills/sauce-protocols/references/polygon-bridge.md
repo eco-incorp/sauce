@@ -70,5 +70,5 @@ an ABI import bound to the address), and the ABI functions are generated in
 - L1 to L2 deposits finalize after the next Polygon checkpoint (~30-60 minutes)
 - L2 to L1 withdrawals require checkpoint inclusion + `exit()` call on Ethereum (~3 hours for checkpoint)
 - Supports ERC-20, ERC-721, and ERC-1155 via different predicate contracts
-- Canonical bridge -- no third-party risk, secured by the Polygon PoS validator set
+- Canonical bridge, secured by the Polygon PoS validator set
 - Audited

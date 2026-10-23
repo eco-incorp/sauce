@@ -4,13 +4,13 @@
 
 **Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
 
-> KyberSwap Aggregator is an exchange aggregator: it looks across many exchanges for the best price.
-> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
-> and the functions a program can call.
+> KyberSwap Aggregator is an exchange aggregator: it routes a swap across many exchanges. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-Meta aggregator that routes through multiple aggregators and DEXes for optimal swap execution.
+Meta aggregator that routes through multiple aggregators and DEXes.
 
 | Fact | Value |
 | --- | --- |
