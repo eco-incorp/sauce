@@ -113,9 +113,13 @@ could loosen it.
   Solana the fee and any rent are included. On Arc, whose native coin is also the `USDC` token (one
   balance), what leaves as either counts against `native` and the `USDC` limit both.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
-  leaves the wallet or its Pot. An approval above what the limit leaves room for is refused, an
-  approval of Permit2 aside, which moves nothing without a later signature. A token the policy does
-  not name is not limited.
+  leaves the wallet or its Pot. A token the policy does not name is not limited.
+- On an EVM chain, an ERC-20 approval above what the limit leaves room for is refused, an approval
+  of Permit2 aside, which moves nothing without a later signature. On Solana the policy counts
+  balance changes only: a delegate approval (SPL Token `Approve` or `ApproveChecked`), from the
+  wallet or from its Pot in a cook, moves nothing when it is made and is not limited, and the
+  delegate can later move up to the approved amount without the wallet signing. Do not give a
+  wallet with token limits a program that approves a delegate.
 - `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside the
   wallet.
 

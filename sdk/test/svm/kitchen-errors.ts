@@ -16,3 +16,10 @@ export const KITCHEN_ERROR = {
   PotSpaceOutOfRange: 6007,
   ExecutionFeeExceedsMaximum: 6012,
 } as const;
+
+/**
+ * Anchor's own `ConstraintSeeds`: an account is not the address its seeds give at the bump the
+ * instruction names. The framework's code, not one of the Kitchen's `#[error_code]`s, so it is not
+ * among the IDL's errors and not in {@link KITCHEN_ERROR}.
+ */
+export const ANCHOR_CONSTRAINT_SEEDS = 2006;
