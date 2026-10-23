@@ -194,6 +194,28 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     ).toMatch(/^`pot\.USDC` on Solana: `USDC` is not a token solana registers\./);
   });
 
+  it("a name a pattern or a catch clause binds is no read of pot or self", () => {
+    const lower = (source: string) =>
+      rewriteSvmTokenSyntax(source, resolveTokenMap(SOLANA), svmTokenRows(SOLANA));
+    for (const name of ["pot", "self"]) {
+      for (const body of [
+        `const [${name}, bump] = crypto.findPDA(program, [hex\`01\`]);\n  return bump;`,
+        `const { ${name} } = rec;\n  return 1;`,
+        `const { key: ${name} } = rec;\n  return 1;`,
+        `const [first, ...${name}] = rec;\n  return 1;`,
+        `try {\n    return 1;\n  } catch (${name}) {\n    return 2;\n  }`,
+      ]) {
+        const source = `function main(program: Address): Uint256 {\n  ${body}\n}\n`;
+        expect(lower(source)).toMatchObject({ rewrote: false, source });
+      }
+    }
+    // A default is a read: `pot` there is the Pot's key.
+    expect(
+      lower("function main(rec: Uint256): Uint256 {\n  const [a = pot] = rec;\n  return a;\n}\n")
+        .source,
+    ).toContain("const [a = pot.address] = rec;");
+  });
+
   it("a pot or self the caller binds (a define, an ambient module's export) is the caller's", () => {
     const lower = (source: string) =>
       rewriteSvmTokenSyntax(
@@ -241,6 +263,20 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     ).toMatch(
       /^`holder\.USDC` on Solana: the holder must be known when the transaction is built, to attach its token account — `pot`, /,
     );
+  });
+
+  it("an account's .balance through parentheses keeps them matched", () => {
+    for (const receiver of ["(vault)", "((vault))"]) {
+      expect(
+        compile(`function main(vault: Account): Uint256 {\n  return ${receiver}.balance;\n}\n`)
+          .source,
+      ).toBe("function main(vault: Account): Uint256 {\n  return ctx.balance(vault.address);\n}\n");
+    }
+    // The account expression inside is lowered on its own.
+    const pda = compile(
+      'function main(): Uint256 {\n  return (Solana.pda(Solana.systemProgram, ["a"])).balance;\n}\n',
+    );
+    expect(pda.source).toContain("return ctx.balance(aPda.address);");
   });
 });
 

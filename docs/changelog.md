@@ -165,8 +165,8 @@ remain available and explicitly report that deployment availability has not been
   `abi.decode` returns, and a struct a contract call returns (`market.userCollateral(a, b).balance`);
   for the native coin of such a value write `ctx.balance(x)`. `.ETH` on a record is an ordinary
   field now. A program that declares or imports its own `pot` owns the name, and so does a compile
-  whose `defines` or `ambient` modules give one; a `self` given either way is not refused.
-  `ctx.self()`, `ctx.balance(x)` and `ctx.selfBalance()` are unchanged.
+  whose `defines`, `contracts` or `ambient` modules give one; a `self` given any of these ways is
+  not refused. `ctx.self()`, `ctx.balance(x)` and `ctx.selfBalance()` are unchanged.
 
 - **Added (Solana):** `pot` works as on an EVM chain. Bare `pot` is the Pot's key, and its account
   wherever an `Account` is taken. A script with no `main` and a helper function can use `pot.USDC`,

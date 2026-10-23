@@ -30,7 +30,7 @@ import {
   mapTarget,
   type RsCompileResult,
 } from "./rs-compile.js";
-import { sdkStdPath } from "../embedded/resolve.js";
+import { normalize, sdkStdPath } from "../embedded/resolve.js";
 import { collectPatternNames, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import {
@@ -422,9 +422,11 @@ const sdkModuleExports = new Map<string, readonly string[]>();
 /**
  * The names the `ambient` modules broadcast into the program: every value each exports (a
  * SauceScript module exports only declarations: it has no `export { … }` list and no re-export),
- * each module resolved as the compiler resolves it — a bare specifier through `resolvePackage`, a
- * path's per-target arm (`token.evm.js`) before its neutral one. A module that resolves to nothing,
- * or does not parse, adds nothing: the compile reports it.
+ * each module found as the compiler finds it: a relative specifier (`./`, `../`) normalized, one
+ * that climbs above the root refused; any other through `resolvePackage`, and as written where it
+ * declines; then the path's per-target arm (`holder.evm.js`) before its neutral one, a path with
+ * no extension as written. A module that resolves to nothing, or does not parse, adds nothing: the
+ * compile reports it.
  */
 function ambientExports(
   ambient: readonly string[],
@@ -437,11 +439,18 @@ function ambientExports(
   const arm = `.${mapTarget(target)}`;
   const names = new Set<string>();
   for (const specifier of ambient) {
-    const path = specifier.startsWith(".") ? specifier : bare(specifier, ENTRY);
-    if (path === undefined || path === null) continue;
-    let at = path.replace(/(\.[^./]+)$/, `${arm}$1`);
+    let path: string | undefined;
+    if (specifier.startsWith("./") || specifier.startsWith("../")) {
+      const normalized = normalize(specifier);
+      path = normalized === undefined ? undefined : `./${normalized}`;
+    } else {
+      path = bare(specifier, `./${ENTRY}`) ?? specifier;
+    }
+    if (path === undefined) continue;
+    const armed = path.replace(/(\.[^./]+)$/, `${arm}$1`);
+    let at = armed;
     let bytes = read(at);
-    if (bytes === undefined || bytes === null) {
+    if ((bytes === undefined || bytes === null) && armed !== path) {
       at = path;
       bytes = read(at);
     }
@@ -525,10 +534,12 @@ function compileForChain(
   // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
   // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
-  // The names the compile binds beside the source: the caller's defines and what its ambient
-  // modules export. A `pot` or `self` that is one of them is the caller's value, never the Pot.
+  // The names the compile binds beside the source: the caller's defines, its contract bindings and
+  // what its ambient modules export. A `pot` or `self` that is one of them is the caller's value,
+  // never the Pot.
   const bound = new Set([
     ...Object.keys(options.defines ?? {}),
+    ...Object.keys(options.contracts ?? {}),
     ...ambientExports(options.ambient ?? [], target, options.resolve, options.resolvePackage),
   ]);
 

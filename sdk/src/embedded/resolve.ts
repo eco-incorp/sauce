@@ -41,7 +41,7 @@ const utf8 = new TextEncoder();
  * `path` with `.` segments dropped and `..` applied, `/`-joined without a leading slash —
  * `undefined` when a `..` would climb above the root.
  */
-function normalize(path: string): string | undefined {
+export function normalize(path: string): string | undefined {
   const parts: string[] = [];
   for (const part of path.split("/")) {
     if (part === "" || part === ".") continue;

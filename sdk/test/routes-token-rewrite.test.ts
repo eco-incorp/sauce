@@ -841,12 +841,51 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
   });
 
+  it.each([
+    ["a bare specifier only `resolve` serves", "holder", {}, "holder"],
+    [
+      "a bare specifier `resolvePackage` declines",
+      "@caller/holder",
+      { resolvePackage: () => undefined },
+      "@caller/holder",
+    ],
+    ["a bare `.js` specifier, at its target arm", "holder.js", {}, "holder.evm.js"],
+    ["a relative specifier written with `..`", "./sub/../holder.ts", {}, "./holder.ts"],
+  ])("an ambient module found as the compiler finds it: %s", (_form, specifier, own, path) => {
+    const options = {
+      ambient: [specifier],
+      ...own,
+      ...served({ [path]: `export const pot = ${HOLDER};\nexport const self = ${HOLDER};` }),
+    };
+    expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(hex(main("return self.USDC;"), options)).toBe(
+      hex(main(`return USDC.balanceOf(${HOLDER});`)),
+    );
+  });
+
   it.each(["pot", "self"])("an imported `%s` is what it reads", (name) => {
     const options = served({ "./constants.js": `export const ${name} = ${HOLDER};` });
     const program = (body: string) => `import { ${name} } from "./constants.js";\n${main(body)}`;
     expect(hex(program(`return ${name};`), options)).toBe(hex(main(`return ${HOLDER};`)));
     expect(hex(program(`return ${name}.USDC;`), options)).toBe(
       hex(main(`return USDC.balanceOf(${HOLDER});`)),
+    );
+  });
+
+  it.each(["pot", "self"])("a contract binding the caller names `%s` is its own", (name) => {
+    const erc20: Abi = [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "account", type: "address" }],
+        outputs: [{ name: "", type: "uint256" }],
+      },
+    ];
+    const program = (binding: string) =>
+      `function main(token: Address, holder: Address): Uint256 { return ${binding}.at(token).balanceOf(holder); }`;
+    expect(hex(program(name), { contracts: { [name]: { abi: erc20 } } })).toBe(
+      hex(program("Other"), { contracts: { Other: { abi: erc20 } } }),
     );
   });
 
@@ -874,6 +913,23 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     expect(solana(`function main(): Address { return ${name}; }`, { [name]: key })).toEqual(
       solana(`function main(): Address { return ${key}; }`),
     );
+  });
+
+  it("on Solana, a bare ambient module only `resolve` serves binds `pot`", () => {
+    const key = BigInt(`0x${"06".repeat(32)}`);
+    const solana = (source: string, options: Parameters<typeof compileSauceProgram>[2] = {}) => {
+      const compiled = compileSauceProgram("solana", source, options);
+      return {
+        bytecode: Buffer.from(compiled.bytecode).toString("hex"),
+        manifest: compiled.manifest,
+      };
+    };
+    expect(
+      solana("function main(): Address { return pot; }", {
+        ambient: ["holder"],
+        ...served({ holder: `export const pot = ${key};` }),
+      }),
+    ).toEqual(solana(`function main(): Address { return ${key}; }`));
   });
 });
 
@@ -976,6 +1032,28 @@ describe("`.balance` is a field wherever it was one", () => {
         'function main(d: bytes): Uint256 { return ctx.balance(abi.decode(d, ["Address"])[0]); }',
       ),
     );
+  });
+
+  it("a destructured record's field, by its position", () => {
+    const program = (field: string, read: string) =>
+      `function main(row: { wallet: { ${field}: Uint256 }; to: Address }): Uint256 {\n` +
+      `  const [wallet, to] = row;\n  return ${read};\n}`;
+    untouched(program("balance", "wallet.balance"));
+    expect(hex(program("balance", "wallet.balance"))).toBe(hex(program("amount", "wallet.amount")));
+    expect(hex(program("balance", "to.balance"))).toBe(hex(program("balance", "ctx.balance(to)")));
+    const skipped = (read: string) =>
+      `function main(row: { to: Address; wallet: { balance: Uint256 } }): Uint256 {\n` +
+      `  const [, wallet] = row;\n  return ${read};\n}`;
+    untouched(skipped("wallet.balance"));
+  });
+
+  it("a destructured element of abi.decode's result, by its shape", () => {
+    untouched(
+      'function main(d: bytes): Uint256 { const [w, n] = abi.decode(d, ["{Uint256, Uint256}", "Uint256"]); return w.balance + n; }',
+    );
+    const decoded = (read: string) =>
+      `function main(d: bytes): Uint256 { const [a] = abi.decode(d, ["Address"]); return ${read}; }`;
+    expect(hex(decoded("a.balance"))).toBe(hex(decoded("ctx.balance(a)")));
   });
 
   it("an element of a contract call's result: a struct's field", () => {

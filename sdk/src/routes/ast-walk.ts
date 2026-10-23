@@ -59,32 +59,38 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
  *  destructuring, defaults and rest. Collecting only the `Identifier` case would miss
  *  `const { Token } = x` and `function f({ Token })`, which bind the name just as plainly. */
 export function collectPatternNames(pattern: unknown, names: { add(name: string): void }): void {
+  collectPatternBinders(pattern, (node) => names.add((node as unknown as { name: string }).name));
+}
+
+/** Every `Identifier` node a binding PATTERN binds, the nodes of `collectPatternNames`' names:
+ *  never a default value or a computed key, which are reads. */
+export function collectPatternBinders(pattern: unknown, add: (node: AstNode) => void): void {
   if (pattern === null || typeof pattern !== "object") return;
   const node = pattern as AstNode;
   switch (node.type) {
     case "Identifier":
-      names.add((node as unknown as { name: string }).name);
+      add(node);
       return;
     case "ObjectPattern":
       for (const property of (node as { properties?: AstNode[] }).properties ?? []) {
         // A `Property`'s VALUE is the binding (`{ a: Token }` binds `Token`, not `a`); a
         // `RestElement`'s argument is.
-        collectPatternNames(
+        collectPatternBinders(
           (property as { value?: unknown }).value ?? (property as { argument?: unknown }).argument,
-          names,
+          add,
         );
       }
       return;
     case "ArrayPattern":
       for (const element of (node as { elements?: AstNode[] }).elements ?? []) {
-        collectPatternNames(element, names);
+        collectPatternBinders(element, add);
       }
       return;
     case "AssignmentPattern":
-      collectPatternNames((node as { left?: unknown }).left, names);
+      collectPatternBinders((node as { left?: unknown }).left, add);
       return;
     case "RestElement":
-      collectPatternNames((node as { argument?: unknown }).argument, names);
+      collectPatternBinders((node as { argument?: unknown }).argument, add);
       return;
     default:
       return;
