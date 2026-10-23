@@ -411,7 +411,11 @@ const codeAndStrings = (text: string): string[] => text.split(/("(?:[^"\\]|\\.)*
 const identifiers = (text: string): string[] =>
   codeAndStrings(text).flatMap((part, i) => (i % 2 === 1 ? [] : (part.match(NAME) ?? [])));
 
-/** The text with each name `to` maps read as what it maps it to. */
+/**
+ * The text with each name `to` maps read as what it maps it to. A splice's text holds only what
+ * the program reads there, never a record's key (a shorthand `{ pot }` keeps its own key, and its
+ * splice is the value after it), so every name in it is a read.
+ */
 const substitute = (text: string, to: ReadonlyMap<string, string>): string =>
   codeAndStrings(text)
     .map((part, i) => (i % 2 === 1 ? part : part.replace(NAME, (name) => to.get(name) ?? name)))

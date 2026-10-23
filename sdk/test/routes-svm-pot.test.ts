@@ -253,6 +253,22 @@ describe("where a site stands", () => {
     ).toContain("`__sauce_accounts` is reserved");
   });
 
+  it("a shorthand { pot } keeps its key, in main and in a top-level function given the accounts", () => {
+    const record = "  const r = { size: 1, pot };\n  return r.pot;\n}\n";
+    expect(compile(`function main(): Address {\n${record}`).source).toBe(
+      "function main(pot: Account): Address {\n  const r = { size: 1, pot: pot.address };\n  return r.pot;\n}\n",
+    );
+    expect(
+      compile(
+        `function held(): Address {\n${record}function main(): Address {\n  return held();\n}\n`,
+      ).source,
+    ).toBe(
+      "function held(__sauce_accounts: Account[]): Address {\n" +
+        "  const r = { size: 1, pot: __sauce_accounts[0].address };\n  return r.pot;\n}\n" +
+        "function main(pot: Account): Address {\n  return held([pot]);\n}\n",
+    );
+  });
+
   it("a token write in a helper: its checks where it stands, its accounts' checks at the top of main", () => {
     const key = `0x${"ab".repeat(32)}`;
     const program = compile(

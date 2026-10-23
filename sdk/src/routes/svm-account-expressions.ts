@@ -617,13 +617,14 @@ export function collectAccountExpressions(l: SvmLowering): void {
     }
     l.site(n, () => {
       l.requirePlaced(n, `\`${text(n)}\``, "an account");
-      // `{ pot }` is `{ pot: <key> }`.
+      // `{ pot }` is `{ pot: <key> }`: the key stays the program's own text, so a splice holds
+      // only what is read, which a top-level function's threading rewrites (`threadHelpers`).
       const shorthand = parent?.type === "Property" && parent.shorthand === true;
-      l.splices.push({
-        start: n.start,
-        end: n.end,
-        replacement: shorthand ? `${text(n)}: ${key()}` : key(),
-      });
+      l.splices.push(
+        shorthand
+          ? { start: n.end, end: n.end, replacement: `: ${key()}` }
+          : { start: n.start, end: n.end, replacement: key() },
+      );
     });
   };
   walk(l.program, (n) => {
