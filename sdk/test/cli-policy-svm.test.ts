@@ -1861,6 +1861,81 @@ describeSvm(
       expectOk(sendSigned(harness, within));
     });
 
+    it("counts the wrapped SOL the wallet pays as the delegate of a Pot's account against native, with no cook", async () => {
+      // The Pot's wrapped SOL account, which the Pot's own cook delegates to the wallet (no outside
+      // key is given anything: the setup counts the fee only); then the wallet alone pays 2 SOL
+      // out of it, no cook naming the Pot. Its lamports leave an account the wallet does not own.
+      const { account: source } = wrappedSol(harness.pot, 2_000_000_000n);
+      const { account: dest } = wrappedSol(randomAddress(), 0n);
+      const approveAll = compileSauceProgram(
+        "solana",
+        'import { approve } from "@sauce/token";\n' +
+          "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, " +
+          "delegate: Account, pot: Account<Writable, Signer>) {\n" +
+          `  approve(0x${keyHex(NATIVE_MINT)}n, tokenProgram, source, delegate, pot, 2000000000);\n` +
+          "}",
+      ).bytecode;
+      const staged = await stageProgram(harness, approveAll, 402n);
+      const setup = await signed([
+        ...prepends(),
+        buildCookFromAccountInstruction({
+          kitchen: harness.kitchen,
+          owner: wallet,
+          engineProgram: harness.programId,
+          potSalt: HARNESS_POT_SALT,
+          pot: harness.pot,
+          feeConfig: harness.feeConfig,
+          maxExecutionFee: 0n,
+          tail: [
+            readonly(TOKEN_PROGRAM),
+            writable(source),
+            readonly(NATIVE_MINT),
+            readonly(wallet),
+            writable(harness.pot),
+          ],
+          ...staged,
+          pin: staged.sha256,
+        }),
+      ]);
+      const setupNative = (await measure(setup)).native.amount;
+      expectOk(sendSigned(harness, setup));
+      expect(keyAt(source, 76)).toBe(wallet);
+      // The wallet pays `amount` of it to another key: TransferChecked needs the mint, which the
+      // harness does not carry, so SPL Token's plain Transfer (3).
+      const pay = (amount: bigint) =>
+        signed([
+          {
+            programAddress: TOKEN_PROGRAM,
+            accounts: [writable(source), writable(dest), signer(wallet)],
+            data: Uint8Array.of(3, ...u64(amount)),
+          },
+        ]);
+
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const over = await nativeVerdict("1", await pay(2_000_000_000n));
+      const within = await pay(500_000_000n);
+      expect({
+        setup: String(setupNative),
+        over,
+        within: await nativeVerdict("1", within),
+      }).toEqual({
+        setup: String(FEE),
+        over: {
+          unmeasured: {},
+          native: String(2_000_000_000n + FEE),
+          refusal: nativeRefusal,
+          spend: undefined,
+        },
+        within: {
+          unmeasured: {},
+          native: String(500_000_000n + FEE),
+          refusal: ALLOWED,
+          spend: { native: { amount: String(500_000_000n + FEE), decimals: 9 } },
+        },
+      });
+      expectOk(sendSigned(harness, within));
+    });
+
     it("counts SOL the wallet wraps into its own account where an outside key stands to move it", async () => {
       // An empty wrapped SOL account of the wallet's, with a standing allowance of 2 SOL to a key
       // outside: whatever the wallet wraps into it is that key's to take.

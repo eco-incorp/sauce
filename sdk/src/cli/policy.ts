@@ -848,8 +848,11 @@ export async function measureSvm(
   // What the wallet (or a Pot) moves out of an account it does not own, as that account's delegate:
   // a Pot's account delegated to the wallet, spent from a transaction that cooks on no Pot. The
   // owner is outside this transaction's set, so the balance it loses is the delegate's spend, which
-  // is the wallet's own send: as much of the drop as the allowance fell by, by mint.
+  // is the wallet's own send: as much of the drop as the allowance fell by, by mint. Spent from
+  // wrapped SOL, it is lamports too, which leave an account the set does not hold: they count
+  // against `native` as well.
   const spentAsDelegate = new Map<SvmAddress, bigint>();
+  let lamportsAsDelegate = 0n;
   tracked.forEach((account, index) => {
     const delegateBefore = permanentDelegateOf(before[index] ?? null);
     const delegateAfter = permanentDelegateOf(after[index] ?? null);
@@ -877,6 +880,7 @@ export async function measureSvm(
       const fell = old.delegatedAmount - allowanceLeft;
       const spent = drop < fell ? drop : fell;
       if (spent > 0n) spentAsDelegate.set(old.mint, (spentAsDelegate.get(old.mint) ?? 0n) + spent);
+      if (spent > 0n && old.isNative) lamportsAsDelegate += spent;
     }
     // An account it closes gives nothing more away: its balance is counted as it leaves.
     if (is === undefined || !ours.has((was ?? is).owner)) return;
@@ -983,7 +987,7 @@ export async function measureSvm(
 
     return state.lamports - outside;
   };
-  let lamports = 0n;
+  let lamports = lamportsAsDelegate;
   tracked.forEach((account, index) => {
     const was = before[index] ?? null;
     const is = after[index] ?? null;
