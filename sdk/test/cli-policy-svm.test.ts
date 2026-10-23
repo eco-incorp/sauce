@@ -1523,6 +1523,53 @@ describeSvm(
       expectOk(sendSigned(harness, transaction));
     });
 
+    it.each(["spl", "token2022"] as const)(
+      "gives nothing away by a %s delegate that is the wallet itself, on the wallet's account",
+      async (kind) => {
+        const mint = mints[kind];
+        const source = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          wallet,
+          AMOUNT,
+          PROGRAMS[kind],
+        );
+        const transaction = await signed([approval(kind, source, wallet)]);
+
+        const measured = await measure(transaction);
+        expect({
+          approvals: plain(measured.approvals),
+          refusal: (await guarded(limited(mint), transaction)).refusal,
+        }).toEqual({ approvals: [], refusal: "none: the guard let it through" });
+      },
+    );
+
+    it.each([
+      ["the wallet", "the top level"],
+      ["the wallet", "a CPI"],
+      ["the Pot", "the top level"],
+    ] as const)(
+      "gives nothing away by a delegate that is %s, on the Pot's account in a cook at %s",
+      async (who, depth) => {
+        const mint = mints.spl;
+        const source = setTokenAccount(harness, randomAddress(), mint, harness.pot, AMOUNT);
+        const delegate = who === "the wallet" ? wallet : harness.pot;
+        const transaction = await signed([
+          ...prepends(),
+          potApproval("approveChecked", "spl", source, delegate, depth, "inline"),
+        ]);
+
+        const measured = await measure(transaction);
+        expect({
+          approvals: plain(measured.approvals),
+          refusal: (await guarded(limited(mint), transaction)).refusal,
+        }).toEqual({ approvals: [], refusal: "none: the guard let it through" });
+        expectOk(sendSigned(harness, transaction));
+        expect(keyAt(source, 76)).toBe(delegate);
+      },
+    );
+
     it("gives nothing away by a close authority handed to the wallet itself", async () => {
       const mint = mints.spl;
       const source = setTokenAccount(harness, randomAddress(), mint, wallet, AMOUNT);

@@ -794,7 +794,8 @@ export async function measureSvm(
   const ours = new Set<string>([wallet, ...pots]);
   // What it gives another key over a token account of the wallet's or a Pot's, which counts for
   // whose the account was before it (whose it is, for one it creates), as its balance does: a
-  // delegate's allowance, new or raised; the account itself; or the right to close it.
+  // delegate's allowance, new or raised; the account itself; or the right to close it. A delegate,
+  // owner or closer that is the wallet or a Pot it cooks on is no other key.
   const approved: Array<{ token: SvmAddress; spender: SvmAddress; amount: bigint }> = [];
   const handedOff = new Map<SvmAddress, bigint>();
   const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
@@ -807,6 +808,7 @@ export async function measureSvm(
     if (is === undefined || !ours.has((was ?? is).owner)) return;
     if (
       is.delegate !== undefined &&
+      !ours.has(is.delegate) &&
       is.delegatedAmount > 0n &&
       (is.delegate !== was?.delegate || is.delegatedAmount > (was?.delegatedAmount ?? 0n))
     ) {
