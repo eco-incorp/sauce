@@ -681,6 +681,65 @@ describe("the guard", () => {
         spend: { amount: String(parseUnits("12", 18)), decimals: 18 },
       });
     });
+
+    it("holds a USDC allowance left another key to the native limit too, alone, with USDC sent, and in the day's total", async () => {
+      // Native USDC and the ERC-20 are one balance: an allowance of the ERC-20 lets its spender take
+      // native USDC, so a policy that limits only native holds it.
+      const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+      const allows = (usdc: string) => approval(ARC_USDC, WALLET, SPENDER, parseUnits(usdc, 6));
+      const verdict = (guard: SendGuard, moved: PublicClient, call = pay) =>
+        guard.evm(moved, call).then(
+          () => "let through",
+          (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+        );
+      const capped = guarded({ native: { perTransaction: "1.5" } });
+      const one = parseUnits("1", 18);
+      const alone = await verdict(capped, onArc([allows("2")]));
+      const withValue = await verdict(
+        capped,
+        onArc([
+          transfer(NATIVE, WALLET, RECIPIENT, one),
+          transfer(CHAIN, WALLET, RECIPIENT, one),
+          allows("1"),
+        ]),
+        { to: RECIPIENT, data: "0x", value: one },
+      );
+      const within = await verdict(capped, onArc([allows("1")]));
+      // An allowance of it whose amount after the transaction cannot be read is not measured.
+      const unread = await verdict(capped, {
+        ...client([allows("1")], 18, [], null),
+        getChainId: async () => requireChain("arc").id,
+      } as PublicClient);
+      // An approval of Permit2 makes standing Permit2 allowances of it spendable, which nothing in
+      // the transaction measures.
+      const throughPermit2 = await verdict(
+        capped,
+        onArc([approval(ARC_USDC, WALLET, PERMIT2, maxUint256)]),
+      );
+      rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+      const daily = guarded({ native: { perDay: "5" } });
+      (await daily.evm(onArc([allows("3")]), pay)).sent("0xaa");
+      const day = await verdict(daily, onArc([allows("3")]));
+
+      expect({ alone, withValue, within, unread, throughPermit2, day }).toEqual({
+        alone: expect.stringContaining(
+          "native.perTransaction is 1.5 USDC, and this transaction sends 2 USDC (2 USDC of it as allowances it approves)",
+        ) as unknown,
+        withValue: expect.stringContaining(
+          "native.perTransaction is 1.5 USDC, and this transaction sends 2 USDC (1 USDC of it as allowances it approves)",
+        ) as unknown,
+        within: "let through",
+        unread: expect.stringContaining(
+          `native is limited, and the allowance this transaction leaves ${SPENDER} of USDC, Arc's native coin, could not be read`,
+        ) as unknown,
+        throughPermit2: expect.stringContaining(
+          `this transaction approves Permit2 (${PERMIT2}) for USDC`,
+        ) as unknown,
+        day: expect.stringContaining(
+          "native.perDay is 5 USDC; 3 USDC went in the last 24 hours, and this transaction sends 3 USDC",
+        ) as unknown,
+      });
+    });
   });
 
   it("refuses an approval above the limit", async () => {

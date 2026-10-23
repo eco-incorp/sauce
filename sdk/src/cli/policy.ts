@@ -697,11 +697,12 @@ export async function measureEvm(
       ...(deploysPot === undefined ? {} : { deploysPot }),
       approvals: [] as Approval[],
     };
-    const nativeOf = (amount: bigint): Outflow => ({
+    const nativeOf = (amount: bigint, delegated = 0n): Outflow => ({
       token: "native",
       symbol: nativeSymbol(chain),
       decimals: 18,
       amount,
+      ...(delegated === 0n ? {} : { delegated }),
     });
     const result = results?.[index];
     if (result === undefined) {
@@ -854,9 +855,13 @@ export async function measureEvm(
     };
     const coin = erc20 === undefined || nativeOut === 0n ? undefined : getAddress(erc20.address);
     const toWei = erc20 === undefined ? 1n : 10n ** BigInt(18 - erc20.decimals);
+    // An allowance of that token another key keeps lets it take the native coin too: it counts
+    // against a native limit as well, in 18 decimals.
+    const allowedNative =
+      erc20 === undefined ? 0n : (delegated.get(getAddress(erc20.address)) ?? 0n) * toWei;
     measured.push({
       ...base,
-      native: nativeOf(nativeOut),
+      native: nativeOf(nativeOut + allowedNative, allowedNative),
       tokens: [
         ...(await Promise.all(
           [...tokens]
@@ -1590,6 +1595,33 @@ function spendOf(
   if (policy.native !== undefined) {
     if (measured.unmeasured.native !== undefined) {
       refuse("native", `native is limited, and ${measured.unmeasured.native}`);
+    }
+    // Where the native coin is also an ERC-20, an allowance of the token is one of the native coin:
+    // one that cannot be read, or an approval of Permit2 for it, gives no amount the limit can weigh.
+    const coin = nativeErc20(chain.id)?.address.toLowerCase();
+    if (coin !== undefined) {
+      const permit2 = permit2Of(chain);
+      const native = `${chain.name}'s native coin`;
+      for (const unread of (measured.unreadAllowances ?? []).filter(
+        (each) => each.token.toLowerCase() === coin,
+      )) {
+        refuse(
+          "native",
+          `native is limited, and the allowance this transaction leaves ${unread.spender} of ` +
+            `${unread.symbol ?? unread.token}, ${native}, could not be read once it has run, so ` +
+            "it cannot be held to the limit",
+        );
+      }
+      for (const approval of measured.approvals.filter(
+        (each) => each.token.toLowerCase() === coin && each.spender.toLowerCase() === permit2,
+      )) {
+        refuse(
+          "native",
+          `this transaction approves Permit2 (${approval.spender}) for ` +
+            `${approval.symbol ?? approval.token}, ${native}, which lets each standing Permit2 ` +
+            "allowance of it be taken with no further signature, and native limits it",
+        );
+      }
     }
     hold("native", policy.native, measured.native.amount, measured.native);
   }
