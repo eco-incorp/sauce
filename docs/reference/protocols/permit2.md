@@ -61,7 +61,7 @@ function main(
 
 ## Notes
 
-- Same address on all 7 chains (deterministic CREATE2 deployment)
+- Same address on all 9 chains (deterministic CREATE2 deployment)
 - Approve once: ERC-20 approve to Permit2, then use Permit2 to manage per-protocol allowances
 - amount is uint160 (not uint256) - max value is type(uint160).max
 - expiration is uint48 unix timestamp - approvals auto-expire for security
