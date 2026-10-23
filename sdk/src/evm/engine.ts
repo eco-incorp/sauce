@@ -14,9 +14,21 @@
 // there rather than leaving a consumer to read the artifact by hand.
 
 import {
+  bytesToHex,
+  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
+  getCreate2Address,
+  hashTypedData,
+  hexToBigInt,
+  isAddress,
+  isHex,
+  keccak256,
   parseAbi,
+  recoverAddress,
+  size,
+  slice,
+  zeroAddress,
   type Address,
   type Hex,
   type PublicClient,
@@ -24,6 +36,7 @@ import {
 
 import { v12PredictPot } from "../deployments/pot.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
+import { v12PotDerivation } from "../deployments/v12-addresses.js";
 
 /**
  * V12Pot — private Pots restrict `cook()` to their owner; Shared Pots allow any caller.
@@ -153,6 +166,437 @@ export const v12Pot = {
     return encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [engine, program] });
   },
 } as const;
+
+/**
+ * The EIP-712 domain a Pot's owner signs a cook under: `{ name: "Sauce Pot", version: "1", chainId,
+ * verifyingContract: the Pot }`. `chainId` and the Pot are the signature's: a Private Pot has one
+ * address on every chain, and the chain id is what keeps a signature to one of them.
+ */
+export const POT_SIGN_DOMAIN = { name: "Sauce Pot", version: "1" } as const;
+
+/** `Cook`'s EIP-712 type, field order and all: the Pot hashes exactly these, in this order. */
+export const COOK_TYPE =
+  "Cook(address engine,bytes program,uint256 value,uint256 maxExecutionFee,uint256 nonce,uint256 deadline,address submitter)";
+
+/** `keccak256(COOK_TYPE)`, the constant the Pot hashes with (`Pot.sol`'s `COOK_TYPEHASH`). */
+export const COOK_TYPEHASH: Hex =
+  "0xee063c16caa92a203b808bd65797df72ea8c821b890805ab457c5fdb28c7fc67";
+
+/** The ERC-7201 slot of `sauce.storage.CookNonces`: word `w` of the nonce bitmap is at
+ *  `keccak256(abi.encode(w, COOK_NONCES_LOCATION))` ({@link cookNonceSlot}). */
+export const COOK_NONCES_LOCATION: Hex =
+  "0x08184ababcb38dd115581f50f6ee2ae87aeba9473b07b25b94798bbfbf936b00";
+
+/** The `Cook` struct as a wallet's `signTypedData` takes it. */
+export const COOK_TYPES = {
+  Cook: [
+    { name: "engine", type: "address" },
+    { name: "program", type: "bytes" },
+    { name: "value", type: "uint256" },
+    { name: "maxExecutionFee", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+    { name: "submitter", type: "address" },
+  ],
+} as const;
+
+const UINT256_MAX = (1n << 256n) - 1n;
+
+/** The top of the curve order's lower half: `cookSigned` accepts no `s` above it. */
+const SECP256K1_HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0n;
+
+/** ERC-1271's `isValidSignature` answer: the selector, in a whole word, its other 28 bytes zero. */
+const ERC1271_MAGIC: Hex = `0x1626ba7e${"00".repeat(28)}`;
+
+const erc1271Abi = parseAbi([
+  "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
+]);
+
+/**
+ * One cook a Private Pot's owner signs, for anyone (or one named account) to submit with
+ * `cookSigned`. Every field is covered by the signature: the Pot runs the cook if and only if the
+ * owner signed this engine, this program, this value, this fee ceiling, this nonce, this deadline and
+ * this submitter, for this Pot on this chain.
+ */
+export interface SignedCookExecution {
+  /** The chain it runs on; the signature is good for no other. */
+  readonly chainId: number | bigint;
+  /** The Private Pot that runs it, and whose owner signs. */
+  readonly pot: Address;
+  /** The engine the Pot delegatecalls, with the Pot's whole authority: `v12EngineAddress()`. */
+  readonly engine: Address;
+  /** The bytecode with its entry arguments appended: exactly what the engine runs, all of it signed. */
+  readonly program: Hex;
+  /**
+   * What the submitter's `msg.value` must be, in wei; `0n` when left out. The Pot hashes the value
+   * it was sent, so any other amount is `BadSignature`. The Kitchen's fee comes out of the Pot's
+   * balance, which includes it: a Pot holding no native coin needs a `value` that covers the fee.
+   */
+  readonly value?: bigint;
+  /** The most of the Kitchen's fee the Pot pays for this cook. The Kitchen's owner may raise the fee
+   *  after the owner signs; a fee above this (or above the Pot's balance) is `FeeNotPaid`. */
+  readonly maxExecutionFee: bigint;
+  /** Runs once, in any order: bit `nonce & 255` of word `nonce >> 8` ({@link cookNonceWordBit}). */
+  readonly nonce: bigint;
+  /** The last second it runs, inclusive: a unix time, compared with `block.timestamp`. */
+  readonly deadline: bigint;
+  /** The only caller that may submit it; the zero address, or left out, for anyone. */
+  readonly submitter?: Address;
+}
+
+/** {@link SignedCookExecution} with the owner's signature: what {@link encodeCookSigned} submits. */
+export interface SignedCookCall extends SignedCookExecution {
+  /** The owner's 65-byte `r ‖ s ‖ v` (`s` in the lower half, `v` 27 or 28), or what an ERC-1271
+   *  owner's `isValidSignature` takes, of any length. */
+  readonly signature: Hex;
+}
+
+type ResolvedCook = Required<Omit<SignedCookExecution, "chainId">> & { readonly chainId: bigint };
+
+function uint256(name: string, value: bigint): bigint {
+  if (typeof value !== "bigint" || value < 0n || value > UINT256_MAX) {
+    throw new Error(`${name} is an unsigned 256-bit integer (a bigint), not ${String(value)}`);
+  }
+
+  return value;
+}
+
+function addressOf(name: string, value: string): Address {
+  if (!isAddress(value, { strict: false })) {
+    throw new Error(`${name} is an EVM address, not ${value}`);
+  }
+
+  return getAddress(value);
+}
+
+/** The cook with its defaults, every field checked: nothing is signed or built from a value the
+ *  Pot's ABI would encode differently, or refuse. */
+function resolved(execution: SignedCookExecution): ResolvedCook {
+  const chainId = BigInt(execution.chainId);
+  if (chainId < 1n || chainId > UINT256_MAX) {
+    throw new Error(`chainId is a positive integer, not ${String(execution.chainId)}`);
+  }
+  if (!isHex(execution.program) || size(execution.program) === 0) {
+    throw new Error(
+      "program is the compiled bytecode with its arguments appended, as 0x hex, and not empty",
+    );
+  }
+  const engine = addressOf("engine", execution.engine);
+  assertEngineRunsCompiler("evm", engine);
+
+  return {
+    chainId,
+    pot: addressOf("pot", execution.pot),
+    engine,
+    program: execution.program,
+    value: uint256("value", execution.value ?? 0n),
+    maxExecutionFee: uint256("maxExecutionFee", execution.maxExecutionFee),
+    nonce: uint256("nonce", execution.nonce),
+    deadline: uint256("deadline", execution.deadline),
+    submitter: addressOf("submitter", execution.submitter ?? zeroAddress),
+  };
+}
+
+/**
+ * The typed data the owner of `pot` signs to let anyone run `program` there: domain `Sauce Pot`
+ * (the Pot, the chain), message `Cook { engine, program, value, maxExecutionFee, nonce, deadline,
+ * submitter }`. It is viem's `signTypedData` input as it stands, and `eth_signTypedData_v4`'s through
+ * {@link signedCookTypedDataJson}:
+ *
+ * ```ts
+ * const signature = await wallet.signTypedData(signedCookTypedData(cook));
+ * const { to, data, value } = encodeCookSigned({ ...cook, signature }); // sent by anyone
+ * ```
+ *
+ * Throws for a field `cookSigned` could not carry (an address that is not one, a number outside 256
+ * bits, an empty program) and for an engine a release names for another compiler.
+ */
+export function signedCookTypedData(execution: SignedCookExecution) {
+  const cook = resolved(execution);
+
+  return {
+    domain: { ...POT_SIGN_DOMAIN, chainId: cook.chainId, verifyingContract: cook.pot },
+    types: COOK_TYPES,
+    primaryType: "Cook",
+    message: {
+      engine: cook.engine,
+      program: cook.program,
+      value: cook.value,
+      maxExecutionFee: cook.maxExecutionFee,
+      nonce: cook.nonce,
+      deadline: cook.deadline,
+      submitter: cook.submitter,
+    },
+  } as const;
+}
+
+/** The 32-byte digest the owner's signature is over: what the Pot hashes in `cookSigned`. */
+export function signedCookDigest(execution: SignedCookExecution): Hex {
+  return hashTypedData(signedCookTypedData(execution));
+}
+
+/** {@link signedCookTypedData} as JSON, in `eth_signTypedData_v4`'s spelling: the domain's type
+ *  written out, every number a decimal string. What a wallet that is not viem is handed. */
+export function signedCookTypedDataJson(execution: SignedCookExecution) {
+  const { domain, types, primaryType, message } = signedCookTypedData(execution);
+
+  return {
+    domain: {
+      name: domain.name,
+      version: domain.version,
+      chainId: domain.chainId.toString(),
+      verifyingContract: domain.verifyingContract,
+    },
+    types: {
+      EIP712Domain: [
+        { name: "name", type: "string" },
+        { name: "version", type: "string" },
+        { name: "chainId", type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      ...types,
+    },
+    primaryType,
+    message: {
+      engine: message.engine,
+      program: message.program,
+      value: message.value.toString(),
+      maxExecutionFee: message.maxExecutionFee.toString(),
+      nonce: message.nonce.toString(),
+      deadline: message.deadline.toString(),
+      submitter: message.submitter,
+    },
+  } as const;
+}
+
+/** The call a Pot's `cookSigned` submits, for any account to send. */
+export interface SignedCookTransaction {
+  /** The Pot. */
+  readonly to: Address;
+  readonly data: Hex;
+  /** Exactly the signed `value`: the Pot hashes what it is sent, so no other amount is accepted. The
+   *  submitter pays gas on top, and nothing else; the Kitchen's fee is the Pot's. */
+  readonly value: bigint;
+}
+
+/**
+ * `cookSigned(engine, program, maxExecutionFee, nonce, deadline, submitter, signature)` on the Pot,
+ * as `{ to: pot, data, value }`. Anyone sends it (only the named `submitter`, when there is one)
+ * with `value` as the signed value and nothing on top: the Pot pays the Kitchen's fee itself, out of
+ * its balance, which includes that value.
+ *
+ * The Pot answers raw: call it, and do not ABI-decode the result. Only a Private Pot minted under
+ * this release has the call ({@link checkSignedCookPot}); an older one sends it on to its Router,
+ * which reverts.
+ */
+export function encodeCookSigned(call: SignedCookCall): SignedCookTransaction {
+  const cook = resolved(call);
+  if (!isHex(call.signature)) {
+    throw new Error(`signature is 0x hex, not ${String(call.signature)}`);
+  }
+
+  return {
+    to: cook.pot,
+    data: encodeFunctionData({
+      abi: v12PotAbi,
+      functionName: "cookSigned",
+      args: [
+        cook.engine,
+        cook.program,
+        cook.maxExecutionFee,
+        cook.nonce,
+        cook.deadline,
+        cook.submitter,
+        call.signature,
+      ],
+    }),
+    value: cook.value,
+  };
+}
+
+/**
+ * `invalidateNonces(word, mask)` calldata: sets every bit of `mask` in nonce word `word`, so no
+ * signature for those nonces runs. Sent to the Pot by its owner, or by the Pot itself from a cook
+ * ({@link cookNonceMasks} turns nonces into words and masks). Bits are only ever set.
+ */
+export function encodeInvalidateNonces(word: bigint, mask: bigint): Hex {
+  return encodeFunctionData({
+    abi: v12PotAbi,
+    functionName: "invalidateNonces",
+    args: [uint256("word", word), uint256("mask", mask)],
+  });
+}
+
+/** A fresh nonce: 256 random bits, which no two signatures share but by chance. A nonce in a word the
+ *  Pot has not written costs its submitter about 17,000 gas more than one in a word it has. */
+export function randomCookNonce(): bigint {
+  return hexToBigInt(bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(32))));
+}
+
+/** Where a nonce lives: bit `bit` of nonce word `word`, which is `mask` in that word. */
+export interface CookNonceBit {
+  readonly word: bigint;
+  readonly bit: number;
+  readonly mask: bigint;
+}
+
+/** The word and bit a nonce is recorded in: word `nonce >> 8`, bit `nonce & 255`. */
+export function cookNonceWordBit(nonce: bigint): CookNonceBit {
+  uint256("nonce", nonce);
+  const bit = Number(nonce & 255n);
+
+  return { word: nonce >> 8n, bit, mask: 1n << BigInt(bit) };
+}
+
+/** The nonce at `bit` of `word`: the inverse of {@link cookNonceWordBit}. */
+export function cookNonceAt(word: bigint, bit: number): bigint {
+  if (!Number.isInteger(bit) || bit < 0 || bit > 255) {
+    throw new Error(`a nonce's bit is 0 to 255, not ${bit}`);
+  }
+  if (uint256("word", word) > UINT256_MAX >> 8n) {
+    throw new Error(`a nonce word is below 2^248, not ${word}`);
+  }
+
+  return (word << 8n) | BigInt(bit);
+}
+
+/** `nonces` as the `(word, mask)` pairs `invalidateNonces` takes: one per word, every bit named. */
+export function cookNonceMasks(
+  nonces: readonly bigint[],
+): readonly { readonly word: bigint; readonly mask: bigint }[] {
+  const byWord = new Map<bigint, bigint>();
+  for (const nonce of nonces) {
+    const { word, mask } = cookNonceWordBit(nonce);
+    byWord.set(word, (byWord.get(word) ?? 0n) | mask);
+  }
+
+  return [...byWord].map(([word, mask]) => ({ word, mask }));
+}
+
+/** The storage slot of nonce word `word` in a Pot, for `eth_getStorageAt`. */
+export function cookNonceSlot(word: bigint): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint256" }, { type: "bytes32" }],
+      [uint256("word", word), COOK_NONCES_LOCATION],
+    ),
+  );
+}
+
+/** Whether `nonce` is spent on `pot`: used by a signed cook, or cancelled. */
+export async function cookNonceUsed(
+  client: Pick<PublicClient, "getStorageAt">,
+  pot: Address,
+  nonce: bigint,
+): Promise<boolean> {
+  const { word, mask } = cookNonceWordBit(nonce);
+  const stored = await client.getStorageAt({ address: pot, slot: cookNonceSlot(word) });
+
+  return stored !== undefined && (hexToBigInt(stored) & mask) !== 0n;
+}
+
+/**
+ * Whether `call.signature` is `owner`'s over this cook, as the Pot reads it: a 65-byte `r ‖ s ‖ v`
+ * with `s` in the lower half of the curve order and `v` 27 or 28 that recovers `owner` (a compact
+ * 64-byte signature, or `v` 0 or 1, is refused on chain, and here). An owner with code — a contract
+ * wallet, or an EIP-7702 account — can sign through its ERC-1271 `isValidSignature` as well, which
+ * only a chain can answer: given a `client`, it is asked when the key does not match, and its answer
+ * must be the magic value in a whole word, as the Pot requires.
+ */
+export async function verifySignedCook(
+  call: SignedCookCall & { readonly owner: Address },
+  client?: Pick<PublicClient, "call" | "getCode">,
+): Promise<boolean> {
+  const digest = signedCookDigest(call);
+  const owner = addressOf("owner", call.owner);
+  if (!isHex(call.signature)) return false;
+  if (size(call.signature) === 65) {
+    const s = hexToBigInt(slice(call.signature, 32, 64));
+    const v = hexToBigInt(slice(call.signature, 64, 65));
+    if (s <= SECP256K1_HALF_ORDER && (v === 27n || v === 28n)) {
+      try {
+        const signer = await recoverAddress({ hash: digest, signature: call.signature });
+        if (getAddress(signer) === owner) return true;
+      } catch {
+        // A signature that recovers no key is not the owner's.
+      }
+    }
+  }
+  if (client === undefined || ((await client.getCode({ address: owner })) ?? "0x") === "0x") {
+    return false;
+  }
+  try {
+    const answer = await client.call({
+      to: owner,
+      data: encodeFunctionData({
+        abi: erc1271Abi,
+        functionName: "isValidSignature",
+        args: [digest, call.signature],
+      }),
+    });
+
+    return answer.data !== undefined && answer.data.toLowerCase() === ERC1271_MAGIC;
+  } catch {
+    return false;
+  }
+}
+
+/** What {@link checkSignedCookPot} found. */
+export type SignedCookPotCheck =
+  { readonly ok: true; readonly owner: Address } | { readonly ok: false; readonly reason: string };
+
+/**
+ * Whether `pot` answers `cookSigned`: a Private Pot minted under this release, fixed Router or not.
+ * `cookSigned` is in the Pot's creation code, so it moved the Pot init-code hash: a Pot is this
+ * release's when its address derives from its Kitchen and `gateSalt()` under the pinned hash, read,
+ * not assumed. An older Pot keeps its bytecode and has no `cookSigned` (a call to one goes to its
+ * Router, which reverts); its owner signs for a Pot minted under this release. A Shared Pot has no
+ * owner to sign, and refuses every signed cook.
+ */
+export async function checkSignedCookPot(
+  client: Pick<PublicClient, "readContract" | "getCode">,
+  pot: Address,
+): Promise<SignedCookPotCheck> {
+  if (((await client.getCode({ address: pot })) ?? "0x") === "0x") {
+    return { ok: false, reason: `${pot} has no code: no Pot is deployed there` };
+  }
+  let owner: Address;
+  let kitchen: Address;
+  let gateSalt: Hex;
+  try {
+    [owner, kitchen, gateSalt] = await Promise.all([
+      client.readContract({ address: pot, abi: v12PotAbi, functionName: "owner" }),
+      client.readContract({ address: pot, abi: v12PotAbi, functionName: "kitchen" }),
+      client.readContract({ address: pot, abi: v12PotAbi, functionName: "gateSalt" }),
+    ]);
+  } catch {
+    return {
+      ok: false,
+      reason: `${pot} does not answer owner(), kitchen() and gateSalt(): it is not a Pot`,
+    };
+  }
+  if (owner === zeroAddress) {
+    return {
+      ok: false,
+      reason: `${pot} is a Shared Pot: it has no owner to sign, and anyone may cook it directly`,
+    };
+  }
+  const derived = getCreate2Address({
+    from: kitchen,
+    salt: gateSalt,
+    bytecodeHash: v12PotDerivation().initCodeHash as Hex,
+  });
+  if (derived !== getAddress(pot)) {
+    return {
+      ok: false,
+      reason:
+        `${pot} was minted before signed cooks (its address does not derive under this release's ` +
+        "Pot init-code hash) and has no cookSigned: sign for a Pot minted under this release",
+    };
+  }
+
+  return { ok: true, owner: getAddress(owner) };
+}
 
 /** Ready-to-use V12Kitchen handle: the viem ABI plus calldata encoders. */
 export const v12Kitchen = {
