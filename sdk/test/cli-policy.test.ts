@@ -16,6 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ContractFunctionZeroDataError,
   encodeAbiParameters,
   encodeFunctionData,
   getAddress,
@@ -77,8 +78,14 @@ const approval = (token: Address, owner: Address, spender: Address, amount: bigi
 type Log = ReturnType<typeof transfer>;
 
 /** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. Its
- *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. */
-function client(logs: Log[] | null, decimals: number | null = 18): PublicClient {
+ *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. A contract with no
+ *  such function answers with no data, as viem reports it; a read of a contract in `unreadable`
+ *  fails at the endpoint instead, before any contract answers. */
+function client(
+  logs: Log[] | null,
+  decimals: number | null = 18,
+  unreadable: readonly Address[] = [],
+): PublicClient {
   return {
     getChainId: async () => BASE.id,
     simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: unknown[] }> }) => {
@@ -87,13 +94,14 @@ function client(logs: Log[] | null, decimals: number | null = 18): PublicClient 
       return [{ calls: blocks[0]!.calls.map(() => ({ status: "success", logs, data: "0x" })) }];
     },
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
+      if (unreadable.includes(getAddress(address))) throw new Error("fetch failed: 429");
       if (functionName === "decimals" && decimals !== null) return decimals;
       // A Pot answers for itself: its owner, its salt (the default) and its Kitchen.
       const owner = POT_OWNERS[getAddress(address)];
       if (owner !== undefined && functionName === "owner") return owner;
       if (owner !== undefined && functionName === "userSalt") return pad("0x00", { size: 32 });
       if (owner !== undefined && functionName === "kitchen") return getAddress(v12KitchenAddress());
-      throw new Error(`no ${functionName}`);
+      throw new ContractFunctionZeroDataError({ functionName });
     },
   } as unknown as PublicClient;
 }
@@ -307,6 +315,42 @@ describe("the guard", () => {
     expect((await refused(guard.evm(untraced, cook))).message).toMatch(
       /native is limited, and the endpoint does not trace native transfers/,
     );
+  });
+
+  it("refuses a cook on a Pot it cannot tell is the wallet's own, where a native or token limit needs it", async () => {
+    // The wallet's own Pot, whose owner(), userSalt() and kitchen() the endpoint fails to read: a
+    // cook on it spends the Pot's coin and USDC to another key.
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const verdict = (guard: SendGuard, logs: Log[]) =>
+      guard.evm(client(logs, 18, [POT]), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+    const native = await verdict(guarded({ native: { perTransaction: "0.01" } }), [
+      transfer(NATIVE, POT, RECIPIENT, parseUnits("0.02", 18)),
+    ]);
+    const usdc = await verdict(guarded({ tokens: { USDC: { perTransaction: "1.5" } } }), [
+      transfer(NATIVE, POT, RECIPIENT, 0n),
+      transfer(USDC, POT, RECIPIENT, parseUnits("2", 6)),
+    ]);
+    // Where no native or token limit is set, nothing it cannot measure is limited.
+    const open = await verdict(guarded({ chains: ["base"] }), [
+      transfer(USDC, POT, RECIPIENT, parseUnits("2", 6)),
+    ]);
+
+    expect({ native, usdc, open }).toEqual({
+      native: expect.stringContaining(
+        `native is limited, and could not tell whether ${POT}, which the transaction cooks on, is the wallet's own Pot`,
+      ) as unknown,
+      usdc: expect.stringContaining(
+        `tokens.USDC is limited, and could not tell whether ${POT}, which the transaction cooks on, is the wallet's own Pot`,
+      ) as unknown,
+      open: "let through",
+    });
   });
 
   it("counts what the wallet pays a contract that is not its own Pot, whatever its calldata says", async () => {

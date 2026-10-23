@@ -105,7 +105,7 @@ import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { evmPotRelease } from "./pots.js";
+import { authenticatePot } from "./pots.js";
 import {
   accountsNow,
   approvesOn,
@@ -550,33 +550,28 @@ export async function measureEvm(
   // The wallet's own Pots: one an earlier call of these deploys for it, or one the chain shows is,
   // its owner the wallet and its address its (owner, salt) under a Kitchen a release records. A
   // cook's calldata sent anywhere else makes no Pot of it: what the wallet pays there leaves it.
+  // Where the chain cannot be read to tell, the wallet's own Pot may be the one it spends from:
+  // what it moves cannot be measured, so a native or token limit refuses it.
   const deployed = new Set<string>();
-  const owned = new Map<string, Promise<boolean>>();
-  const ownPot = (to: Address): Promise<boolean> => {
-    if (deployed.has(to)) return Promise.resolve(true);
+  const owned = new Map<string, Promise<"own" | "not" | "unreadable">>();
+  const ownPot = (to: Address): Promise<"own" | "not" | "unreadable"> => {
+    if (deployed.has(to)) return Promise.resolve("own");
     const known = owned.get(to);
     if (known !== undefined) return known;
-    const read = <T>(functionName: "owner" | "userSalt" | "kitchen") =>
-      client.readContract({ address: to, abi: v12PotAbi, functionName }) as Promise<T>;
-    const found = Promise.all([
-      read<Address>("owner"),
-      read<Hex>("userSalt"),
-      read<Address>("kitchen"),
-    ])
-      .then(
-        ([owner, salt, kitchen]) =>
-          getAddress(owner) === getAddress(wallet) &&
-          evmPotRelease({ kitchen, owner, salt, pot: to }) !== undefined,
-      )
-      .catch(() => false);
+    const found = authenticatePot(client, wallet, to);
     owned.set(to, found);
 
     return found;
   };
   for (const [index, call] of calls.entries()) {
-    const cook =
-      COOKS.has(call.data.slice(0, 10).toLowerCase()) && (await ownPot(getAddress(call.to)))
-        ? getAddress(call.to)
+    const shown = COOKS.has(call.data.slice(0, 10).toLowerCase())
+      ? await ownPot(getAddress(call.to))
+      : "not";
+    const cook = shown === "own" ? getAddress(call.to) : undefined;
+    const doubt =
+      shown === "unreadable"
+        ? `could not tell whether ${getAddress(call.to)}, which the transaction cooks on, is the ` +
+          "wallet's own Pot: its owner, salt or Kitchen could not be read from the endpoint"
         : undefined;
     const ours = new Set<string>([getAddress(wallet), ...(cook === undefined ? [] : [cook])]);
     const deploysPot = ownPotDeployed(call, wallet);
@@ -601,7 +596,7 @@ export async function measureEvm(
         tokens: [],
         unmeasured: {
           tokens: "the endpoint did not run eth_simulateV1, which shows what a transaction moves",
-          ...(cook === undefined
+          ...(cook === undefined && doubt === undefined
             ? {}
             : {
                 native:
@@ -666,7 +661,9 @@ export async function measureEvm(
     const granted: typeof approvals = [];
     const delegated = new Map<string, bigint>();
     for (const each of kept.values()) {
-      if (each.amount === 0n || ours.has(each.spender) || (await ownPot(each.spender))) continue;
+      if (each.amount === 0n || ours.has(each.spender) || (await ownPot(each.spender)) === "own") {
+        continue;
+      }
       granted.push(each);
       if (each.spender.toLowerCase() === permit2) continue;
       tokens.set(each.token, (tokens.get(each.token) ?? 0n) + each.amount);
@@ -718,8 +715,8 @@ export async function measureEvm(
           spender: approval.spender,
         })),
       ),
-      unmeasured:
-        untraced && cook !== undefined
+      unmeasured: {
+        ...(untraced && cook !== undefined
           ? {
               native:
                 "the endpoint does not trace native transfers, so what the cook moves from the Pot is not known",
@@ -730,7 +727,10 @@ export async function measureEvm(
                     tokens: `the endpoint does not trace native transfers, and ${nativeSymbol(chain)} is ${chain.name}'s native coin`,
                   }),
             }
-          : {},
+          : {}),
+        // A Pot it cannot tell is the wallet's: what it moves out of it is not seen.
+        ...(doubt === undefined ? {} : { native: doubt, tokens: doubt }),
+      },
     });
   }
 

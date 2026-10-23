@@ -559,6 +559,18 @@ const hasCode = async (client: PublicClient, address: Address): Promise<boolean>
   return code !== undefined && code !== "0x";
 };
 
+/**
+ * Whether `error`, from reading a contract, is the contract's own answer (it reverted, or returned
+ * nothing: it has no such function, or no code there) and not a failure of the request itself.
+ */
+export const answered = (error: unknown): boolean =>
+  error instanceof BaseError &&
+  error.walk(
+    (cause) =>
+      cause instanceof ContractFunctionZeroDataError ||
+      cause instanceof ContractFunctionRevertedError,
+  ) !== null;
+
 /** The Pot at `pot` on `chain`, read off the Pot itself (its owner, salt and Kitchen) and told its
  *  release from its address. Refused when nothing is there, or no known release minted it. */
 export async function importEvmPot(
@@ -576,15 +588,9 @@ export async function importEvmPot(
       .catch((error: unknown) => {
         // A contract with no such function answers nothing or reverts; any other failure is the
         // endpoint's, and says so.
-        const answered =
-          error instanceof BaseError &&
-          error.walk(
-            (cause) =>
-              cause instanceof ContractFunctionZeroDataError ||
-              cause instanceof ContractFunctionRevertedError,
-          ) !== null;
+        const answer = answered(error);
         throw new Error(
-          answered
+          answer
             ? `${pot} on ${chain.slug} is not a Pot: it has no ${functionName}()`
             : `reading ${pot}'s ${functionName}() on ${chain.slug} failed: ` +
                 ((error as { shortMessage?: string }).shortMessage ?? "the request failed"),
@@ -612,6 +618,42 @@ export async function importEvmPot(
     pot,
     origin: "imported",
   });
+}
+
+/**
+ * Whether `pot` is `wallet`'s own Pot, as the chain shows it: its owner is the wallet, and its
+ * address is the CREATE2 of its owner and salt under a Kitchen a release records, which no other
+ * contract can sit at. `"not"` where the contract answers otherwise (it has no such getters, or
+ * another owner), `"unreadable"` where a read failed for any reason but the contract's own answer:
+ * the wallet's claim to it is then neither shown nor refuted.
+ */
+export async function authenticatePot(
+  client: PublicClient,
+  wallet: Address,
+  pot: Address,
+): Promise<"own" | "not" | "unreadable"> {
+  type Read<T> = { readonly value: T } | { readonly answer: "not" | "unreadable" };
+  const read = async <T>(functionName: "owner" | "userSalt" | "kitchen"): Promise<Read<T>> => {
+    try {
+      return {
+        value: (await client.readContract({ address: pot, abi: v12PotAbi, functionName })) as T,
+      };
+    } catch (error) {
+      return { answer: answered(error) ? "not" : "unreadable" };
+    }
+  };
+  // The owner first: a contract that is no Pot, or another owner's, ends it with one read.
+  const owner = await read<Address>("owner");
+  if ("answer" in owner) return owner.answer;
+  if (getAddress(owner.value) !== getAddress(wallet)) return "not";
+  const [salt, kitchen] = await Promise.all([read<Hex>("userSalt"), read<Address>("kitchen")]);
+  if ("answer" in salt) return salt.answer;
+  if ("answer" in kitchen) return kitchen.answer;
+
+  return evmPotRelease({ kitchen: kitchen.value, owner: owner.value, salt: salt.value, pot }) ===
+    undefined
+    ? "not"
+    : "own";
 }
 
 /** The Pots `owner` has at `salt` on `chain`, one per release and kind whose address has code. */
