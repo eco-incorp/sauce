@@ -23,7 +23,13 @@ import { CliError } from "./args.js";
 import { entryReturnType } from "../routes/entry.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
 import { assumeTokenBalance } from "./assume.js";
-import { balanceReader, connectAt, kitchenFee, potState } from "./chain.js";
+import {
+  balanceReader,
+  connectAt,
+  potState,
+  requireCookContracts,
+  requirePotDerivation,
+} from "./chain.js";
 import {
   type ChainAccess,
   type CliFiles,
@@ -248,6 +254,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   const cook = cookOf(input, files);
   // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
   const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);
+  const fee = await requireCookContracts(client, input.chain);
   const state = await potState(client, cook.pot);
   const target = input.target;
   if (!state.deployed && !("owner" in target)) {
@@ -256,6 +263,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
         "give its --owner (and --salt) instead, and the simulation deploys it first",
     );
   }
+  if (!state.deployed) await requirePotDerivation(client, input.chain);
   const owner = state.deployed ? state.owner! : (target as { readonly owner: Address }).owner;
   const deploy = state.deployed ? undefined : { salt: (target as { readonly salt: Hex }).salt };
   const kitchen = kitchenAddress();
@@ -263,9 +271,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, owner);
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
-  const value =
-    valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
-    (funding?.value ?? 0n);
+  const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
   const {
     assumed,
     overrides,

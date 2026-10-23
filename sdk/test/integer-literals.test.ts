@@ -76,6 +76,11 @@ const PROGRAMS: ReadonlyArray<readonly [string, string, ReadonlyArray<"evm" | "s
     "signed bit roundtrip",
     "function main(): Uint256 { return Uint256.fromBits(Int256.fromBits(~0$) / 2$); }",
   ],
+  ["a signed constant", "function main(): Int256 { const d: Int256 = 1$ - 2$; return d; }"],
+  [
+    "the smallest signed integer",
+    "function main(): Int256 { return -57896044618658097711785492504343953926634992332820282019728792003956564819968$; }",
+  ],
   ["a script", "let total: Uint256 = 0$;\ntotal = total + 5$;"],
   [
     "evm storage and value",

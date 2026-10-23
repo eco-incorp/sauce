@@ -539,7 +539,7 @@ const ARGS: FlagSpecs = {
   args: {
     type: "boolean",
     value: "<value>…",
-    help: "main's arguments in order (JSON for an array or tuple); -- before one like a flag",
+    help: "main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag",
   },
 };
 

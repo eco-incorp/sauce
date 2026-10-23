@@ -1,6 +1,6 @@
 ---
 name: sauce-typescript
-description: The TypeScript side of Sauce (@eco-incorp/sauce), for application code that builds the transactions itself. Compiling a .sauce.ts program for a chain exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, the protocol registry, JSON action programs, settlement verification, the Solana Kitchen client and token helpers, testing on a forked chain, browser compilation with ready(), which import or subpath to use, and the rule that the library embeds no RPC. Use when writing application or script code that compiles, encodes, verifies, tests or submits Sauce programs, or when the user asks which import or subpath to use.
+description: The TypeScript side of Sauce (@eco-incorp/sauce), for application code that builds the transactions itself. Compiling a .sauce.ts program for a chain exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and ABI-v1 arguments, the protocol registry, JSON action programs, settlement verification, the Solana Kitchen client and token helpers, testing on a forked chain, browser compilation with ready(), which import or subpath to use, and the rule that the library embeds no RPC. Use when writing application or script code that compiles, encodes, verifies, tests or submits Sauce programs, or when the user asks which import or subpath to use.
 ---
 
 # Sauce from TypeScript
@@ -14,14 +14,14 @@ simulate) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.
 
 ## When to use
 
-| Task                                                              | Here | Elsewhere      |
-| ----------------------------------------------------------------- | ---- | -------------- |
-| A service compiles a program and builds its cook                  | yes  |                |
-| The raw compiler, compact arguments, a custom resolver, a browser | yes  |                |
-| The registry, actions, verification or Solana from code           | yes  |                |
-| Tests that run programs on a forked EVM chain or Solana           | yes  |                |
-| Writing the program                                               |      | `sauce-script` |
-| Running it by hand                                                |      | `sauce-cli`    |
+| Task                                                             | Here | Elsewhere      |
+| ---------------------------------------------------------------- | ---- | -------------- |
+| A service compiles a program and builds its cook                 | yes  |                |
+| The raw compiler, ABI-v1 arguments, a custom resolver, a browser | yes  |                |
+| The registry, actions, verification or Solana from code          | yes  |                |
+| Tests that run programs on a forked EVM chain or Solana          | yes  |                |
+| Writing the program                                              |      | `sauce-script` |
+| Running it by hand                                               |      | `sauce-cli`    |
 
 ## Core model
 

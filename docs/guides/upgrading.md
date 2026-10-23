@@ -182,6 +182,25 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
 6. **Rebuild Solana cooks with the new SDK.** The engine program id and Kitchen instruction
    format changed. Do not replay serialized old cook/staged-cook instructions. High-level builders
    keep the same call shape; they supply the release's required account derivations.
+7. **Remove intent integrations.** Programs run on one chain; chain namespaces such as `Base`
+   and `Solana` are no longer callable, and `.route`, `.reward` and `.nest` are removed.
+   Remove `EcoRoutes`, intent/Portal/vault helpers and types, `programIntent`, the transfer
+   recipes, `/protocols/eco-routes`, SVM intent-route/Portal exports, and the
+   `…SettleFromIntent` extractors. `compileSauceProgram` no longer accepts `intents`.
+   Settlement codecs, `…FromCalls` extractors, the settle recipe and execution verification remain.
+   The [SDK removals](../changelog.md#sdk-removals) list names by import path.
+8. **Update renamed imports; there are no aliases.** Replace `SAUCE_INTENT_POT_SALT` with
+   `DEFAULT_POT_SALT` (the default zero bytes32 salt), and `destinationExecutionFee` with
+   `kitchenExecutionFee` (the Kitchen fee read for a cook).
+9. **Update CLI and MCP callers.** `sauce intent` and all its verbs, every `--intent-*` flag,
+   `--store` on `run`/`send`/`mcp`, and the `~/.sauce/intents` store are removed.
+   `inspect` drops `--args`/`--args-json` and intent/Portal reports; `compile --json` drops
+   `intentPots`. `verify` no longer accepts a Portal publish or returns `callIndex`/`target`.
+   MCP removes all ten `sauce_intent_*` tools, `sauce_open_intent`, `intent*` inputs,
+   `sauce_compile.rpcUrls`, `sauce_inspect.args` and Portal input to `sauce_verify`.
+   Use the [current command reference](../reference/cli.md) and
+   [MCP tool reference](mcp-tools.md) when updating automation. Run `sauce skills update` to
+   remove the retired `sauce-intents` skill; locally edited files are kept unless forced.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,

@@ -802,9 +802,9 @@ const mintProgramOn =
     });
 
 /**
- * main's `Address` arguments, by name, as keys, and its `Uint256` ones as integers: what an account
- * derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before the arguments are
- * given.
+ * main's `Address` arguments, by name, as keys, and its integers (`Uint256`, `Int256`) as integers:
+ * what an account derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before
+ * the arguments are given. A negative `Int256` is kept as it is: a seed refuses it by name.
  */
 export function svmKeyArguments(
   program: CompiledSauceProgram,
@@ -822,9 +822,9 @@ export function svmKeyArguments(
   }
   program.entryParams.forEach((param, index) => {
     const value = values[index];
-    if (param.type === "Uint256") {
+    if (param.type === "Uint256" || param.type === "Int256") {
       if (
-        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) ||
+        (typeof value === "string" && /^(0x[0-9a-fA-F]+|-?\d+)$/.test(value)) ||
         typeof value === "number" ||
         typeof value === "bigint"
       ) {

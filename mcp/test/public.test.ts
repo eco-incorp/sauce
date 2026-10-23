@@ -22,8 +22,7 @@ const PAY = [
 ].join("\n");
 const NOTE = /base was read through a built-in public endpoint, which can be slow or rate-limited/;
 
-/** Base, as a node would answer: no code at the Pot, a Kitchen fee of zero, a rehearsal that
- *  succeeds with no logs. */
+/** Codeless release addresses: the node would accept a call without executing a program. */
 function answer(method: string, params: unknown[]): unknown {
   switch (method) {
     case "eth_chainId":
@@ -98,9 +97,9 @@ describe("a server with no endpoint of its own", () => {
     assert.equal(chains.find((chain) => chain.slug === "ethereum")?.endpoint, "none");
   });
 
-  it("simulates with no rpcUrl, through the chain's public endpoint, and says so", async () => {
+  it("refuses a codeless cook through the public endpoint, and identifies that endpoint", async () => {
     asked.length = 0;
-    const simulated = ok(
+    const refusal = failed(
       await mcp.call("sauce_simulate", {
         source: PAY,
         chain: "base",
@@ -108,11 +107,10 @@ describe("a server with no endpoint of its own", () => {
         args: [RECIPIENT, "1000000"],
       }),
     );
-    assert.equal(simulated.ok, true);
-    assert.equal(simulated.path, "eth_simulateV1");
-    assert.ok((simulated.notes as string[]).some((note) => NOTE.test(note)));
+    assert.match(refusal, NOTE);
     assert.ok(asked.length > 0 && asked.every((each) => each.url === PUBLIC));
-    assert.ok(asked.some((each) => each.method === "eth_simulateV1"));
+    assert.ok(asked.some((each) => each.method === "eth_getCode"));
+    assert.ok(!asked.some((each) => each.method === "eth_simulateV1"));
   });
 
   it("uses the call's rpcUrl over the public endpoint", async () => {
