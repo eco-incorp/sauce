@@ -404,7 +404,7 @@ export async function fetchStabbleClmmConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
+/** The Stabble CLMM venue: a concentrated-liquidity AMM forked from Raydium CLMM. */
 export const stabbleClmm = {
   slug: SLUG,
   programId: STABBLE_CLMM_PROGRAM_ID,

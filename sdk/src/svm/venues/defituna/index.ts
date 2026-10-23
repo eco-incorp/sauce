@@ -378,7 +378,7 @@ export async function fetchDefiTunaPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like orca-whirlpool/raydium-clmm/byreal). */
+/** The DefiTuna Fusion venue: a concentrated-liquidity AMM derived from Orca Whirlpool. */
 export const defituna = {
   slug: SLUG,
   programId: DEFITUNA_PROGRAM_ID,

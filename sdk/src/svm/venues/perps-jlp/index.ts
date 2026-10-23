@@ -523,7 +523,7 @@ export async function fetchPerpsJlpConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — not in the v1 registry; see quantum/solfi-v2). */
+/** The Jupiter Perpetuals venue: swaps between the JLP pool's custodies at the oracle price. */
 export const perpsJlp = {
   slug: SLUG,
   programId: PERPS_JLP_PROGRAM_ID,

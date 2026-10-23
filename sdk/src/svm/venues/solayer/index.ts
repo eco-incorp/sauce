@@ -249,7 +249,7 @@ export async function fetchSolayerPoolConfig(
   return { venue: SLUG, pool, direction: "delegate", authority, receiptMint, lstMint, vault, name };
 }
 
-/** Family facade for the recipe orchestrator. */
+/** The Solayer venue: delegates sSOL 1:1 into an AVS receipt token, and back. */
 export const solayer = {
   slug: SLUG,
   programId: SOLAYER_PROGRAM_ID,

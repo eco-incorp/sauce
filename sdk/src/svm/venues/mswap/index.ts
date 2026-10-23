@@ -424,7 +424,7 @@ export async function fetchMSwapPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator. */
+/** The M Swap venue: M0's router that unwraps one M extension token and wraps another. */
 export const mswap = {
   slug: SLUG,
   programId: MSWAP_PROGRAM_ID,

@@ -288,7 +288,7 @@ export async function fetchQuantumConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — not in the v1 registry). */
+/** The Quantum venue: a market maker that posts priced levels, each with an expiry slot. */
 export const quantum = {
   slug: SLUG,
   programId: QUANTUM_PROGRAM_ID,

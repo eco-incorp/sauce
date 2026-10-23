@@ -505,7 +505,7 @@ export async function fetchInvariantPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like orca-whirlpool/raydium-clmm). */
+/** The Invariant venue: a Uniswap V3-style concentrated-liquidity AMM. */
 export const invariant = {
   slug: SLUG,
   programId: INVARIANT_PROGRAM_ID,

@@ -298,7 +298,7 @@ export async function fetchGammaPoolConfig(
   return cfg;
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like raydium-amm-v4/raydium-cp-swap). */
+/** The GooseFX GAMMA venue: a constant-product AMM on raydium-cp-swap's layout, with dynamic fees. */
 export const gamma = {
   slug: SLUG,
   programId: GAMMA_PROGRAM_ID,

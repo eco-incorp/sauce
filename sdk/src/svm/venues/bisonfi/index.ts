@@ -252,7 +252,7 @@ function quoteAccounts(base: PoolConfig): VenueAccount[] {
   ];
 }
 
-/** Family facade for the consuming app's orchestrator. */
+/** The BisonFi venue: a closed-source AMM priced by a keeper-pushed oracle. */
 export const bisonfi = {
   slug: SLUG,
   kind: "constant-product" as const,
