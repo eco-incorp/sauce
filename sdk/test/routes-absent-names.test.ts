@@ -331,10 +331,24 @@ describe("what a chain can lack", () => {
     expect(
       hex("solana", "function main(to: Account): Uint256 { if (WETH) { Token(WETH).transfer(to, 1); } return 0; }"),
     ).toBe(hex("solana", "function main(to: Account): Uint256 { return 0; }"));
-    // Anywhere else it is refused, as on every holder and as on an EVM chain.
-    expect(refusal("solana", "function main(): Uint256 { return pot.WETH; }")).toMatch(
-      /`WETH` is not a token on solana\. `<holder>\.<TOKEN>` reads the holder's balance/,
-    );
+    // Anywhere else it is refused before anything compiles, at the read, as on an EVM chain: no
+    // stand-in for the Pot reaches the compiler.
+    for (const [chain, symbol] of [
+      ["solana", "WETH"],
+      ["base", "USDT"],
+    ] as const) {
+      for (const holder of ["pot", "ctx.self()"]) {
+        const source = `function main(): Uint256 { return ${holder}.${symbol}; }`;
+        expect(refusal(chain, source)).toMatch(
+          new RegExp(
+            `\`${symbol}\` is not a token on ${chain}\\. [\\s\\S]*--> main\\.js:1:${source.indexOf(`.${symbol}`) + 2}`,
+          ),
+        );
+        expect(refusal(chain, `function main(): Uint256 { if (${holder}.${symbol} > 0) { return 1; } return 0; }`)).toMatch(
+          new RegExp(`\`${symbol}\` is not a token on ${chain}\\.`),
+        );
+      }
+    }
     expect(refusal("solana", "function main(to: Account): Uint256 { Token(WETH).transfer(to, 1); return 0; }")).toMatch(
       /`WETH` is not a token on solana\.[\s\S]*--> main\.js:1:45/,
     );

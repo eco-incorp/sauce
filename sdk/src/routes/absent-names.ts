@@ -45,7 +45,7 @@ import {
 import { pascalOfSlug } from "./builder.js";
 import { parseSauce } from "./parse.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { BALANCE_MEMBER } from "./pot-sugar.js";
+import { BALANCE_MEMBER, POT_NAME } from "./pot-sugar.js";
 import { SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
 import { locatedError, nearMatches } from "./unknown-global.js";
 
@@ -286,6 +286,32 @@ export function checkNames(
     if (shadowed(at, key, node.start) || defined.has(key)) return undefined;
     const on = chainOfKey(key);
     return on !== undefined && chain.kind === "svm" && on.kind === "svm" ? undefined : on;
+  };
+
+  /** Whether `node` is the Pot, `pot` or `ctx.self()`, where the program does not declare either. */
+  const isThePot = (node: AstNode, at: Scope | undefined): boolean => {
+    const target = unwrap(node);
+    if (target.type === "Identifier") {
+      return (
+        nameOf(target) === POT_NAME &&
+        !shadowed(at, POT_NAME, target.start) &&
+        !defined.has(POT_NAME)
+      );
+    }
+    if (target.type !== "CallExpression" || prop<AstNode[]>(target, "arguments").length > 0) {
+      return false;
+    }
+    const callee = unwrap(prop(target, "callee"));
+    if (callee.type !== "MemberExpression" || prop<boolean>(callee, "computed")) return false;
+    const object = unwrap(prop(callee, "object"));
+    const method = prop<AstNode>(callee, "property");
+    return (
+      object.type === "Identifier" &&
+      nameOf(object) === "ctx" &&
+      !shadowed(at, "ctx", object.start) &&
+      method.type === "Identifier" &&
+      nameOf(method) === "self"
+    );
   };
 
   /** The member `<namespace>.<member>` of `on`'s namespace, as `node` reads it with `role`. */
@@ -880,6 +906,18 @@ export function checkNames(
             !prop<boolean>(node, "computed") && property.type === "Identifier"
               ? nameOf(property)
               : "[…]";
+          // The Pot's balance of a token the chain lacks (`pot.WETH`, `ctx.self().WETH`) is a use of
+          // the token, refused where a test of it does not rule the read out. The Pot is never a
+          // record, so no field of that name can be meant; another holder's may be one, which the
+          // compile reads or refuses.
+          if (
+            names.absentTokens.has(read) &&
+            !defined.has(read) &&
+            !shadowed(at, read, node.start) &&
+            isThePot(prop(node, "object"), at)
+          ) {
+            use({ kind: "token", node: property, symbol: read, present: false }, "value", "value");
+          }
           visit(prop(node, "object"), mode, `.${read}`, at);
           if (prop<boolean>(node, "computed")) visit(prop(node, "property"), "value", "value", at);
         }
