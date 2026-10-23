@@ -110,22 +110,31 @@ could loosen it.
   Pot counts as a transaction to that Pot, so a policy that lets the wallet cook on its Pot lets a
   command create the Pot first.
 - `native` counts the chain's coin leaving the wallet or the Pot the transaction cooks on. On
-  Solana the fee and any rent are included. On Arc, whose native coin is also the `USDC` token (one
-  balance), what leaves as either counts against `native` and the `USDC` limit both.
+  Solana that is every account the wallet controls: the wallet and the Pot, their token accounts
+  (wrapped SOL among them), and durable nonce and stake accounts whose authority is the wallet,
+  netted, so wrapping SOL into the wallet's own account and unwrapping it count only the fee. Rent
+  paid into an account the wallet does not control (a code buffer, a lookup table) counts, as does
+  the fee. A wallet the transaction gives to another program counts all it holds. On Arc, whose
+  native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
+  and the `USDC` limit both.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
   leaves the wallet or its Pot. A token the policy does not name is not limited.
-- An approval above what a token's limit leaves room for is refused. On an EVM chain that is an
-  ERC-20 approval, an approval of Permit2 aside, which moves nothing without a later signature. On
-  Solana it is a delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token
-  account of the wallet or of the Pot the transaction cooks on, counted at the delegate's whole
-  allowance; a revoke, or a delegate spending what it was given, is none.
+- On an EVM chain, an ERC-20 approval above what a token's limit leaves room for is refused, an
+  approval of Permit2 aside, which moves nothing without a later signature. It is checked, not
+  counted: it does not go into the day's total.
+- On Solana a delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of
+  the wallet or the Pot counts as sent, at the delegate's whole allowance, per transaction and in
+  the day's total: the delegate needs no later signature. A revoke, a delegate spending what it was
+  given, and a delegate that is the wallet or the Pot are none. Wrapped SOL a delegate may move
+  counts against `native` too.
 - On Solana a token account of the wallet or the Pot handed to another owner is a send of all it
-  holds, and a transfer out of it in the same transaction counts too. A token account whose close
-  authority goes to another key is refused where its token is limited; for wrapped SOL its lamports
-  count against `native`, since closing it pays them out. Where a limited token's decimals cannot be
-  read, the transaction is refused.
-- A Token-2022 mint's permanent delegate moves tokens with no approval from the wallet: no policy
-  limits it.
+  holds, and a transfer out of it in the same transaction counts too; so does an account closed and
+  made again at its address for another token. A token account whose close authority goes to another
+  key is refused where its token is limited, and a Token-2022 mint whose permanent delegate goes from
+  the wallet to another key is refused where that mint is limited. Where a limited token's decimals
+  cannot be read, a transaction moving it is refused; other limits are not affected.
+- A Token-2022 mint's permanent delegate the wallet never held moves tokens with no approval from
+  the wallet: no policy limits it.
 - `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside the
   wallet.
 
@@ -136,9 +145,10 @@ A field the policy does not know is an error, so a typo never silently lifts a l
 What a transaction moves is measured, not read from its calldata. An EVM transaction is simulated
 with `eth_simulateV1` (a node method that runs it and returns its logs), and its token and native
 transfers out of the wallet and its Pot are counted. A Solana transaction is simulated with the
-accounts it writes reported. A limit that cannot be measured on the endpoint (one without
-`eth_simulateV1`, for one) refuses the send. Every wallet send also holds to the
-[supported chains](cli.md#supported-and-preview-chains).
+accounts it writes reported. Every simulation is unsigned: the wallet signs only a transaction its
+policy has let go, so an endpoint never holds one it could send itself. A limit that cannot be
+measured on the endpoint (one without `eth_simulateV1`, for one) refuses the send. Every wallet send
+also holds to the [supported chains](cli.md#supported-and-preview-chains).
 
 ## Passwords without a prompt
 

@@ -223,8 +223,9 @@ balance change (SPL Token and Token-2022, in whole units by its mint's decimals,
 records by its symbol) and each account's lamports are listed, named by their `--account` names, as
 the owner, the Pot and the Kitchen's fee config; the owner's lamports include the transaction's fee.
 A token account's change is its owner's before the transaction; one the transaction hands to
-another owner says so, and names that owner. `--json` lists them as `tokenChanges` (`owner`, and
-`ownerAfter` for an account handed over) and `lamportChanges`.
+another owner says so, and names that owner, and one it closes and makes again at its address for
+another token shows as two changes, the old token emptied and the new one filled. `--json` lists
+them as `tokenChanges` (`owner`, and `ownerAfter` for an account handed over) and `lamportChanges`.
 
 #### In a local copy
 

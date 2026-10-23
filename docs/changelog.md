@@ -116,13 +116,20 @@ Pot addresses, accounts loaded through lookup tables and cooks a program the tra
 makes, so SOL and token limits cannot miss those outflows. A transaction whose lookup tables or
 calls to the Kitchen the endpoint does not report readably is refused where a limit applies.
 On Solana a policy also holds what a transaction gives another key over a token account of the
-wallet or the Pot it cooks on: a delegate approval (SPL Token `Approve` or `ApproveChecked`) above
-what the token's limit leaves room for is refused, as an ERC-20 approval is; an account handed to
-another owner is a send of all it holds, a transfer out of it in the same transaction included; and
-a close authority given to another key is refused where the token is limited, and for wrapped SOL
-counts its lamports against `native`. `sauce simulate` and `sauce run` on Solana count a token
-account's change for its owner before the transaction, and name the new owner of one handed over
-(`ownerAfter` in `tokenChanges`). See [wallets](guides/cli-wallets.md).
+wallet or the Pot it cooks on. A delegate approval (SPL Token `Approve` or `ApproveChecked`) to
+another key counts as sent, at the delegate's allowance, per transaction and in the day's total. An
+account handed to another owner is a send of all it holds, a transfer out of it in the same
+transaction included, and so is one closed and made again at its address for another token. A
+close authority given to another key, or a Token-2022 mint's permanent delegate handed from the
+wallet to another key, is refused where that token is limited. `native` counts every account the
+wallet controls, net: its token accounts (wrapped SOL among them) and the durable nonce and stake
+accounts it is the authority of, and all a wallet holds when the transaction gives it to another
+program. A mint whose decimals cannot be read refuses only the limits that name it. Every
+simulation is unsigned, and the wallet signs only a transaction its policy has let go.
+`sauce simulate` and `sauce run` on Solana count a token account's change for its owner before the
+transaction, and name the new owner of one handed over (`ownerAfter` in `tokenChanges`). The SDK
+adds `prepareExecuteTransaction`, which compiles a transaction now and signs it when asked. See
+[wallets](guides/cli-wallets.md).
 
 Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
 deployments instead of reporting success on an address with no code. Offline unsigned builders
