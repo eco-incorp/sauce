@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Dynamic distribution AMM with directional liquidity positioning. Allows LPs to follow price movements automatically with customizable bin strategies. Uses pool addresses directly (no path routing).
 
@@ -19,42 +19,9 @@ Dynamic distribution AMM with directional liquidity positioning. Allows LPs to f
 | Namespace | `Maverick` on ethereum, base, arbitrum |
 | Chains | ethereum, base, arbitrum |
 
-## Key Operations
+## What it offers
 
 - **swap**: Exact input single swap via V2 Router, specifying pool address and direction
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { MaverickV2RouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  pool: Address,
-  tokenAIn: bool,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256 {
-  const router = IRouter.at(routerAddress);
-  return router.exactInputSingle(recipient, pool, tokenAIn, amountIn, amountOutMin);
-}
-```
-
-- `routerAddress`: Maverick V2 Router address for the target chain
-- `pool`: The specific pool contract address (must be obtained from factory or known in advance)
-- `tokenAIn`: `true` to swap tokenA for tokenB, `false` to swap tokenB for tokenA
-- `amountIn`: Exact input amount (in wei)
-- `amountOutMin`: Minimum output for slippage protection
-- `recipient`: Address to receive output tokens
-- Note: parameter order is `(recipient, pool, tokenAIn, amountIn, amountOutMin)` - recipient comes FIRST
 
 ## Notes
 
@@ -91,6 +58,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `MaverickV2FactoryABI`
 
 `import MaverickV2FactoryABI from "./protocols/maverick/MaverickV2FactoryABI.json";` Speaks for: v2Factory.
@@ -104,8 +76,8 @@ function main() {
 - `getState() view returns ((uint128 reserveA, uint128 reserveB, int64 lastTwaD8, int64 lastLogPriceD8, uint40 lastTimestamp, int32 activeTick, bool isLocked, uint32 binCounter, uint8 protocolFeeRatioD3))`
 - `fee(bool tokenAIn) view returns (uint256)`
 - `tickSpacing() view returns (uint256)`
-- `tokenA() view returns (address)`
-- `tokenB() view returns (address)`
+- `tokenA() view returns (address)`: the address is a token
+- `tokenB() view returns (address)`: the address is a token
 
 ### `MaverickV2RouterABI`
 
@@ -113,3 +85,9 @@ function main() {
 
 - `exactInputSingle(address recipient, address pool, bool tokenAIn, uint256 amountIn, uint256 amountOutMinimum) payable returns (uint256 amountOut)`
 - `exactOutputSingle(address recipient, address pool, bool tokenAIn, uint256 amountOut, uint256 amountInMaximum) payable returns (uint256 amountIn, uint256 amountOut)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

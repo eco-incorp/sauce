@@ -54,47 +54,10 @@ function main(
 }
 ```
 
-## Key Operations
+## What it offers
 
 - **approve**: Set token allowance for a spender via Permit2
 - **transferFrom**: Transfer tokens using a Permit2 allowance
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Approve token via Permit2
-import { Permit2ABI as IPermit2 } from "./abis";
-function main(
-  permit2Address: Address,
-  token: Address,
-  spender: Address,
-  amount: Uint256,
-  expiration: Uint256,
-): Uint256 {
-  const permit2 = IPermit2.at(permit2Address);
-  permit2.approve(token, spender, amount, expiration);
-  return 1;
-}
-
-// Transfer tokens using Permit2 allowance
-import { Permit2ABI as IPermit2 } from "./abis";
-function main(
-  permit2Address: Address,
-  from: Address,
-  to: Address,
-  amount: Uint256,
-  token: Address,
-): Uint256 {
-  const permit2 = IPermit2.at(permit2Address);
-  permit2.transferFrom(from, to, amount, token);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -141,3 +104,9 @@ function main() {
 - `permitTransferFrom(((address token, uint256 amount) permitted, uint256 nonce, uint256 deadline) permit, (address to, uint256 requestedAmount) transferDetails, address owner, bytes signature)`
 - `nonceBitmap(address owner, uint256 wordPosition) view returns (uint256)`
 - `lockdown((address token, address spender)[] approvals)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

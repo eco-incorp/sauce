@@ -1,4 +1,4 @@
-# What is actually registered
+# Coverage
 
 **Reference** · [API reference](README.md) · [Chains](../reference/chains.md) · [Protocols](../reference/protocols.md) · [Tokens](../reference/tokens.md)
 
@@ -6,10 +6,12 @@
 > each one is deployed. They answer different questions. This page says which list to ask which
 > question.
 
-The SDK carries several registries, and they answer different questions. "Is this protocol in the
-catalog?" is not "can I call it by name in a program?", and neither is "is it deployed on my chain?".
-Each of the three can be true without the others. The [reference](../reference/chains.md) lists
-what each holds, generated from the registries themselves; this page is how to tell them apart.
+This page is for a developer who looks a name up from TypeScript and needs to know which list to
+ask. [Names and registries](../concepts/names-and-registries.md) explains how a name resolves; this
+page lists the registries and the call that inspects each.
+
+"Is this protocol in the catalog?", "can I call it by name in a program?" and "is it deployed on my
+chain?" are three questions, and each answer can be yes while the others are no.
 
 | Registry                         | What it holds                                                                     | Inspect it                                                        |
 | -------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -25,16 +27,14 @@ what each holds, generated from the registries themselves; this page is how to t
 contracts on every chain; [Tokens](../reference/tokens.md) every chain's symbols and stocks; and
 [Chains](../reference/chains.md) every canonical chain, with its metadata where it has a record.
 
-Every catalog protocol is a namespace, in a program and in TypeScript: the descriptor registry is
+Every catalog protocol is a namespace, in a program and in TypeScript. The descriptor registry is
 generated from the same binding of addresses to ABIs that the registry's ABI evidence is checked
-against, so a contract is exposed exactly as it is evidenced. `contracts.listDescriptors()` lists
-them and `contracts.listContracts(slug)` one protocol's.
+against, so a contract is exposed exactly as it is evidenced.
 
 ## Protocol namespaces
 
-A namespace is its protocol's slug in PascalCase, and every one has a contract per registered
-deployment role, plus its interfaces. [Names](../guides/protocols-and-tokens.md#names) has the
-naming rules, and the [contracts reference](contracts.md) both surfaces.
+Every namespace has a contract per registered deployment role, plus its interfaces. The
+[contracts reference](contracts.md) has the naming rules and both surfaces.
 
 | Contract kind     | What it is                                                                    |
 | ----------------- | ----------------------------------------------------------------------------- |
@@ -49,8 +49,9 @@ construction, listing the chains that have it.
 Every registry ABI declares its contract's deployed types, so its selectors are the deployed ones,
 and is a subset of the contract's complete API. A `coverage.caveats` entry records a deployment the
 evidence shows differs from its ABI — a bridged token without the L1 token's functions, a function
-whose selector is checked but whose source is not verified. `compile.accessors.allowWidenedSelectors`
-is still accepted, and no shipped descriptor needs it.
+whose selector is checked but whose source is not verified. The compile option
+`accessors.allowWidenedSelectors` lets a program use a contract whose ABI's selectors do not match
+its deployment; no shipped descriptor needs it.
 
 ## Tokens
 
@@ -58,7 +59,7 @@ A missing symbol means the registry has no verified row under that name. Token v
 different symbols and addresses: Tether's migrated USDT is `USDT0` wherever Tether's own USDT0 list
 names its token (Arbitrum and Polygon among them), and those chains register no `USDT`, since the
 contract's `symbol()` answers `USD₮0` or `USDT0`. Optimism has both, as two contracts: the bridged
-`USDT` and Tether's `USDT0`. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens` can
+`USDT` and Tether's `USDT0`. `SauceCompileOptions.tokens` can
 override or add a chain-local mapping. Amounts are integer token units; the compiler does not
 apply decimal scaling.
 
@@ -84,10 +85,27 @@ scale, rounding down as `balanceOf` does.
 
 The SDK refuses what Arc cannot do before anything is signed: the actions `wrapETH` and `unwrapETH`,
 the native ETH stakes and a `nativeBalance` spent as a token amount, when a program's `chainId` is
-5042; the deposit builder's `weth` templates with Arc's `USDC` or a registry token as the target; and
-an intent reward that offers both native value and `USDC`. An intent to Arc uses the same Portal,
-Executor and derived Pot as every other chain; see
-[One Portal, one Pot](../guides/intents.md#one-portal-one-pot).
+5042; and the deposit builder's `weth` templates with Arc's `USDC` or a registry token as the
+target.
+
+## Solana venues
+
+On Solana, a venue is a program, not a per-chain contract. `Solana.<Venue>` and the root's
+`svmVenues` (`svmVenues.venue(slug)`, `svmVenues.venues()`) cover the registered venues only, which
+`listVenues()` from `@eco-incorp/sauce/svm` returns:
+
+```ts
+import { Solana } from "@eco-incorp/sauce";
+import { listVenues } from "@eco-incorp/sauce/svm";
+
+listVenues(); // "raydium-cp-swap", "raydium-amm-v4", "pumpswap", …
+Solana.RaydiumCpSwap.programId; // the venue's mainnet program id
+```
+
+The `/svm` subpath exports more venue adapters than are registered, each by its own name. An adapter
+that is not registered has no `Solana.<Venue>` accessor; import it from `/svm` by name. There is no
+pool address book on Solana: a pool's address is always your input. The
+[Solana guide](../guides/solana.md#venues-by-namespace) shows the accessors in a swap.
 
 ## Host discovery and chain coverage
 
@@ -112,11 +130,18 @@ Use `requireChain` for route identities. `getChain` is a separate metadata looku
 native-currency and explorer details, and it covers fewer chains: a chain's
 [page](../reference/chains.md) says "not recorded" for a native coin where it has no record.
 
-The SDK ships no RPC endpoints; pass your own. No chain record, Solana cluster or default carries a
-URL, and nothing reads one from the environment. Whatever reads a chain takes its connection from
-you: a client you construct for the EVM reads, and `rpcUrl` for `createSauceSvmClient`, which throws
-naming that option when it is missing.
+No import of the package carries an RPC endpoint; pass your own. No chain record, Solana cluster or
+default carries a URL, and nothing reads one from the environment. Whatever reads a chain takes its
+connection from you: a client you construct for the EVM reads, and `rpcUrl` for
+`createSauceSvmClient`, which throws naming that option when it is missing. The `sauce` command is
+the one exception: it falls back to public endpoints of its own, which no import can reach.
 
-Three questions, three answers: whether a chain is canonical, whether a protocol is available on it,
-and whether a Sauce engine is deployed there. The deployment helpers report recorded addresses — what
-your execution path needs is code that is live, which is a read you make.
+Whether a Sauce engine is deployed on a chain is a fourth question. The deployment helpers in
+`@eco-incorp/sauce/deployments` report recorded addresses, which
+[Deployments](../reference/deployments.md) lists. A recorded address is not live code: read the
+chain to confirm the code is there before you rely on it.
+
+## Next
+
+[Contracts and tokens](contracts.md) lists the shape of every name these registries give. For the
+generated lists themselves, start at [Chains](../reference/chains.md).

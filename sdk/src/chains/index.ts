@@ -1,4 +1,5 @@
 import type { Chain, NativeErc20 } from "../core/types.js";
+import type { CanonicalChain } from "./canonical.js";
 
 export type { NativeErc20 } from "../core/types.js";
 
@@ -263,11 +264,36 @@ export const chains: Record<number, Chain> = {
     },
     blockExplorerUrls: ["https://explorer.arc.io"],
     testnet: false,
+    // "Minimum base fee | 20 Gwei | Floor enforced by the protocol", and "Set maxFeePerGas to at
+    // least 20 Gwei" (docs.arc.io/arc/references/gas-and-fees). Measured 2026-10-22: the base fee of
+    // all 1025 blocks to 27326543 was 20 gwei, and an eth_call with maxFeePerGas 19 gwei is refused
+    // "max fee per gas less than block base fee".
+    minBaseFeePerGas: 20_000_000_000n,
   },
 };
 
 export function getChain(chainId: number): Chain | undefined {
   return chains[chainId];
+}
+
+/** The native coin of each canonical chain `chains` does not carry, by slug. */
+const NATIVE_SYMBOLS: Readonly<Record<string, string>> = {
+  unichain: "ETH",
+  monad: "MON",
+  sonic: "S",
+  ronin: "RON",
+  plasma: "XPL",
+  ink: "ETH",
+  solana: "SOL",
+};
+
+/**
+ * The symbol of `chain`'s native coin — ETH, SOL, AVAX, … — as `chains` records it, or for a
+ * canonical chain it does not carry, as the table above does. A program reads a holder's balance of
+ * it as `<holder>.<symbol>` (`self.ETH`).
+ */
+export function nativeCoinSymbol(chain: CanonicalChain): string | undefined {
+  return chains[chain.id]?.nativeCurrency.symbol ?? NATIVE_SYMBOLS[chain.slug];
 }
 
 export function getAllChainIds(): number[] {

@@ -2,9 +2,9 @@
  * The generated half of the SauceScript declarations an editor loads for a program file
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
- * - every chain as the function that opens an intent there, with its namespaces
- *   (`Base(() => { … })`, `Base.UniswapV3.Factory`), and Solana with the accounts a program for it
- *   writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every chain as a namespace of its contracts (`Base.UniswapV3.Factory`), and Solana with the
+ *   accounts a program for it writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every token symbol and native coin as a holder's balance (`self.USDC`, `pot.ETH`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
@@ -23,6 +23,7 @@
 import IERC20 from "../artifacts/IERC20.json" with { type: "json" };
 import ISauceRouter from "../artifacts/ISauceRouter.json" with { type: "json" };
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
+import { nativeCoinSymbol } from "../chains/index.js";
 import { PROTOCOL_ABIS, STD_SOURCES } from "../embedded/sources.generated.js";
 import type { AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
@@ -61,6 +62,7 @@ function valueType(parameter: AbiParameter, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
+  if (/^int\d*$/.test(parameter.type)) return input ? "SauceInt" : "Int256";
   if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) return input ? "SauceInt" : "bigint";
   if (parameter.type === "bool") return "boolean";
   if (/^(bytes|string)$/.test(parameter.type)) return input ? "SauceData" : "SauceBytes";
@@ -125,6 +127,7 @@ function annotatedType(annotation: string | undefined, input: boolean): string {
       ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
       : `SauceArray<${element}>`;
   }
+  if (type === "Int256") return input ? "SauceInt" : "Int256";
   if (/^(Address|Uint256|u?int\d*|number|bigint)$/.test(type)) return input ? "SauceInt" : "bigint";
   if (/^(bool|boolean)$/.test(type)) return "boolean";
   if (/^(bytes|string)$/.test(type)) return input ? "SauceData" : "SauceBytes";
@@ -178,16 +181,22 @@ function libraryModules(): string[] {
 
 /** The generated `index.d.ts`. */
 export function sauceScriptDeclarations(): string {
-  const namespaces = new Set<string>();
+  // A namespace's type: `<Namespace>Source`, or `<Namespace>FamilySource` for a family alias.
+  const namespaces = new Map<string, string>();
   const defines = new Set<string>();
   const tokens = new Set<string>();
+  const coins = new Set<string>();
   let chains: ReadonlyArray<{ readonly key: string; readonly kind: string }> = [];
   for (const chain of CANONICAL_CHAINS) {
     const globals = sourceGlobals(chain);
     chains = globals.chains;
-    for (const ns of globals.protocols) namespaces.add(ns.namespace);
+    for (const ns of globals.protocols) {
+      namespaces.set(ns.namespace, `${ns.namespace}${ns.kind === "family" ? "Family" : ""}Source`);
+    }
     for (const name of Object.keys(globals.defines)) defines.add(name);
     for (const token of globals.tokens) tokens.add(token.symbol);
+    const native = nativeCoinSymbol(chain);
+    if (native !== undefined) coins.add(native);
   }
   const sources = 'import("../routes/source-globals.generated.js")';
   const served: Array<[string, unknown]> = [
@@ -206,8 +215,8 @@ export function sauceScriptDeclarations(): string {
     '/// <reference path="./builtins.d.ts" />',
     '/// <reference path="../routes/source-globals.generated.d.ts" />',
     "",
-    "/** A contract call's result; `.catch(() => …)` gives a value for when the call fails. */",
-    "type SauceCall<R> = R & { catch<T>(handler: () => T): R | T };",
+    "/** An external call's result, with an optional gas cap and a failure handler. */",
+    "type SauceCall<R> = R & { gas(cap: SauceInt): SauceCall<R>; catch(handler: (error: SauceBytes) => unknown): SauceCall<R> };",
     "",
     "/** A contract an ABI types: its methods, called at an address. */",
     "interface SauceContractOf<B> {",
@@ -216,13 +225,11 @@ export function sauceScriptDeclarations(): string {
     "  lib(address: SauceInt): B;",
     "}",
     "",
-    "/** Opening an intent on a chain, as a typed closure in a host file opens one too. */",
-    `type SauceOpensIntent = ${sources}.SauceIntentChain;`,
-    "",
-    "/** A chain: called, it opens an intent there (`Base(() => { … }).reward({ … })`); its",
-    " *  namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
-    "interface SauceChain extends SauceOpensIntent {",
-    ...[...namespaces].sort().map((ns) => `  readonly ${ns}: ${sources}.${ns}Source;`),
+    "/** A chain: its namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
+    "interface SauceChain {",
+    ...[...namespaces]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([ns, type]) => `  readonly ${ns}: ${sources}.${type};`),
     "}",
     "",
     ...chains.map((chain) =>
@@ -230,6 +237,16 @@ export function sauceScriptDeclarations(): string {
         ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts;`
         : `declare const ${chain.key}: SauceChain;`,
     ),
+    "",
+    "/** A holder's balance of a token or of the native coin, by its symbol: `self.USDC`,",
+    " *  `recipient.TSLAx`, `self.ETH`, the same read as `USDC.balanceOf(self)` or",
+    " *  `ctx.selfBalance()`. The holder is any address: `self`, a variable, a contract. */",
+    "interface BigInt {",
+    ...[...new Set([...tokens, ...coins])]
+      .filter((symbol) => IDENTIFIER.test(symbol))
+      .sort()
+      .map((symbol) => `  readonly ${symbol}: bigint;`),
+    "}",
     "",
     "/** A protocol contract's address on the chain a program is compiled for: a define. */",
     ...[...defines]

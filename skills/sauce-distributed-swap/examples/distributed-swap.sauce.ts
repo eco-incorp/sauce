@@ -29,7 +29,7 @@ function trade(
   limit: Uint256,
   recipient: Address,
 ): Uint256 {
-  const unspent = USDC.balanceOf(ctx.self()) - kept;
+  const unspent = self.USDC - kept;
   if (pool == 0 || unspent == 0) {
     return 0;
   }
@@ -81,10 +81,9 @@ function main(
   maxAvgPrice: Uint256,
   recipient: Address,
 ): { spent: Uint256; bought: Uint256; unspent: Uint256 } {
-  const self = ctx.self();
   require(priceLimit > 0, "priceLimit is 0");
-  require(USDC.balanceOf(self) >= budget, "budget is not in the Pot");
-  const kept = USDC.balanceOf(self) - budget; // the Pot's other USDC, never spent
+  require(self.USDC >= budget, "budget is not in the Pot");
+  const kept = self.USDC - budget; // the Pot's other USDC, never spent
   let bought = 0;
 
   // priceLimit as a pool's sqrt price (token1 per token0, times 2^96): where a unit costs it.
@@ -118,7 +117,7 @@ function main(
   }
 
   // Settle: the recipient already has the SPCXc bought; what is left of the budget goes there too.
-  const unspent = USDC.balanceOf(self) - kept;
+  const unspent = self.USDC - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");

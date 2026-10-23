@@ -5,14 +5,20 @@
  * crosses, and a pool walked far enough runs the transaction out of them: the whole cook fails, every
  * pool's trade with it. The deployed engine cannot read the units left, so the cook's builder works
  * out each pool's walk as the cook is built, from the pool's tick arrays: how far its limit takes it,
- * and what that costs (`SVM_SWAP_COSTS`). The deepest pools walk first, each as far as its limit takes
- * it within what the cook has left; a pool the units no longer reach is held to where they end, and
- * one they do not reach at all is skipped. Each pool's swap takes the result as its `stop`
- * (`@sauce/router`'s): 0 none, 1 skip the pool, else a tick (its i32 with the sign bit flipped) the
- * swap holds a tick inside of — the first initialized tick a pool held short cannot pay to cross, or,
- * for a pool that walks its whole way on Raydium's code or Crema, the last initialized tick of the
- * furthest tick array its slot gives, past where the router's own window ends, which the router
- * checks with one read. A pool so held loses fill, never the cook.
+ * what that costs (`SVM_SWAP_COSTS`) and what it buys. The pool whose walk buys the most per unit goes
+ * first, each as far as its limit takes it within what the cook has left; a pool the units no longer
+ * reach is held to where they end, and one they do not reach at all is skipped. A pool held or
+ * skipped is compiled to `@sauce/router`'s Stopped form of its swap, its `stop` a tighter `priceLimit`
+ * worked out here with the router's own arithmetic, so that its swap stops a tick inside the first
+ * initialized tick its share does not pay to cross (1 to skip); every other pool's swap is the plain
+ * one.
+ *
+ * Each stop is fixed as the cook is built, and a price that moves before it lands can leave a swap
+ * more ticks to cross than were priced. Every pool that trades is charged `SVM_HEADROOM_TICKS` more
+ * crossings for that, and a held pool's stop carries where its price was then: its Stopped form skips
+ * the pool where the price has since moved further than that from its stop. A held pool so crosses
+ * at most that many more initialized ticks than were priced. A pool that walks its whole way runs the
+ * plain swap, unchecked: a price that moves further than the headroom can still cost it more.
  *
  * The walk is the router's own: the pool's limit for `priceLimit` and its fee, and no further than its
  * window, the last tick its slot's tick arrays let it reach (`router.svm.js`, "The window a swap at a
@@ -43,9 +49,14 @@ export type SvmStopLayout = "raydium" | "whirlpool" | "defituna" | "crema";
 /**
  * What a venue's program charges one swap at a price, in compute units: `base` for the swap itself
  * and `tick` for each initialized tick it crosses (a tick it walks past uninitialized costs next to
- * nothing). Measured on the venues' own programs, as mainnet runs them, at or a little above every
- * walk measured, and held to them by `test/svm/compute-costs.e2e.test.ts`: a program upgrade that
- * moves them fails it.
+ * nothing). Both are the venue program's own units as the engine calls it, under CPI, as its log
+ * line reports them (`Program <id> consumed N`): the invoke itself and the accounts it serializes are
+ * the caller's, in `SVM_SWAP_FIXED`, so a caller pricing the venue under its own CPI adds its own.
+ * `base` is at or above every walk of none measured and `tick` at or above the steepest step between
+ * two measured walks, on the venues' own programs as mainnet runs them; the router suite holds both
+ * to those programs (`test/std/router/svm.e2e.test.ts`, "the cost table holds to its program"), so a
+ * program upgrade that moves them fails it. A whirlpool with an adaptive fee, which pays per step of
+ * its volatility too, is not priced here: the router skips it at a price.
  */
 export interface SvmSwapCost {
   readonly base: number;
@@ -54,14 +65,23 @@ export interface SvmSwapCost {
 
 export const SVM_SWAP_COSTS: Readonly<Record<string, SvmSwapCost>> = {
   [RAYDIUM_CLMM_PROGRAM_ID]: { base: 39_000, tick: 9_200 },
-  [PANCAKESWAP_CLMM_PROGRAM_ID]: { base: 56_000, tick: 15_500 },
-  [BYREAL_PROGRAM_ID]: { base: 60_000, tick: 15_800 },
-  [STABBLE_CLMM_PROGRAM_ID]: { base: 80_000, tick: 15_800 },
-  [ORCA_WHIRLPOOL_PROGRAM_ID]: { base: 30_500, tick: 7_200 },
-  [CROPPER_PROGRAM_ID]: { base: 40_500, tick: 15_000 },
-  [DEFITUNA_PROGRAM_ID]: { base: 35_000, tick: 13_100 },
-  [CREMA_PROGRAM_ID]: { base: 76_500, tick: 15_400 },
+  [PANCAKESWAP_CLMM_PROGRAM_ID]: { base: 56_000, tick: 15_800 },
+  [BYREAL_PROGRAM_ID]: { base: 60_000, tick: 15_900 },
+  [STABBLE_CLMM_PROGRAM_ID]: { base: 80_000, tick: 15_900 },
+  [ORCA_WHIRLPOOL_PROGRAM_ID]: { base: 30_500, tick: 7_300 },
+  [CROPPER_PROGRAM_ID]: { base: 40_500, tick: 14_400 },
+  [DEFITUNA_PROGRAM_ID]: { base: 35_000, tick: 13_500 },
+  [CREMA_PROGRAM_ID]: { base: 76_500, tick: 15_500 },
 };
+
+/** A program the table does not hold is priced at the table's dearest: never at nothing. */
+const DEAREST: SvmSwapCost = {
+  base: Math.max(...Object.values(SVM_SWAP_COSTS).map((cost) => cost.base)),
+  tick: Math.max(...Object.values(SVM_SWAP_COSTS).map((cost) => cost.tick)),
+};
+
+/** What `program`'s swap costs: its row of `SVM_SWAP_COSTS`, else the table's dearest. */
+export const svmSwapCost = (program: string): SvmSwapCost => SVM_SWAP_COSTS[program] ?? DEAREST;
 
 /** The units a Solana cook may spend: the compute-unit limit its transaction asks for. */
 export const SVM_COOK_UNITS = 1_400_000;
@@ -69,10 +89,10 @@ export const SVM_COOK_UNITS = 1_400_000;
 /**
  * What the cook spends besides the venues' programs, as `sauce tx` estimates it with no simulation:
  * the Kitchen, the engine and the program's own work, `SVM_COOK_FIXED`; each swap at a price that
- * trades, the router reading its pool and arrays and the balances around it, `SVM_SWAP_FIXED`; each
- * whose pool it reads and leaves (past its limit, an adaptive fee), `SVM_SWAP_IDLE`; and each with
- * no pool at its key, `SVM_SWAP_SKIPPED`. Measured on the distributed swap's program, a little
- * above; `sauce simulate` and `sauce run` measure each cook's own.
+ * trades, the router reading its pool and arrays, the balances around it and the venue's invoke,
+ * `SVM_SWAP_FIXED`; each whose pool it reads and leaves (past its limit, an adaptive fee),
+ * `SVM_SWAP_IDLE`; and each with no pool at its key, `SVM_SWAP_SKIPPED`. Measured on the distributed
+ * swap's program, a little above; `sauce simulate` and `sauce run` measure each cook's own.
  */
 export const SVM_COOK_FIXED = 200_000;
 export const SVM_SWAP_FIXED = 255_000;
@@ -80,15 +100,18 @@ export const SVM_SWAP_IDLE = 120_000;
 export const SVM_SWAP_SKIPPED = 20_000;
 
 /**
- * The share of each pool's estimate kept back, for prices that move between the cook's building and
- * its landing and for the cost table's own error: each walk is charged `1 + SVM_COMPUTE_HEADROOM`
- * times its estimate.
+ * The initialized ticks each pool that trades is charged past its walk, for a price that moves
+ * between the cook's building and its landing: tick-spacing positions, each holding at most one
+ * initialized tick. A held pool's Stopped form skips the pool where its price has moved further than
+ * that from where its walk was priced, so a held pool crosses at most this many more initialized
+ * ticks than were priced, while the ticks in its way stay as they were read: a position opened inside
+ * the walk in the meantime adds a crossing nothing charged.
  */
-export const SVM_COMPUTE_HEADROOM = 0.15;
+export const SVM_HEADROOM_TICKS = 3;
 
 /** A pool a swap at a price walks, as the cook's builder reads it. */
 export interface SvmStopPool {
-  /** The swap's stop, `main`'s parameter: what the result is keyed by. */
+  /** The swap's stop's derivation: what the result is keyed by. */
   readonly name: string;
   readonly program: Address;
   readonly layout: SvmStopLayout;
@@ -102,35 +125,50 @@ export interface SvmStopPool {
   readonly paysA: boolean;
   /** The swap's `priceLimit`, where the cook knows it: none is walked to the window's edge. */
   readonly priceLimit?: bigint;
+  /**
+   * How many times the swap runs, in a loop that writes its count out; once when absent. Each run
+   * is charged its swap's own units (`base`), and the walk once: every run walks the same way to the
+   * same limit, from where the one before left the price.
+   */
+  readonly runs?: number;
 }
 
-/** How far a pool's swap would walk, unheld, and what that costs. */
+/** How far a pool's swap would walk, unheld, and what that costs and buys. */
 export interface SvmWalk {
-  /** Its liquidity at its price: what the deepest-first order sorts by. */
+  /** Its liquidity at its price. */
   readonly liquidity: bigint;
   readonly tick: number;
   readonly spacing: number;
-  /** Its window's last safe tick, read as the router reads it with the swap's `stop`. */
+  /** Its window's last safe tick, as the router reads it. */
   readonly window: number;
-  /** Its slot's tick arrays, read. */
-  readonly arrays: readonly (Array_ | undefined)[];
-  /** Whether it walks past where the router's own window ends, which only the stop takes it. */
-  readonly deep?: true;
-  /** The tick its walk ends at: its limit's, or a tick inside its window. */
+  /** The tick its walk ends in: its limit's, or a tick inside its window. */
   readonly limitTick: number;
   /** The initialized ticks it crosses getting there, in walk order. */
   readonly crossed: readonly number[];
   /** Its venue's program's units for the whole walk, before the headroom. */
   readonly units: number;
-  /** None: no swap (no tick array ahead of the price, no liquidity, past its limit already). */
+  /** What the whole walk buys, in the bought token's base units, before the fee. */
+  readonly output: bigint;
+  /** None: no swap (no room in its window, no liquidity, past its limit already, skipped). */
   readonly none?: true;
 }
 
 /** A pool's stop, as the cook's builder worked it out. */
 export interface SvmComputeStop {
   readonly name: string;
-  /** The swap's `stop`: 0 none, 1 skip, else a tick, biased, it holds the swap a tick inside of. */
+  /**
+   * The swap's `stop`, as the Stopped form takes it: 0 none (the plain swap); `svmSkipStop`'s where
+   * it is `skipped`; else a tighter `priceLimit` (`limit`) in its low 192 bits, and from bit 192 the
+   * start bound (`from`): the tick, as the router reads ticks, its price may lie no further from the
+   * stop than when it was priced, give or take `SVM_HEADROOM_TICKS` positions.
+   */
   readonly stop: bigint;
+  /** Where the units leave the pool too few for its swap at all: its stop skips it. */
+  readonly skipped?: boolean;
+  /** The tighter `priceLimit`, holding the swap a tick inside `stopTick`. */
+  readonly limit?: bigint;
+  /** The start bound, a tick. */
+  readonly from?: number;
   /** Where the units held the pool: the initialized tick it stops a tick short of. */
   readonly stopTick?: number;
   /** The walk to its limit: the initialized ticks it crosses, and its units with the headroom. */
@@ -138,7 +176,7 @@ export interface SvmComputeStop {
   readonly estimatedUnits: number;
   /** The units the pool was given; equal to `estimatedUnits` where it walks its whole way. */
   readonly share: number;
-  /** Where the order put it, deepest first, from 0. */
+  /** Where the order put it, the most output per unit first, from 0. */
   readonly rank: number;
 }
 
@@ -149,6 +187,12 @@ const le = (data: Uint8Array, at: number, width: number): bigint => {
   let value = 0n;
   for (let i = width - 1; i >= 0; i--) value = (value << 8n) | BigInt(data[at + i] ?? 0);
   return value;
+};
+
+/** A signed 128-bit integer, little-endian. */
+const i128 = (data: Uint8Array, at: number): bigint => {
+  const value = le(data, at, 16);
+  return value >= 1n << 127n ? value - (1n << 128n) : value;
 };
 
 const hex8 = (data: Uint8Array): string =>
@@ -165,42 +209,59 @@ const SPACING_AT: Readonly<Record<SvmStopLayout, number>> = {
 const RAYDIUM_FIXED = "c09b55cd31f9812a";
 const RAYDIUM_DYNAMIC = "6a8b98247599b838";
 const TICK_ARRAY = "4561bdbe6e0742bb";
+const DYNAMIC_TICK_ARRAY = "11d8f68ee1c7da38";
 const FUSION_TICK_ARRAY = "5501c702bc61658b";
 
-/** An array's first tick, its span in ticks, and its initialized ticks; undefined for none. */
-interface Array_ {
-  readonly start: number;
-  readonly span: number;
-  readonly ticks: readonly number[];
+/** An initialized tick, and the liquidity crossing it adds walking up. */
+export interface SvmTick {
+  readonly tick: number;
+  readonly net: bigint;
 }
 
-/** The slot place (6 to 8) of the array of `arrays` holding `tick`, in walk order from ticks0. */
-const placeOf = (arrays: readonly (Array_ | undefined)[], tick: number): number | undefined => {
-  const at = arrays.findIndex(
-    (array) => array !== undefined && tick >= array.start && tick < array.start + array.span,
-  );
-  return at < 0 ? undefined : 6 + at;
-};
+/** An array's first tick, its span in ticks, and its initialized ticks. */
+export interface SvmTickArray {
+  readonly start: number;
+  readonly span: number;
+  readonly ticks: readonly SvmTick[];
+}
+
+/**
+ * Ticks in Orca's and DefiTuna's tagged layout, from `at`: each a byte, 1 for an initialized tick
+ * followed by its 112 bytes (its liquidity net first), else that byte alone.
+ */
+function tagged(data: Uint8Array, at: number, start: number, spacing: number): SvmTick[] {
+  const ticks: SvmTick[] = [];
+  for (let offset = 0; offset < 88 && at < data.length; offset++) {
+    if (data[at] === 1) {
+      ticks.push({ tick: start + offset * spacing, net: i128(data, at + 1) });
+      at += 113;
+    } else at += 1;
+  }
+  return ticks;
+}
 
 /** One tick array of `layout`, read: its start, span and initialized ticks; undefined for none. */
-function readArray(
+export function svmTickArray(
   layout: SvmStopLayout,
   data: Uint8Array | undefined,
   spacing: number,
-): Array_ | undefined {
+): SvmTickArray | undefined {
   if (data === undefined || data.length < 8) return undefined;
   const kind = hex8(data);
-  const ticks: number[] = [];
+  const ticks: SvmTick[] = [];
   if (layout === "raydium") {
     if (kind !== RAYDIUM_FIXED && kind !== RAYDIUM_DYNAMIC) return undefined;
     const start = i32(data, 40);
+    // A tick's state: its index, its net liquidity, its gross (0: not initialized).
     for (let offset = 0; offset < 60; offset++) {
-      let at = 64 + offset * 168;
+      let at = 44 + offset * 168;
       if (kind === RAYDIUM_DYNAMIC) {
         const place = data[48 + offset] ?? 0;
-        at = place === 0 ? 0 : 216 + (place - 1) * 168 + 20;
+        if (place === 0) continue;
+        at = 216 + (place - 1) * 168;
       }
-      if (at !== 0 && le(data, at, 16) !== 0n) ticks.push(start + offset * spacing);
+      if (le(data, at + 20, 16) !== 0n)
+        ticks.push({ tick: start + offset * spacing, net: i128(data, at + 4) });
     }
     return { start, span: 60 * spacing, ticks };
   }
@@ -208,32 +269,34 @@ function readArray(
     if (kind !== TICK_ARRAY) return undefined;
     const span = 64 * spacing;
     const start = -443636 + (443636 % spacing) + Number(le(data, 8, 2)) * span;
+    // A tick's state: initialized, its index, its sqrt price, its net liquidity.
     for (let offset = 0; offset < 64; offset++) {
-      if (data[44 + offset * 133] === 1) ticks.push(start + offset * spacing);
+      const at = 44 + offset * 133;
+      if (data[at] === 1) ticks.push({ tick: start + offset * spacing, net: i128(data, at + 21) });
     }
     return { start, span, ticks };
   }
   if (layout === "defituna") {
     if (kind !== FUSION_TICK_ARRAY) return undefined;
     const start = i32(data, 8);
-    let at = 44;
-    for (let offset = 0; offset < 88 && at < data.length; offset++) {
-      if (data[at] === 1) {
-        ticks.push(start + offset * spacing);
-        at += 113;
-      } else at += 1;
+    return { start, span: 88 * spacing, ticks: tagged(data, 44, start, spacing) };
+  }
+  const start = i32(data, 8);
+  if (kind === DYNAMIC_TICK_ARRAY) {
+    // Orca's dynamic array: its start, its pool, a bitmap of its ticks, then the ticks, tagged.
+    return { start, span: 88 * spacing, ticks: tagged(data, 60, start, spacing) };
+  }
+  if (kind === TICK_ARRAY && data.length >= 12 + 88 * 113) {
+    // A tick's state: initialized, its net liquidity, its gross.
+    for (let offset = 0; offset < 88; offset++) {
+      const at = 12 + offset * 113;
+      if (data[at] === 1) ticks.push({ tick: start + offset * spacing, net: i128(data, at + 1) });
     }
     return { start, span: 88 * spacing, ticks };
   }
-  const start = i32(data, 8);
-  if (kind === TICK_ARRAY && data.length >= 12 + 88 * 113) {
-    for (let offset = 0; offset < 88; offset++) {
-      if (data[12 + offset * 113] === 1) ticks.push(start + offset * spacing);
-    }
-  } else {
-    // An array of a layout not read here: every place in it taken as initialized, the most it costs.
-    for (let offset = 0; offset < 88; offset++) ticks.push(start + offset * spacing);
-  }
+  // An array of a layout not read here: every place in it taken as initialized, the most it costs.
+  for (let offset = 0; offset < 88; offset++)
+    ticks.push({ tick: start + offset * spacing, net: 0n });
   return { start, span: 88 * spacing, ticks };
 }
 
@@ -241,23 +304,23 @@ const floorDiv = (a: number, b: number): number => Math.floor(a / b);
 
 /**
  * The window's last safe tick, as the router reads it (`raydiumStop`, `cremaStop`, `whirlpoolStop`):
- * undefined where the swap has no array to walk.
+ * undefined where the swap has no room to walk.
  */
 function windowStop(
   layout: SvmStopLayout,
   tick: number,
   spacing: number,
-  arrays: readonly (Array_ | undefined)[],
+  arrays: readonly (SvmTickArray | undefined)[],
   down: boolean,
-): { readonly deep: number; readonly near: number } | undefined {
+): number | undefined {
   if (layout === "whirlpool" || layout === "defituna") {
     const span = 88 * spacing;
     const base = floorDiv(tick, span) * span;
+    if (down) return base - 2 * span;
     const first = tick + spacing >= base + span ? base + span : base;
-    const edge = down ? base - 2 * span : first + 2 * span + 87 * spacing;
-    return { deep: edge, near: edge };
+    return first + 2 * span + 87 * spacing;
   }
-  let far: Array_ | undefined;
+  let far: SvmTickArray | undefined;
   if (layout === "crema") {
     far = [...arrays].reverse().find((array) => array !== undefined);
   } else {
@@ -272,14 +335,12 @@ function windowStop(
     }
   }
   if (far === undefined) return undefined;
-  const holds = down ? far.start + far.span > tick : far.start <= tick;
-  // The router's own window: where the furthest array begins, or, holding the price, its last
-  // initialized tick that way; taken on into a furthest array past the price by the swap's stop.
-  const edge = down ? far.start + far.span : far.start;
-  const past = far.ticks.filter((t) => !holds || (down ? t <= tick : t > tick));
-  const last = past.length === 0 ? undefined : down ? Math.min(...past) : Math.max(...past);
-  if (holds) return last === undefined ? undefined : { deep: last, near: last };
-  return { deep: last ?? edge, near: edge };
+  // Past the price: where it begins. Holding it: its last initialized tick that way, if any.
+  if (down ? far.start + far.span <= tick : far.start > tick)
+    return down ? far.start + far.span : far.start;
+  const ahead = far.ticks.map((t) => t.tick).filter((t) => (down ? t <= tick : t > tick));
+  if (ahead.length === 0) return undefined;
+  return down ? Math.min(...ahead) : Math.max(...ahead);
 }
 
 /** The tick whose sqrt price is the greatest at or below `sqrt`. */
@@ -308,6 +369,7 @@ const isqrt = (n: bigint): bigint => {
 };
 
 const E18 = 10n ** 18n;
+const Q64 = 1n << 64n;
 const Q128 = 1n << 128n;
 
 /** The router's own limit for `priceLimit` at a pool of `fee`: its sqrt price (`clmmOrder`). */
@@ -330,93 +392,157 @@ function skipped(layout: SvmStopLayout, pool: Uint8Array): boolean {
   return false;
 }
 
-/** How far `pool`'s swap walks, held by nothing but its limit and its window, and its cost. */
+/**
+ * What `liquidity` buys moving the sqrt price from `from` to `to` the way the swap walks: token B
+ * as it falls (`down`), A as it rises. A stretch the other way buys nothing.
+ */
+function bought(liquidity: bigint, from: bigint, to: bigint, down: boolean): bigint {
+  if (liquidity <= 0n || (down ? to >= from : to <= from)) return 0n;
+  return down ? (liquidity * (from - to)) / Q64 : (liquidity * (to - from) * Q64) / (from * to);
+}
+
+/** How far `pool`'s swap walks, held by nothing but its limit and its window, its cost and output. */
 export function svmPoolWalk(pool: SvmStopPool): SvmWalk {
   const layout = SVM_CLMM_LAYOUT[pool.layout];
   const tick = i32(pool.pool, layout.tick);
   const spacing = Number(le(pool.pool, SPACING_AT[pool.layout], 2));
   const liquidity = le(pool.pool, layout.liquidity, 16);
   const price = le(pool.pool, layout.price, 16);
-  const cost = SVM_SWAP_COSTS[pool.program] ?? { base: 0, tick: 0 };
-  const arrays = pool.arrays.map((data) => readArray(pool.layout, data, spacing));
+  const cost = svmSwapCost(pool.program);
+  const arrays = pool.arrays.map((data) => svmTickArray(pool.layout, data, spacing));
   const down = pool.paysA;
-  const windows = windowStop(pool.layout, tick, spacing, arrays, down);
-  const window = windows?.deep;
+  const window = windowStop(pool.layout, tick, spacing, arrays, down);
   const none = (): SvmWalk => ({
     liquidity,
     tick,
     spacing,
     window: window ?? tick,
-    arrays,
     limitTick: tick,
     crossed: [],
     units: 0,
+    output: 0n,
     none: true,
   });
   if (window === undefined || liquidity === 0n || spacing === 0 || skipped(pool.layout, pool.pool))
     return none();
-  // A tick inside the window: down, the price ends above `window + 1`; up, below `window − 1`.
+  // The router's room: a tick inside the window, measured from the price's own tick, or none.
+  if (down ? window + 1 >= tick : window <= tick + 2) return none();
   let limitTick = down ? window + 1 : window - 2;
+  let end = raydiumSqrtPriceAtTick(limitTick);
   if (pool.priceLimit !== undefined && pool.priceLimit > 0n) {
     const own = svmOwnLimit(pool.priceLimit, pool.fee, down);
     if (down ? own >= price : own <= price) return none();
-    const ownTick = svmTickAtSqrtPrice(own);
-    limitTick = down ? Math.max(limitTick, ownTick) : Math.min(limitTick, ownTick);
+    // Its own limit, where nearer: inside the price's own tick it still trades, crossing none.
+    if (down ? own > end : own < end) {
+      end = own;
+      limitTick = svmTickAtSqrtPrice(own);
+    }
   }
-  if (down ? limitTick > tick : limitTick <= tick) return none();
-  const near = down ? windows!.near + 1 : windows!.near - 2;
-  const deep = down ? limitTick < near : limitTick > near;
   const all = [
-    ...new Set(arrays.flatMap((array) => (array === undefined ? [] : array.ticks))),
-  ].sort((a, b) => (down ? b - a : a - b));
-  const crossed = all.filter((t) =>
-    down ? t <= tick && t >= limitTick : t > tick && t <= limitTick,
-  );
+    ...new Map(
+      arrays.flatMap((array) => (array === undefined ? [] : array.ticks.map((t) => [t.tick, t]))),
+    ).values(),
+  ].sort((a, b) => (down ? b.tick - a.tick : a.tick - b.tick));
+  // The initialized ticks whose sqrt price the walk reaches, which is where a swap crosses one: down,
+  // one at or above where it ends (the tick its own limit lies in, a hair above it, is not), up, one
+  // at or below.
+  const crossed = all.filter((t) => {
+    if (down ? t.tick > tick : t.tick <= tick) return false;
+    const at = raydiumSqrtPriceAtTick(t.tick);
+    return down ? at >= end : at <= end;
+  });
+  // What the walk buys: each stretch between initialized ticks at the liquidity then, which each
+  // crossing changes by its net (added walking up, taken walking down).
+  let output = 0n;
+  let at = price;
+  let active = liquidity;
+  for (const t of crossed) {
+    const next = raydiumSqrtPriceAtTick(t.tick);
+    output += bought(active, at, next, down);
+    at = next;
+    active = down ? active - t.net : active + t.net;
+  }
+  output += bought(active, at, end, down);
 
   return {
     liquidity,
     tick,
     spacing,
     window,
-    arrays,
-    ...(deep ? { deep } : {}),
     limitTick,
-    crossed,
+    crossed: crossed.map((t) => t.tick),
     units: cost.base + cost.tick * crossed.length,
+    output,
   };
 }
 
-/** The units of a swap crossing `n` initialized ticks of `pool`'s, with the headroom. */
+/**
+ * The units charged for a swap crossing `n` initialized ticks of `pool`'s, with the headroom: its
+ * own units for each time it runs, and the crossings once.
+ */
 function charged(pool: SvmStopPool, n: number): number {
-  const cost = SVM_SWAP_COSTS[pool.program] ?? { base: 0, tick: 0 };
-  return Math.ceil((cost.base + cost.tick * n) * (1 + SVM_COMPUTE_HEADROOM));
+  const cost = svmSwapCost(pool.program);
+  return cost.base * (pool.runs ?? 1) + cost.tick * (n + SVM_HEADROOM_TICKS);
 }
 
 /**
- * A swap's stop at `tick`, as the router reads it: the tick's i32 with the sign bit flipped, and on
- * Raydium's code the slot place of the array it lies in from bit 40, where the router reads it.
+ * The `priceLimit` that holds `pool`'s swap a tick inside `tick`, the first initialized tick it is
+ * not to cross: the loosest whose own limit, by the router's arithmetic (`svmOwnLimit`), keeps the
+ * price short of it, found by halving, since the own limit moves with `priceLimit` one way only.
+ * Undefined where none does, a tick past what the router's arithmetic reaches.
  */
-const stopAt = (pool: SvmStopPool, walk: SvmWalk, tick: number): bigint => {
-  const place = pool.layout === "raydium" ? placeOf(walk.arrays, tick) : undefined;
-  return BigInt(tick) + (1n << 31n) + (place === undefined ? 0n : BigInt(place) << 40n);
-};
+export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint | undefined {
+  // Paying the lower-key token the price falls: it is to stay at or above the sqrt price a tick
+  // above `tick`. Paying the other it rises, and is to stay at or below the one a tick below.
+  const bound = raydiumSqrtPriceAtTick(paysA ? tick + 1 : tick - 1);
+  const keeps = (limit: bigint): boolean => {
+    const own = svmOwnLimit(limit, fee, paysA);
+    return paysA ? own >= bound : own <= bound;
+  };
+  // The own limit falls as priceLimit rises paying the lower-key token, and rises with it otherwise:
+  // the loosest priceLimit that keeps is the greatest one.
+  let low = 2n;
+  let high = 1n << 190n;
+  if (!keeps(low)) return undefined;
+  while (high - low > 1n) {
+    const mid = (low + high) / 2n;
+    if (keeps(mid)) low = mid;
+    else high = mid;
+  }
+  return low;
+}
+
+/** A tick as the router reads it: its i32 with the sign bit flipped. */
+const biased = (tick: number): bigint => BigInt(tick) + (1n << 31n);
 
 /**
- * Each pool's stop for a cook whose venues' programs may spend `budget` units between them: the
- * deepest pool (most liquidity at its price) first, each walking as far as its limit takes it within
- * what is left, a pool the rest no longer covers held a tick inside the first initialized tick it
- * cannot pay to cross, and one that cannot pay for the swap itself skipped.
+ * The stop that skips a pool, whatever its price: a start bound past every tick the walk's way (the
+ * least an i32 tick reads as paying the lower-key token, as the price falls, the greatest the other
+ * way), which every pool's price has moved past, and no limit.
+ */
+export function svmSkipStop(paysA: boolean): bigint {
+  return (paysA ? 1n : (1n << 32n) - 1n) << 192n;
+}
+
+/**
+ * Each pool's stop for a cook whose venues' programs may spend `budget` units between them. The pool
+ * whose walk buys the most per unit of compute goes first, each walking as far as its limit takes
+ * it within what is left; a pool the rest no longer covers is held a tick inside the first
+ * initialized tick it cannot pay to cross, and one that cannot pay for the swap itself is skipped.
+ * Every pool that trades is charged `SVM_HEADROOM_TICKS` crossings past its walk.
  */
 export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): SvmComputeStop[] {
-  const order = pools
-    .map((pool, index) => ({ pool, walk: svmPoolWalk(pool), index }))
-    .sort((a, b) =>
-      a.walk.liquidity === b.walk.liquidity
-        ? a.index - b.index
-        : a.walk.liquidity > b.walk.liquidity
-          ? -1
-          : 1,
-    );
+  const walks = pools.map((pool, index) => ({ pool, walk: svmPoolWalk(pool), index }));
+  // The most output per unit first: a's output over its units against b's, cross-multiplied.
+  const per = ({ pool, walk }: (typeof walks)[number]): [bigint, bigint] =>
+    walk.none === true ? [0n, 1n] : [walk.output, BigInt(charged(pool, walk.crossed.length))];
+  const order = [...walks].sort((a, b) => {
+    const [outA, unitsA] = per(a);
+    const [outB, unitsB] = per(b);
+    const left = outA * unitsB;
+    const right = outB * unitsA;
+    return left === right ? a.index - b.index : left > right ? -1 : 1;
+  });
   let left = budget;
   const stops = new Map<string, SvmComputeStop>();
   order.forEach(({ pool, walk }, rank) => {
@@ -428,26 +554,33 @@ export function svmComputeStops(pools: readonly SvmStopPool[], budget: number): 
     }
     if (whole <= left) {
       left -= whole;
-      // Its whole way: no stop, but where that is past the router's own window (on Raydium's code
-      // and Crema, into the furthest array, which that window stops at the start of).
-      stops.set(pool.name, {
-        ...of,
-        stop: walk.deep === true ? stopAt(pool, walk, walk.window) : 0n,
-        share: whole,
-      });
+      // Its whole way: no stop, the plain swap.
+      stops.set(pool.name, { ...of, stop: 0n, share: whole });
       return;
     }
     // The most crossings what is left pays for: held a tick inside the next.
     let n = walk.crossed.length - 1;
     while (n >= 0 && charged(pool, n) > left) n--;
-    if (n < 0) {
-      stops.set(pool.name, { ...of, stop: 1n, share: 0 });
+    const stopTick = n < 0 ? undefined : walk.crossed[n]!;
+    const limit = stopTick === undefined ? undefined : svmStopLimit(stopTick, pool.fee, pool.paysA);
+    if (stopTick === undefined || limit === undefined) {
+      stops.set(pool.name, { ...of, stop: svmSkipStop(pool.paysA), skipped: true, share: 0 });
       return;
     }
     const share = charged(pool, n);
     left -= share;
-    const stopTick = walk.crossed[n]!;
-    stops.set(pool.name, { ...of, stop: stopAt(pool, walk, stopTick), stopTick, share });
+    // Where its price may lie when it runs: no further from the stop than now, give or take the
+    // headroom's positions.
+    const room = SVM_HEADROOM_TICKS * walk.spacing;
+    const from = pool.paysA ? walk.tick + room : walk.tick - room;
+    stops.set(pool.name, {
+      ...of,
+      stop: limit | (biased(from) << 192n),
+      limit,
+      from,
+      stopTick,
+      share,
+    });
   });
 
   return pools.map((pool) => stops.get(pool.name)!);
@@ -481,14 +614,25 @@ export interface SvmPoolStop extends SvmComputeStop {
   readonly stopPrice?: string;
 }
 
-/** The stops of a cook: the values `main` takes, in its order, and each pool's. */
+/** The stops of a cook: each swap's, by its stop's derivation (`name`), in the program's order. */
 export interface SvmProgramStops {
-  readonly values: readonly bigint[];
   readonly stops: readonly SvmPoolStop[];
+  /** The swaps whose stop binds (held or skipped): what to compile to the Stopped form. */
+  readonly binding: readonly string[];
   /** The units the venues' programs were given between them. */
   readonly budget: number;
   /** The cook's own units, besides the venues': the cost table's, or a simulation's. */
   readonly fixed: { readonly units: number; readonly measured: boolean };
+  /** The units of `SVM_HEADROOM_TICKS` more crossings at every pool that trades. */
+  readonly headroom: number;
+  /**
+   * A swap whose runs no stop can be worked out for, where there is one: how the program names its
+   * pool, and its loop's count where the loop writes one out (null where it does not). Either that
+   * count is a value, or it is more than the cook's own units pay for, so the program leaves the loop
+   * sooner; both ways the swap runs a number of times known only as the cook runs, what it leaves
+   * the others cannot be worked out, and no swap is held. `stops` is then empty.
+   */
+  readonly unbounded?: { readonly label: string; readonly runs: number | null };
 }
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
@@ -516,31 +660,17 @@ const feeOf = (layout: SvmStopLayout, pool: Uint8Array, config: Uint8Array | und
         ? le(pool, 143, 2)
         : le(pool, 172, 2);
 
-/** The price of a pool's last unit at `tick`, fee included, in whole tokens of the pair. */
-function takerPrice(
-  tick: number,
-  paysA: boolean,
-  fee: bigint,
-  [payDecimals, buyDecimals]: readonly [number, number],
-): string {
-  const sqrt = raydiumSqrtPriceAtTick(tick);
-  const kept = 1_000_000n - fee;
-  const price = paysA
-    ? (Q128 * E18 * 1_000_000n) / (sqrt * sqrt * kept)
-    : (sqrt * sqrt * E18 * 1_000_000n) / (Q128 * kept);
-
-  return significant(price * 10n ** BigInt(buyDecimals), E18 * 10n ** BigInt(payDecimals));
-}
-
 /**
  * The stops of `program`'s swaps at a price, read through `load` from the accounts the cook resolved
  * (`accounts`, by `main`'s parameter), with main's `Uint256` arguments by name (`integers`), for a
  * limit a swap takes from one. `fixed` is the cook's own units where a simulation measured them;
- * `scale` shrinks what the venues are given, for a cook that ran out of units anyway. Undefined for
- * a program with no stops.
+ * `scale` shrinks what the venues are given, for a cook that ran out of units anyway. A swap in a
+ * loop is charged for each time the loop runs it (`stoppableRuns`); where a loop does not write its
+ * count out, or writes one that swap's runs alone cannot pay for, none is held (`unbounded`).
+ * Undefined for a program with no stops.
  */
 export async function svmProgramStops(
-  program: Pick<CompiledSauceProgram, "derivedValues" | "derivedAccounts">,
+  program: Pick<CompiledSauceProgram, "stoppable" | "stoppableRuns" | "derivedAccounts">,
   chain: CanonicalChain,
   accounts: Readonly<Record<string, string>>,
   integers: Readonly<Record<string, bigint>>,
@@ -548,9 +678,38 @@ export async function svmProgramStops(
   fixed?: number,
   scale = 1,
 ): Promise<SvmProgramStops | undefined> {
-  const values = program.derivedValues ?? [];
+  // Each swap that runs, with how many times: once outside a loop, never in a loop that never does.
+  const runsOf = (derive: string): number | null =>
+    program.stoppableRuns !== undefined && Object.hasOwn(program.stoppableRuns, derive)
+      ? program.stoppableRuns[derive]!
+      : 1;
+  const values = (program.stoppable ?? [])
+    .map((derive) => ({ name: derive, derive, runs: runsOf(derive) }))
+    .filter((value) => value.runs !== 0);
   if (values.length === 0) return undefined;
   const derived = Object.entries(program.derivedAccounts ?? {});
+  /** The account the cook gives the part `name` of the slot of `pool` paying `token`. */
+  const part = (pool: string, token: string, name: string): string | undefined => {
+    const at = derived.find(([, derive]) => derive === `slot:${pool}:${token}.${name}`)?.[0];
+    return at === undefined ? undefined : accounts[at];
+  };
+  /** No stop for any swap, for `value`'s runs. */
+  const unbounded = (value: (typeof values)[number]): SvmProgramStops => {
+    const [, pool, token] = value.derive.split(":") as [string, string, string];
+    return {
+      stops: [],
+      binding: [],
+      budget: 0,
+      fixed: { units: fixed ?? 0, measured: fixed !== undefined },
+      headroom: 0,
+      unbounded: {
+        label: labelOf(pool, (part(pool, token, "pool") ?? "") as Address),
+        runs: value.runs,
+      },
+    };
+  };
+  const uncounted = values.find((value) => value.runs === null);
+  if (uncounted !== undefined) return unbounded(uncounted);
   const rows = svmTokenRows(chain);
   const symbolOf = (mint: Address): string => rows.find((row) => row.mint === mint)?.symbol ?? mint;
   const data = async (key: string | undefined): Promise<Uint8Array | undefined> =>
@@ -562,23 +721,19 @@ export async function svmProgramStops(
     string,
     Pick<SvmPoolStop, "pool" | "label" | "venue" | "pay" | "buy"> & {
       readonly decimals: readonly [number, number];
-      readonly paysA: boolean;
-      readonly fee: bigint;
     }
   >();
   for (const value of values) {
-    const [, pool, token, limit = ""] = value.derive.split(":") as [
+    // `stop:<pool>:<token>:<limit>`, a second swap of the same three numbered after a `#`.
+    const [, pool, token, written = ""] = value.derive.split(":") as [
       string,
       string,
       string,
       string?,
     ];
-    const part = (name: string): string | undefined => {
-      const at = derived.find(([, derive]) => derive === `slot:${pool}:${token}.${name}`)?.[0];
-      return at === undefined ? undefined : accounts[at];
-    };
-    const program = part("program");
-    const address = part("pool") as Address | undefined;
+    const limit = written.replace(/#\d+$/, "");
+    const program = part(pool, token, "program");
+    const address = part(pool, token, "pool") as Address | undefined;
     const venue = SVM_PRICE_LIMIT_VENUES.find((one) => one.program === program);
     const account = await data(address);
     if (venue === undefined || address === undefined || account === undefined) continue;
@@ -592,9 +747,9 @@ export async function svmProgramStops(
     const buyMint = getAddressDecoder().decode(
       account.subarray(paysA ? at.mintB : at.mintA, (paysA ? at.mintB : at.mintA) + 32),
     );
-    const fee = feeOf(layout, account, await data(part("config")));
+    const fee = feeOf(layout, account, await data(part(pool, token, "config")));
     const arrays = await Promise.all(
-      ["ticks0", "ticks1", "ticks2"].map((name) => data(part(name))),
+      ["ticks0", "ticks1", "ticks2"].map((name) => data(part(pool, token, name))),
     );
     const priceLimit = limit.startsWith("@")
       ? integers[limit.slice(1)]
@@ -610,6 +765,7 @@ export async function svmProgramStops(
       arrays,
       paysA,
       ...(priceLimit === undefined ? {} : { priceLimit }),
+      ...(value.runs === 1 ? {} : { runs: value.runs! }),
     });
     seen.set(value.name, {
       pool: address,
@@ -621,20 +777,29 @@ export async function svmProgramStops(
         Number((await data(payMint))?.[44] ?? 0),
         Number((await data(buyMint))?.[44] ?? 0),
       ],
-      paysA,
-      fee,
     });
   }
-  // The cook's own units: as a simulation measured them, else the cost table's, a swap that trades
-  // costing more than one whose pool the router reads and leaves, and that more than a key with no
-  // pool.
-  const trading = pools.filter((pool) => svmPoolWalk(pool).none !== true).length;
+  // What the cook spends on a swap each time it runs, besides its venue's program, by the cost table:
+  // one that trades more than one whose pool the router reads and leaves, and that more than a key
+  // with no pool.
+  const each = (value: (typeof values)[number]): number => {
+    const pool = pools.find((one) => one.name === value.name);
+    return pool === undefined
+      ? SVM_SWAP_SKIPPED
+      : svmPoolWalk(pool).none === true
+        ? SVM_SWAP_IDLE
+        : SVM_SWAP_FIXED;
+  };
+  // A loop's count that the cook cannot pay for, that swap's runs alone: the program leaves the loop
+  // sooner (a `break`, a `return`), at a point known only as it runs.
+  const unpaid = values.find(
+    (value) => value.runs! > 1 && SVM_COOK_FIXED + each(value) * value.runs! > SVM_COOK_UNITS,
+  );
+  if (unpaid !== undefined) return unbounded(unpaid);
+  // The cook's own units: as a simulation measured them, else the cost table's, each swap's as many
+  // times as it runs.
   const units =
-    fixed ??
-    SVM_COOK_FIXED +
-      SVM_SWAP_FIXED * trading +
-      SVM_SWAP_IDLE * (pools.length - trading) +
-      SVM_SWAP_SKIPPED * (values.length - pools.length);
+    fixed ?? values.reduce((sum, value) => sum + each(value) * value.runs!, SVM_COOK_FIXED);
   const budget = Math.max(0, Math.floor((SVM_COOK_UNITS - units) * scale));
   const computed = new Map(svmComputeStops(pools, budget).map((stop) => [stop.name, stop]));
   const stops: SvmPoolStop[] = [];
@@ -642,20 +807,40 @@ export async function svmProgramStops(
     const stop = computed.get(value.name);
     const pool = seen.get(value.name);
     if (stop === undefined || pool === undefined) continue;
-    const { decimals, paysA, fee, ...shown } = pool;
+    const { decimals, ...shown } = pool;
     stops.push({
       ...stop,
       ...shown,
-      ...(stop.stopTick === undefined
+      ...(stop.limit === undefined
         ? {}
-        : { stopPrice: takerPrice(stop.stopTick, paysA, fee, decimals) }),
+        : {
+            stopPrice: significant(
+              stop.limit * 10n ** BigInt(decimals[1]),
+              E18 * 10n ** BigInt(decimals[0]),
+            ),
+          }),
     });
   }
 
   return {
-    values: values.map((value) => computed.get(value.name)?.stop ?? 0n),
     stops,
+    binding: stops.filter((stop) => stop.stop !== 0n).map((stop) => stop.name),
     budget,
     fixed: { units, measured: fixed !== undefined },
+    headroom: pools
+      .filter((pool) => (computed.get(pool.name)?.share ?? 0) > 0)
+      .reduce((sum, pool) => sum + svmSwapCost(pool.program).tick * SVM_HEADROOM_TICKS, 0),
   };
+}
+
+/**
+ * The values a program compiled with `stops.binding` takes after its own arguments, one for each of
+ * its `derivedValues`: each held swap's stop.
+ */
+export function svmStopValues(
+  stops: SvmProgramStops | undefined,
+  program: Pick<CompiledSauceProgram, "derivedValues">,
+): bigint[] {
+  const of = new Map((stops?.stops ?? []).map((stop) => [stop.name, stop.stop]));
+  return (program.derivedValues ?? []).map((value) => of.get(value.derive) ?? 0n);
 }

@@ -3,8 +3,8 @@
 //
 //   node sdk/scripts/check-browser-compile.mjs [--package-root <dir>] [--consumer <dir>]
 //
-// `browser/cases.mjs` imports the package by name and compiles: the README's route example (read
-// out of the README, as `docs:check` does), a raw `compile()` with `compactArgs` on both targets,
+// `browser/cases.mjs` imports the package by name and compiles: a `compileSauceProgram` program
+// (typed `main`, then its argument bound), a raw `compile()` with ABI arguments on both targets,
 // the settle recipe through `resolveSdkModule`, a swap and a deposit builder, and an actions
 // program. This script runs it in Node, then bundles it with esbuild for the browser, loads it into
 // headless Chromium (Playwright) and requires the browser's results to equal Node's. The page runs
@@ -47,17 +47,6 @@ function argument(name, fallback) {
 const packageRoot = realpathSync(argument("--package-root", REPO));
 const consumer = realpathSync(argument("--consumer", packageRoot));
 
-/** The README's TypeScript route example, as JavaScript that exports what it built. */
-function readmeRoute() {
-  const readme = readFileSync(join(packageRoot, "README.md"), "utf8");
-  const fence = [...readme.matchAll(/```ts\n([^]*?)```/g)].map((match) => match[1]);
-  const example = fence.find((code) => code.includes("Base("));
-  assert.ok(example, "the README has no TypeScript `Base(...)` route example");
-  const { code } = esbuild.transformSync(example, { loader: "ts", format: "esm" });
-
-  return `${code}\nexport { built };\n`;
-}
-
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm" };
 
 function serve(dir) {
@@ -83,7 +72,6 @@ let server;
 let browser;
 try {
   copyFileSync(join(HERE, "browser", "cases.mjs"), join(work, "cases.mjs"));
-  writeFileSync(join(work, "readme-route.mjs"), readmeRoute());
 
   // ---- Node ---------------------------------------------------------------------------------
   const cases = await import(pathToFileURL(join(work, "cases.mjs")).href);
@@ -166,10 +154,10 @@ window.__sauce = (async () => {
     `check-browser-compile: headless Chromium ${browser.version()} compiled the same bytes as Node ` +
       `${process.version}, with ready() given no source, the bytes and a URL ` +
       `(${(bundleBytes / 1e6).toFixed(1)} MB bundle):\n` +
-      `  README route  ${expected.readme.bytecode[0].length / 2} bytes, intent ${expected.readme.intentHash}\n` +
+      `  program       ${expected.program.bytecode.length / 2} bytes, bound ${expected.program.bound.length / 2}\n` +
       `  settle        ${expected.settle.length / 2} bytes\n` +
       `  swap/deposit  ${expected.swap[0].length / 2} / ${expected.deposit[0].length / 2} bytes\n` +
-      `  compact       evm ${expected.raw.evm.bytecode.length / 2}, svm ${expected.raw.svm.bytecode.length / 2} bytes\n` +
+      `  ABI arguments evm ${expected.raw.evm.bytecode.length / 2}, svm ${expected.raw.svm.bytecode.length / 2} bytes\n` +
       `  actions       ${expected.action.length / 2} bytes; by names on base ${expected.actionNamed.length / 2} bytes\n` +
       `  before ready() a compile throws: ${notReady}`,
   );

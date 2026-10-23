@@ -13,8 +13,8 @@
  * Kitchen cook instructions — calls {@link assertEngineRunsCompiler} first.
  *
  * An engine no row names (a local deployment, a fork's own) is not refused: the SDK cannot tell
- * what it is. A row's engine is known from its release's `addresses.json` — the EVM address is
- * CREATE3 from the version and so known before the release, the SVM program id only after it.
+ * what it is. A row's engine is known from its release's `addresses.json`; current engines are
+ * content-addressed, so a runtime change also changes the EVM address or SVM program id.
  */
 import table from "./releases.json" with { type: "json" };
 import { v12DeployedAddresses } from "./v12-addresses.js";

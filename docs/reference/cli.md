@@ -5,10 +5,46 @@
 **Reference** · [Documentation](../README.md)
 
 > This is the `sauce` command's manual page: every command and every flag, word for word as `--help`
-> prints it. The guides explain what each one is for; come here to look up an exact flag.
+> prints it. The list below links each command; the guides explain what each one is for, and this
+> page is where you look up an exact flag.
 
-Every command of `sauce`, and every flag it takes, as `sauce <command> --help` prints it. The
-guides show the commands in use: [the sauce command](../guides/cli.md) lists them.
+Every command of `sauce`, and every flag it takes, as `sauce <command> --help` prints it, in
+the order `sauce --help` lists them. The first block is `sauce --help` itself: what every
+command shares, from endpoints and signing to the chains it sends on. A command with verbs is
+followed by each verb's help.
+
+## Commands
+
+Most work goes through four of them: `sauce compile` checks a program, `sauce simulate` tries
+it with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsigned
+transaction for another wallet to sign.
+
+- [`sauce compile`](#sauce-compile): Compile a SauceScript program; print its bytecode
+- [`sauce actions`](#sauce-actions): Lower an actions document to SauceScript for a chain; print the source and bytecode
+- [`sauce simulate`](#sauce-simulate): Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
+- [`sauce run`](#sauce-run): Compile, sign, send and wait for the cook on your Pot
+- [`sauce wallet`](#sauce-wallet): Create, list and import the wallets --wallet signs with
+  - `sauce wallet new`: Create a wallet with a fresh key, encrypted under its password
+  - `sauce wallet list`: Every wallet: its name, kind and address
+  - `sauce wallet address`: A wallet's address, with no password
+  - `sauce wallet import`: Keep a key you have as a wallet: a private key, keystore or Solana keypair
+  - `sauce wallet export`: Show a wallet's key at your terminal, once you confirm
+- [`sauce tx`](#sauce-tx): Print the unsigned cook transaction, for a wallet to sign
+- [`sauce send`](#sauce-send): Broadcast transactions signed elsewhere, wait for them, and report what they did
+- [`sauce reclaim`](#sauce-reclaim): List the code buffers and lookup tables a Solana owner left open, and close them
+- [`sauce pot`](#sauce-pot): Predict a Pot's address, deploy it, and list the Pots you deployed
+  - `sauce pot list`: List the Pots you deployed or imported, each with the release it was minted under
+  - `sauce pot import`: Record a Pot deployed elsewhere, read from the chain with the release that minted it
+- [`sauce globals`](#sauce-globals): List the tokens, protocols and other names a program on a chain can use
+- [`sauce price`](#sauce-price): Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
+- [`sauce pools`](#sauce-pools): List a pair's price-limit pools on a chain, deepest first, with their prices
+- [`sauce inspect`](#sauce-inspect): Take a cook, a Kitchen call, a program or a file apart
+- [`sauce verify`](#sauce-verify): Check that a payload or cook runs the audited settle program
+- [`sauce skills`](#sauce-skills): Install, update or check this package's agent skills in a project
+- [`sauce update`](#sauce-update): Update this sauce command, the way it was installed
+- [`sauce runtime`](#sauce-runtime): Install or check the packages sauce mcp and Solana simulations load
+- [`sauce init`](#sauce-init): Scaffold a project that uses this package
+- [`sauce mcp`](#sauce-mcp): Serve the commands and the agent skills to coding agents over MCP
 
 ## `sauce`
 
@@ -23,7 +59,6 @@ Commands:
   actions   Lower an actions document to SauceScript for a chain; print the source and bytecode
   simulate  Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
   run       Compile, sign, send and wait for the cook on your Pot
-  intent    Publish, fill, prove, claim, refund and cancel cross-chain intents
   wallet    Create, list and import the wallets --wallet signs with
   tx        Print the unsigned cook transaction, for a wallet to sign
   send      Broadcast transactions signed elsewhere, wait for them, and report what they did
@@ -32,8 +67,8 @@ Commands:
   globals   List the tokens, protocols and other names a program on a chain can use
   price     Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
   pools     List a pair's price-limit pools on a chain, deepest first, with their prices
-  inspect   Take a cook, a Portal or Kitchen call, a program or a file apart
-  verify    Check that a payload, cook or intent runs the audited settle program
+  inspect   Take a cook, a Kitchen call, a program or a file apart
+  verify    Check that a payload or cook runs the audited settle program
   skills    Install, update or check this package's agent skills in a project
   update    Update this sauce command, the way it was installed
   runtime   Install or check the packages sauce mcp and Solana simulations load
@@ -53,9 +88,9 @@ registry once a day, in the background, never delaying a command. It is off with
 with --no-update-check (any command takes it, before the command too), and for a command
 whose --config file says "updateCheck": false.
 
-For the initial release, transactions are built and sent only on Ethereum, Base and Solana.
-Every other chain is a preview chain: programs compile there, and simulate, dry runs and reads
-work, but no transaction is built or sent. Ask for a chain:
+Transactions are built and sent only on Ethereum, Base, Arc and Solana. Every other chain is a
+preview chain: programs compile there, and simulate and reads work, but no transaction is built
+or sent. Ask for a chain:
 https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
 
 A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain
@@ -74,27 +109,20 @@ Compile a SauceScript program; print its bytecode.
 Usage: sauce compile <file | -> --chain <slug|id> [options]
 
 Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --account NAME=<address>                     Solana: an account main takes (an address, pot, owner, self, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
-      --via <kitchen|engine>                       Solana: size the Kitchen's cook (default) or the engine's direct one
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --out <path>                                 Write the output to a file, not stdout
-      --json                                       Print JSON: sizes, defines and contracts applied, main's parameters, engine
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --chain <slug|id>         Chain the program runs on (base, 8453, solana)
+      --target <evm|svm>        Checked against the chain; svm alone means solana
+      --source-dir <dir>        Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --args-json <json|file>   main's arguments as a JSON array, inline or in a file
+      --account NAME=<address>  Solana: an account main takes (an address, pot, owner, self, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
+      --via <kitchen|engine>    Solana: size the Kitchen's cook (default) or the engine's direct one
+      --rpc-url <url>           Your own RPC endpoint for the chain (default: a built-in public one)
+      --config <file>           Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
+      --offline                 Read no chain: no endpoint, not even a built-in one
+      --out <path>              Write the output to a file, not stdout
+      --json                    Print JSON: sizes, defines and contracts applied, main's parameters, engine
+  -h, --help                    Show this help
+      --no-update-check         No notice of a newer sauce, and no registry read for one
+      --args <value>…           main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -102,9 +130,9 @@ Low-level (a program's inputs are main's parameters, given with --args):
 
 Compiles the file as a standalone program for the chain (routes.compileSauceProgram):
 its token symbols (USDC), protocol namespaces (Uniswap.UniversalRouter), chainId, the
-zero-import @sauce/token functions, SafeERC20 token writes (USDC.transfer,
-Token(addr).approve) and intents opened inside the program all resolve against it, so
-one file compiles for any chain whose names it uses. Relative imports are read from beside
+zero-import @sauce/token functions and SafeERC20 token writes (USDC.transfer,
+Token(addr).approve) all resolve against it, so one file compiles for any chain whose
+names it uses. Relative imports are read from beside
 the file. A file may name its chain in a leading `// @chain base` line. An actions
 document compiles too (`sauce actions`).
 
@@ -112,15 +140,11 @@ document compiles too (`sauce actions`).
   defines    each name the chain gave the file (a token symbol, a protocol contract, the
              chain id) and each low-level --define it read, with its value and source
   contracts  each protocol contract it calls or reads (UniswapV3.Factory), resolved on its
-             chain: an intent body's on the intent's own
+             chain
   size       the program's bytes; payload: the program with main's arguments (--args)
   cook       on Solana, the cook's transaction against the 1232-byte limit, measured
              with --account where given and a distinct account for each other slot, as
              the Kitchen's cook or, --via engine, the engine's direct one
-  intentPots each intent that runs a program on its destination: the Pot it cooks on (the
-             one the destination Portal's Executor owns, salt 0) and, read from that
-             chain, whether it is deployed; a missing one is warned
-             about, since no solver can fill the intent until it is
 A --define the file never reads is named on stderr: it changes nothing.
 
 Examples:
@@ -133,11 +157,10 @@ Examples:
 ```text
 Lower an actions document to SauceScript for a chain; print the source and bytecode.
 
-Usage: sauce actions <file | -> [--chain <slug|id>] [--compact-args] [--json]
+Usage: sauce actions <file | -> [--chain <slug|id>] [--json]
 
 Options:
       --chain <slug|id>  The chain to compile for (default: the document's chainId)
-      --compact-args     Take main's arguments as compact-v1, not ABI-v1
       --json             Print JSON: the document, source, bytecode and main's parameters
   -h, --help             Show this help
       --no-update-check  No notice of a newer sauce, and no registry read for one
@@ -168,34 +191,27 @@ Usage: sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <a
        sauce simulate <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]
 
 Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --owner <address>                            The Pot's owner, which derives the Pot with the salt (default 0)
-      --salt <label>                               Name one of the owner's Pots: salt = keccak256(label)
-      --salt-hex <bytes32>                         …or give its salt exactly
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --assume-balance <TOKEN:amount>              Give the Pot this balance, in whole tokens, for the simulation only: USDC:2, ETH:0.1
-      --expect-revert <text>                       Expect the cook to revert with a reason containing this text: exit 0 only if it does
-      --wallet <name>                              The owner's wallet: names the owner (and on EVM signs --fund's pulls)
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --chain <slug|id>                Chain the program runs on (base, 8453, solana)
+      --target <evm|svm>               Checked against the chain; svm alone means solana
+      --source-dir <dir>               Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --owner <address>                The Pot's owner, which derives the Pot with the salt (default 0)
+      --salt <label>                   Name one of the owner's Pots: salt = keccak256(label)
+      --salt-hex <bytes32>             …or give its salt exactly
+      --args-json <json|file>          main's arguments as a JSON array, inline or in a file
+      --rpc-url <url>                  Your own RPC endpoint for the chain (default: a built-in public one)
+      --config <file>                  Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
+      --offline                        Read no chain: no endpoint, not even a built-in one
+      --assume-balance <TOKEN:amount>  Give the Pot this balance, in whole tokens, for the simulation only: USDC:2, ETH:0.1
+      --expect-revert <text>           Expect the cook to revert with a reason containing this text: exit 0 only if it does
+      --wallet <name>                  The owner's wallet: names the owner (and on EVM signs --fund's pulls)
+      --wallets [<dir>]                The wallet directory (default: ~/.sauce/wallets)
+      --password-env <NAME>            The password is the environment variable NAME (only that one is read)
+      --password-file <path>           …or a file only you can read (else it is asked for)
+      --password-command <command>     …or what this command prints (a secret manager's CLI)
+      --json                           Print one JSON object instead
+  -h, --help                           Show this help
+      --no-update-check                No notice of a newer sauce, and no registry read for one
+      --args <value>…                  main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
@@ -260,14 +276,16 @@ accounts the transaction writes before it and as the simulation leaves them — 
 (a program's revert message decoded) and the program logs. Solana's simulateTransaction
 takes no account overrides, so the owner must hold the Pot's rent and the fees there.
 A cook too large for one transaction, or one given --assume-balance, is simulated in a
-local copy instead (LiteSVM, which the package brings): every account it names read from
-the cluster with its rent, the released engine and Kitchen, the owner given the lamports
-the staging and the fees take (any address can simulate), the Pot created
-if missing, the program staged into a code buffer as `sauce run` stages it, then the cook,
-its accounts through a lookup table. There --assume-balance TOKEN:amount gives the account
-the cook spends that token from (the Pot's, or the owner's with --via engine) that balance,
-and a pot:<token> or owner:<token> account the cluster does not have yet is made empty,
-which `sauce run` creates before the cook. An --owner that is not a wallet is refused.
+local copy instead, with LiteSVM, which the package does not bundle: your own copy at the
+version it pins, else the runtime folder its first use installs (sauce runtime). Every
+account the cook names is read from the cluster with its rent, the released engine and
+Kitchen loaded, the owner given the lamports the staging and the fees take (any address
+can simulate), the Pot created if missing, the program staged into a code buffer as
+`sauce run` stages it, then the cook, its accounts through a lookup table. There
+--assume-balance TOKEN:amount gives the account the cook spends that token from (the
+Pot's, or the owner's with --via engine) that balance, and a pot:<token> or owner:<token>
+account the cluster does not have yet is made empty, which `sauce run` creates before the
+cook. An --owner that is not a wallet is refused.
 
 A cook that reverts exits 1, and the first line says so: The cook reverts: <reason>. In
 --json, reverted: true and error lead the JSON, and the same line leads stderr.
@@ -294,36 +312,28 @@ Usage: sauce run <file | -> --chain <slug|id> (--keystore <path> | --private-key
        sauce run <file | -> --chain solana --keypair <path> [--account NAME=<value>]… [options]
 
 Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --owner <address>                            The Pot's owner, which derives the Pot with the salt (default 0)
-      --salt <label>                               Name one of the owner's Pots: salt = keccak256(label)
-      --salt-hex <bytes32>                         …or give its salt exactly
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --pots <dir>                                 The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --chain <slug|id>             Chain the program runs on (base, 8453, solana)
+      --target <evm|svm>            Checked against the chain; svm alone means solana
+      --source-dir <dir>            Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --owner <address>             The Pot's owner, which derives the Pot with the salt (default 0)
+      --salt <label>                Name one of the owner's Pots: salt = keccak256(label)
+      --salt-hex <bytes32>          …or give its salt exactly
+      --args-json <json|file>       main's arguments as a JSON array, inline or in a file
+      --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
+      --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
+      --offline                     Read no chain: no endpoint, not even a built-in one
+      --wallet <name>               Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
+      --wallets [<dir>]             The wallet directory (default: ~/.sauce/wallets)
+      --password-env <NAME>         The password is the environment variable NAME (only that one is read)
+      --password-file <path>        …or a file only you can read (else it is asked for)
+      --password-command <command>  …or what this command prints (a secret manager's CLI)
+  -y, --yes                         Approve, without asking, what it sends first (deploying your Pot, an approval)
+      --auto-approve                The same as --yes, its older name
+      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
+      --json                        Print one JSON object instead
+  -h, --help                        Show this help
+      --no-update-check             No notice of a newer sauce, and no registry read for one
+      --args <value>…               main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
@@ -395,9 +405,9 @@ Both pay the same execution fee into the Kitchen's treasury. The cook signs the 
 as its max_execution_fee, so it pays that or fails; --max-execution-fee <lamports> refuses
 a fee above it before anything is sent.
 
-Runs only on a supported chain: Ethereum, Base and Solana, for the initial release. On any other
-(a preview chain) it is refused before anything is read or signed, with the supported chains and
-the GitHub issue to ask for that chain with; compile and simulate work there.
+Runs only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
+it is refused before anything is read or signed, with the supported chains and the GitHub issue
+to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json
@@ -405,681 +415,6 @@ Examples:
     --account source=<token account> --account authority=pot
   sauce run sweep.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
     --via engine --max-execution-fee 10000 --account authority=owner …
-```
-
-## `sauce intent`
-
-```text
-Publish, fill, prove, claim, refund and cancel cross-chain intents.
-
-Usage: sauce intent <verb> [options]
-       sauce intent [--keystore <path> | --private-key <hex>]
-
-Options:
-      --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                     Read no chain: no endpoint, not even a built-in one
-      --wallet <name>               Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]             The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>         The password is the environment variable NAME (only that one is read)
-      --password-file <path>        …or a file only you can read (else it is asked for)
-      --password-command <command>  …or what this command prints (a secret manager's CLI)
-  -y, --yes                         Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                The same as --yes, its older name
-      --store <dir>                 The intent store (default: ~/.sauce/intents)
-      --json                        Print one JSON object instead
-  -h, --help                        Show this help
-      --no-update-check             No notice of a newer sauce, and no registry read for one
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Verbs (`sauce intent <verb> --help` for each):
-  publish   Publish a file's fixed intents from a wallet (or make one, step by step)
-  fill      Fill a file's (or a stored) intents on their destination: simulated, or --send
-  prove     Send the proof of filled (or cancelled) intents, paying the prover's fee
-  claim     Withdraw proven intents' rewards to their claimants, on the source
-  refund    Return unearned rewards from their vaults to their creators, on the source
-  cancel    Cancel unfilled intents after their route's deadline, for an early refund
-  status    Where intents stand on both chains, and what can be done next
-  list      Every intent the store keeps, and where each stands
-  show      One stored intent: its route, reward, deadlines and events, and where it stands
-  import    Store the intents a transaction published, rebuilt from its logs
-
-An intent is a file that opens one (`Base(() => { … }).reward({ … })`), named with the
-flags it is built with, or its hash once the store keeps it: `publish`, `fill` and
-`import` store every intent they touch (--store, default ~/.sauce/intents), and every verb
-takes the hash. With no verb, at a terminal: a list of the stored intents, read live from
-the chains, to pick one from, then a menu that runs these verbs on it, with the same
-approvals (with a signer, they send). With no terminal, the plain list.
-
-Examples:
-  sauce intent publish                          (guided, at a terminal)
-  sauce intent fill 0x<intent hash> --send --keystore <path>
-  sauce intent claim 0x<intent hash> --keystore <path>
-```
-
-### `sauce intent publish`
-
-```text
-Publish a file's fixed intents from a wallet (or make one, step by step).
-
-Usage: sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]
-       sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-      --source <chain>                             No file: the source chain (the reward's)
-      --destination <chain>                        …the destination chain
-      --token <symbol|address>                     …the token delivered there
-      --amount <n>                                 …how much, in whole units
-      --recipient <address>                        …to whom (default: the signer)
-      --reward-token <symbol|address>              …the reward's token
-      --reward <n>                                 …the reward, in whole units
-      --prover <role|address>                      …the prover (HyperProver)
-      --fill-deadline <when>                       …the last second to fill: unix seconds, or +30m, +2h, +1d
-      --reward-deadline <when>                     …from when it is refundable, if no fill is proven
-      --out <path>                                 …the .sauce.ts file to write
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --from <address>                             With --dry-run or --format and no signer: whose wallet
-      --dry-run                                    Simulate the transactions together (eth_simulateV1); send nothing
-      --assume-balance <TOKEN:amount>              With --dry-run: give the wallet this balance, in whole tokens, for the simulation only
-      --format <json|cast>                         Print the unsigned transactions instead of sending them
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Solana only:
-      --keypair <path>  Sign with a keypair file (a JSON array of 64 bytes)
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-For a file whose intents are fixed when it is built — every amount a literal, one of main's
-arguments or a top-level `const` of a literal — builds each intent off-chain (the SDK's own
-lowering) and sends the source chain's transactions from the signer's wallet: each reward token
-transferred to the intent's vault (and the native amount sent to it), then Portal.publish.
-No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own
-intentVaultAddress must agree with or nothing is sent; only what the vault does not hold
-yet is transferred, and publish is sent only once the Portal counts the intent funded.
-Prints the intent hashes and the transactions. A file whose intent uses a value the program
-measures or computes while it runs, or that does anything besides open its intents, is
-refused: use `sauce run` on a Pot.
-
-main's arguments (--args, in order, or --args-json) are the values the intents are built
-with: a wallet publishes what it knows before anything runs, so each is bound into the
-intents as it is. Each is one word: an integer, an address or a bool.
-
---intent-fund-via publishAndFund funds it through the Portal instead: each reward token
-approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20
-does), then publishAndFund, which records the intent Funded and emits IntentFunded.
-
---dry-run simulates the transactions together through eth_simulateV1 from the signer's
-wallet, or --from's with no key, then asks the Portal whether each intent is funded, and
-sends nothing. --assume-balance TOKEN:amount gives that wallet a balance for the simulation
-only, by state override (repeatable; the amount as `sauce run --fund` takes it;
-ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can
-simulate publishing it.
-
-From Solana (--chain solana), the wallet is a Solana one (--keypair, or a Solana --wallet)
-and Solana's Portal escrows the reward: two transactions an intent, Portal.fund (the reward
-into the vault the Portal derives) then Portal.publish, each simulated on the cluster first.
-The reward's names are Solana's, and --intent-creator is a Solana key. --format json prints
-them unsigned for --from <key>. The route travels whole in one Solana transaction: a body of
-token transfers fits, a program body does not.
-
-With no <file>, it makes one: which chains, what is delivered and to whom, the reward
-(suggested: what is delivered plus a margin over the solver's destination costs — gas, the
-proof's fee, a Kitchen fee where one runs — priced through a Uniswap V3 pool there, and
-doubled so a fill is worth a solver's while), the fill and reward deadlines, the prover
-and how the reward is funded (--intent-fund-via, a transfer to the vault by default), each
-asked at a terminal unless its flag gives it (with no terminal, every flag still needed is
-named). It writes the intent as a .sauce.ts file (--out, default
-intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, simulates
-publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and
-with a signer publishes it once you approve (or with --yes), storing it. It reads
-both chains.
-
-Publishes (or prints the transactions) only on a supported chain: Ethereum, Base and Solana, for
-the initial release. On any other (a preview chain) it is refused before anything is read or
-signed, with the supported chains and the GitHub issue to ask for that chain with; compile and
-simulate work there.
-
-Examples:
-  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \
-    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…
-  sauce intent publish pay.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
-    --intent-deadline 2000000000 --intent-creator <Solana key> --args 0x…
-  sauce intent publish --keystore ~/.keys/me.json
-  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \
-    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \
-    --fill-deadline +1h --reward-deadline +1d --keystore <path>
-```
-
-### `sauce intent fill`
-
-```text
-Fill a file's (or a stored) intents on their destination: simulated, or --send.
-
-Usage: sauce intent fill <file | -> --chain <source> [options] [--args <value>…]
-       sauce intent fill <intent-hash> [options]
-       sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--yes]
-       sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --rpc-url <url>                              Your own endpoint for the destination chain (one destination only)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --solver <address|key>                       Simulate as this account (default: one nobody holds the key of; on Solana, required)
-      --claimant <address|bytes32>                 Who claims the reward, as fulfill records it (default: the solver; for Solana, required)
-      --no-prove                                   fulfill only: send no proof with the fill (prove later: sauce intent prove)
-      --send                                       Send the fill, from the signer, after simulating it
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --pots <dir>                                 The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Solana only:
-      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-Builds each intent the file opens, as `sauce intent publish` does (or takes the intent the store
-holds under that hash), and fills it on its destination chain as a solver does: one
-eth_simulateV1 block, every call from the solver — Kitchen.deployPot for the destination's
-shared intent Pot when the route cooks on it and it is not deployed yet (any account may
-send it), the solver's approval of the Portal for each token the route delivers (reset to
-zero first where a smaller allowance stands, as USDT requires), then the fill:
-  Portal.fulfillAndProve(intentHash, route, rewardHash, claimant, prover, domain, data)
-             when the reward's prover is a Hyperlane prover, with the route's native amount
-             (the Kitchen's fee for a cook) plus the Hyperlane fee, quoted from the prover's
-             fetchFee, as the value: the proof leaves with the fill;
-  Portal.fulfill(intentHash, route, rewardHash, claimant)
-             otherwise, or with --no-prove, with the route's native amount: prove it later.
-
-With no --send, nothing is signed or sent: the solver is given the route's tokens and the
-value by state override, where a token keeps the balance found as simulate's
---assume-balance finds it. With --send the signer is the solver and nothing is assumed: the
-simulation runs on its real balances, a fill that would revert is not sent, and what it
-spends (each token, the value and what it is for) is shown for you to approve at the
-terminal, or with --yes. Then the transactions are sent in order, and the intent and its
-fill go into the store (--store, default ~/.sauce/intents).
-
-Prints the gas and what the fill moved — the transfers, each address's net change, labelled
-with the defines that name it (RECIPIENT, REFUND_TO) — what it left in the shared Pot and the
-Portal's Executor, which every intent through that Portal shares, the Portal's
-IntentFulfilled record, and, sent, the Hyperlane message the proof travels as; or the
-decoded reason it reverts (exit 1), a failed route call unwrapped to the program's own
-message.
-
-It runs on the DESTINATION, and reads the source to check the source prover trusts the
-destination's; --rpc-url is the destination's endpoint, for intents that all go to one
-chain. The intent must be fixed when it is built, as for publish: one using a value the
-program measures on chain has no route until it runs (name it by the hash `sauce run`
-stored). Needs an endpoint that serves eth_simulateV1.
-
-An intent to Solana (one `sauce intent import` stored from its publishing transaction) is
-filled through Solana's Portal program: Portal.fulfill, the solver's token accounts paying
-the route's tokens, simulated by simulateTransaction on the accounts as they are (Solana's
-simulation takes no overrides: --solver names a Solana key, whose accounts pay). --claimant,
-an address on the source chain, is required: the reward pays it, and a Solana key is none.
-With --send and --keypair it is sent, then its proof through the HyperProver, the IGP's gas
-paid in the same transaction, each spend approved.
-
---send sends a fill only on a supported chain: Ethereum, Base and Solana, for the initial
-release. On any other (a preview chain) it is refused before anything is read or signed, with
-the supported chains and the GitHub issue to ask for that chain with; compile and simulate work
-there.
-
-Examples:
-  sauce intent fill swap-on-base.sauce.ts --chain ethereum \
-    --intent-deadline 2000000000 --intent-creator 0x… --intent-execution-fee 1000000000000 \
-    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>
-  sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json
-```
-
-### `sauce intent prove`
-
-```text
-Send the proof of filled (or cancelled) intents, paying the prover's fee.
-
-Usage: sauce intent prove <file | intent-hash…> [--keystore <path> | --private-key <hex>]
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Solana only:
-      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-For intents fulfilled (or cancelled) on their destination whose proof has not reached the
-source: Portal.prove(prover, sourceDomain, intentHashes, data) on the destination, from
-the signer, with the prover's fee — quoted from its fetchFee — as the value, which you
-approve at the terminal or with --yes. Several hashes share one proof when they have one
-destination, source and prover. An intent the source has proven already is left out.
-Prints the transaction and the Hyperlane message the proof travels as. With no signer,
-prints the unsigned transaction instead.
-
-The intent is a hash the store holds (`sauce intent publish`, `run`, `fill` and `intents import`
-store them), or the file that opens it (with --chain, its source, and the flags it was
-built with). It reads the destination, and the source to skip what is proven already.
-
-Proves (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for the
-initial release. On any other (a preview chain) it is refused before anything is read or signed,
-with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
-work there.
-
-Example:
-  sauce intent prove 0x<intent hash> --keystore ~/.keys/me.json
-```
-
-### `sauce intent claim`
-
-```text
-Withdraw proven intents' rewards to their claimants, on the source.
-
-Usage: sauce intent claim <file | intent-hash…> --chain <source> [signer]
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Solana only:
-      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-Checks the reward's prover on the source chain has the intent proven, for this
-destination, and the reward is not withdrawn or refunded; then sends Portal.withdraw
-(Portal.batchWithdraw for several, one transaction) from the signer — anyone may — which
-pays each reward to the claimant its proof records. Prints what moved out of the vault,
-and stores the claim. With no signer, prints the unsigned transaction.
-
-While the proof has not arrived it says so (exit 1), with when the store saw the intent
-filled and the Hyperlane message its proof travels as, which the Hyperlane explorer shows by
-id. A proven CANCELLATION pays no claimant: refund it instead.
-
-An intent from Solana is claimed on Solana, one transaction an intent, paid by --keypair
-(any key): the claimant's token account opened where it has none, then Portal.withdraw.
-
-Claims (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for the
-initial release. On any other (a preview chain) it is refused before anything is read or signed,
-with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
-work there.
-
-Example:
-  sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
-  sauce intent claim 0x<intent hash> --keypair ~/.config/solana/id.json
-```
-
-### `sauce intent refund`
-
-```text
-Return unearned rewards from their vaults to their creators, on the source.
-
-Usage: sauce intent refund <file | intent-hash…> --chain <source> [signer]
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Solana only:
-      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-Sends Portal.refund from the signer — anyone may — which returns everything the intent's
-vault holds to the reward's creator, once the Portal allows it:
-  a proven cancellation    at once (eco-routes 2.12: `sauce intent cancel`, then `sauce intent prove`);
-  no proof                 from the reward's deadline on;
-  a proof of a fill        only after the claimant has withdrawn: the leftovers.
-It reads the status first and says why not, with the time left (exit 1). There is no batch
-refund: several intents are refunded one transaction each. With no signer, prints the
-unsigned transactions. An intent from Solana is refunded on Solana, paid by --keypair (any
-key): the creator's token account opened where it has none, then Portal.refund.
-
-Refunds (or prints the transactions) only on a supported chain: Ethereum, Base and Solana, for
-the initial release. On any other (a preview chain) it is refused before anything is read or
-signed, with the supported chains and the GitHub issue to ask for that chain with; compile and
-simulate work there.
-
-Example:
-  sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
-  sauce intent refund 0x<intent hash> --keypair ~/.config/solana/id.json
-```
-
-### `sauce intent cancel`
-
-```text
-Cancel unfilled intents after their route's deadline, for an early refund.
-
-Usage: sauce intent cancel <file | intent-hash…> [--and-prove] [signer]
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --wallet <name>                              Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana
-      --wallets [<dir>]                            The wallet directory (default: ~/.sauce/wallets)
-      --password-env <NAME>                        The password is the environment variable NAME (only that one is read)
-      --password-file <path>                       …or a file only you can read (else it is asked for)
-      --password-command <command>                 …or what this command prints (a secret manager's CLI)
-  -y, --yes                                        Approve, without asking, what it sends first (deploying your Pot, an approval)
-      --auto-approve                               The same as --yes, its older name
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --and-prove                                  cancelAndProve: prove in the same transaction (before finality)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-
-EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
-
-Solana only:
-      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-eco-routes 2.12 lets anyone cancel an intent on its DESTINATION once the route's deadline
-has passed and no solver filled it: Portal.cancel records it cancelled, so no fill can
-land after, and proving the cancellation (`sauce intent prove`) lets the creator refund at once,
-without waiting for the reward's deadline (`sauce intent refund`). It is refused, saying why:
-  where the destination Portal has no cancel (it predates 2.12): refund after the reward's
-  deadline instead;
-  where the SOURCE Portal predates 2.12, which would pay a proven cancellation to an
-  address nobody controls, burning the reward: it is checked for the CancelledIntent
-  refusal 2.12 added, so it reads both chains;
-  before the route's deadline, after a fill, and when cancelled already.
-
-eco-routes asks for the proof to wait until the cancel is final on the destination: a
-reorg past the deadline that re-includes a fill would leave that solver unpaid. So cancel
-sends only the cancel; --and-prove sends cancelAndProve, proving at once, with the fee
-approved as for prove. With no signer, prints the unsigned transaction.
-
-Cancels (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for
-the initial release. On any other (a preview chain) it is refused before anything is read or
-signed, with the supported chains and the GitHub issue to ask for that chain with; compile and
-simulate work there.
-
-Example:
-  sauce intent cancel 0x<intent hash> --keystore ~/.keys/me.json
-```
-
-### `sauce intent status`
-
-```text
-Where intents stand on both chains, and what can be done next.
-
-Usage: sauce intent status <file | intent-hash…>
-
-Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --api <url>                                  Also ask the Eco API gateway at this URL (none is built in)
-      --api-key-file <path>                        …and send the key in this file
-      --store <dir>                                The intent store (default: ~/.sauce/intents)
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-
-Low-level (a program's inputs are main's parameters, given with --args):
-      --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
-      --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
-
-Reads each intent on its source chain (the reward's status, what its vault holds, the
-proof its prover records) and its destination (whether the Portal recorded a fill or a
-cancellation, and whether it can cancel), wherever an endpoint reaches, and prints
-its state — unfunded, funded, filled, cancelled, proven, cancelProven, claimed or refunded
-— its deadlines, and whether it can be filled, proven, claimed, refunded or cancelled now,
-with why not and from when. Nothing is sent. --api <url> also asks the Eco API gateway
-there (GET /v1/intents/status) and prints its word beside the chains' state, which stays
-the truth; --api-key-file sends a key with it. No URL is built in.
-
-Example:
-  sauce intent status 0x<intent hash>
-```
-
-### `sauce intent list`
-
-```text
-Every intent the store keeps, and where each stands.
-
-Usage: sauce intent list [--store <dir>]
-
-Options:
-      --rpc-url <url>    Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>    Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline          Read no chain: no endpoint, not even a built-in one
-      --store <dir>      The intent store (default: ~/.sauce/intents)
-      --json             Print one JSON object instead
-  -h, --help             Show this help
-      --no-update-check  No notice of a newer sauce, and no registry read for one
-
-The store (--store, default ~/.sauce/intents) keeps every intent `sauce intent publish`,
-`sauce run`, `sauce send` and the intent commands touch, and those `sauce intent import`
-brings in (as does `sauce mcp`, over stdio): one directory per intent hash, its
-intent.json written once and never changed, and events.jsonl, one line appended per
-thing that happened (published, funded, filled, proving, claimed, refunded, cancelled)
-with its chain, transaction, block and time, read from the Portal's own events as each
-transaction lands. Where an intent stands is never stored: it is read from the chains,
-each time (--offline: not).
-```
-
-### `sauce intent show`
-
-```text
-One stored intent: its route, reward, deadlines and events, and where it stands.
-
-Usage: sauce intent show <intent-hash> [--store <dir>]
-
-Options:
-      --rpc-url <url>        Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>        Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline              Read no chain: no endpoint, not even a built-in one
-      --api <url>            Also ask the Eco API gateway at this URL (none is built in)
-      --api-key-file <path>  …and send the key in this file
-      --store <dir>          The intent store (default: ~/.sauce/intents)
-      --json                 Print one JSON object instead
-  -h, --help                 Show this help
-      --no-update-check      No notice of a newer sauce, and no registry read for one
-
-Prints the intent the store keeps under that hash — its route and reward, its deadlines,
-its creator and prover, and every event recorded for it — and, read from the chains, its state on
-both chains and what can be done next, as `sauce intent status` reads it.
-```
-
-### `sauce intent import`
-
-```text
-Store the intents a transaction published, rebuilt from its logs.
-
-Usage: sauce intent import <tx-hash | signature> --chain <source> [--index <n>]
-
-Options:
-      --chain <slug|id>  Chain the program runs on (base, 8453, solana)
-      --rpc-url <url>    Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>    Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline          Read no chain: no endpoint, not even a built-in one
-      --store <dir>      The intent store (default: ~/.sauce/intents)
-      --index <n>        Only the n-th intent the transaction published (from 0)
-      --json             Print one JSON object instead
-  -h, --help             Show this help
-      --no-update-check  No notice of a newer sauce, and no registry read for one
-
-Reads the transaction's receipt on the source chain and rebuilds every intent its
-IntentPublished logs announce — the destination, the route (the bytes the Portal hashed)
-and the whole reward — checking each one hashes to the hash its log names, and stores it
-with the Portal that emitted it and the vault that Portal derives. Then every intent
-command takes it by hash. For an intent someone else published, or one published before
-the store kept it. On Solana, by the transaction's signature: each publish of Solana's
-Portal it ran, rebuilt from the instruction and checked against the hash the Portal logged.
-
-Example:
-  sauce intent import 0x<tx hash> --chain ethereum
-  sauce intent import <signature> --chain solana
 ```
 
 ## `sauce wallet`
@@ -1254,27 +589,20 @@ Usage: sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address
        sauce tx <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]
 
 Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --owner <address>                            The Pot's owner, which derives the Pot with the salt (default 0)
-      --salt <label>                               Name one of the owner's Pots: salt = keccak256(label)
-      --salt-hex <bytes32>                         …or give its salt exactly
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --format <json|cast>                         json (default), or a `cast send` line with placeholders
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --chain <slug|id>        Chain the program runs on (base, 8453, solana)
+      --target <evm|svm>       Checked against the chain; svm alone means solana
+      --source-dir <dir>       Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --owner <address>        The Pot's owner, which derives the Pot with the salt (default 0)
+      --salt <label>           Name one of the owner's Pots: salt = keccak256(label)
+      --salt-hex <bytes32>     …or give its salt exactly
+      --args-json <json|file>  main's arguments as a JSON array, inline or in a file
+      --rpc-url <url>          Your own RPC endpoint for the chain (default: a built-in public one)
+      --config <file>          Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
+      --offline                Read no chain: no endpoint, not even a built-in one
+      --format <json|cast>     json (default), or a `cast send` line with placeholders
+  -h, --help                   Show this help
+      --no-update-check        No notice of a newer sauce, and no registry read for one
+      --args <value>…          main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
@@ -1314,10 +642,9 @@ same transaction, ahead of the cook (createsPot). It reads the cluster (for the 
 and the fee), and the --account flags simulate takes; --max-execution-fee refuses a fee
 above it.
 
-Prints the transaction only on a supported chain: Ethereum, Base and Solana, for the initial
-release. On any other (a preview chain) it is refused before anything is read or signed, with
-the supported chains and the GitHub issue to ask for that chain with; compile and simulate work
-there.
+Prints the transaction only on a supported chain: Ethereum, Base, Arc and Solana. On any other
+(a preview chain) it is refused before anything is read or signed, with the supported chains and
+the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
@@ -1342,7 +669,6 @@ Options:
       --config <file>            Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                  Read no chain: no endpoint, not even a built-in one
       --pots <dir>               The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
-      --store <dir>              The intent store (default: ~/.sauce/intents)
       --json                     Print one JSON object instead
   -h, --help                     Show this help
       --no-update-check          No notice of a newer sauce, and no registry read for one
@@ -1382,14 +708,11 @@ why, with the logs, and the cursor alone, once what it needs is there, simulates
 carries no key and no endpoint; @file reads it from a file, or from the JSON a step was
 printed as.
 
-What landed is kept as the other commands keep it: a Pot one deployed in the Pot store,
-and in the intent store (--store, default ~/.sauce/intents) every intent one published
-and what one did to an intent the store holds (filled, proving, claimed, refunded,
-cancelled), read from the Portal's own events.
+What landed is kept as the other commands keep it: a Pot one deployed in the Pot store.
 
-Sends only on a supported chain: Ethereum, Base and Solana, for the initial release. On any
-other (a preview chain) it is refused before anything is read or signed, with the supported
-chains and the GitHub issue to ask for that chain with; compile and simulate work there.
+Sends only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
+it is refused before anything is read or signed, with the supported chains and the GitHub issue
+to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)
@@ -1451,9 +774,9 @@ With the owner's key (--keypair, or --wallet), it asks, then sends each transact
 prints it; --yes sends without asking. With --owner alone it prints the transactions
 unsigned, as JSON, for the owner to sign anywhere and send with sauce send.
 
-Closes only on a supported chain: Ethereum, Base and Solana, for the initial release. On any
-other (a preview chain) it is refused before anything is read or signed, with the supported
-chains and the GitHub issue to ask for that chain with; compile and simulate work there.
+Closes only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
+it is refused before anything is read or signed, with the supported chains and the GitHub issue
+to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce reclaim --chain solana --owner <pubkey>
@@ -1502,9 +825,8 @@ needs it (asking, or with -y), and sauce tx plans its deployment first. This doe
 hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with
 --deploy, sends it unless the Pot is already there, and waits until the endpoint shows its
 code. The owner defaults to the signer. Deploying is permissionless: with --owner, the
-signer sends and pays for another owner's Pot, which is that owner's alone — how the Pot
-intents share on a chain (owner: its Portal's Executor) is deployed. The default salt is
-zero: the one Pot an owner has by default. With a signer and no --owner, it is the
+signer sends and pays for another owner's Pot, which is that owner's alone. The default
+salt is zero: the one Pot an owner has by default. With a signer and no --owner, it is the
 signer's own Pot, so `sauce pot --chain base --keystore <keystore>` prints your address and
 your Pot (the keystore's own address field is read, with no password, where it has one).
 Without --deploy it also reads
@@ -1515,8 +837,8 @@ On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the 
 instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so
 the signer is the owner.
 
-Every Pot a command deploys (this, a run that deploys its Pot first, sauce send, a fill
-that deploys an intent's Pot) is recorded in the Pot store (--pots, default
+Every Pot a command deploys (this, a run that deploys its Pot first, sauce send) is
+recorded in the Pot store (--pots, default
 ~/.sauce/pots) once the chain shows it deployed: its chain, owner, salt and kind, the
 Kitchen and the release it was minted under (the engine, and the compiler whose programs
 it runs), and the transaction that deployed it. sauce tx sends nothing, so it records
@@ -1526,10 +848,9 @@ Verbs (`sauce pot <verb> --help` for each):
   list      List the Pots you deployed or imported, each with the release it was minted under
   import    Record a Pot deployed elsewhere, read from the chain with the release that minted it
 
-Deploys (or prints the deployment) only on a supported chain: Ethereum, Base and Solana, for the
-initial release. On any other (a preview chain) it is refused before anything is read or signed,
-with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
-work there.
+Deploys (or prints the deployment) only on a supported chain: Ethereum, Base, Arc and Solana. On
+any other (a preview chain) it is refused before anything is read or signed, with the supported
+chains and the GitHub issue to ask for that chain with; compile and simulate work there.
 
 Examples:
   sauce pot --owner 0x… --chain base
@@ -1629,7 +950,7 @@ Options:
 Every name a program compiled for the chain may use without declaring it, from the SDK's
 registries (routes.sourceGlobals) — the ones the compile resolves: token symbols with
 their addresses and decimals, protocol namespaces with each contract's address (and,
-with --protocol, its methods), the chain names that open intents, the defines, and the
+with --protocol, its methods), the chain names, the defines, and the
 zero-import @sauce/token functions. With no filter it lists everything but the chain's
 tokenized stocks, which it counts: Ethereum and Solana have over a thousand each. A stock
 token is named like any other (SPCXc.balanceOf(...), balanceOf(TSLAx, account) on
@@ -1768,56 +1089,43 @@ Examples:
 ## `sauce inspect`
 
 ```text
-Take a cook, a Portal or Kitchen call, a program or a file apart.
+Take a cook, a Kitchen call, a program or a file apart.
 
-Usage: sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options] [--args <value>…]
+Usage: sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options]
 
 Options:
-      --chain <slug|id>                            Chain the program runs on (base, 8453, solana)
-      --target <evm|svm>                           Checked against the chain; svm alone means solana
-      --intent-deadline <unix seconds>             For intents the program opens: their deadline
-      --intent-creator <address>                   …their creator, who may reclaim an unearned reward
-      --intent-reward-deadline <unix seconds>      …from when an unproven one's reward is refundable (default: the deadline)
-      --intent-prover <address>                    …their prover (default: the registry's for the pair)
-      --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
-      --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
-      --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
-      --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
-      --source <file>                              The program a cook was compiled from: decode its arguments
-      --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
-      --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
-      --offline                                    Read no chain: no endpoint, not even a built-in one
-      --json                                       Print one JSON object instead
-  -h, --help                                       Show this help
-      --no-update-check                            No notice of a newer sauce, and no registry read for one
-      --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
+      --chain <slug|id>   Chain the program runs on (base, 8453, solana)
+      --target <evm|svm>  Checked against the chain; svm alone means solana
+      --source-dir <dir>  Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --source <file>     The program a cook was compiled from: decode its arguments
+      --rpc-url <url>     Your own RPC endpoint for the chain (default: a built-in public one)
+      --config <file>     Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
+      --offline           Read no chain: no endpoint, not even a built-in one
+      --json              Print one JSON object instead
+  -h, --help              Show this help
+      --no-update-check   No notice of a newer sauce, and no registry read for one
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
       --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
 
-Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine, its
-program, the intents the program opens), a Kitchen.deployPot (the Pot it makes), a Portal
-publish or publishAndFund (the route and the reward), an ERC-20 call, or a bare program.
-A 32-byte hash with --chain (or --rpc-url) is a transaction, fetched first.
-With --source, a cook's program is checked against that file's and the arguments after it
-are decoded against its main. A file operand is compiled and its intents listed, with
-each value it measures at run time named; with --args, main's arguments are bound into
-them, as `sauce intent publish` binds them. No opcode listing: programs are reported by
-size, hash and what they open.
+Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine and its
+program), a Kitchen.deployPot (the Pot it makes), an ERC-20 call, or a bare program. A
+32-byte hash with --chain (or --rpc-url) is a transaction, fetched first. With --source, a
+cook's program is checked against that file's and the arguments after it are decoded
+against its main. A file operand is compiled and reported. No opcode listing: programs are
+reported by size and hash.
 
 Examples:
   sauce inspect 0x… --chain base --source split.sauce.ts
   sauce inspect 0x<tx hash> --chain base
-  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x… \
-    --args 1000000 0x…
+  sauce inspect buy.sauce.ts --chain base
 ```
 
 ## `sauce verify`
 
 ```text
-Check that a payload, cook or intent runs the audited settle program.
+Check that a payload or cook runs the audited settle program.
 
 Usage: sauce verify <payload | calldata | tx-hash> [--pin <hash:bytes>]… [--engine <address>]… [--chain <slug|id>]
 
@@ -1834,13 +1142,12 @@ Options:
   -h, --help              Show this help
       --no-update-check   No notice of a newer sauce, and no registry read for one
 
-Takes a settle payload, Pot.cook calldata, Portal.publish[AndFund] calldata, or — with an
---chain — a transaction hash, and checks the settle it carries with the SDK's
-validateSettleProgram: the program must hash to the current pin (or a --pin), and its
-arguments must be the one canonical encoding. Prints tokens, minOut and recipient. A cook
-must name the released engine (or an --engine); an intent must carry a settle cook. A
-rejection exits 1 with its code: the SDK's SettleFailureCode, or UNKNOWN_ENGINE or
-NO_SETTLE.
+Takes a settle payload, Pot.cook calldata, or — with an --chain — a transaction hash, and
+checks the settle it carries with the SDK's validateSettleProgram: the program must hash
+to the current pin (or a --pin), and its arguments must be the one canonical encoding.
+Prints tokens, minOut and recipient. A cook must name the released engine (or an
+--engine). A rejection exits 1 with its code: the SDK's SettleFailureCode, or
+UNKNOWN_ENGINE.
 
 On Solana (--chain solana and a transaction signature): an SVM settle's
 floor and split are compiled into it, so give them, --min-out and --spl-count. The
@@ -1994,7 +1301,7 @@ Examples:
 ```text
 Serve the commands and the agent skills to coding agents over MCP.
 
-Usage: sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--store <dir>] [--no-stores]
+Usage: sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--no-stores]
        sauce mcp (--password-env <NAME> | --password-file <path> | --password-command <command>) [--wallets <dir>] [--config <file>]
        sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]
        sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]
@@ -2013,7 +1320,6 @@ Options:
       --password-file <path>        …or a file only you can read (else it is asked for)
       --password-command <command>  …or what this command prints (a secret manager's CLI)
       --pots <dir>                  Over stdio: keep the Pot store here (default ~/.sauce/pots, as sauce pot list reads)
-      --store <dir>                 Over stdio: keep the intent store here (default ~/.sauce/intents, as sauce intent list reads)
       --no-stores                   Over stdio: keep none of the command's stores (by default it keeps them, as sauce does)
       --agent <agent>               setup: claude, codex, cursor, copilot, gemini or all (default all)
       --dir <project>               setup: the project (default .)
@@ -2021,13 +1327,15 @@ Options:
   -h, --help                        Show this help
       --no-update-check             No notice of a newer sauce, and no registry read for one
 
-The Sauce MCP server. Its tools are this command's building half — sauce_compile,
-sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,
-sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools
-and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,
-sauce_install_skills) and as resources, at sauce://skills/<path>. No tool takes a key or a
-password: a transaction comes back unsigned, for the user's own wallet, or is sent from
-one of the server's own wallets (below).
+The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half
+as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,
+sauce_actions, sauce_tx, sauce_pot, sauce_reclaim, sauce_simulate, sauce_inspect and
+sauce_verify; sauce_send, which broadcasts what the caller signed; the agent skills as
+tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as resources, at
+sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also has the
+wallet tools and the
+store tools (below). No tool takes a key or a password: a transaction comes back unsigned,
+for the user's own wallet, or is sent from one of the server's own wallets.
 
 A coding agent starts the server itself, from its MCP configuration. Add it once:
   claude mcp add sauce -- sauce mcp    # Claude Code
@@ -2057,10 +1365,7 @@ Over stdio it keeps this command's stores as the command does, in the same direc
 for an agent that reaches Sauce only through it: every Pot a tool's transaction deploys
 (sauce_send, sauce_wallet_send) is recorded in the Pot store (--pots, default
 ~/.sauce/pots), which sauce_pot_list and sauce_pot_import read and write, as sauce pot list
-and sauce pot import do; and every intent one publishes, and what one does to an intent,
-in the intent store (--store, default ~/.sauce/intents), which sauce_intent_list,
-sauce_intent_show and sauce_intent_import read and write, as sauce intent list, show and
-import do, and every intent tool names an intent from by its hash. The wallet directory
+and sauce pot import do. The wallet directory
 is one of those stores: --no-stores keeps none, and serves no wallet tool. Over HTTP it
 keeps nothing, and has none of those tools.
 
@@ -2086,3 +1391,9 @@ Examples:
   sauce mcp --http 3000
   sauce mcp setup --agent claude,cursor
 ```
+
+## Next
+
+- [The sauce command](../guides/cli.md): installing it, and what each command is for.
+- [Troubleshooting](../guides/troubleshooting.md): what a command's message means.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

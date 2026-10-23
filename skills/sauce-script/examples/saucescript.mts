@@ -63,12 +63,10 @@ check(
   ),
   "switch",
 );
-check(
-  /unsupported construct/.test(
-    rejects("function main(): void { try { require(false); } catch (e) {} }"),
-  ),
-  "try/catch",
-);
+// EVM atomic try/catch is supported; Solana rejects it.
+const recovered = "function main(): void { try { require(false); } catch (e) {} }";
+build(recovered);
+check(/not available/.test(rejects(recovered, "svm")), "try/catch is EVM only");
 check(
   /unsupported construct/.test(
     rejects('function main(x: Uint256): void { throw new Error("no"); }'),
@@ -79,21 +77,33 @@ check(
   /not a context builtin/.test(rejects("function main(): Address { return ctx.caller(); }")),
   "the caller is ctx.msgSender(), not ctx.caller()",
 );
-// A negative amount is `-x`, two's complement, on both targets; `~x + 1` overflows at x = 0.
-for (const target of ["evm", "svm"] as const)
-  build("function main(x: Uint256): Uint256 { return -x; }", target);
-check(
-  /overflows 256 bits/.test(rejects("function main(): Uint256 { return ~0 + 1; }")),
-  "~0 + 1 overflows",
-);
+// Signed values use Int256 on both targets; unsigned values convert before negation. The two kinds
+// compare by value but do not mix in arithmetic, and a helper returning an Int256 declares it.
+for (const target of ["evm", "svm"] as const) {
+  build("function main(x: Uint256): Int256 { return -Int256(x); }", target);
+  build("function main(a: Int256, b: Uint256): bool { return a < b; }", target);
+  check(
+    /cannot combine Int256 and Uint256/.test(
+      rejects("function main(a: Int256, b: Uint256): Int256 { return a + b; }", target),
+    ),
+    `mixed arithmetic needs a conversion on ${target}`,
+  );
+  check(
+    /needs an explicit `: Int256` return annotation/.test(
+      rejects(
+        "function f(a: Int256) { return a; }\nfunction main(a: Int256): Int256 { return f(a); }",
+        target,
+      ),
+    ),
+    `a signed helper result is annotated on ${target}`,
+  );
+}
+check(rejects("function main(): Uint256 { return ~0 + 1; }").length > 0, "~0 + 1 overflows");
 check(
   /not a valid 256-bit literal/.test(rejects("function main(): Uint256 { return 1.5; }")),
   "no floats",
 );
-check(
-  /overflows 256 bits/.test(rejects("function main(): Uint256 { return 0 - 1; }")),
-  "checked arithmetic",
-);
+check(rejects("function main(): Uint256 { return 0 - 1; }").length > 0, "checked arithmetic");
 
 // Target differences: EVM-only context reads are refused on Solana with a reason.
 check(

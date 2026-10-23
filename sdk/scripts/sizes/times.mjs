@@ -23,14 +23,6 @@ const files = dirs
       .filter((name) => name.endsWith(".sauce.ts"))
       .map((name) => join(dir, name)),
   );
-const options = {
-  intents: {
-    executionFee: 1000n,
-    deadline: 2000000000n,
-    openedAt: 1900000000n,
-    salt: `0x${"5a".repeat(32)}`,
-  },
-};
 const median = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const out = {};
 for (const file of files) {
@@ -40,7 +32,7 @@ for (const file of files) {
     return existsSync(at) ? new TextEncoder().encode(readFileSync(at, "utf8")) : undefined;
   };
   for (const chain of ["base", "ethereum", "solana"]) {
-    const compile = () => compileSauceProgram(chain, text, { ...options, resolve });
+    const compile = () => compileSauceProgram(chain, text, { resolve });
     try {
       clearFunctionCache();
       compile();

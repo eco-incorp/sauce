@@ -17,33 +17,10 @@ Aave-native decentralized stablecoin minted against Aave V3 collateral. Multi-co
 | Namespace | `Gho` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **transfer**: Transfer GHO tokens
 - **approve**: Approve GHO token spender
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Transfer GHO
-import { transfer } from "@sauce/token";
-function main(ghoAddress: Address, to: Address, amount: Uint256): Uint256 {
-  transfer(ghoAddress, to, amount);
-  return 1;
-}
-
-// Approve GHO spender
-import { approve } from "@sauce/token";
-function main(ghoAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  approve(ghoAddress, spender, amount);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -80,3 +57,9 @@ function main() {
 - `transfer(address to, uint256 amount) returns (bool)`
 - `approve(address spender, uint256 amount) returns (bool)`
 - `balanceOf(address account) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

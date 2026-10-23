@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
 
@@ -29,8 +29,9 @@ hooks)`. A pool can attach a hook contract that runs around swaps and liquidity 
 
 ## Pitfalls for a program
 
-- Exact input is a **negative** `amountSpecified` (`-amount`), the reverse of V3's pool.
-  `uniswapV4` takes a positive `amountIn` and passes `-amountIn` itself.
+- Exact input is a **negative** `amountSpecified`, the reverse of V3's pool. For raw calls use
+  `-Int256(amount)` when `amount` is unsigned; `uniswapV4` takes a positive `amountIn` and handles
+  the protocol's signed convention itself.
 - A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0`) unless you have
   reviewed the hook.
 - A protocol fee can apply on top of the LP fee; both are in the pool's state
@@ -61,65 +62,11 @@ function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, re
 (`10`) and hooks (`0`, none), pays `recipient` and reverts below `minOut`. The WETH the pool did
 not take before the price limit goes back to `recipient` too.
 
-## Key Operations
+## What it offers
 
 - **swap**: Execute a swap through the UniversalRouter using command-based encoding
 - **addLiquidity**: Modify liquidity positions through the PositionManager
 - **removeLiquidity**: Decrease or remove liquidity positions through the PositionManager
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { UniswapV4UniversalRouterABI as IUniversalRouter } from "./abis";
-
-function main(routerAddress: Address, commands: bytes, inputs: bytes[]): Uint256 {
-  const router = IUniversalRouter.at(routerAddress);
-  router.execute(commands, inputs, 99999999999);
-  return 1;
-}
-```
-
-- `routerAddress`: UniversalRouter address for the target chain
-- `commands`: Encoded bytes of command IDs defining the sequence of operations (each byte = one command)
-- `inputs`: Encoded bytes array of ABI-encoded parameters for each command
-- Commands and inputs must be pre-encoded off-chain; the router decodes and executes sequentially
-
-### addLiquidity
-
-```typescript
-import { UniswapV4PositionManagerABI as IPositionManager } from "./abis";
-
-function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
-  const pm = IPositionManager.at(positionManagerAddress);
-  pm.modifyLiquidities(unlockData, 99999999999);
-  return 1;
-}
-```
-
-- `positionManagerAddress`: PositionManager address for the target chain
-- `unlockData`: ABI-encoded liquidity modification data including pool key, tick range, and amounts
-- Data must be pre-encoded off-chain with the position parameters
-
-### removeLiquidity
-
-```typescript
-import { UniswapV4PositionManagerABI as IPositionManager } from "./abis";
-
-function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
-  const pm = IPositionManager.at(positionManagerAddress);
-  pm.modifyLiquidities(unlockData, 99999999999);
-  return 1;
-}
-```
-
-- Same interface as addLiquidity but with negative liquidityDelta in the encoded data
 
 ## Notes
 
@@ -132,7 +79,7 @@ function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
 - Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
-- From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, which unlocks the PoolManager, swaps, takes the output and settles the input from the Pot — no UniversalRouter and no approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first) with `fee`, `tickSpacing` and `hooks`; the function passes `-amountIn`, exact input, and returns the amount out. The `uniswapV4Swap` action is the same call
+- From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, with no UniversalRouter or approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first), with `fee`, `tickSpacing` and `hooks`. Pass positive `amountIn`; the helper handles the signed exact-input convention and returns output. The `uniswapV4Swap` action is the same call.
 - On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance
 
 ## Its names in a program
@@ -199,6 +146,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `UniswapV4PoolManagerABI`
 
 `import UniswapV4PoolManagerABI from "./protocols/uniswap-v4/UniswapV4PoolManagerABI.json";` Speaks for: poolManager.
@@ -230,7 +182,7 @@ function main() {
 - `getPositionInfo(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)`
 - `getPositionInfo(bytes32 poolId, address owner, int24 tickLower, int24 tickUpper, bytes32 salt) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)`
 - `getPositionLiquidity(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity)`
-- `poolManager() view returns (address)`
+- `poolManager() view returns (address)`: the address is a `UniswapV4.PoolManager`
 
 ### `UniswapV4UniversalRouterABI`
 
@@ -238,3 +190,9 @@ function main() {
 
 - `execute(bytes commands, bytes[] inputs, uint256 deadline) payable`
 - `execute(bytes commands, bytes[] inputs) payable`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

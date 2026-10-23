@@ -72,7 +72,6 @@
     "gen-skills-actions": "node scripts/gen-skills-actions.mjs",
     "gen-runtime-lock": "node scripts/gen-runtime-lock.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
-    "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs",
     "sync-stock-tokens": "node scripts/sync-stock-tokens.mjs"
   },
   "dependencies": {
@@ -84,7 +83,7 @@
     "@solana-program/token": "^0.17.0",
     "@solana/kit": "^8.5.0",
     "litesvm": "1.6.0",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.5.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.0",
     "viem": "^2.45.1"
   },
   "devDependencies": {

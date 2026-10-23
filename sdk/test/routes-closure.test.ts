@@ -1,30 +1,13 @@
 /**
- * Closure route bodies — `sauceBodyToSource` extraction + end-to-end via `openRoute`.
+ * Closure route bodies — `sauceBodyToSource` extraction + end-to-end through `compileSauceRoute`.
  */
 import { compileProgram as compile } from "./helpers";
 import * as acorn from "acorn";
 import { isSauceClosure, sauceBodyToSource } from "../src/routes/closure.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import type { IntentOptions } from "../src/routes/intent-dsl.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
-
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
 
 function bytecodeOf(source: string): Uint8Array {
   const { bytecode } = compile(source);
@@ -117,52 +100,31 @@ describe("isSauceClosure", () => {
   });
 });
 
-describe("openRoute: closure bodies end to end", () => {
-  it("a genuine capture throws the WRAPPED capture error naming the free identifier", () => {
-    const outer = 5n;
-    expect(() =>
-      openRoute(
-        "ethereum",
-        () => {
-          return outer + 1n;
-        },
-        evmOptions(),
-      ),
-    ).toThrow(/outer/);
-    expect(() =>
-      openRoute(
-        "ethereum",
-        () => {
-          return outer + 1n;
-        },
-        evmOptions(),
-      ),
-    ).toThrow(/defines/);
-  });
+describe("closure bodies end to end", () => {
+  const execution = { pot: POT, engine: ENGINE };
 
-  it("Base(() => { return 1n; }, opts).reward(...) equals Base('function main(){ return 1n; }', opts).reward(...) at the Intent level", () => {
-    const viaClosure = openRoute(
+  it("a closure compiles to the same route as its program written out", () => {
+    const viaClosure = compileSauceRoute(
       "ethereum",
-      () => {
+      sauceBodyToSource(() => {
         return 1n;
-      },
-      evmOptions(),
-    ).reward(0n);
-    const viaString = openRoute("ethereum", "function main(){ return 1n; }", evmOptions()).reward(
-      0n,
+      }),
+      execution,
     );
-    expect(viaClosure.intent).toEqual(viaString.intent);
+    const viaString = compileSauceRoute("ethereum", "function main(){ return 1n; }", execution);
+    expect(viaClosure.calls).toEqual(viaString.calls);
   });
 
   it("a compile()-level define resolves a free identifier that would otherwise be a capture", () => {
-    const built = openRoute(
+    const built = compileSauceRoute(
       "ethereum",
-      () => {
+      sauceBodyToSource(() => {
         return chainId;
-      },
-      evmOptions({ compile: { defines: { chainId: 1n } } }),
-    ).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+      }),
+      execution,
+      { defines: { chainId: 1n } },
+    );
+    expect(built.calls).toHaveLength(1);
   });
 });
 
@@ -232,28 +194,6 @@ function main() {
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
-
-  it("reach an intent opened inside the closure", () => {
-    const body = () => {
-      function half(x: bigint): bigint {
-        return x / 2n;
-      }
-      const amount = USDC.balanceOf(0x1234n);
-      Arbitrum(() => {
-        USDC.transfer(RECIPIENT, half(amount));
-      }).reward({ tokens: [{ token: USDC, amount }] });
-    };
-    const out = compileSauceRoute("base", sauceBodyToSource(body), execution, {
-      defines: { RECIPIENT: 0x99n },
-      intents: {
-        deadline: 4_000_000_000n,
-        creator: "0x3333333333333333333333333333333333333333",
-        executionFee: 0n,
-      },
-    });
-
-    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-  });
 });
 
 // Ambient declared only for the type-checker inside the closure fixtures above -- the compiler
@@ -261,4 +201,3 @@ function main() {
 // nothing).
 declare const chainId: bigint;
 declare const RECIPIENT: bigint;
-declare const Arbitrum: (body: () => void) => { reward(spec: unknown): void };

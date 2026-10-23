@@ -32,6 +32,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `VelodromePoolABI`
 
 `import VelodromePoolABI from "./protocols/velodrome/VelodromePoolABI.json";`
@@ -39,15 +44,15 @@ function main() {
 - `getReserves() view returns (uint256 _reserve0, uint256 _reserve1, uint256 _blockTimestampLast)`
 - `getAmountOut(uint256 amountIn, address tokenIn) view returns (uint256)`
 - `stable() view returns (bool)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 - `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
 
 ### `VelodromePoolFactoryABI`
 
 `import VelodromePoolFactoryABI from "./protocols/velodrome/VelodromePoolFactoryABI.json";` Speaks for: poolFactory.
 
-- `getPool(address tokenA, address tokenB, bool stable) view returns (address pool)`
+- `getPool(address tokenA, address tokenB, bool stable) view returns (address pool)`: the address is a `Velodrome.Pool`
 
 ### `VelodromeRouterABI`
 

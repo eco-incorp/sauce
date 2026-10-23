@@ -27,7 +27,13 @@ import {
   registrySpelling,
   TOKEN_SYMBOL_RE,
 } from "./names.js";
-import { IDENTIFIER_RE, ProgramError, programIssues, type ProgramIssue } from "./semantics.js";
+import {
+  balancerBatchIssues,
+  IDENTIFIER_RE,
+  ProgramError,
+  programIssues,
+  type ProgramIssue,
+} from "./semantics.js";
 import type { Action, ActionProgram, ActionType } from "./types.js";
 
 /** The action-program format version this package reads and writes. */
@@ -396,6 +402,8 @@ function checkAction(c: Checker, path: string, value: unknown): Action | undefin
     });
   }
   if (c.issues.length > before) return undefined;
+  c.issues.push(...balancerBatchIssues(value as unknown as Action, path));
+  if (c.issues.length > before) return undefined;
 
   // A deep copy, in canonical key order.
   const copy = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
@@ -488,8 +496,8 @@ function orderedValue(value: unknown, kind: FieldKind): unknown {
 }
 
 /**
- * Checks each of `values` as an action on its own — shape only, no chaining rules — and returns
- * them as canonical copies. Throws a `ProgramError` whose paths start at `path`.
+ * Checks each of `values` as an action on its own — shape and batch value rules, no chaining —
+ * and returns canonical copies. Throws a `ProgramError` whose paths start at `path`.
  */
 export function parseActions(values: readonly unknown[], path: string): Action[] {
   const c = new Checker();

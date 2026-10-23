@@ -1,6 +1,6 @@
 /**
- * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names and no
- * intent around it — and `encodeEntryArguments`, the values for its `main(...)`.
+ * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names — and
+ * `encodeEntryArguments`, the values for its `main(...)`.
  */
 import {
   bytesToHex,
@@ -12,9 +12,13 @@ import {
   type Hex,
 } from "viem";
 
-import { encodeCompactArguments } from "../src/compact-arguments.js";
-import { decodeEntryArguments, encodeEntryArguments, mainParams } from "../src/routes/entry.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
+import {
+  decodeEntryArguments,
+  encodeEntryArguments,
+  mainParams,
+  mainReturnType,
+  mainSignature,
+} from "../src/routes/entry.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
 
@@ -59,79 +63,23 @@ describe("compileSauceProgram", () => {
     ]);
   });
 
-  it("gives a program the ambient openRoute gives a route body, with no intent around it", () => {
+  it("gives a program the chain's ambient names, which compileSauceRoute leaves out", () => {
     const body = "require(chainId == 8453n);\ntransfer(USDC, RECIPIENT, 5n);\n";
     const defines = { RECIPIENT: BigInt(RECIPIENT) };
-    const program = compileSauceProgram("base", body, { defines });
-    const built = openRoute("base", body, { deadline: 2_000_000_000n, defines }).reward({
-      source: "ethereum",
-      creator: CREATOR,
-      prover: PROVER,
-      nativeAmount: 0n,
-    });
-    expect(program.bytecode).toEqual(built.compiled.bytecode[0]);
+    expect(compileSauceProgram("base", body, { defines }).bytecode.length).toBeGreaterThan(0);
     // compileSauceRoute adds none of it, deliberately: chainId and `transfer` are undeclared there.
     expect(() =>
       compileSauceRoute("base", body, { pot: RECIPIENT, engine: RECIPIENT }, { defines }),
     ).toThrow();
   });
 
-  it("builds an intent the program opens", () => {
-    const body = [
-      "function main(recipient: Address) {",
-      "  const amount = USDC.balanceOf(ctx.self());",
-      "  Arbitrum(() => {",
-      "    USDC.transfer(recipient, amount);",
-      "  }).reward({ tokens: [{ token: USDC, amount }] });",
-      "}",
-    ].join("\n");
-    expect(() => compileSauceProgram("base", body)).toThrow(/needs a `deadline`/);
-    const program = compileSauceProgram("base", body, {
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    });
-    expect(program.entryParams).toEqual([{ name: "recipient", type: "Address" }]);
-    expect(program.bytecode.length).toBeGreaterThan(0);
-  });
-
-  it("compiles an intent every value of which is known now, and reports it fixed", () => {
-    const body = [
-      "Base(() => {",
-      "  USDC.transfer(RECIPIENT, 5n);",
-      "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
-    ].join("\n");
-    const program = compileSauceProgram("arbitrum", body, {
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    });
-    expect(program.intents).toHaveLength(1);
-    const [lowered] = program.intents;
-    expect(lowered!.captures).toEqual([]);
-    expect(lowered!.destination.slug).toBe("base");
-    expect(lowered!.fundVia).toBe("transfer");
-    // No slot to fill: the program carries the publish calldata as it is, and pays the vault itself.
-    const target = { portal: "0x3333333333333333333333333333333333333333" } as const;
-    const publish = routes.publishTx(lowered!.intent, target);
-    expect(bytesToHex(program.bytecode)).toContain(publish.data.slice(10, 200));
-
-    // Opted out, it carries the publishAndFund calldata instead.
-    const optedOut = compileSauceProgram("arbitrum", body, {
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
-    });
-    expect(optedOut.intents[0]!.fundVia).toBe("publishAndFund");
-    const publishAndFund = routes.publishAndFundTx(optedOut.intents[0]!.intent, false, target);
-    expect(bytesToHex(optedOut.bytecode)).toContain(publishAndFund.data.slice(10, 200));
-  });
-
-  it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {
-    const compact = compileSauceProgram("base", SPLIT, { compactArgs: true });
-    expect(compact.entryEncoding).toBe("compact-v1");
-    expect(compact.entrySchema).toBeInstanceOf(Uint8Array);
+  it("reports ABI-v1, and on Solana the accounts apart from the arguments", () => {
+    expect(compileSauceProgram("base", SPLIT).entryEncoding).toBe("abi-v1");
     const svm = compileSauceProgram(
       "solana",
       "function main(vault: Account<Writable>, amount: Uint256) {\n  require(vault.dataLen > amount);\n}\n",
-      { compactArgs: true },
     );
+    expect(svm.entryEncoding).toBe("abi-v1");
     expect(svm.entryParams).toEqual([{ name: "amount", type: "Uint256" }]);
     expect(svm.manifest).toEqual({
       accounts: [{ kind: "slot", index: 0, name: "vault", requires: "writable" }],
@@ -199,6 +147,156 @@ describe("main's signature", () => {
       1n,
     ]);
     expect(encoded.length).toBeGreaterThan(0);
+  });
+
+  it("reads the module's own main: not one nested in a function or bodyless, and past type parameters", () => {
+    const nested =
+      "function helper(): Uint256 {\n  function main(z: Address): Uint256 {\n    return 1;\n  }\n  return 2;\n}\n";
+    const overload = "function main(a: Address): Address;\n";
+    const own = "function main(b: Uint256): Uint256 {\n  return b;\n}\n";
+    for (const source of [
+      `${nested}${own}`,
+      `function helper(): Uint256 {function main(z: Address): Uint256 { return 1; } return 2; }\n${own}`,
+      `${overload}${own}`,
+      `declare ${overload}${own}`,
+      "function main<T>(b: Uint256): Uint256 {\n  return b;\n}\n",
+      `export ${own}`,
+      `// function main(z: Address) {}\n${own}`,
+    ]) {
+      expect(mainParams(source)).toEqual([{ name: "b", type: "Uint256" }]);
+      expect(mainSignature(source)?.names).toEqual(["b"]);
+      expect(mainReturnType(source)).toBe("Uint256");
+    }
+    expect(mainSignature(nested)).toBeUndefined();
+    expect(mainParams(`${overload}const x: Uint256 = 1;\n`)).toEqual([]);
+  });
+
+  it("reads each parameter's name and type, and the return type, past comments in the signature", () => {
+    const source = [
+      "function main(",
+      "  to: Address, // who is paid",
+      "  /* in base units, fees included */ amount /* : Address */: Uint256,",
+      "): /* what arrived */ Uint256 {",
+      "  return amount;",
+      "}",
+    ].join("\n");
+    const params = [
+      { name: "to", type: "Address" },
+      { name: "amount", type: "Uint256" },
+    ];
+    expect(mainParams(source)).toEqual(params);
+    expect(mainSignature(source)?.names).toEqual(["to", "amount"]);
+    expect(mainReturnType(source)).toBe("Uint256");
+    expect(mainSignature("function main(): /* nothing */ void {}")?.returnsValue).toBe(false);
+    const program = compileSauceProgram("base", source, {});
+    expect(program.entryParams).toEqual(params);
+    expect(bytesToHex(encodeEntryArguments(program, [RECIPIENT, 5n]))).toBe(
+      encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [RECIPIENT, 5n]),
+    );
+    // Bound, it is the program that returns the amount.
+    expect(compileSauceProgram("base", source, { args: [RECIPIENT, 5n] }).bytecode).toEqual(
+      compileSauceProgram("base", "function main(): Uint256 {\n  return 5;\n}\n").bytecode,
+    );
+  });
+});
+
+describe("main's arguments bound by args", () => {
+  it("refuses one the module declares too, which the bound define would replace outside main", () => {
+    // `owed` reads the module's `fee`; `main`'s parameter shadows it in `main` alone.
+    const fee = [
+      "const fee: Uint256 = 30;",
+      "function owed(amount: Uint256): Uint256 {",
+      "  return (amount * fee) / 10000;",
+      "}",
+      "function main(amount: Uint256, fee: Uint256): Uint256 {",
+      "  return owed(amount) + fee;",
+      "}",
+    ].join("\n");
+    expect(() => compileSauceProgram("base", fee)).not.toThrow();
+    expect(() => compileSauceProgram("base", fee, { args: [10000n, 5n] })).toThrow(
+      "argument 2 (fee: Uint256): the module declares fee too",
+    );
+    const payee = [
+      `const payee: Address = ${CREATOR};`,
+      "function owner(): Address {",
+      "  return payee;",
+      "}",
+      "function main(payee: Address): Address {",
+      "  return owner();",
+      "}",
+    ].join("\n");
+    expect(() => compileSauceProgram("base", payee, { args: [RECIPIENT] })).toThrow(
+      "argument 1 (payee: Address): the module declares payee too",
+    );
+    // A signed argument is a `let` of `main`'s own, which shadows the module's in `main` alone.
+    const signed = [
+      "const delta: Int256 = 30;",
+      "function start(): Int256 {",
+      "  return delta;",
+      "}",
+      "function main(delta: Int256): Int256 {",
+      "  return start() + delta;",
+      "}",
+    ].join("\n");
+    expect(compileSauceProgram("base", signed, { args: [-5n] }).bytecode).toEqual(
+      compileSauceProgram("base", "function main(): Int256 {\n  return 25;\n}\n").bytecode,
+    );
+  });
+
+  it("refuses one named like a value of the chain, which the bound define would replace outside main", () => {
+    // `paid` reads the chain's USDC; `main`'s parameter shadows it in `main` alone.
+    const paid = "function paid(): Address {\n  return USDC;\n}\n";
+    expect(() =>
+      compileSauceProgram(
+        "base",
+        `${paid}function main(USDC: Address): Address {\n  return paid();\n}\n`,
+        {
+          args: [RECIPIENT],
+        },
+      ),
+    ).toThrow("USDC is main's parameter, given in args; it is not also a define (USDC on base)");
+    expect(() =>
+      compileSauceProgram(
+        "base",
+        "function main(chainId: Uint256): Uint256 {\n  return chainId;\n}\n",
+        {
+          args: [5n],
+        },
+      ),
+    ).toThrow(
+      "chainId is main's parameter, given in args; it is not also a define (chainId on base)",
+    );
+    expect(() =>
+      compileSauceProgram(
+        "base",
+        "function main(Asset: Address): Address {\n  return Asset;\n}\n",
+        {
+          args: [RECIPIENT],
+          tokens: { Asset: CREATOR },
+        },
+      ),
+    ).toThrow("Asset is main's parameter, given in args; it is not also a define (Asset on base)");
+    expect(() =>
+      compileSauceProgram(
+        "solana",
+        "function main(USDC: Uint256): Uint256 {\n  return USDC;\n}\n",
+        {
+          args: [5n],
+        },
+      ),
+    ).toThrow("USDC is main's parameter, given in args; it is not also a define (USDC on solana)");
+    // A signed argument is a `let` of `main`'s own, which leaves the chain's USDC to `paid`.
+    expect(
+      compileSauceProgram(
+        "base",
+        `${paid}function main(USDC: Int256): Address {\n  return paid();\n}\n`,
+        {
+          args: [-5n],
+        },
+      ).bytecode,
+    ).toEqual(
+      compileSauceProgram("base", "function main(): Address {\n  return USDC;\n}\n").bytecode,
+    );
   });
 });
 
@@ -278,23 +376,24 @@ describe("encodeEntryArguments", () => {
     );
   });
 
-  it("encodes compact-v1 against the program's own schema", () => {
+  it("encodes ABI-v1 against the compiled program's declared parameters", () => {
     const program = compileSauceProgram(
       "base",
       "function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: bool, leg: { amount: Uint256, to: Address }, memo: bytes) {}",
-      { compactArgs: true },
     );
     expect(program.entryParams).toEqual(params);
+    expect(program.entryEncoding).toBe("abi-v1");
     expect(encodeEntryArguments(program, values)).toEqual(
-      encodeCompactArguments(program.entrySchema!, [
-        RECIPIENT,
-        [RECIPIENT, CREATOR],
-        1000n,
-        true,
-        [5n, PROVER],
-        hexToBytes("0xbeef"),
-      ]),
+      encodeEntryArguments({ entryEncoding: "abi-v1", entryParams: params }, values),
     );
+    expect(decodeEntryArguments(program, encodeEntryArguments(program, values))).toEqual([
+      RECIPIENT,
+      [RECIPIENT, CREATOR],
+      1000n,
+      true,
+      { amount: 5n, to: PROVER },
+      "0xbeef",
+    ]);
   });
 
   it("reads a record type's fields separated by ;, as a formatter writes them", () => {

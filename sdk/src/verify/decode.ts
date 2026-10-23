@@ -8,7 +8,7 @@
  *
  * ```
  * payload     := program , args
- * program     := 435 bytes                        ; SETTLE_WIRE.PROGRAM_BYTES — invariant
+ * program     := pinned program                   ; SETTLE_WIRE.PROGRAM_BYTES
  * args        := head , token_array
  * head        := tokens_ptr , minout , recipient  ; three 32-byte big-endian words
  * tokens_ptr  := word, value = 96                 ; byte offset WITHIN args of token_array
@@ -49,7 +49,7 @@
  *
  * WHAT THIS PROVES. `decodeSettleProgram` is STRUCTURAL: it pins the program's LENGTH and reads the
  * tail, so it tells you which `(tokens, minOut, recipient)` a payload carries and nothing about
- * what the 435 program bytes do. `validateSettleProgram` adds the authenticity half — one
+ * what the program bytes do. `validateSettleProgram` adds the authenticity half — one
  * `keccak256` over the WHOLE program against `SETTLE_WIRE.PROGRAM_HASH` — and that is now a
  * complete answer rather than a partial one: because the arguments left the program, a matching
  * hash means the payload runs the audited `settle.sauce.ts` and nothing else — a statement about
@@ -365,7 +365,7 @@ function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
 
 /** Decode whenever the shape is well-formed enough to name a full `(tokens, minOut, recipient)` —
  *  even when a check that does not block reading (a trailing-slack tail, a dirty address word, a
- *  zero recipient) would make `decodeSettleProgram` throw — so a rejected payload's decoded intent is
+ *  zero recipient) would make `decodeSettleProgram` throw — so a rejected payload's decoded values are
  *  still visible to a caller debugging the rejection.
  *
  *  DECLINES wherever the report would not match execution — the whole point being that on a hostile
@@ -397,9 +397,8 @@ export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | nul
  * dirty upper bytes, and a zero recipient — see §4 for why. Throws `SettleDecodeError` (carrying a
  * stable `.code`) on any of the failures in `SettleFailureCode`.
  *
- * This is a STRUCTURAL decode: it proves the payload is `435 bytes || a canonical argument tail`.
- * It does NOT prove those 435 bytes are the settle program you audited — any 435-byte prefix
- * passes. Use `validateSettleProgram` when that matters, which is nearly always.
+ * Structural decoding splits at `programBytes` and requires a canonical argument tail.
+ * It does not authenticate the prefix. Use `validateSettleProgram` to check program identity.
  */
 export function decodeSettleProgram(
   payload: Hex,
@@ -419,26 +418,16 @@ export function decodeSettleProgram(
 }
 
 /**
- * `decodeSettleProgram` plus the authenticity pin: the payload's 435 program bytes must hash to
- * `SETTLE_WIRE.PROGRAM_HASH`. Because the arguments no longer live inside the program, a match
- * means the payload runs the audited `recipes/settle.sauce.ts` and nothing else — the whole
- * question, not the structural half.
+ * Authenticate an accepted program hash and length, then decode its canonical argument tail.
+ * The default accepts only the current `SETTLE_WIRE` pin.
  *
- * Throws `SettleDecodeError` with code `PROGRAM_HASH` when the program is a different 435 bytes,
- * and whatever `decodeSettleProgram` would throw otherwise.
+ * `accepted` replaces the default set; an empty list rejects every program. To retain historical
+ * payloads across compiler upgrades, include their `{ hash, bytes }` records explicitly.
+ * A bare hash uses the current program length and is suitable only for a same-length program.
+ * The first matching pin is used.
  *
- * `accepted` overrides the pin. The dependency is a caret range and `SETTLE_WIRE` documents that a
- * codegen change is answered by RE-PINNING — at which point every intent already on chain carries the
- * OLD program, and a single hard-coded pin makes all of them unverifiable. Pass the pins you accept
- * (the current one plus any historical ones) to keep those payloads readable across a re-pin.
- *
- * A PIN IS A HASH *AND* A LENGTH, which is why a bare hash is not enough. The payload is split into
- * program and argument tail at a byte offset, before any hash is computed — so if a re-pin changes the
- * program's length (the likely outcome of a codegen change), splitting a historical payload at the NEW
- * length yields a wrong program and a truncated tail, and it dies as `ARGS_TRUNCATED` without any hash
- * ever being compared. Each entry may be `{ hash, bytes }`; a bare `Hex` means the CURRENT
- * `SETTLE_WIRE.PROGRAM_BYTES` and is only safe for a same-length re-pin. Candidates are tried in order
- * and the first whose program hash matches wins. Defaults to the current pin.
+ * Throws `SettleDecodeError` with code `PROGRAM_HASH` for an unrecognized program, or a structural
+ * decoding error when a recognized program carries malformed arguments.
  */
 export function validateSettleProgram(
   payload: Hex,
@@ -448,7 +437,7 @@ export function validateSettleProgram(
 ): DecodedSettleProgram {
   // Compared case-insensitively: `programHash` is always viem's lowercase keccak, so a historical pin
   // supplied in any other spelling would silently fail to match and orphan exactly the payloads this
-  // parameter exists to keep readable -- surfacing through the intent path as a bare `null`.
+  // parameter exists to keep readable -- surfacing through the calls path as a bare `null`.
   const pins: ProgramPin[] = accepted.map((pin) =>
     typeof pin === "string"
       ? { hash: pin.toLowerCase() as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES }
@@ -466,7 +455,7 @@ export function validateSettleProgram(
   // ordering: each is an artefact of the candidate that produced it, and the FIRST supplied pin's is
   // the one reported -- so with several pins and no match at all, the code can still differ by pin
   // order (measured on v1's 588-byte payload: a 410-byte pin reports TOKENS_OFFSET, a 461-byte pin
-  // ARGS_TRUNCATED). Diagnostic only: through `intent.ts` every one of them collapses to `null`, and
+  // ARGS_TRUNCATED). Diagnostic only: through `calls.ts` every one of them collapses to `null`, and
   // with a single pin -- the default and common case -- there is no order to depend on.
   let hashMismatch: SettleDecodeError | null = null;
   let parseError: unknown = null;

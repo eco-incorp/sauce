@@ -17,66 +17,13 @@ The standard interface for fungible tokens on EVM chains (EIP-20). Defines trans
 | Namespace | none: import its ABI |
 | Chains | none recorded |
 
-## Key Operations
+## What it offers
 
 - **transfer**: Send tokens to an address
 - **approve**: Authorize a spender to transfer tokens on your behalf
 - **transferFrom**: Transfer tokens from one address to another (requires approval)
 - **balanceOf**: Query token balance of an address
 - **allowance**: Query remaining approved amount for a spender
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Transfer tokens
-import { transfer } from "@sauce/token";
-function main(token: Address, to: Address, amount: Uint256): Uint256 {
-  transfer(token, to, amount);
-  return 1;
-}
-
-// Approve spender
-import { approve } from "@sauce/token";
-function main(token: Address, spender: Address, amount: Uint256): Uint256 {
-  approve(token, spender, amount);
-  return 1;
-}
-
-// Transfer from (requires prior approval)
-import { transferFrom } from "@sauce/token";
-function main(token: Address, from: Address, to: Address, amount: Uint256): Uint256 {
-  transferFrom(token, from, to, amount);
-  return 1;
-}
-
-// Check balance
-import { ERC20ABI as IERC20 } from "./abis";
-function main(token: Address, account: Address): Uint256 {
-  const t = IERC20.at(token);
-  return t.balanceOf(account);
-}
-
-// Storage-based transfer (demonstrates storage, crypto, abi encode, events)
-function balanceSlot(account: Address): Uint256 {
-  return crypto.keccak256(abi.encode(account, 1));
-}
-function main(to: Address, amount: Uint256): Uint256 {
-  const from = ctx.msgSender();
-  const fromSlot = balanceSlot(from);
-  const fromBalance = evm.sload(fromSlot);
-  if (fromBalance < amount) throw "insufficient balance";
-  evm.sstore(fromSlot, fromBalance - amount);
-  const toSlot = balanceSlot(to);
-  evm.sstore(toSlot, evm.sload(toSlot) + amount);
-  log(abi.encode(from, to, amount), crypto.keccak256("Transfer(address,address,uint256)"));
-  return 1;
-}
-```
 
 ## Notes
 
@@ -118,3 +65,9 @@ function main(contract: Address) {
 - `name() view returns (string)`
 - `symbol() view returns (string)`
 - `decimals() view returns (uint8)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

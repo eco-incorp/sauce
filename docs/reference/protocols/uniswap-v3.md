@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Concentrated liquidity AMM allowing LPs to allocate capital within custom price ranges for higher capital efficiency. Supports multiple fee tiers per pair and NFT-based liquidity positions.
 
@@ -61,125 +61,11 @@ function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, re
 the WETH it did not take goes back to `recipient` too: `amountIn` less what the swap spent, not
 the Pot's whole WETH balance.
 
-## Key Operations
+## What it offers
 
 - **swap**: Swap tokens using exact input (single-hop or multi-hop via encoded path)
 - **addLiquidity**: Mint a new concentrated liquidity position as an NFT within a tick range
 - **removeLiquidity**: Decrease liquidity from an existing NFT position
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { UniswapV3SwapRouterABI as ISwapRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenIn: Address,
-  tokenOut: Address,
-  fee: Uint256,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256 {
-  const router = ISwapRouter.at(routerAddress);
-  return router.exactInputSingle({
-    tokenIn: tokenIn,
-    tokenOut: tokenOut,
-    fee: fee,
-    recipient: recipient,
-    deadline: 99999999999,
-    amountIn: amountIn,
-    amountOutMinimum: amountOutMin,
-    sqrtPriceLimitX96: 0,
-  });
-}
-```
-
-- `routerAddress`: Uniswap V3 SwapRouter address for the target chain. This `swap` uses SwapRouter's params (with `deadline`); chains that only have SwapRouter02 (Base, BSC, Avalanche, Celo, Monad) need `UniswapV3SwapRouter02ABI`, whose params have no `deadline`
-- `tokenIn` / `tokenOut`: Input and output token addresses
-- `fee`: Pool fee tier in hundredths of a bip. Common values: `500` (0.05%), `3000` (0.3%), `10000` (1%)
-- `amountIn`: Exact amount of input token (in wei)
-- `amountOutMin`: Minimum output for slippage protection
-- `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. With `@sauce/router`'s `uniswapV3`, set a real limit ([the `@sauce/router` reference](../../api/router.md))
-
-### addLiquidity (mint position)
-
-```typescript
-import { UniswapV3NonfungiblePositionManagerABI as INonfungiblePositionManager } from "./abis";
-
-function main(
-  nfpmAddress: Address,
-  token0: Address,
-  token1: Address,
-  fee: Uint256,
-  tickLower: Uint256,
-  tickUpper: Uint256,
-  amount0Desired: Uint256,
-  amount1Desired: Uint256,
-  amount0Min: Uint256,
-  amount1Min: Uint256,
-  recipient: Address,
-): { tokenId: Uint256; liquidity: Uint256; amount0: Uint256; amount1: Uint256 } {
-  const nfpm = INonfungiblePositionManager.at(nfpmAddress);
-  return nfpm.mint({
-    token0: token0,
-    token1: token1,
-    fee: fee,
-    tickLower: tickLower,
-    tickUpper: tickUpper,
-    amount0Desired: amount0Desired,
-    amount1Desired: amount1Desired,
-    amount0Min: amount0Min,
-    amount1Min: amount1Min,
-    recipient: recipient,
-    deadline: 99999999999,
-  });
-}
-```
-
-- `nfpmAddress`: NonfungiblePositionManager contract address
-- `token0` / `token1`: Pair tokens sorted by address (token0 < token1)
-- `fee`: Pool fee tier (500, 3000, or 10000)
-- `tickLower` / `tickUpper`: Price range boundaries as tick values. Ticks must be multiples of the pool's tick spacing (10 for 0.05%, 60 for 0.3%, 200 for 1%)
-- `amount0Desired` / `amount1Desired`: Target deposit amounts
-- `amount0Min` / `amount1Min`: Minimum deposit amounts (slippage protection)
-- Both tokens must be approved to the NonfungiblePositionManager
-
-### removeLiquidity (decrease liquidity)
-
-```typescript
-import { UniswapV3NonfungiblePositionManagerABI as INonfungiblePositionManager } from "./abis";
-
-function main(
-  nfpmAddress: Address,
-  tokenId: Uint256,
-  liquidity: Uint256,
-  amount0Min: Uint256,
-  amount1Min: Uint256,
-): { amount0: Uint256; amount1: Uint256 } {
-  const nfpm = INonfungiblePositionManager.at(nfpmAddress);
-  return nfpm.decreaseLiquidity({
-    tokenId: tokenId,
-    liquidity: liquidity,
-    amount0Min: amount0Min,
-    amount1Min: amount1Min,
-    deadline: 99999999999,
-  });
-}
-```
-
-- `tokenId`: NFT ID of the liquidity position
-- `liquidity`: Amount of liquidity to remove (not token amounts)
-- `amount0Min` / `amount1Min`: Minimum tokens to receive (slippage protection)
-- After decreasing liquidity, call `collect` to actually withdraw the tokens
 
 ## Notes
 
@@ -217,12 +103,18 @@ function main() {
 | [Ethereum](../chains/ethereum.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Optimism](../chains/optimism.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Optimism](../chains/optimism.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
+| [Optimism](../chains/optimism.md) | quoterV2 | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` | `UniswapV3.QuoterV2` |
 | [Optimism](../chains/optimism.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
+| [Optimism](../chains/optimism.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [BNB Chain](../chains/bsc.md) | factory | `0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7` | `UniswapV3.Factory` |
+| [BNB Chain](../chains/bsc.md) | nonfungiblePositionManager | `0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613` | `UniswapV3.NonfungiblePositionManager` |
+| [BNB Chain](../chains/bsc.md) | quoterV2 | `0x78D78E420Da98ad378D7799bE8f4AF69033EB077` | `UniswapV3.QuoterV2` |
 | [BNB Chain](../chains/bsc.md) | swapRouter02 | `0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2` | `UniswapV3.SwapRouter02` |
 | [Polygon](../chains/polygon.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Polygon](../chains/polygon.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
+| [Polygon](../chains/polygon.md) | quoterV2 | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` | `UniswapV3.QuoterV2` |
 | [Polygon](../chains/polygon.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
+| [Polygon](../chains/polygon.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Monad](../chains/monad.md) | factory | `0x204faca1764b154221e35c0d20abb3c525710498` | `UniswapV3.Factory` |
 | [Monad](../chains/monad.md) | nonfungiblePositionManager | `0x7197e214c0b767cfb76fb734ab638e2c192f4e53` | `UniswapV3.NonfungiblePositionManager` |
 | [Monad](../chains/monad.md) | quoterV2 | `0x661e93cca42afacb172121ef892830ca3b70f08d` | `UniswapV3.QuoterV2` |
@@ -233,22 +125,34 @@ function main() {
 | [Arc](../chains/arc.md) | swapRouter02 | `0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77` | `UniswapV3.SwapRouter02` |
 | [Base](../chains/base.md) | factory | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` | `UniswapV3.Factory` |
 | [Base](../chains/base.md) | nonfungiblePositionManager | `0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1` | `UniswapV3.NonfungiblePositionManager` |
+| [Base](../chains/base.md) | quoterV2 | `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a` | `UniswapV3.QuoterV2` |
 | [Base](../chains/base.md) | swapRouter02 | `0x2626664c2603336E57B271c5C0b26F421741e481` | `UniswapV3.SwapRouter02` |
 | [Arbitrum One](../chains/arbitrum.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Arbitrum One](../chains/arbitrum.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
+| [Arbitrum One](../chains/arbitrum.md) | quoterV2 | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` | `UniswapV3.QuoterV2` |
 | [Arbitrum One](../chains/arbitrum.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
+| [Arbitrum One](../chains/arbitrum.md) | swapRouter02 | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` | `UniswapV3.SwapRouter02` |
 | [Celo](../chains/celo.md) | factory | `0xAfE208a311B21f13EF87E33A90049fC17A7acDEc` | `UniswapV3.Factory` |
+| [Celo](../chains/celo.md) | nonfungiblePositionManager | `0x3d79EdAaBC0EaB6F08ED885C05Fc0B014290D95A` | `UniswapV3.NonfungiblePositionManager` |
+| [Celo](../chains/celo.md) | quoterV2 | `0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8` | `UniswapV3.QuoterV2` |
 | [Celo](../chains/celo.md) | swapRouter02 | `0x5615CDAb10dc425a742d643d949a7F474C01abc4` | `UniswapV3.SwapRouter02` |
 | [Avalanche C-Chain](../chains/avalanche.md) | factory | `0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD` | `UniswapV3.Factory` |
+| [Avalanche C-Chain](../chains/avalanche.md) | nonfungiblePositionManager | `0x655C406EBFa14EE2006250925e54ec43AD184f8B` | `UniswapV3.NonfungiblePositionManager` |
+| [Avalanche C-Chain](../chains/avalanche.md) | quoterV2 | `0xbe0F5544EC67e9B3b2D979aaA43f18Fd87E6257F` | `UniswapV3.QuoterV2` |
 | [Avalanche C-Chain](../chains/avalanche.md) | swapRouter02 | `0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE` | `UniswapV3.SwapRouter02` |
 
 ## ABI
+
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
 
 ### `UniswapV3FactoryABI`
 
 `import UniswapV3FactoryABI from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";` Speaks for: factory.
 
-- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`
+- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`: the address is a `UniswapV3.Pool`
 - `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
 
 ### `UniswapV3NonfungiblePositionManagerABI`
@@ -268,8 +172,8 @@ function main() {
 - `liquidity() view returns (uint128)`
 - `fee() view returns (uint24)`
 - `tickSpacing() view returns (int24)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 
 ### `UniswapV3QuoterV2ABI`
 
@@ -294,3 +198,9 @@ function main() {
 - `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`
 - `exactOutputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountIn)`
 - `exactOutput((bytes path, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum) params) payable returns (uint256 amountIn)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

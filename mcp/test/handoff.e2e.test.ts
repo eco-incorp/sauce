@@ -1,6 +1,6 @@
 /**
  * The hand-offs a result carries for a wallet's own MCP server, held to that server's input schema
- * (`wallet-mcp-schemas.ts`) and then sent as that server would send them, on a local anvil running
+ * (`wallet-mcp/`) and then sent as that server would send them, on a local anvil running
  * the released gated stack (`sdk/test/cli-anvil.ts`):
  *
  * - `sendCalls`, Coinbase Wallet MCP's `send_calls` input, run by a contract wallet as one batch
@@ -34,7 +34,6 @@ import {
   fixture,
   OTHER_KEY,
   OWNER,
-  placePortal,
   potOwner,
   registered,
   RUNTIME_HEX_PATH,
@@ -43,7 +42,8 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { connect, endpointsFor, ok, type Connected } from "./harness.js";
-import { coinbaseSendCalls, phantomSendEvmTransaction } from "./wallet-mcp-schemas.js";
+import { SendCallsSchema } from "./wallet-mcp/coinbase.js";
+import { SendEvmTransactionSchema } from "./wallet-mcp/phantom.verbatim.js";
 
 const EVM_FIXTURES = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -55,12 +55,6 @@ const PAY = [
   "function main(recipient: Address, amount: Uint256) {",
   "  USDC.transfer(recipient, amount);",
   "}",
-  "",
-].join("\n");
-const INTENT = [
-  "Ethereum(() => {",
-  "  USDC.transfer(RECIPIENT, 5n);",
-  "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
   "",
 ].join("\n");
 
@@ -84,7 +78,7 @@ interface Batch {
 
 /** Each transaction, as it is, is `evm_send`'s input: its fields kept, its labels dropped. */
 function walletTakes(tx: Tx, chainId: number): void {
-  const parsed = phantomSendEvmTransaction.parse({ ...tx, confirmed: true });
+  const parsed = SendEvmTransactionSchema.parse({ ...tx, confirmed: true });
   assert.deepEqual(
     parsed,
     {
@@ -93,6 +87,7 @@ function walletTakes(tx: Tx, chainId: number): void {
       data: tx.data,
       value: tx.value,
       ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+      derivationIndex: 0,
       confirmed: true,
     },
     "nothing but what the wallet takes, and nothing of it changed",
@@ -101,7 +96,7 @@ function walletTakes(tx: Tx, chainId: number): void {
 
 /** The batch is the transactions, in order. */
 function sameBatch(batch: Batch, txs: readonly Tx[], chain: string): void {
-  const parsed = coinbaseSendCalls.parse(batch);
+  const parsed = SendCallsSchema.parse(batch);
   assert.equal(parsed.chain, chain);
   assert.deepEqual(
     parsed.calls.map((call) => [call.to, BigInt(call.value ?? "0x0"), call.data]),
@@ -154,7 +149,6 @@ describe(
     before(async () => {
       base = await startChain("base");
       usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-      await placePortal(base);
       mcp = await connect(endpointsFor({ [String(base.chain.id)]: base.rpcUrl }));
     });
 
@@ -322,41 +316,6 @@ describe(
       const there = ok(await mcp.call("sauce_pot", { chain: "base", owner }));
       assert.equal(there.deployed, true);
       assert.equal(there.sendCalls, undefined);
-    });
-
-    it("an intent's publish: every intent's transactions as one batch, and none for a dry run", async () => {
-      const args = {
-        source: INTENT,
-        chain: "base",
-        defines: { RECIPIENT },
-        intentDeadline: 2_000_000_000,
-        intentCreator: OWNER.address,
-        from: OWNER.address,
-      };
-      const out = ok(await mcp.call("sauce_intent_publish", args)) as {
-        intents: Array<{ transactions: Tx[] }>;
-        sendCalls: Batch;
-      };
-      const transactions = out.intents.flatMap((intent) => intent.transactions);
-      assert.deepEqual(
-        transactions.map((tx) => tx.what?.split(" ")[0]),
-        ["transfer", "publish"],
-      );
-      transactions.forEach((each) => walletTakes(each, base.chain.id));
-      sameBatch(out.sendCalls, transactions, "base");
-      // A rehearsal reports what ran: nothing in it is to be sent.
-      const dry = ok(
-        await mcp.call("sauce_intent_publish", {
-          ...args,
-          dryRun: true,
-          assumeBalance: ["USDC:1"],
-        }),
-      );
-      assert.equal(dry.sendCalls, undefined);
-      assert.ok(
-        (dry.transactions as Array<Record<string, unknown>>).every((tx) => "status" in tx),
-        "each is what ran, with its status",
-      );
     });
   },
 );

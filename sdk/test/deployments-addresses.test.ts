@@ -24,7 +24,6 @@ import {
   v12PotDerivation,
   v12ReleaseSet,
   v12RouterAddress,
-  v12RouterGeneration,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
@@ -98,11 +97,13 @@ describeAddresses("v12 deployed addresses", () => {
     expect(v12SvmEngineProgramId()).toBe(set["v12-svm"].engine);
   });
 
-  it("records the Router's generation, read off its fixed-address salt", () => {
+  it("records the execution Router's content-addressed provenance", () => {
     const router = v12DeployedAddresses().evm.contracts.router;
-    expect(router.saltName).toBe("Router");
-    expect(v12RouterGeneration()).toBe(Number.parseInt(router.rawSalt!.slice(-2), 16));
-    expect(v12RouterGeneration()).toBeGreaterThanOrEqual(1);
+    expect(router.addressing).toBe("content");
+    expect(router.initCodeHash).toMatch(HASH_32);
+    expect(router.saltName).toBeUndefined();
+    expect(router.generation).toBeUndefined();
+    expect(v12DeployedAddresses().evm.contracts.quoteRouter.generation).toBe(3);
   });
 
   it("carries the release provenance (version + commit)", () => {

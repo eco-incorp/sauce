@@ -7,9 +7,9 @@ description: A Sauce program that spreads one exact-input swap over several pric
 
 The caller gives **one price: the most they pay for any unit, fees included**. Every pool trades
 until its own price reaches that price, and the budget it does not take stays in the Pot for the
-next pool. This skill owns that method, its arithmetic (`priceLimit`, `minTokens`, `maxAvgPrice`), how
-to set and simulate it, and the complete program for EVM chains. One swap is `sauce-swaps`'s; the
-same order on Solana is `sauce-solana-distributed-swap`'s, on these rules.
+next pool. The method, its arithmetic (`priceLimit`, `minTokens`, `maxAvgPrice`), how to set and
+simulate it, and the complete program for EVM chains are here. For one swap, see `sauce-swaps`;
+for the same order on Solana, on these rules, see `sauce-solana-distributed-swap`.
 
 ## When to use
 
@@ -19,7 +19,6 @@ same order on Solana is `sauce-solana-distributed-swap`'s, on these rules.
 | Work out `priceLimit`, `minTokens`, `maxAvgPrice` for any decimals       | yes  |                                 |
 | One swap at one pool                                                     |      | `sauce-swaps`                   |
 | The same order on Solana                                                 |      | `sauce-solana-distributed-swap` |
-| The order as the body of an intent on another chain                      |      | `sauce-intents`                 |
 
 ## Core model
 
@@ -72,8 +71,10 @@ once; one that only wraps a call costs a call frame of gas.
   `UniswapV3.Pool(pool).liquidity()`, or `AerodromeSlipstream.Pool(pool)` for a Slipstream pool,
   whose `slot0` has no `feeProtocol`; a V4 pool through the StateView, by id:
   `UniswapV4.StateView.getLiquidity(id)`. The binding and the method are one expression, never a
-  value kept in a variable. Take only the outputs you need, by name (`.slot0().sqrtPriceX96`) or by
+  value kept in a variable. Select fields for readability, by name (`.slot0().sqrtPriceX96`) or
   position: `const [sqrtPriceX96, , protocolFees, poolFee] = UniswapV4.StateView.getSlot0(pool);`.
+  Reading any field still decodes and validates every declared output; field selection is not
+  partial decoding.
 - **A function that returns a value returns it on every path**, or the program does not compile
   (`` `trade` does not return on every path ``): end every early exit with `return 0;`.
 
@@ -88,7 +89,8 @@ first. With enough budget for every pool to reach its limit, every pool's last u
 [examples/distributed-swap.sauce.ts](examples/distributed-swap.sauce.ts) is one complete
 implementation of those rules: it buys SpaceX stock on Base, SPCXc, with USDC, over Base's
 Aerodrome Slipstream, Uniswap V3 and hookless Uniswap V4 pools. Its header gives every input with
-its units and the command that runs it. Its code:
+its units and the command that runs it. Save it as `distributed-swap.sauce.ts` in your project:
+every command below runs that file. Its code:
 
 ```sauce chain=base
 import { uniswapV3, uniswapV4 } from "@sauce/router";
@@ -103,7 +105,7 @@ function trade(
   limit: Uint256,
   recipient: Address,
 ): Uint256 {
-  const unspent = USDC.balanceOf(ctx.self()) - kept;
+  const unspent = self.USDC - kept;
   if (pool == 0 || unspent == 0) {
     return 0;
   }
@@ -155,10 +157,9 @@ function main(
   maxAvgPrice: Uint256,
   recipient: Address,
 ): { spent: Uint256; bought: Uint256; unspent: Uint256 } {
-  const self = ctx.self();
   require(priceLimit > 0, "priceLimit is 0");
-  require(USDC.balanceOf(self) >= budget, "budget is not in the Pot");
-  const kept = USDC.balanceOf(self) - budget; // the Pot's other USDC, never spent
+  require(self.USDC >= budget, "budget is not in the Pot");
+  const kept = self.USDC - budget; // the Pot's other USDC, never spent
   let bought = 0;
 
   // priceLimit as a pool's sqrt price (token1 per token0, times 2^96): where a unit costs it.
@@ -192,7 +193,7 @@ function main(
   }
 
   // Settle: the recipient already has the SPCXc bought; what is left of the budget goes there too.
-  const unspent = USDC.balanceOf(self) - kept;
+  const unspent = self.USDC - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
@@ -388,7 +389,7 @@ moved. Buying SPCXc with 2,000 USDC at most **1507500000000000000** (150.75) ove
 local chain, the addresses as placeholders and the lines on how it was simulated left out:
 
 ```text
-The cook succeeds from <owner>: gas used 693217, returns <the same three words, in hex>
+The cook succeeds from <owner>: gas used 692591, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 1329416629, unspent: 0 }
 What moved, in order:
   [1] <pool A>  -> <recipient>  3.40239687 SPCXc

@@ -5,31 +5,23 @@
 **Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
 
 > Everything a program can name on Arc: its tokens, and every protocol deployed there with the name
-> a program writes for each contract. Arc is a preview chain: programs compile and simulate here,
-> and the `sauce` command sends nothing.
+> a program writes for each contract. The `sauce` command builds and sends transactions on Arc.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On Arc a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request Arc, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Arc%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Arc+%285042%29&chain=Arc&chain-id=5042) with the chain-support issue form.
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Arc a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `arc`; also `arc-mainnet`, `arc-network` |
 | Chain id | 5042 |
 | Kind | EVM |
 | Name in a program | `Arc` |
 | In TypeScript | `import { Arc } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | USDC (USDC), 18 decimals; also the ERC-20 `USDC` (6 decimals), one balance |
+| Minimum base fee | 20 gwei: a transaction with a lower `maxFeePerGas` is never included |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [Deployments](../deployments.md#the-shared-intent-pot); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 26 |
 
 ## Notes
@@ -45,19 +37,17 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
 - `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei
   reads as 0. Compare a native amount with a token amount only after converting one to the
   other's scale.
-- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a
-  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.
-- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped
-  silently: no error, and no receipt.
+- Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native
+  value is 10^-12 USDC, not 1 USDC.
+- A transaction whose `maxFeePerGas` is below the minimum base fee (the table above) is never
+  included: it can stay pending with no receipt, or be refused as underpriced. Arc's own
+  documentation asks for a `maxFeePerGas` of at least that fee, and a tip of 0 is accepted.
 - There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no
   `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that always
   reverts, so the ETH paths of its routers revert too. Wrapping, unwrapping and staking the
   native coin are refused for Arc.
 - Native value sent to the zero address, to or from a blocklisted address, or to a
   self-destructed account reverts, also when a contract forwards it.
-- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one
-  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is
-  built. Fold the two into one amount.
 
 ## In a program
 
@@ -137,3 +127,9 @@ address.
 | [UnitFlow V3](../protocols/unitflow-v3.md) | quoter | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` | `UnitflowV3.Quoter` |
 | [UnitFlow V3](../protocols/unitflow-v3.md) | router | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` | `UnitflowV3.Router` |
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0xC8aD24fC6063c41cB5C12a8e3851AafC3b3CF027` | `Wormhole.CoreBridge` |
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

@@ -41,9 +41,11 @@ export interface RouterSvmDataOptions {
    *  the amount when it sells the base token. */
   readonly baseLot?: bigint;
   readonly quoteLot?: bigint;
-  /** OpenBook v2: the order's price in lots (0, or absent: a market order), and the most resting
-   *  orders it may match. */
+  /** OpenBook v2: the order's price in lots (0, or absent: a market order). */
   readonly priceLots?: bigint;
+  /** OpenBook v2 and Phoenix: the most resting orders the order may match, a byte on OpenBook and
+   *  64 bits on Phoenix, whose count includes the expired orders it removes on the way. On Phoenix 0,
+   *  or absent, is no limit. */
   readonly orders?: bigint;
   /** Perena: the indices among the pool's tokens of the one paid and the one bought, a byte each;
    *  Sanctum Infinity: the paid and the bought token's indices in its LST list, 32 bits each. */
@@ -91,9 +93,10 @@ const flag = (on: boolean): Uint8Array => Uint8Array.of(on ? 1 : 0);
 const SWAP = "f8c69e91e17587c8";
 const SWAP_V2 = "2b04ed0b1ac91e62";
 const PLACE_TAKE_ORDER = "032c47031ac7cb55";
-/** Phoenix's order past its sizes: no minimum fill, a self-trade cancels the resting order, no match
- *  limit, client id 0, no deposited funds, no expiry. */
-const PHOENIX_REST = `${"00".repeat(16)}01${"00".repeat(20)}`;
+/** Phoenix's order past its sizes: no minimum fill, a self-trade cancels the resting order, then
+ *  its match limit (`PHOENIX_MATCH`), client id 0, no deposited funds, no expiry. */
+const PHOENIX_FILL = `${"00".repeat(16)}01`;
+const PHOENIX_TAIL = "00".repeat(19);
 
 /** `name` within `[0, max]`, or a RangeError naming the field. */
 const within = (venue: string, name: string, value: bigint, max: bigint, field: string): bigint => {
@@ -428,8 +431,9 @@ export function routerSvmDataTemplate(
       takes(["minOut"]);
       return { prefix: hex("04"), suffix: join(le(minOut, 8), flag(aToB), hex("01")), divisor: 1n };
     case "phoenix": {
-      takes(["ticks", "lot"]);
+      takes(["ticks", "lot", "orders"]);
       const ticks = within(venue, "ticks", options.ticks ?? 0n, U64, "64 bits");
+      const orders = within(venue, "orders", options.orders ?? 0n, U64, "64 bits");
       const lot = options.lot;
       if (lot === undefined || lot <= 0n) throw new Error("phoenix's swap takes a lot size");
       const head = join(
@@ -437,7 +441,11 @@ export function routerSvmDataTemplate(
         flag(aToB),
         ticks === 0n ? hex("00") : join(hex("01"), le(ticks, 8)),
       );
-      const rest = hex(PHOENIX_REST);
+      const rest = join(
+        hex(PHOENIX_FILL),
+        orders === 0n ? hex("00") : join(hex("01"), le(orders, 8)),
+        hex(PHOENIX_TAIL),
+      );
       // Base lots selling base, quote lots buying it; the other size 0.
       return aToB
         ? { prefix: head, suffix: join(le(0n, 8), rest), divisor: lot }

@@ -60,11 +60,7 @@ import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./p
 import { svmTokenAccount } from "./token-accounts.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./token-program.js";
-import {
-  memoizedAssociatedTokenAccountSync,
-  memoizedFindProgramAddressSync,
-  memoizedGetProgramDerivedAddress,
-} from "./venues/pda-memo.js";
+import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 
 /** A mint's token program, read from the cluster: the owner of the mint's account. */
 export type SvmMintProgramOf = (mint: Address) => Promise<Address>;
@@ -585,54 +581,6 @@ export async function resolveSvmAccountName(
   }
 }
 
-/**
- * {@link resolveSvmAccountName}, synchronously, for a name that needs nothing read from the
- * cluster — every name but a pool's slot and an unregistered mint's token account or program, which
- * it refuses (`ctx.programOf` and `ctx.load` are not consulted). For a caller that cannot await: the
- * intent lowering, which resolves an intent's cook on Solana inside the synchronous compile.
- */
-export function resolveSvmAccountNameSync(
-  value: string,
-  ctx: Omit<SvmAccountNameContext, "programOf" | "load" | "slots">,
-): ResolvedSvmAccountName {
-  const planned = plan(value, ctx);
-  switch (planned.kind) {
-    case "done":
-      return planned.resolved;
-    case "slot":
-      throw new SvmAccountNameError(
-        `${value} is read from the pool on the cluster when the transaction is built, and this ` +
-          "account is derived before anything is read: name the account by its address",
-      );
-    case "pda":
-      return {
-        value: memoizedFindProgramAddressSync(planned.program, planned.seeds)[0],
-        label: `the address ${planned.program} derives for ${planned.text}`,
-        kind: "address",
-      };
-    case "token": {
-      if (planned.row === undefined) {
-        throw new SvmAccountNameError(
-          `mint ${planned.mint} is not one ${ctx.chain.slug} registers, and its token program ` +
-            "can only be read from the cluster, which this resolution does not do: use a " +
-            `registered token (sauce globals --chain ${ctx.chain.slug} --tokens)`,
-        );
-      }
-      const program = address(planned.row.tokenProgram);
-      const account =
-        planned.need === "account"
-          ? memoizedAssociatedTokenAccountSync({
-              owner: planned.holder!.key,
-              mint: planned.mint,
-              tokenProgram: program,
-            })
-          : undefined;
-
-      return tokenName(planned, program, account);
-    }
-  }
-}
-
 /** One account of a pool's slot, the slot read once per resolution (`slots`), pool and token paid. */
 async function resolveSlot(
   parsed: Extract<Parsed, { kind: "slot" }>,
@@ -798,7 +746,7 @@ function pdaSeeds(
         const value =
           typeof seed.value === "bigint" ? seed.value : integerArgument(seed.value, ctx);
         const width = seed.bits / 8;
-        if (value >= 1n << BigInt(seed.bits)) {
+        if (value < 0n || value >= 1n << BigInt(seed.bits)) {
           throw new SvmAccountNameError(
             `seed u${seed.bits}:${value} does not fit ${width} byte${width === 1 ? "" : "s"}`,
           );

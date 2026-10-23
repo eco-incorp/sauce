@@ -8,14 +8,11 @@
 > the name a program writes for each contract. zkSync Era is a preview chain: programs compile and
 > simulate here, and the `sauce` command sends nothing.
 
-**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
-On zkSync Era a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
-runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
-refused, naming the supported chains and how to request this one.
-
-To request zkSync Era, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22zkSync+Era%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+zkSync+Era+%28324%29&chain=zkSync+Era&chain-id=324) with the chain-support issue form.
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On zkSync Era a program
+compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
+`sauce pot --deploy` are refused,
+naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
@@ -27,7 +24,6 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | In TypeScript | `import { Zksync } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | none recorded |
 
 ## In a program
 
@@ -62,3 +58,14 @@ address.
 | [SyncSwap](../protocols/syncswap.md) | router | `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295` | `Syncswap.Router` |
 | [ZeroLend](../protocols/zerolend.md) | pool | `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8` | `Zerolend.Pool` |
 | [zkSync Native Bridge](../protocols/zksync-bridge.md) | l2Bridge | `0x11f943b2c77b743AB90f4A0Ae7d5A4e7FCA3E102` | `ZksyncBridge.L2Bridge` |
+
+## Requesting support
+
+To request zkSync Era, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22zkSync+Era%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+zkSync+Era+%28324%29&chain=zkSync+Era&chain-id=324) with the chain-support issue form.
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

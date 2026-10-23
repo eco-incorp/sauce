@@ -7,9 +7,9 @@
 > Everything a program can name on Base: its tokens, and every protocol deployed there with the name
 > a program writes for each contract. The `sauce` command builds and sends transactions on Base.
 
-**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
-Base a program compiles and simulates, and the `sauce` command and the MCP server build
-its transactions and send them.
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Base a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them.
 
 | Fact | Value |
 | --- | --- |
@@ -21,9 +21,6 @@ its transactions and send them.
 | In TypeScript | `import { Base } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
-| Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
-| Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [Deployments](../deployments.md#the-shared-intent-pot); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 6 |
 
 ## Notes
@@ -135,6 +132,7 @@ address.
 | [Uniswap V2](../protocols/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` | `UniswapV3.Factory` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | quoterV2 | `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | swapRouter02 | `0x2626664c2603336E57B271c5C0b26F421741e481` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x498581ff718922c3f8e6a244956af099b2652b2b` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0x7c5f5a4bbd8fd63184577525326123b519429bdc` | `UniswapV4.PositionManager` |
@@ -143,3 +141,9 @@ address.
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627` | `Wormhole.TokenBridge` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+
+## Next
+
+- [Chains](../chains.md): every other chain, with its support.
+- [Names and registries](../../concepts/names-and-registries.md): how a name in a program becomes an address on the chain it is compiled for.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

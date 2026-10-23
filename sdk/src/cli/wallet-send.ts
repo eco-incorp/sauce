@@ -1,16 +1,16 @@
 /**
  * Sending, from a wallet, transactions another step built unsigned: what `sauce_wallet_send` (the
- * local MCP server's) does with the result of `sauce_tx`, `sauce_pot`, `sauce_actions`,
- * `sauce_intent_publish` or any `sauce_intent_*` tool — taken as they come back, whole.
+ * local MCP server's) does with the result of `sauce_tx`, `sauce_pot` or `sauce_actions` — taken
+ * as it comes back, whole.
  *
  * Nothing is sent before the whole plan is rehearsed and held to the wallet's policy. On an EVM
  * chain the transactions are rehearsed together in one `eth_simulateV1` block from the wallet (one
  * alone may fall back to `eth_call`), the plan refused if any would revert, and the policy checked
- * over all of them; then each is sent through `chain.ts#sendAndWait` — the path `sauce run` and
- * `sauce intent fill --send` send through, which simulates it again, reserves what it spends in the
- * wallet's ledger, signs, sends and waits — stopping at the first that does not succeed. On Solana
- * each is signed by the wallet as its fee payer and sent through `solana.ts#sendPlannedSvm`, which
- * rehearses it as signed and refuses it if it would fail, as `sauce intent fill --send` does.
+ * over all of them; then each is sent through `chain.ts#sendAndWait` — the path `sauce run` sends
+ * through, which simulates it again, reserves what it spends in the wallet's ledger, signs, sends
+ * and waits — stopping at the first that does not succeed. On Solana each is signed by the wallet
+ * as its fee payer and sent through `solana.ts#sendPlannedSvm`, which rehearses it as signed and
+ * refuses it if it would fail, as `sauce run` does.
  */
 import {
   address,
@@ -71,7 +71,7 @@ export type PlannedTx =
 
 const SHAPES =
   "a transaction ({ to, data, value }, or a Solana { transaction } in base64), a list of them, or " +
-  "a tool's whole result that carries them (transactions, intents[].transactions, transaction)";
+  "a tool's whole result that carries them (transactions, transaction)";
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 
@@ -144,16 +144,6 @@ function collect(
     collect(fields.transactions, `${where}.transactions`, chainId, out);
 
     return;
-  }
-  if (Array.isArray(fields.intents)) {
-    const before = out.length;
-    fields.intents.forEach((intent, index) => {
-      const each = intent as Record<string, unknown> | null;
-      if (each !== null && typeof each === "object" && "transactions" in each) {
-        collect(each, `${where}.intents[${index}]`, chainId, out);
-      }
-    });
-    if (out.length > before) return;
   }
   if (fields.transaction !== null && typeof fields.transaction === "object") {
     collect(fields.transaction, `${where}.transaction`, chainId, out);

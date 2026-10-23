@@ -29,7 +29,7 @@ const BUFFER = "So11111111111111111111111111111111111111112";
 
 const DEFAULT_EXPECTED: SvmSettleExpectation = { minOut: 777n, splCount: 1n };
 
-/** What a partner does: compile the shipped source with this intent's defines. */
+/** What a partner does: compile the shipped source with the settlement's defines. */
 function partnerCompile(escrowCount: number, expected: SvmSettleExpectation = DEFAULT_EXPECTED) {
   return compileSource(svmSettleSource(escrowCount), "svm", {
     defines: { SETTLE_MIN_OUT: expected.minOut, SETTLE_SPL_COUNT: expected.splCount },

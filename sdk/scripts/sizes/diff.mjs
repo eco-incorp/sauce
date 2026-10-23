@@ -1,5 +1,5 @@
 // Compares two sizes.json files: `node diff.mjs base.json candidate.json`. Prints every bytecode
-// that grew (program [0], then each intent body), and exits 1 when one did.
+// that grew (program [0], then each recorded body an older tree reported), and exits 1 when one did.
 import { readFileSync } from "node:fs";
 
 const [base, candidate] = process.argv

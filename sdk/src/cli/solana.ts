@@ -66,7 +66,12 @@ import {
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
-import { svmProgramStops, type SvmProgramStops } from "../svm/compute-stops.js";
+import {
+  SVM_COOK_UNITS,
+  svmProgramStops,
+  svmStopValues,
+  type SvmProgramStops,
+} from "../svm/compute-stops.js";
 import type { SvmSlot } from "../svm/pool-slot.js";
 import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
@@ -117,7 +122,6 @@ import {
   compileProgram,
   payloadOf,
   type ProgramInput,
-  refusePastDeadline,
   revertedFirst,
   unapproved,
 } from "./commands.js";
@@ -658,9 +662,9 @@ export async function svmLanded(
 }
 
 /**
- * Signs a plan's Solana transaction (`lifecycle-svm.ts`: base64, its fresh keys' signatures in, the
- * fee payer's out) with `signer`, the fee payer, rehearses it as signed and refuses it if it would
- * fail, then sends it and waits until it is confirmed.
+ * Signs a planned Solana transaction (base64, as another tool's or command's plan hands it out: any
+ * fresh keys' signatures in, the fee payer's out) with `signer`, the fee payer, rehearses it as
+ * signed and refuses it if it would fail, then sends it and waits until it is confirmed.
  */
 export async function sendPlannedSvm(
   url: string,
@@ -798,9 +802,9 @@ const mintProgramOn =
     });
 
 /**
- * main's `Address` arguments, by name, as keys, and its `Uint256` ones as integers: what an account
- * derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before the arguments are
- * given.
+ * main's `Address` arguments, by name, as keys, and its integers (`Uint256`, `Int256`) as integers:
+ * what an account derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before
+ * the arguments are given. A negative `Int256` is kept as it is: a seed refuses it by name.
  */
 export function svmKeyArguments(
   program: CompiledSauceProgram,
@@ -818,9 +822,9 @@ export function svmKeyArguments(
   }
   program.entryParams.forEach((param, index) => {
     const value = values[index];
-    if (param.type === "Uint256") {
+    if (param.type === "Uint256" || param.type === "Int256") {
       if (
-        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) ||
+        (typeof value === "string" && /^(0x[0-9a-fA-F]+|-?\d+)$/.test(value)) ||
         typeof value === "number" ||
         typeof value === "bigint"
       ) {
@@ -1376,12 +1380,6 @@ export function svmPayload(
     );
   }
   const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
-  if (keyed && program.entryEncoding === "compact-v1") {
-    throw new UsageError(
-      "--compact-args: an Address argument on Solana is encoded as an ABI-v1 word only; compile " +
-        "without --compact-args, or take the key as an Account parameter",
-    );
-  }
 
   return hexToBytes(
     payloadOf(
@@ -1545,38 +1543,34 @@ const tablesOption = (
   Object.keys(tables).length === 0 ? {} : { lookupTables: tables };
 
 /**
- * Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. `stops` are
- * the swaps' stops where a simulation settled them already (`sauce run`); else they are worked out
- * from the cost table.
+ * Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`, each swap's
+ * stop worked out from the cost table (`Prepared.restop` works them out again).
  */
 async function prepare(
   input: SvmCookInput,
   files: CliFiles,
   signer: TransactionSigner,
-  settled?: { readonly fixed?: number; readonly scale?: number },
 ): Promise<Prepared> {
-  refusePastDeadline(input);
   const via = input.via ?? "kitchen";
-  const program = compileProgram(input, files);
-  // The arguments are checked before anything is read: the stops come after them.
-  svmPayload(program, input.args);
-  const manifest = program.manifest ?? { accounts: [] };
-  requireSvmAccounts(manifest, program.derivedAccounts, input.accounts, via);
+  // Compiled with every swap the plain one; a swap whose stop binds is compiled again, below, to
+  // the Stopped form. The arguments are checked before anything is read.
+  const plain = compileProgram(input, files);
+  svmPayload(plain, input.args);
+  const manifest = plain.manifest ?? { accounts: [] };
+  requireSvmAccounts(manifest, plain.derivedAccounts, input.accounts, via);
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
   // The slots the token methods added that no `--account` gave: the command derives each.
   const derived = new Set(
-    Object.keys(program.derivedAccounts ?? {}).filter(
-      (name) => !Object.hasOwn(input.accounts, name),
-    ),
+    Object.keys(plain.derivedAccounts ?? {}).filter((name) => !Object.hasOwn(input.accounts, name)),
   );
   const found = new Map<string, Address | null>();
   // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster, and so are
   // the pools and tick arrays a swap's stop is worked out from.
   const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
-  const keyArguments = svmKeyArguments(program, input.args);
+  const keyArguments = svmKeyArguments(plain, input.args);
   const given = await resolveTokenAccounts(
-    svmAccountsWanted(program, input.accounts),
+    svmAccountsWanted(plain, input.accounts),
     input.owner,
     pot,
     input.chain,
@@ -1590,7 +1584,7 @@ async function prepare(
   const stopsFor = (fixed?: number, scale?: number): Promise<SvmProgramStops | undefined> =>
     ask(input.rpcUrl, "the pools the swaps stop in", () =>
       svmProgramStops(
-        program,
+        plain,
         input.chain,
         given.accounts,
         keyArguments.integers,
@@ -1599,8 +1593,15 @@ async function prepare(
         scale,
       ),
     );
-  const stops = await stopsFor(settled?.fixed, settled?.scale);
-  const bytecode = svmPayload(program, input.args, stops?.values ?? []);
+  // The program a cook runs: the plain one where no stop binds, byte for byte; else each binding
+  // swap compiled to the Stopped form, its stop after main's arguments. The accounts are the same.
+  const held = (stops: SvmProgramStops | undefined): CompiledSauceProgram =>
+    stops === undefined || stops.binding.length === 0
+      ? plain
+      : compileProgram(input, files, undefined, stops.binding);
+  const stops = await stopsFor();
+  const program = held(stops);
+  const bytecode = svmPayload(program, input.args, svmStopValues(stops, program));
   refuseTooManyAccounts(
     given.accounts,
     input.owner,
@@ -1644,9 +1645,11 @@ async function prepare(
     ...(stops === undefined ? {} : { stops }),
     restop: async (fixed, scale) => {
       const again = await stopsFor(fixed, scale);
+      const recompiled = held(again);
       return {
         ...prepared,
-        bytecode: svmPayload(program, input.args, again?.values ?? []),
+        program: recompiled,
+        bytecode: svmPayload(recompiled, input.args, svmStopValues(again, recompiled)),
         ...(again === undefined ? {} : { stops: again }),
       };
     },
@@ -1926,17 +1929,25 @@ async function withStops(
   const ranOut = (out: CommandOutput): boolean =>
     out.json.ok === false && svmRanOutOfUnits(logsOf(out));
   const holds = (stops: SvmProgramStops | undefined): boolean =>
-    stops !== undefined &&
-    stops.stops.some((stop) => stop.stop === 1n || stop.stopTick !== undefined);
+    stops !== undefined && stops.binding.length > 0;
   // A cook that succeeds with a pool held: the cook's own units, measured, are what the venues are
   // given the rest of, once more, kept where that cook succeeds too.
   if (holds(prepared.stops) && output.json.ok !== false && output.json.computeUnits !== undefined) {
     const fixed = svmCookFixedUnits(BigInt(output.json.computeUnits as string), logsOf(output));
     if (fixed < prepared.stops!.fixed.units) {
       const loosened = await prepared.restop(fixed);
-      if (loosened.stops!.values.some((value, i) => value !== prepared.stops!.values[i])) {
+      const before = prepared.stops!.stops.map((stop) => stop.stop);
+      if (loosened.stops!.stops.some((stop, i) => stop.stop !== before[i])) {
         const again = await simulate(loosened);
-        if (again.json.ok !== false) {
+        // Kept only where it succeeds with the headroom still to spare: its units and the headroom's
+        // crossings at every pool that trades within the cook's.
+        const spent =
+          again.json.computeUnits === undefined ? undefined : Number(again.json.computeUnits);
+        if (
+          again.json.ok !== false &&
+          spent !== undefined &&
+          spent + loosened.stops!.headroom <= SVM_COOK_UNITS
+        ) {
           prepared = loosened;
           output = again;
         }
@@ -1944,13 +1955,16 @@ async function withStops(
     }
   }
   for (const scale of TIGHTENED) {
-    if (prepared.stops === undefined || !ranOut(output)) break;
+    if (prepared.stops === undefined || prepared.stops.unbounded !== undefined || !ranOut(output)) {
+      break;
+    }
     prepared = await prepared.restop(undefined, scale);
     output = await simulate(prepared);
   }
   const stops = prepared.stops;
   if (stops === undefined) return { output, prepared };
-  const refused = ranOut(output);
+  // With no stop to work out again, a cook that runs out is the simulation's own failure.
+  const refused = stops.unbounded === undefined && ranOut(output);
   const refusal = refused
     ? [
         "The cook runs out of compute units with every pool's stop worked out three times, the " +
@@ -1964,7 +1978,11 @@ async function withStops(
     output: {
       ...output,
       text: [...refusal, ...svmStopLines(stops), output.text].join("\n"),
-      json: { ...output.json, ...svmStopsJson(stops) },
+      json: {
+        ...output.json,
+        ...svmStopsJson(stops),
+        ...(refused ? { computeRefused: refusal[0] } : {}),
+      },
       ...(refused ? { exitCode: 1 } : {}),
     },
   };
@@ -2566,12 +2584,18 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       ...step.notes,
       ...(prepared.stops === undefined
         ? []
-        : [
-            ...svmStopLines(prepared.stops),
-            "Each pool's stop comes from the cost table, with no simulation: `sauce simulate` and " +
-              "`sauce run` check the stops in a simulation, and tighten them where the cook would " +
-              "run out of compute units.",
-          ]),
+        : prepared.stops.unbounded !== undefined
+          ? svmStopLines(prepared.stops)
+          : [
+              ...svmStopLines(prepared.stops),
+              "The cook here is built with each pool's stop from the cost table, with no " +
+                "simulation: an estimate. `sauce simulate` works the stops out again against the " +
+                "units its simulation measures, so the cook it reports can differ from this one " +
+                "(`sauce run` sends the cook it simulated). A stop is fixed now, from the pools' " +
+                "prices now; a held pool whose price moves further than its headroom before the " +
+                "cook lands is skipped, but a pool that walks its whole way is not checked. The " +
+                "cursor sends this cook as built: resumed later, its stops are still these.",
+            ]),
       single
         ? `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
           `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
@@ -2800,7 +2824,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
   // would run out of compute units; one it still runs out with is refused here.
   const stopNotes: string[] = [];
-  if (prepared.stops !== undefined) {
+  if (prepared.stops !== undefined && prepared.stops.unbounded === undefined) {
     try {
       const checked = await withStops(prepared, (again) => simulatePrepared(again, input));
       const logs = Array.isArray(checked.output.json.logs)

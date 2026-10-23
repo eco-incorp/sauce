@@ -17,40 +17,10 @@ Web3 automation network for scheduling and executing smart contract functions an
 | Namespace | `Gelato` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
-## Key Operations
+## What it offers
 
 - **createTask**: Create an automated task for scheduled execution
 - **cancelTask**: Cancel an existing automated task
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Create automated task
-import { GelatoAutomateABI as IAutomate } from "./abis";
-function main(
-  automateAddress: Address,
-  execAddress: Address,
-  execData: bytes,
-  moduleData: { modules: Uint256[]; args: bytes[] },
-  feeToken: Address,
-): Uint256 {
-  const automate = IAutomate.at(automateAddress);
-  return automate.createTask(execAddress, execData, moduleData, feeToken);
-}
-
-// Cancel task
-import { GelatoAutomateABI as IAutomate } from "./abis";
-function main(automateAddress: Address, taskId: Uint256): Uint256 {
-  const automate = IAutomate.at(automateAddress);
-  automate.cancelTask(taskId);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -93,3 +63,9 @@ function main() {
 
 - `createTask(address execAddress, bytes execDataOrSelector, (uint8[] modules, bytes[] args) moduleData, address feeToken) returns (bytes32 taskId)`
 - `cancelTask(bytes32 taskId)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

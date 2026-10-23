@@ -24,9 +24,12 @@ import {
   type ReadonlyUint8Array,
   type Transaction,
 } from "@solana/kit";
-import { FailedTransactionMetadata, type LiteSVM } from "litesvm";
+import { FailedTransactionMetadata, FeatureSet, LiteSVM } from "litesvm";
 
 import { FIELDLESS } from "../../src/cli/svm-fork.js";
+
+/** The bank a shim answers from, named for suites whose package does not depend on LiteSVM. */
+export type { LiteSVM };
 
 const b64 = (bytes: ReadonlyUint8Array): string => getBase64Decoder().decode(bytes);
 
@@ -94,6 +97,19 @@ interface Landed {
 
 /** The genesis hash the shim answers: its own, a local bank's, which names no public cluster. */
 export const SHIM_GENESIS_HASH = "LocaLSVMgenesis1111111111111111111111111111";
+
+/**
+ * A bank to answer from, as a cluster runs: every feature, the builtins, precompiles and sysvars,
+ * and LiteSVM's default programs (SPL Token, Token-2022, the Associated Token Account program).
+ */
+export function clusterBank(): LiteSVM {
+  return new LiteSVM()
+    .withFeatureSet(FeatureSet.allEnabled())
+    .withBuiltins()
+    .withPrecompiles()
+    .withSysvars()
+    .withDefaultPrograms();
+}
 
 export interface SolanaShim {
   readonly url: string;
@@ -317,6 +333,54 @@ export function solanaShim(
         const failed = result instanceof FailedTransactionMetadata;
         const meta = result.meta();
         const asked = (params[1] as { accounts?: { addresses: string[] } } | undefined)?.accounts;
+        const wantsInner =
+          (params[1] as { innerInstructions?: boolean } | undefined)?.innerInstructions === true;
+        // As a cluster reports them: a group per top-level instruction that made CPIs, each inner
+        // instruction keyed by `programId`. A mainnet node gives a program it has no parser for —
+        // the Kitchen, the engine — partially decoded (accounts by address, data in base58, stack
+        // height), and System and SPL Token parsed, with no accounts or data; here every program
+        // comes partially decoded, which is all a reader of the Kitchen's calls needs.
+        const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+          staticAccounts: readonly string[];
+          addressTableLookups?: readonly {
+            lookupTableAddress: Address;
+            writableIndexes: readonly number[];
+            readonlyIndexes: readonly number[];
+          }[];
+        };
+        const tableKey = (table: Address, index: number): string => {
+          const read = svm.getAccount(table);
+
+          return read.exists
+            ? getBase58Decoder().decode(read.data.subarray(56 + index * 32, 88 + index * 32))
+            : "";
+        };
+        const lookups = message.addressTableLookups ?? [];
+        const keys = [
+          ...message.staticAccounts,
+          ...lookups.flatMap((l) =>
+            l.writableIndexes.map((i) => tableKey(l.lookupTableAddress, i)),
+          ),
+          ...lookups.flatMap((l) =>
+            l.readonlyIndexes.map((i) => tableKey(l.lookupTableAddress, i)),
+          ),
+        ];
+        const inner = meta
+          .innerInstructions()
+          .map((group, index) => ({
+            index,
+            instructions: group.map((each) => {
+              const compiled = each.instruction();
+
+              return {
+                programId: keys[compiled.programIdIndex()],
+                accounts: Array.from(compiled.accounts()).map((at) => keys[at]),
+                data: getBase58Decoder().decode(compiled.data()),
+                stackHeight: each.stackHeight(),
+              };
+            }),
+          }))
+          .filter((group) => group.instructions.length > 0);
         const post = failed ? [] : result.postAccounts();
         // The last return data any instruction set, as a cluster reports it: what `main` returned.
         const returned = meta.returnData();
@@ -326,6 +390,7 @@ export function solanaShim(
           value: {
             err: failed ? rpcError(result.err()) : null,
             logs: meta.logs(),
+            innerInstructions: wantsInner ? inner : null,
             unitsConsumed: Number(meta.computeUnitsConsumed()),
             returnData:
               returned.data().length === 0

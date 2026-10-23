@@ -30,7 +30,6 @@ import { NO_ENDPOINTS } from "../src/config.js";
 import { endpointUrl, serveHttp } from "../src/http.js";
 import { POT_TOOL_NAMES } from "../src/pots.js";
 import { createSauceServer } from "../src/server.js";
-import { INTENT_STORE_TOOL_NAMES, INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
@@ -50,14 +49,10 @@ const PROGRAM = "function main(): Uint256 {\n  return chainId;\n}\n";
 
 const structured = (result: unknown) => (result as CallToolResult).structuredContent!;
 
-/** The tools a server lists: over stdio the wallet tools (unless `--no-wallets`), and the intent
- *  and Pot stores' where it keeps them. */
-const toolsOf = (
-  local: { readonly wallets?: boolean; readonly pots?: boolean; readonly intents?: boolean } = {},
-): string[] => [
+/** The tools a server lists: over stdio the wallet tools (unless `--no-wallets`), and the Pot
+ *  store's where it keeps it. */
+const toolsOf = (local: { readonly wallets?: boolean; readonly pots?: boolean } = {}): string[] => [
   ...TOOL_NAMES,
-  ...INTENT_TOOL_NAMES,
-  ...(local.intents === true ? INTENT_STORE_TOOL_NAMES : []),
   ...SEND_TOOL_NAMES,
   ...(local.wallets === true ? WALLET_TOOL_NAMES : []),
   ...(local.pots === true ? POT_TOOL_NAMES : []),
@@ -66,7 +61,7 @@ const toolsOf = (
 
 async function exercise(
   client: Client,
-  local: { readonly wallets?: boolean; readonly pots?: boolean; readonly intents?: boolean } = {},
+  local: { readonly wallets?: boolean; readonly pots?: boolean } = {},
 ): Promise<void> {
   const { tools } = await client.listTools();
   assert.deepEqual(
@@ -93,10 +88,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     writeFileSync(config, JSON.stringify({ rpcUrls: { "8453": `http://127.0.0.1:9/${SECRET}` } }));
     const transport = new StdioClientTransport({
       command: BIN[0],
-      args: [
-        ...BIN.slice(1),
-        ...["--config", config, "--pots", join(dir, "pots"), "--store", join(dir, "intents")],
-      ],
+      args: [...BIN.slice(1), ...["--config", config, "--pots", join(dir, "pots")]],
       // A home of its own: the wallets it serves by default are that home's.
       env: { ...getDefaultEnvironment(), HOME: dir },
       cwd: dir,
@@ -107,7 +99,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     const client = new Client({ name: "stdio-smoke", version: "0.0.0" });
     await client.connect(transport);
     try {
-      await exercise(client, { wallets: true, pots: true, intents: true });
+      await exercise(client, { wallets: true, pots: true });
       // Over stdio a program is read from the user's own disk, relative to where it runs.
       writeFileSync(join(dir, "program.sauce.ts"), PROGRAM);
       const byPath = structured(
@@ -167,7 +159,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       const { tools } = await client.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
-        toolsOf({ wallets: true, pots: true, intents: true }),
+        toolsOf({ wallets: true, pots: true }),
       );
       assert.match(
         received[0]!,
@@ -274,7 +266,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       args: [
         ...BIN.slice(1),
         ...["--wallets", wallets, "--password-env", "SAUCE_TEST_WALLET_PASSWORD"],
-        ...["--pots", join(dir, "pots"), "--store", join(dir, "intents")],
+        ...["--pots", join(dir, "pots")],
       ],
       env: { ...getDefaultEnvironment(), SAUCE_TEST_WALLET_PASSWORD: password },
       cwd: dir,
@@ -289,7 +281,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       const { tools } = await client.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
-        toolsOf({ wallets: true, pots: true, intents: true }),
+        toolsOf({ wallets: true, pots: true }),
       );
       assert.match(
         received[0]!,
@@ -332,7 +324,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     await client.connect(transport);
     try {
       // The other stores are kept: --no-wallets leaves out the wallets alone.
-      await exercise(client, { pots: true, intents: true });
+      await exercise(client, { pots: true });
       assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
     } finally {
       await client.close();
@@ -388,7 +380,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       const { tools } = await byDefault.client.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
-        toolsOf({ wallets: true, pots: true, intents: true }),
+        toolsOf({ wallets: true, pots: true }),
       );
       assert.ok(
         (byDefault.client.getInstructions() ?? "").includes(
@@ -399,24 +391,13 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         structured(await byDefault.client.callTool({ name: "sauce_pot_list", arguments: {} })),
         { store: join(home, ".sauce", "pots"), pots: [record] },
       );
-      // And the intent store, ~/.sauce/intents, where sauce intent list reads it: empty.
-      assert.ok(
-        (byDefault.client.getInstructions() ?? "").includes(
-          `THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE, in ${join(home, ".sauce", "intents")}`,
-        ),
-      );
-      assert.deepEqual(structured(await byDefault.client.callTool({ name: "sauce_intent_list" })), {
-        store: join(home, ".sauce", "intents"),
-        intents: [],
-      });
     } finally {
       await byDefault.client.close();
     }
     assert.equal(byDefault.stderr(), "", "a store kept by default is not logged");
 
     // A directory the operator names: kept there, and said.
-    const intents = join(dir, "kept-intents");
-    const named = await serve({}, "--pots", pots, "--store", intents, "--offline");
+    const named = await serve({}, "--pots", pots, "--offline");
     try {
       const listed = structured(
         await named.client.callTool({ name: "sauce_pot_list", arguments: { chain: "base" } }),
@@ -427,17 +408,12 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       const bare = (await named.client.callTool({ name: "sauce_pot_list" })) as CallToolResult;
       assert.notEqual(bare.isError, true, JSON.stringify(bare.content));
       assert.deepEqual(structured(bare), { store: pots, pots: [record] });
-      assert.deepEqual(structured(await named.client.callTool({ name: "sauce_intent_list" })), {
-        store: intents,
-        intents: [],
-      });
     } finally {
       await named.client.close();
     }
     assert.equal(
       named.stderr(),
-      `sauce mcp: keeping the Pots its transactions deploy in ${pots}\n` +
-        `sauce mcp: keeping the intents its transactions touch in ${intents}\n`,
+      `sauce mcp: keeping the Pots its transactions deploy in ${pots}\n`,
     );
 
     const none = await serve({}, "--no-stores", "--offline");
@@ -503,15 +479,9 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         ["--http", "0", "--pots", "/tmp/sauce-pots"],
         /--pots is for stdio: the HTTP server keeps nothing/,
       ],
-      [
-        ["--http", "0", "--store", "/tmp/sauce-intents"],
-        /--store is for stdio: the HTTP server keeps nothing/,
-      ],
       [["--http", "0", "--no-stores"], /--no-stores is for stdio: the HTTP server keeps nothing/],
       [["--pots", "/tmp/sauce-pots", "--no-stores"], /give --pots or --no-stores, not both/],
-      [["--store", "/tmp/sauce-intents", "--no-stores"], /give --store or --no-stores, not both/],
       [["setup", "--pots", "/tmp/sauce-pots"], /--pots is for serving, not setup/],
-      [["setup", "--store", "/tmp/sauce-intents"], /--store is for serving, not setup/],
     ] as const) {
       const child = spawn(BIN[0], [...BIN.slice(1), ...argv], {
         stdio: ["ignore", "ignore", "pipe"],

@@ -19,12 +19,13 @@
  *    the wallet's own Pot, with no value, counts as a transaction to that Pot: deploying a Pot the
  *    policy lets the wallet cook on grants nothing cooking on it does not, so a command that
  *    deploys the Pot it is about to cook on is allowed whenever the cook is.
- *  - `native`: the chain's native coin, in its own units (ETH, SOL), leaving the wallet or the Pot
- *    a transaction cooks on; on Solana the fee and any rent it pays are included.
+ *  - `native`: the chain's native coin, in its own units (ETH, SOL, Arc's USDC), leaving the wallet
+ *    or the Pot a transaction cooks on; on Solana the fee and any rent it pays are included.
  *  - `tokens`: by registry symbol or by address (an EVM token, a Solana mint); what leaves the
  *    wallet or the Pot it cooks on, and any approval it grants above what is left of the limit
  *    (Permit2 aside, which moves nothing without the wallet's signature in a later cook). A token
- *    the policy does not name is not limited.
+ *    the policy does not name is not limited. Where the native coin is also an ERC-20 (Arc's USDC,
+ *    one balance), what leaves as either counts against `native` and that token's limit both.
  *  - `perDay` is the last 24 hours, every chain together, counted from the ledger.
  *
  * What a transaction moves is MEASURED, not read from its calldata: an EVM transaction is rehearsed
@@ -32,8 +33,8 @@
  * transfers out of the wallet and its Pot are what count; a Solana one is simulated with the
  * accounts it writes reported, and the wallet's and its Pot's lamports and token accounts compared
  * before and after. What cannot be measured — an endpoint without `eth_simulateV1`, a cook whose
- * native transfers are not traced, a Solana transaction loading accounts from lookup tables — is
- * refused wherever a limit would need it.
+ * native transfers are not traced, or a Solana lookup table that cannot be read — is refused
+ * wherever a limit would need it.
  *
  * Every wallet unlocked is GUARDED, policy or not: {@link guardWallet} registers it by address, and
  * the two places every send of this command passes — `chain.ts#sendAndWait` on an EVM chain,
@@ -57,6 +58,7 @@ import { join } from "node:path";
 
 import {
   address as solanaAddress,
+  getBase58Encoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
@@ -79,17 +81,18 @@ import {
 } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { nativeErc20 } from "../chains/index.js";
 import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda, fetchAlt, svmPublicKey } from "../svm/index.js";
+import { fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
-import { nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
+import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
+import { accountsNow, messageAccounts, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -322,6 +325,12 @@ interface Outflow {
   readonly token: string;
   readonly symbol?: string;
   readonly decimals?: number;
+  /**
+   * The decimals a limit written in base units (`"1500000n"`) counts in, where they are not
+   * `decimals`: Arc's USDC leaving as the native coin is measured in its 18, to the wei, and its
+   * token limit is written in the ERC-20's 6.
+   */
+  readonly limitDecimals?: number;
   readonly amount: bigint;
 }
 
@@ -501,8 +510,10 @@ export async function measureEvm(
         `transaction ${index + 1} of ${calls.length} would revert in the simulation, so nothing was sent`,
       );
     }
-    const logs = result.logs ?? [];
-    const traced = logs.some((log) => getAddress(log.address) === NATIVE_EMITTER);
+    // One log per native movement, however the node or the chain said it.
+    const { logs, logged } = nativeOnce(chain, result.logs ?? []);
+    const traced =
+      logged || (result.logs ?? []).some((log) => getAddress(log.address) === NATIVE_EMITTER);
     let native = 0n;
     const tokens = new Map<string, bigint>();
     const approvals: Array<{ token: Address; spender: Address; amount: bigint }> = [];
@@ -522,8 +533,13 @@ export async function measureEvm(
       }
     }
     // An account's own native leaves only as a transaction's value, which a trace shows; with no
-    // trace, the value is what the wallet sends, and a cook's Pot is not seen.
+    // trace, the value is what the wallet sends, and a cook's Pot is not seen. (What `native` holds
+    // then is what left through the native coin's ERC-20, where it has one.)
     const untraced = !traced && (call.value > 0n || cook !== undefined);
+    const nativeOut = untraced ? call.value + native : native;
+    // Where the native coin is also an ERC-20 (Arc's USDC), it is one balance: whatever leaves as
+    // either is held to the token's limit as well as to the native one.
+    const erc20 = nativeErc20(chain.id);
     const known = new Map<string, { symbol?: string; decimals?: number }>();
     const info = async (token: Address) => {
       if (!known.has(token)) known.set(token, await evmToken(client, chain, token));
@@ -532,14 +548,27 @@ export async function measureEvm(
     };
     measured.push({
       ...base,
-      native: nativeOf(untraced ? call.value : native),
-      tokens: await Promise.all(
-        [...tokens].map(async ([token, amount]) => ({
-          token,
-          ...(await info(token as Address)),
-          amount,
-        })),
-      ),
+      native: nativeOf(nativeOut),
+      tokens: [
+        ...(await Promise.all(
+          [...tokens].map(async ([token, amount]) => ({
+            token,
+            ...(await info(token as Address)),
+            amount,
+          })),
+        )),
+        ...(erc20 === undefined || nativeOut === 0n
+          ? []
+          : [
+              {
+                token: getAddress(erc20.address),
+                symbol: (await info(getAddress(erc20.address))).symbol ?? nativeSymbol(chain),
+                decimals: 18,
+                limitDecimals: erc20.decimals,
+                amount: nativeOut,
+              },
+            ]),
+      ],
       approvals: await Promise.all(
         approvals.map(async (approval) => ({
           token: approval.token,
@@ -553,6 +582,12 @@ export async function measureEvm(
           ? {
               native:
                 "the endpoint does not trace native transfers, so what the cook moves from the Pot is not known",
+              // Nor, where the native coin is also an ERC-20, what leaves as that token.
+              ...(erc20 === undefined
+                ? {}
+                : {
+                    tokens: `the endpoint does not trace native transfers, and ${nativeSymbol(chain)} is ${chain.name}'s native coin`,
+                  }),
             }
           : {},
     });
@@ -561,17 +596,34 @@ export async function measureEvm(
   return measured;
 }
 
-/** The Kitchen's two cooks, whose data starts with the Pot's salt. */
+/** The Kitchen's cooks and the Pot's index among each one's accounts. */
 const KITCHEN_COOKS = [
-  [147, 233, 205, 239, 200, 21, 190, 159],
-  [247, 166, 195, 248, 78, 176, 147, 84],
+  { head: KITCHEN_DISCRIMINATORS.cook, pot: 2 },
+  { head: KITCHEN_DISCRIMINATORS.cookFromAccount, pot: 4 },
 ];
 /** The compute-budget program: a transaction's plumbing, not where it goes. */
 const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
 
 /**
+ * A program the transaction calls through another (a CPI), as a simulation reports it. Mainnet
+ * nodes answer `simulateTransaction` with every inner instruction keyed by `programId`: parsed
+ * (`parsed`, `program`; no `accounts` or `data`) for a program they parse, such as System and SPL
+ * Token, and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
+ * Kitchen's and the engine's. `programIdIndex` and index `accounts` are the unparsed form a
+ * transaction's own report uses, taken here too.
+ */
+type InnerInstruction = Readonly<{
+  programId?: string;
+  programIdIndex?: number;
+  accounts?: readonly (string | number)[];
+  data?: string;
+}>;
+
+/**
  * What a signed Solana `transaction` moves out of `wallet` and the Pots it cooks on, as a
  * simulation that reports its writable accounts shows it; a transaction that would fail is refused.
+ * A cook counts wherever it runs: called by the transaction, or by a program it calls (a signer's
+ * signature passes through a CPI, and the Kitchen takes a cook at any depth).
  */
 export async function measureSvm(
   rpc: Rpc,
@@ -589,21 +641,10 @@ export async function measureSvm(
     addressTableLookups?: readonly unknown[];
   };
   const kitchen = solanaAddress(v12SvmKitchenProgramId());
-  const pots: SvmAddress[] = [];
   const programs = new Set<string>();
   for (const instruction of message.instructions) {
     const program = message.staticAccounts[instruction.programAddressIndex]!;
     if (program !== COMPUTE_BUDGET) programs.add(program);
-    const data = instruction.data ?? new Uint8Array();
-    const owner = message.staticAccounts[instruction.accountIndices?.[0] ?? -1];
-    if (
-      program === kitchen &&
-      owner === wallet &&
-      data.length >= 40 &&
-      KITCHEN_COOKS.some((head) => head.every((byte, at) => data[at] === byte))
-    ) {
-      pots.push((await derivePotPda(kitchen, wallet, data.slice(8, 40))).address);
-    }
   }
   const base = { chain, to: [...programs] };
   const native = (amount: bigint): Outflow => ({
@@ -632,6 +673,31 @@ export async function measureSvm(
       },
     };
   }
+  // Measure the Pot the cook names, not the salt's canonical PDA. The Kitchen checks that account
+  // against the owner, salt and supplied bump before signing; any off-curve bump can select it.
+  const accounts = messageAccounts(transaction, tables);
+  /** The Pot `program` signs for with `data` on `keys` (its accounts in order): the Kitchen's cook
+   *  by `wallet`, else nothing. */
+  const cookPot = (
+    program: string | undefined,
+    data: Uint8Array,
+    keys: readonly (string | undefined)[],
+  ): string | undefined => {
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+
+    return program === kitchen && cook !== undefined && keys[0] === wallet
+      ? keys[cook.pot]
+      : undefined;
+  };
+  const pots: string[] = [];
+  for (const instruction of message.instructions) {
+    const pot = cookPot(
+      accounts[instruction.programAddressIndex],
+      instruction.data ?? new Uint8Array(),
+      (instruction.accountIndices ?? []).map((at) => accounts[at]),
+    );
+    if (pot !== undefined) pots.push(pot);
+  }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
   const wire = getBase64EncodedWireTransaction(transaction);
@@ -639,11 +705,59 @@ export async function measureSvm(
     .simulateTransaction(wire, {
       encoding: "base64",
       sigVerify: false,
+      innerInstructions: true,
       accounts: { addresses: tracked, encoding: "base64" },
     })
     .send();
   if (value.err !== null) {
     throw new CliError("the transaction would fail in the simulation, so nothing was sent");
+  }
+  // The cooks its programs make: each inner instruction, at any depth, that calls the Kitchen.
+  const inner: readonly Readonly<{ instructions: readonly InnerInstruction[] }>[] | null =
+    value.innerInstructions ?? null;
+  let unseen: string | undefined =
+    inner === null
+      ? "the endpoint did not report the programs its programs call, so a cook among them is not seen"
+      : undefined;
+  for (const each of (inner ?? []).flatMap((group) => group.instructions)) {
+    const program =
+      each.programId ??
+      (each.programIdIndex === undefined ? undefined : accounts[each.programIdIndex]);
+    if (program === undefined) {
+      unseen = "the endpoint reported a program its programs call that cannot be named";
+      continue;
+    }
+    if (program !== kitchen) continue;
+    const keys = (each.accounts ?? []).map((key) =>
+      typeof key === "number" ? accounts[key] : key,
+    );
+    let data: Uint8Array | undefined;
+    try {
+      data =
+        each.data === undefined ? undefined : new Uint8Array(getBase58Encoder().encode(each.data));
+    } catch {
+      data = undefined;
+    }
+    // Every Kitchen instruction opens with an 8-byte discriminator: shorter data is a cut report.
+    if (data === undefined || data.length < 8 || keys.some((key) => key === undefined)) {
+      unseen =
+        "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+      continue;
+    }
+    // A cook reported without its owner or Pot account (a truncated report) is not "not a cook":
+    // whether it is the wallet's, and which Pot it signs for, cannot be read, so it is refused.
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+    if (
+      cook !== undefined &&
+      keys.length <= cook.pot &&
+      (keys.length === 0 || keys[0] === wallet)
+    ) {
+      unseen =
+        "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
+      continue;
+    }
+    const pot = cookPot(program, data, keys);
+    if (pot !== undefined) pots.push(pot);
   }
   const after = (value.accounts ?? []).map((account) =>
     account === null
@@ -678,7 +792,7 @@ export async function measureSvm(
       .filter(([, out]) => out.amount > 0n)
       .map(([token, out]) => ({ token, ...out })),
     approvals: [],
-    unmeasured: {},
+    unmeasured: unseen === undefined ? {} : { native: unseen, tokens: unseen },
   };
 }
 
@@ -847,7 +961,7 @@ function spendOf(
     limitName: string,
     limit: Limit,
     amount: bigint,
-    unit: Pick<Outflow, "decimals" | "symbol" | "token">,
+    unit: Pick<Outflow, "decimals" | "limitDecimals" | "symbol" | "token">,
   ): void => {
     if (unit.decimals === undefined) {
       refuse(
@@ -858,7 +972,7 @@ function spendOf(
     const value = scaled(amount, unit.decimals!);
     const text = (at: bigint) => `${whole(at)} ${unit.symbol ?? unit.token}`;
     if (limit.perTransaction !== undefined) {
-      const cap = limitScaled(limit.perTransaction, unit.decimals!);
+      const cap = limitScaled(limit.perTransaction, unit.limitDecimals ?? unit.decimals!);
       if (value > cap) {
         refuse(
           `${limitName}.perTransaction`,
@@ -867,7 +981,7 @@ function spendOf(
       }
     }
     if (limit.perDay !== undefined) {
-      const cap = limitScaled(limit.perDay, unit.decimals!);
+      const cap = limitScaled(limit.perDay, unit.limitDecimals ?? unit.decimals!);
       const before = totals.get(limitName) ?? 0n;
       if (before + value > cap) {
         refuse(

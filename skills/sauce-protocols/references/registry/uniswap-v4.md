@@ -76,6 +76,11 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `UniswapV4PoolManagerABI`
 
 `import UniswapV4PoolManagerABI from "./protocols/uniswap-v4/UniswapV4PoolManagerABI.json";` Speaks for: poolManager.
@@ -107,7 +112,7 @@ function main() {
 - `getPositionInfo(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)`
 - `getPositionInfo(bytes32 poolId, address owner, int24 tickLower, int24 tickUpper, bytes32 salt) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)`
 - `getPositionLiquidity(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity)`
-- `poolManager() view returns (address)`
+- `poolManager() view returns (address)`: the address is a `UniswapV4.PoolManager`
 
 ### `UniswapV4UniversalRouterABI`
 

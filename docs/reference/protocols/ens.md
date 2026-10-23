@@ -17,35 +17,10 @@ Ethereum Name Service - the decentralized naming system for wallets, websites, a
 | Namespace | `Ens` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **setResolver**: Set the resolver contract for an ENS name
 - **setOwner**: Transfer ownership of an ENS name
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Set resolver for ENS name
-import { ENSRegistryABI as IENSRegistry } from "./abis";
-function main(registryAddress: Address, node: Uint256, resolver: Address): Uint256 {
-  const registry = IENSRegistry.at(registryAddress);
-  registry.setResolver(node, resolver);
-  return 1;
-}
-
-// Transfer ENS name ownership
-import { ENSRegistryABI as IENSRegistry } from "./abis";
-function main(registryAddress: Address, node: Uint256, owner: Address): Uint256 {
-  const registry = IENSRegistry.at(registryAddress);
-  registry.setOwner(node, owner);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -90,3 +65,9 @@ function main() {
 - `resolver(bytes32 node) view returns (address)`
 - `setOwner(bytes32 node, address owner)`
 - `setResolver(bytes32 node, address resolver)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

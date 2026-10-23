@@ -20,14 +20,6 @@ const files = dirs.filter(existsSync).flatMap((d) =>
     .filter((n) => n.endsWith(".sauce.ts"))
     .map((n) => join(d, n)),
 );
-const options = {
-  intents: {
-    executionFee: 1000n,
-    deadline: 2000000000n,
-    openedAt: 1900000000n,
-    salt: `0x${"5a".repeat(32)}`,
-  },
-};
 let i = 0;
 for (const file of files) {
   const text = readFileSync(file, "utf8");
@@ -39,7 +31,7 @@ for (const file of files) {
     const dir = join(out, `${file.slice(root.length + 1).replaceAll("/", "__")}@${chain}`);
     process.env.LOG_DIR = dir;
     try {
-      compileSauceProgram(chain, text, { ...options, resolve });
+      compileSauceProgram(chain, text, { resolve });
       i++;
     } catch {}
   }

@@ -6,7 +6,8 @@
 
 > Tokens are the coins a program moves, such as USDC and WETH. In a program you write a token's
 > symbol, and Sauce puts in its address on the chain the program runs on. This page lists every
-> chain's tokens, the tokenized stocks among them, and the token functions.
+> chain's tokens, how a program reads a balance and moves a token safely, the tokenized stocks among
+> them, and the token functions.
 
 A program compiled for a chain names that chain's registered tokens by symbol, with no import
 (`USDC.balanceOf(ctx.self())`), and any other ERC-20 as `Token(<address>)`. In TypeScript the
@@ -37,6 +38,70 @@ writes.
 | [Solana](chains/solana.md) | `PYUSD`, `USDC`, `USDT`, `WSOL` | [1799](chains/solana-stocks.md) |
 
 Every other chain registers no token: a program there uses `Token(<address>)`.
+
+## Balances and writes
+
+A symbol is that chain's token address: a value (`balanceOf(USDC, account)`) or the target of its
+methods. Any other ERC-20 is `Token(address)`, or bound once: `const t = Token(address);` (declared
+once, never reassigned, used only as `t.<method>(...)`).
+
+**A balance is `<holder>.<TOKEN>`: any address or contract, then a token's symbol.** `self.USDC` is
+the USDC the Pot holds, `recipient.TSLAx` the TSLAx `recipient` holds, `UniswapV4.PoolManager.WETH`
+the WETH in the PoolManager. It is `USDC.balanceOf(holder)` written short, and compiles to the same
+bytes. The native coin takes it too: `self.ETH` is `ctx.selfBalance()`, `recipient.ETH` is
+`ctx.balance(recipient)`, and on Solana `self.SOL` is the Pot's lamports. The holder is:
+
+- on an EVM chain, any address: `self` (the Pot) or `ctx.self()`, a variable or parameter, an
+  address written out, a protocol contract (`Aave.Pool`), a contract at an address
+  (`UniswapV3.Pool(pool)` or `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that
+  returns an address (`UniswapV4.StateView.poolManager()`); a program that declares its own `self`
+  reads that variable;
+- a token's own contract too: `WETH.ETH` is the ETH locked in WETH, `USDC.WETH` the WETH the USDC
+  contract holds (on Solana, `USDC.SOL` is the mint's lamports, `USDC.WSOL` its own WSOL account's
+  balance);
+- on Solana, one known when the transaction is built, whose account is added to `main`: `self` (the
+  Pot), `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a 32-byte key written
+  out ([Solana](../guides/solana.md)).
+
+A record or a list is not a holder: on one, a property named like a token or the native coin is
+refused, since the name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an
+interface with no address (`UniswapV3.Pool.WETH`). Where the native coin and a token share a symbol (Arc's USDC), the
+shorthand is refused for it. `Token(address)` has no short form: its balance is
+`Token(address).balanceOf(holder)`.
+
+| Method                            | Behaviour                                                 |
+| --------------------------------- | --------------------------------------------------------- |
+| `.transfer(to, amount)`           | SafeERC20 transfer                                        |
+| `.transferFrom(from, to, amount)` | SafeERC20 transferFrom                                    |
+| `.approve(spender, amount)`       | forceApprove: a non-zero allowance is reset to zero first |
+| `.balanceOf(owner)`               | balance read, the long form of `owner.USDC`               |
+
+- **Writes are SafeERC20**: a token that returns nothing (USDT) works when it has code; a `false`
+  return, a malformed return or an address with no code reverts the program. A write returns
+  nothing, so `const ok = USDT.transfer(...)` does not compile.
+- **Approve exactly what the next call spends**: a standing allowance outlives the program.
+- **The same library as functions**, token first, with no import: `transfer(token, to, amount)`,
+  `transferFrom(token, from, to, amount)`, `approve(token, spender, amount)`,
+  `balanceOf(token, account)`, `allowance(token, owner, spender)`, `totalSupply(token)`,
+  `decimals(token)`, and the signature pulls `permit` and `permitTransferFrom`. The methods compile
+  to exactly these; [this page](#token-functions) ends with every signature.
+- **On Solana** the methods are the same, `Token(mint)` takes a mint given as an `Address` argument,
+  and compiling adds the token accounts each call moves through to `main`, derived and checked
+  ([Solana](../guides/solana.md)).
+
+```ts
+function main(payee: Address, amount: Uint256) {
+  require(self.USDT >= amount, "not enough USDT");
+  USDT.transfer(payee, amount);
+  require(allowance(USDT, ctx.self(), payee) == 0, "no allowance left standing");
+}
+```
+
+**`IERC20` is low level, and only imported.** `import { IERC20 as Erc20 } from
+"./artifacts/IERC20.json"` binds the raw ERC-20 ABI, for a call the token syntax does not offer. Its
+writes decode the declared `bool`, so they are not SafeERC20 (USDT's `transfer` reverts there, and
+a `false` return passes): never write a transfer or an approval through it. Import it under a name
+of its own, as here, in a file that also uses the token syntax, which binds `IERC20` itself.
 
 ## Ethereum
 
@@ -150,7 +215,7 @@ Devnet's mints differ: [Solana](chains/solana.md) lists them.
 ## Tokenized stocks
 
 A tokenized stock is a token like any other, named by its symbol with no import:
-`SPCXc.balanceOf(ctx.self())`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
+`self.SPCXc`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
 functions, a token a swap buys or sells.
 
 | Chain    | Issuers (example symbols)                                                                                                                                   |
@@ -159,9 +224,10 @@ functions, a token a swap buys or sells.
 | Base     | Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens                                                                                                          |
 | Solana   | Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities' (`NVDA_US`, `SPCX_US`), PreStocks' private companies (`SPACEX`, `OPENAI`) |
 
-- **The symbol is the issuer's own ticker, in its case**: symbols are case-sensitive (`SPCXC` is
-  not `SPCXc`), a `.` is written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`), and
-  PreStocks' symbol is the company's name (`SPACEX`).
+- **The symbol is the issuer's own ticker, in its case**: in a program symbols are case-sensitive
+  (`SPCXC` is not `SPCXc`; the `sauce` command's token flags, such as `--fund`, match one without
+  regard to case), a `.` is written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`),
+  and PreStocks' symbol is the company's name (`SPACEX`).
 - **One company has one token per issuer**: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on
   Base, and `SPCXx`, `SPCXon`, `SPCX_US` and `SPACEX` on Solana. Find one by name or ticker with
   `sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
@@ -183,7 +249,7 @@ functions, a token a swap buys or sells.
 
 ```ts
 function main(recipient: Address, amount: Uint256) {
-  require(SPCXc.balanceOf(ctx.self()) >= amount, "not enough SPCXc");
+  require(self.SPCXc >= amount, "not enough SPCXc");
   SPCXc.transfer(recipient, amount);
 }
 ```
@@ -205,9 +271,9 @@ mint's 32-byte key (`balanceOf(TSLAx, account)`). Token-2022 and the accounts it
 
 ```ts
 function main(recipient: Address, amount: Uint256): Uint256 {
-  const before = SPACEX.balanceOf(recipient);
+  const before = recipient.SPACEX;
   SPACEX.transfer(recipient, amount);
-  return SPACEX.balanceOf(recipient) - before;
+  return recipient.SPACEX - before;
 }
 ```
 
@@ -254,3 +320,9 @@ On Solana:
 - `approve(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void`
 - `transferChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, dest: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
 - `approveChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, delegate: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
+
+## Next
+
+- [Protocols and tokens](../guides/protocols-and-tokens.md#token-methods-and-balances): token methods and balances in a program.
+- [Safety](../concepts/safety.md): what Sauce checks for you, and what it cannot.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.

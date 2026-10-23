@@ -21,20 +21,37 @@ export function svmCookFixedUnits(total: bigint | number, logs: readonly string[
   return Math.max(0, Number(total) - venues);
 }
 
-/** Whether a simulated cook ran out of compute units. */
+/**
+ * Whether a simulated cook ran out of compute units: in a program's own instructions ("exceeded CUs
+ * meter"), or in a call it made into the runtime, which the runtime reports as "Computational budget
+ * exceeded". Which one a cook logs depends on where its last unit goes.
+ */
 export const svmRanOutOfUnits = (logs: readonly string[]): boolean =>
   logs.some((line) =>
-    /exceeded CUs meter|exceeded maximum compute|ComputationalBudgetExceeded/.test(line),
+    /exceeded CUs meter|Computational budget exceeded|exceeded maximum compute|ComputationalBudgetExceeded/.test(
+      line,
+    ),
   );
 
 const grouped = (units: number): string => units.toLocaleString("en-US");
 
+/** Why no swap is held where one runs a number of times known only as the cook runs. */
+const unboundedLine = ({ label, runs }: NonNullable<SvmStops["unbounded"]>): string =>
+  runs === null
+    ? `No pool is held to a stop: the swap in ${label} runs in a loop whose count the program does ` +
+      "not write out, so how many units it leaves the other swaps is known only as the cook runs. " +
+      "Every swap is the plain one; a loop written `for (let i = 0; i < 3; i++)` has its stops worked out"
+    : `No pool is held to a stop: the swap in ${label} runs in a loop written to run it more times ` +
+      "than one cook's compute units pay for, so the program leaves the loop sooner, at a point " +
+      "known only as the cook runs. Every swap is the plain one";
+
 /** A line for each pool a stop holds or skips: what a person reads. */
 export function svmStopLines(stops: SvmStops): string[] {
+  if (stops.unbounded !== undefined) return [unboundedLine(stops.unbounded)];
   return stops.stops.flatMap((stop) => {
-    if (stop.stop === 1n) {
+    if (stop.skipped === true) {
       return [
-        `${stop.label} is skipped: the deeper pools leave too few compute units for its swap ` +
+        `${stop.label} is skipped: the pools ahead of it leave too few compute units for its swap ` +
           `(about ${grouped(stop.estimatedUnits)} to its limit, ${stop.ticksToLimit} initialized ` +
           "ticks)",
       ];
@@ -50,6 +67,9 @@ export function svmStopLines(stops: SvmStops): string[] {
 
 /** The stops as `--json` and the MCP server give them. */
 export function svmStopsJson(stops: SvmStops): Record<string, unknown> {
+  if (stops.unbounded !== undefined) {
+    return { computeStops: [], noComputeStops: unboundedLine(stops.unbounded) };
+  }
   return {
     computeStops: stops.stops.map((stop) => ({
       pool: stop.pool,
@@ -57,7 +77,7 @@ export function svmStopsJson(stops: SvmStops): Record<string, unknown> {
       venue: stop.venue,
       stop: stop.stop.toString(),
       held: stop.stopTick !== undefined,
-      skipped: stop.stop === 1n,
+      skipped: stop.skipped === true,
       ...(stop.stopTick === undefined ? {} : { stopTick: stop.stopTick }),
       ...(stop.stopPrice === undefined ? {} : { stopPrice: stop.stopPrice }),
       ticksToLimit: stop.ticksToLimit,

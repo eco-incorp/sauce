@@ -32,12 +32,12 @@ function main(
 ): { price: Uint256; triggered: bool; sold: Uint256; received: Uint256 } {
   require(maxSlippageBps < 10000, "maxSlippageBps is 100% or more");
   const round = Chainlink.EthUsdFeed.latestRoundData();
-  const price = round.answer; // USD per ETH, 8 decimals
-  require(price > 0, "no price");
+  require(round.answer > 0, "no price");
+  const price = Uint256(round.answer); // USD per ETH, 8 decimals
   require(ctx.timestamp() - round.updatedAt <= maxAge, "the price is stale");
 
   const triggered = (stop > 0 && price <= stop) || (takeProfit > 0 && price >= takeProfit);
-  const held = WETH.balanceOf(ctx.self());
+  const held = self.WETH;
   if (!triggered || held == 0) {
     return { price, triggered, sold: 0, received: 0 };
   }
@@ -62,7 +62,7 @@ function main(
   // The limit decides how much sells, so no minimum is known before the swap; the average is held
   // to the floor after it.
   const received = uniswapV3(pool, WETH, USDC, held, limit, 0, ctx.self());
-  const sold = held - WETH.balanceOf(ctx.self());
+  const sold = held - self.WETH;
   require(received >= Math.mulDiv(sold, floor, 10 ** 18), "sold below the floor");
   return { price, triggered, sold, received };
 }

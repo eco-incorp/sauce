@@ -1,27 +1,49 @@
 # Verifying settlement programs
 
-**How-to guide** · [Documentation](../README.md) · [Intents](intents.md) · [Compiler API](../api/compiler.md)
+**How-to guide** · [Documentation](../README.md) · [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md) · [Compiler API](../api/compiler.md)
 
-> Someone hands you an intent and says "this settles your swap". Verification is the label check: it
-> confirms that the program inside is the real settlement program, and reads its settings. It does
-> not check everything around it. That part is still yours.
+> Someone hands you a payload or a cook and says "this settles your swap". Verification is the
+> label check: it confirms that the program inside is the real settlement program, and reads its
+> settings. It does not check everything around it. That part is still yours.
 
-Somebody hands you an intent and says it settles a swap to your address. These helpers answer one
-question about it: **is the program inside really the settlement program, and with what parameters?**
+This page is for a developer whose application receives settlement payloads, cooks or transactions
+that someone else built, such as a partner's front end or service, and must check them before
+relying on them. It assumes you know what a Pot and a cook are
+([Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md)). The program it checks is the
+**settlement program**, `settle.sauce.ts`, which the package ships: it sweeps a Pot's tokens to one
+recipient, with a floor. The checks answer one question: **is the program inside really the
+settlement program, and with what parameters?**
 
-That is a narrower question than "is this intent safe to sign", and the gap matters. A genuine
+That is a narrower question than "is this transaction safe to sign", and the gap matters. A genuine
 settlement can sit next to calls that are not, on a chain you did not expect, aimed at a Pot you do
-not control. Verification identifies the program and decodes its arguments. The destination, the
-execution target, the account identities and every other call in the intent remain yours to check.
+not control. Verification identifies the program and decodes its arguments. The chain, the
+execution target, the account identities and every other call in the batch remain yours to check.
 
 | Surface                        | Mechanism                                                                                          | Environment                                                                |
 | ------------------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `@eco-incorp/sauce/verify`     | Validate the EVM program hash and decode its canonical runtime argument tail                       | Node, browsers, and edge runtimes; depends on `viem`, not the compiler     |
 | `@eco-incorp/sauce/svm/verify` | Recompile SVM settlement with expected parameters, compare bytecode, and inspect attached accounts | Node and browsers; loads the compiler (`await ready()` first in a browser) |
 
+## Check a settlement from the command line
+
+`sauce verify` runs the same checks on a payload, a cook's calldata, or a transaction:
+
+```sh
+sauce verify 0x<payload>
+sauce verify 0x<tx hash> --chain base
+sauce verify <signature> --chain solana --min-out 0 --spl-count 1
+```
+
+It prints the tokens, the floor and the recipient, or exits 1 with the reason it refused, such as
+`PROGRAM_HASH` or `NO_SETTLE`. A cook must name the released engine, or one you add with
+`--engine <address>`. `--pin <hash:bytes>` also accepts a historical settlement program, as
+[below](#compiler-upgrades-and-historical-pins). On Solana, the floor and the split are compiled
+into the program, so give them with `--min-out` and `--spl-count`. An agent runs the same checks
+through the MCP tool `sauce_verify`. The rest of this page does it in code.
+
 ## Settlement behavior
 
-The EVM recipe sweeps the Pot's **entire current balance** of every listed token to one recipient.
+The EVM settlement program sweeps the Pot's **entire current balance** of every listed token to one recipient.
 Before the first transfer it checks `minOut` against the balance of `tokens[0]`; `minOut: 0n` turns
 that floor off.
 
@@ -29,7 +51,7 @@ Read "current balance" literally. A balance that was already there, or that some
 toward the floor and is swept along with everything else. The floor tells you what the Pot holds, not
 what the swap before it produced.
 
-The SVM recipe applies the same pattern to escrow token accounts. It takes an
+The SVM settlement program applies the same pattern to escrow token accounts. It takes an
 escrow count and compile-time `minOut`/`splCount`, then attaches token programs,
 escrows, mints, destination token accounts, and the owner. `splCount` selects how
 the escrows are split between the two token-program slots.
@@ -77,9 +99,8 @@ recipient, clean address words, and no trailing data. Some alternate encodings
 execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
-This surface verifies the pinned **ABI-v1** settlement artifact. Recompiling the
-recipe with `compactArgs: true` changes that contract and is not accepted by the
-existing settlement decoder.
+This surface verifies the pinned **ABI-v1** settlement artifact. Historical compact-encoded
+payloads are not accepted by the settlement decoder. Compiler 2.6 produces ABI-v1 only.
 
 ### Inspection levels
 
@@ -96,23 +117,26 @@ accept any bytes of the right length — only the hash check establishes that wh
 settlement program. Failures carry a `SettleDecodeError.code` such as `PROGRAM_HASH`,
 `TOKENS_OFFSET`, `DIRTY_ADDRESS_WORD` or `ARGS_OVERLONG`.
 
-### Extract a settlement from an intent
+### Extract a settlement from a cook
 
-The intent helpers unwrap `cook` calldata and validate the program they find.
-This reusable check expects exactly one current Pot settlement call:
+`decodeSettleCall(data)` unwraps one `Pot.cook` calldata and validates the program it carries, or
+returns `null` when the calldata is not a cook of the settlement program.
+`extractEvmSettleFromCalls(calls)` does the same across a batch of calls, each `{ data, target }`,
+and reports where it found the settlement. This reusable check expects exactly one call, a
+settlement cook on your Pot:
 
 ```ts
-import { extractEvmSettleFromIntent, type IntentLike } from "@eco-incorp/sauce/verify";
-import type { Address } from "viem";
+import { extractEvmSettleFromCalls } from "@eco-incorp/sauce/verify";
+import type { Address, Hex } from "viem";
 
 export function inspectSingleSettle(
-  intent: IntentLike,
+  calls: readonly { data: Hex; target?: Address }[],
   trustedPot: Address,
   trustedEngine: Address,
 ) {
-  const result = extractEvmSettleFromIntent(intent);
+  const result = extractEvmSettleFromCalls(calls);
   if (!result) throw new Error("No recognized settlement");
-  if (intent.route.calls.length !== 1 || result.callIndex !== 0) {
+  if (calls.length !== 1 || result.callIndex !== 0) {
     throw new Error("Expected exactly one settlement call");
   }
   if (result.ingredientCount !== 1) throw new Error("Unexpected extra program");
@@ -126,18 +150,14 @@ export function inspectSingleSettle(
 }
 ```
 
-For a swap-plus-settle intent, use the expected call count and positions for that
-application and validate every other call. `extractEvmSettleFromIntent()` returns
-the first recognized settlement; it does not approve the whole batch or check
-the intent's destination chain.
+For a batch that swaps and then settles, use the expected call count and positions for that
+application and validate every other call. `extractEvmSettleFromCalls()` returns the first
+recognized settlement; it does not approve the whole batch or check the chain it runs on.
 
-`decodeSettleCall(data)` examines one cook, and
-`extractEvmSettleFromCalls(calls)` operates without the intent wrapper. The
-decoder also recognizes the historical `cook(bytes[])` wrapper: only its first
-ingredient is inspected. A legacy router executes every ingredient, so check
-`ingredientCount` and interpret an absent `engine` according to that contract.
-Current `Pot.cook(address,bytes)` carries exactly one program and reports the
-engine it names.
+The decoder also recognizes the historical `cook(bytes[])` wrapper: only its first ingredient is
+inspected. A legacy router executes every ingredient, so check `ingredientCount` and interpret an
+absent `engine` according to that contract. Current `Pot.cook(address,bytes)` carries exactly one
+program and reports the engine it names.
 
 ### Compiler upgrades and historical pins
 
@@ -146,18 +166,24 @@ engine it names.
 program with a different length. Passing an empty list accepts no program; it
 does not fall back to the default pin.
 
-Programs from earlier releases, before the sweep followed `SafeERC20`:
+Four earlier builds of the settlement program can still be accepted when you list them. The last
+two predate the sweep following `SafeERC20`:
 
-| Released in     | `bytes` | `hash`                                                               |
-| --------------- | ------- | -------------------------------------------------------------------- |
-| 0.99.2 – 0.99.4 | 356     | `0xf9fffd262b32ad0cb07f2748f813626363497e09e4f4da134bed1b8da0c5d5fe` |
-| 0.99.0 – 0.99.1 | 362     | `0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11` |
+| Built by                                   | `bytes` | Published in     |
+| ------------------------------------------ | ------- | ---------------- |
+| Compiler 2.4.0 and 2.5.0                   | 435     | 0.99.5 – 0.99.15 |
+| Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release       |
+| Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4  |
+| Compiler 2.2.0 and 2.2.1                   | 362     | 0.99.0 – 0.99.1  |
 
-An explicit list replaces the default, so include the current pin —
-`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }` — alongside the historical
-ones you accept.
+Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
+editor shows on hover. The current pin is
+`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`: the 410-byte program
+produced by compiler 2.6.0. An explicit list replaces the default, so include the current pin
+alongside any historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
+adds one.
 
-A compiler change can change program bytes without changing a line of the recipe. So an SDK or
+A compiler change can change program bytes without changing a line of the source. So an SDK or
 compiler upgrade is the moment to check two separate things: which program version your application
 now _produces_, and which versions it still _accepts_. Import the SDK's pins rather than copying
 their values, and keep an older pin only for a version you have decided to accept.
@@ -269,28 +295,13 @@ not proof of a valid Pot derivation or signature. The verifier does not validate
 the Kitchen invocation, account roles, on-chain state, or execution success;
 `genuine` describes the recognized program under the stated pin assumptions.
 
-### Eco Portal envelopes
+As on EVM, finding a genuine settlement does not validate adjacent instructions or an arbitrary
+callee that accepts the same instruction discriminator. For a transaction that has already run,
+check the inner engine instruction the Kitchen made: `sauce verify <signature> --chain solana` does
+that. Match the engine program and the account plan to the deployment your application expects.
 
-`decodePortalCalldataWithAccounts()` unwraps the SVM Portal's instruction data
-and ordered account metas. It requires the declared account count to match the
-full account list, canonical Borsh flags, and no trailing bytes. Envelope decoding
-alone does not validate the target, program identity, or settlement.
-`extractSvmSettleFromIntent()` and
-`extractSvmSettleFromCalls()` combine envelope extraction with execution
-verification and report the call target. They expect the raw engine format
-above, default to `gated-v1`, and do **not** decode Kitchen cook envelopes. Supply
-expected `minOut`, `splCount`, optional `wireFormat`, and optional `bytecode`
-through their options. When verifying staged code, attach
-the independently obtained `pin` to the relevant input call; pins are per call,
-not shared across the batch.
+## Next
 
-A working Kitchen-targeted route needs separate Kitchen decoding before its
-program and account plan can be checked. For an already executed transaction,
-inspect the recorded inner engine instruction instead. The SDK's legacy SVM
-route builder cannot produce that Kitchen integration; see the
-[Solana guide](solana.md#svm-destinations-in-eco-intents).
-
-As on EVM, finding a genuine settlement does not validate adjacent calls or an
-arbitrary callee that accepts the same instruction discriminator. Match the
-reported target and account plan to the deployment and intent your application
-expects.
+- What changed in each release, the settlement program included: the [changelog](../changelog.md).
+- Run the same checks from a terminal: [Look things up](cli-lookup.md).
+- Moving to a newer package, and the pins to accept: [Upgrading](upgrading.md).

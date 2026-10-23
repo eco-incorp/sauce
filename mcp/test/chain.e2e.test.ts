@@ -2,7 +2,7 @@
  * The tools against a chain: a local anvil running the released gated stack (`sdk/test/cli-anvil.ts`,
  * the harness the `sauce` command's own chain suites use), reached only through a `--config`-style
  * endpoint. The server reads the Kitchen's fee and the Pot, rehearses the cook through the
- * simulate machinery, and rehearses an intent's publish — and the one transaction that lands here
+ * simulate machinery — and the one transaction that lands here
  * is signed by the test, with a key the server never sees, from the unsigned transaction the
  * server built: the remote-compile, local-sign split the server exists for.
  *
@@ -19,7 +19,6 @@ import {
   FEE,
   fixture,
   OWNER,
-  placePortal,
   registered,
   RUNTIME_HEX_PATH,
   startChain,
@@ -40,12 +39,6 @@ const PAY = [
   "function main(recipient: Address, amount: Uint256) {",
   "  USDC.transfer(recipient, amount);",
   "}",
-  "",
-].join("\n");
-const INTENT = [
-  "Base(() => {",
-  "  USDC.transfer(RECIPIENT, 5n);",
-  "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
   "",
 ].join("\n");
 
@@ -82,47 +75,22 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
   return `0x60003560e01c${dispatch}600080fd${bodies.map((each) => each.body).join("")}`;
 }
 
-/** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
-const COOKED = [
-  "Base(",
-  "  () => {",
-  "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).balanceOf(ctx.self());",
-  "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, got);",
-  "  },",
-  "  { tokens: [{ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n }] },",
-  ").reward({ tokens: [{ token: USDC, amount: 7n }] });",
-  "",
-].join("\n");
-
 describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, () => {
   let local: LocalChain;
-  /** The intent's destination, which only a call's own rpcUrl reaches. */
-  let base: LocalChain;
-  let baseUsdc: Address;
-  let basePortal: Address;
   let mcp: Connected;
   let usdc: Address;
 
   before(async () => {
     local = await startChain("ethereum");
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
-    // The real eco-routes Portal, where the SDK records it and deployed there in effect (so its
-    // vaults are the ones the SDK derives), for the publish rehearsal.
-    await placePortal(local);
-    base = await startChain("base");
-    baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-    basePortal = (await placePortal(base)).portal;
     mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
   });
 
   after(async () => {
     await mcp?.close();
     await local?.stop();
-    await base?.stop();
     // Every byte the server sent, across every test: never an endpoint.
-    for (const chain of [local, base]) {
-      assert.ok(!mcp.received.join("\n").includes(chain.rpcUrl.replace("http://", "")));
-    }
+    assert.ok(!mcp.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
   });
 
   const pot = getAddress(v12PredictPot(NOBODY, `0x${"00".repeat(32)}`) as Address);
@@ -595,154 +563,5 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.match(other, /the pool 0x9{40} trades 0x\w+ and 0x\w+, not WETH and /);
     const token = failed(await mcp.call("sauce_price", { ...pair, pool: usdc }));
     assert.match(token, /answers none of a V3-style pool's reads on ethereum/);
-  });
-
-  it("rehearses an intent's publish from a wallet that does not hold the reward yet", async () => {
-    const args = {
-      source: INTENT,
-      chain: "ethereum",
-      defines: { RECIPIENT },
-      intentDeadline: 2_000_000_000,
-      intentCreator: NOBODY,
-      from: NOBODY,
-      dryRun: true,
-    };
-    const short = ok(await mcp.call("sauce_intent_publish", args));
-    assert.equal(short.ok, false, "with nothing to pay into the vault, the transfer reverts");
-    const out = ok(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] }));
-    assert.equal(out.ok, true);
-    assert.deepEqual(
-      (out.transactions as Array<{ what: string; status: string }>).map((tx) => [
-        tx.what.split(" ")[0],
-        tx.status,
-      ]),
-      [
-        ["transfer", "success"],
-        ["publish", "success"],
-      ],
-    );
-    // After the transfer and the publish, the Portal counts the intent funded.
-    assert.deepEqual(
-      (out.intents as Array<{ fundVia: string; funded: boolean }>).map((intent) => [
-        intent.fundVia,
-        intent.funded,
-      ]),
-      [["transfer", true]],
-    );
-    assert.equal(await local.balanceOf(usdc, NOBODY), 0n);
-    // The other side is the destination's, and its tool is named.
-    const notes = (out.notes as string[]).join(" ");
-    assert.match(notes, /sauce_intent_fill with the same inputs/);
-    assert.doesNotMatch(notes, /sauce (intent )?fill|--/);
-  });
-
-  it("checks the Pot an intent's cook needs on its destination, through rpcUrls", async () => {
-    type PotCheck = { destination: string; pot: string; deployed: boolean | null };
-    const args = {
-      source: COOKED,
-      chain: "ethereum",
-      defines: { RECIPIENT },
-      intentDeadline: 2_000_000_000,
-      intentCreator: NOBODY,
-      intentExecutionFee: String(FEE),
-    };
-    const unchecked = ok(await mcp.call("sauce_compile", args));
-    assert.deepEqual(
-      (unchecked.intentPots as PotCheck[]).map((check) => [check.destination, check.deployed]),
-      [["base", null]],
-      "no endpoint for the destination, so not checked",
-    );
-    const checked = ok(
-      await mcp.call("sauce_compile", { ...args, rpcUrls: { base: base.rpcUrl } }),
-    );
-    const [pot] = checked.intentPots as PotCheck[];
-    assert.deepEqual([pot!.destination, pot!.deployed], ["base", false]);
-    const notes = (checked.notes as string[]).join(" ");
-    assert.match(notes, /is not deployed there, so no solver can fill it yet/);
-    assert.match(notes, /sauce_pot \(its unsigned deployment, which any account may send\)/);
-    assert.doesNotMatch(notes, /--|sauce pot/);
-  });
-
-  it("rehearses a solver filling the intent on its destination, through the call's endpoint", async () => {
-    type Fill = {
-      ok: boolean;
-      destination: string;
-      portal: string;
-      calls: Array<{ kind: string; status: string }>;
-    };
-    const args = {
-      source: INTENT,
-      chain: "ethereum",
-      defines: { RECIPIENT },
-      intentDeadline: 2_000_000_000,
-      intentCreator: NOBODY,
-    };
-    const block = await base.publicClient.getBlockNumber();
-    for (const reach of [{ rpcUrl: base.rpcUrl }, { rpcUrls: { base: base.rpcUrl } }]) {
-      const out = ok(await mcp.call("sauce_intent_fill", { ...args, ...reach, dryRun: true })) as {
-        ok: boolean;
-        chain: string;
-        intents: Fill[];
-      };
-      assert.equal(out.ok, true);
-      assert.equal(out.chain, "ethereum");
-      const [fill] = out.intents;
-      assert.equal(fill!.destination, "base");
-      assert.equal(getAddress(fill!.portal), basePortal);
-      assert.deepEqual(
-        fill!.calls.map((call) => [call.kind, call.status]),
-        [
-          ["approve", "success"],
-          ["fulfill", "success"],
-        ],
-      );
-    }
-    // A rehearsal: nothing landed on the destination.
-    assert.equal(await base.publicClient.getBlockNumber(), block);
-    assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), 0n);
-    // A deadline that has passed is rehearsed anyway, so the Portal's refusal shows, and said.
-    const late = ok(
-      await mcp.call("sauce_intent_fill", {
-        ...args,
-        intentDeadline: 1_728_432_000,
-        dryRun: true,
-        rpcUrl: base.rpcUrl,
-      }),
-    ) as { ok: boolean; notes: string[] };
-    assert.equal(late.ok, false);
-    assert.match(late.notes[0]!, /has passed: .* the simulation shows the Portal refusing it/);
-    assert.doesNotMatch(late.notes[0]!, /--intent-deadline/);
-
-    // The server has no endpoint of its own for the destination.
-    assert.match(
-      failed(await mcp.call("sauce_intent_fill", { ...args, dryRun: true })),
-      /Simulating a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
-    );
-
-    // Built, for a solver to sign: its approval, then the fill. No prover this server drives is on
-    // this destination, so it is fulfill, proven later; and this solver holds nothing yet.
-    type Built = {
-      intentHash: string;
-      proves: boolean;
-      transactions: Array<{ chainId: number; to: string; what: string; value: string }>;
-    };
-    const built = ok(
-      await mcp.call("sauce_intent_fill", { ...args, from: NOBODY, rpcUrl: base.rpcUrl }),
-    ) as { from: string; intents: Built[]; notes: string[] };
-    assert.equal(built.from, NOBODY);
-    const [fill] = built.intents;
-    assert.equal(fill!.proves, false);
-    const [approve, fulfill] = fill!.transactions;
-    assert.equal(fill!.transactions.length, 2);
-    assert.ok(approve!.what.startsWith("approve the Portal for"), approve!.what);
-    assert.ok(fulfill!.what.startsWith("Portal.fulfill("), fulfill!.what);
-    assert.equal(getAddress(fulfill!.to), basePortal);
-    assert.ok(fill!.transactions.every((tx) => tx.chainId === 8453));
-    assert.ok(
-      built.notes.some((note) => /holds .* and the fill delivers/.test(note)),
-      built.notes.join("; "),
-    );
-    assert.ok(built.notes.some((note) => new RegExp(`Only ${NOBODY} may send these`).test(note)));
-    assert.equal(await base.publicClient.getBlockNumber(), block, "built, not sent");
   });
 });

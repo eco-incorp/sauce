@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 StableSwap AMM optimized for low-slippage swaps between pegged assets (stablecoins, wrapped tokens). Uses a specialized invariant that provides near-zero slippage for like-kind assets while maintaining AMM properties.
 
@@ -19,72 +19,11 @@ StableSwap AMM optimized for low-slippage swaps between pegged assets (stablecoi
 | Namespace | `Curve` on ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
 
-## Key Operations
+## What it offers
 
 - **swap**: Exchange tokens within a pool using index-based routing
 - **addLiquidity**: Add liquidity with flexible token amounts (can be imbalanced)
 - **removeLiquidity**: Remove liquidity proportionally or single-sided
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { CurveStableSwapABI as IStableSwap } from "./abis";
-
-function main(
-  poolAddress: Address,
-  i: Uint256,
-  j: Uint256,
-  amountIn: Uint256,
-  minAmountOut: Uint256,
-): Uint256 {
-  const pool = IStableSwap.at(poolAddress);
-  return pool.exchange(i, j, amountIn, minAmountOut);
-}
-```
-
-- `poolAddress`: The specific Curve pool contract address (each pool is a separate contract)
-- `i`: Index of the input token within the pool (0-based)
-- `j`: Index of the output token within the pool (0-based)
-- `amountIn`: Exact amount of input token (in wei)
-- `minAmountOut`: Minimum output for slippage protection
-- Token indices vary per pool
-- For StableSwap-NG pools. 3pool's `exchange` returns nothing, so reading back a `uint256` reverts there: use `CurveThreePoolABI` for 3pool
-
-### addLiquidity
-
-```typescript
-import { CurveStableSwapABI as IStableSwap } from "./abis";
-
-function main(poolAddress: Address, amounts: Uint256[], minMintAmount: Uint256): Uint256 {
-  const pool = IStableSwap.at(poolAddress);
-  return pool.add_liquidity(amounts, minMintAmount);
-}
-```
-
-- `amounts`: Array of deposit amounts for each token in pool order (can include zeros for imbalanced deposits)
-- `minMintAmount`: Minimum LP tokens to receive (slippage protection)
-- All deposited tokens must be approved to the pool contract
-
-### removeLiquidity
-
-```typescript
-import { CurveStableSwapABI as IStableSwap } from "./abis";
-
-function main(poolAddress: Address, amount: Uint256, minAmounts: Uint256[]): Uint256[] {
-  const pool = IStableSwap.at(poolAddress);
-  return pool.remove_liquidity(amount, minAmounts);
-}
-```
-
-- `amount`: Amount of LP tokens to burn
-- `minAmounts`: Minimum amounts of each token to receive (array in pool token order)
 
 ## Notes
 
@@ -169,3 +108,9 @@ function main() {
 - `remove_liquidity_one_coin(uint256 _token_amount, int128 i, uint256 min_amount)`
 - `get_dy(int128 i, int128 j, uint256 dx) view returns (uint256)`
 - `get_virtual_price() view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

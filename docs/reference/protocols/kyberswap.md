@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a meta-aggregation router that routes across multiple DEXes for best execution. Features dynamic fees and anti-sniping protection.
 
@@ -19,52 +19,9 @@ Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a m
 | Namespace | `Kyberswap` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 
-## Key Operations
+## What it offers
 
 - **swap**: Exact input single swap via Elastic Router (concentrated liquidity)
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-```typescript
-import { KyberSwapElasticRouterABI as IElasticRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenIn: Address,
-  tokenOut: Address,
-  fee: Uint256,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-): Uint256 {
-  const router = IElasticRouter.at(routerAddress);
-  return router.swapExactInputSingle({
-    tokenIn: tokenIn,
-    tokenOut: tokenOut,
-    fee: fee,
-    recipient: recipient,
-    deadline: 99999999999,
-    amountIn: amountIn,
-    minAmountOut: amountOutMin,
-    limitSqrtP: 0,
-  });
-}
-```
-
-- `routerAddress`: KyberSwap Elastic Router address (`0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` on every listed chain except Base, which has no Elastic deployment here)
-- `tokenIn` / `tokenOut`: Input and output token addresses
-- `fee`: Pool fee tier (similar to Uniswap V3 but with KyberSwap's own tiers)
-- `amountIn`: Exact input amount (in wei)
-- `amountOutMin`: Minimum output for slippage protection (named `minAmountOut` not `amountOutMinimum`)
-- `recipient`: Address to receive output tokens
-- `limitSqrtP`: Price limit (`0` is no limit, which leaves `amountOutMin` as the only bound; named `limitSqrtP` not `sqrtPriceLimitX96`)
 
 ## Notes
 
@@ -125,3 +82,9 @@ function main() {
 `import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouterV2.
 
 - `swap((address callTarget, address approveTarget, bytes targetData, (address srcToken, address dstToken, address[] srcReceivers, uint256[] srcAmounts, address[] feeReceivers, uint256[] feeAmounts, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes clientData) execution) payable returns (uint256 returnAmount, uint256 gasUsed)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

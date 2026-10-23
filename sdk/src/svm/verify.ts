@@ -6,25 +6,23 @@ import { compileWithRs } from "../routes/rs-compile.js";
 import { EXECUTE_DISCRIMINATOR, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from "./engine.js";
 import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "./recipes/index.js";
 
-// The intent-level surface (unwrap the Portal envelope + extract from an intent) is re-exported here so
-// the whole partner-facing decode/verify story lives under `@eco-incorp/sauce/svm/verify`, symmetric
-// with the EVM `/verify` barrel re-exporting its own `intent.ts`.
+// The call-level surface (unwrap the Portal envelope, extract the settle from calls) is re-exported
+// here so the whole partner-facing decode/verify story lives under `@eco-incorp/sauce/svm/verify`,
+// symmetric with the EVM `/verify` barrel re-exporting its own `calls.ts`.
 export {
   decodePortalCalldataWithAccounts,
   encodePortalCalldataWithAccounts,
   extractSvmSettleFromCalls,
-  extractSvmSettleFromIntent,
   type PortalAccountMeta,
   type PortalCalldataWithAccounts,
   type PortalCalldataWithAccountsInput,
   type BytesInput,
   type UniversalAddressInput,
-  type SvmIntentCallLike,
-  type SvmIntentLike,
+  type SvmCallLike,
   type ExtractSvmSettleOptions,
   type ExtractedSvmSettle,
   type SvmSettleTarget,
-} from "./intent.js";
+} from "./calls.js";
 
 // ── what a caller expects a settle program to enforce ──
 

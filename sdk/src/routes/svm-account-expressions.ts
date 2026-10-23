@@ -485,10 +485,20 @@ export function collectAccountExpressions(l: SvmLowering): void {
     }
     const member = solanaMember(n);
     if (member !== undefined && !CALLS.has(member)) {
-      // `Solana.<chain thing>` that is no account (an intent's `.chain`, say) is left as it is.
+      // `Solana.<chain thing>` that is no account (its `.chain`, say) is left as it is.
       if (!Object.hasOwn(KNOWN, member)) return;
       const parent = parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
+      // `Solana.owner.USDC`: the holder of a balance, which the token methods lower.
+      if (
+        parent?.type === "MemberExpression" &&
+        parent.object === n &&
+        (parent as { computed?: boolean }).computed !== true &&
+        (parent.property as AstNode).type === "Identifier" &&
+        l.isBalanceName(nameOf(parent.property as AstNode))
+      ) {
+        return;
+      }
       roots.push({
         node: n,
         describe: () => {

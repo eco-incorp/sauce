@@ -6,7 +6,9 @@
 //   - A number and a bigint together: `x == 0`, `n + 1`, `f(500)` where a bigint is declared, a
 //     bigint stored where TypeScript inferred a number (`let pool = 0; pool = f()`), and the
 //     `number | bigint` of `c ? x : 0` (TS2365, TS2367, TS2322, TS2345). In SauceScript `1` and `1n`
-//     are the same integer, and an account compares as its address (`program == 0x06dd…`).
+//     are the same integer, an account compares as its address (`program == 0x06dd…`), and so does
+//     an address typed as the contract it is (`bigint & UniswapV3PoolMethods`, what a factory's
+//     `getPool` returns: `pool != 0`).
 //
 // Everything else TypeScript reports stays: a misspelled builtin, a wrong argument count, a method a
 // contract does not have, and a name the program never declares, whatever its case: a program's
@@ -19,10 +21,16 @@
 
 /** `one`, or a union of it: `c ? x : 0` is `number | bigint`. */
 const UNION = (one) => String.raw`${one}(?: \| ${one})*`;
-/** A TypeScript type that is a SauceScript number: `bigint`, `number`, a literal of either. */
-const NUMBER = UNION(String.raw`(?:bigint|number|-?\d+n?|SauceInt)`);
+/** A TypeScript type that is a SauceScript integer: either signedness, a plain number, a literal,
+ *  or an address typed as a contract (`bigint & UniswapV3PoolMethods`). Range and signedness
+ *  conversions remain the Sauce compiler's responsibility, not a TypeScript diagnostic filter. */
+const NUMBER = UNION(
+  String.raw`(?:bigint(?: & \w+)*|number|-?\d+n?|SauceInt|Uint256|Int256|SauceCall<(?:bigint|Uint256|Int256)(?: & \w+)*>)`,
+);
 /** ... or an `Account` (`Account<Writable, Signer>`), which compares as its address. */
-const INT = UNION(String.raw`(?:bigint|number|-?\d+n?|SauceInt|Account(?:<[\w, ]*>)?)`);
+const INT = UNION(
+  String.raw`(?:bigint(?: & \w+)*|number|-?\d+n?|SauceInt|Uint256|Int256|SauceCall<(?:bigint|Uint256|Int256)(?: & \w+)*>|Account(?:<[\w, ]*>)?)`,
+);
 
 const PATTERNS = {
   // Type 'bigint' cannot be used as an index type. / Type '0n' cannot be …

@@ -32,7 +32,7 @@ function main(
     data: data,
     tokenAmounts: [],
     feeToken: 0x0000000000000000000000000000000000000000,
-    extraArgs: 0x00,
+    extraArgs: hex``,
   });
 }
 ```
@@ -42,7 +42,7 @@ function main(
 - `data`: Arbitrary message payload (bytes)
 - `tokenAmounts`: Array of `{token, amount}` tuples for cross-chain token transfers. Empty array `[]` for message-only
 - `feeToken`: Address of token to pay fees in. `address(0)` = pay in native token (ETH). Can also use LINK token address
-- `extraArgs`: Optional encoded extra arguments (gas limits, etc.). `0x00` for defaults
+- `extraArgs`: Optional encoded extra arguments (gas limits, etc.). ` hex`` ` for defaults
 - Requires native token (ETH) as msg.value when `feeToken` is `address(0)`
 - Requires ERC-20 approval to the Router for any tokens in `tokenAmounts`
 

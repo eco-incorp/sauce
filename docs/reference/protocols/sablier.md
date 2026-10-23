@@ -17,41 +17,11 @@ Token streaming protocol for continuous payments. Supports linear, cliff, and dy
 | Namespace | `Sablier` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **withdrawFromStream**: Withdraw accrued tokens from an active stream
 - **cancelStream**: Cancel a stream and return remaining tokens to sender
 - **createWithDurations**: Create a new linear stream with cliff and total duration
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Withdraw from stream
-import { LockupLinearABI as ILockupLinear } from "./abis";
-function main(
-  lockupLinearAddress: Address,
-  streamId: Uint256,
-  to: Address,
-  amount: Uint256,
-): Uint256 {
-  const lockup = ILockupLinear.at(lockupLinearAddress);
-  lockup.withdraw(streamId, to, amount);
-  return 1;
-}
-
-// Cancel stream
-import { LockupLinearABI as ILockupLinear } from "./abis";
-function main(lockupLinearAddress: Address, streamId: Uint256): Uint256 {
-  const lockup = ILockupLinear.at(lockupLinearAddress);
-  lockup.cancel(streamId);
-  return 1;
-}
-```
 
 ## Notes
 
@@ -88,3 +58,9 @@ function main() {
 - `createWithDurations((address sender, address recipient, uint128 totalAmount, address asset, bool cancelable, bool transferable, (uint40 cliff, uint40 total) durations, (address account, uint256 fee) broker) params) returns (uint256 streamId)`
 - `withdraw(uint256 streamId, address to, uint128 amount)`
 - `cancel(uint256 streamId)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

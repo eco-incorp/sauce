@@ -9,7 +9,6 @@ import {
   decodeFunctionData,
   encodeAbiParameters,
   encodeErrorResult,
-  encodeEventTopics,
   getAddress,
   keccak256,
   pad,
@@ -30,13 +29,9 @@ import { revertReason } from "../src/cli/chain.js";
 import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../src/evm/effects.js";
 import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import { assumedBalances } from "../src/cli/inputs.js";
+import { potBalances } from "../src/cli/simulate.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
-import { PortalABI } from "../src/protocols/eco-routes/abis.js";
-import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
-import { encodeRoute, hashIntent } from "../src/routes/encode.js";
-import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
-import { predictIntentVault } from "../src/routes/portal.js";
-import type { Intent } from "../src/routes/types.js";
 
 const TOKEN = getAddress("0x1000000000000000000000000000000000000001");
 const HOLDER = getAddress("0x5a0ce0000000000000000000000000000000beef");
@@ -334,166 +329,6 @@ describe("what the cook did, from its logs", () => {
     },
   } as unknown as PublicClient;
 
-  /** An intent from Base, as a test builds it. */
-  const intentTo = (
-    destination: bigint,
-    portal: Hex,
-    delivered: { token: Hex; amount: bigint },
-    reward: { tokens: Array<{ token: Address; amount: bigint }>; nativeAmount?: bigint },
-  ): Intent => ({
-    sourceChainId: 8453n,
-    destination,
-    route: normalizeRoute({ deadline: 2_000_000_000n, portal, tokens: [delivered], calls: [] }),
-    reward: normalizeReward({
-      deadline: 2_000_003_600n,
-      creator: POT,
-      prover: ecoRoutesProver(base, "ethereum"),
-      tokens: reward.tokens,
-      nativeAmount: reward.nativeAmount ?? 0n,
-    }),
-  });
-  /** `IntentPublished` for `intent`, as `emitter` logs it: the indexed fields as topics, the rest
-   *  ABI-encoded as the data. */
-  const publishedLog = (intent: Intent, emitter: Address): RawLog => ({
-    address: emitter,
-    topics: encodeEventTopics({
-      abi: PortalABI,
-      eventName: "IntentPublished",
-      args: {
-        intentHash: hashIntent(intent).intentHash,
-        creator: POT,
-        prover: getAddress(ecoRoutesProver(base, "ethereum")),
-      },
-    }) as Hex[],
-    data: encodeAbiParameters(
-      [
-        { type: "uint64" },
-        { type: "bytes" },
-        { type: "uint64" },
-        { type: "uint256" },
-        { type: "tuple[]", components: [{ type: "address" }, { type: "uint256" }] },
-      ],
-      [
-        intent.destination,
-        encodeRoute(intent.route, intent.destination),
-        intent.reward.deadline,
-        intent.reward.nativeAmount,
-        intent.reward.tokens.map((token): readonly [Hex, bigint] => [
-          getAddress(`0x${token.token.slice(26)}`),
-          token.amount,
-        ]),
-      ],
-    ),
-  });
-  /** `IntentFunded(intentHash, funder, complete)` from `emitter`. */
-  const fundedLog = (intent: Intent, emitter: Address, complete: boolean): RawLog => ({
-    address: emitter,
-    topics: encodeEventTopics({ abi: PortalABI, eventName: "IntentFunded" }) as Hex[],
-    data: encodeAbiParameters(
-      [{ type: "bytes32" }, { type: "address" }, { type: "bool" }],
-      [hashIntent(intent).intentHash, POT, complete],
-    ),
-  });
-  const refundable = `refundable from ${new Date(2_000_003_600_000).toISOString()} if no fill is proven`;
-
-  it("names an intent the cook published, and the reward it paid into the intent's vault", async () => {
-    const portal = getAddress(ecoRoutesPortal(base));
-    const intent = intentTo(
-      1n,
-      ecoRoutesPortal("ethereum"),
-      { token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 1_000_000n },
-      { tokens: [{ token: usdc, amount: 1_050_000n }] },
-    );
-    const { intentHash } = hashIntent(intent);
-    const vault = getAddress(predictIntentVault(intent, { portal }));
-    const effects = await effectsOf(
-      metadata,
-      base,
-      [
-        log(usdc, [TRANSFER, at(POT), at(vault)], 1_050_000n),
-        publishedLog(intent, portal),
-        fundedLog(intent, portal, true),
-      ],
-      true,
-      new Map([[POT, "the Pot"]]),
-    );
-    // Neither Portal log is left as an unnamed event.
-    expect(effects.other).toEqual([]);
-    expect(effects.intents).toMatchObject([{ intentHash, portal, vault, funded: true }]);
-    const lines = effectLines(effects);
-    const short = `${intentHash.slice(0, 6)}…${intentHash.slice(-4)}`;
-    expect(lines).toEqual(
-      expect.arrayContaining([
-        `  [1] Pot 0x0000…00A1 -> vault of intent ${short} ${vault.slice(0, 6)}…${vault.slice(-4)}  1.05 USDC  the intent's reward`,
-        "Intents published:",
-        `  intent ${intentHash} to ethereum, through the Portal ${portal}`,
-        "    its route: 0 calls, the solver delivering 1 USDC",
-        `    its reward: 1.05 USDC, ${refundable}, held in its vault ${vault} (funded)`,
-      ]),
-    );
-    expect(lines.some((line) => line.startsWith("Other events"))).toBe(false);
-    expect((effectsJson(effects).intents as Array<Record<string, unknown>>)[0]).toMatchObject({
-      intentHash,
-      destination: "ethereum",
-      vault,
-      funded: true,
-      rewardTokens: [{ amount: "1050000" }],
-    });
-  });
-
-  it("says an intent is funded only when the Portal logs it complete, and names no vault but the Portal's", async () => {
-    const portal = getAddress(ecoRoutesPortal(base));
-    // To Solana: its mint by the symbol Solana's registry gives it, and a native reward beside
-    // the token. Funded by nothing the cook logged.
-    const toSolana = intentTo(
-      1399811149n,
-      ecoRoutesPortal("solana"),
-      {
-        token: "0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
-        amount: 2_000_000n,
-      },
-      { tokens: [{ token: usdc, amount: 2_100_000n }], nativeAmount: 10n ** 15n },
-    );
-    // Funded short of its reward: `complete` false.
-    const short = intentTo(
-      1n,
-      ecoRoutesPortal("ethereum"),
-      { token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 1n },
-      { tokens: [{ token: usdc, amount: 3n }] },
-    );
-    // Announced by a contract that is not the chain's eco-routes Portal: no vault is derived.
-    const elsewhere = getAddress("0x000000000000000000000000000000000000dEaD");
-    const effects = await effectsOf(
-      metadata,
-      base,
-      [
-        publishedLog(toSolana, portal),
-        publishedLog(short, portal),
-        fundedLog(short, portal, false),
-        publishedLog(short, elsewhere),
-      ],
-      true,
-      new Map(),
-    );
-    expect(effects.other).toEqual([]);
-    expect(effects.intents.map((each) => [each.funded, each.vault === undefined])).toEqual([
-      [false, false],
-      [false, false],
-      [false, true],
-    ]);
-    const lines = effectLines(effects);
-    expect(lines).toEqual(
-      expect.arrayContaining([
-        `  intent ${hashIntent(toSolana).intentHash} to solana, through the Portal ${portal}`,
-        "    its route: 0 calls, the solver delivering 2 USDC",
-        `    its reward: 2.1 USDC and 0.001 ETH, ${refundable}, held in its vault ${getAddress(predictIntentVault(toSolana, { portal }))}`,
-        `  intent ${hashIntent(short).intentHash} to ethereum, through the Portal ${elsewhere}`,
-        `    its reward: 0.000003 USDC, ${refundable}`,
-      ]),
-    );
-    expect(lines.some((line) => line.endsWith("(funded)"))).toBe(false);
-  });
-
   it("decodes transfers, approvals, wraps and native transfers, and nets each address", async () => {
     const effects = await effectsOf(
       metadata,
@@ -636,6 +471,120 @@ describe("what the cook did, from its logs", () => {
     expect(effectLines(await effectsOf(metadata, base, [], true, new Map()))).toEqual([
       "It moved no tokens and logged nothing.",
     ]);
+  });
+
+  it("says each movement of Arc's native USDC once, however the node and the chain report it", async () => {
+    const arc = requireChain("arc");
+    const ARC_USDC = getAddress("0x3600000000000000000000000000000000000000");
+    // Arc logs every native movement itself, from EIP-7708's system address, in 18 decimals.
+    const CHAIN = getAddress("0xfffffffffffffffffffffffffffffffffffffffe");
+    const TRACED = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    const OWNER = getAddress("0x00000000000000000000000000000000000000d4");
+    const KITCHEN = getAddress("0x00000000000000000000000000000000000000e5");
+    const FEE = 10n ** 16n;
+    const labels = new Map([
+      [POT, "the Pot"],
+      [OWNER, "owner"],
+      [KITCHEN, "Kitchen"],
+    ]);
+    // What Arc's eth_simulateV1 answered for a cook paying the Kitchen's fee and sending 1 USDC
+    // through the ERC-20 (block 27322511): the value reported by the trace and by the chain, the
+    // transfer by the chain and by the token.
+    const simulated = [
+      log(TRACED, [TRANSFER, at(OWNER), at(POT)], FEE),
+      log(CHAIN, [TRANSFER, at(OWNER), at(POT)], FEE),
+      log(TRACED, [TRANSFER, at(POT), at(KITCHEN)], FEE),
+      log(CHAIN, [TRANSFER, at(POT), at(KITCHEN)], FEE),
+      log(CHAIN, [TRANSFER, at(POT), at(POOL)], 10n ** 18n),
+      log(ARC_USDC, [TRANSFER, at(POT), at(POOL)], 10n ** 6n),
+      log(
+        ARC_USDC,
+        [topic("Approval(address,address,uint256)"), at(POT), at(POOL)],
+        5n * 10n ** 6n,
+      ),
+    ];
+    const once = [
+      { token: "native", from: OWNER, to: POT, amount: FEE, kind: "transfer" },
+      { token: "native", from: POT, to: KITCHEN, amount: FEE, kind: "transfer" },
+      { token: "native", from: POT, to: POOL, amount: 10n ** 18n, kind: "transfer" },
+    ];
+    const effects = await effectsOf(metadata, arc, simulated, true, labels);
+    expect(effects.moves).toEqual(once);
+    expect(effects.native).toEqual(once);
+    expect(effects.transfers).toEqual([]);
+    expect(effects.other).toEqual([]);
+    expect(effects.changes).toEqual([
+      { address: OWNER, deltas: [{ token: "native", amount: -FEE }] },
+      { address: POT, deltas: [{ token: "native", amount: -(10n ** 18n) }] },
+      { address: KITCHEN, deltas: [{ token: "native", amount: FEE }] },
+      { address: POOL, deltas: [{ token: "native", amount: 10n ** 18n }] },
+    ]);
+    expect(effectLines(effects)).toEqual(
+      expect.arrayContaining([
+        `  ${POT} (the Pot): -1 USDC`,
+        `  ${POT} (the Pot) lets ${POOL} spend 5 USDC`,
+      ]),
+    );
+    // A receipt has no trace, and the chain's own logs report the native movements all the same.
+    const receipt = await effectsOf(
+      metadata,
+      arc,
+      simulated.filter((each) => each.address !== TRACED),
+      false,
+      labels,
+    );
+    expect(receipt.moves).toEqual(once);
+    expect(receipt.native).toEqual(once);
+    // Without the chain's logs, a transfer through the ERC-20 is the native movement it is.
+    const tokenOnly = await effectsOf(metadata, arc, [simulated[5]!], true, labels);
+    expect(tokenOnly.moves).toEqual([once[2]]);
+  });
+});
+
+describe("--assume-balance and a keyless --fund of Arc's USDC", () => {
+  const arc = requireChain("arc");
+  const ARC_USDC = getAddress("0x3600000000000000000000000000000000000000");
+  const POT = getAddress("0x00000000000000000000000000000000000000a1");
+  // The Pot holds 0.5 USDC. No token storage holds it, so nothing may search the ERC-20's.
+  const client = {
+    getBalance: async () => 5n * 10n ** 17n,
+    call: async () => {
+      throw new Error("no storage of Arc's USDC holds a balance");
+    },
+    readContract: async () => {
+      throw new Error("no storage of Arc's USDC holds a balance");
+    },
+  } as unknown as PublicClient;
+
+  it("is the Pot's native balance, in the native coin's 18 decimals", async () => {
+    const assumed = await potBalances(
+      client,
+      { chain: arc, assume: assumedBalances(["USDC:2"], arc) },
+      POT,
+      [],
+    );
+    expect(assumed.overrides).toEqual([{ address: POT, balance: 2n * 10n ** 18n }]);
+    expect(assumed.assumed).toEqual([
+      expect.objectContaining({
+        token: "native",
+        symbol: "USDC",
+        decimals: 18,
+        amount: 2n * 10n ** 18n,
+        because: "--assume-balance",
+      }),
+    ]);
+    // A keyless --fund credits what its pull would bring on top of what the Pot holds.
+    const credited = await potBalances(client, { chain: arc, assume: [] }, POT, [
+      { token: ARC_USDC, label: "USDC", amount: 1_500_000n },
+    ]);
+    expect(credited.overrides).toEqual([{ address: POT, balance: 2n * 10n ** 18n }]);
+  });
+
+  it("is one balance with the native coin, named once", () => {
+    expect(() => assumedBalances(["USDC:2", "native:1"], arc)).toThrow(
+      "--assume-balance names USDC twice: give it once",
+    );
+    expect(assumedBalances(["USDC:2", "ETH:1"], requireChain("base"))).toHaveLength(2);
   });
 });
 

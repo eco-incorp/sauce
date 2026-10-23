@@ -27,9 +27,8 @@
  *
  * Over stdio it is the command for an agent that has no shell, so it keeps the command's stores
  * ({@link McpStores}) as the command does, in the same directories, BY DEFAULT: every Pot a tool's
- * transaction deploys is recorded where `sauce pot list` reads it, and every intent one publishes,
- * and what one does to an intent, where `sauce intent list` reads it. `--pots <dir>` and
- * `--store <dir>` name other directories, and `--no-stores` keeps none. Over HTTP it keeps nothing.
+ * transaction deploys is recorded where `sauce pot list` reads it. `--pots <dir>` names another
+ * directory, and `--no-stores` keeps none. Over HTTP it keeps nothing.
  *
  * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
  * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
@@ -56,7 +55,6 @@ import {
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { updateCheckOff, updateNote, type UpdateCheck } from "./update-check.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
-import { defaultStoreDir } from "./store.js";
 import { defaultWalletsDir } from "./wallets.js";
 
 /** How `sauce mcp` serves, as given on the command line; the server checks each value. */
@@ -98,19 +96,15 @@ export interface McpStores {
   /** The Pot store (`pot-store.ts`): every Pot a tool's transaction deploys is recorded there, and
    *  `sauce_pot_list` and `sauce_pot_import` read and write it. */
   readonly pots?: string;
-  /** The intent store (`store.ts`): every intent a tool's transaction publishes, and what one does
-   *  to an intent, is recorded there; `sauce_intent_list`, `sauce_intent_show` and
-   *  `sauce_intent_import` read and write it, and every intent tool takes an intent by its hash. */
-  readonly intents?: string;
   /** The wallet directory (`wallets.ts`), which the wallet tools serve; `--no-wallets` alone keeps
    *  the other stores. */
   readonly wallets?: McpWallets;
   /**
-   * The stores whose directory the operator named (`--pots`, `--wallets <dir>`, `--store`). A start
-   * says where it keeps those, and nothing of a store kept by default: a client logs every line a
-   * start writes, and the server's instructions say where it keeps them.
+   * The stores whose directory the operator named (`--pots`, `--wallets <dir>`). A start says
+   * where it keeps those, and nothing of a store kept by default: a client logs every line a start
+   * writes, and the server's instructions say where it keeps them.
    */
-  readonly named?: ReadonlyArray<"pots" | "wallets" | "intents">;
+  readonly named?: ReadonlyArray<"pots" | "wallets">;
 }
 
 /** The wallet directory the stdio server serves, and what enables its wallets to sign. */
@@ -198,11 +192,6 @@ export const MCP_FLAGS: FlagSpecs = {
     value: "<dir>",
     help: "Over stdio: keep the Pot store here (default ~/.sauce/pots, as sauce pot list reads)",
   },
-  store: {
-    type: "string",
-    value: "<dir>",
-    help: "Over stdio: keep the intent store here (default ~/.sauce/intents, as sauce intent list reads)",
-  },
   "no-stores": {
     type: "boolean",
     help: "Over stdio: keep none of the command's stores (by default it keeps them, as sauce does)",
@@ -251,7 +240,6 @@ const SERVE_ONLY = [
   "password-file",
   "password-command",
   "pots",
-  "store",
   "no-stores",
 ] as const;
 const PASSWORDS = ["password-env", "password-file", "password-command"] as const;
@@ -266,8 +254,6 @@ export async function mcpCommand(
     readonly updateCheck?: UpdateCheck | undefined;
     /** The command's own Pot store (`CliIo.potsDir`): the executable's `~/.sauce/pots`. */
     readonly potsDir?: string | undefined;
-    /** The command's own intent store (`CliIo.storeDir`), else `~/.sauce/intents`. */
-    readonly storeDir?: string | undefined;
     /** The command's own wallet directory, where a test names one (`CliIo.walletsDir`). */
     readonly walletsDir?: string | undefined;
   } & PasswordIo,
@@ -392,22 +378,20 @@ async function walletsOf(
 
 /**
  * The command's stores the server keeps: over stdio, each where the command keeps it unless
- * `--pots`, `--wallets` or `--store` says otherwise, or none with `--no-stores` (`--no-wallets`
- * leaves out the wallets alone); over HTTP, none.
+ * `--pots` or `--wallets` says otherwise, or none with `--no-stores` (`--no-wallets` leaves out the
+ * wallets alone); over HTTP, none.
  */
 async function storesOf(
   args: ParsedArgs,
   io: PasswordIo & {
     readonly potsDir?: string | undefined;
     readonly walletsDir?: string | undefined;
-    readonly storeDir?: string | undefined;
   },
   http: boolean,
 ): Promise<McpStores | undefined> {
   const pots = stringFlag(args, "pots");
-  const intents = stringFlag(args, "store");
   const none = args.values["no-stores"] === true;
-  const given = pots !== undefined ? "pots" : intents !== undefined ? "store" : undefined;
+  const given = pots !== undefined ? "pots" : undefined;
   if (http) {
     if (given !== undefined || none) {
       throw new UsageError(`--${given ?? "no-stores"} is for stdio: the HTTP server keeps nothing`);
@@ -426,13 +410,11 @@ async function storesOf(
   const named = [
     ...(pots === undefined ? [] : (["pots"] as const)),
     ...(wallets?.dirNamed === true ? (["wallets"] as const) : []),
-    ...(intents === undefined ? [] : (["intents"] as const)),
   ];
 
   return {
     ...(dir === undefined ? {} : { pots: dir }),
     ...(wallets === undefined ? {} : { wallets }),
-    intents: intents ?? io.storeDir ?? defaultStoreDir(),
     ...(named.length === 0 ? {} : { named }),
   };
 }

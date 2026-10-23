@@ -17,41 +17,11 @@ Decentralized credit protocol behind DAI and USDS stablecoins. Users deposit col
 | Namespace | `Maker` on ethereum |
 | Chains | ethereum |
 
-## Key Operations
+## What it offers
 
 - **depositToSDAI**: Deposit DAI into Savings DAI vault (ERC-4626)
 - **withdrawFromSDAI**: Withdraw DAI from sDAI vault by asset amount
 - **redeemFromSDAI**: Redeem sDAI shares for DAI
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Deposit DAI into sDAI
-import { SavingsDaiABI as ISavingsDai } from "./abis";
-function main(sDAIAddress: Address, amount: Uint256, receiver: Address): Uint256 {
-  const sDAI = ISavingsDai.at(sDAIAddress);
-  return sDAI.deposit(amount, receiver);
-}
-
-// Withdraw DAI from sDAI
-import { SavingsDaiABI as ISavingsDai } from "./abis";
-function main(sDAIAddress: Address, amount: Uint256, receiver: Address, owner: Address): Uint256 {
-  const sDAI = ISavingsDai.at(sDAIAddress);
-  return sDAI.withdraw(amount, receiver, owner);
-}
-
-// Redeem sDAI shares for DAI
-import { SavingsDaiABI as ISavingsDai } from "./abis";
-function main(sDAIAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {
-  const sDAI = ISavingsDai.at(sDAIAddress);
-  return sDAI.redeem(shares, receiver, owner);
-}
-```
 
 ## Notes
 
@@ -102,3 +72,9 @@ function main() {
 - `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
 - `convertToShares(uint256 assets) view returns (uint256)`
 - `convertToAssets(uint256 shares) view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

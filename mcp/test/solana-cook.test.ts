@@ -22,7 +22,7 @@ import {
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { resolveSvmAccountName } from "../../sdk/dist/svm/account-names.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
-import { signableBy } from "./wallet-mcp-schemas.js";
+import { signableBy } from "./wallet-mcp/phantom.js";
 
 const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
 const KITCHEN = "SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot";

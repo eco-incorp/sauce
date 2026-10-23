@@ -190,18 +190,103 @@ describeEvm("main's arguments, encoded by the SDK and read by the compiled progr
     );
   };
 
-  for (const encoding of ["abi-v1", "compact-v1"] as const) {
-    for (const { name, source, values, read } of CASES) {
-      it(`${encoding}: ${name}`, async () => {
-        const program = compileSauceProgram("base", source, {
-          compactArgs: encoding === "compact-v1",
-        });
-        expect(program.entryEncoding).toBe(encoding);
-        const encoded = encodeEntryArguments(program, values);
-        // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
-        expect(await returned(program, encoded)).toEqual(read.map(String));
-        expect(decodeEntryArguments(program, encoded)).toEqual(values);
-      }, 30_000);
-    }
+  for (const { name, source, values, read } of CASES) {
+    it(`abi-v1: ${name}`, async () => {
+      const program = compileSauceProgram("base", source);
+      expect(program.entryEncoding).toBe("abi-v1");
+      const encoded = encodeEntryArguments(program, values);
+      // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
+      expect(await returned(program, encoded)).toEqual(read.map(String));
+      expect(decodeEntryArguments(program, encoded)).toEqual(values);
+    }, 30_000);
   }
+
+  // An Int256 parameter, executed: what `main` reads of the word the SDK encodes is the signed
+  // value, so a program that compares or subtracts it sees a negative number. ABI-v1 only: the
+  // signed word is the ABI's `int256`.
+  const MIN = -(1n << 255n);
+  const MAX = (1n << 255n) - 1n;
+  const unsigned = (value: bigint): string => BigInt.asUintN(256, value).toString();
+  const SIGNED: ReadonlyArray<{
+    name: string;
+    source: string;
+    values: EntryValue[];
+    read: bigint[];
+  }> = [
+    {
+      name: "a negative value, subtracted from",
+      source: "function main(x: Int256): Int256 { return x - 1; }",
+      values: [-5n],
+      read: [-6n],
+    },
+    {
+      name: "a negative value, from decimal text and from a number",
+      source:
+        "function main(x: Int256, y: Int256): { x: Int256, y: Int256 } { return { x: x, y: y }; }",
+      values: ["-7", -8],
+      read: [-7n, -8n],
+    },
+    {
+      name: "-2^255 and 2^255 - 1, the bounds, as they are",
+      source:
+        "function main(a: Int256, b: Int256): { a: Int256, b: Int256 } { return { a: a, b: b }; }",
+      values: [MIN, MAX],
+      read: [MIN, MAX],
+    },
+    {
+      name: "a negative value, ordered below zero",
+      source: "function main(x: Int256): bool { return x < 0; }",
+      values: [-5n],
+      read: [1n],
+    },
+    {
+      name: "a positive value, not ordered below zero",
+      source: "function main(x: Int256): bool { return x < 0; }",
+      values: [5n],
+      read: [0n],
+    },
+    {
+      name: "an array of them",
+      source:
+        "function main(xs: Int256[]): { n: Uint256, first: Int256, last: Int256 } { return { n: xs.length, first: xs[0], last: xs[2] }; }",
+      values: [[-1n, 0n, MIN]],
+      read: [3n, -1n, MIN],
+    },
+    {
+      name: "a tuple holding one, beside a Uint256",
+      source:
+        "function main(p: { d: Int256, a: Uint256 }, x: Uint256): { d: Int256, a: Uint256, x: Uint256 } { return { d: p.d, a: p.a, x: x }; }",
+      values: [{ d: -2n, a: 3n }, 4n],
+      read: [-2n, 3n, 4n],
+    },
+  ];
+  for (const { name, source, values, read } of SIGNED) {
+    it(`abi-v1: ${name}`, async () => {
+      const program = compileSauceProgram("base", source);
+      expect(program.entryEncoding).toBe("abi-v1");
+      const encoded = encodeEntryArguments(program, values);
+      expect(await returned(program, encoded)).toEqual(read.map(unsigned));
+      expect(decodeEntryArguments(program, encoded)).toEqual(
+        values.map((value, index) =>
+          typeof value === "string" || typeof value === "number" ? BigInt(value) : values[index],
+        ),
+      );
+    }, 30_000);
+  }
+
+  it("binds a negative argument into the program, which then reads it as the signed literal", async () => {
+    const program = compileSauceProgram(
+      "base",
+      "function main(x: Int256): Int256 { return x - 1; }",
+      {
+        args: [-5n],
+      },
+    );
+    expect(program.entryParams).toEqual([]);
+    expect(await returned(program, new Uint8Array())).toEqual([unsigned(-6n)]);
+    const minimum = compileSauceProgram("base", "function main(x: Int256): Int256 { return x; }", {
+      args: [MIN],
+    });
+    expect(await returned(minimum, new Uint8Array())).toEqual([unsigned(MIN)]);
+  }, 30_000);
 });

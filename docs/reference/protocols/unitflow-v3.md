@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Concentrated-liquidity AMM on Arc, forked from Uniswap V3 with native USDC in place of WETH9.
 
@@ -19,52 +19,11 @@ Concentrated-liquidity AMM on Arc, forked from Uniswap V3 with native USDC in pl
 | Namespace | `UnitflowV3` on arc |
 | Chains | arc |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### swap
-
-Exact-input single-hop swap through UnitFlowV3Router.
-
-```typescript
-import { UnitFlowV3RouterABI as IRouter } from "./abis";
-
-function main(
-  routerAddress: Address,
-  tokenIn: Address,
-  tokenOut: Address,
-  fee: Uint256,
-  amountIn: Uint256,
-  amountOutMin: Uint256,
-  recipient: Address,
-  deadline: Uint256,
-): Uint256 {
-  const router = IRouter.at(routerAddress);
-  return router.exactInputSingle({
-    tokenIn: tokenIn,
-    tokenOut: tokenOut,
-    fee: fee,
-    recipient: recipient,
-    deadline: deadline,
-    amountIn: amountIn,
-    amountOutMinimum: amountOutMin,
-    sqrtPriceLimitX96: 0,
-  });
-}
-```
-
-- The router has Uniswap V3 SwapRouter's shape: its params include `deadline`
-- `tokenIn` must be `approve`d to the router
-
 ## Notes
 
 - Pools call back `unitFlowV3SwapCallback`, not `uniswapV3SwapCallback`, so a contract that swaps against a pool directly must implement the renamed callback
 - The GitHub README lists testnet addresses; these mainnet addresses are the defaults in UnitFlow's own app build
-- From a Pot program, instead of the protocol's own router: `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` calls the Router's `swapV3`, requiring generation 4 and its `unitFlowV3SwapCallback` callback. A Pot for which `potRouterUpdate(client, pot)` returns nothing runs the Kitchen's Router, generation `v12RouterGeneration()`; otherwise its owner signs the update it returns
+- From a Pot program, `@sauce/router`'s `uniswapV3` uses the paired execution Router's `swapV3` and `unitFlowV3SwapCallback`. `potRouterUpdate(client, pot)` returns an owner-signed update when the Pot differs from its Kitchen's current Router. Compare addresses with `v12RouterAddress()`; Router releases are content-addressed, not generation-numbered.
 - `uniswapV3` is exact input: the Router caps what the callback may take at `amountIn`
 
 ## Its names in a program
@@ -88,11 +47,16 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
 ### `UnitFlowV3FactoryABI`
 
 `import UnitFlowV3FactoryABI from "./protocols/unitflow-v3/UnitFlowV3FactoryABI.json";` Speaks for: factory.
 
-- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`
+- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`: the address is a `UnitflowV3.Pool`
 - `feeAmountTickSpacing(uint24 fee) view returns (int24)`
 
 ### `UnitFlowV3PoolABI`
@@ -103,8 +67,8 @@ function main() {
 - `liquidity() view returns (uint128)`
 - `fee() view returns (uint24)`
 - `tickSpacing() view returns (int24)`
-- `token0() view returns (address)`
-- `token1() view returns (address)`
+- `token0() view returns (address)`: the address is a token
+- `token1() view returns (address)`: the address is a token
 
 ### `UnitFlowV3QuoterABI`
 
@@ -117,4 +81,10 @@ function main() {
 `import UnitFlowV3RouterABI from "./protocols/unitflow-v3/UnitFlowV3RouterABI.json";` Speaks for: router.
 
 - `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`
-- `factory() view returns (address)`
+- `factory() view returns (address)`: the address is a `UnitflowV3.Factory`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

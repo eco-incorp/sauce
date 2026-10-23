@@ -17,32 +17,6 @@ Official Linea zkEVM bridge via L1MessageService. Deposits ETH from Ethereum to 
 | Namespace | `LineaBridge` on ethereum, linea |
 | Chains | ethereum, linea |
 
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-### bridgeETH
-
-Bridge ETH from Ethereum L1 to Linea L2 via the message service.
-
-```typescript
-import { LineaL1MessageServiceABI as IL1MessageService } from "./abis";
-
-function main(messageServiceAddress: Address, recipient: Address, fee: Uint256): Uint256 {
-  const service = IL1MessageService.at(messageServiceAddress);
-  service.sendMessage(recipient, fee, 0x00);
-  return 1;
-}
-```
-
-- `recipient`: Address to receive ETH on Linea L2
-- `fee`: Fee for the postman (relayer) to deliver the message on L2. Set to 0 for self-claim
-- `_calldata`: Optional calldata to execute on L2 when message is delivered. `0x00` for simple ETH transfers
-- ETH amount (minus fee) is sent as `msg.value`
-
 ## Notes
 
 - **L1 to L2** via L1MessageService. L2 to L1 via L2MessageService on Linea
@@ -81,3 +55,9 @@ function main() {
 
 - `sendMessage(address _to, uint256 _fee, bytes _calldata) payable`
 - `claimMessage(address _from, address _to, uint256 _fee, uint256 _value, address _feeRecipient, bytes _calldata, uint256 _nonce)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

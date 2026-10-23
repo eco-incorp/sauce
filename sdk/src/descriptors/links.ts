@@ -34,7 +34,29 @@ export interface ContractLink {
   readonly caveats?: readonly string[];
 }
 
-export { CONTRACT_LINKS } from "./contracts.generated.js";
+/**
+ * A registry function whose address output the registry knows the contract of: a factory's pool,
+ * a pool's tokens, a vault's asset. GENERATED (`RETURNED_CONTRACTS`) from the `returns` of
+ * `test/fixtures/registry-abi/targets.json`, reviewed there beside the bindings. An annotation names
+ * an ABI the registry already holds to its deployments (`registry-abi.test.ts`); it says only which
+ * of them an address a function returns speaks. Where the actions suites' replayed mainnet state
+ * holds the contracts, they call each result as its annotation says (`names.mainnet`,
+ * `swap.mainnet`).
+ */
+export interface ReturnedContractLink {
+  readonly protocol: string;
+  readonly abiExport: string;
+  /** The function, canonical: `getPool(address,address,uint24)`. */
+  readonly signature: string;
+  /** Where the address is in what the function returns: `[]` for its one output, else the field
+   *  names that lead to it (`["LBPair"]`). */
+  readonly path: readonly string[];
+  /** The contract the address is, as its namespace names it: `{ protocol: "uniswap-v3", contract:
+   *  "Pool" }` is `UniswapV3.Pool`. */
+  readonly returns: { readonly protocol: string; readonly contract: string };
+}
+
+export { CONTRACT_LINKS, RETURNED_CONTRACTS } from "./contracts.generated.js";
 import type { CONTRACT_LINKS } from "./contracts.generated.js";
 
 export type ContractLinkEntry = (typeof CONTRACT_LINKS)[number];

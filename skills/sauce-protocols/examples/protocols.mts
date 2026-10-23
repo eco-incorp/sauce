@@ -50,13 +50,16 @@ for (const [slug, hasPancake] of [
 }
 
 // The per-protocol documents ship as this skill's references/, and `getProtocolSkill` returns the
-// same text. Not every catalogued protocol has one.
+// same text. Every catalogued protocol has one.
 const document = readFileSync(new URL("../references/pancakeswap-v3.md", import.meta.url), "utf8");
 check(
   getProtocolSkill("pancakeswap-v3") === document,
   "references/ is what getProtocolSkill reads",
 );
-check(listSkillSlugs().length < listProtocols().length, "some protocols have no document");
+check(
+  listSkillSlugs().length === listProtocols().length,
+  "every catalogued protocol has a document",
+);
 
 // Templates are named exports; their `import { X as Y } from "./abis"` is a contract import, so
 // the resolver serves `./abis` with the named ABI's JSON.

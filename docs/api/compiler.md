@@ -6,21 +6,20 @@
 > chain runs. This page is its exact interface for TypeScript: every option you can pass, and
 > everything it gives back.
 
-`@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
-argument format. Both ship with the SDK; there is nothing extra to install. It runs in
-Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
+This page is for a TypeScript developer who calls the compiler directly: a build tool, a server
+that compiles programs, or a test. It assumes you have written a SauceScript program
+([Write your first program](../guides/write-your-first-program.md)). To compile a program for one
+chain by name, with its tokens and protocols resolved for you, the
+[compiling guide](../guides/compiling.md) is the shorter path.
 
-This SDK pins compiler **2.5.0**, EVM engine/Kitchen **1.2.0**, SVM engine **1.3.0**, and SVM Kitchen
-**1.0.0**. Deploy the matching stack before using the release defaults on-chain. A Pot keeps the
-code of the Kitchen that deployed it, so a Pot from Kitchen 1.1.0 runs only with that release's
-engine and SDK.
+`@eco-incorp/sauce/compiler` is the SauceScript compiler. It ships with the SDK; there is nothing
+extra to install. Entry arguments use ABI-v1 only. It runs in
+Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
 
 ```ts
 import {
   compile,
   ready,
-  encodeCompactArguments,
-  decodeCompactArguments,
   resolveSdkModule,
   resolveSdkPackage,
   type CompileOptions,
@@ -28,13 +27,14 @@ import {
 } from "@eco-incorp/sauce/compiler";
 ```
 
-This SDK pins one compiler and the four v12 releases its output runs on: the EVM
-engine and Kitchen, and the SVM engine and Kitchen. `v12ReleaseSet()` names them —
-see [Which engine runs a program](#which-engine-runs-a-program). Release addresses
-identify this compatible set; they do not confirm it has been deployed on a chain.
-Check deployment readiness before using it live.
+Each SDK release pins one compiler version and the engine and Kitchen releases its output runs on.
+The [changelog](../changelog.md) records which versions each SDK release pins, and
+[Deployments](../reference/deployments.md) lists the current set and its addresses. A recorded
+address does not confirm that the release is deployed on a chain: check that the code is there
+before you use it live. [Which engine runs a program](#which-engine-runs-a-program) explains the
+pairing.
 
-Every example here is checked against the compiler version this package ships.
+The examples on this page use the compiler this package ships.
 
 ## `compile(options): CompileResult`
 
@@ -44,7 +44,7 @@ callbacks; the compiler does not fetch a filesystem path or network URL itself.
 ```ts
 const source = new TextEncoder().encode(`
   function main(amount: Uint256): Uint256 {
-    return amount + 1n;
+    return amount + 1;
   }
 `);
 
@@ -59,22 +59,28 @@ console.log(artifact.bytecode.length, artifact.entryEncoding);
 
 ### Options
 
-| Field             | Type                                                   | Meaning                                                                |
-| ----------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `target`          | `"evm" \| "svm"`                                       | Required target runtime                                                |
-| `resolve`         | `(path: string) => Uint8Array \| undefined \| null`    | Required synchronous module/JSON resolver                              |
-| `entry`           | `string`                                               | Entry module; default `"main.js"`                                      |
-| `resolvePackage`  | `(specifier, importer) => string \| undefined \| null` | Map a bare package specifier to a path understood by `resolve`         |
-| `contracts`       | `[name, path][]`                                       | Register entry-module ABI bindings by resolver path                    |
-| `inlineContracts` | `[name, abiJson][]`                                    | Register entry-module ABI bindings from JSON strings                   |
-| `ambient`         | `string[]`                                             | Resolve libraries and broadcast their exports into every module        |
-| `defines`         | `[name, value][]`                                      | Program-wide scalar compile-time constants; values are integer strings |
-| `optimize`        | `boolean`                                              | Enable compiler optimizations; default `true`                          |
-| `compactArgs`     | `boolean`                                              | Use compact-v1 entry arguments; default `false`                        |
-| `cache`           | `boolean`                                              | Enable the per-function lowering cache; default `true`                 |
+| Field             | Type                                                   | Meaning                                                                     |
+| ----------------- | ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `target`          | `"evm" \| "svm"`                                       | Required target runtime                                                     |
+| `resolve`         | `(path: string) => Uint8Array \| undefined \| null`    | Required synchronous module/JSON resolver                                   |
+| `entry`           | `string`                                               | Entry module; default `"main.js"`                                           |
+| `entryKind`       | `"module" \| "closure"`                                | Default `"module"`; `"closure"` parses one function expression verbatim     |
+| `resolvePackage`  | `(specifier, importer) => string \| undefined \| null` | Map a bare package specifier to a path understood by `resolve`              |
+| `contracts`       | `[name, path][]`                                       | Register entry-module ABI bindings by resolver path                         |
+| `inlineContracts` | `[name, abiJson][]`                                    | Register entry-module ABI bindings from JSON strings                        |
+| `ambient`         | `string[]`                                             | Resolve libraries and broadcast their exports into every module             |
+| `defines`         | `[name, value][]`                                      | Program-wide scalar compile-time constants; values are integer strings      |
+| `args`            | `(bigint \| boolean \| string)[]`                      | Bind scalar `main` arguments at compilation; removes runtime argument slots |
+| `optimize`        | `boolean`                                              | Enable compiler optimizations; default `true`                               |
+| `chain`           | `string`                                               | The chain the program runs on: a key of `chainProfiles`                     |
+| `chainProfiles`   | `Record<string, ChainProfile>`                         | Each chain's builtin profile, keyed by a chain key you choose               |
+| `cache`           | `boolean`                                              | Reuse compiler work between calls; default `true`                           |
 
-`optimize: false` turns the optimizer off. Every check the compiler performs still
-runs; you get a larger, more literal program.
+`optimize: false` disables optional optimization passes, not compile-time checks or known-value
+decisions. In particular, known program ids and seeds still make `crypto.findPDA` run at compile
+time. Disabling optimization does not guarantee a larger or more literal program, nor does
+compile-time evaluation predict runtime gas or compute-unit failures. A folded expression can
+produce a value even when evaluating that expression on chain would exhaust those resources.
 
 `defines` accepts decimal or `0x` integer strings, with supported literal
 separators and an optional trailing `n`. Use strings so the JavaScript host does
@@ -85,6 +91,55 @@ module's same-named `const`; incompatible declarations, such as a module-level
 An ambient export yields to a module's own declarations, imports, and bindings.
 Two ambient modules exporting the same name are an error. Ambient libraries must
 be resolvable SauceScript modules and cannot supply an entry `main`.
+
+### Chain profiles
+
+A target is a virtual machine, and two EVM chains can run the same engine while a builtin behaves
+differently on them: a chain with no blobs has no blob base fee to report. A chain profile tells the
+compiler what one chain does with such a builtin, so the program is compiled for that chain.
+
+```ts
+const source = new TextEncoder().encode(`
+  function main(): Uint256 {
+    return ctx.prevrandao();
+  }
+`);
+
+const artifact = compile({
+  target: "evm",
+  entry: "main.ts",
+  resolve: (path) => (path === "main.ts" ? source : undefined),
+  chain: "base",
+  chainProfiles: {
+    base: { builtins: { "ctx.prevrandao": { constant: "0" } } },
+    arbitrum: { name: "Arbitrum", builtins: { "ctx.prevrandao": "unsupported" } },
+  },
+});
+
+console.log(artifact.chain); // "base"
+```
+
+A `ChainProfile` is `{ name?: string; builtins?: Record<string, "unsupported" | { constant: string }> }`:
+
+- A key of `builtins` is a builtin's source spelling, such as `"ctx.prevrandao"` or `"evm.create2"`.
+  Only a builtin whose behaviour depends on the chain can be named. A typo, or a portable read such
+  as `ctx.timestamp`, is a compile error.
+- `"unsupported"` makes any use of the builtin a compile error, naming the chain
+  (`` `ctx.prevrandao()` is not available on Arbitrum ``), instead of a program that reverts there.
+- `{ constant: "0" }` compiles the builtin to that value, as a decimal or `0x` string, and constant
+  folding sees through it. It applies only to a builtin that takes no arguments.
+- `name` is the chain's name in error messages. Without it, the error names the chain by its key.
+- A builtin the profile does not name compiles as it does with no profile.
+
+`chain` and `chainProfiles` go together. A `chain` that has no profile is an error; give a chain
+whose builtins all behave as the target's an empty profile, `{}`. Profiles with no `chain` are an
+error too. Every profile is checked, whether or not this compile uses it. The keys are yours: a
+chain id or a name, whichever your host uses.
+
+The same source can compile to different bytecode on two chains, so the function cache treats each
+profile as an input. The SDK's own route compilation and the `sauce` command pass no profile. The
+`/compiler` subpath does not re-export the `ChainProfile` type; in TypeScript, write
+`NonNullable<CompileOptions["chainProfiles"]>[string]`.
 
 ### Resolver contract
 
@@ -134,10 +189,16 @@ const artifact = compile({
 ```ts
 interface CompileResult {
   bytecode: Uint8Array;
-  isaRevision: "stack-compact-v2";
-  entryEncoding: "abi-v1" | "compact-v1";
-  entrySchema?: Uint8Array;
+  isaRevision: "stack-v3";
+  entryEncoding: "abi-v1";
+  entryParams: AbiParameter[];
+  entrySignature: {
+    params: { name: string; type: string; abi?: AbiParameter }[];
+    returns?: string;
+  };
+  programs: ProgramReport[];
   manifest?: AccountManifest;
+  chain?: string;
 }
 ```
 
@@ -148,20 +209,66 @@ interface CompileResult {
   revision while only one of them runs a given compiler's output. Pair a program
   with an engine by exact package version — see
   [Which engine runs a program](#which-engine-runs-a-program).
-- `entryEncoding` selects the argument encoder: ABI arguments by default, with
-  every tuple parameter behind an offset
-  ([Pass arguments with ABI-v1](../guides/compiling.md#pass-arguments-with-abi-v1)),
-  compact arguments when `compactArgs: true`. It does not describe
-  [program return encoding](../guides/compiling.md#return-values-an-abi-decoder-can-read).
-- `entrySchema` describes compact argument structure. Pass this exact schema to
-  the compact codec; do not infer or rebuild it from example bytes.
+- `entryEncoding` is always `"abi-v1"`. `entryParams` is `main`'s runtime ABI signature:
+  `{ name, type, components?, indirect? }`, excluding attached SVM accounts. A top-level fixed-size
+  tuple has `indirect: true`: its head is an offset, not inline fields. Honor that flag; plain
+  `encodeAbiParameters(entryParams, values)` works only when no parameter is indirect.
+  [The compiling guide](../guides/compiling.md#pass-arguments-with-abi-v1) shows the SDK encoder.
+- `entrySignature` preserves SauceScript type spellings, including `Int256`, records and `Account`,
+  with an `abi` entry for each encoded parameter. `returns` is the declared/inferred-void return
+  spelling; it is absent for an unannotated value-returning `main`. Unlike `entryParams`, it keeps
+  parameters bound through `args` and SVM account declarations.
+- `programs` reports nested `program(closure, ...args)` compilations in completion order, inner
+  programs first. Each report has `{ id, path, target, chain?, bytecode, manifest?, captures }`.
+  `path` is the enclosing program-id list; `captures` names captured runtime scalar paths in the
+  order their 32-byte big-endian words appear in the closure result's `args`.
+- Compact entry arguments, `entrySchema` and the SDK's compact codec exports are removed. Drop
+  `compactArgs` and recompile rather than appending historical compact payloads.
 - `manifest` is present for SVM and describes attached accounts. It is absent
   for EVM.
+- `chain` echoes the `chain` option, and is absent when the compile named none.
+  It tells an artifact built for one chain apart from one built for another.
 
-Compilation and resolution failures throw. A source diagnostic carries a location
-and span; an error about an option, a resolver or a feature the target lacks has
-nothing to point at. A message thrown by your own resolver is preserved. There is
-no success-with-warnings result to inspect — if `compile()` returns, it worked.
+There is no success-with-warnings result to inspect: if `compile()` returns, it
+worked.
+
+### Errors
+
+Compilation and resolution failures throw. The thrown error's `message` is the
+full report: the rule that was broken, the source line and a caret under the
+span. Its `diagnostics` array places each source error, in source order:
+
+```ts
+try {
+  compile(options);
+} catch (error) {
+  const diagnostics = (error as { diagnostics?: unknown }).diagnostics;
+  if (Array.isArray(diagnostics)) {
+    for (const { path, message, start, end } of diagnostics) {
+      console.log(`${path}:${start.line}:${start.column}-${end.line}:${end.column} ${message}`);
+    }
+  }
+  throw error;
+}
+```
+
+Each entry is `{ path, message, start, end, secondary?, code? }`:
+
+- `path` is the module as `resolve` was asked for it. An error in an imported module names the
+  import, not the entry.
+- `start` and `end` are `{ offset, line, column }`. Lines and columns start at 1. Every count is in
+  UTF-16 code units, the unit a JavaScript string indexes in, so
+  `source.slice(start.offset, end.offset)` is the span.
+- `secondary`, when present, is a second location with its own note, such as where a name was
+  first declared.
+- `code`, when present, is a stable refusal name such as `UnknownIdentifier`, `UnknownFunction`
+  or `TypeMismatch`; use it rather than matching message text. Parse/subset errors may omit it.
+
+An error with no place in the source has an empty `diagnostics` array: an invalid option, a
+resolver failure, or a builtin a chain profile refuses. A message thrown by your own resolver is
+kept. The error `compile()` throws in a browser before [`ready()`](#in-a-browser) has resolved
+carries no `diagnostics` at all, which is why the example checks for the array. The `/compiler`
+subpath does not re-export the `CompileError` or `Diagnostic` types.
 
 ### SVM account manifest
 
@@ -181,11 +288,11 @@ type AccountEntry =
 Slots correspond to `main`'s `Account` parameters. Their roles are declarations
 made by the author, not permissions inferred by examining a CPI callee. A
 `remaining` entry marks the start of the variable account tail when the source
-uses it. SVM `Account` parameters do not occupy compact argument fields.
+uses it. SVM `Account` parameters do not occupy encoded argument fields.
 
 The subpath also exports `AccountEntry`, `AccountManifest`, `AccountRole`,
 `CompileOptions`, `CompileResult`, `ResolveModule`, `ResolvePackage`, and
-`SauceTarget` as types from the compiler package.
+`SauceTarget` as types from the compiler package, and its own `WasmSource`.
 
 ### Which engine runs a program
 
@@ -221,60 +328,57 @@ compiler no row pairs with. When you run programs from a different compiler
 version than the SDK's, pass that version as the third argument:
 `assertEngineRunsCompiler("evm", engine, compiler)`.
 
-## Compact argument codec
+## Closure entries and bound arguments
+
+`entryKind: "closure"` accepts the text of one arrow or function expression, exactly as
+`Function.prototype.toString()` prints it. Its parameters become `main`'s; a concise expression
+becomes its return, and top-level helper declarations in its body become module functions.
+Diagnostics remain located in that original closure text. Async/generator closures and a named
+function expression calling itself are rejected. This is a raw compiler option, not a request to
+execute a JavaScript closure or capture host variables.
+
+`args` compiles scalar arguments into `main` as known values, allowing branches and helper calls
+to specialize. Pass one value per numeric/bool parameter, in declaration order; bytes, arrays and
+records are not supported by this raw option. Numeric values must be non-negative 256-bit words,
+as a `bigint` or integer string. For a negative `Int256`, pass its two's-complement word:
+`-10n` and `"-10"` are refused; `(1n << 256n) - 10n` represents signed `-10`.
+This is the **raw compiler** contract; SDK route argument encoding accepts natural signed inputs
+such as `-10n` for `Int256`. Bound parameters remain in `entrySignature` but disappear from
+`entryParams`.
 
 ```ts
-encodeCompactArguments(
-  schema: Uint8Array,
-  value: CompactValue,
-  options?: { scalarWidth?: number },
-): Uint8Array;
-
-decodeCompactArguments(
-  schema: Uint8Array,
-  data: Uint8Array,
-  options?: { maxValues?: number; scalarWidth?: number },
-): CompactValue;
+const closure = new TextEncoder().encode("(amount: Int256): Int256 => amount / 2");
+const bound = compile({
+  target: "evm",
+  entryKind: "closure",
+  resolve: () => closure,
+  args: [(1n << 256n) - 10n],
+});
+console.log(bound.entryParams); // []
 ```
 
-`CompactValue` accepts `bigint`, safe integer `number`, `boolean`, integer or hex
-`string`, `Uint8Array`, and recursively nested positional arrays.
+Within SauceScript, `program((fee) => { … }, feeValue)` compiles that inline arrow as a separate
+program and returns `{ code, args }`; `eval(parcel.code.concat(parcel.args))` runs it read-only.
+Known captures fold into its code. Runtime numbers/addresses/bools and statically shaped scalar
+records/arrays are captured as words; runtime bytes or dynamically sized arrays cannot be captured.
+Captured values and arrow parameters are read-only, including writes through aliases/helpers.
+An optional final literal `{ chain: "...", target: "evm" | "svm" }` selects its profile/target;
+other compile options and the lexical module's imports/bindings are inherited.
 
-For a compiled entry, the root value is an array containing its arguments in
-declaration order. Omit `Account` parameters only on SVM, where accounts are
-attached separately; EVM `Account` parameters are encoded as scalars. For
-`main(account: Account, amount: Uint256)`, pass `[account, amount]` on EVM and
-`[amount]` on SVM. Nested records are positional arrays too.
-`bytes` values accept a `Uint8Array` or an even-length `0x` hex string. Scalar
-addresses/public keys are integers or hexadecimal integers; base58 public-key
-text is not a scalar encoding.
+## Raw compiler versus compiling for a chain
 
-A negative integer keeps its 256-bit two's-complement pattern, and the decoder
-returns every scalar as an unsigned `bigint` — it has no way to know you meant a
-signed type, so convert at your own boundary.
+`routes.compileSauceProgram(chain, source, options?)` is the SDK's compile for one
+chain by name. It supplies the chain's token symbols, protocol addresses and
+`chainId`, the `@sauce/token` functions with no import, and the registry rewrites,
+then calls this compiler. Its result keeps the bytecode, ABI entry encoding,
+`main`'s parameters, and the SVM manifest; its `args` option binds `main`'s
+arguments into the SDK program.
 
-Encoding is canonical: one value, one byte string. The decoder enforces that, and
-rejects a padded scalar, a non-canonical boolean, a malformed length or trailing
-data. `maxValues` bounds the decoded object graph and defaults to `1_000_000`.
-A schema may be at most 65,535 bytes and 32 levels deep.
-
-`scalarWidth` fixes every scalar at a declared width of 1–32 bytes instead of the
-smallest that fits. The payload stays canonical — still exactly one encoding per
-value — but its **length stops depending on the values**, which is what lets a
-caller write a number into an already-built payload at a known offset. Pass the
-same width to both functions; a decode without it rejects the padded form, and a
-decode with it rejects the minimal one. A value too wide for the declared width is
-rejected rather than truncated.
-
-Encoding successfully says nothing about whether the payload fits a transaction or
-the engine's own execution limits. And compact-v1 is about **entry arguments only**:
-contract calls the program makes still use their contract ABIs.
-
-## Raw compiler versus route compilation
-
-`routes.compileSauceRoute()` is a separate SDK API with a source string,
-destination, execution settings, and `SauceCompileOptions`. It supplies registry
-rewrites and call encoding. Its result is:
+`routes.compileSauceRoute()` compiles the same way with two differences: it supplies neither
+`chainId` nor `CHAIN_ID`, and not the `@sauce/token` functions with no import, so a program that
+reads either name or calls `transfer(...)` bare does not compile there unchanged. Pass `chainId` in
+`defines` and import `@sauce/token` instead. It returns the program in a compatibility shape beside
+one encoded cook call:
 
 ```ts
 {
@@ -284,22 +388,22 @@ rewrites and call encoding. Its result is:
 }
 ```
 
-There is one compiled segment and one route call. `source` is the SDK-rewritten
+There is one compiled segment and one call. `source` is the SDK-rewritten
 program; the internal compiler adapter can additionally annotate a falling-through
-`main` as `void`. `warnings` is always empty — a compilation failure throws.
+`main` as `void`. `warnings` is always empty — a compilation failure throws. It
+keeps neither the raw compiler's nested-program reports nor the SVM manifest.
 
-The route adapter keeps neither the entry schema nor the SVM manifest, and its
-options do not expose `compactArgs`, `cache` or `optimize`. Use raw `compile()`
-when you need any of those, runtime entry parameters, or full resolver control.
-Route `target: "v1"` and `"v12"` both select the EVM backend.
+Neither exposes `cache` or `optimize`. Use raw `compile()` when you need either of
+those, or full resolver control. SDK target `"v1"` and `"v12"` both select the EVM
+backend.
 
-See [routes](routes.md) for the route-specific API.
+See [Programs and cooks](routes.md) for both, and for the cook builders.
 
 ## In a browser
 
-The SDK compiles in a browser exactly as it does in Node: raw `compile()`, route
-compilation (`Base(...)`, `.reward(...)`, `compileSauceRoute`), the builders, the
-recipes and `/actions` produce the same bytes in both. The difference is start-up.
+The SDK compiles in a browser exactly as it does in Node: raw `compile()`,
+`routes.compileSauceProgram`, the builders, the recipes and `/actions` produce the
+same bytes in both. The difference is start-up.
 Node instantiates the compiler's WebAssembly as the package loads; a browser has to
 fetch it, which cannot happen synchronously. Call `ready()` once, before the first
 compile:
@@ -308,8 +412,8 @@ compile:
 import { ready } from "@eco-incorp/sauce/compiler"; // also exported by "@eco-incorp/sauce"
 
 await ready();
-// compile(), compileSauceRoute(), Base(...).reward(...) and compileProgram() are now
-// synchronous, as in Node.
+// compile(), routes.compileSauceProgram() and compileProgram() are now synchronous,
+// as in Node.
 ```
 
 Until `ready()` resolves, every compile throws an error saying to await it. In Node
@@ -333,13 +437,20 @@ await ready(await (await fetch("/assets/sauce_wasm_bg.wasm")).arrayBuffer());
 The first `source` that succeeds is the one used; the compiler warns if a later call
 passes a different one.
 
-Every subpath works in a browser except `/svm/engine-artifacts`. It returns filesystem
-paths to the packaged engine binaries for a local LiteSVM harness, and is Node-only.
-In Node, the SDK requires Node **24 or newer**.
+Two subpaths do not run in a browser: `/svm/engine-artifacts`, which returns
+filesystem paths to the packaged engine binaries for a local LiteSVM harness, and
+`/testing`, which starts local chains for tests. Both are Node-only. The
+[API reference](README.md#where-each-import-runs) lists where each import runs.
 
 ## Compiler-only features
 
-The compiler package also exports `clearFunctionCache()` and `functionCacheStats()`
-for inspecting its internal lowering cache. The SDK's `/compiler` export does not
-re-export those; an application that wants them declares the compiler as a direct
-dependency and imports from its own package name.
+The compiler package also exports `clearFunctionCache()` and `functionCacheStats()` for cache
+management and statistics. `cache: false` forces fresh compilation; source changes invalidate
+reuse automatically. The SDK's `/compiler` export does not re-export those helpers; declare the
+compiler directly to inspect them.
+
+## Next
+
+[Programs and cooks](routes.md) compiles a program for one chain by name and builds the cook that
+runs it. [Pots and cooks in code](README.md#pots-and-cooks-in-code) lists each step with the
+`sauce` command beside it.

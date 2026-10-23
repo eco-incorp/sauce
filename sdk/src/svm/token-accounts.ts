@@ -17,7 +17,6 @@
  * way Token-2022 does, to the unit, at the epoch the transfer lands in.
  */
 import type { Address } from "@solana/kit";
-import { associatedTokenAccount } from "./portal.js";
 import {
   classifyMintProgram,
   isToken2022Mint,
@@ -27,6 +26,7 @@ import {
 import { grossTransferAmount, netTransferAmount, parseMintExtensions } from "./token-extensions.js";
 import type { MintExtensions } from "./token-extensions.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
+import { memoizedFindAssociatedTokenPda } from "./venues/pda-memo.js";
 
 /** A mint's base: decimals@44 and is_initialized@45, the same in both programs. */
 const MINT_DECIMALS = 44;
@@ -93,7 +93,11 @@ export function svmTokenAccount(
   token: Pick<SvmToken, "mint" | "tokenProgram">,
   owner: Address,
 ): Promise<Address> {
-  return associatedTokenAccount(owner, token.mint, token.tokenProgram);
+  return memoizedFindAssociatedTokenPda({
+    owner,
+    mint: token.mint,
+    tokenProgram: token.tokenProgram,
+  });
 }
 
 /** What the destination of a transfer of `amount` receives at `epoch`: `amount` less the fee. */

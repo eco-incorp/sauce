@@ -4,11 +4,10 @@
  * contract, the chain id) and the chain it applied on, and the protocol contracts it calls,
  * resolved on their chain.
  *
- * Nothing here decides anything the compile does not. The defines follow the compile's own rule
- * (`sauce-route.ts#levelOn`): each part of the program reads its own chain's values — an intent's
- * body and delivery the destination's, its reward the enclosing chain's — and a user define named
- * like a chain-scoped value stays on the chain it was given for, while any other holds at every
- * depth. The contracts are the ones the protocol rewrite resolved (`accessors.onContract`).
+ * Nothing here decides anything the compile does not. The defines follow the compile's own rule: a
+ * user define replaces the value the chain sets under the same name, and every other name the
+ * program reads takes the chain's. The contracts are the ones the protocol rewrite resolved
+ * (`accessors.onContract`).
  */
 import { getAddressDecoder } from "@solana/kit";
 import { getAddress, hexToBytes, numberToHex } from "viem";
@@ -17,6 +16,8 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
+import { resolveNamespace } from "../routes/accessor-index.js";
+import { collectValuePositionExclusions } from "../routes/token-rewrite.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
@@ -34,7 +35,7 @@ export interface AppliedDefine {
   readonly kind?: "token" | "contract" | "chain id";
   /** A user define that replaced a value the chain sets: that value. */
   readonly replaces?: string | boolean;
-  /** The chain it applied on: the program's, or that of an intent body that reads it. */
+  /** The chain it applied on: the program's. */
   readonly chain: string;
 }
 
@@ -44,7 +45,8 @@ export interface UsedContract {
   readonly reference: string;
   /** The contract it resolved to: `UniswapV3.Factory`. */
   readonly contract: string;
-  /** The chain whose deployment it is: an intent body's resolve on the intent's chain. */
+  /** The chain whose deployment it is: the program's, or the chain a reference names
+   *  (`Base.UniswapV3.Factory`). */
   readonly chain: string;
   readonly address: string;
 }
@@ -69,48 +71,34 @@ export function shownValue(
     : getAddress(numberToHex(word, { size: 20 }));
 }
 
-/** A source range that runs on another chain: an intent's body or its delivery argument. */
-interface IntentPart {
-  readonly chain: CanonicalChain;
-  readonly start: number;
-  readonly end: number;
-}
-
-/** The parts of `program` each intent it opens runs on its destination, as the intent lowering
- *  finds them: `Chain(() => { body }, delivery).reward(reward)`, the reward left out. */
-function intentParts(program: AstNode): IntentPart[] {
-  const chains = chainAccessorNames();
-  const parts: IntentPart[] = [];
-  walk(program, (node) => {
-    if (node.type !== "CallExpression") return;
-    const callee = node.callee as AstNode | undefined;
-    if (callee?.type !== "MemberExpression" || callee.computed === true) return;
-    if ((callee.property as AstNode | undefined)?.name !== "reward") return;
-    const opener = callee.object as AstNode | undefined;
-    if (opener?.type !== "CallExpression") return;
-    const name = (opener.callee as AstNode | undefined)?.name;
-    const chain = typeof name === "string" ? chains.get(name) : undefined;
-    const [body, delivery] = (opener.arguments as AstNode[] | undefined) ?? [];
-    if (chain === undefined || body?.type !== "ArrowFunctionExpression") return;
-    for (const part of [body, delivery]) {
-      if (part !== undefined) parts.push({ chain, start: part.start, end: part.end });
-    }
-  });
-
-  return parts;
-}
-
-/** A name the file reads, and the chains of the intents it is read inside, outermost first. */
+/** A name the file reads. */
 interface ReadName {
   readonly name: string;
-  readonly path: readonly CanonicalChain[];
+  /** Read as a holder's balance, `pot.USDC`: a name only a token symbol is read as. */
+  readonly balance?: true;
+}
+
+/**
+ * `<holder>.<name>` as the token syntax reads a balance (`token-rewrite.ts#collectBalanceSites`):
+ * a value, on any holder but a chain's or a protocol's own name. Its property names the token.
+ */
+function isBalanceRead(
+  node: AstNode,
+  excluded: ReadonlySet<AstNode>,
+  chains: ReadonlyMap<string, CanonicalChain>,
+): boolean {
+  const object = node.object as AstNode | undefined;
+  if (node.computed === true || excluded.has(node) || object === undefined) return false;
+  if (object.type !== "Identifier") return true;
+  const name = object.name as string;
+
+  return !chains.has(name) && resolveNamespace(name) === undefined;
 }
 
 /**
  * Every name the file reads as a value: identifiers outside declarations, member properties and
  * object keys, with annotations and type declarations stepped over (the file is parsed as the
- * compile's rewrites parse it, as written). Each comes with the chains of the intent bodies it is
- * read inside, which decide what it resolves to.
+ * compile's rewrites parse it, as written).
  */
 export function namesRead(text: string): readonly ReadName[] {
   let program: AstNode;
@@ -120,11 +108,16 @@ export function namesRead(text: string): readonly ReadName[] {
     // The compile reports a file it cannot parse; a report of it has nothing to add.
     return [];
   }
-  const parts = intentParts(program);
+  const chains = chainAccessorNames();
+  const excluded = collectValuePositionExclusions(program);
   const skipped = new Set<AstNode>();
+  const balances = new Set<AstNode>();
   walk(program, (node) => {
     const at = node as AstNode & Record<string, AstNode | undefined>;
-    if (node.type === "MemberExpression" && node.computed !== true) skipped.add(at.property!);
+    if (node.type === "MemberExpression" && node.computed !== true) {
+      if (isBalanceRead(node, excluded, chains)) balances.add(at.property!);
+      else skipped.add(at.property!);
+    }
     if (node.type === "Property" && node.computed !== true && node.shorthand !== true) {
       skipped.add(at.key!);
     }
@@ -138,11 +131,10 @@ export function namesRead(text: string): readonly ReadName[] {
   const names: ReadName[] = [];
   walk(program, (node) => {
     if (node.type !== "Identifier" || skipped.has(node)) return;
-    const path = parts
-      .filter((part) => part.start <= node.start && node.end <= part.end)
-      .sort((a, b) => b.end - b.start - (a.end - a.start))
-      .map((part) => part.chain);
-    names.push({ name: node.name as string, path });
+    names.push({
+      name: node.name as string,
+      ...(balances.has(node) ? { balance: true as const } : {}),
+    });
   });
 
   return names;
@@ -162,93 +154,55 @@ function chainKinds(chain: CanonicalChain): ReadonlyMap<string, AppliedDefine["k
   return kinds;
 }
 
-/** A user define that changes nothing: the file never reads it, or reads it only inside intents
- *  on other chains (`readOn`), where a chain-scoped name is that chain's own. */
-export interface UnreadDefine {
-  readonly name: string;
-  readonly readOn: readonly string[];
-}
-
-/** The user defines a level on `path`'s last chain still has: entering an intent on another
- *  chain drops each one named like a chain-scoped value of either chain (`levelOn`). */
-function userDefinesOn(
-  chain: CanonicalChain,
-  path: readonly CanonicalChain[],
-  user: Readonly<Record<string, DefineValue>>,
-): Readonly<Record<string, DefineValue>> {
-  let defines = user;
-  let enclosing = chain;
-  for (const destination of path) {
-    if (destination.id !== enclosing.id) {
-      const scoped = new Set([
-        ...Object.keys(chainDefines(enclosing)),
-        ...Object.keys(chainDefines(destination)),
-      ]);
-      defines = Object.fromEntries(Object.entries(defines).filter(([name]) => !scoped.has(name)));
-    }
-    enclosing = destination;
-  }
-
-  return defines;
-}
-
 /**
- * The defines `text`, compiled for `chain` with `user`'s defines, reads, each on the chain it
- * applied on: a user define where the part of the program reading it still has it, and otherwise
- * the value that part's chain sets. `unread` is each user define no part reads where it applies,
- * which changes nothing.
+ * The defines `text`, compiled for `chain` with `user`'s defines, reads: a user define where the
+ * program reads it, and otherwise the value the chain sets. `unread` is each user define the
+ * program never reads, which changes nothing.
  */
 export function appliedDefines(
   text: string,
   chain: CanonicalChain,
   user: Readonly<Record<string, DefineValue>>,
   addresses: ReadonlySet<string> = new Set(),
-): { readonly defines: readonly AppliedDefine[]; readonly unread: readonly UnreadDefine[] } {
+): { readonly defines: readonly AppliedDefine[]; readonly unread: readonly string[] } {
   const applied = new Map<string, AppliedDefine>();
   const used = new Set<string>();
-  const readOn = new Map<string, Set<string>>();
-  for (const { name, path } of namesRead(text)) {
-    const on = path.at(-1) ?? chain;
-    const key = `${on.slug} ${name}`;
-    readOn.set(name, (readOn.get(name) ?? new Set()).add(on.slug));
-    if (applied.has(key)) continue;
-    const fromChain = chainDefines(on);
-    const kinds = chainKinds(on);
+  const fromChain = chainDefines(chain);
+  const kinds = chainKinds(chain);
+  for (const { name, balance } of namesRead(text)) {
+    if (balance === true && kinds.get(name) !== "token") continue;
+    if (applied.has(name)) continue;
     const address = isAddressKind(kinds.get(name));
-    const users = userDefinesOn(chain, path, user);
-    if (Object.hasOwn(users, name)) {
+    if (Object.hasOwn(user, name)) {
       used.add(name);
       const replaced = fromChain[name];
-      applied.set(key, {
+      applied.set(name, {
         name,
         value: shownValue(
-          users[name]!,
-          on,
+          user[name]!,
+          chain,
           (replaced !== undefined && address) || addresses.has(name),
         ),
         source: "user",
-        ...(replaced === undefined ? {} : { replaces: shownValue(replaced, on, address) }),
-        chain: on.slug,
+        ...(replaced === undefined ? {} : { replaces: shownValue(replaced, chain, address) }),
+        chain: chain.slug,
       });
     } else if (Object.hasOwn(fromChain, name)) {
       const kind = kinds.get(name) ?? "contract";
-      applied.set(key, {
+      applied.set(name, {
         name,
-        value: shownValue(fromChain[name]!, on, isAddressKind(kind)),
+        value: shownValue(fromChain[name]!, chain, isAddressKind(kind)),
         source: "chain",
         kind,
-        chain: on.slug,
+        chain: chain.slug,
       });
     }
   }
-  const byName = (a: AppliedDefine, b: AppliedDefine): number =>
-    a.name < b.name ? -1 : a.name > b.name ? 1 : a.chain < b.chain ? -1 : 1;
+  const byName = (a: AppliedDefine, b: AppliedDefine): number => (a.name < b.name ? -1 : 1);
 
   return {
     defines: [...applied.values()].sort(byName),
-    unread: Object.keys(user)
-      .filter((name) => !used.has(name))
-      .map((name) => ({ name, readOn: [...(readOn.get(name) ?? [])].sort() })),
+    unread: Object.keys(user).filter((name) => !used.has(name)),
   };
 }
 

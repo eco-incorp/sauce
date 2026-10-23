@@ -19,7 +19,6 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
-  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
   http,
@@ -30,18 +29,12 @@ import {
   type PublicClient,
   type TestClient,
   type WalletClient,
-  zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
-import {
-  ecoRoutesExecutorOf,
-  ecoRoutesPortal,
-  ecoRoutesVaultImplementationOf,
-} from "../src/protocols/eco-routes/lookup.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
@@ -105,16 +98,12 @@ export interface Run {
   readonly stderr: string;
 }
 
-/** The intent store the suites' commands write to: never the real `~/.sauce`. */
-export const TEST_STORE = mkdtempSync(join(tmpdir(), "sauce-store-"));
-
 /** Runs the command in process with `overrides` on the real io — a scripted answer to a prompt. */
 export async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
   let stdout = "";
   let stderr = "";
   const io: CliIo = {
     ...nodeIo(),
-    storeDir: TEST_STORE,
     ...overrides,
     stdout: (text) => void (stdout += text),
     stderr: (text) => void (stderr += text),
@@ -265,69 +254,6 @@ export const potOwner = (local: LocalChain, pot: Address): Promise<Address> =>
 /** The registry's address for `symbol` on `chain`, as the program names it. */
 export const registered = (chain: CanonicalChain, symbol: string): Address =>
   getAddress(numberToHex(registryTokenAddress(chain, symbol)!, { size: 20 }));
-
-/**
- * The real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge creation code) at the
- * address the SDK records for `local`'s chain, deployed there IN EFFECT: its Executor and its vault
- * implementation where a Portal deployed at that address would have created them. So a fill runs
- * the Portal's real `_fulfill`, and its vaults are the ones the SDK derives, with no override.
- *
- * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE. A Portal's address is its deployer's, and its
- * constructor CREATEs two contracts: the vault implementation (`ECO_ROUTES_VAULT_IMPLEMENTATION_NONCE`)
- * and the Executor (`ECO_ROUTES_EXECUTOR_NONCE`). The Portal holds both addresses as immutables (its
- * `executor`, and the implementation its vaults are clones of), and the two hold the Portal's (the
- * Executor's `onlyPortal` check). So this deploys the fixture wherever it lands, then copies all three
- * runtimes to the registry's Portal and the two addresses derived from it, with every copy of those
- * three addresses rewritten. Copied alone, the Portal would derive its vaults from the
- * implementation of the address it really landed at, which no deployed Portal does and the SDK does
- * not predict. Its other immutables are untouched: its chain id (anvil's, which `startChain` sets
- * to the chain's) and its EIP-712 cache, which recomputes the domain for an address that is not the
- * cached one.
- */
-export async function placePortal(local: LocalChain): Promise<{
-  readonly portal: Address;
-  readonly executor: Address;
-  readonly vaultImplementation: Address;
-}> {
-  const portal = getAddress(ecoRoutesPortal(local.chain.slug));
-  const executor = getAddress(ecoRoutesExecutorOf(portal));
-  const vaultImplementation = getAddress(ecoRoutesVaultImplementationOf(portal));
-  const creation = (
-    JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as {
-      creationCode: Hex;
-    }
-  ).creationCode;
-  const deployed = await local.plant(
-    `${creation}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
-  );
-  const moves = [
-    [deployed, portal],
-    [getAddress(ecoRoutesVaultImplementationOf(deployed)), vaultImplementation],
-    [getAddress(ecoRoutesExecutorOf(deployed)), executor],
-  ] as const;
-  const relocated = (code: Hex): Hex =>
-    moves.reduce(
-      (text, [from, to]) => text.split(from.slice(2).toLowerCase()).join(to.slice(2).toLowerCase()),
-      code.toLowerCase(),
-    ) as Hex;
-  for (const [from, to] of moves) {
-    const code = await local.publicClient.getCode({ address: from });
-    if (code === undefined) throw new Error(`the Portal's deployment left no contract at ${from}`);
-    await local.testClient.setCode({ address: to, bytecode: relocated(code) });
-  }
-  const placed = await local.publicClient.readContract({
-    address: portal,
-    abi: PORTAL_EXECUTOR,
-    functionName: "executor",
-  });
-  if (getAddress(placed) !== executor) {
-    throw new Error(`the placed Portal's executor is ${placed}, not ${executor}`);
-  }
-
-  return { portal, executor, vaultImplementation };
-}
-
-const PORTAL_EXECUTOR = parseAbi(["function executor() view returns (address)"]);
 
 /** Deploys the owner's Pot with the transaction `sauce pot` prints, returning its address. */
 export async function deployPot(

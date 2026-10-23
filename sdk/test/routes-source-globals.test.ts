@@ -8,18 +8,12 @@ import { CONTRACT_LINKS } from "../src/descriptors/links.js";
 import { NAMESPACE_KEYS } from "../src/routes/accessor-index.js";
 import { SVM_VENUE_NAMESPACES } from "../src/routes/svm-venue-methods.js";
 import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
-import type { IntentOptions } from "../src/routes/intent-dsl.js";
+import { sauceBodyToSource } from "../src/routes/closure.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
-const options: IntentOptions = {
-  pot: "0x1111111111111111111111111111111111111111",
-  engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  deadline: 2_000_000_000n,
-  portal: "0x2222222222222222222222222222222222222222",
-  source: "ethereum",
-  creator: "0x3333333333333333333333333333333333333333",
-  prover: "0x4444444444444444444444444444444444444444",
-  rewardDeadline: 2_000_003_600n,
-};
+/** A typed closure's program, compiled for Base with Base's names. */
+const onBase = (body: string | (() => unknown)): Uint8Array =>
+  compileSauceProgram("base", typeof body === "string" ? body : sauceBodyToSource(body)).bytecode;
 
 function diagnostics(source: string): string[] {
   const dir = mkdtempSync(join(tmpdir(), "sauce-source-types-"));
@@ -53,12 +47,11 @@ function diagnostics(source: string): string[] {
 }
 
 test("token/protocol closures compile identically to the same source text", () => {
-  const closure = Base(() => {
+  const closure = onBase(() => {
     USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  }, options).reward(0n);
-  const text = Base("USDC.approve(Uniswap.UniversalRouter, 1_000_000n);", options).reward(0n);
-  expect(closure.compiled.bytecode).toEqual(text.compiled.bytecode);
-  expect(closure.intent).toEqual(text.intent);
+  });
+  const text = onBase("USDC.approve(Uniswap.UniversalRouter, 1_000_000n);");
+  expect(closure).toEqual(text);
   // These names have compile-time meaning only. Importing typings must not
   // invent global runtime clients or eagerly bind them to one chain.
   expect(Object.hasOwn(globalThis, "USDC")).toBe(false);
@@ -86,6 +79,33 @@ test("ABI-derived protocol methods, address values, and ambient chain identity t
     export {};
   `),
   ).toEqual([]);
+});
+
+test("an output the registry knows the contract of is typed as that contract", () => {
+  expect(
+    diagnostics(`
+    const routeBody = () => {
+      const liquidity: bigint = UniswapV3.Factory.getPool(USDC, WETH, 500n).liquidity();
+      const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+      const decimals: bigint = pool.token0().decimals();
+      pool.token1().transfer(0x1234n, 1n);
+      const active: bigint = TraderJoe.LBFactory.getLBPairInformation(USDC, WETH, 10n).LBPair.getActiveId();
+      const earned: bigint = Convex.Booster.poolInfo(9n).crvRewards.earned(pool);
+      const fee: bigint = AerodromeSlipstream.NonfungiblePositionManager.factory().tickSpacingToFee(100n);
+      return liquidity + decimals + active + earned + fee + pool;
+    };
+    export {};
+  `),
+  ).toEqual([]);
+  // A method the contract lacks, a token write's result (SafeERC20 returns nothing), and a method on
+  // an address the registry does not know the contract of.
+  const errors = diagnostics(`
+    UniswapV3.Factory.getPool(USDC, WETH, 500n).liquidty();
+    const sent: boolean = UniswapV3.Pool(0x1234n).token0().transfer(0x1234n, 1n);
+    Curve.AddressProvider.get_registry().pool_count();
+    export {};
+  `);
+  expect(errors).toHaveLength(3);
 });
 
 test("unsupported names and ABI argument shapes remain TypeScript errors", () => {
@@ -172,16 +192,16 @@ test("a typed closure over a formerly unlinked namespace typechecks and compiles
   `;
   expect(diagnostics(`const routeBody = () => {${body}};\nexport {};`)).toEqual([]);
   // The same body as a closure, compiled for a chain with every name in it.
-  const closure = Base(() => {
+  const closure = onBase(() => {
     let pool = 0n;
     if (available(PancakeswapV3.Factory)) {
       pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
     }
     const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(0x1234n);
     return pool + sqrtPriceX96 + AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
-  }, options).reward(0n);
+  });
   // Each contract is called at Base's address for it, which the bytecode carries.
-  const bytecode = Buffer.from(closure.compiled.bytecode[0]!).toString("hex");
+  const bytecode = Buffer.from(closure).toString("hex");
   for (const contract of [Base.PancakeswapV3.Factory, Base.AerodromeSlipstream.CLFactory]) {
     expect(bytecode).toContain(contract.address!.slice(2).toLowerCase());
   }

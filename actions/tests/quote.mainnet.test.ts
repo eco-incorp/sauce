@@ -11,11 +11,22 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createPublicClient, custom, http, parseAbi, type Address } from "viem";
+import {
+  createPublicClient,
+  custom,
+  encodeAbiParameters,
+  hexToBytes,
+  http,
+  parseAbi,
+  type Address,
+} from "viem";
 
 import { quoteAction, type QuoteOptions } from "../src/index.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
+import { compileEvm } from "../src/compile.js";
+import { newEmitter, type Fragment } from "../src/emit.js";
+import { quoteCall } from "../src/to-quote.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { DEADLINE } from "./mainnet.js";
 
@@ -138,23 +149,21 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
     await env?.stop();
   });
 
-  it("refuses generation 4 as a quote service before issuing a call", () => {
+  it("refuses the execution Router as a quote service before issuing a call", () => {
     assert.notEqual(env.router, env.quoteRouter);
-    assert.throws(
-      () =>
-        quoteAction(
-          {
-            type: "uniswapV3Swap",
-            pool: UNIV3_USDC_WETH_500,
-            tokenIn: USDC,
-            tokenOut: WETH,
-            amount: "1000000",
-            amountOutMin: "0",
-            recipient: "self",
-          },
-          { router: env.router },
-        ),
-      /generation 4 has no quote method; use v12QuoteRouterAddress/,
+    assert.throws(() =>
+      quoteAction(
+        {
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_WETH_500,
+          tokenIn: USDC,
+          tokenOut: WETH,
+          amount: "1000000",
+          amountOutMin: "0",
+          recipient: "self",
+        },
+        { router: env.router },
+      ),
     );
   });
 
@@ -538,6 +547,29 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
       const quoted = await quote(action);
       assert.equal(quoted, await expected());
       assert.ok(quoted >= atLeast, `${name} quoted ${quoted}`);
+    });
+  }
+
+  // An Ambient quote reads `int128` flows and a V4 quote writes a negative `int256 amountSpecified`:
+  // each on-chain form, run as a program with its amount fixed and with it a run-time argument,
+  // must quote what the venue's own quoter does.
+  for (const type of ["uniswapV4Swap", "ambientSwap"] as const) {
+    it(`${type}: its on-chain forms match the venue's own quoter`, async () => {
+      const { action, expected } = cases.find((c) => c.action.type === type)!;
+      assert.ok("amount" in action && typeof action.amount === "string");
+      const amount = BigInt(action.amount);
+      const { toSauce, toSauceDynamic } = quoteCall(action, amount, quoters);
+      assert.ok(toSauce && toSauceDynamic);
+      const args = hexToBytes(encodeAbiParameters([{ type: "uint256" }], [amount]));
+      const run = async (fragment: Fragment): Promise<bigint> => {
+        const compiled = compileEvm(
+          `function main(amount: Uint256): Uint256 {\n${fragment.stmts.join("\n")}\nreturn ${fragment.expr};\n}`,
+        );
+        return BigInt(await env.returned(new Uint8Array([...compiled.bytecode, ...args])));
+      };
+      const want = await expected();
+      assert.equal(await run(toSauce(newEmitter())), want, "fixed amount");
+      assert.equal(await run(toSauceDynamic(newEmitter(), "amount")), want, "run-time amount");
     });
   }
 

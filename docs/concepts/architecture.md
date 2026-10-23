@@ -1,135 +1,122 @@
-# How Sauce fits together
+# Architecture
 
 **Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [SauceScript](saucescript.md)
 
-> You write a program in words you can read. The compiler translates it into a compact code card.
-> On the chain, the engine is the cook who reads that card and follows it, inside your Pot. This
-> package is your toolbox around them: it knows where every token and protocol lives on every chain,
-> and it packs the card into a transaction. This page says which piece does which job.
+> You write a program in words you can read. The compiler translates it into compact code, like a
+> recipe rewritten as a card of short instructions. On the chain, the engine reads that card and
+> carries it out, inside your Pot. This package is your toolbox around them: it knows where every
+> token and protocol lives on every chain, and it packs the card into a transaction. This page says
+> which piece does which job.
 
-Sauce turns a program into one atomic on-chain execution. Three pieces divide that work, and knowing
-which piece owns a problem is most of what this page is for.
+This page is for you once you have run a program ([quick start](../guides/quick-start.md)) and know
+what a Pot and a cook are ([Kitchen, Pot and cook](kitchen-pot-cook.md)). Knowing which piece owns a
+problem tells you where to look when something fails.
 
-| Piece    | Where it lives                                   | What it does                                                                                                 |
-| -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| This SDK | `@eco-incorp/sauce` and its subpaths             | Chain, protocol and token knowledge; route syntax; builders; intent encoding; account planning; verification |
-| Compiler | bundled, exposed at `@eco-incorp/sauce/compiler` | Checks SauceScript, resolves modules and ABIs, applies compile-time values, emits bytecode for a target      |
-| Engine   | deployed on chain, with a Kitchen and Pot        | Executes that bytecode against the chain's real contracts and accounts                                       |
+## Three pieces
 
-You only install one package. The compiler comes with it.
+Sauce turns a program into one atomic execution on chain: every step happens, or none does. Three
+pieces divide that work:
 
-What the engine actually does is simple enough to state in a sentence and is all you need to reason
-about: **it runs your program's steps in order, inside the surrounding transaction, and anything
-that reverts reverts the whole thing.** There is no partial execution, no retry, no rollback of one
-step. The bytecode is Sauce's own — not a Solidity contract's deployment code, not a Solana ELF
-program — and only a Sauce engine interprets it.
+| Piece    | Where it lives                                   | What it does                                                                            |
+| -------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| This SDK | `@eco-incorp/sauce` and its subpaths             | Knows every chain, protocol and token; builds programs and cooks; checks and plans them |
+| Compiler | bundled, exposed at `@eco-incorp/sauce/compiler` | Checks SauceScript, resolves modules and ABIs, emits bytecode for one chain's kind      |
+| Engine   | deployed on chain, with a Kitchen and Pots       | Executes that bytecode against the chain's real contracts and accounts                  |
+
+You install one package. The compiler comes with it, and the engine is already on chain. A program
+passes through all three:
+
+```text
+pay.sauce.ts ─► the SDK       names become addresses on the chain, ABIs are supplied
+             ─► the compiler  every line checked, bytecode out
+             ─► the SDK       the cook built: to your Pot, the program, the Kitchen's fee
+             ─► your wallet   signs and sends it
+             ─► the engine    runs the program inside your Pot; uncaught failure reverts the cook
+```
+
+Programs run their steps in order inside one transaction. **An uncaught failure reverts the
+whole transaction.** On EVM, an atomic `try` block can roll back only its own work and continue
+through `catch`; a single-call catch handles only that call's failure. SVM has no catch support.
+The compiled output is a Sauce program, not a contract or Solana program to deploy yourself.
 
 ## From a name to a contract call
 
-Inside an EVM route body you write:
+The quick start's program pays with one line:
 
 ```js
-USDC.approve(Uniswap.UniversalRouter, 1_000_000);
+USDC.transfer(to, amount);
 ```
 
-The destination chain picks which `USDC` and which router that means. Before compiling, the SDK
-rewrites those names, supplies the matching ABIs and injects the addresses. A token write becomes a
-call to the `@sauce/token` library, whose writes follow OpenZeppelin `SafeERC20`, so the compiler
-sees the equivalent of `approve(USDC, <the router's address>, 1_000_000)`. A token read and a
-protocol call become ABI-bound calls such as `IERC20.at(USDC).balanceOf(...)`.
+The chain you compile for decides which `USDC` that is. Before compiling, the SDK rewrites the
+names a program uses: it gives `USDC` the token's address on that chain, and turns the token write
+into a call to `transfer` in `@sauce/token`, Sauce's token library, which checks the token's reply
+as OpenZeppelin's SafeERC20 does. A protocol call such as `UniswapV3.Factory.getPool(...)` becomes a
+call bound to that contract's ABI, its interface, at its address on that chain. A balance such as
+`self.USDC` becomes a call to the token's `balanceOf` for the Pot.
 
-These names belong to the SDK's route path, not to the compiler. A direct `compile()` call resolves
-nothing for you: bind ABIs and supply addresses yourself. See
-[protocols and tokens](../guides/protocols-and-tokens.md) and [compiling](../guides/compiling.md).
+These names are the SDK's, not the compiler's. The compiler used on its own, from TypeScript,
+resolves nothing for you: you bind ABIs and supply addresses yourself
+([Compiling programs](../guides/compiling.md)). [Names and registries](names-and-registries.md)
+explains where the names come from.
 
 ## Two environments that look alike
 
-A route body is **source text**, not a callback. The SDK reads it, rewrites it and compiles it; it
-is never invoked as JavaScript and captures no surrounding variable. A host `const amount = …` does
-not exist inside the program — pass it through `defines`.
+A program is **source text**, even when you write it as a TypeScript function in your own code.
+The SDK reads its text, rewrites it and compiles it; it never runs it as JavaScript, and it captures
+no variable around it. A `const amount = …` in your application does not exist inside the program:
+give the program the value instead ([SauceScript](saucescript.md) explains how values reach a
+program).
 
-That is why `Base` and `USDC` behave differently even though both are bare names. `Base` is a named
-export you import. `USDC` is program syntax the compiler resolves. The package ships TypeScript
-declarations for the program names so a typed body still checks, but a declaration is a type, not a
-value.
+That is why `Base` and `USDC` behave differently even though both are bare names in your editor.
+`Base` is a value you import from the package and read in your application, for that chain's
+addresses, such as `Base.USDC.address`. `USDC` is a name inside the program, which the compiler
+resolves for the chain. The package ships TypeScript declarations for the program's names so your
+editor checks them, but a declaration is a type, not a value you can use in your application.
 
-## From bytecode to execution
+## On the chain
 
-[Kitchen, Pot and cook](kitchen-pot-cook.md) introduces the contracts a program runs through: what
-a Pot is, what a cook does, and who may do what. This section adds what an integrator needs on top.
+[Kitchen, Pot and cook](kitchen-pot-cook.md) introduces the contracts a program runs through. A few
+more facts explain how the pieces stay paired.
 
-### EVM
+A cook names the engine each time, and the engine accepts only Pots its own Kitchen created, with
+the Pot code it was built for. A Kitchen release that changes the Pot's code starts a new family of
+Pot addresses, and a Pot of an earlier family keeps running on the engine built for it. On Ethereum
+and Base, the engine refuses to run anywhere but inside such a Pot.
 
-A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each
-cook, so a call needs **both** addresses. A direct `compileSauceRoute` takes them from you. An intent
-derives them: the released engine, and the Pot the recorded Portal's Executor owns under salt zero
-(`SAUCE_INTENT_POT_SALT`). That Pot must exist before the route runs; the solver deploys it. An
-engine accepts only Pots created by its own Kitchen, with the Pot bytecode it was built for: a
-Kitchen release that changes the Pot's bytecode starts a new family of Pot addresses, and a Pot
-from an earlier family keeps running on the engine built for it.
+### A Pot's Router
 
-#### A Pot's Router
+A Pot's swaps run on **its own Router**. When a pool calls back in the middle of a swap, to be paid,
+the call reaches the Pot, and the Pot hands it to its Router, which pays the pool on the Pot's
+behalf. A new Pot starts on the Kitchen's current Router. After that, only the Pot's owner can point
+it at another one; the Kitchen's owner moves the Router that new Pots start on, and nothing else,
+and a Router change moves no Pot address. A Pot can also be created with its Router fixed for good.
+[A Pot's Router after a rollout](../api/README.md#a-pots-router-after-a-rollout) shows how to check
+a Pot and update it.
 
-A Pot's swaps run on **its own Router**. Router self-calls and the pools' mid-swap callbacks reach
-the Pot's fallback, which delegatecalls `pot.router()`: the Kitchen's Router when the Pot was
-minted, until the Pot's owner points it elsewhere with `setRouter`. The Kitchen's owner moves the
-Router that NEW Pots start on and nothing else — the Kitchen cannot move an existing Pot, and a
-Router change moves no Pot address. So after a Router rollout, `potRouterUpdate(client, pot)` from
-`@eco-incorp/sauce/evm/engine` reads both through your client and returns the `setRouter` call for
-the Pot's owner to sign, or nothing when the Pot is already current. Nothing sends it for you, and
-a call from anyone but the owner reverts with `NotOwner()`. It throws for a Pot of an earlier
-Kitchen release, which has no `setRouter` and keeps its Router for good.
-[pot-router.ts](../examples/pot-router.ts) shows the check.
+### On Solana
 
-`v12PotAbi` and `v12KitchenAbi` from the same subpath are the released contracts' complete ABIs,
-including the Kitchen's owner-only administration (`initialize`, `setRouter`, `setExecutionFee`,
-ownership transfer and upgrade).
-
-Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
-moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
-the Pot does not pay the fee. On Arc, native value is USDC at 18 decimals, drawn from the same
-balance as the USDC ERC-20 ([Arc: USDC is the native coin](../reference/chains/arc.md#notes)).
-
-One route body is one program and one cook, however many statements it contains. For a Portal-driven
-intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put
-assets in, use them and take the remainder out within the same fulfillment.
-[The destination Pot](../guides/intents.md#the-destination-pot) covers deployment and overrides.
-
-### Solana
-
-The compiler returns an **account manifest** alongside the bytecode. Each `Account` parameter of
-`main` is a slot; its `Writable`/`Signer` modifiers state the role that slot requires. Account
-identities travel with the instruction, separately from the encoded argument values.
-
-The SDK resolves those slots into a plan, builds the instructions and transactions, and can stage a
-larger program through the Kitchen before executing it. See the [Solana guide](../guides/solana.md).
-
-## Intents connect executions across chains
-
-`Base(body, options).reward(reward)` builds an Eco intent whose route executes on Base. The SDK
-compiles the destination program, assembles the route, and hands back hashes and Portal calldata.
-
-A program can also create an intent itself, with the same `Chain(() => { ... }).reward({ ... })`
-written in its body — which is how a hop whose amount is only known on arrival gets built at all.
-See [create an intent from inside a program](../guides/intents.md#create-an-intent-from-inside-a-program).
-
-Building an intent publishes nothing. Your application submits the source-chain transactions, and a
-solver fulfills the destination. A nested intent is opened by the body of the one before it, when
-that body runs — a cascade of separate executions, not one call stack spanning chains. See
-[create an intent](../guides/intents.md) and [nested intents](../guides/nested-intents.md).
+Compiling for Solana also returns an **account manifest**: every account the program needs, in
+order, with the role each must have. The SDK works out most of those accounts from your wallet, your
+Pot and the arguments, builds the transactions, and uploads a program too large for one transaction
+before running it. [How Sauce runs on Solana](solana-model.md) explains each part.
 
 ## Versions travel with artifacts
 
-A compiled program is paired with an engine that understands it, by exact package version in both
-directions: each compiler release names the engine releases its output runs on, and those engines
-run no other compiler's output. The compiler reports what it produced; it does not inspect an
-address to find out what is deployed there. The SDK pins one compiler, ships the engines of its row of
-`V12_RELEASE_SETS`, and refuses to build a cook for an engine another row names
-([which engine runs a program](../api/compiler.md#which-engine-runs-a-program)). Read the deployment
-helpers in `@eco-incorp/sauce/deployments` for released engine and Kitchen addresses, and confirm the
-code is live on the chain or cluster you are targeting.
+A compiled program is paired with the engine that runs it by exact version, in both directions:
+each compiler release names the engine releases its output runs on, and those engines run no other
+compiler's output. The compiler reports what it produced; it does not look at a chain to find what
+is deployed there. The SDK pins one compiler, ships the engines it pairs with, and refuses to build
+a cook for an engine another compiler pairs with
+([which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
+[Deployments](../reference/deployments.md) lists the released addresses.
 
 Changing the compiler can change bytecode without changing a line of source. Anything that pins
-bytes — a settlement hash, a cached program, a staged code account — has to be re-derived when the
-compiler moves. Keep the compiler version, target and argument format with any artifact you store.
-[Verification](../guides/verification.md) covers the settlement pins the SDK ships.
+bytes, such as a settlement's hash, a cached program or a staged program on Solana, has to be
+derived again when the compiler moves ([Upgrading](../guides/upgrading.md)).
+
+## Next
+
+- Why programs are written in a small, strict TypeScript, and how values reach them:
+  [SauceScript](saucescript.md).
+- How a name such as `USDC` becomes an address on each chain:
+  [Names and registries](names-and-registries.md).

@@ -37,7 +37,6 @@ import {
   encodeArgs,
   fn,
   hexToBytes,
-  indent,
   newEmitter,
   slotVar,
   type Emitter,
@@ -372,7 +371,7 @@ function balanceDelta(
 // Program assembly
 // ---------------------------------------------------------------------------
 
-/** A program's parts, before it is rendered for a standalone compile or a route body. */
+/** A program's parts, before `renderProgram` renders them for a standalone compile. */
 export interface Lowered {
   readonly body: readonly Stmt[];
   readonly contracts: ActionContracts;
@@ -448,22 +447,6 @@ export function renderProgram(lowered: Lowered): string {
   const params = lowered.parameters.map((name) => `${argumentVar(name)}: Uint256`);
 
   return `${routerImport(lowered.router)}${fn("main", params, "void", lowered.body)}\n`;
-}
-
-/**
- * `main` for an SDK route body: no return annotation, because the route compiler's adapter adds the
- * `void` itself. A route body is compiled with no arguments, so a program with `argument` actions
- * cannot be one.
- */
-export function renderRouteBody(lowered: Lowered): string {
-  if (lowered.parameters.length > 0) {
-    throw new Error(
-      `an intent route takes no runtime arguments, but this program declares ` +
-        `${lowered.parameters.map((p) => `'${p}'`).join(", ")}. Read the amount on-chain instead ` +
-        `(a \`balanceOf\` action), or compile it standalone with \`compileProgram\`.`,
-    );
-  }
-  return `${routerImport(lowered.router)}function main() {\n${indent(lowered.body)}\n}\n`;
 }
 
 /**
@@ -819,11 +802,12 @@ function balancerV2BatchSwap(
       }),
     ),
   );
-  // The Vault may take any amount of every asset but the last, and must pay at least
-  // `amountOutMin` of the last (a negative limit is an amount the Vault pays out).
+  const outputIndex = action.steps[action.steps.length - 1]!.assetOutIndex;
+  // Limits apply to net asset deltas: the Vault must pay at least `amountOutMin` of the last
+  // step's output asset, wherever it appears in `assets`. Other assets have no output floor.
   const limits = list(
     action.assets.map((_, i) =>
-      i === action.assets.length - 1 ? `-${word(action.amountOutMin)}` : word(MAX_INT256),
+      i === outputIndex ? `Int256(-${word(action.amountOutMin)})` : `Int256(${word(MAX_INT256)})`,
     ),
   );
   const funds = record({
@@ -835,8 +819,7 @@ function balancerV2BatchSwap(
 
   // `batchSwap` returns `int256[] assetDeltas`, signed and negative for what was received; the
   // realized output is the executing account's delta on the last step's output asset instead.
-  const lastStep = action.steps[action.steps.length - 1]!;
-  const assetOut = action.assets[Number(lastStep.assetOutIndex)]!;
+  const assetOut = action.assets[outputIndex]!;
 
   return balanceDelta(
     l,

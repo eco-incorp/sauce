@@ -12,6 +12,9 @@ dev-tools/cache
 
 # Preserve the license text verbatim from eco-incorp/v12.
 /LICENSE.md
+# Wallet MCP servers' schemas, copied verbatim from their packages so a diff against upstream reads
+# clean (mcp/test/wallet-mcp/).
+mcp/test/wallet-mcp/*.verbatim.ts
 
 # Formatted by the package manager itself.
 pnpm-lock.yaml
@@ -51,9 +54,6 @@ docs/guides/solana-distributed-swap.md
 sdk/test/svm/fixtures
 sdk/test/std/token/fixtures
 sdk/test/evm/fixtures
-# eco-routes' Solana programs and accounts as mainnet holds them, and the manifest
-# scripts/dump-eco-routes-svm.mjs writes beside them.
-sdk/test/fixtures/eco-routes-svm
 # The Solana venues' programs and the manifest scripts/dump-svm-venues.mjs writes beside them (their
 # accounts are under sdk/test/svm/fixtures, ignored above).
 sdk/test/fixtures/svm-venue-programs
@@ -66,8 +66,7 @@ sdk/test/fixtures/registry-abi/evidence.json
 # way.
 sdk/test/fixtures/token-registry/evidence.json
 # Programs an agent wrote, copied from the project it wrote them in: the SauceScript declarations
-# are proved on them as they were written (the intent since given main's parameters, as every input
-# now is).
+# are proved on them as they were written.
 sdk/test/fixtures/sauce-script
 
 # GENERATOR OUTPUT that happens to be SauceScript. Both of these are emitted by TypeScript in
@@ -75,6 +74,6 @@ sdk/test/fixtures/sauce-script
 # `recipes-assets.test.ts` ("settleSource() returns the exact on-disk settle.sauce.ts") and
 # `svm-settle.compile.test.ts` ("svmSettleSource(1) returns ..."). Formatting one side diverges it
 # from the other; the generator's own alignment is what ships. Every OTHER `.sauce.ts` here is
-# hand-written (e.g. `cctp-split.sauce.ts`, a standalone asset read off disk) and IS formatted.
+# hand-written and IS formatted.
 sdk/src/recipes/settle.sauce.ts
 sdk/src/svm/recipes/settle.sauce.ts

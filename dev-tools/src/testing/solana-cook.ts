@@ -52,6 +52,7 @@ import {
   SvmAccountNameError,
   svmKitchenIdlPath,
   svmProgramStops,
+  svmStopValues,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   TRANSACTION_SIZE_LIMIT,
@@ -150,10 +151,13 @@ function argumentsByName(
         keys[param.name] = getAddressDecoder().decode(hexToBytes(value as Hex));
       }
     } else if (
-      param.type === "Uint256" &&
+      (param.type === "Uint256" || param.type === "Int256") &&
       (typeof value === "bigint" ||
         typeof value === "number" ||
-        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)))
+        (typeof value === "string" &&
+          (param.type === "Int256" ? /^(0x[0-9a-fA-F]+|-?\d+)$/ : /^(0x[0-9a-fA-F]+|\d+)$/).test(
+            value,
+          )))
     ) {
       integers[param.name] = BigInt(value);
     }
@@ -321,7 +325,8 @@ function tableAddresses(transaction: Transaction): Address[] {
 export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> {
   const manifest = input.program.manifest ?? { accounts: [] };
   const { resolution, labels, tokenAccounts } = await resolveNames(chain, input, manifest);
-  // Each swap at a price's stop, worked out from the pools the cook names, as `sauce` works it out.
+  // Each swap at a price's stop, worked out from the pools the cook names, as `sauce` works it out:
+  // a swap whose stop binds compiled again to the Stopped form, every other the plain one.
   const named = Object.fromEntries(
     Object.entries(resolution).map(([name, at]) => [
       name,
@@ -339,7 +344,11 @@ export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> 
       return account === null ? null : { data: account.data, owner: account.owner };
     },
   );
-  const payload = hexToBytes(input.program.payload(input.args, stops?.values ?? []));
+  const program =
+    stops === undefined || stops.binding.length === 0
+      ? input.program
+      : input.program.held(stops.binding);
+  const payload = hexToBytes(program.payload(input.args, svmStopValues(stops, program)));
   const tail = resolveAccounts(manifest, resolution, input.owner.address);
   const { bank, kitchen, engine, feeConfig } = chain;
   const owner = input.owner;

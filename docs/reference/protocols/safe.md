@@ -17,26 +17,10 @@ The most trusted multi-signature smart contract wallet, securing billions in dig
 | Namespace | `Safe` on ethereum, optimism, polygon, arc, base, arbitrum |
 | Chains | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Key Operations
+## What it offers
 
 - **getThreshold**: Query the signing threshold of a Safe multisig
 - **execTransaction**: Execute a transaction with collected signatures
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Get Safe threshold
-import { SafeABI as ISafe } from "./abis";
-function main(safeAddress: Address): Uint256 {
-  const safe = ISafe.at(safeAddress);
-  return safe.getThreshold();
-}
-```
 
 ## Notes
 
@@ -79,3 +63,9 @@ function main() {
 - `execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)`
 - `getOwners() view returns (address[])`
 - `getThreshold() view returns (uint256)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

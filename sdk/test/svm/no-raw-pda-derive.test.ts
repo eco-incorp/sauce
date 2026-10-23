@@ -23,7 +23,7 @@ const SDK = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 /** The one file allowed to derive. */
 const MEMO = "src/svm/venues/pda-memo.ts";
 /** Files the scan must include, so a move cannot leave it passing over nothing. */
-const REQUIRED = [MEMO, "src/svm/kitchen.ts", "src/svm/portal.ts", "src/svm/alt.ts"];
+const REQUIRED = [MEMO, "src/svm/kitchen.ts", "src/svm/token-accounts.ts", "src/svm/alt.ts"];
 
 const RAW_NAMES = new Set([
   "getProgramDerivedAddress",

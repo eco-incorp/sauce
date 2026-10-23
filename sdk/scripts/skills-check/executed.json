@@ -26,17 +26,12 @@
     "sauce-examples/examples/rebalance.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
-    "sauce-examples/examples/repay-on-base.sauce.ts": [
-      "actions/tests/examples-cookbook.mainnet.test.ts"
-    ],
     "sauce-examples/examples/stop-loss.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
     "sauce-examples/examples/supply-idle.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
-    "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
-    "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
     "sauce-solana/examples/pay.sauce.ts": [
       "sdk/test/cli-solana-token-methods.e2e.test.ts",
       "dev-tools/test/testing/solana-examples.test.ts"
@@ -55,7 +50,6 @@
   },
   "compileOnly": {
     "sauce-globals/examples/globals.sauce.ts": "compiled, and its token-write lowering pinned, by globals.mts; no suite executes it",
-    "sauce-intents/examples/cross-chain.sauce.ts": "compiled by intents.mts, which pins on which chain each name resolves; no suite fulfils the intent it opens",
     "sauce-protocols/examples/protocols.sauce.ts": "compiled by protocols.mts for chains with and without PancakeSwap V3; no suite executes it",
     "sauce-script/examples/twap.sauce.ts": "compiled by skills:check and by the MCP sauce_compile test; no suite executes it",
     "sauce-swaps/examples/swap-leg.sauce.ts": "compiled by swaps.mts for Base and Arbitrum; no suite executes it"

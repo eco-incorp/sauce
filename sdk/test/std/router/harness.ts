@@ -155,11 +155,13 @@ export const SVM_LIMIT_VENUES = ["Invariant", "OpenbookV2"] as const;
 
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
 
-/** Every function of the SVM arm: each of the nine venues at a price; each venue at its own limit,
- *  its instruction alone and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s;
- *  OpenBook's two: from an amount and from lots); and Manifest's. */
+/** Every function of the SVM arm: each of the nine venues at a price, and the eight
+ *  concentrated-liquidity ones held to a stop; each venue at its own limit, its instruction alone
+ *  and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s; OpenBook's two: from an amount
+ *  and from lots); and Manifest's. */
 export const SVM_FUNCTIONS = [
   ...SVM_VENUES.map(lower),
+  ...SVM_VENUES.filter((venue) => venue !== "Phoenix").map((venue) => `${lower(venue)}Stopped`),
   ...[...SVM_VENUES, ...SVM_LIMIT_VENUES].flatMap((venue) => [
     `${lower(venue)}AtLimit`,
     `${lower(venue)}Cpi`,
@@ -175,10 +177,12 @@ export const SVM_FUNCTIONS = [
 /** An instruction's own: `…Cpi`, which sends it, or `…Data`, which builds its data. */
 export const svmInstructionForm = (name: string): boolean => /(Cpi|Data)$/.test(name);
 
-/** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
-/** The eight concentrated-liquidity swaps at a price, which take a `stop` after the recipient. */
+/** The eight concentrated-liquidity swaps at a price held to a stop, which take it after the
+ *  recipient. */
 export const SVM_STOPPED =
-  /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm|orcaWhirlpool|cropper|defituna|crema)$/;
+  /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm|orcaWhirlpool|cropper|defituna|crema)Stopped$/;
+
+/** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
 
 export const svmArguments = (name: string): string[] =>
   name === "manifest"
@@ -207,7 +211,7 @@ export const svmCpiArguments = (name: string): string[] =>
 /** A `…Data` function's arguments, by venue: what its instruction carries, and its direction. */
 export const svmDataArguments = (name: string): string[] =>
   name === "phoenixData"
-    ? ["amountIn", "lot", "ticks", "paysBase"]
+    ? ["amountIn", "lot", "ticks", "orders", "paysBase"]
     : name === "openbookV2Data"
       ? ["amountIn", "baseLot", "quoteLot", "priceLots", "orders", "paysBase"]
       : name === "openbookV2LotsData"

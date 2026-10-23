@@ -188,8 +188,7 @@ unspent:
 2. Pay the output to its recipient (`recipient` does it), or keep it in the Pot for the next step.
 3. Send the rest of the input back to the user or a refund address: `amountIn` less what the swap
    took (the input balance before minus after), never the Pot's whole balance of the token, which
-   may hold more of it for other uses. A full sweep is only for an intent's body on the shared
-   intent Pot (`sauce-intents`).
+   may hold more of it for other uses.
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
 Simulate it, then run it, with the input in the Pot or pulled in with `--fund`:
@@ -290,11 +289,10 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
 One function per venue whose swap stops at a price limit and leaves the rest of the input:
 `raydiumClmm`, `pancakeswapClmm`, `byreal`, `stabbleClmm`, `orcaWhirlpool`, `cropper`, `defituna`,
 `crema` and `phoenix` (an immediate-or-cancel order on its book). Every one takes the same
-arguments, and the eight concentrated-liquidity ones a `stop` after them (Phoenix's book takes
-none):
+arguments:
 
 ```text
-orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint256
+orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, recipient): Uint256
 ```
 
 | Argument     | What it is                                                                                                                                                                                                                                                                                                   |
@@ -303,7 +301,6 @@ orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint
 | `trader`     | `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the authority that signs (the Pot), the token account paid from, the two mints, the two token programs, the memo program                                                                                                             |
 | `priceLimit` | the most one unit bought may cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the pool's fee and stops where its last unit, fee paid, costs `priceLimit`; the rest of `amountIn` stays in `source`                                                             |
 | `recipient`  | the token account the output lands in; Crema and Phoenix pay only into the authority's own. The function returns what it gained                                                                                                                                                                              |
-| `stop`       | a tick the swap holds a tick inside of, which the `sauce` command works out from the pool's tick arrays as it builds the cook (below): `0` for none, `1` to skip the pool. A program calling the function itself passes `0`; the venue namespaces (`Orca.Whirlpool.swap(…)`) have it filled                  |
 
 Each returns `0` having moved nothing for a missing slot (the System program as its pool), no
 input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than one
@@ -318,20 +315,36 @@ A concentrated-liquidity swap walks only the tick arrays its slot gives it, and 
 program fails the whole transaction. So each of these holds its limit a tick inside them: Raydium's
 code and Crema's to where the furthest array that way begins (or, for the array holding the price,
 its last initialized tick that way), a whirlpool's to the far end of its three. A `priceLimit` past
-the window buys up to it.
+the window buys up to it. A limit far past every price, with a large input, can still run a deep
+pool out of the cook's compute before then: keep it tight.
 
-A pool's swap also costs compute units for every initialized tick it crosses, and a walk that
-crosses enough runs the whole cook out of them (one Solana transaction has 1,400,000). So for a
-program written with the venue namespaces, the `sauce` command works out each swap's `stop` as it
-builds the cook: it reads the pool's tick arrays, counts the initialized ticks its walk to its
-limit crosses, prices them from a table measured on each venue's program, and gives the deepest
-pool its whole walk first, then the next, from what is left. A pool what is left does not cover is
-held short of its limit; one it cannot pay for at all is skipped. The cook then fills less, and
-never fails for compute. The same stop takes Raydium's code and Crema on into the furthest array,
-to its last initialized tick, when the walk fits. `sauce simulate` and `sauce run` check the stops in
-a simulation and tighten them if the cook would still run out; each prints a line for each pool a
-stop held or skipped. A program calling the functions itself with `stop` 0 has none of this: keep
-its limit tight.
+Each of the eight concentrated-liquidity functions has a Stopped form, the same swap with its limit
+held to a `stop` as well: its low 192 bits a tighter `priceLimit` (the swap takes the lower of the
+two; `0` none), and from bit 192 a start bound, a tick past which the swap skips the pool (`1`
+paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price):
+
+```text
+orcaWhirlpoolStopped(slot, trader, amountIn, priceLimit, minOut, recipient, stop): Uint256
+```
+
+A pool's swap costs compute units for every initialized tick it crosses, and a walk that crosses
+enough runs the whole cook out of them (one Solana transaction has 1,400,000). For a program written
+with the venue namespaces the `sauce` command works each swap's stop out as it builds the cook: it
+reads the pool's tick arrays, counts the initialized ticks its walk to its limit crosses, prices
+them from a table measured on each venue's program with three more crossings kept back, and gives
+the pool whose walk buys the most per unit its whole walk first, then the next from what is left. A
+pool the rest does not cover is compiled to the Stopped form, held short of its limit, its start
+bound three tick-spacing positions past its price then; one it cannot pay for at all is skipped.
+Where no stop binds, the program is the plain one. A swap in a loop whose count is written out
+(`for (let i = 0; i < 3; i++)`) is charged its own units for each run, and its walk once; in a loop
+whose count is a value or a negative number, or more runs than one cook pays for, no pool is held,
+and the command says so. This lowers the risk of running out, and does not
+remove it: a held pool crosses at most three more initialized ticks than were priced while the
+ticks in its way stay as they were read (a position opened inside its walk meanwhile adds one), but
+a pool that walks its whole way is not checked, and a price that moves further before the cook lands can
+cost it more. `sauce simulate` and `sauce run` check the stops in a simulation and tighten them if
+the cook would still run out, and print a line for each pool a stop held or skipped; `sauce tx`
+takes them from the table alone, so its cook can differ from the one `sauce simulate` reports.
 
 Three more forms, for a program that wants less:
 
@@ -378,11 +391,11 @@ function main(
 ): Uint256 {
   const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
   const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
-  return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output, 0);
+  return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output);
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 2.2 KB of program, past
+A program carries only the venues it calls: one venue's function is about 2.1 KB of program, past
 one transaction, so the program is staged (`sauce-solana`).
 
 ## Exact input on Solana

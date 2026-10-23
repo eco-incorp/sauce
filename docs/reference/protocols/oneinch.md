@@ -8,7 +8,7 @@
 > lists the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
 Leading DEX aggregator that finds optimal swap routes across multiple liquidity sources. Supports limit orders and Fusion mode for gasless swaps.
 
@@ -49,32 +49,10 @@ function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Addres
 }
 ```
 
-## Key Operations
+## What it offers
 
 - **unoswap**: Single-source optimized swap via AggregationRouter
 - **swap**: Multi-source aggregated swap with custom routing
-
-## Typed templates for the raw compiler (not for `sauce compile`)
-
-These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
-compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
-namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
-
-```typescript
-// Unoswap (single-source swap)
-import { AggregationRouterV6ABI as IAggregationRouterV6 } from "./abis";
-function main(
-  routerAddress: Address,
-  srcToken: Address,
-  amount: Uint256,
-  minReturn: Uint256,
-  dex: Uint256,
-): Uint256 {
-  const router = IAggregationRouterV6.at(routerAddress);
-  return router.unoswap(srcToken, amount, minReturn, dex);
-}
-```
 
 ## Notes
 
@@ -116,3 +94,9 @@ function main() {
 
 - `swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes data) payable returns (uint256 returnAmount, uint256 spentAmount)`
 - `unoswap(uint256 token, uint256 amount, uint256 minReturn, uint256 dex) returns (uint256 returnAmount)`
+
+## Next
+
+- [Protocols](../protocols.md): the other protocols, by what they do.
+- [Protocols and tokens](../../guides/protocols-and-tokens.md): calling a contract by its namespace, or through its ABI.
+- [Glossary](../../concepts/glossary.md): the words these pages use, in plain terms.

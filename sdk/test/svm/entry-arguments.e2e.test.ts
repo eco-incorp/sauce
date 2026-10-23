@@ -100,18 +100,53 @@ describeSvm("main's arguments on Solana, as the compiled program reads them", ()
     );
   };
 
-  for (const encoding of ["abi-v1", "compact-v1"] as const) {
-    for (const { name, source, values, read } of CASES) {
-      it(`${encoding}: ${name}`, async () => {
-        const program = compileSauceProgram("solana", source, {
-          compactArgs: encoding === "compact-v1",
-        });
-        expect(program.entryEncoding).toBe(encoding);
-        const encoded = encodeEntryArguments(program, values);
-        // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
-        expect(await returned(program.bytecode, encoded)).toEqual(read.map(String));
-        expect(decodeEntryArguments(program, encoded)).toEqual(values);
-      });
-    }
+  for (const { name, source, values, read } of CASES) {
+    it(`abi-v1: ${name}`, async () => {
+      const program = compileSauceProgram("solana", source);
+      expect(program.entryEncoding).toBe("abi-v1");
+      const encoded = encodeEntryArguments(program, values);
+      // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
+      expect(await returned(program.bytecode, encoded)).toEqual(read.map(String));
+      expect(decodeEntryArguments(program, encoded)).toEqual(values);
+    });
+  }
+
+  // An Int256 parameter, executed: the Solana engine reads the same signed word, so `main` sees a
+  // negative value and a returned one comes back as its two's-complement word.
+  const SIGNED: ReadonlyArray<{
+    name: string;
+    source: string;
+    values: EntryValue[];
+    read: bigint[];
+  }> = [
+    {
+      name: "a negative value, subtracted from",
+      source: "function main(x: Int256): Int256 { return x - 1; }",
+      values: [-5n],
+      read: [-6n],
+    },
+    {
+      name: "a negative value, ordered below zero",
+      source: "function main(x: Int256): bool { return x < 0; }",
+      values: [-5n],
+      read: [1n],
+    },
+    {
+      name: "an array of them, and a tuple holding one",
+      source:
+        "function main(xs: Int256[], p: { d: Int256, a: Uint256 }): { first: Int256, d: Int256, a: Uint256 } { return { first: xs[1], d: p.d, a: p.a }; }",
+      values: [[0n, -(1n << 255n)], { d: -2n, a: 3n }],
+      read: [-(1n << 255n), -2n, 3n],
+    },
+  ];
+  for (const { name, source, values, read } of SIGNED) {
+    it(`abi-v1: ${name}`, async () => {
+      const program = compileSauceProgram("solana", source);
+      const encoded = encodeEntryArguments(program, values);
+      expect(await returned(program.bytecode, encoded)).toEqual(
+        read.map((value) => BigInt.asUintN(256, value).toString()),
+      );
+      expect(decodeEntryArguments(program, encoded)).toEqual(values);
+    });
   }
 });

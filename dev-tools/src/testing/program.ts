@@ -49,10 +49,19 @@ export interface CompiledProgram {
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**
-   * On Solana, the values the SDK added to `main` after its accounts, one for each swap at a price:
-   * its stop, which a cook works out from the pool (`svmProgramStops`).
+   * On Solana, each venue's swap at a price a stop could hold, by its stop's derivation: what a
+   * cook works the stops out for (`svmProgramStops`).
+   */
+  readonly stoppable?: readonly string[];
+  /** How many times each of those inside a loop runs, by its derivation; null where uncounted. */
+  readonly stoppableRuns?: CompiledSauceProgram["stoppableRuns"];
+  /**
+   * On Solana, the values the SDK added to `main` after its accounts, one for each swap compiled
+   * held to a stop (`held`): its stop.
    */
   readonly derivedValues?: CompiledSauceProgram["derivedValues"];
+  /** The program compiled again with the swaps `stops` names held to a stop, the Stopped form. */
+  held(stops: readonly string[]): CompiledProgram;
   /**
    * The program with `args` encoded after it, and after them each of `derivedValues`' (`stops`, 0
    * for each by default): the `program` of `Pot.cook(engine, program)`.
@@ -79,6 +88,7 @@ function load(input: ProgramInput): { source: string; path: string | undefined }
 function valueOf(type: EntryType, returned: Returned): Value {
   switch (type.kind) {
     case "uint":
+    case "int":
       return BigInt(returned as string);
     case "array":
       return (returned as readonly Returned[]).map((element) => valueOf(type.of, element));
@@ -172,7 +182,11 @@ function encodeArguments(
   );
 }
 
-export function compileProgram(input: ProgramInput, chain: CanonicalChain): CompiledProgram {
+export function compileProgram(
+  input: ProgramInput,
+  chain: CanonicalChain,
+  stops?: readonly string[],
+): CompiledProgram {
   const { source, path } = load(input);
   // Relative imports resolve beside the file, or the working directory for source text.
   const dir = path === undefined ? process.cwd() : dirname(path);
@@ -183,6 +197,7 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
         const file = resolve(dir, spec);
         return existsSync(file) ? new Uint8Array(readFileSync(file)) : undefined;
       },
+      ...(stops === undefined ? {} : { stops }),
     });
   } catch (error) {
     const name = path ?? "the program";
@@ -205,7 +220,12 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
     ...(compiled.derivedAccounts === undefined
       ? {}
       : { derivedAccounts: compiled.derivedAccounts }),
+    ...(compiled.stoppable === undefined ? {} : { stoppable: compiled.stoppable }),
+    ...(compiled.stoppableRuns === undefined ? {} : { stoppableRuns: compiled.stoppableRuns }),
     ...(compiled.derivedValues === undefined ? {} : { derivedValues: compiled.derivedValues }),
+    held(binding) {
+      return compileProgram(path === undefined ? { source } : { source, path }, chain, binding);
+    },
     payload(args = [], stops = []) {
       if (
         args.length === 0 &&

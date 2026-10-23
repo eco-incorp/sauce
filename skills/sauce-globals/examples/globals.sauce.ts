@@ -33,7 +33,7 @@ function main(
   const me = ctx.self();
 
   // Registered symbols, and the Pot's own balance.
-  require(USDT.balanceOf(me) >= usdtAmount, "not enough USDT in the Pot");
+  require(me.USDT >= usdtAmount, "not enough USDT in the Pot");
   USDT.transfer(payee, usdtAmount);
 
   // Any ERC-20, bound once: move `payer`'s tokens, which it approved to this Pot, to `payee`.

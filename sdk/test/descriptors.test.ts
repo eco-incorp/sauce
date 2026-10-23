@@ -116,19 +116,29 @@ describe("descriptors: contract-name normalization", () => {
 });
 
 describe("descriptors: hole representation (E2.4 seam)", () => {
-  it("uniswap-v3 QuoterV2 resolves on ethereum + monad + arc, undefined on base (the hole)", () => {
+  it("uniswap-v3 QuoterV2 resolves on every chain Uniswap deploys it; SwapRouter is a hole on base", () => {
     const d = getDescriptor("uniswap-v3", "QuoterV2")!;
-    // QuoterV2 is vendored only where the deploy record carries it — ethereum, monad and arc — and
-    // is a genuine hole on base (whose entry omits quoterV2). The hole on base is the load-bearing
-    // part.
-    expect(d.chains).toEqual(["ethereum", "monad", "arc"]);
-    expect(describeContract("ethereum", "uniswap-v3", "QuoterV2")).toBeDefined();
-    expect(describeContract("monad", "uniswap-v3", "QuoterV2")).toBeDefined();
-    expect(describeContract("arc", "uniswap-v3", "QuoterV2")).toBeDefined();
-    expect(describeContract("base", "uniswap-v3", "QuoterV2")).toBeUndefined();
+    // QuoterV2 is vendored on every chain the registry's Uniswap V3 entries cover, Base included.
+    expect(d.chains).toEqual([
+      "ethereum",
+      "optimism",
+      "bsc",
+      "polygon",
+      "monad",
+      "arc",
+      "base",
+      "arbitrum",
+      "celo",
+      "avalanche",
+    ]);
+    expect(describeContract("base", "uniswap-v3", "QuoterV2")).toBeDefined();
+    // A genuine hole: the legacy SwapRouter was never deployed on Base, whose entry carries the
+    // protocol's other contracts. The hole on base is the load-bearing part.
+    expect(describeContract("base", "uniswap-v3", "Factory")).toBeDefined();
+    expect(describeContract("base", "uniswap-v3", "SwapRouter")).toBeUndefined();
   });
 
-  it("swapRouter (4 chains, no Base) vs swapRouter02 (5 chains, incl. Base) reflect the real uneven vendored coverage", () => {
+  it("swapRouter (4 chains, no Base) vs swapRouter02 (10 chains, incl. Base) reflect the real uneven vendored coverage", () => {
     const swapRouter = getDescriptor("uniswap-v3", "SwapRouter")!;
     const swapRouter02 = getDescriptor("uniswap-v3", "SwapRouter02")!;
     expect(swapRouter.chains).not.toContain("base");
@@ -206,8 +216,8 @@ describe("descriptors: registry totals + purity", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
     const kinds = (kind: string) => DESCRIPTORS.filter((d) => d.kind === kind).length;
     expect(protocolSlugs).toEqual(new Set(listProtocolSlugs()));
-    expect(DESCRIPTORS.length).toBe(316);
-    expect(kinds("singleton")).toBe(226);
+    expect(DESCRIPTORS.length).toBe(313);
+    expect(kinds("singleton")).toBe(223);
     expect(kinds("address-only")).toBe(51);
     expect(kinds("interface")).toBe(39);
   });

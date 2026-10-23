@@ -33,7 +33,7 @@ function main(
   inBaseQty: bool,
   qty: Uint256,
   minOut: Uint256,
-): { baseFlow: Uint256; quoteFlow: Uint256 } {
+): { baseFlow: Int256; quoteFlow: Int256 } {
   const dex = ICrocSwapDex.at(dexAddress);
   return dex.swap(base, quote, poolIdx, isBuy, inBaseQty, qty, 0, 0, minOut, 0);
 }
@@ -43,11 +43,12 @@ function main(
 - `base`: Base token address (lower address of the pair by convention)
 - `quote`: Quote token address (higher address of the pair)
 - `poolIdx`: Pool index identifying the pool type (e.g., `420` for standard pools on Ethereum)
-- `isBuy`: `true` = buy base with quote (swap quote->base); `false` = sell base for quote (swap base->quote)
-- `inBaseQty`: `true` = qty is denominated in base token; `false` = qty is in quote token
-- `qty`: Amount to swap (in wei)
-- `minOut`: Minimum output for slippage protection
+- `isBuy`: `true` pays base and receives quote (base -> quote); `false` pays quote and receives base (quote -> base)
+- `inBaseQty`: `true` = `qty` is denominated in base; `false` = `qty` is denominated in quote. When `isBuy === inBaseQty`, `qty` names the input; when they differ, it names the output
+- `qty`: Amount in the selected token's smallest units
+- `minOut`: Minimum output for slippage protection; when `qty` names the output, the maximum input instead
 - Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit, so `minOut` is the only bound), `reserveFlags` (no reserve usage)
+- Returns `baseFlow` and `quoteFlow` as `Int256` (ABI `int128`): positive flows are tokens paid by the caller, negative flows are tokens received by the caller
 
 ## Deployments and ABI
 
@@ -61,7 +62,8 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Same contract address on both Ethereum and Scroll
 - `poolIdx` identifies the pool type: different pool indices have different fee rates and tick spacing
 - Common pool indices: `420` (standard on Ethereum), `36000` (stable pairs on Scroll)
-- `isBuy` + `inBaseQty` together determine the exact swap semantics
+- Exact-input: `isBuy: true, inBaseQty: true` specifies base paid; `isBuy: false, inBaseQty: false` specifies quote paid
+- Exact-output: `isBuy: true, inBaseQty: false` specifies quote received; `isBuy: false, inBaseQty: true` specifies base received
 - `tip`: Optional tip in basis points for priority execution (usually `0`)
 - `limitPrice`: Price limit as sqrt price Q64.64 fixed-point (`0` is no limit, which leaves `minOut` as the only bound)
 - `reserveFlags`: Bitmask for using surplus collateral (set to `0` for standard swaps)

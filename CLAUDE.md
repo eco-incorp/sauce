@@ -7,18 +7,44 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 repository maintenance instructions belong here.
 
 The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
-**Tutorials** (learn by doing: the EVM quick start `docs/guides/quick-start.md`, the Solana quick
-start and the first intent, on `docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`),
-**How-to guides** (one task a page), **Concepts** (explanation: what a Pot is, why atomic) and
-**Reference** (flags, API, the generated pages). `docs/README.md` is the map: every page is listed
-under exactly one of its four `##` sections, and says which on its breadcrumb line (`**How-to
-guide** · ` before its links); `docs:check` holds both. A page stays in its mode: a
+**Tutorials** (learn by doing), **How-to guides** (one task a page), **Concepts** (explanation: what
+a Pot is, why atomic) and **Reference** (flags, API, the generated pages, the changelog).
+`docs/README.md` is the map: every page is listed under exactly one of its four `##` sections, and
+says which on its breadcrumb line (`**How-to guide** · ` before its links); `docs:check` holds both.
+The part is the index's and the breadcrumb's, never the folder's: a tutorial lives in `docs/guides/`
+beside the how-tos, and a page keeps its path when it changes part. A page stays in its mode: a
 how-to does not wander into a concept essay, a concept page lists no flags, and a fact has one
-owning page that the others link instead of repeating. No history or changelog prose. Every page
+owning page that the others link instead of repeating. No history or changelog prose, except in
+`docs/changelog.md`, which is the one page for it: each SDK 0.99.x release, its SauceScript
+changes, and the compiler and engine changes it shipped. Every page
 then opens with a short plain-words intro in a blockquote: a few short sentences and an everyday
 analogy, any Sauce word in it explained on the spot (the [glossary](docs/concepts/glossary.md) maps
 each to a familiar one). The real content follows it, examples before rules, edge cases in a section
 at the end. Say "simulate", never "rehearse".
+
+**The learning path.** The tutorials take a reader who knows TypeScript, a wallet, a transaction and
+a token, but not Sauce, from nothing to proficient, read in this order, which is the order
+`docs/README.md` lists them under `## Tutorials`:
+
+1. `docs/guides/quick-start.md`, "Quick start" (on `docs/examples/pay.sauce.ts`)
+2. `docs/guides/write-your-first-program.md`, "Write your first program"
+3. `docs/guides/swap-by-name.md`, "Swap by name"
+4. `docs/guides/solana-quick-start.md`, "Solana quick start"
+5. `docs/guides/typescript-quick-start.md`, "Sauce from TypeScript"
+6. `docs/guides/test-your-first-program.md`, "Test your first program"
+7. `docs/guides/agent-quick-start.md`, "Your first agent session"
+
+A tutorial runs an example `docs/examples/` already has and a suite already executes; it does not
+add a program of its own. A tutorial that builds a program up step by step ends on such an example,
+quoted whole, and adds no other program: its steps are versions on the way to it. Every
+hand-written page follows one shape: its title; its breadcrumb (`**Tutorial** · `,
+`**How-to guide** · `, `**Concept** · ` or `**Reference** · `, then its links, copied from a page
+of the same part); the blockquote intro; near the top, who the page is for and what it needs, each
+prerequisite linked to the page that covers it; and at the end `## Next`, linking the next step of
+the path or the closest related page. A tutorial also has a "You will need" list (real funds, when
+it spends them, said first) and a "You will have" outcome, follows one path with no choices, shows
+a result at each step, and its `## Next` names the next tutorial and the concept that explains what
+it just did. `docs:check` fails a page listed under `## Tutorials` with no `## Next` heading.
 
 ## What this repo is
 
@@ -88,8 +114,8 @@ regenerates `sdk/runtime/`.
 
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
-| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 134-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript; `sauce actions` lowers them                                           |
 | `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's building tools (and, over stdio, wallets), the agent skills   |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | `/testing` (from `dev-tools/dist/testing`)                                                                                                            | The testing kit (`src/testing`); the dev harness: local node scripts, compile helpers, SVM Kitchen runner |
 
@@ -200,19 +226,16 @@ key — on Ethereum, Base and Avalanche state, against the same trade by address
 `holdings.sauce.ts` as its header's `sauce simulate` line says, on Ethereum and Base state, and
 holds what it returns to each chain's own pool and the balances the Pot was given.
 `docs-examples.mainnet` (`test:mainnet`) executes the manual's router, venue and README examples
-(`docs/examples/router-route`, `router-swap`, `venue-where-deployed`, `cross-chain-intent`) as their
-runners build them, IMPORTING the runners for their exact bytes, and runs the `sauce run` usage
-line of each that has one as written, through `runCli`, on Ethereum, Base and OP Mainnet state;
-each output is held to the venues' own quotes, and `cross-chain-intent`'s published intent to Base's
-own Portal. Importing a runner is why `actions/tsconfig.json` sets
+(`docs/examples/router-route`, `router-swap`, `venue-where-deployed`) as their runners build them,
+IMPORTING the runners for their exact bytes, and runs the `sauce run` usage line of each that has
+one as written, through `runCli`, on Ethereum, Base and OP Mainnet state; each output is held to
+the venues' own quotes. Importing a runner is why `actions/tsconfig.json` sets
 `rootDir: ".."`: the runners import `@eco-incorp/sauce` by its own name, a self-reference
 TypeScript resolves only with a root; `tsconfig.build.json` pins its own `rootDir` to `src`, so the
 build's output does not move.
 `examples-cookbook.mainnet` (`test:mainnet`) runs every EVM program of the `sauce-examples`
 skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
-results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances, and
-its cross-chain cascade filled hop by hop with `sauce intent fill` (Ethereum's eco-routes Portal
-postdates the pinned block, so the v2.12.0 fixture is planted there; Base's is the deployed one).
+results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances.
 The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
@@ -231,8 +254,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version (2.5.0 uses v12-evm 1.2.0 / v12-svm 1.3.0; 2.4.0 shares SVM 1.3.0 but uses EVM 1.1.0; 2.3.0 output must not reach them), and the SVM ISA revision does not move between them, so nothing else can tell
-  them apart. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
+  package version (2.6.0 uses v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
+  An ISA label is not a compatibility check. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
   Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
@@ -414,16 +437,16 @@ compile(options: CompileOptions): CompileResult
 
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
-`true`), `cache` (default `true`), and `compactArgs` (default `false`) are optional. All four manifests pin the
-compiler exactly to **2.5.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
-`isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
-`entrySchema: Uint8Array`, and optional `manifest: AccountManifest`. `manifest` is the SVM account
-contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
-and appended separately. With `compactArgs: true`, pass the returned schema and positional values
-to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
-`decodeCompactArguments`. Pair the artifact with an engine by exact version (`releases.json`,
-above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged`/`args` compile option; the SDK owns
-its SVM layout types (`sdk/src/svm/layout.ts`).
+`true`), `cache` (default `true`), `chain`, `chainProfiles`, `entryKind` and scalar `args` are optional.
+All four manifests pin the compiler exactly to **2.6.0**, matching the lockfile.
+`CompileResult` contains `bytecode: Uint8Array`, `isaRevision: "stack-v3"`,
+`entryEncoding: "abi-v1"`, `entryParams`, `entrySignature`, nested `programs` reports, and optional
+`manifest: AccountManifest`. `manifest` is the SVM account contract, absent on EVM.
+Compile-time values affect bytecode; runtime entry arguments are encoded and appended separately.
+Use `routes.encodeEntryArguments` for SDK programs; raw `entryParams` can mark top-level fixed-size
+tuples `indirect: true`, which an encoder must honor. Pair the artifact with an engine by exact
+version (`releases.json`, above). `entryKind: "closure"` accepts function-expression source text;
+raw scalar `args` binds inputs at compile time. The SDK owns its SVM layout types (`sdk/src/svm/layout.ts`).
 
 SVM settlement execution verification defaults to `wireFormat: "gated-v1"`: raw engine CPI
 data with the 65-byte owner/salt/bump gate header and the full accounts including the trailing Pot
@@ -435,8 +458,8 @@ locations; resolver and target-capability errors need not contain a source span.
 
 The route adapter is a separate contract: `compileSauceRoute` returns one program in
 `compiled.bytecode: Uint8Array[]`, an empty `warnings` array, rewritten source, and encoded calls.
-It does not expose `compactArgs` or retain the raw compiler's metadata/schema/manifest. Use the raw
-`/compiler` export for those. Both `/compiler` and route compilation run in Node and in a browser
+It retains the runtime entry metadata needed by SDK argument encoding; use the raw `/compiler`
+export for the complete compile report. Both `/compiler` and route compilation run in Node and in a browser
 through one code path, `sdk/src/wasm-compiler.ts`: in a browser `await ready()` (from the root or
 `/compiler`, forwarding to the compiler's `/ready`) before compiling; in Node nothing needs it.
 Nothing browser-facing reads the filesystem. The std sources, recipe programs, protocol ABI twins
@@ -446,6 +469,10 @@ the gitignored `src/embedded/*.generated.ts` (regenerated by `build`, `typecheck
 not add a `node:*` import or `Buffer` to shipped code: `svm/engine-artifacts` (file paths for a
 local LiteSVM harness) is the one Node-only module, on its own subpath and in no barrel. CI bundles
 every export for the browser and compiles in headless Chromium, so a regression fails there.
+
+**There is no cross-chain intent surface**: no Portal encoders, no intent commands, no intent tools.
+A chain export is a plain namespace object, so a program that calls one (`Base(() => …)`) fails to
+compile.
 
 **The authoritative description of that surface is the package's own typings**
 (`node_modules/sauce-compiler/node/sauce_wasm.d.ts`), which document each option in detail —
@@ -470,13 +497,14 @@ first. Keep the page version-free, free of engine internals and free of placehol
 skills' wording rules).
 
 Compiler migration inventories and implementation plans have been removed. Git history retains
-those investigations; do not add them back to the public SDK manual.
+those investigations; do not add them back to the public SDK manual. What a release changed is
+`docs/changelog.md`'s alone (see "Publishing").
 
 **`sdk/`** — registries plus executable SDK logic. `src/protocols/<slug>/` holds per-protocol `info`,
 `addresses`, `abis` as-const, and `functions` SauceScript templates; `src/protocols/index.ts` is the
-query registry. `src/routes/` implements namespace rewrites, compiler integration, intents, and
-Portal encoding; token/deposit builders and EVM/SVM clients construct executable programs,
-account plans, and transactions. `src/skills/loader.ts` is the `/skills` export, which serves the
+query registry. `src/routes/` implements namespace rewrites and compiler integration;
+token/deposit builders and EVM/SVM clients construct executable programs, account plans, and
+transactions. `src/skills/loader.ts` is the `/skills` export, which serves the
 per-protocol documents; those documents are the `sauce-protocols` agent skill's
 `skills/sauce-protocols/references/*.md` (see "Agent skills" below), embedded at build time. `src/chains/`, `src/recipes/`, `src/core/types.ts` hold shared
 chain and recipe definitions. **SDK tests compile every protocol's
@@ -595,7 +623,7 @@ spelling on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZe
 `SafeERC20`, this library, `safe.ts` and the three route-body spellings (each through
 `compileSauceRoute`) over one matrix of tokens (false, empty, no code, a word of 2, 1/31/64-byte
 returns, USDT's standing allowance, honest refusals) and requires identical outcomes, with the raw
-`IERC20.at` binding beside them as the contrast and the plain-transfer recipe executed too.
+`IERC20.at` binding beside them as the contrast.
 CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
 two token program ids the SVM arm guards on (SPL Token and Token-2022) from their base58 addresses,
 and each selector the EVM writes spell out by hand from `keccak256` of its signature, and counts them
@@ -642,7 +670,7 @@ resolves it off disk.
 
 `src/std/router/` is **`@sauce/router`**, the SauceScript swap library, SDK-owned and shipped the
 same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `resolveSdkPackage`
-maps it like `@sauce/token`, so every SDK compile — route bodies, `openRoute`, actions — resolves it
+maps it like `@sauce/token`, so every SDK compile — route bodies, programs, actions — resolves it
 with no option. It has two arms and, like `@sauce/token`, no neutral `router.js`: no venue is on
 both targets, so a function one arm lacks fails at its import, naming it ("`woofi` is not exported
 by module" on Solana). The EVM arm (`router.evm.js`) is THE one implementation of a swap at its eleven venues: one exported function
@@ -776,9 +804,9 @@ where the data says it; the slot forms write `minOut` at least 1. Every exact-in
 instructions (`test/svm/router-accounts-exact-in.test.ts`), and in `router-data.ts`'s `EXACT_IN`
 table (`routerSvmDataTemplate`: `prefix ‖ u64le(amountIn) ‖ suffix`, divisor 1, its options the
 account order's `aToB`, `minOut` and the venue's own fields), held byte for byte to every vector
-(`test/svm/router-data-exact-in.test.ts`). Two compiler facts shape it, both
-measured on compiler 2.5.0 and the released engine: a function other than `main` cannot build an
-account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
+(`test/svm/router-data-exact-in.test.ts`). Two historical measurements shaped these forms,
+on compiler 2.5.0 and the then-released engine (not remeasured for compiler 2.6.0 / v12-svm 1.4.0):
+a function other than `main` cannot build an account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
 Array(n)` holds only numbers, a function cannot return accounts, and account arrays cannot be
 concatenated), so a venue whose swap takes more accounts has only its `Cpi` and `Data` forms; and
 each account read out of an array argument and passed to `svm.call` costs ~1.4k compute units more
@@ -805,33 +833,22 @@ instruction lands, the suite's `WALLET_ONLY` cases send it from a wallet, built 
 nothing when `from_amount <= min_swap_amount` (a u128 at its pool's offset 155): a WOOFi fixture
 with those bytes patched swaps nothing and still succeeds, which is not a swap.
 
-`@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
-list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
-exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route body opened that
-way with **zero import**. `openRoute` and no further: `chainAmbient` has exactly one call site
-(`intent-dsl.ts`), and `compileSauceRoute` passes its caller's `ambient` straight through without
-merging this list in — so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because `embedded/resolve.ts`'s `resolveSdkPackage` maps the bare
+`@sauce/token` is the **default ambient MODULE** of a program. `manifest.json`'s `ambient`
+list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `compileSauceProgram` compile, so
+its exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any program compiled
+that way with **zero import**. `compileSauceProgram` and no further: it is the one compile that
+calls `chainAmbient` (`source-globals.ts` reads it only to list a chain's names), and
+`compileSauceRoute` passes its caller's `ambient` straight through without merging this list in —
+so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because
+`embedded/resolve.ts`'s `resolveSdkPackage` maps the bare
 `@sauce/token` specifier to the embedded copy of `src/std/token`, ahead of any caller
 `resolvePackage` — an ambient module the compile can't resolve makes EVERY route throw, so that
 list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
-
-**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
-the body and the delivery argument resolve on the destination and the reward on the enclosing
-chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
-its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
-entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
-override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
-treated alike. Caller names no chain uses (`RECIPIENT`) hold at every depth. Protocol accessors
-never had the problem: they fold each chain's literal address in. `openRoute` passes its own
-chain's ambient defines as `RouteScope.chainDefines` beside the options rather than in
-`compile.defines`, so its `defines` stay the caller's; `compileScopedRoute` takes the scope and
-`compileSauceRoute` is that with an empty one. Two defects came from mixing these up (Arbitrum's
-USDC as a reward on Base, Base's in an Arbitrum body). `routes-intent-reward-chain.test.ts` records
-every level's compile on three paths and decodes each level's `publishAndFund`;
-`routes-intent-chains.e2e.test.ts` runs them on three anvils whose USDC differs. A test that gives a
-symbol one address everywhere (a `tokens` override, a define) cannot see either defect.
+`compileSauceProgram` passes its chain's ambient defines as `RouteScope.chainDefines` beside the
+options rather than in `compile.defines`, so its `defines` stay the caller's; `compileScopedRoute`
+takes the scope and `compileSauceRoute` is that with an empty one.
 
 The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
 t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
@@ -840,8 +857,8 @@ t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** ar
 token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
 `import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
 write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.3.0 through 2.5.0, accepts `import { a as b }` and emits
-byte-identical code), which is what keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
+is ALIASED (the pinned compiler, 2.6.0, accepts `import { a as b }`), which keeps a program's own
+`transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
 and a program declaring one is refused by name. It is an explicit import, not the ambient module,
 because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
 method on `Token(...)`) stays on the typed `IERC20.at(...)` binding — a `uint256` is always there.
@@ -855,17 +872,25 @@ unchecked write again). Both rewrites are shadow-safe (a program that binds `Tok
 the name) and svm-rejected: the SVM arm's writes need SPL account slots the sugar has nowhere to put.
 The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
 needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
-`@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
-(`Base(() => { USDC.transfer(...) })` inside a program, every statement a `transfer`/`approve` on a
-symbol or literal `Token(...)` — `intent-sugar.ts#isDirectCallBody`) is different again: it lowers
-to plain `route.calls` the Portal's Executor runs raw, not to a Sauce program, so it gets the
-Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return transfers
-work, and every approve is emitted as `approve(spender, 0)` then `approve(spender, amount)` (one
-Executor serves every intent, so a standing allowance is realistic). A `false`-returning token is
-caught only at delivery (the Portal's `safeTransferFrom`); the Executor's own `false` transfer or
-approve fulfils with nothing moved. `routes-nest-dynamic.e2e.test.ts` runs all of that through a
-real Portal and Executor and PINS the gap. Any non-token statement makes the body a program, whose
-writes are SafeERC20 — that is the documented way to get the checks.
+`@sauce/token` _export_ a real `Token` value (blocked by the M1 subset).
+
+**The balance shorthand `<holder>.<TOKEN>` is `<TOKEN>.balanceOf(<holder>)`, to the byte**
+(`token-rewrite.ts#collectBalanceSites`; on Solana `svm-token-rewrite.ts`). It emits the symbol, not
+its address, so a define reaches both spellings, and takes any address-valued holder: the holder's
+text stays in place for the accessor pass after it (`UniswapV4.PoolManager.WETH`,
+`UniswapV4.StateView.poolManager().USDC`), `X.at(a)` (`.view`, `.lib`) on a contract type — a
+registry contract or interface, an ABI imported from a `.json` module, a name the program does not
+declare; never a name it binds to a value, which shadows an import of that name — and
+`<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
+token's own contract is one (`WETH.ETH`; on Solana a mint, its token accounts derived off its key),
+an undeclared `self` or `ctx.self()` is the Pot and a declared `self` an ordinary variable (as on
+Solana, and for the accessor pass's bare `self`). The chain's native coin
+(`chains/index.ts#nativeCoinSymbol`) takes it too: `ctx.selfBalance()`/`ctx.balance(h)` on an EVM
+chain, `ctx.balance(<account>.address)` on Solana, refused where a token shares the symbol (Arc's
+USDC). Being textual it sees no types, so it refuses by name what the program's text says is not an
+address — a record or a list (`balance-holder.ts`), an interface with no address — and a misspelled symbol is named once the compile fails, from the compiler's byte span
+(`unknown-global.ts#unknownBalanceError`). A struct a contract call returns is not seen: a field of
+one named like a token would be read as a balance.
 
 **On Solana the token methods and the venue namespaces add their accounts to `main`.**
 `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)`,
@@ -913,7 +938,7 @@ accounts: a route's `execution.accounts` precede the compile. Executed in
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
 value per canonical chain (`Base`, `Solana`, …) plus `chain` and `Token`, re-exported from the
-package root, each composed in `routes/composed.ts` (callable + `.chain`/`.route` + the lazy
+package root, each composed in `routes/composed.ts` (a plain namespace object: `.chain` + the lazy
 contract tree, + the svm venue tree on an svm chain). **Importing the SDK touches nothing on
 `globalThis`**; `installRouteGlobals()`/`uninstallRouteGlobals()` (`routes/globals.ts`) remain as an
 opt-in for a host that wants the bare-name spelling at run time, hand out the SAME memoised objects,
@@ -959,7 +984,7 @@ address (`spec.ts`'s `oneOf` alternatives, which the schema expresses as `oneOf`
 reads the pool on chain and reverts on the zero address. `quoteAction` and `compileSplitSwap` refuse
 a key (a quote is an `eth_call` at the pool). `programSource` (`compose.ts`, not exported from the
 index) is what `sauce actions` lowers with. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
-`programSchema`, `compileProgram`, `programIntent`, `quoteAction`, `compileSplitSwap`,
+`programSchema`, `compileProgram`, `quoteAction`, `compileSplitSwap`,
 `ProgramError` and the types — and the types ARE the JSON (no per-action chain, one `amount`, one
 `amountOutMin`, `recipient` everywhere); keep it that way rather than adding parallel entry points.
 `spec.ts` is the single field table: `program.ts` parses/validates against it (located issues,
@@ -980,32 +1005,23 @@ bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeE
 `evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
 `view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
 amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
-return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` opens intents
-(`programIntent`, on the program's own chain) and compiles standalone programs with runtime
-arguments (ABI-v1, or compact-v1 with fixed-width offsets). `to-quote.ts` builds the `eth_call`
+return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` compiles standalone
+programs with ABI-v1 runtime arguments. `to-quote.ts`
+builds the `eth_call`
 quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.
 `AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `wallet <verb>`, `tx`, `pot`,
-`globals`, `inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and
-(`solana.ts`) Solana. `run.ts` dispatches `intent <verb>` (`INTENT_VERBS`: publish, fill, prove,
-claim, refund, cancel, status, list, show, import; no verb at a terminal is the picker,
-`interactive.ts`), `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) and
-`pot <verb>` (`POT_VERBS`: list, import; `sauce pot` with no verb predicts and deploys) as
+executable: `compile`, `actions`, `simulate`, `run`, `wallet <verb>`, `tx`, `pot`, `globals`,
+`inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`)
+Solana. `run.ts` dispatches `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export)
+and `pot <verb>` (`POT_VERBS`: list, import; `sauce pot` with no verb predicts and deploys) as
 commands of their own (`VERBS`), each with its own flags and `--help`; the skills checker reads the
-verbs from each command's `--help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
-(`intentStatus`, `buildFill`/`planFill`, `buildProve`, `buildClaim`, `buildRefund`, `buildCancel`,
-`importIntents`) taking an `IntentRecord` and an endpoint per chain and returning unsigned
-transactions as JSON, with no key, store, prompt or environment, which the MCP server calls as they
-are; the calldata is `routes/portal.ts`'s. `intent-commands.ts` adds the signer, the approvals
-(`--auto-approve`) and the store; `store.ts` is the store under `~/.sauce/intents` (an
-`intent.json` linked into place once, an append-only `events.jsonl`, nothing read and written back;
-it imports only Node's modules, so `cli-store.test.ts` runs it in child processes).
-`pot-store.ts` is the Pot store beside it, `~/.sauce/pots` (`--pots <dir>`): one owner-only
-`<chainId>/<pot>.json` per Pot, linked into place once, the same mechanics and the same
-child-process test (`cli-pot-store.test.ts`). A Pot's identity is its chain id AND, on Solana, its
+verbs from each command's `--help`. `pot-store.ts` is the Pot store, `~/.sauce/pots`
+(`--pots <dir>`): one owner-only `<chainId>/<pot>.json` per Pot, linked into place once, nothing
+read and written back; it imports only Node's modules, so `cli-pot-store.test.ts` runs it in
+child processes. A Pot's identity is its chain id AND, on Solana, its
 cluster (by genesis hash, `pots.ts#clusterOf`; filed as `<chainId>-<cluster>` off mainnet), since
 the Kitchen's id, and so a Pot's address, is the same on every cluster. A second deployment of one
 Pot address (a fork with the chain's id, or a Solana Pot closed and created again) is kept beside
@@ -1015,43 +1031,14 @@ deployed from the chain (the Kitchen's `PotDeployed` in a receipt that succeeded
 in a Solana transaction that succeeded; `pots.ts`, which tells each Pot's release from its address
 under every `releases.json` Kitchen and hash), put it on `Sent.pots`/`SvmSent.pots` (so every JSON
 that reports a sent transaction carries `pots`), and hand the transaction to `keep.ts#keepLanded`.
-That is the ONE hook every store a landed transaction feeds attaches to (`LocalStores`): it gives
-the transaction to each store of the current scope, which `runCli` sets per command and the local
-MCP server per tool call (`AsyncLocalStorage`, so scopes keep apart). Only the executable gives the
+That is the ONE hook a store a landed transaction feeds attaches to (`LocalStores`, the Pot store
+its one member): it gives the transaction to each store of the current scope, which `runCli` sets
+per command and the local MCP server per tool call (`AsyncLocalStorage`, so scopes keep apart).
+Only the executable gives the
 Pot store's directory (`main.ts`'s `potsDir`, like `publicRpcs`), so a test records nothing unless
 it passes `--pots` or `CliIo.potsDir`. `sauce pot list` and `sauce pot import` (`POT_VERBS`,
 `pot-commands.ts`) read and add to it; `cli-pots.e2e.test.ts` and `cli-solana.e2e.test.ts` hold
-every path that deploys a Pot to its record.
-The intent store attaches to that hook too, and NO COMMAND WRITES AN INTENT EVENT ITSELF:
-`intent-keep.ts` reads each landed transaction for what it did — `IntentPublished` (stored, with
-`funded`), and the Portal's `IntentFulfilled`, `IntentProven` (with each Hyperlane `DispatchId`),
-`IntentWithdrawn`, `IntentRefunded` and `IntentCancelled`, each counted only from the intent's own
-Portal on that side; on Solana the Portal's `fulfill`, `prove` and `cancel` instructions. That is
-what makes `sauce send`, `sauce_send` and `sauce_wallet_send` record exactly what the lifecycle
-commands do. Unlike the Pot store, `runCli` always keeps it, where `--store`, `CliIo.storeDir` or
-else `~/.sauce/intents` puts it, as the commands always did (the suites pass `storeDir`). An intent
-the store does not hold yet (named by a file or a record) is recorded once the command or tool
-names it with `keep.ts#knowIntents` (`IntentStore.know`, in memory only); do not add a second,
-explicit append beside the hook, which would record the event twice.
-`cli-lifecycle.e2e.test.ts` runs a whole intent on two anvils with eco-routes' own Portal and
-HyperProver (`eco-routes-anvil.ts`, immutables rewritten where the Portal, its Executor and vault
-implementation name each other); only Hyperlane's relay is mocked (`evm/fixtures/MockMailbox.sol`).
-An intent to Solana goes the same way, its Solana steps in `lifecycle-svm.ts` (the fulfill
-marker read, each fill, proof or cancellation built as an `SvmTxJson`: a base64 transaction, the
-fee payer's signature empty, the fresh Hyperlane keys a proof needs already signed; `buildFill`,
-`buildProve` and `buildCancel` take the Solana key as `from`) over `svm/portal.ts`'s pure
-instructions, and `intent-svm.ts` for the fill's rehearsal and `--keypair` sending. A route
-can cook on the Portal executor's Kitchen Pot (`svmIntentCookInstruction`); its calls must be
-committed with the flags the fill TRANSACTION gives each account (`svmRouteCalls`), which the
-Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from the pinned dump
-`test/fixtures/eco-routes-svm/` (`scripts/dump-eco-routes-svm.mjs --redump|--check
---rpc-config <file>`, the sha256 of each program and account in its `manifest.json`, held by
-`eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
-and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
-it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
-`cli-intent-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.sauce.ts`
-the same way from an Ethereum anvil, published with `sauce intent publish` (with LiteSVM running the
-released engine and Kitchen, for the program bodies that cook on the Portal executor's Pot). jest
+every path that deploys a Pot to its record. jest
 (`moduleNameMapper`) and `sdk/tsconfig.test.json` (`paths`) map `@eco-incorp/sauce`, `/svm` and
 `/protocols/*` to `src`, so a suite may import a manual example, which imports the package by its
 name, with no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
@@ -1059,7 +1046,7 @@ header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the
 `cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 `cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
-(`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the
+(`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs from a pinned dump: the
 programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
 take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
 lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
@@ -1075,8 +1062,8 @@ to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as
 cannot import a package not yet built — and `actionsCommand` is also what the MCP server's
 `sauce_actions` tool calls. It adds no
 compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`, with the
-chain bundle `openRoute` uses: `chainAmbient`'s modules and the chain's names as a `RouteScope`, so
-an intent the file opens resolves its body on its own chain) — and no encoder or decoder: the cook is
+chain bundle: `chainAmbient`'s modules and the chain's names as a `RouteScope`) — and no encoder or
+decoder: the cook is
 `buildSauceEvmCall`, the Pot `v12PredictPot`/`potSalt`/`sauceEvmDeployPotCall`, arguments
 `encodeEntryArguments`/`decodeEntryArguments`, names `sourceGlobals`, settles
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
@@ -1143,9 +1130,8 @@ through a JSON-RPC shim; the packed check runs the installed bin through `npx`. 
 `sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
 `skills/<name>/` and ship in the package (see "Agent skills" below).
 
-What a command's input MEANS — the chain a program runs on, whether its defines reach it, `main`'s
-arguments bound into the intents a wallet publishes, the Pot a cook names, its funding and assumed
-balances — lives in `inputs.ts`, taking plain values, so a
+What a command's input MEANS — the chain a program runs on, whether its defines reach it, the Pot
+a cook names, its funding and assumed balances — lives in `inputs.ts`, taking plain values, so a
 second front end applies the same rules: `run.ts` reads flags into it, and the MCP server reads
 tool arguments into it.
 
@@ -1156,37 +1142,23 @@ owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript
 MCP SDK, an optional peer dependency, as zod is: `optional.ts#provide` finds or installs them first);
 `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's building half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
-`sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
+`sauce_pot`, `sauce_simulate`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,
 `sauce_dev`, `sauce_install_skills`), because many clients never read resources. Each command tool
 calls the function the matching command calls (`compileCommand`, `txCommand`, `simulateCommand`, …)
 and returns its JSON as structured content, so a change to a command reaches its tool with no edit
 in `mcp/`; do not reimplement command logic there. `sauce_actions` calls `actions.ts`'s
 `actionsCommand` (and `actionsProgram` for its cook), what `sauce actions` and the program commands
-use. The intent tools (`mcp/src/intents.ts`: `sauce_intent_import`, `sauce_intent_status`,
-`sauce_intent_fill`, `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund`,
-`sauce_intent_cancel`) call `lifecycle.ts` as it is: a call names its intent by its `record`
-(which `sauce_intent_publish` returns per intent) or by `txHash` and its source `chain`, and gives
-each chain's endpoint in `rpcUrls`. Over stdio the server keeps the command's intent store too (on
-by default, `sauce mcp --store <dir>`, `--no-stores` for none; `McpStores.intents`): every intent
-tool also takes `intentHash` from it, `sauce_intent_import` stores through `importCommand`,
-`sauce_intent_list` and `sauce_intent_show` are `listCommand` and `showCommand`, and each intent a
-call names is made known to the store, so what its transactions do lands there through the hook
-above, whichever tool sends them. Over HTTP none of that exists (`intents-store.test.ts`;
-`intents-store.e2e.test.ts` records a whole intent through `sauce_send` and `sauce_wallet_send`). `intents.e2e.test.ts` runs a whole intent
-through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
-signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
-them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.
+use.
 
 Over stdio the server is the command for an agent with no shell, so it keeps the command's stores
 as the command does, in the same directories, BY DEFAULT: `McpServeOptions.stores` (`McpStores`,
-built by `mcp.ts#storesOf`; `--pots <dir>` and `--store <dir>` for other directories,
-`--no-stores` for none) becomes the server's `LocalStores`, which the tool registrar scopes each
+built by `mcp.ts#storesOf`; `--pots <dir>` for another directory, `--no-stores` for none) becomes
+the server's `LocalStores`, which the tool registrar scopes each
 call over (`keep.ts`), saying what it kept in the call's notes. So a Pot a `sauce_send` or
 `sauce_wallet_send` deploys is recorded as `sauce` records it, and `sauce_pot_list`/
 `sauce_pot_import` (`mcp/src/pots.ts`, on a server that keeps the Pot store) call
-`potListCommand`/`potImportCommand`; an intent's steps land in the intent store the same way (see
-the intent tools above). Over HTTP there are no stores, the flags are refused, and
+`potListCommand`/`potImportCommand`. Over HTTP there are no stores, the flags are refused, and
 `createSauceServer` refuses stores beside a guard (`pots.e2e.test.ts`, `transports.test.ts`).
 
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
@@ -1243,8 +1215,12 @@ wallet and the Pot it cooks on — EVM from an `eth_simulateV1` rehearsal's Tran
 traced native transfers, Solana from a simulation reporting its writable accounts (`svm-effects.ts`)
 — and holds it to the policy's `chains`, `to`, `native` and `tokens` limits, per transaction and per
 24 hours from `<name>.ledger.jsonl` (reserve, then sent or released, under a lock file). What cannot
-be measured where a limit needs it is refused. The policy file is parsed strictly (an unknown field
-is an error) and refused when others may write it.
+be measured where a limit needs it is refused. Each native movement counts once:
+`evm/effects.ts#nativeOnce`, which the simulate and run reports read through too, folds what Arc
+reports of its native USDC (its own EIP-7708 Transfer logs from `0xff…fe`, the trace's, its ERC-20's)
+into one, and on Arc that movement is held to `native` and to the `USDC` token limit both (a
+base-unit cap in the ERC-20's 6 decimals: `limitDecimals`). The policy file is parsed strictly (an
+unknown field is an error) and refused when others may write it.
 
 **The MCP server's wallets.** `sauce mcp` over stdio serves the wallet tools by DEFAULT, on the
 CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the server once had to
@@ -1284,15 +1260,15 @@ has no wallet tool. Every password and key in them is generated and thrown away.
 returns is itself what a wallet's send-transaction tool takes: `{ chainId, to, data, value, gas? }`
 beside labels (`what`, `deploysPot`), `value` and `gas` hex quantities (`handoff.ts#hexQuantity`),
 the input of Phantom MCP's `evm_send`, whose schema refuses a decimal value, takes a numeric chain
-id and drops the labels. Each producer writes them so (`lifecycle.ts#txJson`, `commands.ts`'s
-`tx`/`pot` and the Pot's planned deployment, `publish.ts#stepJson`); reports — what was sent, a
+id and drops the labels. Each producer writes them so (`commands.ts`'s `tx`/`pot` and the Pot's
+planned deployment); reports — what was sent, a
 simulation's `transactions` with their `status` — keep decimal amounts, and so do Solana's
 lamports. Readers parse either (`BigInt`, `wallet-send.ts#valueOf`). `sendCalls` on a result is the
 input of Coinbase Wallet MCP's `send_calls` (`{ chain, calls: [{ to, value, data }] }`, one atomic
 batch), placed on the outermost part whose transactions are one chain's by `handoff.ts#handoff`,
 which reads a result the way `plannedTransactions` does and is applied at the two output
 boundaries: the MCP registrar for every tool whose description carries `UNSIGNED`, and the CLI's
-`render()` for commands marked `unsigned` (and the intent verbs' printed transactions). Nothing
+`render()` for commands marked `unsigned`. Nothing
 sent (`hash`), simulated (`status`), not ready, or a Pot already deployed gets one. Solana
 transactions are left as they are: base64, the fee payer first and its signature the only empty
 one, is already Phantom's `solana_send` input. `mcp/test/wallet-mcp-schemas.ts` copies both
@@ -1306,18 +1282,15 @@ the `send_*_transaction` names its documentation uses are not what it lists.
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
-builds transactions on — Ethereum, Base and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
+builds transactions on — Ethereum, Base, Arc and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
 canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
 search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,
 `requireSupported`. The MCP server imports them from there (`mcp/src/sdk.ts`), and the skills'
 generator and checker read the built `cli/support.js`. The gate is called from the command
 functions both front ends share (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s
-deployment, `publishCommand` outside a dry run, `fillCommand` with `send`, the lifecycle `build*`,
-the Solana cook and Pot creation) and again wherever `run.ts` or a tool reaches a network or a key
-first, so the refusal always comes before either. A cook or a publish is refused by its own chain
-and the destination of each intent it opens (`intentDestinations`; a cascade's later levels are not
-seen, the lowering reporting only a program's own intents); a lifecycle step by the chain it is
-sent on. Compiling, simulating, dry runs and reads are never gated, and no flag lifts the gate. A
+deployment, the Solana cook and Pot creation) and again wherever `run.ts` or a tool
+reaches a network or a key first, so the refusal always comes before either. A cook is refused by
+its own chain. Compiling, simulating and reads are never gated, and no flag lifts the gate. A
 refusal is `PreviewChainError` with a `PreviewChainRefusal`: exit 1 from the command, `{ refused }`
 from a tool (`refusedResult`), whose output schema is `refusable(...)` — every field optional
 beside `refused`, because a client validates an error's structured content too. The issue form is
@@ -1325,18 +1298,20 @@ beside `refused`, because a client validates an error's structured content too. 
 `cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
 chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
-the README, the manual's pages and the skills that name the three (`git grep "Ethereum, Base"`). A
+the README, the manual's pages and the skills that name the four (`git grep "Ethereum, Base"`). A
 test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
-`sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
-`sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
-Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents — or a
-contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
-them, `references/`.
+`sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`,
+`sauce-solana-distributed-swap`, `sauce-solana`, `sauce-cli`, `sauce-actions`,
+`sauce-typescript` and the `sauce-examples` index: thirteen. Each is a `SKILL.md` plus `examples/`
+(`.sauce.ts` programs, `.json` actions documents — or a contract ABI, a JSON array, that a program
+beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`, `sauce-chains`,
+`sauce-globals`, `sauce-protocols`, `sauce-script`,
+`sauce-solana-distributed-swap`), `references/`.
 
 - **One shape, one owner per fact.** Every `SKILL.md` opens with a scope paragraph saying what the
   skill owns, then `## When to use` (a table: this skill, or which neighbour instead) and
@@ -1345,8 +1320,8 @@ them, `references/`.
   and what it pins). Each fact has one owning skill, and the others point at it rather than repeat
   it: which chains take transactions and the chain-support request links are `sauce-overview`'s,
   the program header `sauce-script`'s, Solana's accounts and running `sauce-solana`'s, namespace
-  members, aliases and `available(...)` `sauce-globals`'s, the units of each flag `sauce-cli`'s,
-  intents `sauce-intents`'s. `sauce-overview` is the router: the model, the protocol with a user,
+  members, aliases and `available(...)` `sauce-globals`'s, the units of each flag `sauce-cli`'s.
+  `sauce-overview` is the router: the model, the protocol with a user,
   the rules, the chain policy, and the skill map in layers (Start, Write, Build, Compose, Target,
   Run, Index) with routes by need. `skills:check` holds the first two and last two sections of
   every `SKILL.md` (`TEMPLATE_FIRST`, `TEMPLATE_LAST`) and fails any skill but `sauce-overview` that
@@ -1364,10 +1339,8 @@ them, `references/`.
 - **The registry views are generated, by one generator.** `sdk/scripts/gen-skills-references.mjs`
   writes, at the end of every SDK `build`: the globals index
   (`sauce-globals/references/{tokens,protocols,chains}.md`: the NAMES a program uses, no addresses,
-  from `routes.sourceGlobals`, the function `sauce globals` prints, leaving out the `EcoRoutes`
-  namespace: a program opens an intent with the chain syntax, never by calling the Portal or its
-  provers, and the skills keep the Portal to `sauce-intents`); `sauce-chains/references/`
-  (an index and one file per chain: ids, native coin, eco-routes, CCTP domain, tokens with
+  from `routes.sourceGlobals`, the function `sauce globals` prints); `sauce-chains/references/`
+  (an index and one file per chain: ids, native coin, CCTP domain, tokens with
   addresses, and every protocol deployment with how a program names it; and `deployments.json`, the
   Sauce release's addresses, which no chain file repeats); and `sauce-protocols/references/index.md` (every protocol by category, with the
   hand-written "Choosing between them" prose that lives in the generator) plus
@@ -1387,8 +1360,10 @@ them, `references/`.
   `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
   issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
   byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
-  rendered as a guide (its example's whole file in place of the code the skill quotes, and its
-  agent-only sections, When to use and Files, left out: `AGENT_SECTIONS`). The two
+  rendered as a guide, and `docs/guides/solana-distributed-swap.md`, the
+  `sauce-solana-distributed-swap` skill and its venues reference rendered the same way (each
+  example's whole file in place of the code the skill quotes, and the agent-only sections, When to
+  use and Files, left out: `AGENT_SECTIONS`). The two
   renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
   manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
   never sent into `skills/`, nor an agent into `docs/`. And each manual page opens with the
@@ -1399,13 +1374,14 @@ them, `references/`.
   `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
   README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
   exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
-  than an index with more than 3 links per 100 words; every page, generated or not, opening with a
+  than an index or the command reference (`docs/reference/cli.md`) with more than 3 links per 100
+  words; every page, generated or not, opening with a
   plain-words intro (a blockquote after its title and breadcrumb); and `docs/guides/skills.md`'s
   table naming exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
   operation) is written once, in the manual.
 - **One place per release.** The release's addresses (EVM engine, Routers, Kitchen and its
-  implementation, the Pot init-code hash, the shared intent Pot, the Solana programs in base58 and
+  implementation, the Pot init-code hash, the Solana programs in base58 and
   as keys, and every engine `V12_RELEASE_SETS` names) are the same on every chain, so each audience
   writes them in one generated file: `docs/reference/deployments.md` and
   `skills/sauce-chains/references/deployments.json` (prettier-ignored; the MCP server serves it like
@@ -1458,9 +1434,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
-  `INPUT_EXCEPTIONS` entry, per example and name, with its reason; the intent files waiting on
-  `sauce intent publish --args` are listed there, and `docs:check`'s `EXECUTION_EXCEPTIONS` excuses
-  the two not yet executed); and the wording rules below. Its exceptions
+  `INPUT_EXCEPTIONS` entry, per example and name, with its reason); and the wording rules below.
+  Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,
@@ -1468,15 +1443,14 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 - **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
-  SDK records; developer inputs are `<placeholders>`); the Portal and provers only in
-  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
+  SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover; Sauce
+  never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
-  documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
-  chain's file records its eco-routes deployment).
+  documents are third-party facts and are exempt from the address, Portal and multicall rules only.
 - **Simulate, never rehearse, enforced.** What runs with no key and sends nothing —
-  `sauce simulate`, a dry run, a fill without `--send` — is a simulation, in everything a user or
+  `sauce simulate` — is a simulation, in everything a user or
   an agent reads. `docs/scripts/simulate-wording.mjs` is the rule; `skills:check` applies it to every
   file of the skills, comments included, `docs:check` to the README, `docs/` and the examples, and
   `sdk/test/simulate-wording.test.ts` to every string literal in `sdk/src`, `mcp/src` and
@@ -1491,11 +1465,9 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `docs/examples/*.sauce.ts`, the manual's ` ```js ` fences and every fence of a page generated
   from the skills (`docs/reference/`, which renders SauceScript as ` ```ts `). TypeScript host
   code (runners, ` ```ts ` blocks, a closure in a `.ts` file) keeps the `n`: there tsc types the
-  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. The SDK folds an
-  intent's literals itself (`intent-body.ts#literalValue`), from the literal's text, so a plain
-  one past 2^53 is exact there too. A quoted compiler message keeps its words
-  (``write `i += 1n` ``). What the SDK writes for a reader is plain too: the intent file that
-  `sauce intent publish` writes, and the lowering `sauce actions` prints (with `token/safe`'s
+  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. A quoted compiler
+  message keeps its words (``write `i += 1n` ``). What the SDK writes for a reader is plain too:
+  the lowering `sauce actions` prints (with `token/safe`'s
   checked writes, which the settle recipe quotes). The command's token amounts (`--fund`,
   `--assume-balance`, a wallet policy, MCP `fund`/`assumeBalance`) are the other way round from a
   program: whole tokens (`USDC:1.5`), a bare integer included, and base units only with a trailing
@@ -1509,32 +1481,23 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   the `SKILL.md` must not depend on them.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
   `// @chain` header), and every input it takes is a typed `main(...)` parameter passed with
-  `--args`, an intent file's included: `sauce intent publish`, `intent fill` and `inspect` (and the
-  MCP tools' `args`) bind them into the intents as constants (`inputs.ts#bindMainArguments`, over
-  `routes/entry.ts#bindEntryArguments`; `compileSauceProgram`'s `args`). A compile-time define is
+  `--args` (`compileSauceProgram`'s `args`, over `routes/entry.ts#bindEntryArguments`). A
+  compile-time define is
   the SDK's own mechanism: `--define`/`--defines` stay as the low-level flags `--help` lists apart,
   and no skill, doc, example or usage line teaches them.
 - **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a
   skill tells agents to write something, a runner asserts that behaviour, so the change that moves
-  it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: on
-  which chain each part of an intent resolves its names, the body and delivery on the destination
-  and the reward on the source (`sauce-intents/examples/intents.mts`), and that a program for a
+  it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: that
+  a program for a
   chain compiles as written — annotations anywhere, `interface`, a script's helpers and imports
   (`sauce-script/examples/saucescript.mts`). A runner may read its own skill's `SKILL.md` (and
   nothing else outside `examples/` and `references/`) to pin a value the skill states:
   `distributed-swap.mts` holds the selectors, the worked prices and the commands' arguments to the
-  arithmetic, and `intents.mts` the Portal reference's selectors and topics to the registry ABI.
+  arithmetic.
 - **Execution is verified outside the checker.** `skills:check` runs offline, so what a skill says
   about running a program (the distributed swap's per-pool limits, a `main` return coming back from
-  the cook, an intent funded by a transfer into its vault) was verified on anvil against real
-  Uniswap V3/V4 contracts and eco-routes' Portal through the gated engine
+  the cook) was verified on anvil against real Uniswap V3/V4 contracts through the gated engine
   (`sdk/test/evm/gated-engine.ts`) before it was written. Re-verify the same way when changing it.
-  The swap-on-base intent is held permanently: `sdk/test/evm/swap-on-base.e2e.test.ts` fulfils
-  the file's intent through a local Portal into the shared Pot, on Uniswap V3 pools from
-  `@uniswap/v3-core` and V4 pools on `@uniswap/v4-core`'s own PoolManager, run at Base's address
-  with its one immutable (the address `NoDelegateCall` checks) relinked there, and read through
-  `fixtures/StateView.sol` (v4-periphery's two reads the body makes). Change the file and that
-  suite together.
 
 **`dev-tools/`** — the **testing kit**, published as `@eco-incorp/sauce/testing`, and the dev
 harness for developing the SDK (local node scripts, compile helpers, the SVM Kitchen runner), which
@@ -1636,7 +1599,7 @@ what a Pot's swaps call back through). Its ABIs are synced into `sdk/{src,dist}/
 (`Router`, `ISauceRouter`). **There is no `SauceRouter` artifact any more**: it came from the engine
 repo's Solidity tree and no v12 release publishes it.
 
-**Generation 4 (Kitchen 1.2.0)** has one exact-input method per callback venue family:
+**The execution Router (Kitchen 1.3.0)** is content-addressed and has one exact-input method per callback venue family:
 `swapV3`, `swapV4`, `swapMaverickV2`, `swapInfinityCL`, `swapInfinityBin`. All take unsigned
 `amountIn`, pay from the Pot, and return `(amountInUsed, amountOut)`. There is no payer argument,
 unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
@@ -1650,9 +1613,9 @@ paid first and called directly by the program; their paths do not call the Route
 
 **Quoting remains on generation 3**, pinned separately as `quoteRouter` in `releases.json` and
 synced from the private kitchen-evm 1.1.0 package into `V12QuoteRouter.json`. Actions' existing
-`QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (generation 4).
-The old service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
-engine or execution Router. Captured-mainnet tests compare its quotes against swaps on generation 4.
+`QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (the execution Router).
+The quote service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
+engine or execution Router. Captured-mainnet tests compare its quotes against execution Router swaps.
 No chain deployment is implied by these release addresses.
 
 ## Publishing
@@ -1673,5 +1636,34 @@ headings; `check-packed-package.mjs` reruns the same checks and examples on the 
 which is what proves the relative targets also ship. An absolute
 `github.com/eco-incorp/sauce/blob/…/docs/…` URL is rejected: it pins a branch and breaks in the
 tarball. New public doc links must target files shipped in the package.
+
+**Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records each
+SDK 0.99.x release: what changed in SauceScript, the language, and what the compiler and engine
+releases it shipped changed. It does not record component releases on their own, nor anything
+before SDK 0.99.0. Each SDK release puts its pinned set in the table under
+`## Which versions work together` and adds a `## SDK <version> — <date>` entry, newest first. The
+entry opens with one line naming the set it ships, in prose (`Compiler 2.5.0, v12-evm 1.2.0, …`),
+and what moved (`New since 0.99.8: …` or `Same compiler and engines as 0.99.N.`).
+`### SauceScript` follows: **Added**, **Changed**,
+**Now refused**, **Removed** and **Fixed** bullets, each written for a program author and marked
+EVM, Solana or both, or `No language change.` A change to the SDK's names, `@sauce/token`,
+`@sauce/router` or the way it compiles a program counts; a fix to a TypeScript function, a command
+or the MCP server does not. Every SauceScript example compiles with the release it is listed under.
+When a component moved, `### Compiler and engines` has one bullet per moved component
+(`**Compiler 2.4.0 → 2.5.0:**`) saying what that release changes for someone using the SDK
+release: pairing, the compiler's JavaScript API, what a cook can notice of the engines (gas,
+limits, refusals), Pot addresses, the Kitchen's fee and Router, Solana accounts and wire. It points
+at the SauceScript bullets rather than repeating them, and leaves out internals no SDK user acts
+on. A breaking change outside the language (a removed export, a renamed command, the chain gate)
+is one closing `**Also breaking:**` line, named tersely. `docs:check` reads
+`releases.json` and fails while the table has no row whose Compiler, v12-evm, kitchen-evm, v12-svm
+and kitchen-svm cells are a released row's versions; while a table row whose SDK cell is a version
+has no `## SDK <version>` heading (a row whose SDK cell is `Unreleased` needs none); and while the
+`quoteRouter` pin's version is not written as `kitchen-evm <version>` outside code fences. It skips
+a whole row with a `null` digest, engine id, Kitchen or hash (a release not out yet, which the sync
+refuses too), and compares only the cells of the components a row gives a version; the installed
+package ships no `releases.json`, so the packed check skips all three. The changelog is checked
+like every other page (links, fragments, plain integers, no define taught), and it is the only page
+where release history belongs.
 
 **The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.
