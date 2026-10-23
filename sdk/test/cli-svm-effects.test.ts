@@ -186,6 +186,35 @@ describe("what a Solana cook moved", () => {
     expect(svmLeftInPotLines(svmLeftInPot(moved, MINTED), "the owner's wallet")).toEqual([]);
   });
 
+  it.each([
+    ["another mint", OTHER_MINT, TOKEN_PROGRAM],
+    ["the same mint under the other token program", USDC, TOKEN_2022],
+  ] as const)(
+    "counts a token account replaced at its address with %s as the old one emptied and a new one filled",
+    async (_, mint, program) => {
+      const moved = await movedBy(
+        mintRpc({ [USDC]: 6 }),
+        SOLANA,
+        [SOURCE],
+        [account(tokenAccount(USDC, OWNER, 1_500_000n))],
+        [account(tokenAccount(mint, OWNER, 1_500_000n), program)],
+        labels,
+        OWNER,
+      );
+
+      // As strings: a failing BigInt comparison cannot cross Jest's worker boundary.
+      expect(
+        moved.tokens.map((change) => ({
+          mint: change.mint,
+          delta: String(change.after - change.before),
+        })),
+      ).toEqual([
+        { mint: USDC, delta: "-1500000" },
+        { mint, delta: "1500000" },
+      ]);
+    },
+  );
+
   it("counts a balance change for whose the account was, and says whom the transaction handed it to", async () => {
     // The owner's account pays 1 USDC and is handed to MINTED; an empty one of the owner's is
     // filled and handed to the Pot.
@@ -242,6 +271,7 @@ describe("what a Solana cook moved", () => {
       );
 
     expect(plain(readTokenAccount(account(data, TOKEN_2022)))).toEqual({
+      program: TOKEN_2022,
       mint: WSOL,
       owner: OWNER,
       amount: "5",
@@ -251,6 +281,7 @@ describe("what a Solana cook moved", () => {
       isNative: true,
     });
     expect(plain(readTokenAccount(account(tokenAccount(USDC, OWNER, 1n))))).toEqual({
+      program: TOKEN_PROGRAM,
       mint: USDC,
       owner: OWNER,
       amount: "1",

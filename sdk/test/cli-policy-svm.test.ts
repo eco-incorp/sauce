@@ -710,6 +710,173 @@ describe("a wallet's policy, on a transaction it cannot measure", () => {
   });
 });
 
+/**
+ * What `wallet`'s guard does with `transaction` under `policy`, as one value a failure shows
+ * whole: its refusal (the limit and the message), or that it let the transaction through, and the
+ * ledger it leaves (a reservation, when it let it through).
+ */
+const verdictOf = async (
+  rpc: Parameters<typeof measureSvm>[0],
+  wallet: Address,
+  policy: Record<string, unknown>,
+  transaction: Transaction,
+) => {
+  const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-approval-"));
+  const info: WalletInfo = {
+    name: "agent",
+    kind: "solana",
+    address: wallet,
+    path: join(dir, "agent.json"),
+    policyPath: join(dir, "agent.policy.json"),
+  };
+  try {
+    writeFileSync(info.policyPath, JSON.stringify(policy), { mode: 0o600 });
+    const refusal = await guardWallet(info, readPolicy(info))
+      .svm(rpc, transaction)
+      .then(
+        () => "none: the guard let it through",
+        (error: unknown) =>
+          error instanceof PolicyRefusal
+            ? { limit: error.limit, message: error.message }
+            : String(error),
+      );
+    const ledger = join(dir, "agent.ledger.jsonl");
+
+    return {
+      refusal,
+      ledger: readdirSync(dir).includes("agent.ledger.jsonl") ? readFileSync(ledger, "utf8") : "",
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+/** What {@link verdictOf} gives for a refusal by `limit` that says `why` and reserves nothing. */
+const refused = (limit: string, why: string) => ({
+  refusal: { limit, message: expect.stringContaining(why) as unknown },
+  ledger: "",
+});
+
+describe("measuring token accounts from a simulation's account images", () => {
+  const PROGRAM = address("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+  const ACCOUNT = address("Vote111111111111111111111111111111111111111");
+  const MINT_A = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+  const MINT_B = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
+  const SPL = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+  type Image = { lamports: bigint; owner: Address; data: Uint8Array } | null;
+  const asRpc = (image: Image) =>
+    image === null
+      ? null
+      : {
+          lamports: image.lamports,
+          owner: image.owner,
+          data: [Buffer.from(image.data).toString("base64"), "base64"],
+          executable: false,
+        };
+  /** A token account image of `program`'s: `mint`, held by `holder`, holding `amount`. */
+  const held = (program: Address, mint: Address, holder: Address, amount: bigint): Image => ({
+    lamports: 2_039_280n,
+    owner: program,
+    data: tokenAccountData(mint, holder, amount),
+  });
+  /** A mint of `program`'s with `decimals`. */
+  const minted = (program: Address, decimals: number): Image => {
+    const data = new Uint8Array(82);
+    data[44] = decimals;
+    data[45] = 1;
+
+    return { lamports: 1_461_600n, owner: program, data };
+  };
+  /**
+   * The wallet calling PROGRAM with ACCOUNT writable, against an endpoint that holds `now` and
+   * whose simulation leaves `after`.
+   */
+  const simulated = (now: Record<string, Image>, after: Record<string, Image>) => {
+    const transaction = compileTransaction(
+      pipe(
+        createTransactionMessage({ version: 0 }),
+        (message) => setTransactionMessageFeePayer(WALLET, message),
+        (message) =>
+          setTransactionMessageLifetimeUsingBlockhash(
+            {
+              blockhash: "11111111111111111111111111111111" as Blockhash,
+              lastValidBlockHeight: 1n,
+            },
+            message,
+          ),
+        (message) =>
+          appendTransactionMessageInstruction(
+            {
+              programAddress: PROGRAM,
+              accounts: [{ address: ACCOUNT, role: AccountRole.WRITABLE }],
+              data: new Uint8Array([1]),
+            },
+            message,
+          ),
+      ),
+    );
+    const rpc = {
+      getMultipleAccounts: (keys: readonly string[]) => ({
+        send: () =>
+          Promise.resolve({
+            context: { slot: 1n },
+            value: keys.map((key) => asRpc(now[key] ?? null)),
+          }),
+      }),
+      simulateTransaction: (_: string, config: { accounts: { addresses: readonly string[] } }) => ({
+        send: () =>
+          Promise.resolve({
+            context: { slot: 1n },
+            value: {
+              err: null,
+              logs: [],
+              innerInstructions: [],
+              accounts: config.accounts.addresses.map((key) => asRpc(after[key] ?? null)),
+            },
+          }),
+      }),
+    } as unknown as Parameters<typeof measureSvm>[0];
+
+    return { rpc, transaction };
+  };
+  const plain = <T extends { amount: bigint }>(list: readonly T[]) =>
+    list.map(({ amount, ...rest }) => ({ ...rest, amount: String(amount) }));
+
+  // (A mint belongs to one token program, so a limit, which names a mint, cannot see the same mint
+  // under the other program: `movedBy` reports that as two changes, `cli-svm-effects.test.ts`.)
+  it.each([
+    ["another mint, held by the wallet", held(SPL, MINT_B, WALLET, 1_000_000n)],
+    ["another mint, held by another key", held(SPL, MINT_B, PROGRAM, 1_000_000n)],
+  ] as const)(
+    "counts the whole balance of a token account the transaction replaces at its address with %s",
+    async (_, replacement) => {
+      // Closed and made again at the same address, holding as many base units of another mint.
+      const { rpc, transaction } = simulated(
+        {
+          [ACCOUNT]: held(SPL, MINT_A, WALLET, 1_000_000n),
+          [MINT_A]: minted(SPL, 3),
+          [MINT_B]: minted(SPL, 3),
+        },
+        { [ACCOUNT]: replacement },
+      );
+      const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+      expect({
+        tokens: plain(measured.tokens).filter((each) => each.token === MINT_A),
+        ...(await verdictOf(
+          rpc,
+          WALLET,
+          { tokens: { [MINT_A]: { perTransaction: "1" } } },
+          transaction,
+        )),
+      }).toEqual({
+        tokens: [{ token: MINT_A, symbol: "USDC", amount: "1000000", decimals: 3 }],
+        ...refused(`tokens.${MINT_A}.perTransaction`, "this transaction sends 1000 USDC"),
+      });
+    },
+  );
+});
+
 // What a token account lets another key do once a transaction lands: spend from it as its delegate,
 // own it, or close it. Each gives away what the wallet (or a Pot it cooks on) holds, so a policy that
 // limits the token holds each of them: an approval as an ERC-20 approval is held, an account handed
@@ -834,48 +1001,8 @@ describeSvm(
       list.map(({ amount, ...rest }) => ({ ...rest, amount: String(amount) }));
     const limited = (mint: Address) => ({ tokens: { [mint]: { perTransaction: "1" } } });
 
-    /**
-     * What the wallet's guard does with `transaction` under `policy`, as one value a failure shows
-     * whole: its refusal (the limit and the message), or that it let the transaction through, and the
-     * ledger it leaves (a reservation, when it let it through).
-     */
-    const guarded = async (policy: Record<string, unknown>, transaction: Transaction) => {
-      const dir = mkdtempSync(join(tmpdir(), "sauce-policy-svm-approval-"));
-      const info: WalletInfo = {
-        name: "agent",
-        kind: "solana",
-        address: wallet,
-        path: join(dir, "agent.json"),
-        policyPath: join(dir, "agent.policy.json"),
-      };
-      try {
-        writeFileSync(info.policyPath, JSON.stringify(policy), { mode: 0o600 });
-        const refusal = await guardWallet(info, readPolicy(info))
-          .svm(rpc, transaction)
-          .then(
-            () => "none: the guard let it through",
-            (error: unknown) =>
-              error instanceof PolicyRefusal
-                ? { limit: error.limit, message: error.message }
-                : String(error),
-          );
-        const ledger = join(dir, "agent.ledger.jsonl");
-
-        return {
-          refusal,
-          ledger: readdirSync(dir).includes("agent.ledger.jsonl")
-            ? readFileSync(ledger, "utf8")
-            : "",
-        };
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    };
-    /** What {@link guarded} gives for a refusal by `limit` that says `why` and reserves nothing. */
-    const refused = (limit: string, why: string) => ({
-      refusal: { limit, message: expect.stringContaining(why) as unknown },
-      ledger: "",
-    });
+    const guarded = (policy: Record<string, unknown>, transaction: Transaction) =>
+      verdictOf(rpc, wallet, policy, transaction);
     const keyAt = (key: Address, at: number): Address => {
       const account = harness.svm.getAccount(key);
       if (!account.exists) throw new Error(`${key} does not exist`);

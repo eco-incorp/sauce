@@ -69,6 +69,8 @@ export interface TokenChange {
 
 /** A token account as its program records it, in either program. */
 export interface TokenAccountState {
+  /** The token program that owns it: SPL Token or Token-2022. */
+  readonly program: Address;
   readonly mint: Address;
   /** Its SPL owner: who may move it, approve a delegate, hand it over and close it. */
   readonly owner: Address;
@@ -80,6 +82,42 @@ export interface TokenAccountState {
   readonly closeAuthority?: Address;
   /** Wrapped SOL: its amount is lamports it holds above its rent. */
   readonly isNative: boolean;
+}
+
+/**
+ * One address's token account before and after a transaction, as the same asset: where the
+ * transaction closed it and made another at that address (another mint, or the other token
+ * program), the one before is gone (`was` alone counts it) and the one after is new (`is`, with no
+ * `was`). An amount compared across that would net one asset against another.
+ */
+export interface TokenTransition {
+  /** The account before, of the same asset as `is` when both are there. */
+  readonly was?: TokenAccountState;
+  /** The account after. */
+  readonly is?: TokenAccountState;
+  /** The account before, where the transaction replaced it with one of another asset. */
+  readonly replaced?: TokenAccountState;
+}
+
+/** `before` and `after` of one address as a {@link TokenTransition}. */
+export function tokenTransition(
+  before: SimulatedAccount | null,
+  after: SimulatedAccount | null,
+): TokenTransition {
+  const was = tokenAccount(before);
+  const is = tokenAccount(after);
+  if (
+    was !== undefined &&
+    is !== undefined &&
+    (was.mint !== is.mint || was.program !== is.program)
+  ) {
+    return { replaced: was, is };
+  }
+
+  return {
+    ...(was === undefined ? {} : { was }),
+    ...(is === undefined ? {} : { is }),
+  };
 }
 
 /**
@@ -224,6 +262,7 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
   const closeAuthority = key(CLOSE_AUTHORITY_AT);
 
   return {
+    program: account.owner,
     mint: decoder.decode(data.subarray(0, 32)),
     owner: decoder.decode(data.subarray(32, 64)),
     amount: view.getBigUint64(64, true),
@@ -284,10 +323,10 @@ export async function mintFacts(
 
 /**
  * What changed between `before` and `after` for each of `tracked`: the token accounts' balances
- * (a token account the cook created starts at 0, one it closed ends at 0), and every account's
- * lamports. A balance change counts for whose the account was before (the transaction may hand it
- * to another key after moving what it holds), and each mint's decimals and symbol are
- * {@link mintFacts}'.
+ * (a token account the cook created starts at 0, one it closed ends at 0, and one it closed and
+ * made again at the same address for another asset is both), and every account's lamports. A
+ * balance change counts for whose the account was before (the transaction may hand it to another
+ * key after moving what it holds), and each mint's decimals and symbol are {@link mintFacts}'.
  */
 export async function movedBy(
   rpc: Rpc,
@@ -301,25 +340,31 @@ export async function movedBy(
   const tokens: Array<Omit<TokenChange, "decimals" | "symbol">> = [];
   const lamports: LamportChange[] = [];
   tracked.forEach((account, index) => {
-    const was = before[index] ?? null;
-    const is = after[index] ?? null;
-    const lamportsBefore = was?.lamports ?? 0n;
-    const lamportsAfter = is?.lamports ?? 0n;
+    const lamportsBefore = before[index]?.lamports ?? 0n;
+    const lamportsAfter = after[index]?.lamports ?? 0n;
     if (lamportsBefore !== lamportsAfter) {
       lamports.push({ account, before: lamportsBefore, after: lamportsAfter });
     }
-    const held = tokenAccount(was);
-    const holds = tokenAccount(is);
-    const seen = held ?? holds;
+    const { was, is, replaced } = tokenTransition(before[index] ?? null, after[index] ?? null);
+    if (replaced !== undefined && replaced.amount > 0n) {
+      tokens.push({
+        account,
+        mint: replaced.mint,
+        owner: replaced.owner,
+        before: replaced.amount,
+        after: 0n,
+      });
+    }
+    const seen = was ?? is;
     if (seen === undefined) return;
-    const amountBefore = held?.amount ?? 0n;
-    const amountAfter = holds?.amount ?? 0n;
+    const amountBefore = was?.amount ?? 0n;
+    const amountAfter = is?.amount ?? 0n;
     if (amountBefore !== amountAfter) {
       tokens.push({
         account,
         mint: seen.mint,
         owner: seen.owner,
-        ...(holds === undefined || holds.owner === seen.owner ? {} : { ownerAfter: holds.owner }),
+        ...(is === undefined || is.owner === seen.owner ? {} : { ownerAfter: is.owner }),
         before: amountBefore,
         after: amountAfter,
       });

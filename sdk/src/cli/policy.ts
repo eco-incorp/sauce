@@ -97,7 +97,7 @@ import {
   messageAccounts,
   mintFacts,
   movedBy,
-  tokenAccount,
+  tokenTransition,
   writableAccounts,
 } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
@@ -800,8 +800,9 @@ export async function measureSvm(
   const closable: Array<{ token: SvmAddress; account: SvmAddress; closer: SvmAddress }> = [];
   let closableLamports = 0n;
   tracked.forEach((account, index) => {
-    const was = tokenAccount(before[index] ?? null);
-    const is = tokenAccount(after[index] ?? null);
+    // An account made again at its address for another asset is a new one: the old one's balance
+    // is counted as it leaves.
+    const { was, is } = tokenTransition(before[index] ?? null, after[index] ?? null);
     // An account it closes gives nothing more away: its balance is counted as it leaves.
     if (is === undefined || !ours.has((was ?? is).owner)) return;
     if (
