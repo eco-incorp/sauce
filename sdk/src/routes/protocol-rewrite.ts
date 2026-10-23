@@ -14,6 +14,9 @@
  *   (F) `<Protocol>.<Interface>(<address>).<method>(...)` — an interface called with the address
  *       it is bound to, the same as shape E: `UniswapV3.Pool(pool).liquidity()`. Only an
  *       interface binds this way; a deployed contract's name called with an address is refused.
+ * And (G) a scalar method on a contract the names module binds, `<Protocol>.<Contract>.toBytesBe(n)`
+ * or a local holding one: 2.6.0 takes `.toBytesBe`/`.toBytesLe` only on an address, which a binding
+ * is everywhere else a value goes, so `.address` goes before the method (EVM only).
  * Bare `pot` is rewritten to `ctx.self()` in the same pass, and a bare `self` (the Pot's old name)
  * is refused, naming `pot`.
  *
@@ -224,6 +227,47 @@ function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>)
       method,
       spelled: `${head}.${path.join(".")}`,
     });
+  });
+  return out;
+}
+
+/** The scalar methods 2.6.0 refuses on a contract binding: "`ABI_0` has no method named …". */
+const SCALAR_METHODS: ReadonlySet<string> = new Set(["toBytesBe", "toBytesLe"]);
+
+/**
+ * Shape G: `.address` before a scalar method whose receiver is a contract the names module binds
+ * (`AaveV3.Pool.toBytesBe(32)`, `Base.UniswapV3.Factory.toBytesBe(32)`) or a local initialized to
+ * one (`const pool = AaveV3.Pool; pool.toBytesBe(32)`). On the EVM `.address` is the address itself
+ * on any scalar, so a local of that name holding a number elsewhere compiles as written.
+ */
+function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): Splice[] {
+  const nameOf = (node: AstNode): string => (node as unknown as { name: string }).name;
+  const isBinding = (node: AstNode | null | undefined): boolean => {
+    if (!node) return false;
+    const decomposed = decomposeMemberChain(node);
+    if (decomposed === undefined || decomposed.path.length === 0) return false;
+    if (shadowed.has(decomposed.head)) return false;
+    return namedContractKind(decomposed.head, decomposed.path) === "singleton";
+  };
+  const locals = new Set<string>();
+  walk(program, (n) => {
+    if (n.type !== "VariableDeclarator") return;
+    const id = (n as { id?: AstNode }).id;
+    if (id?.type === "Identifier" && isBinding((n as { init?: AstNode | null }).init)) {
+      locals.add(nameOf(id));
+    }
+  });
+  const out: Splice[] = [];
+  walk(program, (n) => {
+    if (n.type !== "CallExpression") return;
+    const callee = (n as { callee?: AstNode }).callee;
+    if (callee?.type !== "MemberExpression" || (callee as { computed?: boolean }).computed) return;
+    const property = (callee as { property?: AstNode }).property;
+    if (property?.type !== "Identifier" || !SCALAR_METHODS.has(nameOf(property))) return;
+    const object = (callee as { object?: AstNode }).object!;
+    if (isBinding(object) || (object.type === "Identifier" && locals.has(nameOf(object)))) {
+      out.push({ start: object.end, end: object.end, replacement: ".address" });
+    }
   });
   return out;
 }
@@ -610,6 +654,7 @@ export function rewriteProtocolAccessors(
     : undefined;
 
   const defaults = collectDefaultCandidates(program, shadowed).map(throughDefault);
+  const addressReads = chain.kind === "evm" ? collectAddressReads(program, shadowed) : [];
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
   const resolved = collectBoundCandidates(program, shadowed).map((c) =>
     resolveBound(c, chain, chainScope, allowWidenedSelectors),
@@ -655,7 +700,7 @@ export function rewriteProtocolAccessors(
         }))
       : [];
 
-  const allSites = [...defaults, ...resolved, ...potSites];
+  const allSites = [...defaults, ...addressReads, ...resolved, ...potSites];
   if (allSites.length === 0) {
     return {
       source,

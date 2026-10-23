@@ -23,7 +23,6 @@ import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 
 const BASE = requireChain("base");
 const OPTIMISM = requireChain("optimism");
-const ETHEREUM = requireChain("ethereum");
 
 const BASE_UNIVERSAL_ROUTER = "0x6ff5693b99212da76ad316178a184ab56d299b43";
 const BASE_AAVE_POOL = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
@@ -511,6 +510,51 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
     expect(defaultSites).toBe(0);
     expect(rewrote).toBe(false);
     expect(out).toBe(source);
+  });
+
+  it("shape G: a scalar method on a bound contract, or on a local holding one, reads the address", () => {
+    // 2.6.0 takes `.toBytesBe`/`.toBytesLe` only on an address: "`ABI_0` has no method named
+    // `toBytesBe`" on the binding the names module holds. Each spelling is the literal's bytes.
+    const literal = bytes(
+      "base",
+      `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesBe(32).toBe(); }`,
+    );
+    for (const body of [
+      "return AaveV3.Pool.toBytesBe(32).toBe();",
+      "const pool = AaveV3.Pool;\nreturn pool.toBytesBe(32).toBe();",
+      "return Base.AaveV3.Pool.toBytesBe(32).toBe();",
+    ]) {
+      expect(bytes("base", `function main(): Uint256 {\n${body}\n}`)).toEqual(literal);
+    }
+    expect(
+      bytes("base", "function main(): Uint256 { return AaveV3.Pool.toBytesLe(20).toLe(); }"),
+    ).toEqual(
+      bytes(
+        "base",
+        `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesLe(20).toLe(); }`,
+      ),
+    );
+    const pass = rewriteProtocolAccessors(
+      "function main() { const pool = AaveV3.Pool; return pool.toBytesBe(32); }",
+      BASE,
+    );
+    expect(pass.source).toBe(
+      "function main() { const pool = AaveV3.Pool; return pool.address.toBytesBe(32); }",
+    );
+    // An ABI method, a value of another kind, and Solana are left as they are.
+    for (const source of [
+      "function main() { return AaveV3.Pool.getUserAccountData(pot); }",
+      "function main(x: Uint256) { return x.toBytesBe(32); }",
+      "function main() { return AaveV3.PoolAddressesProvider.toBytesBe(32); }",
+    ]) {
+      expect(rewriteProtocolAccessors(source, BASE).source).not.toContain(".address");
+    }
+    expect(
+      rewriteProtocolAccessors(
+        "function main() { return AaveV3.Pool.toBytesBe(32); }",
+        requireChain("solana"),
+      ).source,
+    ).not.toContain(".address");
   });
 
   it("tells onContract each contract a program uses: as written, with its chain and address -- and not a test of one", () => {
