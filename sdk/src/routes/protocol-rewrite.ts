@@ -49,6 +49,7 @@ import {
 } from "./accessor-index.js";
 import { parseSauce } from "./parse.js";
 import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
+import { shadowed as shadowedAt, walkScoped } from "./lexical-scope.js";
 
 export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
@@ -665,22 +666,22 @@ function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   return excluded;
 }
 
-/** The bare reads of `name` that neither the program declares nor the compile binds (`bound`):
- *  every `pot` the sugar rewrites. */
+/** The bare reads of `name` where the program does not declare it (`lexical-scope.ts`), unless the
+ *  compile binds it (`bound`): every `pot` the sugar rewrites. */
 function bareReads(
   program: AstNode,
   name: string,
   excluded: ReadonlySet<AstNode>,
-  shadowed: ReadonlySet<string>,
   bound: ReadonlySet<string>,
 ): AstNode[] {
-  if (shadowed.has(name) || bound.has(name)) return [];
+  if (bound.has(name)) return [];
   const reads: AstNode[] = [];
-  walk(program, (n) => {
+  walkScoped(program, (n, at) => {
     if (
       n.type === "Identifier" &&
       (n as unknown as { name: string }).name === name &&
-      !excluded.has(n)
+      !excluded.has(n) &&
+      !shadowedAt(at, name, n.start)
     ) {
       reads.push(n);
     }
@@ -690,8 +691,9 @@ function bareReads(
 
 /**
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
- * `opts.potSugar === false`, every bare `pot` read, over `source` for the enclosing/destination
- * `chain`; refuses a bare `self` the program does not declare (the Pot is `pot`). A `pot` or `self`
+ * `opts.potSugar === false`, every bare `pot` read where the program declares no `pot`
+ * (`lexical-scope.ts`), over `source` for the enclosing/destination `chain`; refuses a bare `self`
+ * read where the program declares no `self` (the Pot is `pot`). A `pot` or `self`
  * in `bound` — a name the compile gives a value beside the source: a define, an ambient module's
  * export — is that value, so neither is touched. Edits use parser ranges over the original source,
  * preserving unrelated formatting, comments, and code byte-for-byte.
@@ -754,11 +756,11 @@ export function rewriteProtocolAccessors(
   }
 
   const excluded = collectReadExclusions(program);
-  const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, shadowed, bound);
+  const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, bound);
   if (retired !== undefined) throw selfRefusal(RETIRED_POT_NAME, POT_NAME);
   const potSites: Splice[] =
     (opts.potSugar ?? true)
-      ? bareReads(program, POT_NAME, excluded, shadowed, bound).map((n) => ({
+      ? bareReads(program, POT_NAME, excluded, bound).map((n) => ({
           start: n.start,
           end: n.end,
           replacement: "ctx.self()",

@@ -45,13 +45,13 @@
  * reserved: on a value that may have a field of that name (`balance-holder.ts#readsField`) it stays
  * the field.
  *
- * Shadowing-aware, CONSERVATIVELY, on the TOKEN name only: if a name anywhere in the WHOLE program
- * is bound (`let`/`const`, a parameter, an import, ...), EVERY occurrence of it is left un-rewritten,
- * rather than re-deriving the compiler's own scoping rules. A user who declares `USDC` or `Token`
- * owns the name. The sugar's HOLDER name is deliberately NOT shadow-checked -- a local variable IS
- * the intended holder -- but for `pot`, which is the Pot (`ctx.self()`) only while the program
- * declares no `pot` of its own: `const pot = ctx.self(); pot.USDC` reads the local. `self`, the
- * Pot's old name, is refused while the program declares no `self`.
+ * Shadowing-aware on the TOKEN name: where the program binds the name (`let`/`const`, a parameter,
+ * an import, ...) in scope at a site, as the compiler scopes it (`lexical-scope.ts`), the site is
+ * left un-rewritten: a user who declares `USDC` owns the name there. `Token` is whole-program
+ * (`rewriteTokenFactory`). The sugar's HOLDER name is deliberately NOT shadow-checked -- a local
+ * variable IS the intended holder -- but for `pot`, which is the Pot (`ctx.self()`) where the
+ * program declares no `pot` in scope: `const pot = ctx.self(); pot.USDC` reads the local. `self`,
+ * the Pot's old name, is refused where the program declares no `self`.
  *
  * A symbol method outside REWRITABLE_METHODS is left untouched and fails closed at compile. A `Token(...)` call in any position this module cannot lower is REFUSED with an
  * error naming the spellings that work — never passed through as the typed binding, which would
@@ -64,6 +64,7 @@ import {
   countDeclarations,
   type AstNode,
 } from "./ast-walk.js";
+import { shadowed as shadowedAt, walkScoped, type Scope } from "./lexical-scope.js";
 import { formatBigint } from "../deposit/format.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import { isChainKey, namedContractKind, resolveNamespace } from "./accessor-index.js";
@@ -274,18 +275,17 @@ function nameWriteSplice(site: MethodCall, name: string, statements: ReadonlySet
 function collectMemberCallSites(
   program: AstNode,
   tokens: TokenSymbols,
-  shadowed: ReadonlySet<string>,
   writes: Set<SafeWrite>,
 ): { sites: Splice[]; reads: number } {
   const sites: Splice[] = [];
   const statements = statementCalls(program);
   let reads = 0;
-  walk(program, (n) => {
+  walkScoped(program, (n, here) => {
     const site = methodCall(n);
     if (!site || site.object.type !== "Identifier") return;
     const symbol = (site.object as unknown as { name: string }).name;
     if (!tokens.has(symbol)) return;
-    if (shadowed.has(symbol)) return;
+    if (shadowedAt(here, symbol, site.object.start)) return;
     if (!REWRITABLE_METHODS.has(site.method)) return;
     if (isSafeWrite(site.method)) {
       sites.push(nameWriteSplice(site, symbol, statements));
@@ -419,6 +419,8 @@ function resolveHolder(
   name: string,
   kind: "token" | "balance",
   scope: HolderScope,
+  /** The names the program declares where `member` is read. */
+  here: Scope | undefined,
 ): Holder | undefined {
   const object = member.object as AstNode;
   const spelled = `\`${scope.source.slice(member.start, member.end)}\``;
@@ -436,7 +438,7 @@ function resolveHolder(
       const holder = (object as unknown as { name: string }).name;
       if (
         holder === RETIRED_POT_NAME &&
-        !scope.shadowed.has(RETIRED_POT_NAME) &&
+        !shadowedAt(here, RETIRED_POT_NAME, object.start) &&
         !scope.bound.has(RETIRED_POT_NAME)
       ) {
         throw selfRefusal(
@@ -444,7 +446,11 @@ function resolveHolder(
           `${POT_NAME}.${kind === "token" ? name : BALANCE_MEMBER}`,
         );
       }
-      if (holder === POT_NAME && !scope.shadowed.has(POT_NAME) && !scope.bound.has(POT_NAME)) {
+      if (
+        holder === POT_NAME &&
+        !shadowedAt(here, POT_NAME, object.start) &&
+        !scope.bound.has(POT_NAME)
+      ) {
         return { kind: "pot" };
       }
       // Reserved defensively -- no longer a compiler namespace root (address.* was dropped for
@@ -591,7 +597,7 @@ function collectBalanceSites(
     shapes: holderShapes(program),
     source,
   };
-  walk(program, (n) => {
+  walkScoped(program, (n, here) => {
     if (n.type !== "MemberExpression") return;
     if ((n as { computed?: boolean }).computed) return;
     if (excluded.has(n)) return;
@@ -602,8 +608,8 @@ function collectBalanceSites(
     // `.<SYMBOL>` is always a registered token: on Arc, whose native coin is USDC, `pot.USDC` is the
     // token, and the coin is `pot.balance`.
     if (tokens.has(name)) {
-      if (shadowed.has(name)) return;
-      const holder = resolveHolder(n, name, "token", scope);
+      if (shadowedAt(here, name, n.start)) return;
+      const holder = resolveHolder(n, name, "token", scope, here);
       if (holder === undefined) return;
       // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
       // spellings are one program under any value the compile gives the symbol, a define included.
@@ -614,7 +620,7 @@ function collectBalanceSites(
     }
     // A member, never a name the program binds: `const balance = …` leaves `pot.balance` alone.
     if (name === BALANCE_MEMBER) {
-      const holder = resolveHolder(n, name, "balance", scope);
+      const holder = resolveHolder(n, name, "balance", scope, here);
       if (holder === undefined) return;
       // The Pot's native balance is the executing contract's own; any other holder's is read at it.
       sites.push(
@@ -627,11 +633,13 @@ function collectBalanceSites(
     }
     // `<holder>.ETH`, the native coin's old spelling, refused where a holder's balance was read:
     // on a record or a list it is the field it says.
-    if (native === undefined || name !== native.symbol || shadowed.has(name)) return;
+    if (native === undefined || name !== native.symbol || shadowedAt(here, name, n.start)) return;
     const object = n.object as AstNode;
     if (notAnAddress(object, scope.shapes) !== undefined) return;
-    const balance = resolveHolder(n, name, "balance", scope);
-    if (balance === undefined && resolveHolder(n, name, "token", scope) === undefined) return;
+    const balance = resolveHolder(n, name, "balance", scope, here);
+    if (balance === undefined && resolveHolder(n, name, "token", scope, here) === undefined) {
+      return;
+    }
     const holder = source.slice(object.start, object.end);
     throw nativeSymbolRefusal(
       site,
@@ -905,7 +913,7 @@ export function rewriteTokenMembers(
   const shadowed = collectDeclaredNames(program);
 
   const writes = new Set<SafeWrite>();
-  const members = collectMemberCallSites(program, tokens, shadowed, writes);
+  const members = collectMemberCallSites(program, tokens, writes);
   const exclusions = collectValuePositionExclusions(program);
   const balances = collectBalanceSites(
     program,

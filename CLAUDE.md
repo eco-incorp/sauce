@@ -874,8 +874,12 @@ lowered only when the name is declared once in the whole program, never reassign
 called as `t.<method>(...)`: the binding then holds the ADDRESS and each call is lowered by name.
 Any other `Token(...)` — an argument, a value, a reassigned or passed binding — is REFUSED with an
 error naming the safe spellings, never passed through as the typed call (which would be the
-unchecked write again). Both rewrites are shadow-safe (a program that binds `Token` or a symbol owns
-the name) and svm-rejected: the SVM arm's writes need SPL account slots the sugar has nowhere to put.
+unchecked write again). Both rewrites are shadow-safe and svm-rejected: a program that binds
+`Token` anywhere owns the name everywhere, and one that binds a symbol owns it where that binding is
+in scope, as the compiler scopes it (`routes/lexical-scope.ts`: a module's names and a function's
+parameters everywhere in them, a block's `let`/`const` from its declarator to the block's end, a
+loop's or a `catch` clause's binding in the loop or the clause; probed on the pinned compiler). The
+SVM arm's writes need SPL account slots the sugar has nowhere to put.
 The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
 needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
 `@sauce/token` _export_ a real `Token` value (blocked by the M1 subset).
@@ -889,12 +893,14 @@ registry contract or interface, an ABI imported from a `.json` module, a name th
 declare; never a name it binds to a value, which shadows an import of that name — and
 `<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
 token's own contract is one (`WETH.balance`; on Solana a mint, its token accounts derived off its
-key), an undeclared `pot` or `ctx.self()` is the Pot and a declared `pot` an ordinary variable (as on
-Solana, and for the accessor pass's bare `pot`, which becomes `ctx.self()`; on Solana the lowering
-consumes every undeclared `pot` itself, as the Pot slot's key, or its account where an `Account` is
-expected). `.<SYMBOL>` is always a registered token; the chain's native coin is `<holder>.balance`:
-`ctx.selfBalance()`/`ctx.balance(h)` on an EVM chain, `ctx.balance(<account>.address)` on Solana, so
-on Arc `pot.USDC` is the 6-decimal token and `pot.balance` the coin. `.balance` on a record, a list or
+key), a `pot` the program does not declare where it is read (`lexical-scope.ts`), nor the compile
+binds (a `defines` key, an ambient module's export), or `ctx.self()`, is the Pot and any other `pot`
+an ordinary variable (as on Solana, and for the accessor pass's bare `pot`, which becomes
+`ctx.self()`; on Solana the lowering consumes every such `pot` itself, as the Pot slot's key, or its
+account where an `Account` is expected). `.<SYMBOL>` is always a registered token; the chain's
+native coin is `<holder>.balance`: `ctx.selfBalance()`/`ctx.balance(h)` on an EVM chain,
+`ctx.balance(<account>.address)` on Solana, so on Arc `pot.USDC` is the 6-decimal token and
+`pot.balance` the coin. `.balance` on a record, a list or
 a contract call's result (`market.userCollateral(a, b).balance`), `X.at(a).balance()` and a
 namespace's own member keep their meaning. The retired spellings (an undeclared `self`,
 `self.<TOKEN>`, `<holder>.<native symbol>`, `Solana.self`) are refused naming the new one

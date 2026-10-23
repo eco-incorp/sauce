@@ -422,10 +422,23 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       expect(rewrote).toBe(false);
     });
 
-    it("a local `let USDC = 1n;` suppresses pot.USDC too (whole-program shadow rule)", () => {
+    it("a local `let USDC = 1n;` suppresses pot.USDC where it is in scope", () => {
       const source = `function main() { let USDC = 1n; return pot.USDC; }`;
       const { rewrote } = rewriteTokenMembers(source, tokens);
       expect(rewrote).toBe(false);
+    });
+
+    it("a `USDC` or `pot` another function or an inner block declares leaves this one's", () => {
+      const helper =
+        "function held(): Uint256 { const USDC = 1; const pot = 2; return USDC + pot; }\n";
+      const { source: out } = rewriteTokenMembers(
+        `${helper}function main(c: bool) { if (c) { const pot = 3; return pot; } USDC.transfer(${TO}, pot.USDC); }`,
+        tokens,
+      );
+      expect(out).toBe(
+        `${helper}function main(c: bool) { if (c) { const pot = 3; return pot; } ` +
+          `__sauce_transfer(USDC, ${TO}, IERC20.at(USDC).balanceOf(ctx.self())); }`,
+      );
     });
 
     it("USDC.WETH -- a token's own contract is a holder: the WETH the USDC contract holds", () => {
