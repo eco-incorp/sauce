@@ -205,7 +205,8 @@ const UINT256_MAX = (1n << 256n) - 1n;
 /** The top of the curve order's lower half: `cookSigned` accepts no `s` above it. */
 const SECP256K1_HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0n;
 
-/** ERC-1271's `isValidSignature` answer: the selector, in a whole word, its other 28 bytes zero. */
+/** ERC-1271's `isValidSignature` answer as the Pot reads it: the first word of the return data, the
+ *  selector in its top 4 bytes and the other 28 zero. Bytes after that word are not read. */
 const ERC1271_MAGIC: Hex = `0x1626ba7e${"00".repeat(28)}`;
 
 const erc1271Abi = parseAbi([
@@ -500,8 +501,10 @@ export async function cookNonceUsed(
  * with `s` in the lower half of the curve order and `v` 27 or 28 that recovers `owner` (a compact
  * 64-byte signature, or `v` 0 or 1, is refused on chain, and here). An owner with code — a contract
  * wallet, or an EIP-7702 account — can sign through its ERC-1271 `isValidSignature` as well, which
- * only a chain can answer: given a `client`, it is asked when the key does not match, and its answer
- * must be the magic value in a whole word, as the Pot requires.
+ * only a chain can answer: given a `client`, it is asked when the key does not match. Its answer is
+ * read as the Pot reads it (`Pot.sol` `_signedByOwner`): the call succeeds, returns at least 32
+ * bytes, and the first word is the magic value with its other 28 bytes zero; anything after that
+ * word is ignored.
  */
 export async function verifySignedCook(
   call: SignedCookCall & { readonly owner: Address },
@@ -535,7 +538,9 @@ export async function verifySignedCook(
       }),
     });
 
-    return answer.data !== undefined && answer.data.toLowerCase() === ERC1271_MAGIC;
+    if (answer.data === undefined || size(answer.data) < 32) return false;
+
+    return slice(answer.data, 0, 32).toLowerCase() === ERC1271_MAGIC;
   } catch {
     return false;
   }

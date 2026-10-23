@@ -19,7 +19,8 @@
  *      its hash in `releases.json`), minted by `fixtures/OldPotDeployer.sol`, which answers the
  *      callbacks that Pot's constructor makes.
  *   6. An ERC-1271 owner (`fixtures/Wallet1271.sol`): the Pot asks it, and so does
- *      `verifySignedCook` with a client.
+ *      `verifySignedCook` with a client. `fixtures/Wallet1271Raw.sol` answers raw bytes, so both
+ *      are held to one reading of the answer: the magic word first, whatever follows ignored.
  */
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -92,6 +93,11 @@ const OLD_POT_DEPLOYER = json<{ abi: Abi; creationCode: Hex }>(
   join(HERE, "fixtures/OldPotDeployer.json"),
 );
 const WALLET_1271 = json<{ abi: Abi; creationCode: Hex }>(join(HERE, "fixtures/Wallet1271.json"));
+const WALLET_1271_RAW = json<{ abi: Abi; creationCode: Hex }>(
+  join(HERE, "fixtures/Wallet1271Raw.json"),
+);
+/** ERC-1271's magic value as a whole word: the selector, then 28 zero bytes. */
+const MAGIC_WORD = `0x1626ba7e${"00".repeat(28)}` as Hex;
 
 /** Anvil's dev accounts. The first deploys the stack, owns the Kitchen and owns the harness Pot. */
 const OWNER = privateKeyToAccount(
@@ -774,6 +780,52 @@ describeEvm("signed cooks on the released Pot", () => {
 
     it("refuses a key the wallet does not answer for", async () => {
       const call = await signedBy(STRANGER, cookOf({ pot }));
+      expect(await verifySignedCook({ ...call, owner: wallet }, publicClient)).toBe(false);
+      await expectRefused(SUBMITTER, call, "BadSignature");
+    });
+  });
+
+  describe("an ERC-1271 owner's answer, read as the Pot reads it", () => {
+    /** A Pot owned by a wallet whose `isValidSignature` returns `answer` verbatim to its key. */
+    const potAnswering = async (
+      answer: Hex,
+      n: number,
+    ): Promise<{ wallet: Address; pot: Address }> => {
+      const wallet = await deploy(
+        concat([
+          WALLET_1271_RAW.creationCode,
+          encodeAbiParameters(
+            [{ type: "address" }, { type: "bytes" }],
+            [WALLET_SIGNER.address, answer],
+          ),
+        ]),
+      );
+
+      return { wallet, pot: await mintPot(wallet, salt(n)) };
+    };
+
+    it("takes the magic word with bytes after it: the Pot reads only the first word", async () => {
+      const { wallet, pot } = await potAnswering(concat([MAGIC_WORD, `0x${"ab".repeat(32)}`]), 80);
+      const call = await signedBy(WALLET_SIGNER, cookOf({ pot }));
+      expect(await verifySignedCook({ ...call, owner: wallet }, publicClient)).toBe(true);
+
+      const receipt = await submit(SUBMITTER, call);
+      expect(receipt.status).toBe("success");
+      expect(await cookNonceUsed(publicClient, pot, call.nonce)).toBe(true);
+    });
+
+    it("refuses the selector with non-zero padding, as the Pot does", async () => {
+      const padded = `0x1626ba7e${"00".repeat(27)}01` as Hex;
+      const { wallet, pot } = await potAnswering(padded, 81);
+      const call = await signedBy(WALLET_SIGNER, cookOf({ pot }));
+      expect(await verifySignedCook({ ...call, owner: wallet }, publicClient)).toBe(false);
+      await expectRefused(SUBMITTER, call, "BadSignature");
+      expect(await cookNonceUsed(publicClient, pot, call.nonce)).toBe(false);
+    });
+
+    it("refuses fewer than 32 bytes, as the Pot does", async () => {
+      const { wallet, pot } = await potAnswering("0x1626ba7e", 82);
+      const call = await signedBy(WALLET_SIGNER, cookOf({ pot }));
       expect(await verifySignedCook({ ...call, owner: wallet }, publicClient)).toBe(false);
       await expectRefused(SUBMITTER, call, "BadSignature");
     });

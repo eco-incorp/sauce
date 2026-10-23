@@ -403,7 +403,7 @@ describe("verifySignedCook", () => {
     }
   });
 
-  it("asks an owner with code through ERC-1271, and takes only the magic value in a whole word", async () => {
+  it("asks an owner with code through ERC-1271, and reads its first word as the Pot does", async () => {
     const signature = "0xc0ffee" as Hex;
     const owner = "0x000000000000000000000000000000000000C0dE" as Address;
     const digest = signedCookDigest(COOK);
@@ -432,10 +432,36 @@ describe("verifySignedCook", () => {
     const call = { ...COOK, signature, owner };
     const magic = `0x1626ba7e${"00".repeat(28)}` as Hex;
     expect(await verifySignedCook(call, clientAnswering(magic) as never)).toBe(true);
+    // The Pot reads the first word and ignores whatever follows it.
+    expect(
+      await verifySignedCook(call, clientAnswering(`${magic}${"ab".repeat(32)}`) as never),
+    ).toBe(true);
+    expect(await verifySignedCook(call, clientAnswering(`${magic}01`) as never)).toBe(true);
+    // Fewer than 32 bytes, another selector, or non-zero padding after the selector: refused.
     expect(await verifySignedCook(call, clientAnswering("0x1626ba7e") as never)).toBe(false);
+    expect(
+      await verifySignedCook(call, clientAnswering(`0x1626ba7e${"00".repeat(27)}`) as never),
+    ).toBe(false);
     expect(
       await verifySignedCook(call, clientAnswering(`0x1626ba7f${"00".repeat(28)}`) as never),
     ).toBe(false);
+    expect(
+      await verifySignedCook(call, clientAnswering(`0x1626ba7e${"00".repeat(27)}01`) as never),
+    ).toBe(false);
+    expect(
+      await verifySignedCook(
+        call,
+        clientAnswering(`0x1626ba7e01${"00".repeat(27)}${"00".repeat(32)}`) as never,
+      ),
+    ).toBe(false);
+    // An answer that reverts is not the owner's.
+    const reverting = {
+      getCode: async () => "0x6001" as Hex,
+      call: async () => {
+        throw new Error("execution reverted");
+      },
+    };
+    expect(await verifySignedCook(call, reverting as never)).toBe(false);
     expect(await verifySignedCook(call, clientAnswering(undefined) as never)).toBe(false);
     // With no client, a contract owner cannot be asked.
     expect(await verifySignedCook(call)).toBe(false);
