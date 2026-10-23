@@ -1034,6 +1034,28 @@ describe("`.balance` is a field wherever it was one", () => {
     );
   });
 
+  it("a destructured record's field, by its position", () => {
+    const program = (field: string, read: string) =>
+      `function main(row: { wallet: { ${field}: Uint256 }; to: Address }): Uint256 {\n` +
+      `  const [wallet, to] = row;\n  return ${read};\n}`;
+    untouched(program("balance", "wallet.balance"));
+    expect(hex(program("balance", "wallet.balance"))).toBe(hex(program("amount", "wallet.amount")));
+    expect(hex(program("balance", "to.balance"))).toBe(hex(program("balance", "ctx.balance(to)")));
+    const skipped = (read: string) =>
+      `function main(row: { to: Address; wallet: { balance: Uint256 } }): Uint256 {\n` +
+      `  const [, wallet] = row;\n  return ${read};\n}`;
+    untouched(skipped("wallet.balance"));
+  });
+
+  it("a destructured element of abi.decode's result, by its shape", () => {
+    untouched(
+      'function main(d: bytes): Uint256 { const [w, n] = abi.decode(d, ["{Uint256, Uint256}", "Uint256"]); return w.balance + n; }',
+    );
+    const decoded = (read: string) =>
+      `function main(d: bytes): Uint256 { const [a] = abi.decode(d, ["Address"]); return ${read}; }`;
+    expect(hex(decoded("a.balance"))).toBe(hex(decoded("ctx.balance(a)")));
+  });
+
   it("an element of a contract call's result: a struct's field", () => {
     const positions = (field: string): Abi => [
       {

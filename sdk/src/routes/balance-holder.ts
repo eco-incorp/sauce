@@ -239,6 +239,29 @@ export function holderShapes(program: AstNode): HolderShapes {
     if (id?.type !== "Identifier" || shape === undefined || shape.kind === "scalar") return;
     if (!names.has(nameOf(id))) names.set(nameOf(id), shape);
   };
+  /** `pattern` bound to a value of `shape`: an array pattern's element is the field at its
+   *  position; any part of a value whose fields the text does not show is of unknown type. */
+  const bindPattern = (pattern: AstNode | null | undefined, shape: Shape | undefined): void => {
+    if (pattern === null || pattern === undefined) return;
+    if (pattern.type === "Identifier") {
+      bind(pattern, shape);
+      return;
+    }
+    if (pattern.type === "ArrayPattern" && shape?.kind === "record" && shape.fields !== undefined) {
+      const fields = [...shape.fields.values()];
+      (pattern.elements as (AstNode | null)[]).forEach((element, position) =>
+        bindPattern(element, position < fields.length ? fields[position] : UNKNOWN),
+      );
+      return;
+    }
+    // `const [a, b] = market.positions(x)`: each part of a value of unknown type is one too.
+    if (shape?.kind !== "unknown" && shape?.kind !== "record") return;
+    collectPatternNames(pattern, {
+      add: (name: string) => {
+        if (!names.has(name)) names.set(name, UNKNOWN);
+      },
+    });
+  };
   walk(program, (n) => {
     if (n.type === "FunctionDeclaration") {
       const id = n.id as AstNode | null;
@@ -266,16 +289,7 @@ export function holderShapes(program: AstNode): HolderShapes {
     walk(program, (n) => {
       if (n.type === "VariableDeclarator") {
         const id = n.id as AstNode;
-        const shape = annotated(id, types) ?? shapeOfValue(n.init as AstNode | null, shapes);
-        if (id.type === "Identifier") bind(id, shape);
-        // `const [a, b] = market.positions(x)`: each part of a value of unknown type is one too.
-        else if (shape?.kind === "unknown") {
-          collectPatternNames(id, {
-            add: (name: string) => {
-              if (!names.has(name)) names.set(name, UNKNOWN);
-            },
-          });
-        }
+        bindPattern(id, annotated(id, types) ?? shapeOfValue(n.init as AstNode | null, shapes));
       }
       if (n.type === "ForOfStatement") {
         const left = n.left as AstNode;
