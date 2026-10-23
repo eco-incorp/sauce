@@ -509,6 +509,52 @@ describe("the guard", () => {
     });
   });
 
+  it("holds an approval and a transfer of a token together, and reserves the approval in the day's total", async () => {
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const six = parseUnits("6", 6);
+    const verdict = (guard: SendGuard, logs: Log[]) =>
+      guard.evm(client(logs), pay).then(
+        (reservation) => {
+          reservation.sent("0xaa");
+
+          return "let through";
+        },
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    // 6 USDC sent and 6 more approved: each within 10, together past it.
+    const together = await verdict(guarded({ tokens: { USDC: { perTransaction: "10" } } }), [
+      transfer(USDC, WALLET, RECIPIENT, six),
+      approval(USDC, WALLET, SPENDER, six),
+    ]);
+    // A day's 10: an approval of 6, reserved, leaves room for 4, so a second approval of 6 is
+    // refused.
+    rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+    const perDay = guarded({ tokens: { USDC: { perDay: "10" } } });
+    const first = await verdict(perDay, [approval(USDC, WALLET, SPENDER, six)]);
+    const reserved = ledger().find((line) => line.state === "reserved")?.spend;
+    const second = await verdict(perDay, [approval(USDC, WALLET, RECIPIENT, six)]);
+    // An approval spent in the same transaction counts once, as what it moved: the allowance the
+    // token reports last is what the spender keeps. And one to the wallet's own Pot gives no other
+    // key anything.
+    rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+    const capped = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const spentAtOnce = await verdict(capped, [
+      approval(USDC, WALLET, SPENDER, six),
+      transfer(USDC, WALLET, RECIPIENT, six),
+      approval(USDC, WALLET, SPENDER, 0n),
+    ]);
+    const toOwnPot = await verdict(capped, [approval(USDC, WALLET, POT, maxUint256)]);
+
+    expect({ together, first, reserved, second, spentAtOnce, toOwnPot }).toEqual({
+      together: "tokens.USDC.perTransaction",
+      first: "let through",
+      reserved: { "tokens.USDC": { amount: String(six), decimals: 6 } },
+      second: "tokens.USDC",
+      spentAtOnce: "let through",
+      toOwnPot: "let through",
+    });
+  });
+
   it("holds a token named by address, its decimals read from it", async () => {
     const guard = guarded({ tokens: { [OTHER_TOKEN]: { perTransaction: "1" } } });
     const over = client([transfer(OTHER_TOKEN, WALLET, RECIPIENT, parseUnits("1.5", 8))], 8);

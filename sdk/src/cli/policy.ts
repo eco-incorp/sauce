@@ -361,8 +361,9 @@ interface Outflow {
   readonly limitDecimals?: number;
   readonly amount: bigint;
   /**
-   * Solana: how much of `amount` is allowances the transaction approves another key, which counts
-   * as sent when it is approved, since the delegate needs no later signature to move it.
+   * How much of `amount` is allowances the transaction approves another key (a Solana delegate's,
+   * an ERC-20 allowance, one granted through Permit2), which counts as sent when it is approved,
+   * since the spender needs no later signature to move it.
    */
   readonly delegated?: bigint;
 }
@@ -655,6 +656,22 @@ export async function measureEvm(
         approvals.push({ token: emitter, spender: topicAddress(two!), amount });
       }
     }
+    // The allowance each spender keeps: the last a token reports in the transaction (a token may
+    // report one again as a spender pulls). A spender that is the wallet or its own Pot is no other
+    // key, and none is kept at 0. What another key keeps counts as sent, with what the transaction
+    // moves of the token, per transaction and in the day's total: it needs no later signature.
+    // (The ERC-20 approval of Permit2 itself moves nothing without one, and is not counted.)
+    const kept = new Map<string, (typeof approvals)[number]>();
+    for (const each of approvals) kept.set(`${each.token}/${each.spender}`, each);
+    const granted: typeof approvals = [];
+    const delegated = new Map<string, bigint>();
+    for (const each of kept.values()) {
+      if (each.amount === 0n || ours.has(each.spender) || (await ownPot(each.spender))) continue;
+      granted.push(each);
+      if (each.spender.toLowerCase() === permit2) continue;
+      tokens.set(each.token, (tokens.get(each.token) ?? 0n) + each.amount);
+      delegated.set(each.token, (delegated.get(each.token) ?? 0n) + each.amount);
+    }
     // An account's own native leaves only as a transaction's value, which a trace shows; with no
     // trace, the value is what the wallet sends, and a cook's Pot is not seen. (What `native` holds
     // then is what left through the native coin's ERC-20, where it has one.)
@@ -678,6 +695,7 @@ export async function measureEvm(
             token,
             ...(await info(token as Address)),
             amount,
+            ...(delegated.has(token) ? { delegated: delegated.get(token)! } : {}),
           })),
         )),
         ...(erc20 === undefined || nativeOut === 0n
@@ -693,7 +711,7 @@ export async function measureEvm(
             ]),
       ],
       approvals: await Promise.all(
-        approvals.map(async (approval) => ({
+        granted.map(async (approval) => ({
           token: approval.token,
           ...(await info(approval.token)),
           amount: approval.amount,
@@ -1386,7 +1404,7 @@ function spendOf(
       );
     }
     // Each approval on its own first, so the refusal names it; then everything the transaction
-    // counts against the limit together (on Solana, approvals included).
+    // counts against the limit together, approvals included.
     const permit2 = permit2Of(chain);
     for (const approval of measured.approvals.filter((each) => names(key, each))) {
       if (approval.spender.toLowerCase() === permit2) continue;
