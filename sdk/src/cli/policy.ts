@@ -77,6 +77,7 @@ import {
   getAddress,
   isAddress,
   parseUnits,
+  toEventSelector,
   toFunctionSelector,
   type Address,
   type Hex,
@@ -411,6 +412,16 @@ export interface Measured {
 
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+/**
+ * Permit2's AllowanceTransfer grants, emitted by Permit2 itself: `approve`, or a `permit` the owner
+ * signed, lets `spender` take up to `amount` of `token` from `owner` through Permit2 until
+ * `expiration`, with no later signature. Owner, token and spender are its three indexed topics, the
+ * amount its first word of data.
+ */
+const PERMIT2_GRANTS = new Set<string>([
+  toEventSelector("Approval(address,address,address,uint160,uint48)"),
+  toEventSelector("Permit(address,address,address,uint160,uint48,uint48)"),
+]);
 /** Where `traceTransfers` reports native transfers, as ERC-20 Transfer logs. */
 const NATIVE_EMITTER = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 /** `Kitchen.deployPot(owner, salt)`, as `sauce run` and `sauce tx` send it. */
@@ -534,6 +545,7 @@ export async function measureEvm(
 ): Promise<Measured[]> {
   const results = rehearsed ?? (await rehearsePlan(client, wallet, calls));
   const measured: Measured[] = [];
+  const permit2 = permit2Of(chain);
   // The wallet's own Pots: one an earlier call of these deploys for it, or one the chain shows is,
   // its owner the wallet and its address its (owner, salt) under a Kitchen a release records. A
   // cook's calldata sent anywhere else makes no Pot of it: what the wallet pays there leaves it.
@@ -611,7 +623,25 @@ export async function measureEvm(
     const tokens = new Map<string, bigint>();
     const approvals: Array<{ token: Address; spender: Address; amount: bigint }> = [];
     for (const log of logs) {
-      const [topic, one, two] = log.topics;
+      const [topic, one, two, three] = log.topics;
+      // A standing allowance granted through Permit2 is an approval of the token it names: the
+      // wallet's approval of Permit2 for that token lets the spender take it.
+      if (
+        permit2 !== undefined &&
+        log.address.toLowerCase() === permit2 &&
+        log.topics.length === 4 &&
+        PERMIT2_GRANTS.has(topic!.toLowerCase()) &&
+        log.data.length >= 66
+      ) {
+        if (ours.has(topicAddress(one!))) {
+          approvals.push({
+            token: topicAddress(two!),
+            spender: topicAddress(three!),
+            amount: BigInt(log.data.slice(0, 66)),
+          });
+        }
+        continue;
+      }
       const amount = wordOf(log.data);
       if (amount === undefined || log.topics.length !== 3) continue;
       const emitter = getAddress(log.address);

@@ -19,9 +19,11 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   getAddress,
+  keccak256,
   maxUint256,
   pad,
   parseUnits,
+  toBytes,
   type Address,
   type Hex,
   type PublicClient,
@@ -458,6 +460,53 @@ describe("the guard", () => {
     await expect(
       guard.evm(client([approval(USDC, WALLET, RECIPIENT, parseUnits("10", 6))]), pay),
     ).resolves.toBeDefined();
+  });
+
+  it("holds a standing allowance granted through Permit2 to the token's limit", async () => {
+    // Permit2's AllowanceTransfer: the wallet's approve (or a permit it signed) lets a spender take
+    // up to the amount of the token through Permit2, with no later signature, wherever the wallet
+    // approved Permit2 for the token, as run --fund permit2 leaves it. Its events are Permit2's own,
+    // whose topics its deployed code carries.
+    const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
+    const PERMIT2_PERMIT = keccak256(
+      toBytes("Permit(address,address,address,uint160,uint48,uint48)"),
+    );
+    const runtime = (
+      JSON.parse(readFileSync(new URL("./fixtures/cli/Permit2.json", import.meta.url), "utf8")) as {
+        runtime: string;
+      }
+    ).runtime.toLowerCase();
+    expect([PERMIT2_APPROVAL, PERMIT2_PERMIT].map((one) => runtime.includes(one.slice(2)))).toEqual(
+      [true, true],
+    );
+    const grant = (event: Hex, spender: Address, amount: bigint) => ({
+      address: PERMIT2,
+      topics: [event, topic(WALLET), topic(USDC), topic(spender)] as Hex[],
+      data:
+        event === PERMIT2_APPROVAL
+          ? encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }], [amount, 2 ** 40])
+          : encodeAbiParameters(
+              [{ type: "uint160" }, { type: "uint48" }, { type: "uint48" }],
+              [amount, 2 ** 40, 0],
+            ),
+    });
+    const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const verdict = (logs: Log[]) =>
+      guard.evm(client(logs), { to: PERMIT2, data: "0x", value: 0n }).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+    const over = 2n ** 160n - 1n;
+
+    expect({
+      approved: await verdict([grant(PERMIT2_APPROVAL, RECIPIENT, over)]),
+      permitted: await verdict([grant(PERMIT2_PERMIT, RECIPIENT, over)]),
+      within: await verdict([grant(PERMIT2_APPROVAL, RECIPIENT, parseUnits("10", 6))]),
+    }).toEqual({
+      approved: expect.stringContaining(`this transaction approves ${RECIPIENT} for `) as unknown,
+      permitted: expect.stringContaining(`this transaction approves ${RECIPIENT} for `) as unknown,
+      within: "let through",
+    });
   });
 
   it("holds a token named by address, its decimals read from it", async () => {
