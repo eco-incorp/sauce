@@ -319,6 +319,31 @@ describe("what a chain can lack", () => {
     );
   });
 
+  it("on Solana a token it lacks is the same: the Pot's balance of it, and Token(it), only under a test", () => {
+    // Solana registers no WETH. A ruled-out read of the Pot's balance adds no account.
+    const read = compileSauceProgram(
+      "solana",
+      "function main(): Uint256 { if (WETH) { return pot.WETH; } return 0; }",
+    );
+    expect(Buffer.from(read.bytecode).toString("hex")).toBe(build("solana", "return 0;"));
+    expect(read.derivedAccounts ?? {}).toEqual({});
+    expect(build("solana", "if (!WETH) { return 0; }\nreturn pot.WETH;")).toBe(build("solana", "return 0;"));
+    expect(
+      hex("solana", "function main(to: Account): Uint256 { if (WETH) { Token(WETH).transfer(to, 1); } return 0; }"),
+    ).toBe(hex("solana", "function main(to: Account): Uint256 { return 0; }"));
+    // Anywhere else it is refused, as on every holder and as on an EVM chain.
+    expect(refusal("solana", "function main(): Uint256 { return pot.WETH; }")).toMatch(
+      /`WETH` is not a token on solana\. `<holder>\.<TOKEN>` reads the holder's balance/,
+    );
+    expect(refusal("solana", "function main(to: Account): Uint256 { Token(WETH).transfer(to, 1); return 0; }")).toMatch(
+      /`WETH` is not a token on solana\.[\s\S]*--> main\.js:1:45/,
+    );
+    // A name no chain registers keeps the Pot's own refusal.
+    expect(refusal("solana", "function main(): Uint256 { return pot.USDCC; }")).toMatch(
+      /`pot\.USDCC` on Solana: `USDCC` is not a token solana registers\. Did you mean `USDC`\?/,
+    );
+  });
+
   it.each([
     ["a contract the protocol does not have", "UniswapV3.Factroy != 0", /`UniswapV3\.Factroy` is not a contract of UniswapV3.*Did you mean `Factory`/],
     ["a symbol no chain registers", "USDX != 0", /`USDX` is not a declared variable/],

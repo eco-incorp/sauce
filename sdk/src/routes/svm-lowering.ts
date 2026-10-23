@@ -629,6 +629,10 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
+    /** The token symbols some chain registers and this one lacks, which the chain's names hold as
+     *  zero (`chain-module.ts`): a read of one is the compiler's, which compiles it only in a branch
+     *  a test of the name rules out. */
+    private readonly absent: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -672,6 +676,11 @@ export class SvmLowering {
   /** Whether `name` is a registered symbol the program does not declare itself. */
   isSymbol(name: string): boolean {
     return this.tokens.has(name) && !this.declared.has(name);
+  }
+
+  /** Whether `name` is a token some chain registers and this one lacks, undeclared. */
+  isAbsentToken(name: string): boolean {
+    return this.absent.has(name) && !this.declared.has(name);
   }
 
   /** Whether `<holder>.<name>` is the token syntax's: a registered symbol, `balance`, or the native

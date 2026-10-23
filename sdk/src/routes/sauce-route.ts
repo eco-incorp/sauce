@@ -552,6 +552,7 @@ function compileForChain(
       ),
       native,
       new Set(stops),
+      names.absentTokens,
     );
     if (lowered.rewrote) {
       source = lowered.source;

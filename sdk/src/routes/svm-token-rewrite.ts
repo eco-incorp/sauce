@@ -145,6 +145,8 @@ export function rewriteSvmTokenSyntax(
   native?: string,
   /** The swaps at a price to hold to a stop (`SvmLowering`'s `stopped`). */
   stopped?: ReadonlySet<string>,
+  /** The token symbols some chain registers and this one lacks (`SvmLowering`'s `absent`). */
+  absent?: ReadonlySet<string>,
 ): SvmTokenRewriteResult {
   // Before parsing: a program that names neither `Token`, a symbol, a venue, the Pot nor a balance
   // has nothing to lower. The scan stops at the first it meets; a mention in a comment only costs
@@ -166,7 +168,7 @@ export function rewriteSvmTokenSyntax(
     return { source, rewrote: false, derived: {} };
   }
   const lower = (text: string): SvmLowering => {
-    const lowering = new SvmLowering(text, tokens, rows, keys, native, stopped);
+    const lowering = new SvmLowering(text, tokens, rows, keys, native, stopped, absent);
     refuseRetiredPot(lowering);
     collectTokenMethods(lowering);
     collectVenueMethods(lowering);
@@ -484,6 +486,14 @@ function collectTokenMethods(l: SvmLowering): void {
       const parent = l.parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
       if (!isAuthority(object) || (l.isPot(object) && ACCOUNT_MEMBERS.has(name))) return;
+      // A token the chain lacks is zero, and its read the compiler's, on the Pot's `ctx.self()` as on
+      // the EVM: compiled only where a test of it rules the read out, and refused anywhere else.
+      if (l.isAbsentToken(name)) {
+        if (l.isPot(object)) {
+          l.site(n, () => l.splices.push({ start: object.start, end: object.end, replacement: "ctx.self()" }));
+        }
+        return;
+      }
       const near = nearMatches(name, [
         ...l.tokens.keys(),
         BALANCE_MEMBER,
@@ -566,7 +576,13 @@ function collectTokenMethods(l: SvmLowering): void {
   if (l.declared.has(TOKEN_FACTORY_NAME)) return;
   const factories = new Set<AstNode>();
   walk(program, (n) => {
-    if (isFactoryCall(n)) factories.add(n);
+    if (!isFactoryCall(n)) return;
+    // A token the chain lacks is zero, the compiler's: used only where a test of it rules it out.
+    const [argument, ...rest] = (n as { arguments?: AstNode[] }).arguments ?? [];
+    if (rest.length === 0 && argument?.type === "Identifier" && l.isAbsentToken(nameOf(argument))) {
+      return;
+    }
+    factories.add(n);
   });
   const tokenOfFactory = (call: AstNode, value: string): TokenRef => {
     const argument = factoryArgument(call);
