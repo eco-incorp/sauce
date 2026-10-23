@@ -14,6 +14,7 @@ import {
   resolveSvmAccountName,
   SvmAccountNameError,
   svmNamesPot,
+  svmPotDerived,
   svmPublicKey,
   type SvmAccountNameContext,
 } from "../../src/svm/account-names.js";
@@ -124,6 +125,27 @@ describe("svm account names", () => {
       `pda:${program}:"pot"`,
     ]) {
       expect(svmNamesPot(name)).toBe(false);
+    }
+  });
+
+  it("knows which derivations are the Pot's through the Kitchen: pot, and authority too", () => {
+    const program = key(9);
+    for (const name of [
+      "pot",
+      "pot:USDC",
+      "authority",
+      "authority:USDC",
+      `pda:${program}:pot`,
+      `pda:${program}:"a",authority`,
+    ]) {
+      expect(svmPotDerived(name, "kitchen")).toBe(true);
+    }
+    // Cooked directly, `authority` is the owner: only `pot` is the Pot's (refused there).
+    expect(svmPotDerived("authority", "engine")).toBe(false);
+    expect(svmPotDerived("authority:USDC", "engine")).toBe(false);
+    expect(svmPotDerived("pot", "engine")).toBe(true);
+    for (const name of ["owner", "owner:USDC", "@to:USDC", `pda:${program}:"pot"`, "mint:USDC"]) {
+      expect(svmPotDerived(name, "kitchen")).toBe(false);
     }
   });
 

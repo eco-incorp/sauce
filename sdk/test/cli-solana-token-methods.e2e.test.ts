@@ -1004,4 +1004,141 @@ describeSvm("the token methods on Solana: every account derived by the command",
       );
     }, 120_000);
   });
+
+  describe("the Pot's slots are the Pot: no account a caller gives stands in for one", () => {
+    // Through the Kitchen a slot the lowering derived from the Pot (`pot`, `pot:<token>`,
+    // `authority`, an address seeded by the Pot) is the Pot's own: given another account in its
+    // place, `return pot` would return that account, `pot.balance` and `pot.USDC` would read it, and
+    // `pot.signer()` would carry the owner's signature. The command refuses before it builds
+    // anything. The refusal names the slot, its derivation, the account it gives and the value given.
+    const assumed = ["--assume-balance", "USDC:5"];
+    const programs = {
+      key: "function main(): Address {\n  return pot;\n}\n",
+      token: "function main(): Uint256 {\n  return pot.USDC;\n}\n",
+      lamports: "function main(): Uint256 {\n  return pot.balance;\n}\n",
+      signer:
+        "function main() {\n  svm.call(Solana.systemProgram, [pot.signer(), pot.writable()], hex`00`);\n}\n",
+      // It names no `pot`: its authority slot derives as `authority`, which is the Pot here too.
+      pays: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+    };
+    /** The refusal's text up to what the given value is: the slot, its derivation and the Pot's. */
+    const stands = (name: string, derivation: string, expected: string, given: string) =>
+      `--account ${name}=${given}: the account ${name} is derived from the Pot, as ` +
+      `${derivation} (${expected}), and `;
+    /** How the refusal names the value given: a name with the account it is, or the address. */
+    const givenAs = (given: string, resolved: string) =>
+      `${given === resolved ? given : `${given} (${resolved})`} is another account. Through the ` +
+      "Kitchen nothing stands in for the Pot:";
+
+    it.each([
+      ["return pot", "key", "pot", "pot"],
+      ["pot.balance", "lamports", "pot", "pot"],
+      ["pot.USDC", "token", "pot", "pot"],
+      ["pot.signer() in an svm.call", "signer", "pot", "pot"],
+    ] as const)(
+      "refuses the owner for the Pot's own slot, by --account and by --accounts: %s",
+      async (_what, name, slot, derivation) => {
+        const file = program(`pot-slot-${name}`, programs[name]);
+        for (const given of [owner.signer.address, "owner"]) {
+          for (const flags of [
+            ["--account", `${slot}=${given}`],
+            ["--accounts", JSON.stringify({ [slot]: given })],
+          ]) {
+            const out = await simulate(file, ...flags, ...assumed);
+            expect(out.code).toBe(2);
+            expect(out.stderr).toContain(stands(slot, derivation, pot, given));
+            expect(out.stderr).toContain(givenAs(given, owner.signer.address));
+          }
+        }
+      },
+      120_000,
+    );
+
+    it("refuses another account for the Pot's token account, and any other for a pda seeded by the Pot", async () => {
+      const file = program("pot-slot-usdc", programs.token);
+      const someone = randomAddress();
+      const refused = await simulate(file, "--account", `potUSDC=${someone}`, ...assumed);
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toContain(
+        stands("potUSDC", "pot:USDC", potUsdc, someone) + givenAs(someone, someone),
+      );
+      // The owner's own USDC account is another holder's: refused as well.
+      const ownerUsdc = await account(usdc, owner.signer.address, 0n, TOKEN_PROGRAM, 6);
+      const other = await simulate(file, "--account", `potUSDC=${ownerUsdc}`, ...assumed);
+      expect(other.code).toBe(2);
+      expect(other.stderr).toContain(stands("potUSDC", "pot:USDC", potUsdc, ownerUsdc));
+
+      const seeded = program(
+        "pot-slot-pda",
+        'function main(program: Address): Uint256 {\n  return Solana.pda(program, ["vault", pot]).dataLen;\n}\n',
+      );
+      const derived = json(await sauce("compile", seeded, "--chain", "solana", "--json")) as {
+        manifest: { accounts: { name: string; derive?: string }[] };
+      };
+      const pda = derived.manifest.accounts.find((slot) => slot.derive?.includes(",pot"))!;
+      const wrongPda = await simulate(
+        seeded,
+        ...["--args", KITCHEN, "--account", `${pda.name}=${someone}`],
+      );
+      expect(wrongPda.code).toBe(2);
+      expect(wrongPda.stderr).toContain(
+        `--account ${pda.name}=${someone}: the account ${pda.name} is derived from the Pot, as ${pda.derive} (`,
+      );
+    }, 120_000);
+
+    it("refuses the owner for the authority slot of a program that never names pot", async () => {
+      const file = program("pot-slot-authority", programs.pays);
+      const to = randomAddress();
+      await account(usdc, to, 0n, TOKEN_PROGRAM, 6);
+      for (const given of [owner.signer.address, "owner"]) {
+        const out = await simulate(file, "--args", to, "1", "--account", `pot=${given}`);
+        expect(out.code).toBe(2);
+        expect(out.stderr).toContain(stands("pot", "authority", pot, given));
+      }
+    }, 120_000);
+
+    it("takes the Pot itself for its slot, by role or by address, and runs", async () => {
+      const key = program("pot-slot-same-key", programs.key);
+      for (const given of ["pot", pot, "authority"]) {
+        for (const flags of [
+          ["--account", `pot=${given}`],
+          ["--accounts", JSON.stringify({ pot: given })],
+        ]) {
+          expect(json(await simulate(key, ...flags, ...assumed))).toMatchObject({
+            ok: true,
+            returned: pot,
+          });
+        }
+      }
+      const token = program("pot-slot-same-usdc", programs.token);
+      expect(
+        json(await simulate(token, "--account", "potUSDC=pot:USDC", ...assumed)),
+      ).toMatchObject({ ok: true, returned: "5000000" });
+      expect(
+        json(await simulate(token, "--account", `potUSDC=${potUsdc}`, ...assumed)),
+      ).toMatchObject({ ok: true, returned: "5000000" });
+    }, 120_000);
+
+    it("--via engine is as it was: the owner is the authority, and a given owner stands for it", async () => {
+      const file = program("pot-slot-engine", programs.pays);
+      const ownerUsdc = await account(usdc, owner.signer.address, 1_000n, TOKEN_PROGRAM, 6);
+      const to = randomAddress();
+      const toUsdc = await account(usdc, to, 0n, TOKEN_PROGRAM, 6);
+      for (const given of ["owner", owner.signer.address]) {
+        const out = await simulate(
+          file,
+          ...["--via", "engine", "--args", to, "1", "--account", `pot=${given}`],
+        );
+        expect(json(out)).toMatchObject({ ok: true });
+      }
+      // Run, it moves the owner's USDC and none of the Pot's.
+      const before = { owner: tokenAmount(harness, ownerUsdc), pot: tokenAmount(harness, potUsdc) };
+      expect(
+        json(await run(file, ...["--via", "engine", "--args", to, "7", "--account", "pot=owner"])),
+      ).toMatchObject({ cook: { status: "success" } });
+      expect(tokenAmount(harness, toUsdc)).toBe(7n);
+      expect(tokenAmount(harness, ownerUsdc)).toBe(before.owner - 7n);
+      expect(tokenAmount(harness, potUsdc)).toBe(before.pot);
+    }, 120_000);
+  });
 });

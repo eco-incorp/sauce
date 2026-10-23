@@ -61,9 +61,11 @@ import {
   resolveSvmAccountName,
   SvmAccountNameError,
   svmNamesPot,
+  svmPotDerived,
   svmPublicKey,
   SYSTEM_HOLDER,
   type ResolvedSvmAccountName,
+  type SvmAccountNameContext,
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
@@ -1095,6 +1097,47 @@ function refusePotOnEngine(
 }
 
 /**
+ * Refuses, through the Kitchen, any account given in place of one the program derives from the Pot
+ * (`svmPotDerived`: `pot`, `pot:<token>`, `authority`, an address the Pot seeds) that is not the one
+ * its derivation gives. The program takes such a slot as its own Pot — `pot` is its key,
+ * `pot.balance` and `pot.<TOKEN>` read it, `pot.signer()` signs as it, and the checks the lowering
+ * writes compare against that same slot — so another account there would stand in for the Pot. The
+ * Pot itself is taken however it is given (`pot`, `authority`, its address). Cooked directly on the
+ * engine (`via: "engine"`) there is no Pot, and nothing changes.
+ */
+async function refuseSubstitutedPot(
+  derived: Readonly<Record<string, string>> | undefined,
+  given: Readonly<Record<string, string>>,
+  ctx: SvmAccountNameContext,
+): Promise<void> {
+  if (ctx.via === "engine") return;
+  const keyOf = (resolved: ResolvedSvmAccountName): Address =>
+    resolved.value === "pot" ? ctx.pot : resolved.value === "owner" ? ctx.owner : resolved.value;
+  for (const [name, derivation] of Object.entries(derived ?? {})) {
+    const value = given[name];
+    if (value === undefined || !svmPotDerived(derivation, ctx.via)) continue;
+    let expected: Address;
+    let actual: Address;
+    try {
+      expected = keyOf(await resolveSvmAccountName(derivation, ctx));
+      actual = keyOf(await resolveSvmAccountName(value, ctx));
+    } catch (error) {
+      if (error instanceof SvmAccountNameError) {
+        throw new UsageError(`--account ${name}=${value}: ${error.message}`);
+      }
+      throw error;
+    }
+    if (actual === expected) continue;
+    throw new UsageError(
+      `--account ${name}=${value}: the account ${name} is derived from the Pot, as ${derivation} ` +
+        `(${expected}), and ${value === actual ? value : `${value} (${actual})`} is another account. ` +
+        `Through the Kitchen nothing stands in for the Pot: give ${derivation} or ${expected}, or ` +
+        "leave the account out to derive it.",
+    );
+  }
+}
+
+/**
  * Refuses a cook whose `--account`s name an account the program does not take, or leave out one
  * nothing derives, or that uses the Pot cooked with none — before anything is read from a cluster,
  * so the refusal needs no endpoint.
@@ -1642,6 +1685,17 @@ async function prepare(
   // the pools and tick arrays a swap's stop is worked out from.
   const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
   const keyArguments = svmKeyArguments(plain, input.args);
+  // The Pot's own slots are the Pot's, whatever --account gives: refused before anything is built.
+  await refuseSubstitutedPot(plain.derivedAccounts, input.accounts, {
+    chain: input.chain,
+    owner: input.owner,
+    pot,
+    via,
+    args: keyArguments.keys,
+    integers: keyArguments.integers,
+    programOf: mintProgramOn(rpc, input.rpcUrl),
+    load,
+  });
   const given = await resolveTokenAccounts(
     svmAccountsWanted(plain, input.accounts),
     input.owner,
