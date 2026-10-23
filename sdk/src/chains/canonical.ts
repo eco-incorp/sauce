@@ -20,12 +20,14 @@
  * the intended fail-closed behavior, not a test to relax.
  */
 
+/** The kind of VM a chain runs: `"evm"`, or `"svm"` for Solana. */
 export type ChainKind = "evm" | "svm";
 
 /**
  * Identity-only record for one chain: what it is called and what kind of VM it
- * runs. Deliberately NOT a superset of `Chain` (../core/types.js) — see the
- * module doc comment above for why.
+ * runs. Deliberately NOT a superset of `Chain` (../core/types.js): it carries no
+ * nativeCurrency, blockExplorerUrls or testnet flag, which `chains` holds for the
+ * ids that have them.
  */
 export interface CanonicalChain {
   /** Numeric chain id. EVM chain id, or Solana's id, 1399811149. */

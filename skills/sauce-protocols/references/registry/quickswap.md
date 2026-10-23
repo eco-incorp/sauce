@@ -2,7 +2,7 @@
 
 # QuickSwap (`quickswap`)
 
-The leading DEX on Polygon with V2 (constant product) and V3 (Algebra concentrated liquidity) pools. Low-fee trading powered by Polygon's infrastructure.
+DEX on Polygon with V2 (constant product) and V3 (Algebra concentrated liquidity) pools. Low-fee trading powered by Polygon's infrastructure.
 
 | Fact | Value |
 | --- | --- |

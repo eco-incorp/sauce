@@ -5,7 +5,7 @@ export const protocolInfo: ProtocolInfo = {
   name: "Spark",
   slug: "spark",
   description:
-    "Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers competitive rates on DAI/USDS borrowing backed by the Maker protocol.",
+    "Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers DAI/USDS borrowing backed by the Maker protocol.",
   website: "https://spark.fi",
   github: "https://github.com/sparkdotfi/sparklend-deployments",
   category: "lending",

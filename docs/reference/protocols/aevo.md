@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-High-performance options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
+Options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
 
 | Fact | Value |
 | --- | --- |

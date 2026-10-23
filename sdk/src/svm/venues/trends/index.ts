@@ -287,7 +287,7 @@ export async function fetchTrendsPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like obric-v2/solfi-v2). */
+/** The Trends venue: a bonding-curve token launchpad. */
 export const trends = {
   slug: SLUG,
   programId: TRENDS_PROGRAM_ID,

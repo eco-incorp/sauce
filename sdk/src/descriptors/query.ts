@@ -45,7 +45,7 @@ export function contractsOnChain(chain: ChainRef): readonly ContractDescriptor[]
   return byChain.get(resolved.slug as ChainSlug) ?? [];
 }
 
-/** Reverse index at protocol granularity, deduped, over the STARTER SET only — deliberately narrower than protocols/index.ts's getProtocolsByChain (all ~128 protocols, no descriptor behind it). */
+/** Reverse index at protocol granularity: each protocol with a contract on `chain`, once, in descriptor order. */
 export function protocolsOnChain(chain: ChainRef): readonly ProtocolInfo[] {
   const slugs = new Set<string>();
   const out: ProtocolInfo[] = [];

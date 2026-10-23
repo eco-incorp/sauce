@@ -1,6 +1,6 @@
 # Instadapp
 
-Flash loan aggregator that routes across Aave, Maker, Balancer and other sources to find the cheapest flash loan.
+Flash loan aggregator that routes across Aave, Maker, Balancer and other sources.
 
 ## Category
 
@@ -9,7 +9,7 @@ infrastructure | Chains and addresses: [registry/instadapp.md](registry/instadap
 ## Key Operations
 
 - **getRoutes**: Query available flash loan routes and their IDs
-- **flashLoan**: Execute a flash loan via optimal route
+- **flashLoan**: Execute a flash loan through a route
 
 ## Typed templates for the raw compiler (not for `sauce compile`)
 

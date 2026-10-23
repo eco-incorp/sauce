@@ -2,7 +2,7 @@
 
 # KyberSwap (`kyberswap`)
 
-Multi-chain DEX aggregator and concentrated liquidity protocol (Elastic). Features dynamic fees and a meta-aggregation router for best execution across DEXes.
+Multi-chain DEX aggregator and concentrated liquidity protocol (Elastic). Features dynamic fees and a meta-aggregation router that routes across DEXes.
 
 | Fact | Value |
 | --- | --- |

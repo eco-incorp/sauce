@@ -528,8 +528,8 @@ const CHOOSING = {
     "`maverickV2` go through the Pot's Router, which answers the pool's callback. Choose by pool type:",
     "",
     "- **Concentrated liquidity** (V3-style pools through `uniswapV3`, V4 pools through `uniswapV4`):",
-    "  the deepest pools for liquid pairs, several fee tiers per pair, and a price limit, so a fill can",
-    "  stop part way and leave the rest unspent.",
+    "  several fee tiers per pair, and a price limit, so a fill can stop part way and leave the rest",
+    "  unspent.",
     "- **Constant-product pairs** (Uniswap V2 and its forks through `uniswapV2`, Solidly-style volatile",
     "  pools): one pool per pair, no price limit; a swap consumes its whole input, bounded only by its",
     "  `minOut`.",
@@ -595,7 +595,7 @@ const CHOOSING = {
     "  a deposit and return shares whose value grows: measure shares and assets as deltas.",
     "- **Yield split** (Pendle): PT is the principal, redeemable at a fixed expiry, YT the yield until",
     "  then.",
-    "- **Managed liquidity** (Gamma, Arrakis) runs concentrated-liquidity positions for you.",
+    "- **Managed liquidity** (Gamma, Arrakis) runs concentrated-liquidity positions in vaults.",
     "- **Boosted LP** (Convex) stakes Curve LP tokens for boosted rewards.",
   ],
   perpetuals: [
@@ -2290,7 +2290,7 @@ export function renderDocsReference(data, skillFiles) {
 /** What a protocol of each category is, for a reader who has never used one. */
 const CATEGORY_PLAINLY = {
   dex: "an exchange: people swap one token for another in its pools",
-  aggregator: "an exchange aggregator: it looks across many exchanges for the best price",
+  aggregator: "an exchange aggregator: it routes a swap across many exchanges",
   lending: "a lending market: deposit tokens to earn interest, or borrow against them",
   cdp: "a stablecoin protocol: lock tokens as collateral and mint a stablecoin against them",
   bridge: "a bridge: it moves tokens from one chain to another",

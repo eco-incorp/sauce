@@ -95,7 +95,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Novel architecture: deposited assets serve dual purpose as lending collateral AND DEX liquidity
+- Deposited assets serve dual purpose as lending collateral AND DEX liquidity
 - No interest rate mode selection -- all rates are algorithmically determined
 - Same contract address on Ethereum and Arbitrum
 - Built by the Instadapp team

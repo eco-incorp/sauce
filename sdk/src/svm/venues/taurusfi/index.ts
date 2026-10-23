@@ -338,7 +338,7 @@ export async function fetchTaurusFiConfig(
   return { venue: SLUG, pool, direction: "0to1", priceScaled, ...entry };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like raydium-amm-v4/raydium-cp-swap). */
+/** The TaurusFi venue: a closed-source market priced by a keeper-updated state account. */
 export const taurusfi = {
   slug: SLUG,
   programId: TAURUSFI_PROGRAM_ID,

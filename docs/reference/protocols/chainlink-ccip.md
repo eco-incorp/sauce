@@ -8,7 +8,7 @@
 > This page lists the chains it is deployed on, the name a program writes for each of its contracts,
 > and the functions a program can call.
 
-Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain messaging with DON (Decentralized Oracle Network) security and token transfers.
+Cross-Chain Interoperability Protocol by Chainlink. Cross-chain messaging with DON (Decentralized Oracle Network) security and token transfers.
 
 | Fact | Value |
 | --- | --- |

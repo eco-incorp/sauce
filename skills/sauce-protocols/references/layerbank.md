@@ -1,6 +1,6 @@
 # LayerBank
 
-Leading lending protocol on Scroll. Compound-style markets (lTokens), but every user action goes through the Core contract, which names the market.
+Lending protocol on Scroll. Compound-style markets (lTokens), but every user action goes through the Core contract, which names the market.
 
 ## Category
 

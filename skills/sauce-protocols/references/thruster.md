@@ -64,7 +64,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 ## Notes
 
 - Standard Uniswap V3 fork interface with identical parameter naming
-- Blast-only deployment; the primary concentrated liquidity DEX on Blast
+- Blast-only deployment
 - Leverages Blast's native yield: ETH and USDB in pools automatically earn native yield
 - Gas rebates from Blast's gas monetization feature benefit traders
 - Input token must be ERC20-approved to the V3 SwapRouter

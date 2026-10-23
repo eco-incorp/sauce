@@ -8,7 +8,7 @@
 > lists the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs for best execution with shared liquidity pool.
+Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs with shared liquidity pool.
 
 | Fact | Value |
 | --- | --- |
@@ -26,7 +26,7 @@ Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetua
 
 ## Notes
 
-- Aggregates perpetual DEXs (GMX, Gains, etc.) for optimal trade execution
+- Aggregates perpetual DEXs (GMX, Gains, etc.)
 - subAccountId (bytes32) encodes: account address + collateral token ID + asset ID + isLong flag
 - tokenId is a uint8 index identifying the collateral asset (0=ETH, 1=BTC, etc.)
 - MLP is the liquidity provider token

@@ -5,7 +5,7 @@ export const protocolInfo: ProtocolInfo = {
   name: "Instadapp",
   slug: "instadapp",
   description:
-    "Flash loan aggregator that routes across Aave, Maker, Balancer and other sources to find the cheapest flash loan.",
+    "Flash loan aggregator that routes across Aave, Maker, Balancer and other sources for a flash loan.",
   website: "https://instadapp.io",
   github: "https://github.com/Instadapp/flashloan-aggregator",
   category: "infrastructure",

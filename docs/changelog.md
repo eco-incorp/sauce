@@ -356,6 +356,19 @@ remain available and explicitly report that deployment availability has not been
   `getAddress` refuses, and 52 were all lowercase. Only the letters' case changes, so every address
   names the same contract.
 
+### Protocol references
+
+- **Fixed**: The protocol documents (the `sauce-protocols` skill, the `/skills` export and the
+  manual's protocol pages) count each protocol's chains from the registry: Permit2 is at one
+  address on 9 chains, Seaport on 6, and Uniswap V2 is on 10. They no longer say an address is the
+  same everywhere where the registry records another: 0x's Exchange Proxy on Optimism, Ambient on
+  Scroll, Silo's SiloRepository on Arbitrum, LI.FI's Diamond on Arc, and the LayerZero endpoint on
+  zkSync and Arc. Ranking, best-execution and safety claims ("leading", "optimal route",
+  "no third-party risk" and the like) are removed or replaced with what the protocol does. Doc
+  comments on `sauceEvmDeployPotCall`, `ChainKind`, `CanonicalChain`, `protocolsOnChain`,
+  `BytesInput`, `UniversalAddressInput`, `svmSettleRefs`, `SAROS_PROGRAM_ID` and the 28 Solana
+  venue objects now describe what they are.
+
 ## SDK 0.99.15 — 2026-10-21
 
 Compiler 2.5.0, v12-evm 1.2.0, kitchen-evm 1.2.0, v12-svm 1.3.0 and kitchen-svm 1.0.0. Same compiler

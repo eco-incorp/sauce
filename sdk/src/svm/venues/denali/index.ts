@@ -246,7 +246,7 @@ function quoteAccounts(base: PoolConfig): VenueAccount[] {
   ];
 }
 
-/** Family facade for the recipe orchestrator. */
+/** The Denali venue: a closed-source, oracle-anchored AMM. */
 export const denali = {
   slug: SLUG,
   kind: "constant-product" as const,

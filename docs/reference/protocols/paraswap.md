@@ -4,13 +4,13 @@
 
 **Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
 
-> ParaSwap is an exchange aggregator: it looks across many exchanges for the best price. This page
-> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
-> functions a program can call.
+> ParaSwap is an exchange aggregator: it routes a swap across many exchanges. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-Multi-chain DEX aggregator optimizing swap rates across decentralized exchanges. Supports limit orders and delta algorithm for MEV protection.
+Multi-chain DEX aggregator routing swaps across decentralized exchanges. Supports limit orders and the Delta algorithm.
 
 | Fact | Value |
 | --- | --- |
@@ -26,10 +26,8 @@ Multi-chain DEX aggregator optimizing swap rates across decentralized exchanges.
 ## Notes
 
 - Augustus V5 and V6 both deployed on all chains
-- Delta algorithm protects against MEV/sandwich attacks
 - Route computation happens off-chain via ParaSwap API - callees/exchangeData come from API
 - Approve srcToken to Augustus contract before swapping
-- V6 is newer but V5 is more widely integrated
 
 ## Its names in a program
 
