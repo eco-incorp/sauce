@@ -48,7 +48,8 @@ import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.
 import {
   awaitPot,
   connect,
-  kitchenFee,
+  requireCookContracts,
+  requirePotDerivation,
   potState,
   releasedContracts,
   sendAndWait,
@@ -801,6 +802,12 @@ export async function planGas(
   };
 }
 
+/** An offline transaction is a builder result, not evidence that its release is live. */
+const UNVERIFIED_COOK =
+  "Release availability is NOT verified: no RPC endpoint was given. The released engine and " +
+  "compatible Kitchen must be deployed, and the Pot must have code before the cook is sent. " +
+  "Pass an RPC endpoint to check; an empty target can accept value without running the program.";
+
 export interface TxInput extends CookInput {
   /** An endpoint, when given: it reads the fee and checks the Pot. */
   readonly rpcUrl?: string;
@@ -821,8 +828,17 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   const cook = cookOf(input, files);
   requireSupported("building the cook transaction", [input.chain]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
-  const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
+  const fee = client === undefined ? undefined : await requireCookContracts(client, input.chain);
   const state = client === undefined ? undefined : await potState(client, cook.pot);
+  if (state !== undefined && !state.deployed && "pot" in input.target) {
+    throw new CliError(
+      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
+        `is. Give its --owner (and --salt) to plan its deployment, or deploy it first`,
+    );
+  }
+  if (client !== undefined && state !== undefined && !state.deployed) {
+    await requirePotDerivation(client, input.chain);
+  }
   const value = valueOf(input.value, fee, input.chain);
   const target = input.target;
   const owner = state?.owner ?? ("owner" in target ? target.owner : undefined);
@@ -948,6 +964,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
         ...feeFloorNotes(input.chain),
+        ...(client === undefined ? [UNVERIFIED_COOK] : []),
       ],
     };
   }
@@ -962,6 +979,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
     ...feeFloorNotes(input.chain),
+    ...(client === undefined ? [UNVERIFIED_COOK] : []),
   ];
   const json = {
     chainId: input.chain.id,
@@ -1028,6 +1046,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const cook = cookOf(input, files);
   requireSupported("sending the cook", [input.chain]);
   const client = await connect(input.rpcUrl, input.chain);
+  const fee = await requireCookContracts(client, input.chain);
   const state = await potState(client, cook.pot);
   // What the cook needs sent first, approved together in one question: the Pot, when it has no
   // code, then whatever else the caller sets up.
@@ -1037,6 +1056,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         `is. Deploy it first: ${deployHint(input.chain, target)}`,
     );
   }
+  if (!state.deployed) await requirePotDerivation(client, input.chain);
   if (state.deployed && state.owner !== signer) {
     throw new CliError(
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
@@ -1082,9 +1102,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
-  const value =
-    valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
-    (funding?.value ?? 0n);
+  const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
   const notes = [...(funding?.notes ?? [])];

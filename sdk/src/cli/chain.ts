@@ -31,8 +31,8 @@ import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" }
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
-import { v12Pot } from "../evm/engine.js";
+import { v12EngineAddress, v12KitchenAddress, v12PotDerivation } from "../deployments/index.js";
+import { v12KitchenAbi, v12Pot } from "../evm/engine.js";
 import { kitchenExecutionFee } from "../evm/execution-fee.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
@@ -330,6 +330,49 @@ export async function releasedContracts(client: PublicClient): Promise<Released>
       ...(executionFee === undefined ? {} : { executionFee }),
     },
   };
+}
+
+/** Refuses an online cook without its released engine and Kitchen, returning the Kitchen's fee. */
+export async function requireCookContracts(
+  client: PublicClient,
+  chain: CanonicalChain,
+): Promise<bigint> {
+  const released = await releasedContracts(client);
+  for (const [name, contract] of [
+    ["engine", released.engine],
+    ["Kitchen", released.kitchen],
+  ] as const) {
+    if (!contract.deployed) {
+      throw new CliError(
+        `the released ${name} ${contract.address} is not deployed on ${chain.slug}: ` +
+          "this SDK's cook cannot run there. No transaction was sent",
+      );
+    }
+  }
+
+  return released.kitchen.executionFee ?? kitchenFee(client, chain);
+}
+
+/** A new Pot must be derived by the Kitchen version this SDK predicts, not an older factory. */
+export async function requirePotDerivation(
+  client: PublicClient,
+  chain: CanonicalChain,
+): Promise<void> {
+  const kitchen = getAddress(v12KitchenAddress());
+  const liveHash = await request("the Kitchen's potInitCodeHash()", () =>
+    client.readContract({
+      address: kitchen,
+      abi: v12KitchenAbi,
+      functionName: "potInitCodeHash",
+    }),
+  );
+  if (liveHash.toLowerCase() !== v12PotDerivation().initCodeHash.toLowerCase()) {
+    throw new CliError(
+      `the Kitchen ${kitchen} on ${chain.slug} derives Pots for a different release ` +
+        "(potInitCodeHash does not match this SDK): it cannot deploy this SDK's predicted Pot. " +
+        "No transaction was sent",
+    );
+  }
 }
 
 /** Whether `pot` is deployed, and whose it is. */

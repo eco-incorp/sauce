@@ -33,8 +33,8 @@
  * transfers out of the wallet and its Pot are what count; a Solana one is simulated with the
  * accounts it writes reported, and the wallet's and its Pot's lamports and token accounts compared
  * before and after. What cannot be measured — an endpoint without `eth_simulateV1`, a cook whose
- * native transfers are not traced, a Solana transaction loading accounts from lookup tables — is
- * refused wherever a limit would need it.
+ * native transfers are not traced, or a Solana lookup table that cannot be read — is refused
+ * wherever a limit would need it.
  *
  * Every wallet unlocked is GUARDED, policy or not: {@link guardWallet} registers it by address, and
  * the two places every send of this command passes — `chain.ts#sendAndWait` on an EVM chain,
@@ -86,12 +86,12 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda, fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
+import { fetchAlt, KITCHEN_DISCRIMINATORS, svmPublicKey } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
-import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
+import { accountsNow, messageAccounts, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -595,8 +595,11 @@ export async function measureEvm(
   return measured;
 }
 
-/** The Kitchen's two cooks, whose data starts with the Pot's salt. */
-const KITCHEN_COOKS = [KITCHEN_DISCRIMINATORS.cook, KITCHEN_DISCRIMINATORS.cookFromAccount];
+/** The Kitchen's cooks and the Pot's index among each one's accounts. */
+const KITCHEN_COOKS = [
+  { head: KITCHEN_DISCRIMINATORS.cook, pot: 2 },
+  { head: KITCHEN_DISCRIMINATORS.cookFromAccount, pot: 4 },
+];
 /** The compute-budget program: a transaction's plumbing, not where it goes. */
 const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
 
@@ -620,21 +623,10 @@ export async function measureSvm(
     addressTableLookups?: readonly unknown[];
   };
   const kitchen = solanaAddress(v12SvmKitchenProgramId());
-  const pots: SvmAddress[] = [];
   const programs = new Set<string>();
   for (const instruction of message.instructions) {
     const program = message.staticAccounts[instruction.programAddressIndex]!;
     if (program !== COMPUTE_BUDGET) programs.add(program);
-    const data = instruction.data ?? new Uint8Array();
-    const owner = message.staticAccounts[instruction.accountIndices?.[0] ?? -1];
-    if (
-      program === kitchen &&
-      owner === wallet &&
-      data.length >= 40 &&
-      KITCHEN_COOKS.some((head) => head.every((byte, at) => data[at] === byte))
-    ) {
-      pots.push((await derivePotPda(kitchen, wallet, data.slice(8, 40))).address);
-    }
   }
   const base = { chain, to: [...programs] };
   const native = (amount: bigint): Outflow => ({
@@ -662,6 +654,23 @@ export async function measureSvm(
         tokens: "a lookup table it loads accounts from could not be read",
       },
     };
+  }
+  // Measure the Pot the cook names, not the salt's canonical PDA. The Kitchen checks that account
+  // against the owner, salt and supplied bump before signing; any off-curve bump can select it.
+  const accounts = messageAccounts(transaction, tables);
+  const pots: SvmAddress[] = [];
+  for (const instruction of message.instructions) {
+    const data = instruction.data ?? new Uint8Array();
+    const cook = KITCHEN_COOKS.find(({ head }) => head.every((byte, at) => data[at] === byte));
+    const pot = accounts[instruction.accountIndices?.[cook?.pot ?? -1] ?? -1];
+    if (
+      cook !== undefined &&
+      pot !== undefined &&
+      accounts[instruction.programAddressIndex] === kitchen &&
+      accounts[instruction.accountIndices?.[0] ?? -1] === wallet
+    ) {
+      pots.push(pot);
+    }
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);

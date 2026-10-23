@@ -176,12 +176,26 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
             }).data,
           },
         ];
+  // A successful deployment call can still create another release's Pot. Read the predicted
+  // Pot in the same simulated state before funding or cooking it: a call to no code "succeeds".
+  const verify =
+    input.deploy === undefined
+      ? []
+      : [
+          {
+            account: input.owner,
+            to: input.pot,
+            data: encodeFunctionData({ abi: POT, functionName: "owner" }),
+          },
+        ];
+  const offset = deploy.length + verify.length;
   const before = input.before ?? [];
   const [block] = await client.simulateBlocks({
     blocks: [
       {
         calls: [
           ...deploy,
+          ...verify,
           ...before.map((each) => ({ account: input.owner, ...each.tx })),
           { account: input.owner, ...input.cook },
         ],
@@ -201,8 +215,21 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
       reason: failedWith(results[0]?.data),
     };
   }
+  if (
+    input.deploy !== undefined &&
+    (results[0]?.data.toLowerCase() !== pad(input.pot, { size: 32 }).toLowerCase() ||
+      results[1]?.status !== "success" ||
+      results[1]?.data.toLowerCase() !== pad(input.owner, { size: 32 }).toLowerCase())
+  ) {
+    return {
+      ...base,
+      ok: false,
+      stage: "deploy",
+      reason: `Kitchen.deployPot did not leave the predicted Pot ${input.pot} owned by ${input.owner}`,
+    };
+  }
   for (const [index, each] of before.entries()) {
-    const result = results[deploy.length + index];
+    const result = results[offset + index];
     if (result?.status !== "success") {
       return {
         ...base,
@@ -223,7 +250,7 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
       };
     }
   }
-  const cook = results[deploy.length + before.length];
+  const cook = results[offset + before.length];
   if (cook === undefined)
     throw new CliError("the endpoint's eth_simulateV1 answered no result for the cook");
   if (cook.status !== "success") {
@@ -241,7 +268,7 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
     returns: cook.data,
     gas: cook.gasUsed,
     ...(input.deploy === undefined ? {} : { deployGas: results[0]!.gasUsed }),
-    beforeGas: before.map((_, index) => results[deploy.length + index]!.gasUsed),
+    beforeGas: before.map((_, index) => results[offset + index]!.gasUsed),
     gasKind: "used",
     logs,
     // A cook that carries value moves it to the Pot, so a node that traces transfers reports at

@@ -111,6 +111,14 @@ Arc (chain 5042) is a supported chain, beside Ethereum, Base and Solana: the `sa
 MCP server build and send its cooks and Pot deployments, where before they only compiled and
 simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
 
+Wallet policies on Solana measure the actual Pot named by each cook, including non-canonical
+Pot addresses and accounts loaded through lookup tables, so SOL and token limits cannot miss
+those outflows.
+
+Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
+deployments instead of reporting success on an address with no code. Offline unsigned builders
+remain available and explicitly report that deployment availability has not been checked.
+
 ### SauceScript
 
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and

@@ -31,8 +31,9 @@ function main(amounts: Uint256[], minimum: Uint256): Uint256 {
 
 But a program never runs in a JavaScript engine. The Sauce engine runs it on chain, inside one
 transaction, on Ethereum, Base, Arc or Solana alike. So the language keeps only what has one fixed
-meaning there and can be checked in full before anything runs. What cannot is left out: classes,
-closures, `try`/`catch`, `switch`, `null` and `undefined`, fractions, and JavaScript's libraries.
+meaning there and can be checked in full before anything runs. Classes, `switch`, `null` and
+`undefined`, fractions, and JavaScript's libraries are left out. EVM supports atomic `try`/`catch`;
+`program(closure, ...args)` builds a nested program with explicit captures, not a host JavaScript closure.
 [What is not supported](../reference/saucescript.md#14-not-supported-and-what-to-write-instead)
 lists each, with what to write instead.
 

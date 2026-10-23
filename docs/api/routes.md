@@ -149,7 +149,9 @@ Kitchen call the engine requires. Build Solana execution with the Kitchen client
 
 ## Find and deploy a Pot
 
-A Pot is fixed by its owner and a salt, so its address is arithmetic you can do without a chain.
+For an EVM Kitchen release, a Pot is fixed by its Kitchen, Pot init-code hash, owner and salt.
+Its address is arithmetic you can do without a chain; a release with different Pot code derives
+a different address for the same owner and salt.
 
 | Export                                                    | From           | Does                                                                                                |
 | --------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------- |

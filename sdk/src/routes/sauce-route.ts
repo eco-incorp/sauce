@@ -300,9 +300,9 @@ export interface DerivedValue {
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. Leave
-   * it out to compile `main` taking its arguments as it runs.
+   * `main`'s arguments, in order, bound into the program as constants: each must be one word (a
+   * signed or unsigned integer, an address or a `bool`), and the program then takes none at run time.
+   * Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
   /**
