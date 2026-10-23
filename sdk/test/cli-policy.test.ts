@@ -16,14 +16,19 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CallExecutionError,
   ContractFunctionZeroDataError,
   encodeAbiParameters,
+  encodeErrorResult,
   encodeFunctionData,
   getAddress,
+  getContractError,
+  InternalRpcError,
   keccak256,
   maxUint256,
   pad,
   parseUnits,
+  RpcRequestError,
   toBytes,
   toFunctionSelector,
   type Address,
@@ -45,6 +50,7 @@ import {
   readPolicy,
   SendGuard,
 } from "../src/cli/policy.js";
+import { authenticatePot } from "../src/cli/pots.js";
 import { PreviewChainError } from "../src/cli/support.js";
 import { WalletStore, type WalletInfo } from "../src/cli/wallets.js";
 
@@ -62,6 +68,27 @@ const POT_OWNERS: Record<Address, Address> = { [POT]: WALLET, [OTHERS_POT]: RECI
 const NATIVE = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+
+/**
+ * What viem's readContract throws when the endpoint answers an `eth_call` with JSON-RPC error
+ * `code`: an internal error (-32603), which viem reports as a revert though no contract answered,
+ * or an execution revert (3) with the revert's `data`. Built as readContract builds it.
+ */
+const readError = (functionName: string, code: number, data?: Hex) => {
+  const request = new RpcRequestError({
+    body: { method: "eth_call" },
+    error: { code, message: code === 3 ? "execution reverted" : "internal error", data },
+    url: "http://127.0.0.1:8545",
+  });
+
+  return getContractError(
+    new CallExecutionError(
+      code === InternalRpcError.code ? new InternalRpcError(request) : request,
+      {},
+    ),
+    { abi: v12PotAbi, functionName, args: [] },
+  );
+};
 
 const word = (amount: bigint): Hex => encodeAbiParameters([{ type: "uint256" }], [amount]);
 const topic = (address: Address): Hex => pad(address, { size: 32 });
@@ -122,7 +149,10 @@ function client(
       ];
     },
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
-      if (unreadable.includes(getAddress(address))) throw new Error("fetch failed: 429");
+      // The endpoint fails the read with an internal error, which viem wraps as a revert.
+      if (unreadable.includes(getAddress(address))) {
+        throw readError(functionName, InternalRpcError.code);
+      }
       if (functionName === "decimals" && decimals !== null) return decimals;
       // A Pot answers for itself: its owner, its salt (the default) and its Kitchen.
       const owner = POT_OWNERS[getAddress(address)];
@@ -343,6 +373,58 @@ describe("the guard", () => {
     expect((await refused(guard.evm(untraced, cook))).message).toMatch(
       /native is limited, and the endpoint does not trace native transfers/,
     );
+  });
+
+  it("tells the wallet's own Pot from another contract only by the contract's own answer, never by an endpoint's failure", async () => {
+    // A client whose reads of the Pot answer with `fail`; or as the wallet's genuine Pot does.
+    const reading = (fail?: (functionName: string) => Error) =>
+      ({
+        readContract: async ({
+          address,
+          functionName,
+        }: {
+          address: Address;
+          functionName: string;
+        }) => {
+          if (fail !== undefined) throw fail(functionName);
+          if (getAddress(address) !== POT)
+            throw new ContractFunctionZeroDataError({ functionName });
+          if (functionName === "owner") return WALLET;
+          if (functionName === "userSalt") return pad("0x00", { size: 32 });
+          return getAddress(v12KitchenAddress());
+        },
+      }) as unknown as PublicClient;
+    const errorData = encodeErrorResult({
+      abi: [{ type: "error", name: "Error", inputs: [{ name: "message", type: "string" }] }],
+      errorName: "Error",
+      args: ["no such function"],
+    });
+
+    expect({
+      genuine: await authenticatePot(reading(), WALLET, POT),
+      internalError: await authenticatePot(
+        reading((name) => readError(name, InternalRpcError.code)),
+        WALLET,
+        POT,
+      ),
+      transportFailure: await authenticatePot(
+        reading(() => new Error("fetch failed")),
+        WALLET,
+        POT,
+      ),
+      reverted: await authenticatePot(
+        reading((name) => readError(name, 3, errorData)),
+        WALLET,
+        POT,
+      ),
+      noData: await authenticatePot(reading(), WALLET, RECIPIENT),
+    }).toEqual({
+      genuine: "own",
+      internalError: "unreadable",
+      transportFailure: "unreadable",
+      reverted: "not",
+      noData: "not",
+    });
   });
 
   it("refuses a cook on a Pot it cannot tell is the wallet's own, where a native or token limit needs it", async () => {

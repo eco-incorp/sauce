@@ -559,17 +559,32 @@ const hasCode = async (client: PublicClient, address: Address): Promise<boolean>
   return code !== undefined && code !== "0x";
 };
 
+/** JSON-RPC's "execution reverted": the one error code a contract's own revert comes back with. */
+const EXECUTION_REVERTED = 3;
+
 /**
- * Whether `error`, from reading a contract, is the contract's own answer (it reverted, or returned
- * nothing: it has no such function, or no code there) and not a failure of the request itself.
+ * Whether `error`, from reading a contract, is the contract's own answer, not a failure of the
+ * request: the call returned no data (it has no such function, or no code is there), or it reverted
+ * as the endpoint says an execution reverts (JSON-RPC code 3). viem reports an endpoint's internal
+ * error (-32603) as a revert too, with no contract behind it; that, and every other failure of the
+ * request, is not the contract's answer, and neither is anything this cannot tell apart.
  */
-export const answered = (error: unknown): boolean =>
-  error instanceof BaseError &&
-  error.walk(
-    (cause) =>
-      cause instanceof ContractFunctionZeroDataError ||
-      cause instanceof ContractFunctionRevertedError,
-  ) !== null;
+export const answered = (error: unknown): boolean => {
+  if (!(error instanceof BaseError)) return false;
+  if (error.walk((cause) => cause instanceof ContractFunctionZeroDataError) !== null) return true;
+  if (error.walk((cause) => cause instanceof ContractFunctionRevertedError) === null) return false;
+  // Every JSON-RPC error code the error carries, along its whole chain.
+  const codes: unknown[] = [];
+  error.walk((cause) => {
+    if (cause !== null && typeof cause === "object" && "code" in cause) {
+      codes.push((cause as { code: unknown }).code);
+    }
+
+    return false;
+  });
+
+  return codes.length > 0 && codes.every((code) => code === EXECUTION_REVERTED);
+};
 
 /** The Pot at `pot` on `chain`, read off the Pot itself (its owner, salt and Kitchen) and told its
  *  release from its address. Refused when nothing is there, or no known release minted it. */
