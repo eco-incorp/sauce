@@ -841,6 +841,28 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
   });
 
+  it.each([
+    ["a bare specifier only `resolve` serves", "holder", {}, "holder"],
+    [
+      "a bare specifier `resolvePackage` declines",
+      "@caller/holder",
+      { resolvePackage: () => undefined },
+      "@caller/holder",
+    ],
+    ["a bare `.js` specifier, at its target arm", "holder.js", {}, "holder.evm.js"],
+    ["a relative specifier written with `..`", "./sub/../holder.ts", {}, "./holder.ts"],
+  ])("an ambient module found as the compiler finds it: %s", (_form, specifier, own, path) => {
+    const options = {
+      ambient: [specifier],
+      ...own,
+      ...served({ [path]: `export const pot = ${HOLDER};\nexport const self = ${HOLDER};` }),
+    };
+    expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(hex(main("return self.USDC;"), options)).toBe(
+      hex(main(`return USDC.balanceOf(${HOLDER});`)),
+    );
+  });
+
   it.each(["pot", "self"])("an imported `%s` is what it reads", (name) => {
     const options = served({ "./constants.js": `export const ${name} = ${HOLDER};` });
     const program = (body: string) => `import { ${name} } from "./constants.js";\n${main(body)}`;
@@ -874,6 +896,23 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     expect(solana(`function main(): Address { return ${name}; }`, { [name]: key })).toEqual(
       solana(`function main(): Address { return ${key}; }`),
     );
+  });
+
+  it("on Solana, a bare ambient module only `resolve` serves binds `pot`", () => {
+    const key = BigInt(`0x${"06".repeat(32)}`);
+    const solana = (source: string, options: Parameters<typeof compileSauceProgram>[2] = {}) => {
+      const compiled = compileSauceProgram("solana", source, options);
+      return {
+        bytecode: Buffer.from(compiled.bytecode).toString("hex"),
+        manifest: compiled.manifest,
+      };
+    };
+    expect(
+      solana("function main(): Address { return pot; }", {
+        ambient: ["holder"],
+        ...served({ holder: `export const pot = ${key};` }),
+      }),
+    ).toEqual(solana(`function main(): Address { return ${key}; }`));
   });
 });
 
