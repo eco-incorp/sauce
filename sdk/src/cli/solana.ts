@@ -157,6 +157,7 @@ import {
   newSvmPlan,
   nextStep,
   planBuffer,
+  planPrograms,
   signableStep,
   unsignedSigner,
   type CookHandedOut,
@@ -188,9 +189,24 @@ const programReader =
         };
   };
 
+/** The programs each connection has shown to be the release's, so a command that checks before
+ *  each thing it builds reads each program off the cluster once. A connection is one command's or
+ *  one tool call's: the next reads again. */
+const shownReleased = new WeakMap<object, Set<ProgramName>>();
+
 /** Refuses a cook or a Pot on a cluster without the released programs `needs` names. */
-const requireReleased = (rpc: Rpc, url: string, needs: readonly ProgramName[]): Promise<void> =>
-  requireSolanaRelease(programReader(rpc, url), needs, requireChain("solana").slug);
+export async function requireReleased(
+  rpc: Rpc,
+  url: string,
+  needs: readonly ProgramName[],
+): Promise<void> {
+  const shown = shownReleased.get(rpc) ?? new Set<ProgramName>();
+  const unread = needs.filter((name) => !shown.has(name));
+  if (unread.length === 0) return;
+  await requireSolanaRelease(programReader(rpc, url), unread, requireChain("solana").slug);
+  for (const name of unread) shown.add(name);
+  shownReleased.set(rpc, shown);
+}
 
 /**
  * A Solana public key from a flag, in base58 or as the 32 bytes of hex the command prints a key in
@@ -1679,7 +1695,8 @@ async function prepare(
     );
   }
   // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
-  // or sent. A cook straight to the engine needs no Kitchen.
+  // or sent. A cook straight to the engine needs the Kitchen only when it is staged, which its
+  // plan (or its staged rehearsal) says, and checks.
   await requireReleased(rpc, input.rpcUrl, via === "engine" ? ["engine"] : ["engine", "Kitchen"]);
   // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
   const client = await createSauceSvmClient({
@@ -2213,6 +2230,9 @@ async function stagedRehearsal(
 ): Promise<CommandOutput> {
   const owner = input.owner;
   const direct = prepared.via === "engine";
+  // Staged, a cook straight to the engine runs from the Kitchen's code buffer: the cluster's
+  // Kitchen, not the copy's, is the one that stages it.
+  if (direct && !fitsOne) await requireReleased(prepared.rpc, input.rpcUrl, ["engine", "Kitchen"]);
   const signer = unsignedSigner(owner);
   const { bytecode } = prepared;
   const nonce = 0n;
@@ -2602,6 +2622,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   const prepared = await prepare(input, files, signer);
   const direct = prepared.via === "engine";
   const plan = await planOf(prepared, input);
+  await requireReleased(prepared.rpc, input.rpcUrl, planPrograms(plan));
   const ctx: StepContext = { rpc: prepared.rpc, url: input.rpcUrl, signer, fee: prepared.fee };
   const step = await nextStep(plan, ctx);
   const built = await signableStep(step, ctx);
@@ -2912,6 +2933,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     fee: prepared.fee,
   };
   let plan = await planOf(prepared, input);
+  await requireReleased(prepared.rpc, input.rpcUrl, planPrograms(plan));
   const buffer = await planBuffer(plan);
   let created: SvmSent | undefined;
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
