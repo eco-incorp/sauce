@@ -131,11 +131,14 @@ export function countDeclarations(program: AstNode): ReadonlyMap<string, number>
       case "CatchClause":
         collectPatternNames((n as { param?: unknown }).param, names);
         return;
-      case "ImportSpecifier":
-      case "ImportDefaultSpecifier":
-      case "ImportNamespaceSpecifier":
-        // `local` is the name brought into scope — `import { a as Token }` binds `Token`.
-        collectPatternNames((n as { local?: unknown }).local, names);
+      case "ImportDeclaration":
+        // `local` is the name brought into scope — `import { a as Token }` binds `Token`. A
+        // type-only import (`import type { X }`, `import { type X }`) is erased: it binds no value.
+        if ((n as { importKind?: string }).importKind === "type") return;
+        for (const specifier of (n as { specifiers?: AstNode[] }).specifiers ?? []) {
+          if ((specifier as { importKind?: string }).importKind === "type") continue;
+          collectPatternNames((specifier as { local?: unknown }).local, names);
+        }
         return;
       default:
         return;

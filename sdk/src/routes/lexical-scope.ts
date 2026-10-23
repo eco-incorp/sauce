@@ -83,9 +83,11 @@ export function moduleScope(program: AstNode): Scope {
       declaration.type === "ClassDeclaration"
     ) {
       bindings.push([declaration.id as AstNode, 0]);
-    } else if (declaration.type === "ImportDeclaration") {
+    } else if (declaration.type === "ImportDeclaration" && declaration.importKind !== "type") {
+      // A type-only import (`import type { X }`, `import { type X }`) is erased by the compiler: it
+      // binds no value, so it shadows nothing.
       for (const specifier of declaration.specifiers as AstNode[]) {
-        bindings.push([specifier.local as AstNode, 0]);
+        if (specifier.importKind !== "type") bindings.push([specifier.local as AstNode, 0]);
       }
     }
   }

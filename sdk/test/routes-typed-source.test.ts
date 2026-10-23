@@ -137,15 +137,32 @@ function main(to: Address): Uint256 {
   });
 
   it("reads an annotated parameter as the binding it is", () => {
-    // `pot` as an annotated parameter is a declaration, so the whole-program shadow rule leaves
-    // every `pot` alone, exactly as it does for an unannotated one.
+    // `pot` as an annotated parameter is a declaration of `f`'s own: inside `f` it is the parameter,
+    // and in `main`, where nothing declares it, the Pot.
     const out = rewriteProtocolAccessors(
       "function f(pot: Address): Address { return pot; }\nfunction main(): Address { return f(pot); }",
       BASE,
     );
     expect(out.source).toBe(
-      "function f(pot: Address): Address { return pot; }\nfunction main(): Address { return f(pot); }",
+      "function f(pot: Address): Address { return pot; }\nfunction main(): Address { return f(ctx.self()); }",
     );
+  });
+
+  it("a type-only import binds no value: `pot` is still the Pot and `self` still refused", () => {
+    for (const line of [
+      'import type { pot } from "./t.ts";',
+      'import { type pot } from "./t.ts";',
+    ]) {
+      expect(
+        rewriteProtocolAccessors(`${line}\nfunction main(): Address { return pot; }`, BASE).source,
+      ).toContain("return ctx.self();");
+    }
+    expect(() =>
+      rewriteProtocolAccessors(
+        'import type { self } from "./t.ts";\nfunction main(): Address { return self; }',
+        BASE,
+      ),
+    ).toThrow(/the Pot is `pot`, not `self`/);
   });
 
   it("still reports a syntax error as one", () => {
