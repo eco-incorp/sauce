@@ -7,6 +7,7 @@
  * suites' business (`sdk/test/cli-solana.e2e.test.ts`, `sdk/test/svm/direct-engine.e2e.test.ts`).
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 
@@ -21,6 +22,8 @@ import {
 
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { resolveSvmAccountName } from "../../sdk/dist/svm/account-names.js";
+import { v12SvmEngineProgramId } from "../../sdk/dist/deployments/index.js";
+import { svmEnginePath, svmKitchenPath } from "../../sdk/dist/svm/engine-artifacts.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 import { signableBy } from "./wallet-mcp/phantom.js";
 
@@ -30,6 +33,11 @@ const FEE = 5_000n;
 /** `ExecutionFeeConfig`: its Anchor discriminator, then the fee as a u64 LE. */
 const CONFIG = Buffer.from([60, 73, 184, 44, 4, 104, 241, 138, 0x88, 0x13, 0, 0, 0, 0, 0, 0]);
 const BLOCKHASH = "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn";
+/** The release's programs, by address: the packaged binaries. */
+const RELEASED: Record<string, Buffer> = {
+  [v12SvmEngineProgramId()]: readFileSync(svmEnginePath("mainnet")),
+  [KITCHEN]: readFileSync(svmKitchenPath()),
+};
 
 const PROGRAM = [
   "function main(",
@@ -65,6 +73,31 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
       request.on("data", (chunk: Buffer) => (body += chunk.toString()));
       request.on("end", () => {
         const call = JSON.parse(body) as { id: number; method: string; params: unknown[] };
+        // The release's own engine and Kitchen at their addresses, as a cluster running this release
+        // holds them (another loader's account, the program in it): what the command checks first.
+        const program =
+          call.method === "getAccountInfo" ? RELEASED[call.params[0] as string] : undefined;
+        if (program !== undefined) {
+          response.setHeader("content-type", "application/json");
+          response.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: call.id,
+              result: {
+                context: { slot: 1 },
+                value: {
+                  data: [program.toString("base64"), "base64"],
+                  executable: true,
+                  lamports: 1_000_000,
+                  owner: "BPFLoader2111111111111111111111111111111111",
+                  rentEpoch: 0,
+                  space: program.length,
+                },
+              },
+            }),
+          );
+          return;
+        }
         asked.push(call.method);
         const context = { slot: 1 };
         // Every account asked for is the fee config, but for a Pot, which does not exist yet: a

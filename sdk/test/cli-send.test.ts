@@ -31,6 +31,7 @@ import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
 import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../src/svm/index.js";
+import { releasedProgramAccounts, type RpcAccount } from "./svm/release-accounts.js";
 
 /** A throwaway signer: the signatures are real, the key is the test's alone. */
 const signer = privateKeyToAccount(`0x${"42".repeat(32)}`);
@@ -321,11 +322,25 @@ describe("a plan's next step that cannot be built once something was sent", () =
     },
   };
   const original = globalThis.fetch;
-  beforeAll(() => {
+  beforeAll(async () => {
+    // A cluster running the release, as the check before each step reads it.
+    const released: Record<string, RpcAccount> = await releasedProgramAccounts();
     // The endpoint answers the confirmation and the read back, and fails what the next step asks.
     globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
       if (String(input) !== URL) return original(input as string, init as RequestInit);
-      const { id, method } = JSON.parse(init!.body!) as { id: unknown; method: string };
+      const { id, method, params } = JSON.parse(init!.body!) as {
+        id: unknown;
+        method: string;
+        params: unknown[];
+      };
+      const program = method === "getAccountInfo" ? released[String(params[0])] : undefined;
+      if (program !== undefined) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id,
+          result: { context: { slot: 1_001 }, value: program },
+        });
+      }
 
       return method in answers
         ? Response.json({ jsonrpc: "2.0", id, result: answers[method] })

@@ -97,8 +97,13 @@ import {
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { failureReason, svmTokenAccountsToCreate } from "./solana.js";
+import { failureReason, requireReleased, svmTokenAccountsToCreate } from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
+import {
+  instructionAddresses,
+  releasedProgramsCalled,
+  type ProgramName,
+} from "./solana-release.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -164,6 +169,22 @@ export interface SvmPlan {
   readonly cooked?: { readonly ok: boolean; readonly signature: string };
   /** The plan gave up on its cook: what is left is the code buffer's close. */
   readonly closing?: boolean;
+}
+
+/**
+ * The released programs what is left of `plan` calls: the engine while its cook is still to run,
+ * and the Kitchen for a cook through it and for every plan staged — a cook straight to the engine
+ * stages its program through the Kitchen's code buffer all the same, and closes it there.
+ */
+export function planPrograms(plan: SvmPlan): ProgramName[] {
+  const cooks = plan.cooked === undefined && plan.closing !== true;
+
+  return [
+    ...(cooks ? (["engine"] as const) : []),
+    ...((cooks && plan.via === "kitchen") || plan.staged !== undefined
+      ? (["Kitchen"] as const)
+      : []),
+  ];
 }
 
 /** A cook handed out to a signer, as the plan remembers it. */
@@ -1686,6 +1707,13 @@ export async function signableTransactions(
   readonly lifetime?: CookHandedOut;
 }> {
   if (txs.length === 0) return { transactions: [] };
+  // The cluster they are built against, checked now: a cursor made against one endpoint, or before
+  // an upgrade, can be carried on against another.
+  await requireReleased(
+    ctx.rpc,
+    ctx.url,
+    releasedProgramsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions))),
+  );
   const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );

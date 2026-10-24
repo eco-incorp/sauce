@@ -227,6 +227,22 @@ another owner says so, and names that owner, and one it closes and makes again a
 another token shows as two changes, the old token emptied and the new one filled. `--json` lists
 them as `tokenChanges` (`owner`, and `ownerAfter` for an account handed over) and `lamportChanges`.
 
+#### The release, checked first
+
+Before it simulates, builds or sends a cook, and before `pot --deploy` creates a Pot, the command
+reads the engine and the Kitchen at the release's addresses and holds each to the release's own
+program, byte for byte. A cluster with either missing, or with another build there, is refused, as
+an EVM chain without the release's contracts is: `the released Kitchen <id> is not deployed on
+solana: this SDK's cook cannot run there`. A cook with `--via engine` needs the engine alone, and the
+Kitchen too when its program is staged, which runs through the Kitchen's code buffer. A plan carried
+on with `sauce send`, and a wallet's send of what another step built, are checked again on the
+endpoint they go to, before anything is signed or sent: a cursor may have been made against another
+cluster, or before an upgrade. This holds for the local copy below too, which runs the release's own
+programs and so could otherwise succeed where the cluster would not. The check reads the programs
+through the endpoint the command is given, so it does not protect against a dishonest endpoint,
+which can answer with the release's bytes and run another build, and it does not pin the programs'
+upgrade authority, which can replace them after the check.
+
 #### In a local copy
 
 Solana's `simulateTransaction` takes no account overrides, so a plain simulation runs on the
