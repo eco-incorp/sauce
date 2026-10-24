@@ -41,12 +41,13 @@ import { txLinks } from "./links.js";
 import { measureEvm, noPolicyNote, rehearsePlan, type Measured, type SendGuard } from "./policy.js";
 import type { PotRecord } from "./pot-store.js";
 import { cookReport } from "./receipt.js";
-import { sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
+import { requireReleased, sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
 import {
   decodeCursor,
   encodeCursor,
   isCook,
   nextStep,
+  planPrograms,
   transactionsAhead,
   type SvmPlan,
 } from "./svm-plan.js";
@@ -592,6 +593,9 @@ export async function sendSvmPlan(input: {
   let plan = planFor(input.cursor, wallet.info);
   guard.gate(chain);
   const ctx = { rpc: createSolanaRpc(input.rpcUrl), url: input.rpcUrl, signer: wallet.signer };
+  // The cluster the plan carries on against, checked before anything of it is signed: the plan
+  // may have been made against another endpoint, or before an upgrade.
+  await requireReleased(ctx.rpc, ctx.url, planPrograms(plan));
   // The whole plan held to the wallet's policy before any of it is sent, as far as it can be
   // measured now; each transaction is measured again, and reserved in the ledger, as it is sent.
   if (guard.policy !== undefined) {

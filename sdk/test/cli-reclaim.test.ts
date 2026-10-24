@@ -27,6 +27,7 @@ import { encodeCursor } from "../src/cli/svm-plan.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { deriveExecutionFeeConfigPda } from "../src/svm/index.js";
 import { sauce } from "./cli-anvil.js";
+import { releasedProgramAccounts, type RpcAccount } from "./svm/release-accounts.js";
 
 const key = (fill: number): Address =>
   getBase58Decoder().decode(new Uint8Array(32).fill(fill)) as Address;
@@ -395,7 +396,9 @@ describe("an owner with more open than one run handles", () => {
 
   describe("as the command says it", () => {
     const original = globalThis.fetch;
-    beforeAll(() => {
+    beforeAll(async () => {
+      // A cluster running the release, which the closes are checked against before they are built.
+      const released: Record<string, RpcAccount> = await releasedProgramAccounts();
       globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
         if (String(input) !== URL) return original(input as string, init as RequestInit);
         const { id, method, params } = JSON.parse(init!.body!) as {
@@ -417,7 +420,10 @@ describe("an owner with more open than one run handles", () => {
           }));
         const answers: Record<string, () => unknown> = {
           getSlot: () => 1_000,
-          getAccountInfo: () => ({ context: { slot: 1_000 }, value: null }),
+          getAccountInfo: () => ({
+            context: { slot: 1_000 },
+            value: released[String(params[0])] ?? null,
+          }),
           getProgramAccounts: () => (params[0] === v12SvmKitchenProgramId() ? kitchenScan() : []),
           getMultipleAccounts: () => ({
             context: { slot: 1_000 },

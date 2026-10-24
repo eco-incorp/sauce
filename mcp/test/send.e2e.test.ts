@@ -19,6 +19,15 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import {
+  AccountRole,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  compressTransactionMessageUsingAddressLookupTables,
+  createTransactionMessage,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  type Blockhash,
   address,
   generateKeyPairSigner,
   getAddressCodec,
@@ -36,7 +45,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
 import { decodeCursor, encodeCursor, isCook } from "../../sdk/dist/cli/svm-plan.js";
-import { derivePotPda } from "../../sdk/dist/svm/index.js";
+import { deriveProgramDataPda, derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
   fixture,
   registered,
@@ -46,6 +55,7 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import {
   ENGINE_SO,
+  fabricateAlt,
   randomAddress,
   setMint,
   setTokenAccount,
@@ -662,6 +672,160 @@ describe(
       assert.equal(shim.sent.length, before + 1);
       const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
       assert.deepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
+    });
+
+    it("checks the cluster again when a wallet resumes a plan: a Kitchen not the release's signs nothing", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-swapped", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      // Planned on the release.
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 6;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; cursor: string };
+      const { cook: _, ...unsent } = decodeCursor(planned.cursor);
+      // Resumed once the endpoint's Kitchen is another build: at the release's address, its bytes
+      // not the release's.
+      const { address: kitchenData } = await deriveProgramDataPda(harness.kitchen);
+      const original = harness.svm.getAccount(kitchenData);
+      assert.ok(original.exists);
+      const data = new Uint8Array(original.data);
+      data[data.length - 1] ^= 0xff;
+      harness.svm.setAccount({ ...original, address: kitchenData, data });
+      const before = shim.sent.length;
+      try {
+        // The cook as handed out, and the plan with none handed out yet, which the wallet builds.
+        for (const transaction of [planned, { cursor: encodeCursor(unsent) }]) {
+          assert.match(
+            failed(
+              await wallets.call("sauce_wallet_send", {
+                wallet: "sol-swapped",
+                transaction,
+                rpcUrl: SOLANA_URL,
+              }),
+            ),
+            new RegExp(
+              `the released Kitchen ${v12SvmKitchenProgramId()} is not deployed on solana`,
+            ),
+          );
+        }
+        assert.equal(shim.sent.length, before);
+      } finally {
+        harness.svm.setAccount({ ...original, address: kitchenData });
+      }
+    });
+
+    it("checks the engine a wallet's cook reaches through the Kitchen: an engine not the release's signs nothing", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-engine", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 4;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; cursor: string };
+      // The Kitchen is the release's; the engine it calls is another build.
+      const { address: engineData } = await deriveProgramDataPda(harness.programId);
+      const original = harness.svm.getAccount(engineData);
+      assert.ok(original.exists);
+      const data = new Uint8Array(original.data);
+      data[data.length - 1] ^= 0xff;
+      harness.svm.setAccount({ ...original, address: engineData, data });
+      const before = shim.sent.length;
+      try {
+        // The serialized cook as handed out.
+        assert.match(
+          failed(
+            await wallets.call("sauce_wallet_send", {
+              wallet: "sol-engine",
+              transaction: { transaction: planned.transaction, what: "the cook", feePayer: wallet },
+              rpcUrl: SOLANA_URL,
+            }),
+          ),
+          new RegExp(`the released engine ${v12SvmEngineProgramId()} is not deployed on solana`),
+        );
+        assert.equal(shim.sent.length, before);
+      } finally {
+        harness.svm.setAccount({ ...original, address: engineData });
+      }
+    });
+
+    it("refuses a serialized transaction loading a lookup index its endpoint's table does not hold, sending nothing", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-lookup", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      // A table on the cluster holding the engine, read by the endpoint as it was before it was
+      // extended: the index the transaction loads is not there yet.
+      const engine = address(v12SvmEngineProgramId());
+      const lookupTables = fabricateAlt(harness, [engine]);
+      const table = Object.keys(lookupTables)[0] as SvmAddress;
+      harness.svm.warpToSlot(harness.svm.getClock().slot + 2n);
+      // A plain transfer that names the engine, loaded from the table.
+      const data = new Uint8Array(12);
+      new DataView(data.buffer).setUint32(0, 2, true);
+      new DataView(data.buffer).setBigUint64(4, 1_000_000n, true);
+      const transfer = {
+        programAddress: address("11111111111111111111111111111111"),
+        accounts: [
+          { address: wallet, role: AccountRole.WRITABLE_SIGNER },
+          { address: randomAddress(), role: AccountRole.WRITABLE },
+          { address: engine, role: AccountRole.READONLY },
+        ],
+        data,
+      };
+      const transaction = getBase64EncodedWireTransaction(
+        compileTransaction(
+          compressTransactionMessageUsingAddressLookupTables(
+            pipe(
+              createTransactionMessage({ version: 0 }),
+              (message) => setTransactionMessageFeePayer(wallet, message),
+              (message) => appendTransactionMessageInstruction(transfer, message),
+              (message) =>
+                setTransactionMessageLifetimeUsingBlockhash(
+                  {
+                    blockhash: harness.svm.latestBlockhash() as Blockhash,
+                    lastValidBlockHeight: 1_000_000n,
+                  },
+                  message,
+                ),
+            ),
+            lookupTables,
+          ),
+        ),
+      );
+      // Its header alone: the table before any address was added.
+      const held = harness.svm.getAccount(table);
+      assert.ok(held.exists);
+      shim.staleRead(table, held.data.subarray(0, 56));
+      const before = shim.sent.length;
+      try {
+        assert.match(
+          failed(
+            await wallets.call("sauce_wallet_send", {
+              wallet: "sol-lookup",
+              transaction: { transaction, what: "the transfer", feePayer: wallet },
+              rpcUrl: SOLANA_URL,
+            }),
+          ),
+          new RegExp(`loads index 0 of lookup table ${table}, which holds 0 addresses`),
+        );
+        assert.equal(shim.sent.length, before);
+      } finally {
+        shim.staleRead(table, undefined);
+      }
     });
 
     it("keeps the cook a wallet sent and could not confirm, and learns it landed rather than send it again", async () => {
