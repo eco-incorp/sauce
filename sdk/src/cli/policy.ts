@@ -22,19 +22,23 @@
  *  - `native`: the chain's native coin, in its own units (ETH, SOL, Arc's USDC), leaving the wallet
  *    or the Pot a transaction cooks on; on Solana the fee and any rent it pays are included.
  *  - `tokens`: by registry symbol or by address (an EVM token, a Solana mint); what leaves the
- *    wallet or the Pot it cooks on, and any approval it grants above what is left of the limit
- *    (Permit2 aside, which moves nothing without the wallet's signature in a later cook). A token
- *    the policy does not name is not limited. Where the native coin is also an ERC-20 (Arc's USDC,
- *    one balance), what leaves as either counts against `native` and that token's limit both.
+ *    wallet or the Pot it cooks on, and what another key is left allowed of it. An approval of
+ *    Permit2 for a limited token is refused: it makes the wallet's earlier Permit2 allowances of it
+ *    spendable again, which nothing in the transaction reports. A token the policy does not name
+ *    is not limited. Where the native coin is also an ERC-20 (Arc's USDC, one balance), what leaves
+ *    as either counts against `native` and that token's limit both.
  *  - `perDay` is the last 24 hours, every chain together, counted from the ledger.
  *
  * What a transaction moves is MEASURED, not read from its calldata: an EVM transaction is rehearsed
- * by `eth_simulateV1` with transfers traced, and the ERC-20 Transfer and Approval logs and native
- * transfers out of the wallet and its Pot are what count; a Solana one is simulated with the
- * accounts it writes reported, and the wallet's and its Pot's lamports and token accounts compared
- * before and after. What cannot be measured — an endpoint without `eth_simulateV1`, a cook whose
- * native transfers are not traced, or a Solana lookup table that cannot be read — is refused
- * wherever a limit would need it.
+ * by `eth_simulateV1` on the chain's head, with transfers traced and the gas and fees it is signed
+ * with, and the ERC-20 Transfer and Approval logs and native transfers out of the wallet and its Pot
+ * are what count; an allowance is read in a replay of it on that block, which stands only where it
+ * runs the same. A Solana one is simulated with the accounts it writes reported, and the wallet's
+ * and its Pot's lamports and token accounts compared before and after. What cannot be measured — an
+ * endpoint without `eth_simulateV1`, a cook whose native transfers are not traced, an allowance no
+ * replay reads exactly, or a Solana lookup table that cannot be read — is refused wherever a limit
+ * would need it. A simulation shows what the transaction does on the state it ran on: what it does
+ * in the block it lands in, which may differ, no simulation bounds.
  *
  * Signing a cook for anyone to submit (`sauce sign`, {@link SendGuard.authorizeSignedCook}) is held
  * to `chains` and `to` (the Pot) as written, and refused outright by a policy that sets `native` or
@@ -73,10 +77,14 @@ import {
 } from "@solana/kit";
 import {
   decodeAbiParameters,
+  encodeFunctionData,
+  erc20Abi,
   formatUnits,
   getAddress,
   isAddress,
+  parseAbi,
   parseUnits,
+  toEventSelector,
   toFunctionSelector,
   type Address,
   type Hex,
@@ -101,21 +109,25 @@ import {
   type SimulatedAccount,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import type { TxRequest } from "./chain.js";
+import type { SignedCall, TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
+import { authenticatePot } from "./pots.js";
 import {
   accountsNow,
+  approvesOn,
   lamportKeys,
   messageAccounts,
   mintFacts,
   movedBy,
   namesAnyOf,
+  parsedApprovesOn,
   permanentDelegateOf,
   tokenAccount,
   tokenTransition,
   unsignedWire,
   writableAccounts,
+  type TokenAccountState,
 } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
@@ -357,8 +369,9 @@ interface Outflow {
   readonly limitDecimals?: number;
   readonly amount: bigint;
   /**
-   * Solana: how much of `amount` is allowances the transaction approves another key, which counts
-   * as sent when it is approved, since the delegate needs no later signature to move it.
+   * How much of `amount` is allowances the transaction approves another key (a Solana delegate's,
+   * an ERC-20 allowance, one granted through Permit2), which counts as sent when it is approved,
+   * since the spender needs no later signature to move it.
    */
   readonly delegated?: bigint;
 }
@@ -402,12 +415,38 @@ export interface Measured {
     readonly symbol?: string;
     readonly delegate: string;
   }[];
+  /**
+   * EVM: the allowances it touches that another key keeps and that could not be read exactly once
+   * it has run, which a limit naming the token cannot hold.
+   */
+  readonly unreadAllowances?: readonly {
+    readonly token: string;
+    readonly symbol?: string;
+    readonly spender: string;
+  }[];
   /** Why native or token movements could not be measured, when they could not. */
   readonly unmeasured: { readonly native?: string; readonly tokens?: string };
 }
 
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+/**
+ * Permit2's AllowanceTransfer grants, emitted by Permit2 itself: `approve`, or a `permit` the owner
+ * signed, lets `spender` take up to `amount` of `token` from `owner` through Permit2 until
+ * `expiration`, with no later signature. Owner, token and spender are its three indexed topics, the
+ * amount its first word of data.
+ */
+const PERMIT2_GRANTS = new Set<string>([
+  toEventSelector("Approval(address,address,address,uint160,uint48)"),
+  toEventSelector("Permit(address,address,address,uint160,uint48,uint48)"),
+]);
+/** Permit2's `lockdown`: `owner` zeroes its allowance of `token` to `spender` (in its data). */
+const PERMIT2_LOCKDOWN = toEventSelector("Lockdown(address,address,address)");
+/** What Permit2 lets `spender` take of `user`'s `token` now, its first word (the registry's Permit2
+ *  ABI does not declare it; the deployed Permit2 dispatches it). */
+const PERMIT2_ALLOWANCE = parseAbi([
+  "function allowance(address user, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
+]);
 /** Where `traceTransfers` reports native transfers, as ERC-20 Transfer logs. */
 const NATIVE_EMITTER = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 /** `Kitchen.deployPot(owner, salt)`, as `sauce run` and `sauce tx` send it. */
@@ -469,38 +508,78 @@ async function evmToken(
   return info.decimals === undefined ? {} : { decimals: info.decimals };
 }
 
+/**
+ * Where a plan was simulated: the block it ran on top of, the time of the block it made, and what
+ * the node reported of that block. A replay of the plan is the same execution only where it ran on
+ * that block, at that time, and the node reports the block it made alike.
+ */
+export interface SimulatedAt {
+  readonly base: bigint;
+  readonly time: bigint;
+  /** The block the simulation made, as the node reported it: parent, number, time, fees, limit. */
+  readonly header: string;
+}
+
 /** One call's outcome in a rehearsal of a plan: whether it succeeded, and its logs. */
 export interface Rehearsed {
   readonly status: "success" | "failure";
   readonly logs: readonly Log[];
   /** What it returned, or reverted with. */
   readonly data: Hex;
+  readonly gasUsed: bigint;
+  /** The block it was simulated on, the same for every call of a plan. */
+  readonly at: SimulatedAt;
 }
+
+/** What a node reports of a block it simulated, as one string to compare; `undefined` where it
+ *  names no parent, which no other simulation can be held to. */
+const headerOf = (block: {
+  readonly parentHash?: Hex | null;
+  readonly number?: bigint | null;
+  readonly timestamp?: bigint | null;
+  readonly baseFeePerGas?: bigint | null;
+  readonly gasLimit?: bigint | null;
+  readonly miner?: Address | null;
+  readonly mixHash?: Hex | null;
+}): string | undefined =>
+  block.parentHash === undefined || block.parentHash === null
+    ? undefined
+    : [
+        block.parentHash,
+        block.number,
+        block.timestamp,
+        block.baseFeePerGas,
+        block.gasLimit,
+        block.miner,
+        block.mixHash,
+      ]
+        .map((field) => String(field ?? "").toLowerCase())
+        .join("/");
 
 /**
  * `calls` rehearsed in order from `wallet` in one `eth_simulateV1` block, state carried from each to
- * the next and native transfers traced; `undefined` where the endpoint does not run it.
+ * the next and native transfers traced; `undefined` where the endpoint does not run it. It runs on
+ * the chain's head as read once here, named by number, at a time one second after it, so every
+ * replay of it ({@link allowancesAfter}) can run on the same block in the same context.
  */
 export async function rehearsePlan(
   client: PublicClient,
   wallet: Address,
-  calls: readonly TxRequest[],
+  calls: readonly SignedCall[],
 ): Promise<readonly Rehearsed[] | undefined> {
   try {
+    const head = await client.getBlock({ blockTag: "latest" });
+    const time = head.timestamp + 1n;
     const [block] = await client.simulateBlocks({
+      blockNumber: head.number,
       blocks: [
-        {
-          calls: calls.map((call) => ({
-            account: wallet,
-            to: call.to,
-            data: call.data,
-            value: call.value,
-          })),
-        },
+        { blockOverrides: { time }, calls: calls.map((call) => simulatedCall(wallet, call)) },
       ],
       traceTransfers: true,
       validation: false,
     });
+    const header = block === undefined ? undefined : headerOf(block);
+    const at = header === undefined ? undefined : { base: head.number, time, header };
 
     return (block?.calls ?? []).map((call) => ({
       status: call.status === "success" ? "success" : "failure",
@@ -510,10 +589,142 @@ export async function rehearsePlan(
         data: log.data,
       })),
       data: call.data,
+      gasUsed: call.gasUsed,
+      // A block the node names no parent of: no replay can be shown to run on it.
+      at: at ?? { base: head.number, time, header: "" },
     }));
   } catch {
     return undefined;
   }
+}
+
+/**
+ * `call`, sent from `wallet`, as a call of an `eth_simulateV1` block: with the gas and the fees it
+ * is signed with, where it carries them, since a program reads both.
+ */
+const simulatedCall = (wallet: Address, call: SignedCall) => ({
+  account: wallet,
+  to: call.to,
+  data: call.data,
+  value: call.value,
+  ...(call.gas === undefined ? {} : { gas: call.gas }),
+  ...(call.gasPrice !== undefined
+    ? { gasPrice: call.gasPrice }
+    : {
+        ...(call.maxFeePerGas === undefined ? {} : { maxFeePerGas: call.maxFeePerGas }),
+        ...(call.maxPriorityFeePerGas === undefined
+          ? {}
+          : { maxPriorityFeePerGas: call.maxPriorityFeePerGas }),
+      }),
+});
+
+/** One allowance: `owner`'s of `token` to `spender`, on the token itself or through Permit2. */
+interface Permission {
+  readonly channel: "erc20" | "permit2";
+  readonly owner: Address;
+  readonly token: Address;
+  readonly spender: Address;
+}
+
+/** Whether two calls' logs are the same, address, topics and data, in the same order. */
+const sameLogs = (
+  a: ReadonlyArray<{ address: string; topics: readonly string[]; data: string }>,
+  b: ReadonlyArray<{ address: string; topics: readonly string[]; data: string }>,
+): boolean =>
+  a.length === b.length &&
+  a.every(
+    (log, at) =>
+      log.address.toLowerCase() === b[at]!.address.toLowerCase() &&
+      log.data.toLowerCase() === b[at]!.data.toLowerCase() &&
+      log.topics.length === b[at]!.topics.length &&
+      log.topics.every((one, place) => one.toLowerCase() === b[at]!.topics[place]!.toLowerCase()),
+  );
+
+/**
+ * What each of `permissions` allows once `calls` have run, from `wallet` in order. Each is read in a
+ * simulation of its own: the calls rehearsed again in one `eth_simulateV1` block with that one
+ * allowance read after them, so the read sees the state they leave and no other read can change it
+ * (a token's `allowance()` may write). Every replay runs on the block `original`, the calls' first
+ * rehearsal, ran on, at its time, and a read stands only where the replay is that execution: the
+ * node reports the block it made alike, and every call ran again as it did there (succeeded, with
+ * the same logs, the same return data and the same gas). `undefined` for one that cannot be read
+ * so, which a limit naming its token refuses.
+ */
+async function allowancesAfter(
+  client: PublicClient,
+  wallet: Address,
+  calls: readonly SignedCall[],
+  original: readonly Rehearsed[],
+  permissions: readonly Permission[],
+  permit2: string | undefined,
+): Promise<Array<bigint | undefined>> {
+  const replay = calls.map((call) => simulatedCall(wallet, call));
+  const at = original[0]?.at;
+  // Run on a block no replay can be held to, or not all on one: nothing read of it stands.
+  if (at === undefined || at.header === "" || original.some((call) => call.at !== at)) {
+    return permissions.map(() => undefined);
+  }
+
+  return Promise.all(
+    permissions.map(async (each) => {
+      const read =
+        each.channel === "erc20"
+          ? {
+              to: each.token,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: "allowance",
+                args: [each.owner, each.spender],
+              }),
+            }
+          : {
+              to: getAddress(permit2!),
+              data: encodeFunctionData({
+                abi: PERMIT2_ALLOWANCE,
+                functionName: "allowance",
+                args: [each.owner, each.token, each.spender],
+              }),
+            };
+      try {
+        const [block] = await client.simulateBlocks({
+          blockNumber: at.base,
+          blocks: [
+            {
+              blockOverrides: { time: at.time },
+              calls: [...replay, { account: wallet, to: read.to, data: read.data }],
+            },
+          ],
+          traceTransfers: true,
+          validation: false,
+        });
+        const results = block?.calls ?? [];
+        // Another block, or a call that is missing, failed or ran otherwise here, leaves another
+        // state than the transaction's, which says nothing of what it allows.
+        const ranAgain =
+          block !== undefined &&
+          headerOf(block) === at.header &&
+          results.length === calls.length + 1 &&
+          results.slice(0, calls.length).every((result, index) => {
+            const first = original[index];
+
+            return (
+              first !== undefined &&
+              result.status === "success" &&
+              result.data.toLowerCase() === first.data.toLowerCase() &&
+              result.gasUsed === first.gasUsed &&
+              sameLogs(result.logs ?? [], first.logs)
+            );
+          });
+        const answer = results[calls.length];
+
+        return ranAgain && answer?.status === "success" && answer.data.length >= 66
+          ? BigInt(answer.data.slice(0, 66))
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
 }
 
 /**
@@ -526,26 +737,53 @@ export async function measureEvm(
   client: PublicClient,
   chain: CanonicalChain,
   wallet: Address,
-  calls: readonly TxRequest[],
+  calls: readonly SignedCall[],
   rehearsed?: readonly Rehearsed[],
 ): Promise<Measured[]> {
   const results = rehearsed ?? (await rehearsePlan(client, wallet, calls));
   const measured: Measured[] = [];
+  const permit2 = permit2Of(chain);
+  // The wallet's own Pots: one an earlier call of these deploys for it, or one the chain shows is,
+  // its owner the wallet and its address its (owner, salt) under a Kitchen a release records. A
+  // cook's calldata sent anywhere else makes no Pot of it: what the wallet pays there leaves it.
+  // Where the chain cannot be read to tell, the wallet's own Pot may be the one it spends from:
+  // what it moves cannot be measured, so a native or token limit refuses it.
+  const deployed = new Set<string>();
+  const owned = new Map<string, Promise<"own" | "not" | "unreadable">>();
+  const ownPot = (to: Address): Promise<"own" | "not" | "unreadable"> => {
+    if (deployed.has(to)) return Promise.resolve("own");
+    const known = owned.get(to);
+    if (known !== undefined) return known;
+    const found = authenticatePot(client, wallet, to);
+    owned.set(to, found);
+
+    return found;
+  };
   for (const [index, call] of calls.entries()) {
-    const cook = COOKS.has(call.data.slice(0, 10).toLowerCase()) ? getAddress(call.to) : undefined;
+    const shown = COOKS.has(call.data.slice(0, 10).toLowerCase())
+      ? await ownPot(getAddress(call.to))
+      : "not";
+    const cook = shown === "own" ? getAddress(call.to) : undefined;
+    const doubt =
+      shown === "unreadable"
+        ? `could not tell whether ${getAddress(call.to)}, which the transaction cooks on, is the ` +
+          "wallet's own Pot: its owner, salt or Kitchen could not be read from the endpoint"
+        : undefined;
     const ours = new Set<string>([getAddress(wallet), ...(cook === undefined ? [] : [cook])]);
     const deploysPot = ownPotDeployed(call, wallet);
+    if (deploysPot !== undefined) deployed.add(deploysPot);
     const base = {
       chain,
       to: [(deploysPot ?? call.to).toLowerCase()],
       ...(deploysPot === undefined ? {} : { deploysPot }),
       approvals: [] as Approval[],
     };
-    const nativeOf = (amount: bigint): Outflow => ({
+    const nativeOf = (amount: bigint, delegated = 0n): Outflow => ({
       token: "native",
       symbol: nativeSymbol(chain),
       decimals: 18,
       amount,
+      ...(delegated === 0n ? {} : { delegated }),
     });
     const result = results?.[index];
     if (result === undefined) {
@@ -555,7 +793,7 @@ export async function measureEvm(
         tokens: [],
         unmeasured: {
           tokens: "the endpoint did not run eth_simulateV1, which shows what a transaction moves",
-          ...(cook === undefined
+          ...(cook === undefined && doubt === undefined
             ? {}
             : {
                 native:
@@ -576,9 +814,51 @@ export async function measureEvm(
       logged || (result.logs ?? []).some((log) => getAddress(log.address) === NATIVE_EMITTER);
     let native = 0n;
     const tokens = new Map<string, bigint>();
-    const approvals: Array<{ token: Address; spender: Address; amount: bigint }> = [];
+    // Every allowance the wallet or its Pot gives in the transaction, with whose it is and on which
+    // contract it stands: one on the token, and one through Permit2, are two permissions, as are the
+    // wallet's and its Pot's. A change to one leaves the others as they were.
+    const grants: Array<Permission & { readonly amount: bigint }> = [];
     for (const log of logs) {
-      const [topic, one, two] = log.topics;
+      const [topic, one, two, three] = log.topics;
+      // A standing allowance granted through Permit2 is an approval of the token it names: the
+      // wallet's approval of Permit2 for that token lets the spender take it.
+      if (
+        permit2 !== undefined &&
+        log.address.toLowerCase() === permit2 &&
+        log.topics.length === 4 &&
+        PERMIT2_GRANTS.has(topic!.toLowerCase()) &&
+        log.data.length >= 66
+      ) {
+        if (ours.has(topicAddress(one!))) {
+          grants.push({
+            channel: "permit2",
+            owner: topicAddress(one!),
+            token: topicAddress(two!),
+            spender: topicAddress(three!),
+            amount: BigInt(log.data.slice(0, 66)),
+          });
+        }
+        continue;
+      }
+      // Permit2's lockdown: the owner zeroes an allowance it gave.
+      if (
+        permit2 !== undefined &&
+        log.address.toLowerCase() === permit2 &&
+        log.topics.length === 2 &&
+        topic!.toLowerCase() === PERMIT2_LOCKDOWN &&
+        log.data.length >= 130
+      ) {
+        if (ours.has(topicAddress(one!))) {
+          grants.push({
+            channel: "permit2",
+            owner: topicAddress(one!),
+            token: topicAddress(`0x${log.data.slice(2, 66)}`),
+            spender: topicAddress(`0x${log.data.slice(66, 130)}`),
+            amount: 0n,
+          });
+        }
+        continue;
+      }
       const amount = wordOf(log.data);
       if (amount === undefined || log.topics.length !== 3) continue;
       const emitter = getAddress(log.address);
@@ -589,8 +869,54 @@ export async function measureEvm(
         if (emitter === NATIVE_EMITTER) native += amount;
         else tokens.set(emitter, (tokens.get(emitter) ?? 0n) + amount);
       } else if (topic?.toLowerCase() === APPROVAL && ours.has(topicAddress(one!))) {
-        approvals.push({ token: emitter, spender: topicAddress(two!), amount });
+        grants.push({
+          channel: "erc20",
+          owner: topicAddress(one!),
+          token: emitter,
+          spender: topicAddress(two!),
+          amount,
+        });
       }
+    }
+    // The allowance each permission leaves: the chain's own, read once the transaction has run (a
+    // spender may pull what it was allowed with no report of what is left, as Permit2 does).
+    // Distinct permissions add up. A spender that is the wallet or its own Pot is no other key, and
+    // none is kept at 0. What another key keeps counts as sent, with what the transaction moves of
+    // the token, per transaction and in the day's total: it needs no later signature. One whose
+    // allowance cannot be read exactly is not measured, and a limit naming its token refuses it.
+    // (The ERC-20 approval of Permit2 itself is not counted: a limit on its token refuses it.)
+    const kept = new Map<string, (typeof grants)[number]>();
+    for (const each of grants) {
+      kept.set(`${each.channel}/${each.owner}/${each.token}/${each.spender}`, each);
+    }
+    const permissions = [...kept.values()];
+    const after =
+      permissions.length === 0
+        ? []
+        : await allowancesAfter(
+            client,
+            wallet,
+            calls.slice(0, index + 1),
+            results!.slice(0, index + 1),
+            permissions,
+            permit2,
+          );
+    const granted: Array<{ token: Address; spender: Address; amount: bigint }> = [];
+    const delegated = new Map<string, bigint>();
+    const unread: Array<{ token: Address; spender: Address }> = [];
+    for (const [at, each] of permissions.entries()) {
+      if (ours.has(each.spender) || (await ownPot(each.spender)) === "own") continue;
+      const outer = each.channel === "erc20" && each.spender.toLowerCase() === permit2;
+      const amount = after[at];
+      if (amount === undefined && !outer) {
+        unread.push({ token: each.token, spender: each.spender });
+        continue;
+      }
+      if ((amount ?? each.amount) === 0n) continue;
+      granted.push({ token: each.token, spender: each.spender, amount: amount ?? each.amount });
+      if (outer) continue;
+      tokens.set(each.token, (tokens.get(each.token) ?? 0n) + amount!);
+      delegated.set(each.token, (delegated.get(each.token) ?? 0n) + amount!);
     }
     // An account's own native leaves only as a transaction's value, which a trace shows; with no
     // trace, the value is what the wallet sends, and a cook's Pot is not seen. (What `native` holds
@@ -598,7 +924,9 @@ export async function measureEvm(
     const untraced = !traced && (call.value > 0n || cook !== undefined);
     const nativeOut = untraced ? call.value + native : native;
     // Where the native coin is also an ERC-20 (Arc's USDC), it is one balance: whatever leaves as
-    // either is held to the token's limit as well as to the native one.
+    // either is held to the token's limit as well as to the native one. What leaves as the native
+    // coin and what the token reports (an allowance it leaves) are one row of that token, in the
+    // native coin's 18 decimals, so a limit holds them together and the day records their sum.
     const erc20 = nativeErc20(chain.id);
     const known = new Map<string, { symbol?: string; decimals?: number }>();
     const info = async (token: Address) => {
@@ -606,39 +934,60 @@ export async function measureEvm(
 
       return known.get(token)!;
     };
+    const coin = erc20 === undefined || nativeOut === 0n ? undefined : getAddress(erc20.address);
+    const toWei = erc20 === undefined ? 1n : 10n ** BigInt(18 - erc20.decimals);
+    // An allowance of that token another key keeps lets it take the native coin too: it counts
+    // against a native limit as well, in 18 decimals.
+    const allowedNative =
+      erc20 === undefined ? 0n : (delegated.get(getAddress(erc20.address)) ?? 0n) * toWei;
     measured.push({
       ...base,
-      native: nativeOf(nativeOut),
+      native: nativeOf(nativeOut + allowedNative, allowedNative),
       tokens: [
         ...(await Promise.all(
-          [...tokens].map(async ([token, amount]) => ({
-            token,
-            ...(await info(token as Address)),
-            amount,
-          })),
+          [...tokens]
+            .filter(([token]) => token !== coin)
+            .map(async ([token, amount]) => ({
+              token,
+              ...(await info(token as Address)),
+              amount,
+              ...(delegated.has(token) ? { delegated: delegated.get(token)! } : {}),
+            })),
         )),
-        ...(erc20 === undefined || nativeOut === 0n
+        ...(coin === undefined
           ? []
           : [
               {
-                token: getAddress(erc20.address),
-                symbol: (await info(getAddress(erc20.address))).symbol ?? nativeSymbol(chain),
+                token: coin,
+                symbol: (await info(coin)).symbol ?? nativeSymbol(chain),
                 decimals: 18,
-                limitDecimals: erc20.decimals,
-                amount: nativeOut,
+                limitDecimals: erc20!.decimals,
+                amount: nativeOut + (tokens.get(coin) ?? 0n) * toWei,
+                ...(delegated.has(coin) ? { delegated: delegated.get(coin)! * toWei } : {}),
               },
             ]),
       ],
       approvals: await Promise.all(
-        approvals.map(async (approval) => ({
+        granted.map(async (approval) => ({
           token: approval.token,
           ...(await info(approval.token)),
           amount: approval.amount,
           spender: approval.spender,
         })),
       ),
-      unmeasured:
-        untraced && cook !== undefined
+      ...(unread.length === 0
+        ? {}
+        : {
+            unreadAllowances: await Promise.all(
+              unread.map(async (each) => {
+                const { symbol } = await info(each.token);
+
+                return { ...each, ...(symbol === undefined ? {} : { symbol }) };
+              }),
+            ),
+          }),
+      unmeasured: {
+        ...(untraced && cook !== undefined
           ? {
               native:
                 "the endpoint does not trace native transfers, so what the cook moves from the Pot is not known",
@@ -649,7 +998,10 @@ export async function measureEvm(
                     tokens: `the endpoint does not trace native transfers, and ${nativeSymbol(chain)} is ${chain.name}'s native coin`,
                   }),
             }
-          : {},
+          : {}),
+        // A Pot it cannot tell is the wallet's: what it moves out of it is not seen.
+        ...(doubt === undefined ? {} : { native: doubt, tokens: doubt }),
+      },
     });
   }
 
@@ -668,7 +1020,8 @@ const COMPUTE_BUDGET = "ComputeBudget111111111111111111111111111111";
  * A program the transaction calls through another (a CPI), as a simulation reports it. Mainnet
  * nodes answer `simulateTransaction` with every inner instruction keyed by `programId`: parsed
  * (`parsed`, `program`; no `accounts` or `data`) for a program they parse, such as System and SPL
- * Token, and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
+ * Token and Token-2022 (`{ type, info }`, the token account an approval sets in `info.source`),
+ * and otherwise partially decoded, with `accounts` by address and `data` in base58 — the
  * Kitchen's and the engine's. `programIdIndex` and index `accounts` are the unparsed form a
  * transaction's own report uses, taken here too.
  */
@@ -677,6 +1030,7 @@ type InnerInstruction = Readonly<{
   programIdIndex?: number;
   accounts?: readonly (string | number)[];
   data?: string;
+  parsed?: unknown;
 }>;
 
 /**
@@ -753,13 +1107,22 @@ export async function measureSvm(
       : undefined;
   };
   const pots: string[] = [];
+  // The token accounts a token program's `Approve` or `ApproveChecked` names, at any depth and in a
+  // batch: an allowance that ends where it began may still have been raised and spent between.
+  // A token program's instruction whose report cannot be read may be one, so it is not measured.
+  const approving = new Set<string>();
+  let unseen: string | undefined;
   for (const instruction of message.instructions) {
-    const pot = cookPot(
-      accounts[instruction.programAddressIndex],
-      instruction.data ?? new Uint8Array(),
-      (instruction.accountIndices ?? []).map((at) => accounts[at]),
-    );
+    const program = accounts[instruction.programAddressIndex];
+    const keys = (instruction.accountIndices ?? []).map((at) => accounts[at]);
+    const pot = cookPot(program, instruction.data ?? new Uint8Array(), keys);
     if (pot !== undefined) pots.push(pot);
+    const approves = approvesOn(program, instruction.data, keys);
+    if (approves === null) {
+      unseen =
+        "one of its token program instructions cannot be read, so an approval in it is not seen";
+    }
+    for (const account of approves ?? []) approving.add(account);
   }
   const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
@@ -776,13 +1139,14 @@ export async function measureSvm(
   if (value.err !== null) {
     throw new CliError("the transaction would fail in the simulation, so nothing was sent");
   }
-  // The cooks its programs make: each inner instruction, at any depth, that calls the Kitchen.
+  // The cooks and approvals its programs make: each inner instruction, at any depth, that calls the
+  // Kitchen or a token program.
   const inner: readonly Readonly<{ instructions: readonly InnerInstruction[] }>[] | null =
     value.innerInstructions ?? null;
-  let unseen: string | undefined =
-    inner === null
-      ? "the endpoint did not report the programs its programs call, so a cook among them is not seen"
-      : undefined;
+  if (inner === null) {
+    unseen =
+      "the endpoint did not report the programs its programs call, so a cook among them is not seen";
+  }
   for (const each of (inner ?? []).flatMap((group) => group.instructions)) {
     const program =
       each.programId ??
@@ -791,7 +1155,6 @@ export async function measureSvm(
       unseen = "the endpoint reported a program its programs call that cannot be named";
       continue;
     }
-    if (program !== kitchen) continue;
     const keys = (each.accounts ?? []).map((key) =>
       typeof key === "number" ? accounts[key] : key,
     );
@@ -802,6 +1165,16 @@ export async function measureSvm(
     } catch {
       data = undefined;
     }
+    const approves =
+      each.parsed === undefined
+        ? approvesOn(program, data, keys)
+        : parsedApprovesOn(program, each.parsed);
+    if (approves === null) {
+      unseen =
+        "one of its programs calls a token program, and the endpoint's report of that call cannot be read, so an approval in it is not seen";
+    }
+    for (const account of approves ?? []) approving.add(account);
+    if (program !== kitchen) continue;
     // Every Kitchen instruction opens with an 8-byte discriminator: shorter data is a cut report.
     if (data === undefined || data.length < 8 || keys.some((key) => key === undefined)) {
       unseen =
@@ -848,8 +1221,14 @@ export async function measureSvm(
   // What the wallet (or a Pot) moves out of an account it does not own, as that account's delegate:
   // a Pot's account delegated to the wallet, spent from a transaction that cooks on no Pot. The
   // owner is outside this transaction's set, so the balance it loses is the delegate's spend, which
-  // is the wallet's own send: as much of the drop as the allowance fell by, by mint.
+  // is the wallet's own send: as much of the drop as the allowance fell by, by mint. Spent from
+  // wrapped SOL, it is lamports too, which leave an account the set does not hold: they count
+  // against `native` as well.
   const spentAsDelegate = new Map<SvmAddress, bigint>();
+  let lamportsAsDelegate = 0n;
+  /** What a token account holds: wrapped SOL by its lamports above its rent, synced or not. */
+  const worth = (token: TokenAccountState): bigint =>
+    token.isNative ? (token.wrapped ?? token.amount) : token.amount;
   tracked.forEach((account, index) => {
     const delegateBefore = permanentDelegateOf(before[index] ?? null);
     const delegateAfter = permanentDelegateOf(after[index] ?? null);
@@ -873,10 +1252,13 @@ export async function measureSvm(
     ) {
       const left = was === undefined ? undefined : is;
       const allowanceLeft = left?.delegate === old.delegate ? left.delegatedAmount : 0n;
-      const drop = old.amount - (left?.amount ?? 0n);
+      // Wrapped SOL by its lamports: the delegate may sync what was sent in unsynced and spend it,
+      // leaving the amount where it began.
+      const drop = worth(old) - (left === undefined ? 0n : worth(left));
       const fell = old.delegatedAmount - allowanceLeft;
       const spent = drop < fell ? drop : fell;
       if (spent > 0n) spentAsDelegate.set(old.mint, (spentAsDelegate.get(old.mint) ?? 0n) + spent);
+      if (spent > 0n && old.isNative) lamportsAsDelegate += spent;
     }
     // An account it closes gives nothing more away: its balance is counted as it leaves.
     if (is === undefined || !ours.has((was ?? is).owner)) return;
@@ -884,13 +1266,17 @@ export async function measureSvm(
     // spent in the same transaction, ending below where it began: the delegate can take only what
     // its allowance allowed, so where the allowance moved and what it allows now plus what left the
     // account is more than it allowed before, it was raised. (Conservative: an owner's spend beside
-    // a delegate's reads as one too, and counts the allowance left as approved again.)
+    // a delegate's reads as one too, and counts the allowance left as approved again.) Spent back
+    // to exactly where it began, the allowance alone cannot tell a raise from an owner's spend
+    // beside a standing allowance: where the transaction approves on the account, it is the raise.
+    const exceeded =
+      was !== undefined && is.delegatedAmount + was.amount - is.amount > was.delegatedAmount;
     const raised =
       was !== undefined &&
       is.delegate === was.delegate &&
       (is.delegatedAmount > was.delegatedAmount ||
-        (is.delegatedAmount !== was.delegatedAmount &&
-          is.delegatedAmount + was.amount - is.amount > was.delegatedAmount));
+        (is.delegatedAmount !== was.delegatedAmount && exceeded) ||
+        (approving.has(account) && exceeded));
     if (
       is.delegate !== undefined &&
       !ours.has(is.delegate) &&
@@ -945,7 +1331,8 @@ export async function measureSvm(
   // so wrapping SOL into the wallet's own account and unwrapping it move nothing, and closing,
   // handing over or withdrawing from such an account to another key is a send. Only what the set
   // holds alone counts as held: wrapped SOL an outside delegate may move is that key's to take,
-  // so it is not, whether it stood delegated before or the transaction wrapped it in after. An
+  // so it is not, whether it stood delegated before or the transaction wrapped it in after, synced
+  // into its amount or not (anyone may sync it, with no signature). An
   // account of a layout this does not read, that names one of those keys and loses lamports, may
   // have been the wallet's to command: what it loses counts as sent unless it arrives in the set.
   // The wallet or a Pot that the transaction gives to another program (System's Assign) leaves
@@ -976,14 +1363,14 @@ export async function measureSvm(
     const token = tokenAccount(state);
     const outside =
       token?.isNative === true && token.delegate !== undefined && !ours.has(token.delegate)
-        ? token.delegatedAmount < token.amount
+        ? token.delegatedAmount < worth(token)
           ? token.delegatedAmount
-          : token.amount
+          : worth(token)
         : 0n;
 
     return state.lamports - outside;
   };
-  let lamports = 0n;
+  let lamports = lamportsAsDelegate;
   tracked.forEach((account, index) => {
     const was = before[index] ?? null;
     const is = after[index] ?? null;
@@ -1037,10 +1424,13 @@ export async function measureSvm(
       0n,
     );
     if (amount <= 0n) return [];
-    // Every allowance is in the mint's decimals after; scaled with the rest.
+    // Every allowance is in the mint's decimals after, which are among the parts summed, so the
+    // finest is at least theirs; scaled with the rest. With none, there is nothing to scale.
     const after = facts.get(token)?.decimals;
     const scale =
-      decimals === undefined || after === undefined ? 1n : 10n ** BigInt(decimals - after);
+      delegated === 0n || decimals === undefined || after === undefined
+        ? 1n
+        : 10n ** BigInt(decimals - after);
 
     return [
       {
@@ -1287,6 +1677,33 @@ function spendOf(
     if (measured.unmeasured.native !== undefined) {
       refuse("native", `native is limited, and ${measured.unmeasured.native}`);
     }
+    // Where the native coin is also an ERC-20, an allowance of the token is one of the native coin:
+    // one that cannot be read, or an approval of Permit2 for it, gives no amount the limit can weigh.
+    const coin = nativeErc20(chain.id)?.address.toLowerCase();
+    if (coin !== undefined) {
+      const permit2 = permit2Of(chain);
+      const native = `${chain.name}'s native coin`;
+      for (const unread of (measured.unreadAllowances ?? []).filter(
+        (each) => each.token.toLowerCase() === coin,
+      )) {
+        refuse(
+          "native",
+          `native is limited, and the allowance this transaction leaves ${unread.spender} of ` +
+            `${unread.symbol ?? unread.token}, ${native}, could not be read once it has run, so ` +
+            "it cannot be held to the limit",
+        );
+      }
+      for (const approval of measured.approvals.filter(
+        (each) => each.token.toLowerCase() === coin && each.spender.toLowerCase() === permit2,
+      )) {
+        refuse(
+          "native",
+          `this transaction approves Permit2 (${approval.spender}) for ` +
+            `${approval.symbol ?? approval.token}, ${native}, which lets each standing Permit2 ` +
+            "allowance of it be taken with no further signature, and native limits it",
+        );
+      }
+    }
     hold("native", policy.native, measured.native.amount, measured.native);
   }
   for (const [key, limit] of policy.tokens) {
@@ -1300,19 +1717,44 @@ function spendOf(
           "transaction lets another key take of it cannot be held to a limit",
       );
     }
+    // An allowance it leaves another key that cannot be read exactly: no amount a limit can weigh.
+    for (const unread of (measured.unreadAllowances ?? []).filter((each) => names(key, each))) {
+      refuse(
+        `tokens.${key}`,
+        `tokens.${key} is limited, and the allowance this transaction leaves ${unread.spender} of ` +
+          `${unread.symbol ?? unread.token} could not be read once it has run, so it cannot be ` +
+          "held to the limit",
+      );
+    }
     // Each approval on its own first, so the refusal names it; then everything the transaction
-    // counts against the limit together (on Solana, approvals included).
+    // counts against the limit together, approvals included.
     const permit2 = permit2Of(chain);
     for (const approval of measured.approvals.filter((each) => names(key, each))) {
-      if (approval.spender.toLowerCase() === permit2 || approval.decimals === undefined) continue;
-      const value = scaled(approval.amount, approval.decimals);
+      // An approval of Permit2 makes every allowance the wallet gave through Permit2 before
+      // spendable again, none of which the transaction reports: no amount a limit can weigh.
+      if (approval.spender.toLowerCase() === permit2) {
+        refuse(
+          `tokens.${key}`,
+          `this transaction approves Permit2 (${approval.spender}) for ${approval.symbol ?? approval.token}, ` +
+            "which lets each standing Permit2 allowance of it be taken with no further signature, " +
+            `and tokens.${key} limits it`,
+        );
+      }
+      // An approval in units that cannot be read gives an amount no limit can weigh: refused.
+      if (approval.decimals === undefined) {
+        refuse(
+          `tokens.${key}`,
+          `the decimals of ${approval.symbol ?? approval.token} could not be read, so it cannot be held to the limit`,
+        );
+      }
+      const value = scaled(approval.amount, approval.decimals!);
       const caps = [
         limit.perTransaction === undefined
           ? undefined
-          : limitScaled(limit.perTransaction, approval.decimals),
+          : limitScaled(limit.perTransaction, approval.decimals!),
         limit.perDay === undefined
           ? undefined
-          : limitScaled(limit.perDay, approval.decimals) - (totals.get(`tokens.${key}`) ?? 0n),
+          : limitScaled(limit.perDay, approval.decimals!) - (totals.get(`tokens.${key}`) ?? 0n),
       ].filter((cap): cap is bigint => cap !== undefined);
       const cap = caps.length === 0 ? undefined : caps.reduce((a, b) => (a < b ? a : b));
       if (cap !== undefined && value > cap) {
@@ -1466,8 +1908,39 @@ export class SendGuard {
       refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
   }
 
-  /** Measures and reserves one EVM transaction, just before it is sent. */
-  async evm(client: PublicClient, tx: TxRequest): Promise<Reservation> {
+  /**
+   * Authorizes this wallet to fund its Pot `pot`, on `chain`, for a cook (`sauce run --fund`,
+   * `sauce simulate --fund`): the release's gate, then the policy's `chains` and `to` (the Pot),
+   * checked as written, before any permit is signed or any approval or transfer is sent for it.
+   *
+   * Why `native` and `tokens` are not refused here, as {@link authorizeSignedCook} refuses them:
+   * what funding signs or sends names only the wallet's own Pot, which `--fund` authenticates first
+   * (`pots.ts#authenticatePot`, or the Pot the same run deploys at the wallet's `v12PredictPot`).
+   * A Permit2 transfer is spendable by that Pot alone, and an EIP-2612 permit or an approval lets
+   * that Pot alone pull; the Pot moves anything only in a cook, which only the wallet sends
+   * (`cook` is onlyOwner, and that send is measured and reserved against every limit) or signs for
+   * another to send (refused where a limit is set, above). An approval or transfer funding sends is
+   * itself a send, measured by {@link evm}. A wallet with no policy funds.
+   */
+  authorizeFunding(chain: CanonicalChain, pot: Address): void {
+    this.gate(chain);
+    const policy = this.policy;
+    if (policy === undefined) return;
+    const refuse = refuseBy(this.wallet.name, policy);
+    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
+      refuse(
+        "chains",
+        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this funding is on ${chain.slug}`,
+      );
+    }
+    if (policy.to !== undefined && !policy.to.includes(pot.toLowerCase())) {
+      refuse("to", `to allows ${policy.to.length} address(es), and this funding is for Pot ${pot}`);
+    }
+  }
+
+  /** Measures and reserves one EVM transaction, just before it is sent: as it is signed, with its
+   *  gas and fees where it carries them. */
+  async evm(client: PublicClient, tx: SignedCall): Promise<Reservation> {
     const chain = requireChain(await client.getChainId());
     this.gate(chain);
     if (this.policy === undefined) return NOTHING;

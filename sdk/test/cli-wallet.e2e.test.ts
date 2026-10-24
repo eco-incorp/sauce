@@ -13,11 +13,19 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getAddress, parseEther, type Address, type Hex } from "viem";
+import {
+  getAddress,
+  numberToHex,
+  parseEther,
+  parseTransaction,
+  type Address,
+  type Hex,
+} from "viem";
 
 import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import {
   describeEvm,
+  erc20,
   fixture,
   potOwner,
   registered,
@@ -173,6 +181,183 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     expect(refused.code).toBe(1);
     expect(refused.stderr).toMatch(/chains allows ethereum, and this transaction is on base/);
     expect(await base.publicClient.getTransactionCount({ address: wallet })).toBe(nonce);
+  }, 120_000);
+
+  it("reads a cook's allowance on the block it was simulated on, and holds it to the limit", async () => {
+    // The Pot approves a spender: the guard reads the allowance in a replay of the cook on the
+    // block the cook was simulated on, and counts it only where the node runs it the same way.
+    const approve = join(work, "approve.sauce.ts");
+    writeFileSync(
+      approve,
+      [
+        "function main(spender: Address, amount: Uint256) {",
+        "  USDC.approve(spender, amount);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(wallets, "agent.policy.json"),
+      JSON.stringify({ chains: ["base"], tokens: { USDC: { perTransaction: "1" } } }),
+      { mode: 0o600 },
+    );
+    const allow = (amount: bigint) =>
+      sauce(
+        ...["run", approve, "--chain", "base", "--rpc-url", base.rpcUrl],
+        ...["--wallet", "agent", ...PASSWORD, "--json"],
+        ...["--args", RECIPIENT, amount.toString()],
+      );
+    const allowance = () =>
+      base.publicClient.readContract({
+        address: usdc,
+        abi: erc20,
+        functionName: "allowance",
+        args: [pot, RECIPIENT],
+      });
+    const nonce = await base.publicClient.getTransactionCount({ address: wallet });
+    const over = await allow(2_000_000n);
+    const overAllowance = await allowance();
+    const overNonce = await base.publicClient.getTransactionCount({ address: wallet });
+    const within = await allow(500_000n);
+    const reserved = readFileSync(join(wallets, "agent.ledger.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map(
+        (line) => JSON.parse(line) as { state: string; spend?: Record<string, { amount: string }> },
+      )
+      .filter((line) => line.state === "reserved")
+      .at(-1)?.spend?.["tokens.USDC"]?.amount;
+
+    expect({
+      over: over.code,
+      overSaid: over.stderr,
+      overAllowance: String(overAllowance),
+      overNonce: overNonce - nonce,
+      within: within.code,
+      withinAllowance: String(await allowance()),
+      reserved,
+    }).toEqual({
+      over: 1,
+      overSaid: expect.stringMatching(
+        new RegExp(
+          `this transaction approves ${RECIPIENT} for 2 USDC, more than the 1 USDC tokens\\.USDC leaves room for`,
+        ),
+      ) as unknown,
+      overAllowance: "0",
+      overNonce: 0,
+      within: 0,
+      withinAllowance: "500000",
+      reserved: "500000",
+    });
+  }, 120_000);
+
+  it("measures a cook with the gas and fees it is signed with, and signs exactly what it measured", async () => {
+    // A program that pays more the less gas it has left: 1 USDC with gas to spare, 5 close to its
+    // limit. Simulated with an endpoint's default gas it pays 1; signed with 1.2 times its
+    // estimate, it pays 5.
+    const sensitive = join(work, "gas-sensitive.sauce.ts");
+    writeFileSync(
+      sensitive,
+      [
+        "function main(recipient: Address) {",
+        "  if (ctx.gasLeft() > 1000000) {",
+        "    USDC.transfer(recipient, 1000000);",
+        "  } else {",
+        "    USDC.transfer(recipient, 5000000);",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    await base.mint(usdc, pot, 10_000_000n);
+    const limit = (cap: string) =>
+      writeFileSync(
+        join(wallets, "agent.policy.json"),
+        JSON.stringify({ chains: ["base"], tokens: { USDC: { perTransaction: cap } } }),
+        { mode: 0o600 },
+      );
+    // Every request the command makes, as the endpoint receives it.
+    const recorded = async (): Promise<{
+      result: Awaited<ReturnType<typeof sauce>>;
+      calls: Array<{ method: string; params: unknown[] }>;
+    }> => {
+      const calls: Array<{ method: string; params: unknown[] }> = [];
+      const original = globalThis.fetch;
+      globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        if (typeof init?.body === "string") {
+          calls.push(...[JSON.parse(init.body) as { method: string; params: unknown[] }].flat());
+        }
+
+        return original(input, init);
+      }) as typeof fetch;
+      try {
+        const result = await sauce(
+          ...["run", sensitive, "--chain", "base", "--rpc-url", base.rpcUrl],
+          ...["--wallet", "agent", ...PASSWORD, "--json", "--args", RECIPIENT],
+        );
+
+        return { result, calls };
+      } finally {
+        globalThis.fetch = original;
+      }
+    };
+    const moved = async (run: () => Promise<unknown>) => {
+      const before = await base.balanceOf(usdc, RECIPIENT);
+      const nonce = await base.publicClient.getTransactionCount({ address: wallet });
+      const outcome = await run();
+
+      return {
+        outcome,
+        moved: String((await base.balanceOf(usdc, RECIPIENT)) - before),
+        sent: (await base.publicClient.getTransactionCount({ address: wallet })) - nonce,
+      };
+    };
+    limit("2");
+    const over = await moved(recorded);
+    limit("10");
+    const within = await moved(recorded);
+    const { result, calls } = within.outcome as Awaited<ReturnType<typeof recorded>>;
+    const raw = calls.find((call) => call.method === "eth_sendRawTransaction")?.params[0];
+    const signed = raw === undefined ? undefined : parseTransaction(raw as Hex);
+    // The cook's call in every simulation the policy ran: its gas and what it pays per gas.
+    const measured = calls
+      .filter((call) => call.method === "eth_simulateV1")
+      .flatMap(
+        (call) =>
+          (
+            call.params[0] as {
+              blockStateCalls: Array<{ calls: Array<Record<string, string | undefined>> }>;
+            }
+          ).blockStateCalls[0]!.calls,
+      )
+      .filter((call) => call.to?.toLowerCase() === pot.toLowerCase())
+      .map((call) => `${call.gas}/${call.maxFeePerGas}/${call.maxPriorityFeePerGas}`);
+
+    expect({
+      over: (over.outcome as Awaited<ReturnType<typeof recorded>>).result.code,
+      overSaid: (over.outcome as Awaited<ReturnType<typeof recorded>>).result.stderr,
+      overMoved: over.moved,
+      overSent: over.sent,
+      within: result.code,
+      withinMoved: within.moved,
+      withinSent: within.sent,
+      measured: [...new Set(measured)],
+    }).toEqual({
+      over: 1,
+      overSaid: expect.stringMatching(
+        /tokens\.USDC\.perTransaction is 2 USDC, and this transaction sends 5 USDC/,
+      ) as unknown,
+      overMoved: "0",
+      overSent: 0,
+      within: 0,
+      withinMoved: "5000000",
+      withinSent: 1,
+      measured: [
+        signed === undefined
+          ? "nothing was signed"
+          : `${numberToHex(signed.gas!)}/${numberToHex(signed.maxFeePerGas!)}/${numberToHex(signed.maxPriorityFeePerGas!)}`,
+      ],
+    });
   }, 120_000);
 
   it("deploys its own Pot under a policy whose `to` allows that Pot, and refuses it otherwise", async () => {

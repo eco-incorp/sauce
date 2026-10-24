@@ -620,13 +620,14 @@ export function registerWalletTools(
         "too, sent step by step from its cursor, each step built fresh), sauce_pot, " +
         "sauce_actions (with owner) — or one transaction ({ to, " +
         "data, value }, or a Solana { transaction }), or a list. Needs the wallets enabled " +
-        "(sauce_wallet_enable). First it simulates them, unsigned: on an " +
-        "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each with " +
-        "no signature, the wallet its fee payer (one another key pays for is refused); it " +
-        "refuses, sending nothing, if any would revert, and refuses what the wallet's policy " +
-        "does not allow, naming the limit. Then it sends each in order, simulating it again and " +
-        "signing it only once the policy let it go, and stops at the first that does not " +
-        "succeed. Returns each one's hash (a Solana " +
+        "(sauce_wallet_enable). It simulates them unsigned. On an EVM chain they are simulated " +
+        "all together in one eth_simulateV1 block from the wallet first, and it refuses, sending " +
+        "nothing, if any would revert or the wallet's policy does not allow it, naming the limit. " +
+        "On Solana each is simulated with no signature as it is sent, the wallet its fee payer " +
+        "(one another key pays for is refused), and a plan's cost is checked against the policy " +
+        "before any step; a list of transactions is sent one by one, so one refused after others " +
+        "landed leaves those landed. Each is signed only once the policy let it go, and it stops at " +
+        "the first that does not succeed. Returns each one's hash (a Solana " +
         "signature) and status, with `explorer` and `trace` (Phalcon: calls and balance changes) " +
         "beside it, links to give the user to open in a browser, never to fetch; and for an EVM " +
         "cook, from its receipt, `moves` (what moved, in order, by role), `leftInPot` (what the " +

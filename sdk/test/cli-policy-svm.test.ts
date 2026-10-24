@@ -15,6 +15,7 @@ import {
   AccountRole,
   address,
   appendTransactionMessageInstruction,
+  appendTransactionMessageInstructions,
   compileTransaction,
   compressTransactionMessageUsingAddressLookupTables,
   createTransactionMessage,
@@ -161,12 +162,24 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
   const UNREADABLE_CALL =
     "one of its programs calls the Kitchen, and the endpoint's report of that call cannot be read";
   const UNNAMED = "the endpoint reported a program its programs call that cannot be named";
+  const SPL_TOKEN = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+  const TOKEN_2022 = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+  const USDC = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+  const UNREADABLE_TOKEN_CALL =
+    "one of its programs calls a token program, and the endpoint's report of that call cannot be read, so an approval in it is not seen";
+  /** SPL Token's `Approve` (4) of 1 base unit, as a node reports a call's data: base58. */
+  const APPROVE_DATA = getBase58Decoder().decode(new Uint8Array([4, 1, 0, 0, 0, 0, 0, 0, 0]));
+
   /** A cook's instruction data as a node reports it: base58, the discriminator then a salt and bump. */
   const cookData = (head: Uint8Array) =>
     getBase58Decoder().decode(new Uint8Array([...head, ...new Uint8Array(33)]));
-  /** The wallet calling PROGRAM with the Kitchen among its accounts (as a CPI to it needs), which
-   *  the simulation says made `inner`, given each account's index in the message. */
-  const calling = (inner: (at: (key: Address) => number) => unknown) => {
+  /** The wallet calling PROGRAM with the Kitchen among its accounts (as a CPI to it needs), then
+   *  making `also`, which the simulation says made `inner`, given each account's index in the
+   *  message. */
+  const calling = (
+    inner: (at: (key: Address) => number) => unknown,
+    also: readonly Instruction[] = [],
+  ) => {
     const transaction = compileTransaction(
       pipe(
         createTransactionMessage({ version: 0 }),
@@ -180,12 +193,15 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
             message,
           ),
         (message) =>
-          appendTransactionMessageInstruction(
-            {
-              programAddress: PROGRAM,
-              accounts: [{ address: KITCHEN, role: AccountRole.READONLY }],
-              data: new Uint8Array([1]),
-            },
+          appendTransactionMessageInstructions(
+            [
+              {
+                programAddress: PROGRAM,
+                accounts: [{ address: KITCHEN, role: AccountRole.READONLY }],
+                data: new Uint8Array([1]),
+              },
+              ...also,
+            ],
             message,
           ),
       ),
@@ -330,8 +346,8 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
   });
 
   it("measures as usual when every call it reports is read", async () => {
-    // A System transfer as a mainnet node reports it (parsed: no accounts, no data), a call
-    // PROGRAM makes to itself, and one to the Kitchen that is not a cook.
+    // A System transfer and token programs' calls as a mainnet node reports them (parsed: no
+    // accounts, no data), a call PROGRAM makes to itself, and one to the Kitchen that is not a cook.
     const { rpc, transaction } = calling((at) => [
       {
         index: 0,
@@ -343,6 +359,35 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
             },
             program: "system",
             programId: "11111111111111111111111111111111",
+            stackHeight: 2,
+          },
+          {
+            parsed: {
+              info: {
+                authority: WALLET,
+                destination: PROGRAM,
+                mint: USDC,
+                source: WALLET,
+                tokenAmount: {
+                  amount: "1",
+                  decimals: 6,
+                  uiAmount: 0.000001,
+                  uiAmountString: "0.000001",
+                },
+              },
+              type: "transferChecked",
+            },
+            program: "spl-token",
+            programId: SPL_TOKEN,
+            stackHeight: 2,
+          },
+          {
+            parsed: {
+              info: { amount: "1", delegate: PROGRAM, owner: WALLET, source: WALLET },
+              type: "approve",
+            },
+            program: "spl-token",
+            programId: TOKEN_2022,
             stackHeight: 2,
           },
           { programIdIndex: at(PROGRAM), accounts: [0], data: "1", stackHeight: 2 },
@@ -358,6 +403,120 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
     const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
     expect(measured.unmeasured).toEqual({});
     expect(measured.to).toEqual([PROGRAM]);
+  });
+
+  it.each([
+    [
+      "an SPL Token call comes parsed with no type",
+      { programId: SPL_TOKEN, program: "spl-token", parsed: { info: { source: WALLET } } },
+    ],
+    [
+      "a Token-2022 approval comes parsed with no source",
+      {
+        programId: TOKEN_2022,
+        program: "spl-token",
+        parsed: { type: "approve", info: { amount: "1", delegate: PROGRAM, owner: WALLET } },
+      },
+    ],
+    [
+      "an SPL Token checked approval comes parsed with no info",
+      { programId: SPL_TOKEN, program: "spl-token", parsed: { type: "approveChecked" } },
+    ],
+    [
+      "an SPL Token call comes parsed as something other than an instruction",
+      { programId: SPL_TOKEN, program: "spl-token", parsed: "approve" },
+    ],
+    [
+      "a Token-2022 batch comes parsed with an approval in it that has no source",
+      {
+        programId: TOKEN_2022,
+        program: "spl-token",
+        parsed: {
+          type: "batch",
+          info: {
+            instructions: [
+              { type: "syncNative", info: { account: WALLET } },
+              { type: "approve", info: { amount: "1", delegate: PROGRAM, owner: WALLET } },
+            ],
+          },
+        },
+      },
+    ],
+    [
+      "an SPL Token batch comes parsed with no instructions",
+      { programId: SPL_TOKEN, program: "spl-token", parsed: { type: "batch", info: {} } },
+    ],
+    [
+      "an SPL Token call comes with neither parsed info nor data",
+      { programId: SPL_TOKEN, accounts: [WALLET, PROGRAM, WALLET] },
+    ],
+    [
+      "an SPL Token approval comes with no accounts",
+      { programId: SPL_TOKEN, accounts: [], data: APPROVE_DATA },
+    ],
+    [
+      "an SPL Token approval names an account past the message's",
+      { programId: SPL_TOKEN, accounts: [9, 0], data: APPROVE_DATA },
+    ],
+    [
+      "an SPL Token batch is cut short",
+      {
+        programId: SPL_TOKEN,
+        accounts: [WALLET, PROGRAM, WALLET],
+        data: getBase58Decoder().decode(new Uint8Array([255, 3, 9, 4])),
+      },
+    ],
+  ] as const)(
+    "refuses it where a token is limited when %s, which may hide an approval",
+    async (_, call) => {
+      const { rpc, transaction } = calling(() => [
+        { index: 0, instructions: [{ ...call, stackHeight: 2 }] },
+      ]);
+      const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+      expect({
+        unmeasured: measured.unmeasured,
+        ...(await verdictOf(
+          rpc,
+          WALLET,
+          { tokens: { [USDC]: { perTransaction: "1" } } },
+          transaction,
+        )),
+      }).toEqual({
+        unmeasured: { native: UNREADABLE_TOKEN_CALL, tokens: UNREADABLE_TOKEN_CALL },
+        ...refused(`tokens.${USDC}`, `tokens.${USDC} is limited, and ${UNREADABLE_TOKEN_CALL}`),
+      });
+    },
+  );
+
+  it("refuses it where a token is limited when one of its own token program instructions cannot be read", async () => {
+    // A batch of SPL Token's that says its one instruction has 9 bytes of data, and carries 1.
+    const why =
+      "one of its token program instructions cannot be read, so an approval in it is not seen";
+    const { rpc, transaction } = calling(
+      () => [],
+      [
+        {
+          programAddress: SPL_TOKEN,
+          accounts: [{ address: WALLET, role: AccountRole.WRITABLE_SIGNER }],
+          data: new Uint8Array([255, 1, 9, 4]),
+        },
+      ],
+    );
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+    expect({
+      unmeasured: measured.unmeasured,
+      ...(await verdictOf(
+        rpc,
+        WALLET,
+        { tokens: { [USDC]: { perTransaction: "1" } } },
+        transaction,
+      )),
+    }).toEqual({
+      unmeasured: { native: why, tokens: why },
+      ...refused(`tokens.${USDC}`, `tokens.${USDC} is limited, and ${why}`),
+    });
   });
 });
 
@@ -793,12 +952,13 @@ describe("measuring token accounts from a simulation's account images", () => {
   };
   /**
    * The wallet calling PROGRAM with ACCOUNT (and `also`) writable, against an endpoint that holds
-   * `now` and whose simulation leaves `after`.
+   * `now` and whose simulation leaves `after`, reporting `inner` as the calls PROGRAM makes.
    */
   const simulated = (
     now: Record<string, Image>,
     after: Record<string, Image>,
     also: readonly Address[] = [],
+    inner: readonly unknown[] = [],
   ) => {
     const transaction = compileTransaction(
       pipe(
@@ -841,7 +1001,7 @@ describe("measuring token accounts from a simulation's account images", () => {
             value: {
               err: null,
               logs: [],
-              innerInstructions: [],
+              innerInstructions: inner.length === 0 ? [] : [{ index: 0, instructions: inner }],
               accounts: config.accounts.addresses.map((key) => asRpc(after[key] ?? null)),
             },
           }),
@@ -852,6 +1012,99 @@ describe("measuring token accounts from a simulation's account images", () => {
   };
   const plain = <T extends { amount: bigint }>(list: readonly T[]) =>
     list.map(({ amount, ...rest }) => ({ ...rest, amount: String(amount) }));
+
+  /** The wallet's ACCOUNT of MINT_A holding `amount`, PROGRAM its delegate for 500 tokens. */
+  const allowed = (amount: bigint): Image => {
+    const data = tokenAccountData(MINT_A, WALLET, amount);
+    const view = new DataView(data.buffer);
+    view.setUint32(72, 1, true); // delegate: Some
+    data.set(getAddressEncoder().encode(PROGRAM), 76);
+    view.setBigUint64(121, 500_000n, true); // delegated_amount
+
+    return { lamports: 2_039_280n, owner: SPL, data };
+  };
+  /** SPL Token's `Approve` (4) of 1100 tokens, at MINT_A's 3 decimals. */
+  const raise = new Uint8Array(9);
+  raise[0] = 4;
+  new DataView(raise.buffer).setBigUint64(1, 1_100_000n, true);
+  const raiseInfo = { amount: "1100000", delegate: PROGRAM, owner: WALLET, source: ACCOUNT };
+
+  it.each([
+    [
+      "parsed",
+      { programId: SPL, program: "spl-token", parsed: { type: "approve", info: raiseInfo } },
+    ],
+    [
+      "parsed in a batch",
+      {
+        programId: SPL,
+        program: "spl-token",
+        parsed: {
+          type: "batch",
+          info: {
+            instructions: [
+              { type: "syncNative", info: { account: MINT_B } },
+              { type: "approve", info: raiseInfo },
+            ],
+          },
+        },
+      },
+    ],
+    [
+      "partially decoded",
+      {
+        programId: SPL,
+        accounts: [ACCOUNT, PROGRAM, WALLET],
+        data: getBase58Decoder().decode(raise),
+      },
+    ],
+    [
+      // A batch's instructions take its accounts in turn: the approval's are the second's.
+      "partially decoded in a batch",
+      {
+        programId: SPL,
+        accounts: [MINT_B, ACCOUNT, PROGRAM, WALLET],
+        data: getBase58Decoder().decode(new Uint8Array([255, 1, 1, 17, 3, 9, ...raise])),
+      },
+    ],
+  ] as const)(
+    "counts an allowance raised by a token program's call reported %s and spent back to what it was",
+    async (_, call) => {
+      // PROGRAM's allowance of 500 stands on the wallet's account, which holds 1000. A call PROGRAM
+      // makes raises it to 1100, and PROGRAM spends 600: it ends at 500, as it began, yet 600 left
+      // and 500 more PROGRAM may still take.
+      const { rpc, transaction } = simulated(
+        { [ACCOUNT]: allowed(1_000_000n), [MINT_A]: minted(SPL, 3) },
+        { [ACCOUNT]: allowed(400_000n) },
+        [],
+        [{ ...call, stackHeight: 2 }],
+      );
+      const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+      expect({
+        unmeasured: measured.unmeasured,
+        tokens: measured.tokens
+          .filter((each) => each.token === MINT_A)
+          .map(({ amount, delegated, ...rest }) => ({
+            ...rest,
+            amount: String(amount),
+            delegated: String(delegated),
+          })),
+        ...(await verdictOf(
+          rpc,
+          WALLET,
+          { tokens: { [MINT_A]: { perTransaction: "700" } } },
+          transaction,
+        )),
+      }).toEqual({
+        unmeasured: {},
+        tokens: [
+          { token: MINT_A, symbol: "USDC", amount: "1100000", decimals: 3, delegated: "500000" },
+        ],
+        ...refused(`tokens.${MINT_A}.perTransaction`, "this transaction sends 1100 USDC"),
+      });
+    },
+  );
 
   // (A mint belongs to one token program, so a limit, which names a mint, cannot see the same mint
   // under the other program: `movedBy` reports that as two changes, `cli-svm-effects.test.ts`.)
@@ -997,6 +1250,60 @@ describe("measuring token accounts from a simulation's account images", () => {
       ...refused(`tokens.${MINT_A}.perTransaction`, "this transaction sends 1000 USDC"),
     });
   });
+
+  it("counts a balance the transaction leaves at the same raw amount of a mint it makes again with more decimals", async () => {
+    // The wallet's account holds 1000 of a mint of 0 decimals: 1000 tokens. The transaction makes
+    // the mint again with 9 decimals and leaves the account at 1000 base units: 0.000001 tokens.
+    const { rpc, transaction } = simulated(
+      { [ACCOUNT]: held(SPL, MINT_A, WALLET, 1_000n), [MINT_A]: minted(SPL, 0) },
+      { [ACCOUNT]: held(SPL, MINT_A, WALLET, 1_000n), [MINT_A]: minted(SPL, 9) },
+      [MINT_A],
+    );
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+    expect({
+      tokens: plain(measured.tokens),
+      ...(await verdictOf(
+        rpc,
+        WALLET,
+        { tokens: { [MINT_A]: { perTransaction: "1" } } },
+        transaction,
+      )),
+    }).toEqual({
+      tokens: [
+        { token: MINT_A, symbol: "USDC", amount: String(1_000n * 10n ** 9n - 1_000n), decimals: 9 },
+      ],
+      ...refused(`tokens.${MINT_A}.perTransaction`, "this transaction sends 999.999999 USDC"),
+    });
+  });
+
+  it("measures a balance burnt from a mint made again with more decimals, beside a close authority handed out", async () => {
+    // The wallet's account held 1000 of a mint of 3 decimals: the transaction burns it, makes the
+    // mint again with 9, and lets another key close the emptied account. Nothing is delegated, so no
+    // allowance is scaled; a policy limiting only another token lets it through.
+    const closed = held(SPL, MINT_A, WALLET, 0n)!;
+    const view = new DataView(closed.data.buffer);
+    view.setUint32(129, 1, true);
+    closed.data.set(getAddressEncoder().encode(PROGRAM), 133);
+    const { rpc, transaction } = simulated(
+      { [ACCOUNT]: held(SPL, MINT_A, WALLET, 1_000n), [MINT_A]: minted(SPL, 3) },
+      { [ACCOUNT]: closed, [MINT_A]: minted(SPL, 9) },
+      [MINT_A],
+    );
+    const measured = await measureSvm(rpc, requireChain("solana"), WALLET, transaction);
+
+    expect({
+      tokens: plain(measured.tokens),
+      closers: measured.closers,
+      refusal: (
+        await verdictOf(rpc, WALLET, { tokens: { [MINT_B]: { perTransaction: "1" } } }, transaction)
+      ).refusal,
+    }).toEqual({
+      tokens: [{ token: MINT_A, symbol: "USDC", amount: "1000", decimals: 3 }],
+      closers: [{ token: MINT_A, account: ACCOUNT, closer: PROGRAM, symbol: "USDC" }],
+      refusal: "none: the guard let it through",
+    });
+  });
 });
 
 // What a token account lets another key do once a transaction lands: spend from it as its delegate,
@@ -1029,13 +1336,15 @@ describeSvm(
       ["approve", "spl"],
     ] as const;
     type Approving = (typeof POT_APPROVALS)[number][0];
+    /** What they approve: AMOUNT, and 1100 tokens, to raise an allowance of 500 that stands. */
+    const RAISED = 1_100_000n;
     let harness: EngineHarness;
     let shim: SolanaShim;
     let rpc: ReturnType<typeof createSolanaRpc>;
     let wallet: Address;
     let forwarder: Address;
     const mints = {} as Record<Kind, Address>;
-    /** Each of POT_APPROVALS, compiled and staged once. */
+    /** Each of POT_APPROVALS for each amount it approves, compiled and staged once. */
     const cooking = new Map<string, { bytecode: Uint8Array; staged: StagedProgram }>();
 
     const keyBytes = (key: Address) => new Uint8Array(getAddressEncoder().encode(key));
@@ -1173,13 +1482,14 @@ describeSvm(
       return { account, held: rent + amount };
     };
     /** A token account of `owner`'s holding `amount` of `mint`, with `delegate` standing for
-     *  `allowance` of it. */
+     *  `allowance` of it, under `program`. */
     const delegatedAccount = (
       owner: Address,
       mint: Address,
       amount: bigint,
       delegate: Address,
       allowance: bigint,
+      program: Address = TOKEN_PROGRAM,
     ): Address => {
       const account = randomAddress();
       const data = allowing(tokenAccountData(mint, owner, amount), delegate, allowance);
@@ -1188,15 +1498,15 @@ describeSvm(
         data,
         executable: false,
         lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
-        programAddress: TOKEN_PROGRAM,
+        programAddress: program,
         space: BigInt(data.length),
       });
 
       return account;
     };
 
-    /** The wallet's cook on its Pot approving `delegate` on `source`, at the top level or through
-     *  the forwarder. */
+    /** The wallet's cook on its Pot approving `delegate` on `source` for `amount`, at the top level
+     *  or through the forwarder. */
     const potApproval = (
       fn: Approving,
       kind: Kind,
@@ -1204,8 +1514,9 @@ describeSvm(
       delegate: Address,
       depth: "the top level" | "a CPI",
       via: "inline" | "staged",
+      amount: typeof AMOUNT | typeof RAISED = AMOUNT,
     ): Instruction => {
-      const { bytecode, staged } = cooking.get(`${fn}/${kind}`)!;
+      const { bytecode, staged } = cooking.get(`${fn}/${kind}/${amount}`)!;
       const input = {
         kitchen: harness.kitchen,
         owner: wallet,
@@ -1247,20 +1558,22 @@ describeSvm(
       let nonce = 301n;
       for (const [fn, kind] of POT_APPROVALS) {
         const mint = `0x${keyHex(mints[kind])}n`;
-        const bytecode = compileSauceProgram(
-          "solana",
-          `import { ${fn} } from "@sauce/token";\n` +
-            "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, " +
-            "delegate: Account, pot: Account<Writable, Signer>) {\n" +
-            (fn === "approve"
-              ? `  approve(${mint}, tokenProgram, source, delegate, pot, ${AMOUNT});\n`
-              : `  approveChecked(${mint}, tokenProgram, source, mint, delegate, pot, ${AMOUNT}, ${DECIMALS});\n`) +
-            "}",
-        ).bytecode;
-        cooking.set(`${fn}/${kind}`, {
-          bytecode,
-          staged: await stageProgram(harness, bytecode, nonce++),
-        });
+        for (const amount of [AMOUNT, RAISED]) {
+          const bytecode = compileSauceProgram(
+            "solana",
+            `import { ${fn} } from "@sauce/token";\n` +
+              "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, " +
+              "delegate: Account, pot: Account<Writable, Signer>) {\n" +
+              (fn === "approve"
+                ? `  approve(${mint}, tokenProgram, source, delegate, pot, ${amount});\n`
+                : `  approveChecked(${mint}, tokenProgram, source, mint, delegate, pot, ${amount}, ${DECIMALS});\n`) +
+              "}",
+          ).bytecode;
+          cooking.set(`${fn}/${kind}/${amount}`, {
+            bytecode,
+            staged: await stageProgram(harness, bytecode, nonce++),
+          });
+        }
       }
       shim = solanaShim(harness.svm, RPC_URL);
       shim.install();
@@ -1833,6 +2146,135 @@ describeSvm(
       expect(String(tokenAmount(harness, elsewhere))).toBe("600000");
     });
 
+    it("counts an allowance raised and spent back to what it was, and not an owner's spend beside an allowance that stands", async () => {
+      // An allowance of 500 tokens stands. Raised to 1100, the delegate spends 600: it ends at 500,
+      // as it began, yet 600 left and 500 more the delegate may still take. Beside it, the owner's
+      // own spend of 600 with the same allowance standing, untouched, gives the delegate nothing.
+      const mint = mints.spl;
+      const delegate = await generateKeyPairSigner();
+      const elsewhere = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      const spend = (source: Address, authority: KeyPairSigner | Address): Instruction => ({
+        programAddress: TOKEN_PROGRAM,
+        accounts: [
+          writable(source),
+          readonly(mint),
+          writable(elsewhere),
+          typeof authority === "string" ? signer(authority) : signing(authority),
+        ],
+        data: transferCheckedData(600_000n, DECIMALS),
+      });
+      const policy = { tokens: { [mint]: { perTransaction: "700" } } };
+      const tokens = async (transaction: Transaction) =>
+        (await measure(transaction)).tokens.map(({ amount, delegated, ...rest }) => ({
+          ...rest,
+          amount: String(amount),
+          ...(delegated === undefined ? {} : { delegated: String(delegated) }),
+        }));
+
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const owned = delegatedAccount(wallet, mint, AMOUNT, delegate.address, 500_000n);
+      const ownerSpend = await signed([spend(owned, wallet)]);
+      const plain = { tokens: await tokens(ownerSpend), ...(await guarded(policy, ownerSpend)) };
+      const raisedFrom = delegatedAccount(wallet, mint, AMOUNT, delegate.address, 500_000n);
+      const raisedAndSpent = await signed([
+        approve(raisedFrom, delegate.address, 1_100_000n),
+        spend(raisedFrom, delegate),
+      ]);
+
+      expect({
+        raised: {
+          tokens: await tokens(raisedAndSpent),
+          ...(await guarded(policy, raisedAndSpent)),
+        },
+        plain: { tokens: plain.tokens, refusal: plain.refusal },
+      }).toEqual({
+        raised: {
+          tokens: [{ token: mint, amount: "1100000", decimals: DECIMALS, delegated: "500000" }],
+          ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1100 ${mint}`),
+        },
+        plain: {
+          tokens: [{ token: mint, amount: "600000", decimals: DECIMALS }],
+          refusal: "none: the guard let it through",
+        },
+      });
+      expectOk(sendSigned(harness, raisedAndSpent));
+      expect(String(keyAt(raisedFrom, 76))).toBe(delegate.address);
+    });
+
+    it.each(
+      POT_APPROVALS.flatMap(([fn, kind]) =>
+        (["the top level", "a CPI"] as const).flatMap((depth) =>
+          [false, true].map((alt) => [fn, kind, depth, alt] as const),
+        ),
+      ),
+    )(
+      "counts the Pot's allowance its %s (%s) raises in a cook at %s, lookup table %s, and the delegate spends back to what it was",
+      async (fn, kind, depth, alt) => {
+        // An outside delegate's allowance of 500 tokens stands on the Pot's account. The cook raises
+        // it to 1100, a call the engine makes to the token program, which a node reports parsed
+        // (no accounts, no data), and the delegate spends 600: it ends at 500, as it began, yet 600
+        // left and 500 more the delegate may still take.
+        const mint = mints[kind];
+        const delegate = await generateKeyPairSigner();
+        const source = delegatedAccount(
+          harness.pot,
+          mint,
+          AMOUNT,
+          delegate.address,
+          500_000n,
+          PROGRAMS[kind],
+        );
+        const elsewhere = setTokenAccount(
+          harness,
+          randomAddress(),
+          mint,
+          randomAddress(),
+          0n,
+          PROGRAMS[kind],
+        );
+        const transaction = await signed(
+          [
+            ...prepends(),
+            potApproval(fn, kind, source, delegate.address, depth, "inline", RAISED),
+            {
+              programAddress: PROGRAMS[kind],
+              accounts: [writable(source), readonly(mint), writable(elsewhere), signing(delegate)],
+              data: transferCheckedData(600_000n, DECIMALS),
+            },
+          ],
+          alt ? [harness.pot, source] : undefined,
+        );
+        expect(staticAccounts(transaction).includes(source)).toBe(!alt);
+
+        const measured = await measure(transaction);
+        expect({
+          unmeasured: measured.unmeasured,
+          tokens: measured.tokens.map(({ amount, delegated, ...rest }) => ({
+            ...rest,
+            amount: String(amount),
+            ...(delegated === undefined ? {} : { delegated: String(delegated) }),
+          })),
+          ...(await guarded({ tokens: { [mint]: { perTransaction: "700" } } }, transaction)),
+        }).toEqual({
+          unmeasured: {},
+          tokens: [{ token: mint, amount: "1100000", decimals: DECIMALS, delegated: "500000" }],
+          ...refused(`tokens.${mint}.perTransaction`, `this transaction sends 1100 ${mint}`),
+        });
+
+        // And it lands so: 600 out, and the delegate's allowance back at 500.
+        expectOk(sendSigned(harness, transaction));
+        const landed = harness.svm.getAccount(source);
+        if (!landed.exists) throw new Error(`${source} does not exist`);
+        expect({
+          moved: String(tokenAmount(harness, elsewhere)),
+          delegate: keyAt(source, 76),
+          allowance: String(
+            new DataView(landed.data.buffer, landed.data.byteOffset).getBigUint64(121, true),
+          ),
+        }).toEqual({ moved: "600000", delegate: delegate.address, allowance: "500000" });
+      },
+    );
+
     it("counts what the wallet moves out of a Pot's account it is the delegate of, with no cook", async () => {
       // A Pot's account, the wallet its delegate for all of it (an approval that gave no outside
       // key anything); then the wallet alone spends from it, no cook naming the Pot.
@@ -1859,6 +2301,135 @@ describeSvm(
         },
       );
       expectOk(sendSigned(harness, within));
+    });
+
+    it("counts the wrapped SOL the wallet pays as the delegate of a Pot's account against native, with no cook", async () => {
+      // The Pot's wrapped SOL account, which the Pot's own cook delegates to the wallet (no outside
+      // key is given anything: the setup counts the fee only); then the wallet alone pays 2 SOL
+      // out of it, no cook naming the Pot. Its lamports leave an account the wallet does not own.
+      const { account: source } = wrappedSol(harness.pot, 2_000_000_000n);
+      const { account: dest } = wrappedSol(randomAddress(), 0n);
+      const approveAll = compileSauceProgram(
+        "solana",
+        'import { approve } from "@sauce/token";\n' +
+          "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, " +
+          "delegate: Account, pot: Account<Writable, Signer>) {\n" +
+          `  approve(0x${keyHex(NATIVE_MINT)}n, tokenProgram, source, delegate, pot, 2000000000);\n` +
+          "}",
+      ).bytecode;
+      const staged = await stageProgram(harness, approveAll, 402n);
+      const setup = await signed([
+        ...prepends(),
+        buildCookFromAccountInstruction({
+          kitchen: harness.kitchen,
+          owner: wallet,
+          engineProgram: harness.programId,
+          potSalt: HARNESS_POT_SALT,
+          pot: harness.pot,
+          feeConfig: harness.feeConfig,
+          maxExecutionFee: 0n,
+          tail: [
+            readonly(TOKEN_PROGRAM),
+            writable(source),
+            readonly(NATIVE_MINT),
+            readonly(wallet),
+            writable(harness.pot),
+          ],
+          ...staged,
+          pin: staged.sha256,
+        }),
+      ]);
+      const setupNative = (await measure(setup)).native.amount;
+      expectOk(sendSigned(harness, setup));
+      expect(keyAt(source, 76)).toBe(wallet);
+      // The wallet pays `amount` of it to another key: TransferChecked needs the mint, which the
+      // harness does not carry, so SPL Token's plain Transfer (3).
+      const pay = (amount: bigint) =>
+        signed([
+          {
+            programAddress: TOKEN_PROGRAM,
+            accounts: [writable(source), writable(dest), signer(wallet)],
+            data: Uint8Array.of(3, ...u64(amount)),
+          },
+        ]);
+
+      // Each measured before the next is signed: signing moves the cluster to a new blockhash.
+      const over = await nativeVerdict("1", await pay(2_000_000_000n));
+      const within = await pay(500_000_000n);
+      expect({
+        setup: String(setupNative),
+        over,
+        within: await nativeVerdict("1", within),
+      }).toEqual({
+        setup: String(FEE),
+        over: {
+          unmeasured: {},
+          native: String(2_000_000_000n + FEE),
+          refusal: nativeRefusal,
+          spend: undefined,
+        },
+        within: {
+          unmeasured: {},
+          native: String(500_000_000n + FEE),
+          refusal: ALLOWED,
+          spend: { native: { amount: String(500_000_000n + FEE), decimals: 9 } },
+        },
+      });
+      expectOk(sendSigned(harness, within));
+    });
+
+    it("counts SOL sent into the wallet's wrapped SOL account unsynced, where an outside key stands to move it", async () => {
+      // As below, but with no SyncNative: the account's amount stays 0 while its lamports grow by
+      // 2 SOL. SyncNative needs no signature, so the outside delegate syncs it and takes them.
+      const { account } = wrappedSol(wallet, 0n, {
+        delegate: randomAddress(),
+        allowance: 2_000_000_000n,
+      });
+      const transaction = await signed([
+        {
+          programAddress: SYSTEM_PROGRAM,
+          accounts: [{ address: wallet, role: AccountRole.WRITABLE_SIGNER }, writable(account)],
+          data: Uint8Array.of(...u32(2), ...u64(2_000_000_000n)),
+        },
+      ]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(2_000_000_000n + FEE),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+    });
+
+    it("counts the unsynced wrapped SOL the wallet syncs and pays as the delegate of a Pot's account against native", async () => {
+      // The Pot's wrapped SOL account holds 2 SOL in lamports its amount does not show yet, all of
+      // it delegated to the wallet. The wallet syncs it and pays it out: its amount ends where it
+      // began, at 0, and 2 SOL left.
+      const { account: source } = wrappedSol(harness.pot, 0n, {
+        delegate: wallet,
+        allowance: 2_000_000_000n,
+      });
+      const present = harness.svm.getAccount(source);
+      if (!present.exists) throw new Error("the wrapped SOL account was not made");
+      harness.svm.setAccount({ ...present, lamports: lamports(present.lamports + 2_000_000_000n) });
+      const { account: dest } = wrappedSol(randomAddress(), 0n);
+      const transaction = await signed([
+        { programAddress: TOKEN_PROGRAM, accounts: [writable(source)], data: Uint8Array.of(17) },
+        {
+          programAddress: TOKEN_PROGRAM,
+          accounts: [writable(source), writable(dest), signer(wallet)],
+          data: Uint8Array.of(3, ...u64(2_000_000_000n)),
+        },
+      ]);
+
+      expect(await nativeVerdict("1", transaction)).toEqual({
+        unmeasured: {},
+        native: String(2_000_000_000n + FEE),
+        refusal: nativeRefusal,
+        spend: undefined,
+      });
+      expectOk(sendSigned(harness, transaction));
+      expect(String(tokenAmount(harness, dest))).toBe("2000000000");
     });
 
     it("counts SOL the wallet wraps into its own account where an outside key stands to move it", async () => {
