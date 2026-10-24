@@ -678,10 +678,14 @@ function compileForChain(
           ]),
         ),
       },
+      // A module the caller serves is checked as the entry is, and compiled as the entry is: its
+      // ruled-out code blanked, a contract under `&&`/`||` as a value made the bool.
       checkModule: (path, text) => {
-        for (const on of checkNames(text, names, { ...checks, file: path }).chainKeys) {
-          keys.set(on.id, on);
-        }
+        const module = checkNames(text, names, { ...checks, file: path });
+        for (const on of module.chainKeys) keys.set(on.id, on);
+        return module.dead.length === 0 && module.bindingSides.length === 0
+          ? undefined
+          : withoutDead(text, module.dead, module.bindingSides);
       },
       ...(args === undefined ? {} : { args }),
     });

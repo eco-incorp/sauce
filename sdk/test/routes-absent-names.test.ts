@@ -383,6 +383,29 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     }
   });
 
+  it("a module the program imports gets the same bool from `&&`/`||` on a contract", () => {
+    const served = (helper: string) => (path: string) =>
+      path.replace(/^\.\//, "") === "h.js" ? new TextEncoder().encode(helper) : undefined;
+    const main = `import { pick } from "./h.js";\nfunction main() { return pick(); }`;
+    for (const [body, normalized] of [
+      ["return UniswapV3.Factory || 0;", "return !!(UniswapV3.Factory) || 0;"],
+      [
+        "const a = UniswapV3.Factory; return a || 0;",
+        "const a = UniswapV3.Factory; return !!(a) || 0;",
+      ],
+    ]) {
+      const program = hex("base", main, {
+        resolve: served(`export function pick() { ${body} }`),
+      });
+      expect(program).toBe(
+        hex("base", main, { resolve: served(`export function pick() { ${normalized} }`) }),
+      );
+      expect(program).not.toContain(
+        getDescriptor("uniswap-v3", "Factory")!.perChainAddress[8453]!.slice(2).toLowerCase(),
+      );
+    }
+  });
+
   it("a module the program imports is read the same way", () => {
     const helper = `export function owed(): Address { return USDT; }`;
     const spender = `export function spend(): Uint256 { USDC.approve(PancakeswapV3.Factory, 1); return 0; }`;

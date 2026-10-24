@@ -126,7 +126,7 @@ function toInlineContracts(
 export function makeResolve(
   source: string,
   own: ResolveModule | undefined,
-  check?: (path: string, bytes: Uint8Array) => void,
+  check?: (path: string, bytes: Uint8Array) => Uint8Array | undefined,
   refuse?: (error: Error) => void,
 ): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
@@ -143,8 +143,7 @@ export function makeResolve(
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
       if (bytes !== undefined && bytes !== null) {
-        if (!path.endsWith(".json")) check?.(path, bytes);
-        return bytes;
+        return (!path.endsWith(".json") && check?.(path, bytes)) || bytes;
       }
     }
 
@@ -295,8 +294,9 @@ export interface RsCompileInput {
    *  the chain's names modules (`INSTALLED_CHAIN_MODULE`), by the path `chainModuleText` serves. */
   packages?: Readonly<Record<string, string>>;
   /** Reads each SauceScript module the caller's `resolve` serves, by its path and text, and throws
-   *  to refuse it: the entry is the caller's to read before it compiles. */
-  checkModule?: (path: string, text: string) => void;
+   *  to refuse it, or returns the text to compile in its place: the entry is the caller's to read
+   *  before it compiles. */
+  checkModule?: (path: string, text: string) => string | undefined;
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -429,14 +429,16 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   // The text of each module the program and the caller wrote, by the path an importer is reported
   // by, to locate an import refused while it resolves.
   const texts = new Map<string, string>([[`./${ENTRY}`, input.source]]);
-  const check = (path: string, bytes: Uint8Array): void => {
+  const check = (path: string, bytes: Uint8Array): Uint8Array | undefined => {
     const text = new TextDecoder().decode(bytes);
     texts.set(path, text);
-    if (refused !== undefined || input.checkModule === undefined) return;
+    if (refused !== undefined || input.checkModule === undefined) return undefined;
     try {
-      input.checkModule(path, text);
+      const replaced = input.checkModule(path, text);
+      return replaced === undefined ? undefined : new TextEncoder().encode(replaced);
     } catch (error) {
       refuse(error);
+      return undefined;
     }
   };
   const refusePackage = (specifier: string, importer: string, path: string): void => {

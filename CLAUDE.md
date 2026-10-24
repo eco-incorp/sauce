@@ -560,7 +560,9 @@ bool, and an import is taken as one. `compileForChain` applies both in one pass 
 `0`; a binding side written `!!(…)`, which is the bool, the same bytes for a constant)
 before every rewrite, so the token, venue, account and accessor passes never lower ruled-out code
 — on Solana they would add its accounts and checks to `main`, which `available(X)`, removing the
-branch from the source, never did. A module the caller serves is only checked: no rewrite reads it.
+branch from the source, never did. A module the caller serves gets the same `withoutDead` pass,
+returned by the `checkModule` hook and served by `rs-compile.ts#makeResolve` in place of its text;
+no other rewrite reads it.
 Its scopes are `lexical-scope.ts`'s, the compiler's: the module's names (a type-only import binds
 none) and a function's parameters everywhere in them, a block's `let`/`const` from its declarator
 on, a loop's or `catch` clause's binding in it — a function-wide shadow set once let a use after an
