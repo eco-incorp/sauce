@@ -105,7 +105,7 @@ import {
   type SimulatedAccount,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import type { TxRequest } from "./chain.js";
+import type { SignedCall, TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
 import { authenticatePot } from "./pots.js";
@@ -561,7 +561,7 @@ const headerOf = (block: {
 export async function rehearsePlan(
   client: PublicClient,
   wallet: Address,
-  calls: readonly TxRequest[],
+  calls: readonly SignedCall[],
 ): Promise<readonly Rehearsed[] | undefined> {
   try {
     const head = await client.getBlock({ blockTag: "latest" });
@@ -594,13 +594,26 @@ export async function rehearsePlan(
   }
 }
 
-/** `call`, sent from `wallet`, as a call of an `eth_simulateV1` block. */
-const simulatedCall = (wallet: Address, call: TxRequest) => ({
+/**
+ * `call`, sent from `wallet`, as a call of an `eth_simulateV1` block: with the gas and the fees it
+ * is signed with, where it carries them, since a program reads both.
+ */
+const simulatedCall = (wallet: Address, call: SignedCall) => ({
   account: wallet,
   to: call.to,
   data: call.data,
   value: call.value,
+  ...(call.gas === undefined ? {} : { gas: call.gas }),
+  ...(call.gasPrice !== undefined
+    ? { gasPrice: call.gasPrice }
+    : {
+        ...(call.maxFeePerGas === undefined ? {} : { maxFeePerGas: call.maxFeePerGas }),
+        ...(call.maxPriorityFeePerGas === undefined
+          ? {}
+          : { maxPriorityFeePerGas: call.maxPriorityFeePerGas }),
+      }),
 });
+
 /** One allowance: `owner`'s of `token` to `spender`, on the token itself or through Permit2. */
 interface Permission {
   readonly channel: "erc20" | "permit2";
@@ -636,7 +649,7 @@ const sameLogs = (
 async function allowancesAfter(
   client: PublicClient,
   wallet: Address,
-  calls: readonly TxRequest[],
+  calls: readonly SignedCall[],
   original: readonly Rehearsed[],
   permissions: readonly Permission[],
   permit2: string | undefined,
@@ -720,7 +733,7 @@ export async function measureEvm(
   client: PublicClient,
   chain: CanonicalChain,
   wallet: Address,
-  calls: readonly TxRequest[],
+  calls: readonly SignedCall[],
   rehearsed?: readonly Rehearsed[],
 ): Promise<Measured[]> {
   const results = rehearsed ?? (await rehearsePlan(client, wallet, calls));
@@ -1921,8 +1934,9 @@ export class SendGuard {
     }
   }
 
-  /** Measures and reserves one EVM transaction, just before it is sent. */
-  async evm(client: PublicClient, tx: TxRequest): Promise<Reservation> {
+  /** Measures and reserves one EVM transaction, just before it is sent: as it is signed, with its
+   *  gas and fees where it carries them. */
+  async evm(client: PublicClient, tx: SignedCall): Promise<Reservation> {
     const chain = requireChain(await client.getChainId());
     this.gate(chain);
     if (this.policy === undefined) return NOTHING;

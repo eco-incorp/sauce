@@ -51,6 +51,18 @@ export interface TxRequest {
 }
 
 /**
+ * A transaction as it is signed: its call, the gas it may use and what it pays per gas. A program
+ * reads both (its gas left, the price it pays), so a simulation that measures what the transaction
+ * does runs with them, where they are set.
+ */
+export interface SignedCall extends TxRequest {
+  readonly gas?: bigint;
+  readonly maxFeePerGas?: bigint;
+  readonly maxPriorityFeePerGas?: bigint;
+  readonly gasPrice?: bigint;
+}
+
+/**
  * The endpoint for `chain`: `--rpc-url`, else the `--config` file's `rpcUrls` entry for the chain's
  * id; `undefined` when the file has none for it. `config` is the file's path and text, when one was
  * given.
@@ -605,9 +617,11 @@ export interface Sent {
 
 /**
  * Signs `tx` as `account`, sends it through `url`, and waits for its receipt. It is simulated
- * first, so a transaction that would revert is refused with its reason and never sent. From a
- * wallet (`--wallet`), it is held to the wallet's policy too (`policy.ts`), and what it spends is
- * reserved in the wallet's ledger before it is sent.
+ * first, so a transaction that would revert is refused with its reason and never sent. Then it is
+ * made whole as it will be signed (its gas, fees, nonce and chain), and from a wallet (`--wallet`)
+ * that whole transaction is held to the wallet's policy (`policy.ts`), measured with the gas and fees
+ * it carries, and what it spends is reserved in the wallet's ledger. What is signed is exactly what
+ * was measured: nothing of it is filled in or changed after.
  */
 export async function sendAndWait(
   client: PublicClient,
@@ -617,11 +631,26 @@ export async function sendAndWait(
 ): Promise<Sent> {
   const rehearsal = await simulate(client, account.address, tx);
   if (!rehearsal.ok) throw new CliError(`not sent — it would revert: ${rehearsal.reason}`);
-  const reservation = await guardOf(account.address)?.evm(client, tx);
   const wallet = createWalletClient({ account, transport: http(url) });
+  let envelope: TxRequest & Parameters<PrivateKeyAccount["signTransaction"]>[0];
+  try {
+    envelope = (await wallet.prepareTransactionRequest({
+      account,
+      chain: null,
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      gas: (rehearsal.gas * 12n) / 10n,
+    })) as typeof envelope;
+  } catch (error) {
+    throw new CliError(`preparing the transaction failed: ${reasonOf(error)}`);
+  }
+  const reservation = await guardOf(account.address)?.evm(client, envelope);
   let hash: Hex;
   try {
-    hash = await wallet.sendTransaction({ chain: null, ...tx, gas: (rehearsal.gas * 12n) / 10n });
+    hash = await wallet.sendRawTransaction({
+      serializedTransaction: await account.signTransaction(envelope),
+    });
   } catch (error) {
     reservation?.released("sending failed");
     throw new CliError(`sending failed: ${reasonOf(error)}`);

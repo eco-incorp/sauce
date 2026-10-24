@@ -1145,6 +1145,46 @@ describe("the guard", () => {
     });
   });
 
+  it("simulates a transaction with the gas and fees it is signed with, in its own simulation and every replay", async () => {
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const logs = [approval(USDC, POT, SPENDER, parseUnits("2", 6))];
+    const requests: SimulateRequest[] = [];
+    const recording = {
+      ...client(logs),
+      simulateBlocks: async (request: SimulateRequest) => {
+        requests.push(request);
+
+        return [
+          simulated(request, request.blockNumber ?? HEAD, (call) =>
+            isAllowanceRead(call)
+              ? { status: "success", logs: [], data: word(parseUnits("2", 6)) }
+              : { status: "success", logs, data: "0x" },
+          ),
+        ];
+      },
+    } as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+      gas: 240_000n,
+      maxFeePerGas: 3_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+    };
+    await guarded({ tokens: { USDC: { perTransaction: "10" } } }).evm(recording, cook);
+    // The cook's call in each request, and the replay's read after it, which is no transaction.
+    const sent = requests.map((request) =>
+      request.blocks[0]!.calls.map(
+        (call) => `${call.gas}/${call.maxFeePerGas}/${call.maxPriorityFeePerGas}/${call.gasPrice}`,
+      ),
+    );
+
+    expect(sent).toEqual([
+      ["240000/3000000000/1000000000/undefined"],
+      ["240000/3000000000/1000000000/undefined", "undefined/undefined/undefined/undefined"],
+    ]);
+  });
+
   it("replays a plan up to the call that leaves an allowance, each call as the plan sends it", async () => {
     const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
     const logs = [approval(USDC, POT, SPENDER, parseUnits("20", 6))];

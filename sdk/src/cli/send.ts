@@ -320,6 +320,10 @@ interface SignedEvm {
   readonly gas?: bigint;
   /** The most it pays per gas: an EIP-1559 `maxFeePerGas`, or a legacy `gasPrice`. */
   readonly feeCap?: bigint;
+  /** What it is signed to pay per gas, as a program reads it: its fee fields as they are. */
+  readonly fees:
+    | { readonly maxFeePerGas?: bigint; readonly maxPriorityFeePerGas?: bigint }
+    | { readonly gasPrice: bigint };
 }
 
 async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
@@ -354,6 +358,15 @@ async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
     ...((parsed.maxFeePerGas ?? parsed.gasPrice) === undefined
       ? {}
       : { feeCap: parsed.maxFeePerGas ?? parsed.gasPrice }),
+    fees:
+      parsed.gasPrice !== undefined
+        ? { gasPrice: parsed.gasPrice }
+        : {
+            ...(parsed.maxFeePerGas === undefined ? {} : { maxFeePerGas: parsed.maxFeePerGas }),
+            ...(parsed.maxPriorityFeePerGas === undefined
+              ? {}
+              : { maxPriorityFeePerGas: parsed.maxPriorityFeePerGas }),
+          },
   };
 }
 
@@ -484,7 +497,12 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         );
         break;
       }
-      reservation = await guardOf(tx.from)?.evm(client, request);
+      // Measured as it was signed: with its gas and what it pays per gas.
+      reservation = await guardOf(tx.from)?.evm(client, {
+        ...request,
+        ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+        ...tx.fees,
+      });
       try {
         await broadcastEvm(client, tx);
       } catch (error) {
