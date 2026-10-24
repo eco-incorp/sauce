@@ -710,7 +710,8 @@ try {
     writeFileSync(
       join(work, "solana-ids.mjs"),
       `export { deriveExecutionFeeConfigPda } from "${name}/svm";\n` +
-        `export { v12SvmKitchenProgramId } from "${name}/deployments";\n`,
+        `export { v12SvmKitchenProgramId, v12SvmEngineProgramId } from "${name}/deployments";\n` +
+        `export { svmEnginePath, svmKitchenPath } from "${name}/svm/engine-artifacts";\n`,
     );
     const ids = await import(pathToFileURL(join(work, "solana-ids.mjs")).href);
     const kitchen = ids.v12SvmKitchenProgramId();
@@ -734,6 +735,18 @@ try {
       fee: 85_672n,
       accounts: {
         [usdc.address]: { owner: usdc.owner, data: Buffer.from(usdc.base64Data, "base64") },
+        // The release's engine and Kitchen, the INSTALLED package's binaries, as programs of a
+        // loader the command accepts directly: what it checks before it rehearses a cook.
+        [ids.v12SvmEngineProgramId()]: {
+          owner: "BPFLoader2111111111111111111111111111111111",
+          executable: true,
+          data: readFileSync(ids.svmEnginePath("mainnet")),
+        },
+        [kitchen]: {
+          owner: "BPFLoader2111111111111111111111111111111111",
+          executable: true,
+          data: readFileSync(ids.svmKitchenPath()),
+        },
       },
     });
   };

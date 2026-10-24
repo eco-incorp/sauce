@@ -24,6 +24,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AccountRole,
   address,
   generateKeyPairSigner,
   getAddressCodec,
@@ -49,7 +50,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { decodeCursor } from "../src/cli/svm-plan.js";
-import { buildExecuteTransaction, derivePotPda } from "../src/svm/index.js";
+import { buildExecuteTransaction, deriveProgramDataPda, derivePotPda } from "../src/svm/index.js";
 import {
   CLI_FIXTURES,
   describeEvm,
@@ -62,6 +63,7 @@ import {
 } from "./cli-anvil.js";
 import {
   describeSvm,
+  fabricateAlt,
   ENGINE_SO,
   randomAddress,
   setMint,
@@ -485,6 +487,51 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
     expect(harness.svm.getBalance(recipient)).toBe(1_000_000n);
   }, 120_000);
 
+  it("refuses a transaction loading a lookup index its endpoint's table does not hold, sending nothing", async () => {
+    // A table on the cluster holding the engine, and an endpoint whose read of it is from before it
+    // was extended: the index the transaction loads is not there yet.
+    const engine = address(v12SvmEngineProgramId());
+    const lookupTables = fabricateAlt(harness, [engine]);
+    const table = Object.keys(lookupTables)[0] as SvmAddress;
+    harness.svm.warpToSlot(harness.svm.getClock().slot + 2n);
+    const transfer = getTransferSolInstruction({
+      source: owner,
+      destination: randomAddress(),
+      amount: 1_000_000n,
+    });
+    const signed = await buildExecuteTransaction({
+      payer: owner,
+      instructions: [
+        {
+          ...transfer,
+          accounts: [...transfer.accounts, { address: engine, role: AccountRole.READONLY }],
+        },
+      ],
+      latestBlockhash: {
+        blockhash: harness.svm.latestBlockhash() as Blockhash,
+        lastValidBlockHeight: 1_000_000n,
+      },
+      lookupTables,
+    });
+    // Its header alone: the table before any address was added.
+    const held = harness.svm.getAccount(table);
+    if (!held.exists) throw new Error("no lookup table");
+    shim.staleRead(table, held.data.subarray(0, 56));
+    try {
+      const sentBefore = shim.sent.length;
+      const run = await sauce(
+        ...["send", getBase64EncodedWireTransaction(signed), "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain(
+        `loads index 0 of lookup table ${table}, which holds 0 addresses`,
+      );
+      expect(shim.sent.length).toBe(sentBefore);
+    } finally {
+      shim.staleRead(table, undefined);
+    }
+  }, 120_000);
+
   it("builds no cook its simulation says would fail, and hands none out", async () => {
     // More than the Pot's account holds.
     const run = await sauce(
@@ -741,6 +788,80 @@ describeSvm("sauce send: a staged Solana cook as a plan of steps, signed elsewhe
     expect(refused.next.step).toBe("cook");
     expect(refused.next.transactions).toHaveLength(1);
     const cooked = await send(refused.next.cursor!, ...(await signAll(refused.next)));
+    expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
+  }, 300_000);
+
+  it("checks the cluster again when a plan is resumed: a Kitchen not the release's gets nothing sent or built", async () => {
+    // Made, and its setup sent, on the release.
+    const first = await planFor("resumed");
+    const setup = await send(first.cursor!, ...(await signAll(first)));
+    expect(setup.next.step).toBe("cook");
+    const [cook] = await signAll(setup.next);
+    // Then the endpoint's Kitchen is another build: at the release's address, its bytes not the release's.
+    const { address: kitchenData } = await deriveProgramDataPda(harness.kitchen);
+    const original = harness.svm.getAccount(kitchenData);
+    if (!original.exists) throw new Error("no Kitchen programdata");
+    const data = new Uint8Array(original.data);
+    data[data.length - 1] ^= 0xff;
+    harness.svm.setAccount({ ...original, address: kitchenData, data });
+    const refusal = `the released Kitchen ${v12SvmKitchenProgramId()} is not deployed on solana`;
+    try {
+      const sentBefore = shim.sent.length;
+      // The cook as signed, with its cursor: not sent.
+      const signed = await sauce(
+        ...["send", cook!, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(signed.code).toBe(1);
+      expect(signed.stderr).toContain(refusal);
+      // The cursor alone, given up on too: no step built for anyone to sign.
+      for (const extra of [[], ["--close"]]) {
+        const alone = await sauce(
+          ...["send", ...extra, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+        );
+        expect(alone.code).toBe(1);
+        expect(alone.stderr).toContain(refusal);
+        expect(alone.stdout).not.toContain('"transactions"');
+      }
+      expect(shim.sent.length).toBe(sentBefore);
+    } finally {
+      harness.svm.setAccount({ ...original, address: kitchenData });
+    }
+    // The release's again: the same cook and cursor carry on.
+    const cooked = await send(setup.next.cursor!, cook!);
+    expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
+  }, 300_000);
+
+  it("checks the engine a signed cook reaches through the Kitchen: an engine not the release's gets nothing sent", async () => {
+    const first = await planFor("resumed-engine");
+    const setup = await send(first.cursor!, ...(await signAll(first)));
+    expect(setup.next.step).toBe("cook");
+    const [cook] = await signAll(setup.next);
+    // The Kitchen is the release's; the engine it calls is another build, its bytes not the release's.
+    const { address: engineData } = await deriveProgramDataPda(harness.programId);
+    const original = harness.svm.getAccount(engineData);
+    if (!original.exists) throw new Error("no engine programdata");
+    const data = new Uint8Array(original.data);
+    data[data.length - 1] ^= 0xff;
+    harness.svm.setAccount({ ...original, address: engineData, data });
+    const refusal = `the released engine ${v12SvmEngineProgramId()} is not deployed on solana`;
+    try {
+      const sentBefore = shim.sent.length;
+      const signed = await sauce(
+        ...["send", cook!, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(signed.code).toBe(1);
+      expect(signed.stderr).toContain(refusal);
+      const alone = await sauce(
+        ...["send", "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+      );
+      expect(alone.code).toBe(1);
+      expect(alone.stderr).toContain(refusal);
+      expect(alone.stdout).not.toContain('"transactions"');
+      expect(shim.sent.length).toBe(sentBefore);
+    } finally {
+      harness.svm.setAccount({ ...original, address: engineData });
+    }
+    const cooked = await send(setup.next.cursor!, cook!);
     expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
   }, 300_000);
 
