@@ -22,19 +22,23 @@
  *  - `native`: the chain's native coin, in its own units (ETH, SOL, Arc's USDC), leaving the wallet
  *    or the Pot a transaction cooks on; on Solana the fee and any rent it pays are included.
  *  - `tokens`: by registry symbol or by address (an EVM token, a Solana mint); what leaves the
- *    wallet or the Pot it cooks on, and any approval it grants above what is left of the limit
- *    (Permit2 aside, which moves nothing without the wallet's signature in a later cook). A token
- *    the policy does not name is not limited. Where the native coin is also an ERC-20 (Arc's USDC,
- *    one balance), what leaves as either counts against `native` and that token's limit both.
+ *    wallet or the Pot it cooks on, and what another key is left allowed of it. An approval of
+ *    Permit2 for a limited token is refused: it makes the wallet's earlier Permit2 allowances of it
+ *    spendable again, which nothing in the transaction reports. A token the policy does not name
+ *    is not limited. Where the native coin is also an ERC-20 (Arc's USDC, one balance), what leaves
+ *    as either counts against `native` and that token's limit both.
  *  - `perDay` is the last 24 hours, every chain together, counted from the ledger.
  *
  * What a transaction moves is MEASURED, not read from its calldata: an EVM transaction is rehearsed
- * by `eth_simulateV1` with transfers traced, and the ERC-20 Transfer and Approval logs and native
- * transfers out of the wallet and its Pot are what count; a Solana one is simulated with the
- * accounts it writes reported, and the wallet's and its Pot's lamports and token accounts compared
- * before and after. What cannot be measured — an endpoint without `eth_simulateV1`, a cook whose
- * native transfers are not traced, or a Solana lookup table that cannot be read — is refused
- * wherever a limit would need it.
+ * by `eth_simulateV1` on the chain's head, with transfers traced and the gas and fees it is signed
+ * with, and the ERC-20 Transfer and Approval logs and native transfers out of the wallet and its Pot
+ * are what count; an allowance is read in a replay of it on that block, which stands only where it
+ * runs the same. A Solana one is simulated with the accounts it writes reported, and the wallet's
+ * and its Pot's lamports and token accounts compared before and after. What cannot be measured — an
+ * endpoint without `eth_simulateV1`, a cook whose native transfers are not traced, an allowance no
+ * replay reads exactly, or a Solana lookup table that cannot be read — is refused wherever a limit
+ * would need it. A simulation shows what the transaction does on the state it ran on: what it does
+ * in the block it lands in, which may differ, no simulation bounds.
  *
  * Signing a cook for anyone to submit (`sauce sign`, {@link SendGuard.authorizeSignedCook}) is held
  * to `chains` and `to` (the Pot) as written, and refused outright by a policy that sets `native` or

@@ -138,11 +138,14 @@ could loosen it.
   an approval of it is refused, as a transfer of it is.
 - On an EVM chain, that is the allowance each spender keeps once the transaction is done, read from
   the chain as the transaction leaves it, each in a simulation of its own that runs the
-  transaction's calls again: an ERC-20's, and one granted through Permit2 (its `approve`, or a
-  `permit` the wallet signed), which lets the spender take the token wherever the wallet approved
-  Permit2 for it; Permit2's `lockdown` clears one. An allowance that cannot be read so (the
-  endpoint or the token does not answer, or the calls do not run again as they ran) is not
-  measured, and is refused where its token is limited. The wallet's approval of Permit2 for a
+  transaction's calls again on the block the transaction was simulated on, at the same time: an
+  ERC-20's, and one granted through Permit2 (its `approve`, or a `permit` the wallet signed), which
+  lets the spender take the token wherever the wallet approved Permit2 for it; Permit2's `lockdown`
+  clears one. A read counts only where that simulation is the transaction's own execution again:
+  the node reports the same block, and every call succeeds with the same logs, return data and gas.
+  An allowance that cannot be read so (the endpoint or the token does not answer, the endpoint
+  cannot serve the block, or the calls do not run again as they ran) is not measured, and is
+  refused where its token is limited. The wallet's approval of Permit2 for a
   limited token is refused: it makes spendable again every Permit2 allowance of that token the
   wallet gave before, which the transaction does not report. Under such a limit, fund with
   `--fund-mode permit`, `allowance` or `transfer`, or approve Permit2 from a wallet without the
@@ -195,13 +198,23 @@ with `eth_simulateV1` (a node method that runs it and returns its logs), and its
 transfers out of the wallet and its Pot are counted. A Solana transaction is simulated with the
 accounts it writes reported. Every simulation of a transaction a wallet signs is unsigned, a swap's
 stops in `sauce run` included: the wallet signs only a transaction its policy has let go, so an
-endpoint never holds one it could send itself. (`sauce send` sends what was signed elsewhere, and
-simulates it first: on Solana the signed transaction itself, on an EVM chain its call, with the
-signed gas checked against it; it unlocks no wallet.) On Solana a transaction is held to the policy
-of every wallet it needs a signature from that the command has unlocked, whichever of them pays its
-fee, and a planned transaction another tool built must be paid for by the wallet that sends it. A
-limit that cannot be measured on the endpoint (one without `eth_simulateV1`, for one) refuses the
-send. Every wallet send also holds to the [supported chains](cli.md#supported-and-preview-chains).
+endpoint never holds one it could send itself. An EVM transaction is made whole before the policy
+measures it, with the gas it is signed with (1.2 times its estimate), its fees, nonce and chain;
+every simulation of it runs with that gas and those fees, since a program can read both, and that
+exact transaction is what the wallet signs. (`sauce send` sends what was signed elsewhere, and
+simulates it first: on Solana the signed transaction itself, on an EVM chain its call with the gas
+and fees it was signed with, the signed gas checked against what it needs; it unlocks no wallet.)
+On Solana a transaction is held to the policy of every wallet it needs a signature from that the
+command has unlocked, whichever of them pays its fee, and a planned transaction another tool built
+must be paid for by the wallet that sends it. A limit that cannot be measured on the endpoint (one
+without `eth_simulateV1`, for one) refuses the send. Every wallet send also holds to the
+[supported chains](cli.md#supported-and-preview-chains).
+
+A simulation shows what a transaction does on the state it ran on: the chain's head, a moment
+before the transaction is sent. A program that reads the block it lands in (its time, its base
+fee, what another transaction changed first) may do something else there, and no simulation bounds
+that. A policy limits what the transaction does as simulated; a bound that holds whatever the
+block would have to be enforced by the program as it runs, such as a `require` on what it sends.
 
 ### Know what a policy does to a signed cook
 

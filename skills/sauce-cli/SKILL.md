@@ -198,14 +198,17 @@ instructions call. It does not limit whom a program pays: a cook on an allowed P
 address, so a payee is held by the program itself (a recipient it fixes, a `require` on it).
 Deploying the wallet's own Pot counts as a transaction to that Pot, so a `to` naming the Pot lets a
 run deploy it first. `native` and each token count what leaves the wallet or the Pot a transaction
-cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
+cooks on, measured by simulating it on the chain's head with the gas and fees the wallet then signs
+it with, exactly; `perDay` is the last 24 hours on every chain. On Arc, whose
 native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
 and the `USDC` limit both, native USDC sent and a USDC allowance left count together, and a USDC
 allowance counts against `native` too. A send that breaks a limit is refused, naming it, and
 nothing is signed or sent. An allowance a transaction leaves another key counts as sent, per
 transaction and per day, with what the transaction moves of the token: an ERC-20's or one granted
-through Permit2, as the chain holds it after the transaction (each read in a simulation of its
-own; one that cannot be read is refused where its token is limited), and on Solana a delegate set
+through Permit2, as the chain holds it after the transaction (each read in a simulation of its own
+on the same block, which counts only where the transaction runs there as it did, with the same
+logs, return data and gas; one that cannot be read so is refused where its token is limited), and
+on Solana a delegate set
 or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of the wallet or the Pot.
 Each allowance is its own permission (on the token or through Permit2, the wallet's or its Pot's),
 and they add up. A spender that is the wallet or its Pot is none, and an approval of a token whose
@@ -226,7 +229,9 @@ net, so wrapping SOL into its own account, or paying the rent of its own token a
 the fee. A transaction is held to the policy of every wallet unlocked to sign it, whichever pays
 the fee. The measure errs toward counting, so a refusal may name more than actually leaves. A
 Token-2022 mint's permanent delegate the wallet never held needs no approval, and no policy limits
-it.
+it. A simulation shows what a transaction does on the state it ran on; what it does in the block it
+lands in, which may differ (a program that reads the time or the base fee), no simulation bounds,
+so a hard bound is the program's own `require` on what it sends.
 With no policy, sends work, and each says no limits are set.
 
 ## The run, step by step

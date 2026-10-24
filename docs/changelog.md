@@ -150,9 +150,12 @@ allowance another key keeps (an ERC-20's, or a standing allowance granted throug
 events were not read before) now counts as sent with the transaction's transfers of the token, per
 transaction and in the day's total, where an approval was only checked alone and never reserved.
 It counts as the chain holds it once the transaction has run, each read in a simulation of its own
-that runs the transaction's calls again, so one spent or locked down in the transaction counts what
-is left, and one that cannot be read so is refused where its token is limited; each allowance is
-its own permission, on the token or through Permit2 and the wallet's or its Pot's, and they add up.
+that runs the transaction's calls again on the block the transaction was simulated on, so one spent
+or locked down in the transaction counts what is left, and one that cannot be read so (another
+block, or a call that returns other data or uses other gas) is refused where its token is limited;
+each allowance is its own permission, on the token or through Permit2 and the wallet's or its Pot's,
+and they add up. A wallet's EVM transaction is measured whole, with the gas and fees it is then
+signed with, and signed exactly as measured.
 An approval of Permit2 for a limited token is refused: it makes the wallet's earlier Permit2
 allowances of the token spendable again, which the transaction does not report. An approval of a
 token whose decimals cannot be read is refused where it is limited, and the wallet's own Pot is no
