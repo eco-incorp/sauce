@@ -1362,6 +1362,103 @@ describe.each([
     expect(build(program.replace("nope", "other"), options)).toEqual(callers());
   });
 
+  // A host `resolve` that changes the caller's own options object as the compile first asks it for
+  // a module. A compile reads its options once, as they were when it began, for the probe and the
+  // compile alike, so neither answers for an input the other did not see: the result is the one the
+  // options as given produce.
+  type Given = NonNullable<Options>;
+  const MUTABLE_MODULES: Readonly<Record<string, string>> = {
+    "./holder.js": POT,
+    "./second.js": POT,
+    "./other.js": OTHER,
+  };
+  const mutations: Array<[string, () => Given, (given: Given) => void]> = [
+    [
+      "empties its `ambient`",
+      () => ({ ambient: ["./holder.js"] }),
+      (given) => {
+        given.ambient!.length = 0;
+      },
+    ],
+    [
+      "adds to its `ambient` a second module that exports `pot`",
+      () => ({ ambient: ["./holder.js"] }),
+      (given) => {
+        given.ambient!.push("./second.js");
+      },
+    ],
+    [
+      "replaces its `ambient`",
+      () => ({ ambient: ["./holder.js"] }),
+      (given) => {
+        given.ambient = [];
+      },
+    ],
+    [
+      "adds `pot` to its `defines`",
+      () => ({ ambient: ["./other.js"], defines: {} }),
+      (given) => {
+        given.defines!.pot = BigInt(holder);
+      },
+    ],
+    [
+      "adds a `pot` binding to its `contracts`",
+      () => ({ ambient: ["./other.js"], contracts: {} }),
+      (given) => {
+        given.contracts!.pot = { abi: [] };
+      },
+    ],
+    [
+      "turns its accessor pass off",
+      () => ({ ambient: ["./other.js"] }),
+      (given) => {
+        given.accessors = false;
+      },
+    ],
+  ];
+  /** `make()`'s options, with a `resolve` that applies `mutate` to them as it is first asked. */
+  const mutating = (make: () => Given, mutate: (given: Given) => void) => {
+    const given = make();
+    let mutated = false;
+    given.resolve = (path: string) => {
+      if (!mutated) {
+        mutated = true;
+        mutate(given);
+      }
+      const text = MUTABLE_MODULES[path];
+      return text === undefined ? undefined : new TextEncoder().encode(text);
+    };
+    return { given, mutated: () => mutated };
+  };
+  const asGiven = (make: () => Given): Given => ({ ...make(), ...served(MUTABLE_MODULES) });
+
+  it.each(mutations)(
+    "compileSauceProgram, whose resolver %s, reads them as they were given",
+    (_, make, mutate) => {
+      const { given, mutated } = mutating(make, mutate);
+      const built = build(PROGRAM, given);
+      expect(mutated()).toBe(true);
+      expect(built).toEqual(build(PROGRAM, asGiven(make)));
+    },
+  );
+
+  // A route on Solana takes no account a cook derives, which `pot` is there: EVM only.
+  (arm === "evm" ? it.each(mutations) : it.skip.each(mutations))(
+    "compileSauceRoute, whose resolver %s, reads them as they were given",
+    (_, make, mutate) => {
+      const execution = {
+        pot: "0x1111111111111111111111111111111111111111",
+        engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      } as const;
+      const route = (options: Given) =>
+        Array.from(compileSauceRoute("base", PROGRAM, execution, options).compiled.bytecode[0]!);
+      const { given, mutated } = mutating(make, mutate);
+      const built = route(given);
+      expect(mutated()).toBe(true);
+      expect(built).toEqual(route(asGiven(make)));
+    },
+  );
+
   it("the probe reads only the compiler's refusal of an asked name two ambient modules export", () => {
     const missing: Parameters<typeof ambientNamesOf>[0] = {
       target: arm === "svm" ? "svm" : "v12",

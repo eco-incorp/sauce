@@ -55,6 +55,13 @@ import {
 import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
+import {
+  instructionAddresses,
+  releasedProgramsCalled,
+  requireSolanaRelease,
+  type ProgramName,
+  type ReadProgram,
+} from "./solana-release.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
   isSvmAccountName,
@@ -159,6 +166,7 @@ import {
   newSvmPlan,
   nextStep,
   planBuffer,
+  planPrograms,
   signableStep,
   unsignedSigner,
   type CookHandedOut,
@@ -172,6 +180,83 @@ import {
 /** The released programs, from the release record the SDK ships. */
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
 const engine = (): Address => address(v12SvmEngineProgramId());
+
+/** The program `account` on the cluster `rpc` serves, as the release check reads it. */
+const programReader =
+  (rpc: Rpc, url: string): ReadProgram =>
+  async (account) => {
+    const { value } = await ask(url, `the program ${account}`, () =>
+      rpc.getAccountInfo(address(account), { encoding: "base64" }).send(),
+    );
+
+    return value === null
+      ? undefined
+      : {
+          owner: value.owner,
+          executable: value.executable,
+          data: new Uint8Array(Buffer.from(value.data[0], "base64")),
+        };
+  };
+
+/** The programs each connection has shown to be the release's, so a command that checks before
+ *  each thing it builds reads each program off the cluster once. A connection is one command's or
+ *  one tool call's: the next reads again. */
+const shownReleased = new WeakMap<object, Set<ProgramName>>();
+
+/** Refuses a cook or a Pot on a cluster without the released programs `needs` names. */
+export async function requireReleased(
+  rpc: Rpc,
+  url: string,
+  needs: readonly ProgramName[],
+): Promise<void> {
+  const shown = shownReleased.get(rpc) ?? new Set<ProgramName>();
+  const unread = needs.filter((name) => !shown.has(name));
+  if (unread.length === 0) return;
+  await requireSolanaRelease(programReader(rpc, url), unread, requireChain("solana").slug);
+  for (const name of unread) shown.add(name);
+  shownReleased.set(rpc, shown);
+}
+
+/**
+ * Every address a compiled transaction references: its own accounts, which hold each program it
+ * calls, and those it loads from lookup tables (read from `rpc`). A program it passes as an account
+ * is among them — a Kitchen cook passes the engine, which it reaches by CPI — so the release check
+ * sees what a transaction runs, not only what it calls at the top.
+ */
+export async function transactionAddresses(
+  rpc: Rpc,
+  url: string,
+  transaction: Transaction,
+): Promise<string[]> {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+    staticAccounts: readonly string[];
+    addressTableLookups?: readonly {
+      lookupTableAddress: Address;
+      writableIndexes: readonly number[];
+      readonlyIndexes: readonly number[];
+    }[];
+  };
+  // Every address a lookup loads, or a refusal: an index the table does not hold yet could be
+  // filled by the time the transaction lands, with a program the check never saw.
+  const loaded: string[] = [];
+  for (const lookup of message.addressTableLookups ?? []) {
+    const table = lookup.lookupTableAddress;
+    // A table missing, or an account that is not one, fails here, naming it.
+    const held = (await ask(url, `lookup table ${table}`, () => fetchAlt(rpc, table)))[table] ?? [];
+    for (const index of [...lookup.writableIndexes, ...lookup.readonlyIndexes]) {
+      const entry = held[index];
+      if (entry === undefined) {
+        throw new CliError(
+          `the transaction loads index ${index} of lookup table ${table}, which holds ` +
+            `${held.length} addresses: what it would load cannot be checked, so nothing was sent`,
+        );
+      }
+      loaded.push(entry);
+    }
+  }
+
+  return [...message.staticAccounts, ...loaded];
+}
 
 /**
  * A Solana public key from a flag, in base58 or as the 32 bytes of hex the command prints a key in
@@ -721,6 +806,12 @@ export async function sendPlannedSvm(
     }
   }
   const rpc = createSolanaRpc(url);
+  // The cluster it goes to, checked now: a plan made against one endpoint can be sent to another.
+  await requireReleased(
+    rpc,
+    url,
+    releasedProgramsCalled(await transactionAddresses(rpc, url, decoded)),
+  );
   await rehearsed(rpc, url, decoded, tx.what, false);
 
   return sendAndConfirm(rpc, url, decoded, () => signTransaction([signer.keyPair], decoded));
@@ -1744,6 +1835,10 @@ async function prepare(
         "nothing was signed or sent",
     );
   }
+  // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
+  // or sent. A cook straight to the engine needs the Kitchen only when it is staged, which its
+  // plan (or its staged rehearsal) says, and checks.
+  await requireReleased(rpc, input.rpcUrl, via === "engine" ? ["engine"] : ["engine", "Kitchen"]);
   // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
   const client = await createSauceSvmClient({
     rpcUrl: input.rpcUrl,
@@ -2278,6 +2373,9 @@ async function stagedRehearsal(
 ): Promise<CommandOutput> {
   const owner = input.owner;
   const direct = prepared.via === "engine";
+  // Staged, a cook straight to the engine runs from the Kitchen's code buffer: the cluster's
+  // Kitchen, not the copy's, is the one that stages it.
+  if (direct && !fitsOne) await requireReleased(prepared.rpc, input.rpcUrl, ["engine", "Kitchen"]);
   const signer = unsignedSigner(owner);
   const { bytecode } = prepared;
   const nonce = 0n;
@@ -2667,6 +2765,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   const prepared = await prepare(input, files, signer);
   const direct = prepared.via === "engine";
   const plan = await planOf(prepared, input);
+  await requireReleased(prepared.rpc, input.rpcUrl, planPrograms(plan));
   const ctx: StepContext = { rpc: prepared.rpc, url: input.rpcUrl, signer, fee: prepared.fee };
   const step = await nextStep(plan, ctx);
   const built = await signableStep(step, ctx);
@@ -2790,6 +2889,11 @@ export async function sendPlanTx(
   tx: PlanTx,
   sending?: (lifetime: CookHandedOut) => void,
 ): Promise<SvmSent> {
+  await requireReleased(
+    ctx.rpc,
+    ctx.url,
+    releasedProgramsCalled(instructionAddresses(tx.instructions)),
+  );
   const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );
@@ -2977,6 +3081,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     fee: prepared.fee,
   };
   let plan = await planOf(prepared, input);
+  await requireReleased(prepared.rpc, input.rpcUrl, planPrograms(plan));
   const buffer = await planBuffer(plan);
   let created: SvmSent | undefined;
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
@@ -3403,6 +3508,7 @@ export async function svmPotDeployCommand(
   const predicted = await svmPotCommand(target);
   const pot = predicted.json.pot as Address;
   const rpc = createSolanaRpc(target.rpcUrl);
+  await requireReleased(rpc, target.rpcUrl, ["engine", "Kitchen"]);
   if (await exists(rpc, target.rpcUrl, pot, "the Pot")) {
     const json = { ...predicted.json, deployed: true };
 
