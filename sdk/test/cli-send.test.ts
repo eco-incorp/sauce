@@ -23,11 +23,11 @@ import {
   type Address as SvmAddress,
   type Blockhash,
 } from "@solana/kit";
-import { serializeTransaction, type Hex, type PublicClient } from "viem";
+import { parseTransaction, serializeTransaction, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { simulate, type SignedCall } from "../src/cli/chain.js";
+import { sendAndWait, simulate, type SignedCall } from "../src/cli/chain.js";
 import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
 import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
@@ -527,5 +527,128 @@ describe("the simulation of a transaction signed elsewhere", () => {
     await simulate(client, from, { to, data: "0x", value: 0n });
 
     expect([carried(calls[0]!), carried(estimates[0]!)]).toEqual([{}, {}]);
+  });
+});
+
+describe("a signed transaction the endpoint refuses", () => {
+  const URL = "http://endpoint.invalid/refusing-key";
+  const to = "0x5555555555555555555555555555555555555555";
+  let refusal = "";
+  const received: Hex[] = [];
+  const original = globalThis.fetch;
+  beforeAll(() => {
+    // An endpoint that prepares the transaction (chain, nonce, fees) and refuses its broadcast with
+    // the node's own words, as JSON-RPC error -32000.
+    globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+      if (String(input) !== URL) return original(input as string, init as RequestInit);
+      const { id, method, params } = JSON.parse(init!.body!) as {
+        id: unknown;
+        method: string;
+        params: unknown[];
+      };
+      const results: Record<string, unknown> = {
+        eth_chainId: "0x1",
+        eth_getTransactionCount: "0x5",
+        eth_maxPriorityFeePerGas: "0x3b9aca00",
+        // `sauce send`'s simulation of its call, and its look for the transaction (not there).
+        eth_call: "0x",
+        eth_estimateGas: "0x186a0",
+        eth_getTransactionByHash: null,
+        eth_getBlockByNumber: {
+          number: "0x64",
+          hash: `0x${"11".repeat(32)}`,
+          parentHash: `0x${"22".repeat(32)}`,
+          timestamp: "0x6553f100",
+          baseFeePerGas: "0x3b9aca00",
+          gasLimit: "0x1c9c380",
+          gasUsed: "0x0",
+          transactions: [],
+        },
+      };
+      if (method === "eth_sendRawTransaction") received.push(params[0] as Hex);
+      const body =
+        method === "eth_sendRawTransaction"
+          ? { jsonrpc: "2.0", id, error: { code: -32000, message: refusal } }
+          : method in results
+            ? { jsonrpc: "2.0", id, result: results[method] }
+            : { jsonrpc: "2.0", id, error: { code: -32601, message: `no ${method}` } };
+
+      return new Response(JSON.stringify(body), {
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = original;
+  });
+  // The simulation before it: the call succeeds and needs 100,000 gas.
+  const client = {
+    call: async () => ({ data: "0x" }),
+    estimateGas: async () => 100_000n,
+  } as unknown as PublicClient;
+  const refused = async (message: string) => {
+    refusal = message;
+    try {
+      await sendAndWait(client, URL, signer, { to, data: "0x", value: 0n });
+
+      return "sent";
+    } catch (error) {
+      return (error as Error).message;
+    }
+  };
+
+  it("says why, as the node said it, not as a request with missing parameters", async () => {
+    const said = {
+      nonce: await refused("nonce too low: next nonce 6, tx nonce 5"),
+      replaced: await refused("replacement transaction underpriced"),
+      funds: await refused("insufficient funds for gas * price + value"),
+    };
+    // Each broadcast is the transaction as it was prepared: 1.2 times the estimate, the account's
+    // next nonce, the chain, and the fees the endpoint gave.
+    const signed = received.map((raw) => {
+      const tx = parseTransaction(raw);
+
+      return `${tx.chainId}/${tx.nonce}/${tx.gas}/${tx.maxPriorityFeePerGas}/${tx.type}`;
+    });
+
+    expect({ said, signed: [...new Set(signed)] }).toEqual({
+      said: {
+        nonce: expect.stringContaining(
+          "sending failed: Nonce provided for the transaction (5) is lower than the current nonce",
+        ) as unknown,
+        replaced: "sending failed: replacement transaction underpriced",
+        funds: expect.stringContaining(
+          "sending failed: The total cost (gas * gas fee + value) of executing this transaction exceeds the balance of the account",
+        ) as unknown,
+      },
+      signed: ["1/5/120000/1000000000/eip1559"],
+    });
+    expect(Object.values(said).join("\n")).not.toMatch(
+      /Missing or invalid parameters|refusing-key/,
+    );
+  });
+
+  it("says why for a transaction signed elsewhere too, as sauce send broadcasts it", async () => {
+    refusal = "replacement transaction underpriced";
+    const raw = await signer.signTransaction({
+      chainId: 1,
+      type: "eip1559",
+      to,
+      value: 0n,
+      nonce: 5,
+      gas: 120_000n,
+      maxFeePerGas: 3_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+    });
+    const said = await sendCommand({
+      chain: requireChain("ethereum"),
+      rpcUrl: URL,
+      transactions: [raw],
+    }).then(
+      () => "sent",
+      (error: unknown) => (error as Error).message,
+    );
+
+    expect(said).toBe("sending failed: replacement transaction underpriced");
   });
 });

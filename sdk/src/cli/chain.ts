@@ -8,6 +8,7 @@
  * often carries a key.
  */
 import {
+  BaseError,
   createPublicClient,
   createWalletClient,
   custom,
@@ -17,6 +18,7 @@ import {
   http,
   numberToHex,
   parseAbi,
+  RpcRequestError,
   TransactionReceiptNotFoundError,
   type Abi,
   type Address,
@@ -26,6 +28,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
+import { getTransactionError } from "viem/utils";
 
 import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" };
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
@@ -100,6 +103,28 @@ export function endpointFor(
 /** viem's one-line reason for a failed request, never its details, which repeat the URL. */
 export const reasonOf = (error: unknown): string =>
   (error as { shortMessage?: string }).shortMessage ?? "the request failed";
+
+/**
+ * Why the endpoint refused to broadcast a signed transaction: viem's reading of the node's error,
+ * as `sendTransaction` gives it (a nonce too low, funds short of the cost, a fee below the base
+ * fee), else the node's own words, where it answered with an error of its own (a replacement
+ * underpriced, which viem has no name for), else {@link reasonOf}. The node's message is its own,
+ * never the URL.
+ */
+export function broadcastRefusal(
+  error: unknown,
+  envelope: SignedCall & { readonly nonce?: number },
+): string {
+  if (!(error instanceof BaseError)) return reasonOf(error);
+  const decoded = getTransactionError(error, { ...envelope, account: null, chain: undefined });
+  // A node error viem knows: its explanation.
+  if (decoded.cause !== error) return reasonOf(decoded);
+  const answered = error.walk((cause) => cause instanceof RpcRequestError);
+
+  return answered instanceof RpcRequestError && answered.details !== ""
+    ? answered.details
+    : reasonOf(error);
+}
 
 async function request<T>(what: string, read: () => Promise<T>): Promise<T> {
   try {
@@ -673,7 +698,7 @@ export async function sendAndWait(
     });
   } catch (error) {
     reservation?.released("sending failed");
-    throw new CliError(`sending failed: ${reasonOf(error)}`);
+    throw new CliError(`sending failed: ${broadcastRefusal(error, envelope)}`);
   }
   return landed(client, hash, account.address, tx, (status) =>
     status === "success" ? reservation?.sent(hash) : reservation?.released(`${hash} reverted`),

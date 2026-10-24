@@ -49,7 +49,14 @@ import { v12PotAbi } from "../evm/engine.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { connect, landed, reasonOf, simulate, type Sent, type SignedCall } from "./chain.js";
+import {
+  broadcastRefusal,
+  connect,
+  landed,
+  simulate,
+  type Sent,
+  type SignedCall,
+} from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { guardOf, type Reservation } from "./policy.js";
@@ -402,7 +409,13 @@ async function broadcastEvm(client: PublicClient, tx: SignedEvm): Promise<void> 
   try {
     await client.sendRawTransaction({ serializedTransaction: tx.raw });
   } catch (error) {
-    const reason = reasonOf(error);
+    const reason = broadcastRefusal(error, {
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+      ...tx.fees,
+    });
     const known = await client.getTransaction({ hash: tx.hash }).then(
       () => true,
       () => false,
