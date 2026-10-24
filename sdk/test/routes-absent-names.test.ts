@@ -395,6 +395,34 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     }
   });
 
+  it("an element of a list built from contracts is one, by any index, alias or nesting; a scalar list is left", () => {
+    for (const [body, normalized] of [
+      [
+        "const fs = [UniswapV3.Factory, UniswapV3.QuoterV2];\nreturn fs[i] || 0;",
+        "const fs = [UniswapV3.Factory, UniswapV3.QuoterV2];\nreturn !!(fs[i]) || 0;",
+      ],
+      [
+        "const fs = [UniswapV3.Factory];\nconst gs = fs;\nreturn gs[0] || 0;",
+        "const fs = [UniswapV3.Factory];\nconst gs = fs;\nreturn !!(gs[0]) || 0;",
+      ],
+      [
+        "const ns = [[UniswapV3.QuoterV2, UniswapV3.Factory]];\nreturn ns[0][1] || 0;",
+        "const ns = [[UniswapV3.QuoterV2, UniswapV3.Factory]];\nreturn !!(ns[0][1]) || 0;",
+      ],
+      [
+        "const fs = [UniswapV3.Factory];\nconst k = fs[0];\nreturn k || 0;",
+        "const fs = [UniswapV3.Factory];\nconst k = fs[0];\nreturn !!(k) || 0;",
+      ],
+    ]) {
+      const program = hex("base", `function main(i: Uint256) {\n${body}\n}`);
+      expect(program).toBe(hex("base", `function main(i: Uint256) {\n${normalized}\n}`));
+    }
+    for (const body of ["const xs = [1, 2];\nreturn xs[i] || 0;", "return us[0] || us[1];"]) {
+      const source = `function main(i: Uint256, us: Uint256[]) {\n${body}\n}`;
+      expect(checkNames(source, chainNames(requireChain("base"))).bindingSides).toEqual([]);
+    }
+  });
+
   it("a module the program imports gets the same bool from `&&`/`||` on a contract", () => {
     const served = (helper: string) => (path: string) =>
       path.replace(/^\.\//, "") === "h.js" ? new TextEncoder().encode(helper) : undefined;
