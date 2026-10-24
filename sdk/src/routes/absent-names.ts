@@ -590,6 +590,13 @@ export function checkNames(
         ? "binding"
         : "scalar";
     }
+    if (target.type === "ConditionalExpression") {
+      // A test the compiler folds keeps the binding its arm holds: either arm may be the whole.
+      const kinds = [prop<AstNode>(target, "consequent"), prop<AstNode>(target, "alternate")].map(
+        (arm) => bindingKind(arm, at, seen),
+      );
+      return kinds.includes("binding") ? "binding" : kinds.includes("unsure") ? "unsure" : "scalar";
+    }
     if (target.type !== "Identifier" && target.type !== "MemberExpression") return "scalar";
     if (quietReference(target, at)?.kind === "contract") return "binding";
     if (target.type === "MemberExpression") {
@@ -608,10 +615,16 @@ export function checkNames(
     const declaration = bindings.declarationOf(target);
     if (declaration === undefined || seen.has(declaration)) return "scalar";
     if (declaration.type !== "VariableDeclarator") return "unsure";
-    // An alias holds what its initializer is, but a local initialized to `<Abi>.at(…)` itself is
-    // an address to the compiler, and so is a `?:`.
+    // An alias holds what its initializer is (a `?:` either arm), but a local initialized to
+    // `<Abi>.at(…)` itself is an address to the compiler.
     const init = unwrap(prop(declaration, "init"));
-    if (init.type !== "Identifier" && init.type !== "MemberExpression") return "scalar";
+    if (
+      init.type !== "Identifier" &&
+      init.type !== "MemberExpression" &&
+      init.type !== "ConditionalExpression"
+    ) {
+      return "scalar";
+    }
     return bindingKind(init, bindings.scopeAt(init), new Set([...seen, declaration]));
   };
 
@@ -659,6 +672,14 @@ export function checkNames(
       if (declaration === undefined || seen.has(declaration)) return [];
       if (declaration.type !== "VariableDeclarator") return "unsure";
       return holdersOf(unwrap(prop(declaration, "init")), new Set([...seen, declaration]));
+    }
+    if (node.type === "ConditionalExpression") {
+      const arms = [prop<AstNode>(node, "consequent"), prop<AstNode>(node, "alternate")].map(
+        (arm) => holdersOf(unwrap(arm), seen),
+      );
+      return arms.includes("unsure")
+        ? "unsure"
+        : arms.flatMap((arm) => arm as Exclude<typeof arm, "unsure">);
     }
     if (node.type !== "MemberExpression") return [];
     const outer = holdersOf(unwrap(prop(node, "object")), seen);

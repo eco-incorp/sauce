@@ -591,12 +591,13 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
   });
 });
 
-describe("every binding constructor under every carrier, as a value of `&&` and `||`, is a bool", () => {
+describe("every binding constructor under every carrier, in every place of `&&` and `||`, is a bool", () => {
   // A binding is a registry contract or an ABI bound with `.at`, `.view` or `.lib` (compiler
-  // 2.6.0's `BindMethod`); a carrier is how a program holds it. Each combination is returned from a
-  // `: bool` function, so an operand handed back fails with "a return value: expected a bool, found
-  // a number". Every combination compiles, but the ones 2.6.0 cannot express, each refused with the
-  // compiler's own message (`REFUSED`); one that starts compiling, or any other error, fails.
+  // 2.6.0's `BindMethod`); a carrier is how a program holds it, a `?:` included (a test the
+  // compiler folds keeps the binding its arm holds). Each combination is returned from a `: bool`
+  // function, so an operand handed back fails with "a return value: expected a bool, found a
+  // number". Every combination compiles, but the ones 2.6.0 cannot express, each refused with the
+  // compiler's own message (`refusal`); one that starts compiling, or any other error, fails.
   const A = "0x1111111111111111111111111111111111111111";
   const constructors: Record<string, string> = {
     registry: "UniswapV3.Factory",
@@ -616,49 +617,52 @@ describe("every binding constructor under every carrier, as a value of `&&` and 
     "nested list": (c) => [`const ns = [[${c}], [${c}]];`, "ns[1][0]"],
     "function result": (c) => [`function f() { return ${c}; }`, "f()"],
     "imported export": (c) => ["", "k", `export const k = ${c};`],
+    "?: both arms, run-time test": (c) => ["", `(i == 0 ? ${c} : ${c})`],
+    "?: binding or 0, folds true": (c) => ["", `(true ? ${c} : 0)`],
+    "?: 0 or binding, folds false": (c) => ["", `(false ? 0 : ${c})`],
+    "?: binding or 0, run-time test": (c) => ["", `(i == 0 ? ${c} : 0)`],
+    "alias of a folded ?:": (c) => [`const a = true ? ${c} : 0;`, "a"],
+  };
+  const placements: Record<string, (k: string) => string> = {
+    "K || 0": (k) => `${k} || 0`,
+    "0 || K": (k) => `0 || ${k}`,
+    "1 && K": (k) => `1 && ${k}`,
+    "K && 1": (k) => `${k} && 1`,
   };
   const IMPORT = 'import IERC20 from "./artifacts/IERC20.json";';
-  const BY_POSITION = /a computed member of an object the compiler holds .* is not supported/;
-  const REFUSED: Record<string, RegExp> = {
-    "registry, record by position, ||": BY_POSITION,
-    "registry, record by position, &&": BY_POSITION,
-    "at, record by position, ||": BY_POSITION,
-    "at, record by position, &&": BY_POSITION,
-    "view, record by position, ||": BY_POSITION,
-    "view, record by position, &&": BY_POSITION,
-    "lib, record by position, ||": BY_POSITION,
-    "lib, record by position, &&": BY_POSITION,
-    // A module's `const` holds a word, and a registry contract is a binding.
-    "registry, imported export, ||":
-      /a module-scope `const k` must be initialized with a compile-time constant word/,
-    "registry, imported export, &&":
-      /a module-scope `const k` must be initialized with a compile-time constant word/,
-  };
+  /** What 2.6.0 refuses, and with what: a record read by position, under every constructor, and a
+   *  module `const` initialized to a registry contract, which is a binding and no constant word. */
+  const refusal = (constructor: string, carrier: string): RegExp | undefined =>
+    carrier === "record by position"
+      ? /a computed member of an object the compiler holds .* is not supported/
+      : carrier === "imported export" && constructor === "registry"
+        ? /a module-scope `const k` must be initialized with a compile-time constant word/
+        : undefined;
   const cases = Object.entries(constructors).flatMap(([cn, c]) =>
     Object.entries(carriers).flatMap(([kn, carry]) =>
-      (["||", "&&"] as const).map((op) => [`${cn}, ${kn}, ${op}`, carry(c), op] as const),
+      Object.entries(placements).map(
+        ([pn, place]) => [`${cn}, ${kn}, ${pn}`, carry(c), place, refusal(cn, kn)] as const,
+      ),
     ),
   );
-  it("covers 88 combinations: 78 that compile to the bool, 10 that 2.6.0 refuses", () => {
-    expect(cases).toHaveLength(88);
-    expect(cases.filter(([name]) => REFUSED[name] !== undefined)).toHaveLength(10);
+  it("covers 256 combinations: 236 that compile to the bool, 20 that 2.6.0 refuses", () => {
+    expect(cases).toHaveLength(256);
+    expect(cases.filter(([, , , refused]) => refused !== undefined)).toHaveLength(20);
   });
-  it.each(cases)("%s", (name, [pre, k, module], op) => {
+  it.each(cases)("%s", (_name, [pre, k, module], place, refused) => {
     const helper = pre.startsWith("function") ? pre : "";
     const local = helper === "" ? pre : "";
-    const expression = op === "||" ? `${k} || 0` : `1 && ${k}`;
     const source = [
       IMPORT,
       ...(module === undefined ? [] : ['import { k } from "./m.js";']),
       helper,
-      `function main(i: Uint256): bool {\n${local}\nreturn ${expression};\n}`,
+      `function main(i: Uint256): bool {\n${local}\nreturn ${place(k)};\n}`,
     ].join("\n");
     const resolve = (path: string) =>
       module !== undefined && path.replace(/^\.\//, "") === "m.js"
         ? new TextEncoder().encode(`${IMPORT}\n${module}\n`)
         : undefined;
     const compile = () => compileSauceProgram("base", source, { resolve });
-    const refused = REFUSED[name];
     if (refused !== undefined) expect(compile).toThrow(refused);
     else expect(compile).not.toThrow();
   });
