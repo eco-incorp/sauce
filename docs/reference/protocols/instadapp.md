@@ -8,7 +8,7 @@
 > deployed on, the name a program writes for each of its contracts, and the functions a program can
 > call.
 
-Flash loan aggregator that routes across Aave, Maker, Balancer and other sources to find the cheapest flash loan.
+Flash loan aggregator that routes across Aave, Maker, Balancer and other sources.
 
 | Fact | Value |
 | --- | --- |
@@ -20,7 +20,7 @@ Flash loan aggregator that routes across Aave, Maker, Balancer and other sources
 ## What it offers
 
 - **getRoutes**: Query available flash loan routes and their IDs
-- **flashLoan**: Execute a flash loan via optimal route
+- **flashLoan**: Execute a flash loan through a route
 
 ## Notes
 

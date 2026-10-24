@@ -20,8 +20,8 @@ forks: PancakeSwap V3, Aerodrome Slipstream, Algebra pools, Synthra, UnitFlow), 
 `maverickV2` go through the Pot's Router, which answers the pool's callback. Choose by pool type:
 
 - **Concentrated liquidity** (V3-style pools through `uniswapV3`, V4 pools through `uniswapV4`):
-  the deepest pools for liquid pairs, several fee tiers per pair, and a price limit, so a fill can
-  stop part way and leave the rest unspent.
+  several fee tiers per pair, and a price limit, so a fill can stop part way and leave the rest
+  unspent.
 - **Constant-product pairs** (Uniswap V2 and its forks through `uniswapV2`, Solidly-style volatile
   pools): one pool per pair, no price limit; a swap consumes its whole input, bounded only by its
   `minOut`.
@@ -242,7 +242,7 @@ Olympus stakes OHM into its staked forms.
   a deposit and return shares whose value grows: measure shares and assets as deltas.
 - **Yield split** (Pendle): PT is the principal, redeemable at a fixed expiry, YT the yield until
   then.
-- **Managed liquidity** (Gamma, Arrakis) runs concentrated-liquidity positions for you.
+- **Managed liquidity** (Gamma, Arrakis) runs concentrated-liquidity positions in vaults.
 - **Boosted LP** (Convex) stakes Curve LP tokens for boosted rewards.
 
 | Protocol | Family | Namespace | Chains |

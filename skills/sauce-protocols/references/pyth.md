@@ -1,6 +1,6 @@
 # Pyth Network
 
-High-fidelity oracle network providing low-latency price feeds from institutional sources. Uses pull-based model for efficient on-chain price updates.
+Oracle network providing price feeds from institutional sources. Uses a pull-based model for on-chain price updates.
 
 ## Category
 

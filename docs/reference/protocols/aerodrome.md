@@ -10,7 +10,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)).
 
-The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics, the largest DEX on Base by TVL ($1B+). Supports both stable and volatile pool types.
+DEX on Base. Fork of Velodrome with ve(3,3) tokenomics. Supports both stable and volatile pool types.
 
 | Fact | Value |
 | --- | --- |
@@ -62,7 +62,6 @@ function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
 - Two pool types: `stable=true` (Curve-like invariant for pegged assets), `stable=false` (x*y=k for uncorrelated)
 - Fees: volatile pools ~0.3%, stable pools ~0.04% (governance-controlled)
 - ve(3,3) model: AERO holders vote-lock tokens to direct gauge emissions weekly
-- The dominant DEX on Base by TVL and volume; preferred for most Base swaps
 - LP tokens can be staked in gauges for AERO emissions
 - Routes include both `stable` flag and `factory` address per hop
 - This module is the basic (stable/volatile) pools only. Aerodrome's concentrated-liquidity Slipstream pools are the `aerodrome-slipstream` module

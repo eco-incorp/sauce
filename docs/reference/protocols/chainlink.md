@@ -8,7 +8,7 @@
 > the chains it is deployed on, the name a program writes for each of its contracts, and the
 > functions a program can call.
 
-Industry-standard decentralized oracle network providing price feeds, VRF randomness, automation, and cross-chain interoperability (CCIP).
+Decentralized oracle network providing price feeds, VRF randomness, automation, and cross-chain interoperability (CCIP).
 
 | Fact | Value |
 | --- | --- |

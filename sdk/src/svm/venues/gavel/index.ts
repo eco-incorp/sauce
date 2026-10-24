@@ -267,7 +267,7 @@ export async function fetchGavelConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter, not in the v1 registry). */
+/** The Gavel venue: Ellipsis Labs' sandwich-resistant constant-product AMM. */
 export const gavel = {
   slug: SLUG,
   programId: GAVEL_PROGRAM_ID,

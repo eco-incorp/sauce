@@ -117,7 +117,7 @@ should.
 | **Router**               | A helper for swaps      | A contract on chain that answers when a pool calls back in the middle of a swap, on behalf of your Pot. You rarely see it.                                                                        |
 | **Settle program**       | An audited payout       | Sauce's own program that pays everything a Pot holds of each listed token to one recipient, above a floor. `sauce verify` checks that a payload runs exactly it.                                  |
 | **Supported chain**      | Where Sauce sends       | A chain the `sauce` command builds and sends transactions on: Ethereum, Base, Arc and Solana.                                                                                                     |
-| **Preview chain**        | Look, but don't send    | Every other chain Sauce knows. Programs compile and simulate there, but the command sends nothing.                                                                                                |
+| **Preview chain**        | Look, but don't send    | Every other chain Sauce knows. Programs compile there, but nothing simulates and the command sends nothing.                                                                                       |
 
 ## Swaps
 
@@ -155,11 +155,11 @@ should.
 
 [Your first agent session](../guides/agent-quick-start.md) puts these to work.
 
-| Sauce says       | Think of it as                   | What it is                                                                                                                                                                                                          |
-| ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MCP server**   | A plugin for your coding agent   | `sauce mcp` gives a coding agent Sauce's commands as tools.                                                                                                                                                         |
-| **stdio**        | A private line                   | How an agent usually starts the MCP server: as a program on your machine that it talks to through its input and output. Only there can the server sign, with wallets you give it; served over HTTP, it never signs. |
-| **Agent skills** | A handbook for your coding agent | Instructions written for an agent, which `sauce skills install` copies into your project.                                                                                                                           |
+| Sauce says       | Think of it as                   | What it is                                                                                                                                                                                                                                                                                            |
+| ---------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MCP server**   | A plugin for your coding agent   | `sauce mcp` gives a coding agent Sauce's commands as tools.                                                                                                                                                                                                                                           |
+| **stdio**        | A private line                   | How an agent usually starts the MCP server: as a program on your machine that it talks to through its input and output. Only there can the server sign: it serves your wallet directory's wallets unless started with `--no-wallets`, and an agent can enable them. Served over HTTP, it never signs. |
+| **Agent skills** | A handbook for your coding agent | Instructions written for an agent, which `sauce skills install` copies into your project.                                                                                                                                                                                                             |
 
 ## Next
 

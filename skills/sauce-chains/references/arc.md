@@ -84,7 +84,7 @@ address.
 | [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | mainSpoke | `0xB843bdC3a87A05E77E07Df9FE48928b3A34b134d` | `AaveV4.MainSpoke` |
 | [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x9b4A302A548c7e313c2b74C461db7b84d3074A84` | `Across.SpokePool` |
 | [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | clFactory | `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03` | `AerodromeSlipstream.CLFactory` |
-| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | metarouter | `0x7275FA44c67BbA8d921422e600B4ed396209c886` | `AerodromeSlipstream.Metarouter` |
+| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | metarouter | `0x7275fA44c67bba8D921422e600b4Ed396209C886` | `AerodromeSlipstream.Metarouter` |
 | [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | nonfungiblePositionManager | `0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473` | `AerodromeSlipstream.NonfungiblePositionManager` |
 | [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | ethUsdFeed | `0x50FCDD99D6762D1C170DC6A9111db944AEE6D364` | `Chainlink.EthUsdFeed` |

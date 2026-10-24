@@ -1,6 +1,6 @@
 # Chainlink CCIP
 
-Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain messaging with DON (Decentralized Oracle Network) security and token transfers.
+Cross-Chain Interoperability Protocol by Chainlink. Cross-chain messaging with DON (Decentralized Oracle Network) security and token transfers.
 
 ## Category
 

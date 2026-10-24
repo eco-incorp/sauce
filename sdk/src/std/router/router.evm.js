@@ -32,13 +32,20 @@
 // those pools spends everything it is paid or reverts (a V2 pair and a DODO V2 pool book their whole
 // balance, LB reverts `LBPair__OutOfLiquidity` rather than fill part of an input, WooPPV2 books
 // exactly `fromAmount`), and only an uncaught revert unwinds the push. The `try` functions are the
-// one way to get a swap that may fail without reverting the program, and each loses nothing: a
-// skipped swap returns `0n` having moved nothing, and a swap that ran returns at least 1, so `0n`
-// always means skipped. Three ways make that hold:
+// one way to get a swap that may fail without reverting the program. Each skips — returns `0n`
+// having moved nothing — in the cases its own comment lists, and a swap that ran returns at least 1,
+// so `0n` always means skipped. Anything else reverts the program as the plain function does:
+// arguments that contradict each other (the same token in and out on a pay-first venue, tokens
+// other than the pair a DODO V2 or LB call names, a V2 fee of 100% or more) and a swap that ran
+// below the floor among them. Every `try` function skips a pool, Vault or PoolManager with no code,
+// and three ways make the rest hold:
 //   - a check before anything moves that the pool takes the whole input at the floor —
 //     `tryUniswapV2` (the reserves), `tryTraderJoeLB` (`getSwapOut`), `tryDodoV2`
-//     (`querySellBase`/`querySellQuote`) and `tryWoofi` (`query`). The swap then runs uncaught, so a
-//     failure the check did not foresee still reverts;
+//     (`querySellBase`/`querySellQuote`) and `tryWoofi` (`query`). `tryDodoV2` and `tryWoofi` catch
+//     their view, so a contract whose view reverts is skipped; `tryUniswapV2` and `tryTraderJoeLB`
+//     read theirs uncaught (it returns several words, and a caught call carries one), so a contract
+//     with code that is no pair reverts the program. The swap then runs uncaught, so a failure the
+//     check did not foresee still reverts;
 //   - catching the pool's failure where the pool pulls the input and enforces the floor itself —
 //     `tryCurve` and `tryBalancerV2`, which also reset the approval to zero;
 //   - catching the Router's call where the Router pays the pool from inside it — `tryUniswapV3`,
@@ -122,8 +129,10 @@ export function uniswapV2(
 }
 
 // `uniswapV2`, or nothing: `0n` with nothing moved when the pair cannot take the whole input — no
-// input, an input its reserve cannot hold (past `uint112`), or an output of zero or below the floor.
-// Otherwise the swap runs uncaught, so a failure the check did not foresee still reverts.
+// code, no input, an input its reserve cannot hold (past `uint112`), or an output of zero or below
+// the floor. `getReserves` is read uncaught (a caught call carries one word, and it returns three),
+// so a contract with code that is no pair reverts the program. Otherwise the swap runs uncaught, so
+// a failure the check did not foresee still reverts.
 export function tryUniswapV2(
   pair: Address,
   tokenIn: Address,
@@ -140,6 +149,9 @@ export function tryUniswapV2(
     fee = 3000n;
   }
   const zeroForOne = tokenIn < tokenOut;
+  if (ctx.codeSize(pair) == 0n) {
+    return 0n;
+  }
   const [reserve0, reserve1, updated] = UniswapV2Pair.at(pair).getReserves();
   let reserveIn = reserve1;
   let reserveOut = reserve0;
@@ -205,8 +217,9 @@ export function curve(
   return out;
 }
 
-// `curve`, or nothing: a failed `exchange` is caught, the approval reset to zero, and `0n` returned
-// with nothing moved. The pool's floor is at least 1, so a swap that ran never reads as skipped.
+// `curve`, or nothing: `0n` with nothing moved when the pool has no code, or when `exchange` fails,
+// which is caught and the approval reset to zero. The pool's floor is at least 1, so a swap that
+// ran never reads as skipped.
 export function tryCurve(
   pool: Address,
   tokenIn: Address,
@@ -222,6 +235,9 @@ export function tryCurve(
   let floor = minOut;
   if (floor == 0n) {
     floor = 1n;
+  }
+  if (ctx.codeSize(pool) == 0n) {
+    return 0n;
   }
   approve(tokenIn, pool, amountIn);
   const before = balanceOf(tokenOut, ctx.self());
@@ -292,9 +308,9 @@ export function balancerV2(
   );
 }
 
-// `balancerV2`, or nothing: a failed `Vault.swap` is caught, the approval reset to zero, and `0n`
-// returned with nothing moved. The Vault's limit is at least 1, so a swap that ran never reads as
-// skipped.
+// `balancerV2`, or nothing: `0n` with nothing moved when the Vault has no code, or when `Vault.swap`
+// fails, which is caught and the approval reset to zero. The Vault's limit is at least 1, so a swap
+// that ran never reads as skipped.
 export function tryBalancerV2(
   vault: Address,
   tokenIn: Address,
@@ -308,6 +324,9 @@ export function tryBalancerV2(
   let floor = minOut;
   if (floor == 0n) {
     floor = 1n;
+  }
+  if (ctx.codeSize(vault) == 0n) {
+    return 0n;
   }
   approve(tokenIn, vault, amountIn);
   const userData = hex``;
@@ -461,8 +480,10 @@ export function traderJoeLB(
   return out;
 }
 
-// `traderJoeLB`, or nothing: `0n` with nothing moved unless `getSwapOut` says the pair spends the
-// whole input and pays at least the floor (and at least 1). Otherwise the swap runs uncaught, so a
+// `traderJoeLB`, or nothing: `0n` with nothing moved when the pair has no code, or unless
+// `getSwapOut` says the pair spends the whole input and pays at least the floor (and at least 1).
+// `getSwapOut` is read uncaught (a caught call carries one word, and it returns three), so a
+// contract with code that is no LB pair reverts the program. Otherwise the swap runs uncaught, so a
 // failure the check did not foresee still reverts.
 export function tryTraderJoeLB(
   pair: Address,
@@ -477,7 +498,7 @@ export function tryTraderJoeLB(
   require(tokenIn != tokenOut);
   const swapForY = tokenIn == tokenX && tokenOut == tokenY;
   require(swapForY || (tokenIn == tokenY && tokenOut == tokenX));
-  if (amountIn == 0n || amountIn >> 128n != 0n) {
+  if (amountIn == 0n || amountIn >> 128n != 0n || ctx.codeSize(pair) == 0n) {
     return 0n;
   }
   let floor = minOut;
@@ -587,15 +608,16 @@ export function uniswapV3(
   return out;
 }
 
-// `uniswapV3`, or nothing: `0n` with nothing moved when the pool has no code or is not this pair's
-// pool, or when its swap fails. The Router pays the pool from inside the call that is caught, so a
-// swap the pool or the Router refuses moves nothing. What a swap that ran delivered is the
+// `uniswapV3`, or nothing: `0n` with nothing moved when there is no input (or one of 2^255 or more),
+// the same token in and out, a pool with no code or not this pair's pool (its `token0`/`token1` are
+// caught), or when its swap fails. The Router pays the pool from inside the call that is caught, so
+// a swap the pool or the Router refuses moves nothing. What a swap that ran delivered is the
 // recipient's `tokenOut` balance change, and it must reach the floor — `minOut`, and at least 1 — or
-// the program reverts: the execution Router takes no floor of its own, so a swap below it cannot
-// be undone, and one that took input and delivered nothing (an input the pool rounds away) must not
-// read as skipped. One that ran and moved nothing at all (no liquidity in range: the Router paid
-// nothing and the recipient received nothing) returns `0n`. With no price limit, an empty pool costs
-// a full tick walk before it is skipped; pass a `sqrtPriceLimitX96` to bound it.
+// the program reverts: the execution Router takes no floor of its own, so a swap that ran below it
+// cannot be undone, and one that took input and delivered nothing (an input the pool rounds away)
+// must not read as skipped. One that ran and moved nothing at all (no liquidity in range: the
+// Router paid nothing and the recipient received nothing) returns `0n`. With no price limit, an
+// empty pool costs a full tick walk before it is skipped; pass a `sqrtPriceLimitX96` to bound it.
 export function tryUniswapV3(
   pool: Address,
   tokenIn: Address,

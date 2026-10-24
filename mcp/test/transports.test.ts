@@ -454,6 +454,10 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     assert.match(stdout, /--allowed-host <name>/);
     assert.match(stdout, /--wallets \[<dir>\]/);
     assert.match(stdout, /--no-wallets/);
+    // It names every tool a server can serve, so the help cannot fall behind the server.
+    for (const name of toolsOf({ wallets: true, pots: true })) {
+      assert.match(stdout, new RegExp(`\\b${name}\\b`), `sauce mcp --help does not name ${name}`);
+    }
     for (const [argv, message] of [
       [["--agent", "claude"], /--agent goes with sauce mcp setup/],
       [["setup", "--http", "0"], /--http is for serving, not setup/],

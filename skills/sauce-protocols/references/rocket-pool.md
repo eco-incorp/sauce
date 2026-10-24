@@ -44,7 +44,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- TVL: $3B+. Most decentralized LST with permissionless node operators
+- TVL: $3B+. LST with permissionless node operators
 - rETH is non-rebasing: value increases over time relative to ETH
 - deposit() is payable - send ETH as msg.value, no parameters needed
 - burn() may fail if insufficient liquidity in the deposit pool

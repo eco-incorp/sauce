@@ -39,8 +39,9 @@ live are the [production checklist](../guides/production-checklist.md).
   `IERC20.at(token).transfer(...)`. [Token functions](../reference/tokens.md#token-functions) lists
   each.
 - **Preview chains send nothing.** The `sauce` command builds and sends transactions only on
-  Ethereum, Base, Arc and Solana. On every other chain a program compiles and simulates, and
-  sending is refused before anything is signed ([Names and registries](names-and-registries.md)).
+  Ethereum, Base, Arc and Solana. On every other chain a program compiles, but it does not
+  simulate (the released engine is not deployed there), and sending is refused before anything is
+  signed ([Names and registries](names-and-registries.md)).
 
 ## What Sauce cannot check
 

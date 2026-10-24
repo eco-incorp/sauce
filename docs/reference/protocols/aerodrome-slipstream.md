@@ -44,7 +44,7 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Arc](../chains/arc.md) | clFactory | `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03` | `AerodromeSlipstream.CLFactory` |
-| [Arc](../chains/arc.md) | metarouter | `0x7275FA44c67BbA8d921422e600B4ed396209c886` | `AerodromeSlipstream.Metarouter` |
+| [Arc](../chains/arc.md) | metarouter | `0x7275fA44c67bba8D921422e600b4Ed396209C886` | `AerodromeSlipstream.Metarouter` |
 | [Arc](../chains/arc.md) | nonfungiblePositionManager | `0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473` | `AerodromeSlipstream.NonfungiblePositionManager` |
 | [Base](../chains/base.md) | clFactory | `0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A` | `AerodromeSlipstream.CLFactory` |
 | [Base](../chains/base.md) | clFactoryGaugeCaps | `0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a` | `AerodromeSlipstream.CLFactoryGaugeCaps` |

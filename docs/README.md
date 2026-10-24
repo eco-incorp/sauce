@@ -22,8 +22,8 @@ The manual has four parts, and every page says at its top which part it belongs 
 - **Concepts** explain how Sauce works, and why.
 - **Reference** lists the facts: every chain, protocol, token, function and option.
 
-Sauce sends transactions on **Ethereum**, **Base** and **Solana**. Every other chain it knows is a
-preview chain, where programs compile and simulate but nothing is sent.
+Sauce sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**. Every other chain it knows is a
+preview chain, where programs compile but nothing is simulated or sent.
 
 ## Tutorials
 

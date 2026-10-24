@@ -46,15 +46,18 @@ opened with its password, which the wallet then keeps.
 ### Show a key again
 
 `sauce wallet export me` shows the key on the terminal itself, never on stdout, after you type the
-wallet's name. It refuses without a terminal.
+wallet's name. It refuses without a terminal. That keeps the key out of a pipe or a log, not away
+from a program: one that runs the command in a pseudo-terminal can type the name and read the key,
+and anything that can read the wallet's file and its password has the key anyway.
 
 ### Know where wallets are kept
 
 Each wallet is one file, `<name>.json`, created readable only by you in a directory only you can
 open. `--wallets <dir>` keeps them in another directory. An Ethereum-style wallet's file is a
 standard encrypted keystore, exactly as geth and `cast wallet` write one, so `--keystore <file>`
-and `cast wallet` read it too. A Solana wallet's file is the same envelope around the keypair. Each
-file names its address in the clear, which is why `list` and `address` need no password.
+and `cast wallet` read it too, without its policy. A Solana wallet's file is the same envelope
+around the keypair. Each file names its address in the clear, which is why `list` and `address`
+need no password.
 
 ## Sign with it
 
@@ -77,7 +80,9 @@ small balances in them, and give each one a spending limit.
 ## Put a spending limit on a wallet
 
 A **policy** is a file named `<name>.policy.json`, beside the wallet in `~/.sauce/wallets`, that
-limits what the wallet sends. Every field is optional:
+limits what the wallet sends when it signs through `--wallet` (or the MCP server's wallet tools).
+The same file signed with `--keystore`, `cast wallet` or geth applies no policy, so anyone with the
+file and its password can ignore it. Every field is optional:
 
 ```json
 {
@@ -363,8 +368,10 @@ Besides `--wallet`, a command signs with:
 - `--private-key <hex>`: works, with a warning, because it lands in your shell history.
 - `--keypair <path>`, on Solana: a keypair file, the JSON array of 64 bytes `solana-keygen` writes.
 
-Give one signer per command. The signer is always the Pot's owner. On Solana with `--via engine`,
-which uses no Pot, the signer is the program's authority instead ([Solana](cli-solana.md)).
+None of these applies a policy: a policy limits a wallet only when it signs through `--wallet`, or
+through the MCP server's wallet tools. Give one signer per command. The signer is always the Pot's
+owner. On Solana with `--via engine`, which uses no Pot, the signer is the program's authority
+instead ([Solana](cli-solana.md)).
 
 ## Next
 

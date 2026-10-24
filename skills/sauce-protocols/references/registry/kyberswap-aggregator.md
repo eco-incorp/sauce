@@ -2,7 +2,7 @@
 
 # KyberSwap Aggregator (`kyberswap-aggregator`)
 
-Meta aggregator that routes through multiple aggregators and DEXes for optimal swap execution.
+Meta aggregator that routes through multiple aggregators and DEXes for a swap.
 
 | Fact | Value |
 | --- | --- |

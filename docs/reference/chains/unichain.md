@@ -5,18 +5,19 @@
 **Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
 
 > Everything a program can name on Unichain: its tokens, and every protocol deployed there with the
-> name a program writes for each contract. Unichain is a preview chain: programs compile and
-> simulate here, and the `sauce` command sends nothing.
+> name a program writes for each contract. Unichain is a preview chain: programs compile here and
+> the reads work, but the released engine is not deployed here, so nothing is simulated or sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Unichain a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `unichain` |
 | Chain id | 130 |
 | Kind | EVM |
@@ -62,8 +63,8 @@ address.
 | [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x1f98400000000000000000000000000000000004` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x86e8631a016f9068c3f085faf484ee3f5fdee8f2` | `UniswapV4.StateView` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x1F98400000000000000000000000000000000004` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x86e8631A016F9068C3f085fAF484Ee3F5fDee8f2` | `UniswapV4.StateView` |
 
 ## Requesting support
 

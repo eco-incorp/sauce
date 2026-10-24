@@ -402,7 +402,7 @@ export async function fetchPancakeswapClmmConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
+/** The PancakeSwap venue: a concentrated-liquidity AMM forked from Raydium CLMM. */
 export const pancakeswapClmm = {
   slug: SLUG,
   programId: PANCAKESWAP_CLMM_PROGRAM_ID,

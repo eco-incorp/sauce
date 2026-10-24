@@ -28,8 +28,9 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
 ## Core model
 
 - **One command, no configuration.** It reads no environment variable but the one `--password-env`
-  names, and reads a chain through a built-in public endpoint unless given one of its own
-  (`--rpc-url`, `--config`); `--offline` reads none.
+  names (in `sauce mcp` over stdio, also the one `sauce_wallet_enable`'s `env` names), and reads a
+  chain through a built-in public endpoint unless given one of its own (`--rpc-url`, `--config`);
+  `--offline` reads none.
 - **The run, in order**: look up names → compile → simulate → (Pot, deployed when first needed) →
   fund → run, or `sauce tx` for another signer → read it back. Every command takes the chain as
   `--chain <slug or id>`.
@@ -166,9 +167,10 @@ sauce wallet address agent
   `simulate --fund`). An EVM wallet signs on an EVM chain, a Solana one on Solana.
 - `sauce wallet import <name> <file>` keeps a key the user has (a private key, a keystore or a
   Solana keypair file), read from the file or from stdin with `-`, never from the command line. An
-  EVM wallet's file is a standard keystore, so `--keystore` reads it too.
+  EVM wallet's file is a standard keystore, so `--keystore` reads it too, without its policy.
 - `sauce wallet export <name>` shows a key only at a terminal, after the user types the wallet's
-  name: never run it for the user.
+  name: never run it for the user. It keeps the key out of pipes and logs, not from a program that
+  drives a pseudo-terminal, and the file and its password are the key anyway.
 - **It is a hot wallet.** Whoever has its file and password has the key, and nothing asks before it
   sends: suggest small balances and a policy, and a wallet's MCP server for anything more.
 
@@ -177,8 +179,10 @@ sauce run payout.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLE
   --args '[{"to":"<payee>","bps":10000}]'
 ```
 
-**A policy limits a wallet.** `<name>.policy.json` beside it, written by the user, sets what it may
-send. Every field is optional; amounts are strings in whole tokens (`"100"` is 100 USDC):
+**A policy limits a wallet** when it signs through `--wallet` or the MCP server's wallet tools.
+`<name>.policy.json` beside it, written by the user, sets what it may send. The same file signed
+with `--keystore` applies no policy, nor does `--private-key`. Every field is optional; amounts are
+strings in whole tokens (`"100"` is 100 USDC):
 
 ```json
 {
@@ -484,8 +488,9 @@ sauce sign buy.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_
   now. `--nonce <n>` is the nonce, else a random one. `--within <seconds>` (an hour unless given)
   or `--deadline <unix seconds>` is the last second it runs, inclusive; not both.
   `--submitter <address>` lets only that account send it.
-- **What it prints** (`--json` alone prints only this): `{ chainId, pot, owner, engine, program,
-value, maxExecutionFee, nonce, deadline, submitter, typedData, digest, signature, cook }`, each
+- **What it prints** on stdout, with `--json` or without: `{ chainId, pot, owner, engine,
+program, value, maxExecutionFee, nonce, deadline, submitter, typedData, digest, signature, cook }`,
+  and its notes, the fee warning among them, on stderr either way. Each
   number a decimal string, `typedData` as `eth_signTypedData_v4` takes it. `cook` is
   `{ chainId, to, data, value }` with `value` a hex quantity, as `sauce tx` writes a transaction:
   hand it to the sender. While the Pot has no code, `deployPot` comes too, for any account to send
@@ -577,9 +582,11 @@ line numbers in its errors.
 
 ## What a preview chain refuses
 
-On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `simulate`, `inspect`,
-`verify`, `price` and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its
-deployment out. Everything that leaves a transaction ready to sign, unsigned JSON included, or
+On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `inspect`, `verify`, `price`
+and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its deployment out.
+`sauce simulate` does not run there: the released engine is not deployed on a preview chain, so it
+stops with exit 1 (`the released engine … is not deployed on <chain>`); simulate on a supported
+chain. Everything that leaves a transaction ready to sign, unsigned JSON included, or
 sends one is refused before anything is read or signed: `tx`, `run`, `sign`, `pot --deploy` and
 `pot --format cast`. No flag overrides it. The refusal exits 1 and names the supported chains and
 the chain's request:

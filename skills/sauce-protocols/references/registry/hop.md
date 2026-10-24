@@ -18,7 +18,7 @@ On Ethereum, `Hop` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
 function main() {
-  // Ethereum's l1EthBridge, `0xb8901acb165ed027e32754e0ffe830802919727f`.
+  // Ethereum's l1EthBridge, `0xb8901acB165ed027E32754E0FFe830802919727f`.
   require(Hop.L1EthBridge != 0);
 }
 ```
@@ -27,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | l1EthBridge | `0xb8901acb165ed027e32754e0ffe830802919727f` | `Hop.L1EthBridge` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | l1EthBridge | `0xb8901acB165ed027E32754E0FFe830802919727f` | `Hop.L1EthBridge` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | l1UsdcBridge | `0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a` | `Hop.L1UsdcBridge` |
 | [Optimism](../../../sauce-chains/references/optimism.md) | l2AmmWrapper | `0x86cA30bEF97fB651b8d866D45503684b90cb3312` | `Hop.L2AmmWrapper` |
 | [Polygon](../../../sauce-chains/references/polygon.md) | l2AmmWrapper | `0x76b22b8C1079A44F1211D867D68b1eda76a635A7` | `Hop.L2AmmWrapper` |

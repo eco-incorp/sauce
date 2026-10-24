@@ -5,7 +5,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 1,
     chainName: "Ethereum",
     addresses: {
-      l1EthBridge: "0xb8901acb165ed027e32754e0ffe830802919727f",
+      l1EthBridge: "0xb8901acB165ed027E32754E0FFe830802919727f",
       l1UsdcBridge: "0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a",
     },
   },

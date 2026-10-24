@@ -2,7 +2,7 @@
 
 # Aerodrome (`aerodrome`)
 
-The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics, the largest DEX on Base by TVL.
+The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics.
 
 | Fact | Value |
 | --- | --- |

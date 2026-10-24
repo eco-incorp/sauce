@@ -187,9 +187,10 @@ export const PROGRAM = {
     .optional()
     .describe(
       "Other files the program imports by relative path, as path → text, each path from the " +
-        "directory of `file` (lib/math.sauce.ts). The server reads nothing from its own disk, " +
-        "but serves what the SDK ships without being passed: @sauce/token, @sauce/router, " +
-        "./artifacts/IERC20.json, ./artifacts/ISauceRouter.json and ./protocols/<slug>/<Export>.json.",
+        "directory of `file` (lib/math.sauce.ts for ./lib/math.sauce.ts), inside which every " +
+        "import stays. The server reads nothing from its own disk, but serves what the SDK ships " +
+        "without being passed: @sauce/token, @sauce/router, ./artifacts/IERC20.json, " +
+        "./artifacts/ISauceRouter.json and ./protocols/<slug>/<Export>.json.",
     ),
   chain: chainRef
     .optional()
@@ -1143,7 +1144,8 @@ export const SUPPORTED_ONLY =
   "any other (a preview chain: sauce_chains marks each) it is refused before any endpoint is " +
   "reached, with `refused`: the supported chains, the search for an existing request for that " +
   "chain and a prefilled new one, and the title, body and comment to post. Offer the user that " +
-  "request; compile and simulate work on every chain.";
+  "request; compile and the reads work on every chain, and simulate only where the released " +
+  "engine is deployed, which no preview chain is.";
 
 /** That sentence on a server with wallets (over stdio, unless `--no-wallets`). */
 export const WALLET_UNSIGNED =
@@ -1325,7 +1327,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "take: each chain's slug, numeric id, name, kind (evm or svm) and aliases, `support`, " +
         `and \`endpoint\`. \`support\` is "supported" for ${supportedChainNames()}, where this ` +
         'release builds transactions, and "preview" for every other chain: programs compile ' +
-        "and simulate there, but the tools that build a transaction refuse it (`refused` says " +
+        "there, and globals, price, pools and pot's prediction read, but simulate does not run and " +
+        "the tools that build or send a transaction refuse it (`refused` says " +
         "how to request the chain). `endpoint` is where this server reads the chain without the " +
         'call\'s rpcUrl: "config", its operator\'s endpoint; "public", a built-in public one, ' +
         'which can be slow or rate-limited; "none", only through the call\'s rpcUrl. Reads ' +
@@ -2369,7 +2372,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       title: "Simulate a cook, with no key and nothing sent",
       description:
         "Simulates the cook from the Pot's owner on the chain as it is now, to see what it would " +
-        "do before building the transaction with sauce_tx. Needs an endpoint (rpcUrl, or the " +
+        "do before building the transaction with sauce_tx. It runs only where the released engine " +
+        "is deployed, so it fails on a preview chain. Needs an endpoint (rpcUrl, or the " +
         "server's). EVM: through eth_simulateV1 (else eth_call with state overrides; `path` " +
         "says which), on a Pot that need not be deployed yet — the simulation deploys it first, " +
         "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +

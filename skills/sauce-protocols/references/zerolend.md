@@ -1,6 +1,6 @@
 # ZeroLend
 
-Leading lending protocol on zkSync Era. Aave V3 fork optimized for zero-knowledge rollups with low transaction costs.
+Lending protocol on zkSync Era. Aave V3 fork.
 
 ## Category
 

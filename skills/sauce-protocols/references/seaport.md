@@ -31,7 +31,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Same address across all 5 chains
+- Same address on all 6 chains
 - Zone-based access control for order restrictions
 - Conduits are approved transfer proxies - conduitKey=bytes32(0) for default
 - basicOrderType encodes: ERC-721/1155 + ETH/ERC-20 payment + buy/sell direction

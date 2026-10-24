@@ -29,7 +29,13 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decodeEventLog, toEventSelector, toFunctionSelector, type AbiEvent } from "viem";
+import {
+  decodeEventLog,
+  getAddress,
+  toEventSelector,
+  toFunctionSelector,
+  type AbiEvent,
+} from "viem";
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOLS = join(SDK, "src", "protocols");
@@ -426,6 +432,20 @@ describe("registry ABI evidence: coverage", () => {
       }
     }
     expect(uncaptured).toEqual([]);
+  });
+
+  it("every EVM address a protocol's addresses.ts records is EIP-55 checksummed", () => {
+    // viem's getAddress, and every wallet that checks the case, refuses a mixed-case address whose
+    // checksum is wrong; the generated chain and protocol pages print these as written.
+    const wrong = slugs.flatMap((slug) =>
+      deployments[slug]!.flatMap((d) =>
+        Object.entries(d.addresses)
+          .filter(([, address]) => /^0x[0-9a-fA-F]{40}$/.test(address))
+          .filter(([, address]) => getAddress(address.toLowerCase()) !== address)
+          .map(([role, address]) => `${slug}.${role} ${d.chainId}: ${address}`),
+      ),
+    );
+    expect(wrong).toEqual([]);
   });
 
   it("the fixture holds no RPC endpoint or API key", () => {

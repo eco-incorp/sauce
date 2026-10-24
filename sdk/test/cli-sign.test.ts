@@ -234,6 +234,20 @@ describe("sauce sign", () => {
     expect(Number(hour.deadline)).toBeLessThanOrEqual(now + 3610);
   });
 
+  it("prints the JSON on stdout and its notes on stderr, with --json or without", async () => {
+    const argv = [
+      ...["sign", file, "--chain", "base", "--private-key", KEY, "--offline"],
+      ...["--max-fee", "1", "--nonce", "9", "--deadline", "2000000000", ...ARGS],
+    ];
+    const plain = await sauce(...argv);
+    const json = await sauce(...argv, "--json");
+    expect(signedOf(plain)).toMatchObject({ nonce: "9", deadline: "2000000000" });
+    expect(json.stdout).toBe(plain.stdout);
+    // --json takes nothing away from stderr: the notes are there either way.
+    expect(plain.stderr).toContain("Anyone may submit this cook, once (nonce 9)");
+    expect(json.stderr).toBe(plain.stderr);
+  });
+
   it("prints the typed data alone with no signer, and builds the cook from a signature made elsewhere", async () => {
     const fields = [
       ...["--chain", "base", "--owner", OWNER.address, "--offline", "--json"],
