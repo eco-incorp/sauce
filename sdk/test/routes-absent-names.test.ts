@@ -411,6 +411,10 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
         "const ns = [[UniswapV3.QuoterV2, UniswapV3.Factory]];\nreturn !!(ns[0][1]) || 0;",
       ],
       [
+        "const ns = [[1], [UniswapV3.Factory]];\nreturn ns[1][0] || 0;",
+        "const ns = [[1], [UniswapV3.Factory]];\nreturn !!(ns[1][0]) || 0;",
+      ],
+      [
         "const fs = [UniswapV3.Factory];\nconst k = fs[0];\nreturn k || 0;",
         "const fs = [UniswapV3.Factory];\nconst k = fs[0];\nreturn !!(k) || 0;",
       ],
@@ -584,6 +588,67 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     expect(refusal("optimism", `function main() {\n${both}\n}`)).toMatch(
       /fails on optimism whatever the program does: `PancakeswapV3\.Factory` is not deployed on optimism/,
     );
+  });
+});
+
+describe("every binding constructor under every carrier, as a value of `&&` and `||`, is a bool", () => {
+  // A binding is a registry contract or an ABI bound with `.at`, `.view` or `.lib` (compiler
+  // 2.6.0's `BindMethod`); a carrier is how a program holds it. Each combination is returned from a
+  // `: bool` function, so an operand handed back fails with "a return value: expected a bool, found
+  // a number". What 2.6.0 cannot express is skipped, its message kept in `skipped`.
+  const A = "0x1111111111111111111111111111111111111111";
+  const constructors: Record<string, string> = {
+    registry: "UniswapV3.Factory",
+    at: `IERC20.at(${A})`,
+    view: `IERC20.view(${A})`,
+    lib: `IERC20.lib(${A})`,
+  };
+  const carriers: Record<string, (c: string) => readonly [string, string, string?]> = {
+    direct: (c) => ["", c],
+    alias: (c) => [`const a = ${c};`, "a"],
+    "alias chain": (c) => [`const a = ${c}; const b = a; let k = b;`, "k"],
+    "record by name": (c) => [`const r = { f: ${c} };`, "r.f"],
+    "record by position": (c) => [`const r = { f: ${c} };`, "r[0]"],
+    "nested record": (c) => [`const r = { g: { f: ${c} } };`, "r.g.f"],
+    "list, constant index": (c) => [`const fs = [${c}, ${c}];`, "fs[1]"],
+    "list, computed index": (c) => [`const fs = [${c}, ${c}];`, "fs[i]"],
+    "nested list": (c) => [`const ns = [[${c}], [${c}]];`, "ns[1][0]"],
+    "function result": (c) => [`function f() { return ${c}; }`, "f()"],
+    "imported export": (c) => ["", "k", `export const k = ${c};`],
+  };
+  const IMPORT = 'import IERC20 from "./artifacts/IERC20.json";';
+  const skipped: string[] = [];
+  const cases = Object.entries(constructors).flatMap(([cn, c]) =>
+    Object.entries(carriers).flatMap(([kn, carry]) =>
+      (["||", "&&"] as const).map((op) => [`${cn}, ${kn}, ${op}`, carry(c), op] as const),
+    ),
+  );
+  it.each(cases)("%s", (name, [pre, k, module], op) => {
+    const helper = pre.startsWith("function") ? pre : "";
+    const local = helper === "" ? pre : "";
+    const expression = op === "||" ? `${k} || 0` : `1 && ${k}`;
+    const source = [
+      IMPORT,
+      ...(module === undefined ? [] : ['import { k } from "./m.js";']),
+      helper,
+      `function main(i: Uint256): bool {\n${local}\nreturn ${expression};\n}`,
+    ].join("\n");
+    const resolve = (path: string) =>
+      module !== undefined && path.replace(/^\.\//, "") === "m.js"
+        ? new TextEncoder().encode(`${IMPORT}\n${module}\n`)
+        : undefined;
+    let message: string | undefined;
+    try {
+      compileSauceProgram("base", source, { resolve });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message ?? "").not.toMatch(/expected a bool, found a number/);
+    if (message !== undefined) skipped.push(`${name}: ${message.split("\n")[0]}`);
+  });
+  afterAll(() => {
+    // Recorded for the reader of a failing run: what 2.6.0 cannot express here.
+    expect(skipped.filter((line) => /expected a bool, found a number/.test(line))).toEqual([]);
   });
 });
 

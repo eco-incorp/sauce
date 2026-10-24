@@ -143,6 +143,10 @@ export function withoutDead(
   return out.join("");
 }
 
+/** The methods that bind an ABI to an address, each a contract binding to compiler 2.6.0
+ *  (`BindMethod`: `at`, `view`, `lib`). */
+const BINDING_CONSTRUCTORS: ReadonlySet<string> = new Set(["at", "view", "lib"]);
+
 /** The function `available(X)` was. */
 const AVAILABLE = "available";
 
@@ -577,11 +581,12 @@ export function checkNames(
   ): "binding" | "unsure" | "scalar" => {
     const target = unwrap(node);
     if (target.type === "CallExpression") {
+      // `<Abi>.at(x)`, `.view(x)` and `.lib(x)`: each is the compiler's contract binding.
       const callee = unwrap(prop(target, "callee"));
       return callee.type === "MemberExpression" &&
         !prop<boolean>(callee, "computed") &&
         prop<AstNode>(callee, "property").type === "Identifier" &&
-        nameOf(prop(callee, "property")) === "at"
+        BINDING_CONSTRUCTORS.has(nameOf(prop(callee, "property")))
         ? "binding"
         : "scalar";
     }
@@ -589,29 +594,14 @@ export function checkNames(
     if (quietReference(target, at)?.kind === "contract") return "binding";
     if (target.type === "MemberExpression") {
       // A field or element of a record or list the program declares, nested or not: what the
-      // field holds, or for a computed one (`fs[0]`, `fs[i]`), what any element holds.
-      const holder = holderOf(unwrap(prop(target, "object")), seen);
-      if (holder === "unsure") return "unsure";
-      if (holder === undefined) return "scalar";
-      const property = prop<AstNode>(target, "property");
-      const candidates =
-        holder.node.type === "ArrayExpression"
-          ? prop<(AstNode | null)[]>(holder.node, "elements")
-          : holder.node.type === "ObjectExpression"
-            ? prop<AstNode[]>(holder.node, "properties")
-                .filter(
-                  (p) =>
-                    p.type === "Property" &&
-                    (prop<boolean>(target, "computed") ||
-                      (!prop<boolean>(p, "computed") &&
-                        property.type === "Identifier" &&
-                        (prop<AstNode>(p, "key") as Node)["name"] === nameOf(property))),
-                )
-                .map((p) => prop<AstNode>(p, "value"))
-            : [];
-      const kinds = candidates
-        .filter((value): value is AstNode => value !== null && value.type !== "SpreadElement")
-        .map((value) => bindingKind(value, bindings.scopeAt(value), holder.seen));
+      // member reads, at each level (`ns[1][0]`), or every value a computed key may read.
+      const holders = holdersOf(unwrap(prop(target, "object")), seen);
+      if (holders === "unsure") return "unsure";
+      const kinds = holders.flatMap((holder) =>
+        read(holder.node, target).map((value) =>
+          bindingKind(value, bindings.scopeAt(value), holder.seen),
+        ),
+      );
       return kinds.includes("binding") ? "binding" : kinds.includes("unsure") ? "unsure" : "scalar";
     }
     if (shadowed(at, nameOf(target), target.start) === false) return "scalar";
@@ -625,47 +615,63 @@ export function checkNames(
     return bindingKind(init, bindings.scopeAt(init), new Set([...seen, declaration]));
   };
 
-  /**
-   * The literal `node` holds, a record or a list, followed through the local it names and the
-   * fields and elements it reads (`r.a`, `fs[0]`), with the declarations passed; `unsure` for an
-   * import, whose module this pass does not read.
-   */
-  const holderOf = (
-    node: AstNode,
-    seen: Set<AstNode>,
-  ): { readonly node: AstNode; readonly seen: Set<AstNode> } | "unsure" | undefined => {
-    if (node.type === "ObjectExpression" || node.type === "ArrayExpression") return { node, seen };
-    if (node.type === "Identifier") {
-      const declaration = bindings.declarationOf(node);
-      if (declaration === undefined || seen.has(declaration)) return undefined;
-      if (declaration.type !== "VariableDeclarator") return "unsure";
-      return holderOf(unwrap(prop(declaration, "init")), new Set([...seen, declaration]));
-    }
-    if (node.type !== "MemberExpression") return undefined;
-    const outer = holderOf(unwrap(prop(node, "object")), seen);
-    if (outer === undefined || outer === "unsure") return outer;
-    const property = prop<AstNode>(node, "property");
+  /** The values `member` reads from `literal`, a record or a list: the element at a constant
+   *  index, the field named, or for any other key every element or field. */
+  const read = (literal: AstNode, member: AstNode): AstNode[] => {
+    const property = prop<AstNode>(member, "property");
+    const computed = prop<boolean>(member, "computed");
+    const index =
+      computed && property.type === "Literal" ? prop<unknown>(property, "value") : undefined;
     const values =
-      outer.node.type === "ArrayExpression"
-        ? prop<(AstNode | null)[]>(outer.node, "elements")
-        : prop<AstNode[]>(outer.node, "properties")
+      literal.type === "ArrayExpression"
+        ? typeof index === "number" || typeof index === "bigint"
+          ? [prop<(AstNode | null)[]>(literal, "elements")[Number(index)] ?? null]
+          : prop<(AstNode | null)[]>(literal, "elements")
+        : prop<AstNode[]>(literal, "properties")
             .filter(
               (p) =>
                 p.type === "Property" &&
-                (prop<boolean>(node, "computed") ||
+                (computed ||
                   (!prop<boolean>(p, "computed") &&
                     property.type === "Identifier" &&
                     (prop<AstNode>(p, "key") as Node)["name"] === nameOf(property))),
             )
             .map((p) => prop<AstNode>(p, "value"));
-    // A nested literal read by a computed key may be any one: the first that is a literal stands
-    // for the shape, and a binding in any is found by the caller's own reading of the others.
-    for (const value of values) {
-      if (value === null) continue;
-      const inner = holderOf(unwrap(value), outer.seen);
-      if (inner !== undefined) return inner;
+    return values.filter(
+      (value): value is AstNode => value !== null && value.type !== "SpreadElement",
+    );
+  };
+
+  /**
+   * The literals `node` may hold, records or lists, followed through the local it names and the
+   * member it reads at each level (`ns[1]`), with the declarations passed; `unsure` for an import,
+   * whose module this pass does not read.
+   */
+  const holdersOf = (
+    node: AstNode,
+    seen: Set<AstNode>,
+  ): { readonly node: AstNode; readonly seen: Set<AstNode> }[] | "unsure" => {
+    if (node.type === "ObjectExpression" || node.type === "ArrayExpression") {
+      return [{ node, seen }];
     }
-    return undefined;
+    if (node.type === "Identifier") {
+      const declaration = bindings.declarationOf(node);
+      if (declaration === undefined || seen.has(declaration)) return [];
+      if (declaration.type !== "VariableDeclarator") return "unsure";
+      return holdersOf(unwrap(prop(declaration, "init")), new Set([...seen, declaration]));
+    }
+    if (node.type !== "MemberExpression") return [];
+    const outer = holdersOf(unwrap(prop(node, "object")), seen);
+    if (outer === "unsure") return outer;
+    const inner: { readonly node: AstNode; readonly seen: Set<AstNode> }[] = [];
+    for (const holder of outer) {
+      for (const value of read(holder.node, node)) {
+        const found = holdersOf(unwrap(value), holder.seen);
+        if (found === "unsure") return found;
+        inner.push(...found);
+      }
+    }
+    return inner;
   };
 
   /** `referenceOf` for a decision: a name that is no registry name decides nothing, and an error
