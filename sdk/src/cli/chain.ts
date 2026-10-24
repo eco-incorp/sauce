@@ -577,18 +577,38 @@ export function revertReason(error: unknown): string {
   }
 }
 
-/** A dry run of `tx` from `from`: what it returns and the gas it needs, or why it reverts. */
+/**
+ * A dry run of `tx` from `from`: what it returns and the gas it needs, or why it reverts. The gas it
+ * needs is estimated from the call alone. Where `tx` carries the gas and fees it was signed with, the
+ * call runs with them, as the signed transaction will (a program can read both); a signed gas limit
+ * below the estimate is left out of the call, which would only run out of gas, so the caller can
+ * refuse it naming both.
+ */
 export async function simulate(
   client: PublicClient,
   from: Address,
-  tx: TxRequest,
+  tx: SignedCall,
 ): Promise<
   | { readonly ok: true; readonly returns: Hex; readonly gas: bigint }
   | { readonly ok: false; readonly reason: string }
 > {
+  const plain = { account: from, to: tx.to, data: tx.data, value: tx.value };
   try {
-    const { data } = await client.call({ account: from, ...tx });
-    const gas = await client.estimateGas({ account: from, ...tx });
+    const gas = await client.estimateGas(plain);
+    const fees =
+      tx.gasPrice !== undefined
+        ? { gasPrice: tx.gasPrice }
+        : {
+            ...(tx.maxFeePerGas === undefined ? {} : { maxFeePerGas: tx.maxFeePerGas }),
+            ...(tx.maxPriorityFeePerGas === undefined
+              ? {}
+              : { maxPriorityFeePerGas: tx.maxPriorityFeePerGas }),
+          };
+    const { data } = await client.call({
+      ...plain,
+      ...(tx.gas !== undefined && tx.gas >= gas ? { gas: tx.gas } : {}),
+      ...fees,
+    } as Parameters<PublicClient["call"]>[0]);
 
     return { ok: true, returns: data ?? "0x", gas };
   } catch (error) {

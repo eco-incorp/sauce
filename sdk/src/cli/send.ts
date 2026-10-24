@@ -49,7 +49,7 @@ import { v12PotAbi } from "../evm/engine.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { connect, landed, reasonOf, simulate, type Sent } from "./chain.js";
+import { connect, landed, reasonOf, simulate, type Sent, type SignedCall } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { guardOf, type Reservation } from "./policy.js";
@@ -491,7 +491,14 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         json: {},
       };
     };
-    const request = { to: tx.to, data: tx.data, value: tx.value };
+    // The call as it was signed: with its gas and what it pays per gas, which a program can read.
+    const request: SignedCall = {
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+      ...tx.fees,
+    };
     // One the chain has already (sent before, by this or by the signer) is read back, not resent.
     const known = await client.getTransaction({ hash: tx.hash }).then(
       () => true,
@@ -514,12 +521,7 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         );
         break;
       }
-      // Measured as it was signed: with its gas and what it pays per gas.
-      reservation = await guardOf(tx.from)?.evm(client, {
-        ...request,
-        ...(tx.gas === undefined ? {} : { gas: tx.gas }),
-        ...tx.fees,
-      });
+      reservation = await guardOf(tx.from)?.evm(client, request);
       try {
         await broadcastEvm(client, tx);
       } catch (error) {
@@ -552,7 +554,9 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         break;
       }
     }
-    const result = await landed(client, tx.hash, tx.from, request, (status) =>
+    // Its receipt, and, reverted, the call replayed at the block before it.
+    const plain = { to: tx.to, data: tx.data, value: tx.value };
+    const result = await landed(client, tx.hash, tx.from, plain, (status) =>
       status === "success" ? reservation?.sent(tx.hash) : reservation?.released("reverted"),
     );
     sent.push(await evmEntry(client, input.chain, tx, what, result));

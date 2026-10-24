@@ -200,10 +200,12 @@ accounts it writes reported. Every simulation of a transaction a wallet signs is
 stops in `sauce run` included: the wallet signs only a transaction its policy has let go, so an
 endpoint never holds one it could send itself. An EVM transaction is made whole before the policy
 measures it, with the gas it is signed with (1.2 times its estimate), its fees, nonce and chain;
-every simulation of it runs with that gas and those fees, since a program can read both, and that
-exact transaction is what the wallet signs. (`sauce send` sends what was signed elsewhere, and
-simulates it first: on Solana the signed transaction itself, on an EVM chain its call with the gas
-and fees it was signed with, the signed gas checked against what it needs; it unlocks no wallet.)
+every policy measurement and allowance replay of it runs with that gas and those fees, since a
+program can read both, and that exact transaction is what the wallet signs. The gas estimate it is
+made with, and `sauce_wallet_send`'s first check of a whole plan, run before that, on the call
+alone. (`sauce send` sends what was signed elsewhere, and simulates it first: on Solana the signed
+transaction itself, on an EVM chain its call with the gas and fees it was signed with, the signed
+gas checked against what it needs; it unlocks no wallet.)
 On Solana a transaction is held to the policy of every wallet it needs a signature from that the
 command has unlocked, whichever of them pays its fee, and a planned transaction another tool built
 must be paid for by the wallet that sends it. A limit that cannot be measured on the endpoint (one

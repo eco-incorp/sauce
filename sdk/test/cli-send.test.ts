@@ -27,6 +27,7 @@ import { serializeTransaction, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
+import { simulate, type SignedCall } from "../src/cli/chain.js";
 import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
 import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
@@ -427,5 +428,104 @@ describe("a plan's next step that cannot be built once something was sent", () =
     const next = await confirm(ownerTransaction(key(13) as SvmAddress), fresh);
     expect(next.step).toBe("unknown");
     expect(decodeCursor(next.cursor!).cooked).toBeUndefined();
+  });
+});
+
+describe("the simulation of a transaction signed elsewhere", () => {
+  const to = "0x5555555555555555555555555555555555555555";
+  const from = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
+  /** A client whose `eth_call` and gas estimate answer, recording the arguments each was sent. */
+  const recording = (estimate: bigint) => {
+    const calls: Array<Record<string, unknown>> = [];
+    const estimates: Array<Record<string, unknown>> = [];
+    const client = {
+      call: async (args: Record<string, unknown>) => {
+        calls.push(args);
+
+        return { data: "0x01" };
+      },
+      estimateGas: async (args: Record<string, unknown>) => {
+        estimates.push(args);
+
+        return estimate;
+      },
+    } as unknown as PublicClient;
+
+    return { client, calls, estimates };
+  };
+  const FIELDS = ["gas", "gasPrice", "maxFeePerGas", "maxPriorityFeePerGas"];
+  /** The gas and fee fields `args` carries, as strings: a failing BigInt comparison crashes jest. */
+  const carried = (args: Record<string, unknown>) =>
+    Object.fromEntries(
+      FIELDS.filter((field) => args[field] !== undefined).map((f) => [f, String(args[f])]),
+    );
+
+  it("runs with the gas and the fees it was signed with, as an EIP-1559 transaction", async () => {
+    const { client, calls, estimates } = recording(100_000n);
+    const signedCall: SignedCall = {
+      to,
+      data: "0x1234",
+      value: 0n,
+      gas: 240_000n,
+      maxFeePerGas: 3_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+    };
+    const result = await simulate(client, from, signedCall);
+
+    expect({
+      ok: result.ok,
+      call: carried(calls[0]!),
+      // The estimate is of what it needs: it carries neither the signed gas nor the fees.
+      estimate: carried(estimates[0]!),
+    }).toEqual({
+      ok: true,
+      call: { gas: "240000", maxFeePerGas: "3000000000", maxPriorityFeePerGas: "1000000000" },
+      estimate: {},
+    });
+  });
+
+  it("runs with the gas price it was signed with, as a legacy transaction, mixing no fee kinds", async () => {
+    const { client, calls } = recording(100_000n);
+    const signedCall: SignedCall = {
+      to,
+      data: "0x",
+      value: 1n,
+      gas: 120_000n,
+      gasPrice: 7_000_000_000n,
+    };
+    await simulate(client, from, signedCall);
+
+    expect(carried(calls[0]!)).toEqual({ gas: "120000", gasPrice: "7000000000" });
+  });
+
+  it("runs a gas limit below what it needs without that limit, leaving its refusal to the sender", async () => {
+    // The signed limit is short of the estimate: the call would only fail out of gas, and say so
+    // as a revert. The estimate is what the caller refuses it with, naming both.
+    const { client, calls } = recording(100_000n);
+    const signedCall: SignedCall = {
+      to,
+      data: "0x",
+      value: 0n,
+      gas: 50_000n,
+      maxFeePerGas: 3_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+    };
+    const result = await simulate(client, from, signedCall);
+
+    expect({ ok: result.ok, gas: result.ok ? String(result.gas) : undefined }).toEqual({
+      ok: true,
+      gas: "100000",
+    });
+    expect(carried(calls[0]!)).toEqual({
+      maxFeePerGas: "3000000000",
+      maxPriorityFeePerGas: "1000000000",
+    });
+  });
+
+  it("runs a plain call with neither gas nor fees", async () => {
+    const { client, calls, estimates } = recording(100_000n);
+    await simulate(client, from, { to, data: "0x", value: 0n });
+
+    expect([carried(calls[0]!), carried(estimates[0]!)]).toEqual([{}, {}]);
   });
 });

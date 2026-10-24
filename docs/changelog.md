@@ -155,7 +155,8 @@ or locked down in the transaction counts what is left, and one that cannot be re
 block, or a call that returns other data or uses other gas) is refused where its token is limited;
 each allowance is its own permission, on the token or through Permit2 and the wallet's or its Pot's,
 and they add up. A wallet's EVM transaction is measured whole, with the gas and fees it is then
-signed with, and signed exactly as measured.
+signed with, and signed exactly as measured; `sauce send` simulates a transaction signed elsewhere
+with the gas and fees it was signed with.
 An approval of Permit2 for a limited token is refused: it makes the wallet's earlier Permit2
 allowances of the token spendable again, which the transaction does not report. An approval of a
 token whose decimals cannot be read is refused where it is limited, and the wallet's own Pot is no
