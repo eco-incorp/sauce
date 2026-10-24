@@ -234,6 +234,18 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
         "const both = !!(PancakeswapV3.Factory) || !!(UniswapV3.Factory);\nreturn both;",
       ],
       ["base", 8453, "return 1 && UniswapV3.Factory;", "return 1 && !!(UniswapV3.Factory);"],
+      [
+        "base",
+        8453,
+        "const fs = [UniswapV3.Factory, UniswapV3.QuoterV2];\nreturn fs[0] || fs[1];",
+        "const fs = [UniswapV3.Factory, UniswapV3.QuoterV2];\nreturn !!(fs[0]) || !!(fs[1]);",
+      ],
+      [
+        "base",
+        8453,
+        "const r = { a: { f: UniswapV3.Factory } };\nconst g = r.a;\nreturn g.f || 0;",
+        "const r = { a: { f: UniswapV3.Factory } };\nconst g = r.a;\nreturn !!(g.f) || 0;",
+      ],
     ] as const) {
       const program = hex(chain, `function main() {\n${body}\n}`);
       expect(program).toBe(hex(chain, `function main() {\n${normalized}\n}`));
