@@ -930,28 +930,24 @@ describe("the guard", () => {
     const MEDDLER = getAddress("0x9999999999999999999999999999999999999999");
     const twenty = parseUnits("20", 6);
     const logs = [approval(MEDDLER, POT, SPENDER, 1n), approval(USDC, POT, SPENDER, twenty)];
+    // A node that answers as a consistent one does (the block it made, each call's gas), so every
+    // read stands, and that lowers USDC's allowance after the meddler is read in the same request.
     const meddled = {
       ...client(logs),
-      simulateBlocks: async ({
-        blocks,
-      }: {
-        blocks: Array<{ calls: Array<{ to?: Address; data?: Hex }> }>;
-      }) => {
+      simulateBlocks: async (request: SimulateRequest) => {
         let lowered = false;
 
         return [
-          {
-            calls: blocks[0]!.calls.map((call) => {
-              if (!isAllowanceRead(call)) return { status: "success", logs, data: "0x" };
-              if (getAddress(call.to!) === MEDDLER) {
-                lowered = true;
+          simulated(request, request.blockNumber ?? HEAD, (call) => {
+            if (!isAllowanceRead(call)) return { status: "success", logs, data: "0x" };
+            if (getAddress(call.to!) === MEDDLER) {
+              lowered = true;
 
-                return { status: "success", logs: [], data: word(1n) };
-              }
+              return { status: "success", logs: [], data: word(1n) };
+            }
 
-              return { status: "success", logs: [], data: word(lowered ? 0n : twenty) };
-            }),
-          },
+            return { status: "success", logs: [], data: word(lowered ? 0n : twenty) };
+          }),
         ];
       },
     } as unknown as PublicClient;
@@ -964,10 +960,15 @@ describe("the guard", () => {
       .evm(meddled, cook)
       .then(
         () => "let through",
-        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
       );
 
-    expect(verdict).toBe("tokens.USDC");
+    // Refused for the 20 read, not for an allowance that could not be read.
+    expect(verdict).toMatch(
+      new RegExp(
+        `this transaction approves ${SPENDER} for 20 USDC, more than the 10 USDC tokens\\.USDC leaves room for`,
+      ),
+    );
   });
 
   it("counts the allowance a transaction leaves, as the chain holds it after, not the last it reported", async () => {
