@@ -477,6 +477,11 @@ function compileForChain(
   // own packages (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export
   // neither name, and a name the program does not read (`probeQuestions`) is none the rewrites
   // touch. A `pot` or `self` that is one of them is the caller's value, never the Pot.
+  //
+  // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
+  // with the same options as the compile, so its refusal is one the compile raises too: the probe's
+  // names are left free and the compile below reports its own refusal. Were the compile to succeed
+  // anyway, the probe's refusal is thrown instead, so nothing compiles on an answer never given.
   const ambient = options.ambient ?? [];
   // The caller's resolvers, as this compile reads them: each answers a question as it first did, so
   // the probe and the compile read the same modules (`firstAnswers`). The next compile asks afresh.
@@ -486,25 +491,44 @@ function compileForChain(
   const probe = ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
     ? undefined
     : probeQuestions(sauce);
+  let callerNames: ReadonlySet<string> = new Set();
+  let probeRefusal: { readonly error: unknown } | undefined;
+  if (probe !== undefined) {
+    try {
+      callerNames = ambientNamesOf(
+        {
+          target,
+          resolve,
+          resolvePackage,
+          defines,
+          ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
+          contracts: options.contracts,
+          ambient,
+        },
+        probe.names,
+        probe.imports,
+        probe.declared,
+      );
+    } catch (error) {
+      probeRefusal = { error };
+    }
+  }
   const bound = new Set([
     ...Object.keys(options.defines ?? {}),
     ...Object.keys(options.contracts ?? {}),
-    ...(probe === undefined
-      ? []
-      : ambientNamesOf(
-          {
-            target,
-            resolve,
-            resolvePackage,
-            defines,
-            ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
-            contracts: options.contracts,
-            ambient,
-          },
-          probe.names,
-          probe.imports,
-        )),
+    ...callerNames,
   ]);
+  // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
+  // rewrite makes then rests on no answer, and the probe's own refusal, which the compile would
+  // raise too, is reported in its place.
+  const readingBound = <T>(rewrite: () => T): T => {
+    if (probeRefusal === undefined) return rewrite();
+    try {
+      return rewrite();
+    } catch {
+      throw probeRefusal.error;
+    }
+  };
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. The compiler tells the two apart; nothing here has to.
@@ -558,19 +582,21 @@ function compileForChain(
   let stoppable: readonly string[] | undefined;
   let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
   if (chain.kind === "svm") {
-    const lowered = rewriteSvmTokenSyntax(
-      source,
-      svmTokenValues(tokenMap, options.defines),
-      svmTokenRows(chain),
-      // The caller's values, which a holder may name as a key: its defines.
-      new Map(
-        Object.entries(options.defines ?? {}).filter(
-          (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
+    const lowered = readingBound(() =>
+      rewriteSvmTokenSyntax(
+        source,
+        svmTokenValues(tokenMap, options.defines),
+        svmTokenRows(chain),
+        // The caller's values, which a holder may name as a key: its defines.
+        new Map(
+          Object.entries(options.defines ?? {}).filter(
+            (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
+          ),
         ),
+        native,
+        new Set(stops),
+        bound,
       ),
-      native,
-      new Set(stops),
-      bound,
     );
     if (lowered.rewrote) {
       source = lowered.source;
@@ -587,11 +613,13 @@ function compileForChain(
     }
   } else {
     absorb(
-      rewriteTokenMembers(
-        source,
-        tokenMap,
-        native === undefined ? undefined : { symbol: native, chain: chain.slug },
-        bound,
+      readingBound(() =>
+        rewriteTokenMembers(
+          source,
+          tokenMap,
+          native === undefined ? undefined : { symbol: native, chain: chain.slug },
+          bound,
+        ),
       ),
     );
     absorb(rewriteTokenFactory(source));
@@ -601,11 +629,13 @@ function compileForChain(
   if (options.accessors !== false) {
     const accessorOpts: ProtocolRewriteOptions =
       typeof options.accessors === "object" ? options.accessors : {};
-    const rewrittenAccessors = rewriteProtocolAccessors(
-      source,
-      chain,
-      { ...accessorOpts, existingContracts: contracts },
-      bound,
+    const rewrittenAccessors = readingBound(() =>
+      rewriteProtocolAccessors(
+        source,
+        chain,
+        { ...accessorOpts, existingContracts: contracts },
+        bound,
+      ),
     );
     if (rewrittenAccessors.rewrote) {
       if (chain.kind === "svm") {
@@ -650,6 +680,8 @@ function compileForChain(
       error
     );
   }
+  // The compile succeeded where the probe was refused: no answer the probe gave stands behind it.
+  if (probeRefusal !== undefined) throw probeRefusal.error;
   const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
@@ -693,38 +725,38 @@ function svmTokenValues(
 /**
  * What the probe asks about `sauce`, from the parse every rewrite reads it with (`parseSauce`): the
  * Pot's names (`pot`, `self`) among the identifiers it reads, as the parser names them (an escaped
- * spelling, `p\u006ft`, is the name it spells; a member's name, `ctx.self()`, is none), and its
- * import declarations as written, which the probe's entry repeats so that the compiler loads the
- * modules the compile does. A program that does not parse asks nothing: no rewrite reads it either.
+ * spelling, `p\u006ft`, is the name it spells; a member's name, `ctx.self()`, is none); its import
+ * declarations as written, which the probe's entry repeats so that the compiler loads the modules
+ * the compile does; and every identifier it writes, an import's binding included, which the probe's
+ * own function is named apart from. A program that does not parse asks nothing: no rewrite reads
+ * it either.
  */
 function probeQuestions(sauce: string): {
   readonly names: readonly string[];
   readonly imports: readonly string[];
+  readonly declared: ReadonlySet<string>;
 } {
   let program: AstNode;
   try {
     program = parseSauce(sauce);
   } catch {
-    return { names: [], imports: [] };
+    return { names: [], imports: [], declared: new Set() };
   }
   const members = new Set<AstNode>();
   walk(program, (n) => {
     if (n.type === "MemberExpression" && n.computed !== true) members.add(n.property as AstNode);
   });
   const names = new Set<string>();
+  const declared = new Set<string>();
   walk(program, (n) => {
     const name = (n as { name?: unknown }).name;
-    if (
-      n.type === "Identifier" &&
-      !members.has(n) &&
-      (name === POT_NAME || name === RETIRED_POT_NAME)
-    ) {
-      names.add(name);
-    }
+    if (n.type !== "Identifier" || typeof name !== "string") return;
+    declared.add(name);
+    if (!members.has(n) && (name === POT_NAME || name === RETIRED_POT_NAME)) names.add(name);
   });
   const imports = (program.body as AstNode[])
     .filter((statement) => statement.type === "ImportDeclaration")
     .map((statement) => sauce.slice(statement.start, statement.end));
 
-  return { names: [...names], imports };
+  return { names: [...names], imports, declared };
 }
