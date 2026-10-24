@@ -2,7 +2,7 @@
 
 # PancakeSwap V2 (`pancakeswap-v2`)
 
-The most popular DEX on BNB Chain using the constant product AMM model. Forked from Uniswap V2 with additional features like yield farming and lottery.
+DEX on BNB Chain using the constant product AMM model. Forked from Uniswap V2 with additional features like yield farming and lottery.
 
 | Fact | Value |
 | --- | --- |

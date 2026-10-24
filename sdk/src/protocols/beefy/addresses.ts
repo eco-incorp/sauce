@@ -19,7 +19,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 137,
     chainName: "Polygon",
     addresses: {
-      BIFI: "0xFbdd194376de19a88F4A68671C339563c427310d",
+      BIFI: "0xFbdd194376De19A88f4a68671C339563C427310D",
     },
   },
   {

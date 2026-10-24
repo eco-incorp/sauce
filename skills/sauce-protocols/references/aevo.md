@@ -1,6 +1,6 @@
 # Aevo
 
-High-performance options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
+Options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
 
 ## Category
 

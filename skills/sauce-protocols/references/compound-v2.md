@@ -1,6 +1,6 @@
 # Compound V2
 
-Legacy algorithmic money market protocol on Ethereum. Pioneered cToken model where deposits mint interest-bearing tokens.
+Legacy algorithmic money market protocol on Ethereum. Uses a cToken model where deposits mint interest-bearing tokens.
 
 ## Category
 

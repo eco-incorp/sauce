@@ -60,5 +60,5 @@ an ABI import bound to the address), and the ABI functions are generated in
 - zkEVM architecture -- L2 to L1 withdrawals finalize with ZK proofs (typically 1-24 hours)
 - L1 to L2 deposits finalize after the batch containing the transaction is committed (~minutes)
 - For ERC-20 bridging, use the zkSync ERC20 Bridge contracts (separate from the DiamondProxy)
-- Canonical bridge -- no third-party risk, secured by zkSync's ZK proving system (Matter Labs)
+- Canonical bridge, secured by zkSync's ZK proving system (Matter Labs)
 - Audited

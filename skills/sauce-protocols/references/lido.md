@@ -1,6 +1,6 @@
 # Lido
 
-The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a rebasing liquid staking token. wstETH is the non-rebasing wrapped version for DeFi composability.
+Liquid staking protocol for Ethereum. Stake ETH and receive stETH, a rebasing liquid staking token. wstETH is the non-rebasing wrapped version for DeFi composability.
 
 ## Category
 
@@ -50,7 +50,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- TVL: $27.5B+. Largest DeFi protocol by TVL
+- TVL: $27.5B+
 - stETH rebases daily (balance increases). wstETH does not rebase (exchange rate increases instead)
 - Always use wstETH for DeFi integrations (Aave, Uniswap, etc.) since rebasing tokens cause issues
 - submit() requires ETH sent as msg.value. The referral parameter can be zero address

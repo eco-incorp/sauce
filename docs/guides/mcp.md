@@ -139,8 +139,8 @@ configure. Your own endpoint is optional, and faster ([Use your own endpoints](#
   agent and send from them, each under a policy, a spending limit you set. They are handy for
   experiments with small amounts: [What a local server keeps](mcp-local.md).
 
-It builds transactions only on the supported chains, and on a preview chain it compiles and
-simulates but refuses to build ([Supported and preview chains](mcp-tools.md#supported-and-preview-chains)).
+It builds transactions only on the supported chains. On a preview chain it compiles and reads, but
+it cannot simulate there, and it refuses to build ([Supported and preview chains](mcp-tools.md#supported-and-preview-chains)).
 
 ## Share the setup with your project
 
@@ -215,8 +215,10 @@ In an agent's configuration that is `"args": ["mcp", "--config", "rpc.json"]`. A
 4. if none has one, a plain error naming the chain and saying to pass `rpcUrl`.
 
 `sauce_chains` says where the server reads each chain: `config`, `public` or `none`. The server
-reads no environment variable. `sauce mcp --offline` reaches no network of its own: no public
-endpoint, and no install of its packages, which must already be in place.
+reads no environment variable for an endpoint. Over stdio it reads one only as a password: the one
+`--password-env` names, or the one an agent names with `sauce_wallet_enable { env }`; over HTTP it
+reads none. `sauce mcp --offline` reaches no network of its own: no public endpoint, and no
+install of its packages, which must already be in place.
 
 A provider URL usually carries a key, so no URL of yours is ever returned, logged or quoted, from
 the call or from the file. That covers results and errors, including an upstream error that

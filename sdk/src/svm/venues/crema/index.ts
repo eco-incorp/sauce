@@ -502,7 +502,7 @@ export async function fetchCremaPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like orca-whirlpool/raydium-clmm). */
+/** The Crema Finance venue: a concentrated-liquidity AMM with Orca Whirlpool's layout and math. */
 export const crema = {
   slug: SLUG,
   programId: CREMA_PROGRAM_ID,

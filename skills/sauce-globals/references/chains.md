@@ -3,8 +3,8 @@
 # Chain globals
 
 A chain name qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). Each line says whether the initial
-release supports the chain: a program compiles and simulates on every chain, and its transactions
-are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP
+release supports the chain: a program compiles for every chain, and it simulates and its
+transactions are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP
 server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a
 preview chain.
 

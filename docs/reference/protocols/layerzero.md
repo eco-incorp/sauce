@@ -8,7 +8,7 @@
 > page lists the chains it is deployed on, the name a program writes for each of its contracts, and
 > the functions a program can call.
 
-Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT tokens and arbitrary message passing across 50+ chains.
+Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT tokens and arbitrary message passing.
 
 | Fact | Value |
 | --- | --- |
@@ -21,7 +21,7 @@ Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT t
 
 - This is a messaging protocol, not a direct token bridge. Token bridging is done via OFT (Omnichain Fungible Token) contracts built on top of LayerZero
 - Uses endpoint IDs (dstEid) for chain identification, NOT EVM chain IDs
-- Same endpoint address across most chains (except zkSync)
+- The endpoint address is the same on most chains; zkSync's and Arc's differ
 - Use `quote` to estimate fees before sending
 - Finality: depends on DVN (Decentralized Verifier Network) configuration, typically 1-5 minutes
 - Powers Stargate V2, OFT tokens, and many cross-chain dApps

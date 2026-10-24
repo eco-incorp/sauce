@@ -2,7 +2,7 @@
 
 # MUX Protocol (`mux-protocol`)
 
-Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs for best execution with shared liquidity pool.
+Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetual DEXs with a shared liquidity pool.
 
 | Fact | Value |
 | --- | --- |

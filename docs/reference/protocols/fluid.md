@@ -19,7 +19,7 @@ Liquidity layer that unifies lending and DEX liquidity. Deposited assets simulta
 
 ## Notes
 
-- Novel architecture: deposited assets serve dual purpose as lending collateral AND DEX liquidity
+- Deposited assets serve dual purpose as lending collateral AND DEX liquidity
 - No interest rate mode selection -- all rates are algorithmically determined
 - Same contract address on Ethereum and Arbitrum
 - Built by the Instadapp team

@@ -1,6 +1,6 @@
 # Aave V2
 
-Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum, Polygon, and Avalanche.
+Legacy version of Aave lending protocol.
 
 ## When to use it
 

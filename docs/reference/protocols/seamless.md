@@ -41,7 +41,7 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Base](../chains/base.md) | pool | `0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7` | `Seamless.Pool` |
-| [Base](../chains/base.md) | poolAddressesProvider | `0x0E02EB705be564c2bF0067928A8f8DD89a82B26E` | `Seamless.PoolAddressesProvider` |
+| [Base](../chains/base.md) | poolAddressesProvider | `0x0e02eB705Be564c2bF0067928A8f8DD89A82B26E` | `Seamless.PoolAddressesProvider` |
 
 ## ABI
 

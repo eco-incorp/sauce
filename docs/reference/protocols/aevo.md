@@ -8,7 +8,7 @@
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.
 
-High-performance options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
+Options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
 
 | Fact | Value |
 | --- | --- |
@@ -36,7 +36,7 @@ On Ethereum, `Aevo` is a namespace: its contracts need no import.
 
 ```ts
 function main() {
-  // Ethereum's depositContract, `0x4082C9647c098a6493Fb499EaE63b5ce3259C574`.
+  // Ethereum's depositContract, `0x4082C9647c098a6493fb499EaE63b5ce3259c574`.
   require(Aevo.DepositContract != 0);
 }
 ```
@@ -45,7 +45,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../chains/ethereum.md) | depositContract | `0x4082C9647c098a6493Fb499EaE63b5ce3259C574` | `Aevo.DepositContract` |
+| [Ethereum](../chains/ethereum.md) | depositContract | `0x4082C9647c098a6493fb499EaE63b5ce3259c574` | `Aevo.DepositContract` |
 
 ## ABI
 

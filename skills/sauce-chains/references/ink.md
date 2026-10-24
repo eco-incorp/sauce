@@ -3,7 +3,8 @@
 # Ink
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Ink a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
@@ -13,7 +14,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `ink` |
 | Chain id | 57073 |
 | Kind | EVM |
@@ -33,7 +34,7 @@ function main() {
   const held = USDT0.balanceOf(ctx.self());
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDT0).balanceOf(ctx.self()) == held);
-  // `UniswapV4.PoolManager` is Ink's poolManager: `0x360e68faccca8ca495c1b759fd9eee466db9fb32`.
+  // `UniswapV4.PoolManager` is Ink's poolManager: `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32`.
   require(UniswapV4.PoolManager != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Ink.UniswapV4.PoolManager == UniswapV4.PoolManager);
@@ -54,5 +55,5 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` | `UniswapV4.StateView` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990` | `UniswapV4.StateView` |

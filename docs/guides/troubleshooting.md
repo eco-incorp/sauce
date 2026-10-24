@@ -69,9 +69,21 @@ sauce tx: building the cook transaction is refused: it involves optimism (Optimi
 **Cause.** The command builds and sends transactions only on Ethereum, Base, Arc and Solana. Every
 other chain is a preview chain.
 
-**Fix.** Compile and simulate there freely, and send on a supported chain. To ask for the chain,
+**Fix.** Compile and read there freely, and simulate and send on a supported chain. To ask for the chain,
 follow the two links the message prints: the first finds an existing request, the second opens a
 new one. No flag lifts the refusal ([Supported and preview chains](cli.md#supported-and-preview-chains)).
+
+### `the released engine … is not deployed on <chain>`
+
+```text
+sauce simulate: the released engine 0x0F50… is not deployed on arbitrum: this SDK's cook cannot run there
+```
+
+**Cause.** `sauce simulate` runs the cook on the released engine, which is deployed only on the
+supported chains. On a preview chain there is nothing for the cook to run on.
+
+**Fix.** Simulate on Ethereum, Base, Arc or Solana. On a preview chain, `compile`, `globals`,
+`price`, `pools` and `pot` still work.
 
 ## The command cannot reach the chain
 

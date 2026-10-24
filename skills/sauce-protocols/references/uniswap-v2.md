@@ -2,7 +2,7 @@
 
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
-Constant product AMM (x*y=k) with permissionless pair creation. The most forked DEX protocol in DeFi, deployed across 9 chains with identical interfaces.
+Constant product AMM (x*y=k) with permissionless pair creation. Deployed across 10 chains with identical interfaces.
 
 ## When to use it
 
@@ -159,6 +159,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Both tokens must be ERC20-approved to the Router before addLiquidity/swap
 - LP tokens must be ERC20-approved to the Router before removeLiquidity
 - For tokens with transfer taxes (fee-on-transfer), use `swapExactTokensForTokensSupportingFeeOnTransferTokens` instead (not in SDK but available on-chain)
-- Uniswap V2 is the simplest and most battle-tested DEX model; prefer V3 for better capital efficiency, but V2 for maximum compatibility and simplicity
+- Prefer V3 for better capital efficiency, but V2 for maximum compatibility and simplicity
 - On Arc (5042) the router's `WETH()` is a stub that always reverts with `UnsupportedProtocolError()`, so the ETH paths (`swapExactETHForTokens`, `addLiquidityETH`, …) revert. Trade USDC's ERC-20 `0x3600000000000000000000000000000000000000`; Arc's native coin is USDC and it has no canonical wrapped native
 - From a Pot program, `@sauce/router` trades a Uniswap V2 pair directly, with no router and no approval: `uniswapV2(pair, tokenIn, tokenOut, amountIn, 3000, minOut, recipient)` reads the pair's `getReserves`, prices the output in the program with the pair's fee in parts per million, transfers the input to the pair and calls `pair.swap` with empty `data`, returning the amount out. The direction is the sort order of `tokenIn` and `tokenOut` (`token0` is the lower address), so there is no argument to get wrong. The swap consumes its whole input or reverts; there is no refund path. `tryUniswapV2` takes the same arguments and returns `0`, moving nothing, when the pair cannot fill the whole input at the floor. The `uniswapV2Swap` action is the same call

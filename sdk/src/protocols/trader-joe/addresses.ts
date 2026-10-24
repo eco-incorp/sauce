@@ -15,7 +15,7 @@ export const deployments: ChainDeployment[] = [
     addresses: {
       // LB v2.2, at its Avalanche address: lbRouter.getFactory().
       lbFactory: "0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c",
-      lbRouter: "0x18556da13313f3532c54711497a8fedac273220e",
+      lbRouter: "0x18556DA13313f3532c54711497A8FedAC273220E",
     },
   },
   {

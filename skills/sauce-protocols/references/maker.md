@@ -50,7 +50,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- TVL: $8B+. sDAI is the preferred way to earn DSR yield (ERC-4626 compliant)
+- TVL: $8B+. sDAI earns DSR yield (ERC-4626 compliant)
 - DSR yield accrues automatically - sDAI appreciates against DAI over time
 - Approve DAI to sDAI contract before depositing
 - Pot is the internal DSR accumulator - chi() tracks the accumulated rate

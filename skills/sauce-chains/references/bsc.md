@@ -3,7 +3,8 @@
 # BNB Chain
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On BNB Chain a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
@@ -13,7 +14,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `bsc`; also `bnb`, `binance-smart-chain`, `bnb-smart-chain` |
 | Chain id | 56 |
 | Kind | EVM |
@@ -54,7 +55,7 @@ address.
 | [Celer Network](../../sauce-protocols/references/registry/celer.md) | bridge | `0xdd90E5E87A2081Dcf0391920868eBc2FFB81a1aF` | `Celer.Bridge` |
 | [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
 | [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
-| [DODO](../../sauce-protocols/references/registry/dodo.md) | dodoV2Proxy | `0x8F8Dd7DB1bDA5eD3da8C9dAf3bFA471c12d58486` | `Dodo.DODOV2Proxy` |
+| [DODO](../../sauce-protocols/references/registry/dodo.md) | dodoV2Proxy | `0x8F8Dd7DB1bDA5eD3da8C9daf3bfa471c12d58486` | `Dodo.DODOV2Proxy` |
 | [Gelato Network](../../sauce-protocols/references/registry/gelato.md) | automate | `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0` | `Gelato.Automate` |
 | [Hyperlane](../../sauce-protocols/references/registry/hyperlane.md) | mailbox | `0x2971b9Aec44bE4eb673DF1B88cDB57b96eefe8a4` | `Hyperlane.Mailbox` |
 | [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
@@ -87,10 +88,10 @@ address.
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613` | `UniswapV3.NonfungiblePositionManager` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0x78D78E420Da98ad378D7799bE8f4AF69033EB077` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2` | `UniswapV3.SwapRouter02` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x28e2ea090877bf75740558f6bfb36a5ffee9e9df` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x7a4a5c919ae2541aed11041a1aeee68f1287f95b` | `UniswapV4.PositionManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4` | `UniswapV4.StateView` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x1906c1d672b88cd1b9ac7593301ca990f94eae07` | `UniswapV4.UniversalRouter` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x28e2Ea090877bF75740558f6BFB36A5ffeE9e9dF` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x7A4a5c919aE2541AeD11041A1AEeE68f1287f95b` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xd13Dd3D6E93f276FAfc9Db9E6BB47C1180aeE0c4` | `UniswapV4.StateView` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x1906c1d672b88cD1B9aC7593301cA990F94Eae07` | `UniswapV4.UniversalRouter` |
 | [Venus](../../sauce-protocols/references/registry/venus.md) | comptroller | `0xfD36E2c2a6789Db23113685031d7F16329158384` | `Venus.Comptroller` |
 | [Venus](../../sauce-protocols/references/registry/venus.md) | vBNB | `0xA07c5b74C9B40447a954e1466938b865b6BBea36` | `Venus.VBNB` |
 | [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |

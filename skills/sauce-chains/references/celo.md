@@ -3,7 +3,8 @@
 # Celo
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Celo a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
@@ -13,7 +14,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `celo` |
 | Chain id | 42220 |
 | Kind | EVM |
@@ -53,4 +54,4 @@ address.
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8` | `UniswapV3.QuoterV2` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x5615CDAb10dc425a742d643d949a7F474C01abc4` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x288dc841A52FCA2707c6947B3A777c5E56cd87BC` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xbc21f8720babf4b20d195ee5c6e99c52b76f2bfb` | `UniswapV4.StateView` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xbc21f8720BABf4b20d195eE5C6e99c52b76F2bfb` | `UniswapV4.StateView` |

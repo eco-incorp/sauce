@@ -3,7 +3,8 @@
 # Zora
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Zora a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
@@ -13,7 +14,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `zora` |
 | Chain id | 7777777 |
 | Kind | EVM |
@@ -50,5 +51,5 @@ address.
 | --- | --- | --- | --- |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x0F797dC7efaEA995bB916f268D919d0a1950eE3C` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0xa00F34A632630EFd15223B1968358bA4845bEEC7` | `UniswapV2.Router` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x0575338e4c17006ae181b47900a84404247ca30f` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x385785af07d63b50d0a0ea57c4ff89d06adf7328` | `UniswapV4.StateView` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x0575338e4C17006aE181B47900A84404247CA30f` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x385785Af07d63b50d0a0ea57C4FF89D06adf7328` | `UniswapV4.StateView` |

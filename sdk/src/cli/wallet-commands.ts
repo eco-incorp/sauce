@@ -2,10 +2,14 @@
  * `sauce wallet new|list|address|import|export`, and `--wallet <name>` on every command that signs:
  * the wallet directory (`wallets.ts`) as commands, each password read from the one source named on
  * the command line (`password.ts`), and every wallet unlocked guarded by its policy (`policy.ts`).
+ * Only a wallet unlocked here is guarded: `--keystore`, `--private-key` and `--keypair` sign with no
+ * policy, even when `--keystore` names a wallet's own file.
  *
  * The key never reaches stdout, stderr or a log. `export` alone shows it, and only at a terminal,
  * after the person there types the wallet's name: it writes to the terminal itself, past the
- * scrubbing every other output goes through, so it cannot be piped or captured by an agent.
+ * scrubbing every other output goes through, so it is not in a pipe or a redirected stdout. That
+ * is no barrier to a program: one that runs the command in a pseudo-terminal answers the prompt
+ * and reads the key, and whoever can read the wallet's file and its password has the key anyway.
  */
 import { bytesToHex } from "viem";
 

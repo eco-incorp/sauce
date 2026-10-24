@@ -29,7 +29,6 @@ Base-native DEX with UniV2-style constant product pools (x*y=k). Features yield 
 
 - Standard Uniswap V2 fork interface; 0.3% fee per swap
 - Base-only deployment
-- For most Base swaps, Aerodrome has higher liquidity; use BaseSwap for pairs where Aerodrome has less depth or when BSWAP farming rewards are active
 - Both tokens must be ERC20-approved to the Router before swap/addLiquidity
 
 ## Its names in a program

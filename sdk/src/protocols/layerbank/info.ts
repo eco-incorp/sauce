@@ -4,8 +4,7 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "LayerBank",
   slug: "layerbank",
-  description:
-    "Leading lending protocol on Scroll. Compound V2 fork optimized for L2 rollups with low gas costs.",
+  description: "Lending protocol on Scroll. Compound V2 fork adapted for L2 rollups.",
   website: "https://layerbank.finance",
   github: "https://github.com/layerbank",
   category: "lending",

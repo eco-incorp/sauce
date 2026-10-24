@@ -8,7 +8,7 @@
 > page lists the chains it is deployed on, the name a program writes for each of its contracts, and
 > the functions a program can call.
 
-Permissionless interchain messaging protocol. Supports modular security with ISMs (Interchain Security Modules) across 150+ chains.
+Permissionless interchain messaging protocol. Supports modular security with ISMs (Interchain Security Modules).
 
 | Fact | Value |
 | --- | --- |

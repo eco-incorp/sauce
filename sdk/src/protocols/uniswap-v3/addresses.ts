@@ -23,10 +23,10 @@ export const deployments: ChainDeployment[] = [
     chainId: 143,
     chainName: "Monad",
     addresses: {
-      factory: "0x204faca1764b154221e35c0d20abb3c525710498",
-      swapRouter02: "0xfe31f71c1b106eac32f1a19239c9a9a72ddfb900",
-      quoterV2: "0x661e93cca42afacb172121ef892830ca3b70f08d",
-      nonfungiblePositionManager: "0x7197e214c0b767cfb76fb734ab638e2c192f4e53",
+      factory: "0x204FAca1764B154221e35c0d20aBb3c525710498",
+      swapRouter02: "0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900",
+      quoterV2: "0x661E93cca42AfacB172121EF892830cA3b70F08d",
+      nonfungiblePositionManager: "0x7197E214c0b767cFB76Fb734ab638E2c192F4E53",
     },
   },
   {

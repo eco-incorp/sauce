@@ -309,7 +309,7 @@ export async function fetchHeliumTreasuryPoolConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only, like gamma/heaven). */
+/** The Helium treasury venue: a one-way redemption of IOT or MOBILE for HNT from the subDAO treasury. */
 export const heliumTreasury = {
   slug: SLUG,
   programId: HELIUM_TREASURY_PROGRAM_ID,

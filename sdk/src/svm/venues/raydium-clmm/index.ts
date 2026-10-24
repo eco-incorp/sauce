@@ -470,7 +470,7 @@ export async function fetchRaydiumClmmConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
+/** The Raydium CLMM venue: a concentrated-liquidity AMM. */
 export const raydiumClmm = {
   slug: SLUG,
   programId: RAYDIUM_CLMM_PROGRAM_ID,

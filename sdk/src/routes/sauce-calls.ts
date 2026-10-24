@@ -69,8 +69,6 @@ import { kindOf, denormalizeToEvm, type ChainKindRef } from "./encode.js";
 import { toBigInt, toUniversalAddress } from "./normalize.js";
 import type { AddressInput, CallInput } from "./types.js";
 
-/** Verbatim re-export — sizing advice only, emits zero instructions. See the module doc above. */
-
 // ---------------------------------------------------------------------------
 // EVM
 // ---------------------------------------------------------------------------
@@ -146,13 +144,13 @@ export interface SauceEvmDeployPotCallParams {
 }
 
 /**
- * The leading `deployPot(owner, salt)` call a solver issues before its first `cook()` on a Pot that
+ * The `deployPot(owner, salt)` call that creates a Pot, sent before the first `cook()` on a Pot that
  * may not exist yet.
  *
  * The Kitchen defaults to the pinned release's. This helper reads no chain, so it does not know
  * whether that Kitchen has code where the call is sent: check the chain first.
  *
- * Send it as `{ to, data, value }`, or put it in a route's `calls` as `{ target, data, value }`:
+ * Send it as `{ to, data, value }`, or pass it where a call is taken as `{ target, data, value }`:
  * both fields are there ({@link SauceEvmCall}).
  */
 export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): SauceEvmCall {

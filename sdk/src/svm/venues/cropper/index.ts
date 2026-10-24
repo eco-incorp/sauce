@@ -356,7 +356,7 @@ export async function fetchCropperConfig(
   };
 }
 
-/** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
+/** The Cropper venue: a concentrated-liquidity AMM forked from Orca Whirlpool. */
 export const cropper = {
   slug: SLUG,
   programId: CROPPER_PROGRAM_ID,

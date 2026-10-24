@@ -5,18 +5,19 @@
 **Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
 
 > Everything a program can name on Monad: its tokens, and every protocol deployed there with the
-> name a program writes for each contract. Monad is a preview chain: programs compile and simulate
-> here, and the `sauce` command sends nothing.
+> name a program writes for each contract. Monad is a preview chain: programs compile here and the
+> reads work, but the released engine is not deployed here, so nothing is simulated or sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Monad a program
-compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`
+compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
+but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and simulate; no transaction is built or sent |
+| Support | preview: compile and read; no simulation, and no transaction is built or sent |
 | Slug (`--chain`) | `monad` |
 | Chain id | 143 |
 | Kind | EVM |
@@ -69,14 +70,14 @@ address.
 | [PancakeSwap V2](../protocols/pancakeswap-v2.md) | router | `0xB1Bc24c34e88f7D43D5923034E3a14B24DaACfF9` | `PancakeswapV2.Router` |
 | [Pendle](../protocols/pendle.md) | router | `0x888888888889758F76e7103c6CbF23ABbF58F946` | `Pendle.Router` |
 | [Permit2](../protocols/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
-| [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0x204faca1764b154221e35c0d20abb3c525710498` | `UniswapV3.Factory` |
-| [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0x7197e214c0b767cfb76fb734ab638e2c192f4e53` | `UniswapV3.NonfungiblePositionManager` |
-| [Uniswap V3](../protocols/uniswap-v3.md) | quoterV2 | `0x661e93cca42afacb172121ef892830ca3b70f08d` | `UniswapV3.QuoterV2` |
-| [Uniswap V3](../protocols/uniswap-v3.md) | swapRouter02 | `0xfe31f71c1b106eac32f1a19239c9a9a72ddfb900` | `UniswapV3.SwapRouter02` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x188d586ddcf52439676ca21a244753fa19f9ea8e` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016` | `UniswapV4.PositionManager` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x77395f3b2e73ae90843717371294fa97cc419d64` | `UniswapV4.StateView` |
-| [Uniswap V4](../protocols/uniswap-v4.md) | universalRouter | `0x0d97dc33264bfc1c226207428a79b26757fb9dc3` | `UniswapV4.UniversalRouter` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0x204FAca1764B154221e35c0d20aBb3c525710498` | `UniswapV3.Factory` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0x7197E214c0b767cFB76Fb734ab638E2c192F4E53` | `UniswapV3.NonfungiblePositionManager` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | quoterV2 | `0x661E93cca42AfacB172121EF892830cA3b70F08d` | `UniswapV3.QuoterV2` |
+| [Uniswap V3](../protocols/uniswap-v3.md) | swapRouter02 | `0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900` | `UniswapV3.SwapRouter02` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | positionManager | `0x5b7eC4a94fF9beDb700fb82aB09d5846972F4016` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x77395F3b2E73aE90843717371294fa97cC419D64` | `UniswapV4.StateView` |
+| [Uniswap V4](../protocols/uniswap-v4.md) | universalRouter | `0x0D97Dc33264bfC1c226207428A79b26757fb9dc3` | `UniswapV4.UniversalRouter` |
 
 ## Requesting support
 

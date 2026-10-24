@@ -92,6 +92,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Each Silo is an isolated two-asset market -- risk from one market cannot spread to others
 - `collateralOnly = true` gives higher LTV but your deposit cannot be lent out to borrowers
 - Use `SiloRepository.getSilo(assetAddress)` to find the Silo contract for any asset
-- Same SiloRepository address on Ethereum and Arbitrum
+- The SiloRepository address differs on Ethereum and Arbitrum
 - All deposit/repay operations require ERC-20 approval
 - TVL: $200M+. Audited

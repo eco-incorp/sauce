@@ -5,7 +5,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 1,
     chainName: "Ethereum",
     addresses: {
-      synapseBridge: "0x2796317b0fF8538F253012862c06787Adfb8cEB6",
+      synapseBridge: "0x2796317b0fF8538F253012862c06787Adfb8cEb6",
       cctpRouter: "0x12715a66773BD9C54534a01aBF01d05F6B4Bd35E",
     },
   },
@@ -13,7 +13,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 42161,
     chainName: "Arbitrum",
     addresses: {
-      synapseBridge: "0x6F4e8eba4d337f874AB57478AcC2Cb5BacDc19c9",
+      synapseBridge: "0x6F4e8eBa4D337f874Ab57478AcC2Cb5BACdc19c9",
     },
   },
   {
