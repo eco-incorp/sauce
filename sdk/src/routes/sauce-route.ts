@@ -135,6 +135,50 @@ type ChainRefResolved = ReturnType<typeof requireChain>;
 type DefineValue = bigint | boolean | number;
 
 /**
+ * A compile's options, read once as it begins, before any of the caller's callbacks runs. The
+ * probe of the names the caller binds and the compile both read these and never the caller's
+ * objects, which a `resolve` may change while it runs: the lists and records are copies the SDK
+ * alone holds. A contract's ABI is kept as given, by reference: the accessor pass tells a caller's
+ * binding from the registry's by its ABI's identity, and an ABI's contents bind no name.
+ */
+interface CompileInputs {
+  readonly target: CompileTarget | undefined;
+  readonly tokens: SauceCompileOptions["tokens"];
+  readonly resolve: ResolveModule | undefined;
+  readonly resolvePackage: ResolvePackage | undefined;
+  readonly defines: Readonly<Record<string, DefineValue>> | undefined;
+  readonly contracts: Readonly<ContractsConfig> | undefined;
+  readonly accessors: boolean | ProtocolRewriteOptions | undefined;
+  readonly ambient: string[] | undefined;
+  /** On Solana, the swaps at a price to hold to a stop (`SauceProgramOptions.stops`). */
+  readonly stops: readonly string[];
+}
+
+/** `options` read once (`CompileInputs`): each property read one time, each list and record copied. */
+function readCompileInputs(
+  options: SauceCompileOptions,
+  stops: readonly string[] = [],
+): CompileInputs {
+  const { target, tokens, resolve, resolvePackage, defines, contracts, accessors, ambient } =
+    options;
+
+  return {
+    target,
+    tokens: tokens === undefined ? undefined : { ...tokens },
+    resolve,
+    resolvePackage,
+    defines: defines === undefined ? undefined : { ...defines },
+    contracts:
+      contracts === undefined
+        ? undefined
+        : Object.fromEntries(Object.entries(contracts).map(([name, { abi }]) => [name, { abi }])),
+    accessors: typeof accessors === "object" ? { ...accessors } : accessors,
+    ambient: ambient === undefined ? undefined : [...ambient],
+    stops: [...stops],
+  };
+}
+
+/**
  * The chain-scoped values a compile gets beyond the caller's options. Internal to the SDK — passed
  * beside the options rather than inside them, so the public option surface stays what
  * `compileSauceRoute` documents. `compileSauceProgram` supplies one for the program it compiles.
@@ -214,7 +258,7 @@ export function compileScopedRoute(
   const { chain, compiled, source, derivedAccounts } = compileForChain(
     destination,
     sauce,
-    options,
+    readCompileInputs(options),
     scope,
   );
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
@@ -350,25 +394,25 @@ export function compileSauceProgram(
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
   const { args, stops, ...compile } = options;
+  const inputs = readCompileInputs(compile, stops);
   // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
   // NAMES travel as a scope for this program's chain, never in `defines`, so `defines` stays exactly
   // what the caller wrote.
-  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
+  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(inputs.ambient ?? [])]));
   const scope: RouteScope = {
-    chainDefines: (on) => definesOf(on, compile.tokens),
+    chainDefines: (on) => definesOf(on, inputs.tokens),
   };
   const program = compileForChain(
     resolved,
     source,
-    { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
+    { ...inputs, ambient: ambient.length > 0 ? ambient : inputs.ambient },
     scope,
-    stops,
     args === undefined ? undefined : entryWords(args),
   );
   if (args !== undefined) {
     checkEntryWords(args, program.entrySignature);
     const taken = program.entrySignature.params.find((param) =>
-      Object.hasOwn(compile.defines ?? {}, param.name),
+      Object.hasOwn(inputs.defines ?? {}, param.name),
     );
     if (taken !== undefined) {
       throw new RangeError(
@@ -407,15 +451,14 @@ export function compileSauceProgram(
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
  * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
  * because the bytecode depends on none of them — and none of the chain's ambient bundle beyond what
- * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller.
+ * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller. It reads the
+ * caller's options only as `inputs` holds them (`readCompileInputs`), never the caller's objects.
  */
 function compileForChain(
   destination: ChainRef,
   sauce: string,
-  options: SauceCompileOptions,
+  inputs: CompileInputs,
   scope: RouteScope,
-  /** On Solana, the swaps at a price to hold to a stop (`SauceProgramOptions.stops`). */
-  stops: readonly string[] = [],
   /** `main`'s arguments the program is compiled for, as words (`entryWords`). */
   args?: readonly (bigint | boolean | string)[],
 ): {
@@ -432,7 +475,7 @@ function compileForChain(
   readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
-  const target = options.target ?? defaultTargetFor(chain.kind);
+  const target = inputs.target ?? defaultTargetFor(chain.kind);
 
   if (chain.kind === "svm" && target !== "svm") {
     throw new Error(
@@ -449,7 +492,7 @@ function compileForChain(
   // token-registry.ts#resolveTokenMap). Computed unconditionally: the registry may supply symbols
   // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
   // On svm they are values only: the token syntax below still throws there, by name.
-  const tokenMap = resolveTokenMap(chain, options.tokens);
+  const tokenMap = resolveTokenMap(chain, inputs.tokens);
   // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
   // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
@@ -465,10 +508,10 @@ function compileForChain(
     tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
   const defines: Readonly<Record<string, DefineValue>> | undefined =
     chainValues === undefined
-      ? options.defines
-      : options.defines === undefined || Object.keys(options.defines).length === 0
+      ? inputs.defines
+      : inputs.defines === undefined || Object.keys(inputs.defines).length === 0
         ? chainValues
-        : { ...chainValues, ...options.defines };
+        : { ...chainValues, ...inputs.defines };
 
   // The names the compile binds beside the source: the caller's defines, its contract bindings and,
   // of the Pot's two names, each a caller's ambient module exports. The compiler says which:
@@ -482,12 +525,12 @@ function compileForChain(
   // with the same options as the compile, so its refusal is one the compile raises too: the probe's
   // names are left free and the compile below reports its own refusal. Were the compile to succeed
   // anyway, the probe's refusal is thrown instead, so nothing compiles on an answer never given.
-  const ambient = options.ambient ?? [];
+  const ambient = inputs.ambient ?? [];
   // The caller's resolvers, as this compile reads them: each answers a question as it first did, so
   // the probe and the compile read the same modules (`firstAnswers`). The next compile asks afresh.
-  const resolve = options.resolve === undefined ? undefined : firstAnswers(options.resolve);
+  const resolve = inputs.resolve === undefined ? undefined : firstAnswers(inputs.resolve);
   const resolvePackage =
-    options.resolvePackage === undefined ? undefined : firstAnswers(options.resolvePackage);
+    inputs.resolvePackage === undefined ? undefined : firstAnswers(inputs.resolvePackage);
   const probe = ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
     ? undefined
     : probeQuestions(sauce);
@@ -502,7 +545,7 @@ function compileForChain(
           resolvePackage,
           defines,
           ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
-          contracts: options.contracts,
+          contracts: inputs.contracts,
           ambient,
         },
         probe.names,
@@ -514,8 +557,8 @@ function compileForChain(
     }
   }
   const bound = new Set([
-    ...Object.keys(options.defines ?? {}),
-    ...Object.keys(options.contracts ?? {}),
+    ...Object.keys(inputs.defines ?? {}),
+    ...Object.keys(inputs.contracts ?? {}),
     ...callerNames,
   ]);
   // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
@@ -543,11 +586,11 @@ function compileForChain(
   // (`UniswapV3.Pool(<the call>).liquidity()`, a token's writes `Token(<the call>).transfer(...)`),
   // which the token and accessor passes below lower as written. It claims only calls, never
   // `<result>.<Sym>`, the token pass's balance read. EVM only, as contract bindings are.
-  if (options.accessors !== false && chain.kind === "evm") {
+  if (inputs.accessors !== false && chain.kind === "evm") {
     source = rewriteContractResults(source, chain).source;
   }
 
-  let contracts: ContractsConfig | undefined = options.contracts;
+  let contracts: ContractsConfig | undefined = inputs.contracts;
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
   // pass. The accessor pass's `pot` sugar rewrites a bare `pot` Identifier -> `ctx.self()`
@@ -585,16 +628,16 @@ function compileForChain(
     const lowered = readingBound(() =>
       rewriteSvmTokenSyntax(
         source,
-        svmTokenValues(tokenMap, options.defines),
+        svmTokenValues(tokenMap, inputs.defines),
         svmTokenRows(chain),
         // The caller's values, which a holder may name as a key: its defines.
         new Map(
-          Object.entries(options.defines ?? {}).filter(
+          Object.entries(inputs.defines ?? {}).filter(
             (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
           ),
         ),
         native,
-        new Set(stops),
+        new Set(inputs.stops),
         bound,
       ),
     );
@@ -626,9 +669,9 @@ function compileForChain(
     if (tokenRewrote) source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
 
-  if (options.accessors !== false) {
+  if (inputs.accessors !== false) {
     const accessorOpts: ProtocolRewriteOptions =
-      typeof options.accessors === "object" ? options.accessors : {};
+      typeof inputs.accessors === "object" ? inputs.accessors : {};
     const rewrittenAccessors = readingBound(() =>
       rewriteProtocolAccessors(
         source,
@@ -659,7 +702,7 @@ function compileForChain(
       defines,
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
-      ambient: options.ambient,
+      ambient: inputs.ambient,
       ...(args === undefined ? {} : { args }),
     });
   } catch (error) {

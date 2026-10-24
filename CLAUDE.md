@@ -910,9 +910,11 @@ named apart from every define, contract and name the program writes), with the c
 options and one more ambient module exporting the `pot` and `self` the parse reads, and reads each
 name the compiler refuses as exported twice; any other refusal is no answer: the names stay free,
 the compile reports its own refusal, and the probe's is thrown where the compile succeeds or a
-rewrite reading the answer refuses; both read the caller's resolvers through one snapshot per
-compile, `firstAnswers`; nothing of it is remembered between compiles, the compiler's own caches
-keep it cheap), or `ctx.self()`, is the Pot
+rewrite reading the answer refuses; both read the caller's options as `sauce-route.ts#readCompileInputs`
+read them once when the compile began, lists and records copied, so a callback changing the
+caller's objects reaches neither, and the caller's resolvers through one snapshot per compile,
+`firstAnswers`; nothing of it is remembered between compiles, the compiler's own caches keep it
+cheap), or `ctx.self()`, is the Pot
 and any other `pot` an ordinary variable (as on Solana, and for the accessor pass's bare `pot`,
 which becomes `ctx.self()`; on Solana the lowering consumes every such `pot` itself, as the Pot
 slot's key, or
