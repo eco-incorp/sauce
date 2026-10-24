@@ -595,7 +595,8 @@ describe("every binding constructor under every carrier, as a value of `&&` and 
   // A binding is a registry contract or an ABI bound with `.at`, `.view` or `.lib` (compiler
   // 2.6.0's `BindMethod`); a carrier is how a program holds it. Each combination is returned from a
   // `: bool` function, so an operand handed back fails with "a return value: expected a bool, found
-  // a number". What 2.6.0 cannot express is skipped, its message kept in `skipped`.
+  // a number". Every combination compiles, but the ones 2.6.0 cannot express, each refused with the
+  // compiler's own message (`REFUSED`); one that starts compiling, or any other error, fails.
   const A = "0x1111111111111111111111111111111111111111";
   const constructors: Record<string, string> = {
     registry: "UniswapV3.Factory",
@@ -617,12 +618,31 @@ describe("every binding constructor under every carrier, as a value of `&&` and 
     "imported export": (c) => ["", "k", `export const k = ${c};`],
   };
   const IMPORT = 'import IERC20 from "./artifacts/IERC20.json";';
-  const skipped: string[] = [];
+  const BY_POSITION = /a computed member of an object the compiler holds .* is not supported/;
+  const REFUSED: Record<string, RegExp> = {
+    "registry, record by position, ||": BY_POSITION,
+    "registry, record by position, &&": BY_POSITION,
+    "at, record by position, ||": BY_POSITION,
+    "at, record by position, &&": BY_POSITION,
+    "view, record by position, ||": BY_POSITION,
+    "view, record by position, &&": BY_POSITION,
+    "lib, record by position, ||": BY_POSITION,
+    "lib, record by position, &&": BY_POSITION,
+    // A module's `const` holds a word, and a registry contract is a binding.
+    "registry, imported export, ||":
+      /a module-scope `const k` must be initialized with a compile-time constant word/,
+    "registry, imported export, &&":
+      /a module-scope `const k` must be initialized with a compile-time constant word/,
+  };
   const cases = Object.entries(constructors).flatMap(([cn, c]) =>
     Object.entries(carriers).flatMap(([kn, carry]) =>
       (["||", "&&"] as const).map((op) => [`${cn}, ${kn}, ${op}`, carry(c), op] as const),
     ),
   );
+  it("covers 88 combinations: 78 that compile to the bool, 10 that 2.6.0 refuses", () => {
+    expect(cases).toHaveLength(88);
+    expect(cases.filter(([name]) => REFUSED[name] !== undefined)).toHaveLength(10);
+  });
   it.each(cases)("%s", (name, [pre, k, module], op) => {
     const helper = pre.startsWith("function") ? pre : "";
     const local = helper === "" ? pre : "";
@@ -637,18 +657,10 @@ describe("every binding constructor under every carrier, as a value of `&&` and 
       module !== undefined && path.replace(/^\.\//, "") === "m.js"
         ? new TextEncoder().encode(`${IMPORT}\n${module}\n`)
         : undefined;
-    let message: string | undefined;
-    try {
-      compileSauceProgram("base", source, { resolve });
-    } catch (error) {
-      message = (error as Error).message;
-    }
-    expect(message ?? "").not.toMatch(/expected a bool, found a number/);
-    if (message !== undefined) skipped.push(`${name}: ${message.split("\n")[0]}`);
-  });
-  afterAll(() => {
-    // Recorded for the reader of a failing run: what 2.6.0 cannot express here.
-    expect(skipped.filter((line) => /expected a bool, found a number/.test(line))).toEqual([]);
+    const compile = () => compileSauceProgram("base", source, { resolve });
+    const refused = REFUSED[name];
+    if (refused !== undefined) expect(compile).toThrow(refused);
+    else expect(compile).not.toThrow();
   });
 });
 
