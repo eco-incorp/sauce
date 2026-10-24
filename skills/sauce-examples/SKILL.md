@@ -23,8 +23,8 @@ correct program does a thing, and is not a template to fill in.
 ## Core model
 
 - **A program names no chain**: `--chain` picks one, and the chains a row lists are the ones it is
-  checked on. A chain marked (preview) compiles and simulates there, and its cook is checked to be
-  refused (`sauce-overview`); run its transaction on a supported chain.
+  checked on. A chain marked (preview) compiles there, and its cook is checked to be refused
+  (`sauce-overview`); simulate and run its transaction on a supported chain.
 - **Each program's header** says what it does, gives the `sauce` command that runs it with every
   `main` parameter named, what each is and its units, and one run on a supported chain with real
   values (`sauce-script` owns the format).
@@ -146,8 +146,8 @@ node ../sauce-typescript/examples/cook.mts --owner <address> --recipient <addres
 
 - **Filling an example in as a template.** Write the program the task needs; the example shows the
   idiom.
-- **Sending on a chain the row marks (preview).** Compile and simulate there; send on a supported
-  chain.
+- **Simulating or sending on a chain the row marks (preview).** Compile there; simulate and send on
+  a supported chain.
 - **Reading an example without its skill.** The skill each row names says why the program is written
   that way.
 

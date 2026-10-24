@@ -119,20 +119,21 @@ lists them all.
 
 On Arc the native coin is USDC: gas, a cook's value and the Kitchen's fee are paid in it, not ETH.
 
-On a preview chain a program still compiles and simulates, and every read works, but the command
-builds and sends nothing:
+On a preview chain a program still compiles and every read works, but the released engine is not
+deployed there, so nothing simulates, and the command builds and sends nothing:
 
-| On a preview chain                                                                 | Does                                                                           |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `compile`, `actions`, `simulate`, `globals`, `price`, `pools`, `inspect`, `verify` | What it does everywhere                                                        |
-| `pot`                                                                              | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
-| `tx`, `run`, `sign`, `pot --deploy`, `pot --format cast`                           | Refused                                                                        |
+| On a preview chain                                                     | Does                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `compile`, `actions`, `globals`, `price`, `pools`, `inspect`, `verify` | What it does everywhere                                                        |
+| `pot`                                                                  | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
+| `simulate`                                                             | Stops with exit 1: `the released engine … is not deployed on <chain>`          |
+| `tx`, `run`, `sign`, `pot --deploy`, `pot --format cast`               | Refused                                                                        |
 
 A refusal comes before the command reaches an endpoint or reads a key. The command exits 1 and
 says why, which chains are supported, and how to ask for the one it refused:
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana. On a preview chain a program still compiles, and simulate still runs it.
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana. On a preview chain a program still compiles, and globals, price, pools and pot's prediction still read; simulate does not run there, because the released engine is not deployed on it.
 To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10).
 ```
 

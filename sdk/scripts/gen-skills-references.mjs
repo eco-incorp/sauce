@@ -790,8 +790,10 @@ const DOCS_SITE = {
   noun: "page",
   /** What a reader of the manual also needs about the release's chains. */
   chainIndexNotes: [
-    "On a preview chain the `sauce` command and the MCP server still simulate and read:",
-    "`sauce simulate` and every read. What they refuse there, before any endpoint is reached or any",
+    "On a preview chain the `sauce` command and the MCP server still compile and read: `sauce",
+    "compile`, `sauce globals`, `sauce price`, `sauce pools` and `sauce pot`'s prediction. `sauce",
+    "simulate` does not run there: the released engine is not deployed on a preview chain, so the",
+    "simulation stops (exit 1). What they refuse there, before any endpoint is reached or any",
     "key is read, is building or sending a transaction;",
     "[the command's](../guides/cli.md#supported-and-preview-chains) and",
     "[the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. Every",
@@ -929,8 +931,8 @@ function renderGlobals(data) {
     "# Chain globals",
     "",
     "A chain name qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). Each line says whether the initial",
-    "release supports the chain: a program compiles and simulates on every chain, and its transactions",
-    "are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
+    "release supports the chain: a program compiles for every chain, and it simulates and its",
+    "transactions are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
     "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
     "preview chain.",
     "",
@@ -1078,7 +1080,8 @@ function supportLines(chain, supported, site) {
 
   return [
     `**Preview chain.** Sauce supports transactions on ${names} only. On ${chain.name} a program`,
-    "compiles and simulates (`sauce compile`, `sauce simulate`), but the `sauce`",
+    "compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),",
+    "but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`",
     "command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and",
     "`sauce pot --deploy` are refused,",
     `naming the supported chains and how to request this one${site === DOCS_SITE ? " (the last section)" : ""}.`,
@@ -1108,7 +1111,7 @@ function renderChain(chain, supported, site) {
   lines.push(
     "| Fact | Value |",
     "| --- | --- |",
-    `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and simulate; no transaction is built or sent"} |`,
+    `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and read; no simulation, and no transaction is built or sent"} |`,
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
     `| Chain id | ${chain.id} |`,
     `| Kind | ${kindName(chain.kind)} |`,
@@ -1453,7 +1456,8 @@ function renderChainIndex(data, site) {
   const path = site.chainIndex;
   const supported = `${andList(data.support.supported.map((c) => c.name))} (${data.support.supported.map((c) => code(c.slug)).join(", ")})`;
   const preview = [
-    "a program compiles and simulates there, but the `sauce` command and the MCP server build and",
+    "a program compiles and the reads work there, but it does not simulate (the released engine is not",
+    "deployed there), and the `sauce` command and the MCP server build and",
     "send no transaction, and say so with the supported chains and how to request that chain. To",
     `request one, look among the [existing requests](${data.support.issues}) and add your use case to`,
     `the chain's, or [open one](${data.support.newIssue}) with the chain-support issue form; each`,
@@ -2479,8 +2483,8 @@ function docsIntros(data) {
   const intros = {
     [site.chainIndex]:
       `Sauce knows ${data.chains.length} chains. On ${supported}, the \`sauce\` command builds and ` +
-      "sends transactions. Every other chain is a preview chain: programs compile and simulate " +
-      "there, and nothing is sent. Each chain has a page with its tokens and the protocols a " +
+      "sends transactions. Every other chain is a preview chain: programs compile there and the " +
+      "reads work, but nothing is simulated or sent. Each chain has a page with its tokens and the protocols a " +
       "program can call on it.",
     [site.protocolIndex]:
       "Every protocol a program can call by name, grouped by what it does: exchanges, lending " +
@@ -2525,8 +2529,8 @@ function docsIntros(data) {
       "there with the name a program writes for each contract. " +
       (chain.support === "supported"
         ? `The \`sauce\` command builds and sends transactions on ${chain.name}.`
-        : `${chain.name} is a preview chain: programs compile and simulate here, and the ` +
-          "`sauce` command sends nothing.");
+        : `${chain.name} is a preview chain: programs compile here and the reads work, but the ` +
+          "released engine is not deployed here, so nothing is simulated or sent.");
     intros[site.chainStocks(chain.slug)] =
       "A tokenized stock is a token that follows the price of a company's shares. These are the " +
       `ones on ${chain.name}, each with the symbol a program writes for it.`;

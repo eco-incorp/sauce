@@ -1228,6 +1228,60 @@ describe.each([
     expect(build(PROGRAM, { ambient: [specifier], ...served(modules) })).toEqual(callers());
   });
 
+  // The probe's own helper function, which the compiler would refuse beside a define, an import or a
+  // contract binding of its name, is named apart from every name the compile binds. Each is asked
+  // with a caller ambient module that does not export `pot` (the Pot, as with no ambient module to
+  // probe) and one that does (the caller's). On Solana a program may declare no `__sauce_` name
+  // the lowering might bring in, so an import of one is refused there however the probe answers.
+  const HELPER = "__sauce_probe";
+  const outcome = (source: string, options: Options) => {
+    try {
+      return build(source, options);
+    } catch (error) {
+      return { refused: (error as Error).message };
+    }
+  };
+  it.each<[string, string, Options]>([
+    ["a define", "", { defines: { [HELPER]: 5n } }],
+    ["a value import", `import { other as ${HELPER} } from "./lib.js";\n`, {}],
+    ["an ABI import", `import ${HELPER} from "./abi.json";\n`, {}],
+    ["a JSON document import", `import ${HELPER} from "./data.json" with { type: "json" };\n`, {}],
+    ["a contract binding", "", { contracts: { [HELPER]: { abi: [] } } }],
+  ])("%s named like the probe's helper leaves the answer the probe's", (_, prefix, extra) => {
+    const program = `${prefix}${PROGRAM}`;
+    const options = (text: string): Options => ({
+      ambient: ["./holder.js"],
+      ...extra,
+      ...served({
+        "./holder.js": text,
+        "./lib.js": "export const other = 1;",
+        "./abi.json": "[]",
+        "./data.json": '{"a": 1}',
+      }),
+    });
+    const free =
+      arm === "svm" && prefix !== ""
+        ? { refused: expect.stringContaining(`\`${HELPER}\` is reserved`) }
+        : pots();
+    expect(outcome(program, { ...options(OTHER), ambient: [] })).toEqual(free);
+    expect(outcome(program, options(OTHER))).toEqual(free);
+    expect(build(program, options(POT))).toEqual(
+      build(`${prefix}${PROGRAM.replace("return pot", `return ${holder}`)}`, options(POT)),
+    );
+  });
+
+  it("a caller ambient export named like the probe's helper is hidden by it, as by any local", () => {
+    for (const [exported, expected] of [
+      [`export const ${HELPER} = 3;`, pots],
+      [`export function ${HELPER}(): Uint256 { return 3; }`, pots],
+      [`export const ${HELPER} = 3;\n${POT}`, callers],
+    ] as const) {
+      expect(
+        build(PROGRAM, { ambient: ["./holder.js"], ...served({ "./holder.js": exported }) }),
+      ).toEqual(expected());
+    }
+  });
+
   // The program imports a dependency that imports a package the compile also takes as ambient, which
   // `resolvePackage` maps by importer. The compiler loads an entry's imports before the ambient
   // modules and a module once, so the ambient package is the module the dependency's import loaded.
@@ -1288,8 +1342,45 @@ describe.each([
       ...(arm === "evm" ? ["@sauce/router"] : []),
     ];
     expect(
-      ambientNamesOf({ target: arm === "svm" ? "svm" : "v12", ambient }, ["pot", "self"], []),
+      ambientNamesOf({ target: arm === "svm" ? "svm" : "v12", ambient }, ["pot", "self"], [], []),
     ).toEqual(new Set());
+  });
+
+  it("a probe refused for the program's own fault reports that fault, not a refusal of `self`", () => {
+    const options: Options = {
+      ambient: ["./holder.js"],
+      ...served({
+        "./holder.js": `export const self = ${holder};`,
+        "./lib.js": "export const other = 1;",
+      }),
+    };
+    const program = 'import { nope } from "./lib.js";\nfunction main(): Address { return self; }';
+    const message = refusal(program, options);
+    expect(message).toContain("`nope` is not exported by module");
+    expect(message).not.toContain("the Pot is `pot`, not `self`");
+    // Written right, the caller's `self` is its own.
+    expect(build(program.replace("nope", "other"), options)).toEqual(callers());
+  });
+
+  it("the probe reads only the compiler's refusal of an asked name two ambient modules export", () => {
+    const missing: Parameters<typeof ambientNamesOf>[0] = {
+      target: arm === "svm" ? "svm" : "v12",
+      ambient: ["./missing.js"],
+    };
+    // Any other refusal is no answer: it is thrown as the compiler raised it.
+    expect(() => ambientNamesOf(missing, ["pot"], [], [])).toThrow("./missing.js");
+    let thrown: unknown;
+    try {
+      ambientNamesOf(missing, ["pot"], [], []);
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as { diagnostics?: unknown }).diagnostics).toBeDefined();
+    // As a compile of a program that reads `pot` reports it, and one with nothing to probe.
+    const options = { ambient: ["./missing.js"] };
+    expect(refusal(PROGRAM, options)).toBe(
+      refusal("function main(): Uint256 { return 7; }", options),
+    );
   });
 });
 
