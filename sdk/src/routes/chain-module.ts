@@ -182,9 +182,13 @@ const MODULE_TEXT = new Map<string, string>();
  * them. A module only by the absolute path its installed specifier resolves to, which no import
  * can write (the compiler refuses an absolute import); an ABI also by a relative import joined to
  * its importer's directory and prefixed with `.` (`./@eco-incorp/sauce/chain/abi/…`), the way a
- * module imports it.
+ * module imports it. `own` is the modules one compile made for its own options (`chainNames`),
+ * which no other compile is served and nothing keeps once it returns.
  */
-export function chainModuleText(path: string): string | undefined {
+export function chainModuleText(
+  path: string,
+  own?: ReadonlyMap<string, string>,
+): string | undefined {
   const relative = path.startsWith(`.${CHAIN_MODULE_ROOT}/`);
   const absolute = relative ? path.slice(1) : path;
   if (!absolute.startsWith(`${CHAIN_MODULE_ROOT}/`)) return undefined;
@@ -198,7 +202,7 @@ export function chainModuleText(path: string): string | undefined {
   }
   const key = parts.join("/");
 
-  return ABI_TEXT.get(key) ?? (relative ? undefined : MODULE_TEXT.get(key));
+  return ABI_TEXT.get(key) ?? (relative ? undefined : (MODULE_TEXT.get(key) ?? own?.get(key)));
 }
 
 const widened = (descriptor: ContractDescriptor): string =>
@@ -356,8 +360,10 @@ export function chainNames(chain: CanonicalChain, options: ChainNamesOptions = {
   ].join("\n");
   // A compile with options of its own is served under a path of its own, so a module the compiler
   // keeps for the chain is never read for it; beside the plain one, so its ABIs are `./abi/…` too.
+  // Only the plain module is kept: one made for a compile's options is that compile's to serve
+  // (`RsCompileInput.modules`), so a process compiling with many keeps none of them.
   const path = isPlain ? `${chain.slug}.js` : `${chain.slug}-${hash(text)}.js`;
-  MODULE_TEXT.set(path, text);
+  if (isPlain) MODULE_TEXT.set(path, text);
   const names: ChainNames = { chain, path, text, namespaces, absentTokens, tokens };
   if (isPlain) plain.set(chain.id, names);
 

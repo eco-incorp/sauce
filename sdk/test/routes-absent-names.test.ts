@@ -11,6 +11,7 @@ import { getDescriptor } from "../src/descriptors/query.js";
 import { checkNames, withoutDead } from "../src/routes/absent-names.js";
 import {
   CHAIN_MODULE_ROOT,
+  chainModuleText,
   chainNames,
   INSTALLED_CHAIN_MODULE,
 } from "../src/routes/chain-module.js";
@@ -520,6 +521,23 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     ).toContain(
       getDescriptor("uniswap-v3", "Factory")!.perChainAddress[8453]!.slice(2).toLowerCase(),
     );
+  });
+
+  it("a names module a compile's own options make is served to that compile alone, and kept by none", () => {
+    // Each define set that shadows a registry name makes a module of its own. A process compiling
+    // with many (the MCP server, a page) must not keep one per set.
+    const base = requireChain("base");
+    for (let i = 1; i <= 5; i++) {
+      const value = BigInt(`0x${String(i).repeat(40)}`);
+      const names = chainNames(base, { defined: new Set(["USDT"]) });
+      expect(names.path).toMatch(/^base-[0-9a-f]{8}\.js$/);
+      const source = "function main(): Address { return USDT; }";
+      expect(hex("base", source, { defines: { USDT: value } })).toBe(
+        hex("base", `function main(): Address { return ${`0x${String(i).repeat(40)}`}; }`),
+      );
+      expect(chainModuleText(`${CHAIN_MODULE_ROOT}/${names.path}`)).toBeUndefined();
+    }
+    expect(chainModuleText(`${CHAIN_MODULE_ROOT}/base.js`)).toBeDefined();
   });
 
   it("the compile serves them to its own installation alone, whatever the check reads", () => {

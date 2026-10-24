@@ -708,6 +708,8 @@ function compileForChain(
           ]),
         ),
       },
+      // The names module made for this compile's options is served to this compile alone.
+      modules: new Map([[names.path, names.text]]),
       // A module the caller serves is checked as the entry is, and compiled as the entry is: its
       // ruled-out code blanked, a contract under `&&`/`||` as a value made the bool.
       checkModule: (path, text) => {

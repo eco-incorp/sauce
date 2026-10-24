@@ -128,13 +128,15 @@ export function makeResolve(
   own: ResolveModule | undefined,
   check?: (path: string, bytes: Uint8Array) => Uint8Array | undefined,
   refuse?: (error: Error) => void,
+  /** The names modules this compile alone serves (`RsCompileInput.modules`). */
+  modules?: ReadonlyMap<string, string>,
 ): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
   const utf8 = new TextEncoder();
 
   return (path) => {
     if (path === ENTRY) return entryBytes;
-    const names = chainModuleText(path);
+    const names = chainModuleText(path, modules);
     if (names !== undefined) return utf8.encode(names);
     if (path.startsWith("./") && inChainModuleRoot(path)) {
       refuse?.(new Error(`compileSauceRoute: ${namesRefusal(`\`${path}\` is`)}`));
@@ -297,6 +299,9 @@ export interface RsCompileInput {
    *  to refuse it, or returns the text to compile in its place: the entry is the caller's to read
    *  before it compiles. */
   checkModule?: (path: string, text: string) => string | undefined;
+  /** The names modules this compile made for its own options, by their path under the names'
+   *  root: served to this compile alone, and dropped with it, so a process keeps none. */
+  modules?: ReadonlyMap<string, string>;
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -478,7 +483,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   try {
     result = compile({
       ...sharedOptions(input, refusePackage),
-      resolve: makeResolve(input.source, input.resolve, check, refuse),
+      resolve: makeResolve(input.source, input.resolve, check, refuse, input.modules),
       ...(input.args === undefined ? {} : { args: [...input.args] }),
     });
   } catch (error) {
