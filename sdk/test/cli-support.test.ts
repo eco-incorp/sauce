@@ -2,7 +2,8 @@
  * The release's chain gate (`src/cli/support.ts`) through the `sauce` command, in process: every
  * command that builds or sends a transaction is refused on a preview chain BEFORE any network call
  * — an endpoint that records each request it gets stays untouched — and names the supported chains
- * and the chain's request; compile, simulate and the reads still run there.
+ * and the chain's request; compile and the reads still run there, and simulate is not gated (it
+ * reaches its chain, where the released engine's absence stops it).
  */
 import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -272,7 +273,7 @@ describe("still runs on a preview chain", () => {
     expect(recorded()).toContain("eth_getCode");
   });
 
-  it("simulates: the rehearsal reaches its chain", async () => {
+  it("does not gate simulate: the rehearsal reaches its chain", async () => {
     const { config, recorded } = await endpoints(10);
     const simulated = await sauce(
       ...["simulate", file("pay.sauce.ts", PAY), "--chain", "optimism", "--owner", OWNER],

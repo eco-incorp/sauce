@@ -7,8 +7,9 @@
  *
  * For the initial release the command supports transactions on four chains: Ethereum, Base, Arc
  * and Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
- * program for it compiles, and the command simulates, rehearses and reads there, but builds no
- * transaction for it to sign and sends none.
+ * program for it compiles, and the command's reads work there (`globals`, `price`, `pools`, `pot`'s
+ * prediction), but it builds no transaction for it to sign, sends none, and cannot simulate: the
+ * released engine is not deployed on a preview chain, so a rehearsal fails there on its own.
  *
  * {@link requireSupported} is the gate, called from the command functions both front ends call
  * (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s deployment, `sendCommand`,
@@ -16,8 +17,8 @@
  * a wallet's guard for every send it makes, and, where a front end reaches a network or a key
  * before those, from the front end too. Anything that leaves a transaction ready to sign — the
  * unsigned JSON included — or sends one is refused on a preview chain, each by its own chain: the
- * cook (`tx`, `run`), a Pot's deployment, a raw send (`send`) and a reclaim. Compiling, simulating
- * and reads are never refused.
+ * cook (`tx`, `run`), a Pot's deployment, a raw send (`send`) and a reclaim. Compiling and reads are
+ * never refused.
  *
  * A developer who needs another chain asks for it with a GitHub issue on the repository, from the
  * issue form `.github/ISSUE_TEMPLATE/chain-support.yml`, or adds a use case to the request already
@@ -35,7 +36,7 @@ import {
 } from "../chains/canonical.js";
 import { CliError } from "./args.js";
 
-/** `supported`: the release builds and sends transactions there. `preview`: compile and simulate. */
+/** `supported`: the release builds and sends transactions there. `preview`: compile and read only. */
 export type ChainSupport = "supported" | "preview";
 
 /** The chains the release supports, by slug, in the order the docs name them. */
@@ -263,8 +264,9 @@ export const supportedChainNames = (): string => listed(supportedChains().map((c
 /** One sentence of what a preview chain still does, for a help text or a note. */
 export const previewChainsNote = (): string =>
   `Transactions are built and sent only on ${supportedChainNames()}. ` +
-  "Every other chain is a preview chain: programs compile there, and simulate and reads work, " +
-  `but no transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
+  "Every other chain is a preview chain: programs compile there, and globals, price, pools and the " +
+  "Pot's prediction read, but the released engine is not deployed there, so simulate fails and no " +
+  `transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
 
 /** The refusal of `action` for the preview chains among `chains`; `undefined` when there is none. */
 export function previewRefusal(
@@ -286,7 +288,8 @@ export function previewRefusal(
     `${action} is refused: it involves ${named}, ${preview.length === 1 ? "a preview chain" : "preview chains"}. ` +
       `The sauce command and its MCP server build and send transactions ` +
       `only on ${supportedChainNames()}. On a preview chain a program still compiles, and ` +
-      "simulate still runs it.",
+      "globals, price, pools and pot's prediction still read; simulate does not run there, because " +
+      "the released engine is not deployed on it.",
     ...requests.map(
       ({ name, request }) =>
         `To ask for ${name}: add your use case to its request if there is one ` +
