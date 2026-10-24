@@ -18,6 +18,7 @@ import { getAddress, parseEther, type Address, type Hex } from "viem";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import {
   describeEvm,
+  erc20,
   fixture,
   potOwner,
   registered,
@@ -173,6 +174,74 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     expect(refused.code).toBe(1);
     expect(refused.stderr).toMatch(/chains allows ethereum, and this transaction is on base/);
     expect(await base.publicClient.getTransactionCount({ address: wallet })).toBe(nonce);
+  }, 120_000);
+
+  it("reads a cook's allowance on the block it was simulated on, and holds it to the limit", async () => {
+    // The Pot approves a spender: the guard reads the allowance in a replay of the cook on the
+    // block the cook was simulated on, and counts it only where the node runs it the same way.
+    const approve = join(work, "approve.sauce.ts");
+    writeFileSync(
+      approve,
+      [
+        "function main(spender: Address, amount: Uint256) {",
+        "  USDC.approve(spender, amount);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(wallets, "agent.policy.json"),
+      JSON.stringify({ chains: ["base"], tokens: { USDC: { perTransaction: "1" } } }),
+      { mode: 0o600 },
+    );
+    const allow = (amount: bigint) =>
+      sauce(
+        ...["run", approve, "--chain", "base", "--rpc-url", base.rpcUrl],
+        ...["--wallet", "agent", ...PASSWORD, "--json"],
+        ...["--args", RECIPIENT, amount.toString()],
+      );
+    const allowance = () =>
+      base.publicClient.readContract({
+        address: usdc,
+        abi: erc20,
+        functionName: "allowance",
+        args: [pot, RECIPIENT],
+      });
+    const nonce = await base.publicClient.getTransactionCount({ address: wallet });
+    const over = await allow(2_000_000n);
+    const overAllowance = await allowance();
+    const overNonce = await base.publicClient.getTransactionCount({ address: wallet });
+    const within = await allow(500_000n);
+    const reserved = readFileSync(join(wallets, "agent.ledger.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map(
+        (line) => JSON.parse(line) as { state: string; spend?: Record<string, { amount: string }> },
+      )
+      .filter((line) => line.state === "reserved")
+      .at(-1)?.spend?.["tokens.USDC"]?.amount;
+
+    expect({
+      over: over.code,
+      overSaid: over.stderr,
+      overAllowance: String(overAllowance),
+      overNonce: overNonce - nonce,
+      within: within.code,
+      withinAllowance: String(await allowance()),
+      reserved,
+    }).toEqual({
+      over: 1,
+      overSaid: expect.stringMatching(
+        new RegExp(
+          `this transaction approves ${RECIPIENT} for 2 USDC, more than the 1 USDC tokens\\.USDC leaves room for`,
+        ),
+      ) as unknown,
+      overAllowance: "0",
+      overNonce: 0,
+      within: 0,
+      withinAllowance: "500000",
+      reserved: "500000",
+    });
   }, 120_000);
 
   it("deploys its own Pot under a policy whose `to` allows that Pot, and refuses it otherwise", async () => {

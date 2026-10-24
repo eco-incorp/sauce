@@ -504,17 +504,59 @@ async function evmToken(
   return info.decimals === undefined ? {} : { decimals: info.decimals };
 }
 
+/**
+ * Where a plan was simulated: the block it ran on top of, the time of the block it made, and what
+ * the node reported of that block. A replay of the plan is the same execution only where it ran on
+ * that block, at that time, and the node reports the block it made alike.
+ */
+export interface SimulatedAt {
+  readonly base: bigint;
+  readonly time: bigint;
+  /** The block the simulation made, as the node reported it: parent, number, time, fees, limit. */
+  readonly header: string;
+}
+
 /** One call's outcome in a rehearsal of a plan: whether it succeeded, and its logs. */
 export interface Rehearsed {
   readonly status: "success" | "failure";
   readonly logs: readonly Log[];
   /** What it returned, or reverted with. */
   readonly data: Hex;
+  readonly gasUsed: bigint;
+  /** The block it was simulated on, the same for every call of a plan. */
+  readonly at: SimulatedAt;
 }
+
+/** What a node reports of a block it simulated, as one string to compare; `undefined` where it
+ *  names no parent, which no other simulation can be held to. */
+const headerOf = (block: {
+  readonly parentHash?: Hex | null;
+  readonly number?: bigint | null;
+  readonly timestamp?: bigint | null;
+  readonly baseFeePerGas?: bigint | null;
+  readonly gasLimit?: bigint | null;
+  readonly miner?: Address | null;
+  readonly mixHash?: Hex | null;
+}): string | undefined =>
+  block.parentHash === undefined || block.parentHash === null
+    ? undefined
+    : [
+        block.parentHash,
+        block.number,
+        block.timestamp,
+        block.baseFeePerGas,
+        block.gasLimit,
+        block.miner,
+        block.mixHash,
+      ]
+        .map((field) => String(field ?? "").toLowerCase())
+        .join("/");
 
 /**
  * `calls` rehearsed in order from `wallet` in one `eth_simulateV1` block, state carried from each to
- * the next and native transfers traced; `undefined` where the endpoint does not run it.
+ * the next and native transfers traced; `undefined` where the endpoint does not run it. It runs on
+ * the chain's head as read once here, named by number, at a time one second after it, so every
+ * replay of it ({@link allowancesAfter}) can run on the same block in the same context.
  */
 export async function rehearsePlan(
   client: PublicClient,
@@ -522,20 +564,18 @@ export async function rehearsePlan(
   calls: readonly TxRequest[],
 ): Promise<readonly Rehearsed[] | undefined> {
   try {
+    const head = await client.getBlock({ blockTag: "latest" });
+    const time = head.timestamp + 1n;
     const [block] = await client.simulateBlocks({
+      blockNumber: head.number,
       blocks: [
-        {
-          calls: calls.map((call) => ({
-            account: wallet,
-            to: call.to,
-            data: call.data,
-            value: call.value,
-          })),
-        },
+        { blockOverrides: { time }, calls: calls.map((call) => simulatedCall(wallet, call)) },
       ],
       traceTransfers: true,
       validation: false,
     });
+    const header = block === undefined ? undefined : headerOf(block);
+    const at = header === undefined ? undefined : { base: head.number, time, header };
 
     return (block?.calls ?? []).map((call) => ({
       status: call.status === "success" ? "success" : "failure",
@@ -545,11 +585,22 @@ export async function rehearsePlan(
         data: log.data,
       })),
       data: call.data,
+      gasUsed: call.gasUsed,
+      // A block the node names no parent of: no replay can be shown to run on it.
+      at: at ?? { base: head.number, time, header: "" },
     }));
   } catch {
     return undefined;
   }
 }
+
+/** `call`, sent from `wallet`, as a call of an `eth_simulateV1` block. */
+const simulatedCall = (wallet: Address, call: TxRequest) => ({
+  account: wallet,
+  to: call.to,
+  data: call.data,
+  value: call.value,
+});
 /** One allowance: `owner`'s of `token` to `spender`, on the token itself or through Permit2. */
 interface Permission {
   readonly channel: "erc20" | "permit2";
@@ -576,9 +627,11 @@ const sameLogs = (
  * What each of `permissions` allows once `calls` have run, from `wallet` in order. Each is read in a
  * simulation of its own: the calls rehearsed again in one `eth_simulateV1` block with that one
  * allowance read after them, so the read sees the state they leave and no other read can change it
- * (a token's `allowance()` may write). A read stands only where every call ran again as `original`,
- * their first rehearsal, saw it run: there, succeeded, with the same logs. `undefined` for one that
- * cannot be read so.
+ * (a token's `allowance()` may write). Every replay runs on the block `original`, the calls' first
+ * rehearsal, ran on, at its time, and a read stands only where the replay is that execution: the
+ * node reports the block it made alike, and every call ran again as it did there (succeeded, with
+ * the same logs, the same return data and the same gas). `undefined` for one that cannot be read
+ * so, which a limit naming its token refuses.
  */
 async function allowancesAfter(
   client: PublicClient,
@@ -588,12 +641,12 @@ async function allowancesAfter(
   permissions: readonly Permission[],
   permit2: string | undefined,
 ): Promise<Array<bigint | undefined>> {
-  const replay = calls.map((call) => ({
-    account: wallet,
-    to: call.to,
-    data: call.data,
-    value: call.value,
-  }));
+  const replay = calls.map((call) => simulatedCall(wallet, call));
+  const at = original[0]?.at;
+  // Run on a block no replay can be held to, or not all on one: nothing read of it stands.
+  if (at === undefined || at.header === "" || original.some((call) => call.at !== at)) {
+    return permissions.map(() => undefined);
+  }
 
   return Promise.all(
     permissions.map(async (each) => {
@@ -617,23 +670,34 @@ async function allowancesAfter(
             };
       try {
         const [block] = await client.simulateBlocks({
-          blocks: [{ calls: [...replay, { account: wallet, to: read.to, data: read.data }] }],
+          blockNumber: at.base,
+          blocks: [
+            {
+              blockOverrides: { time: at.time },
+              calls: [...replay, { account: wallet, to: read.to, data: read.data }],
+            },
+          ],
           traceTransfers: true,
           validation: false,
         });
         const results = block?.calls ?? [];
-        // A call that is missing, failed or ran otherwise here leaves another state than the
-        // transaction's, which says nothing of what it allows.
+        // Another block, or a call that is missing, failed or ran otherwise here, leaves another
+        // state than the transaction's, which says nothing of what it allows.
         const ranAgain =
+          block !== undefined &&
+          headerOf(block) === at.header &&
           results.length === calls.length + 1 &&
-          results
-            .slice(0, calls.length)
-            .every(
-              (result, at) =>
-                result.status === "success" &&
-                original[at] !== undefined &&
-                sameLogs(result.logs ?? [], original[at]!.logs),
+          results.slice(0, calls.length).every((result, index) => {
+            const first = original[index];
+
+            return (
+              first !== undefined &&
+              result.status === "success" &&
+              result.data.toLowerCase() === first.data.toLowerCase() &&
+              result.gasUsed === first.gasUsed &&
+              sameLogs(result.logs ?? [], first.logs)
             );
+          });
         const answer = results[calls.length];
 
         return ranAgain && answer?.status === "success" && answer.data.length >= 66

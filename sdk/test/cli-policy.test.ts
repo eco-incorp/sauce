@@ -43,6 +43,7 @@ import { v12Kitchen, v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
 import {
   guardOf,
   guardWallet,
+  measureEvm,
   noPolicyNote,
   ownPotDeployed,
   parsePolicy,
@@ -161,6 +162,53 @@ function reported(logs: readonly Log[], read: { to?: Address; data?: Hex }): big
   return amount;
 }
 
+/** The chain's head in every client below, and the time of each of its blocks. */
+const HEAD = 100n;
+const timeOf = (block: bigint): bigint => 1_700_000_000n + 12n * block;
+
+/** One call of a request to `eth_simulateV1`, as viem is given it. */
+interface SimulatedCall {
+  readonly account?: Address;
+  readonly to?: Address;
+  readonly data?: Hex;
+  readonly value?: bigint;
+  readonly gas?: bigint;
+  readonly nonce?: number;
+  readonly maxFeePerGas?: bigint;
+  readonly maxPriorityFeePerGas?: bigint;
+  readonly gasPrice?: bigint;
+}
+interface SimulateRequest {
+  readonly blockNumber?: bigint;
+  readonly blocks: ReadonlyArray<{
+    readonly blockOverrides?: { readonly time?: bigint };
+    readonly calls: readonly SimulatedCall[];
+  }>;
+}
+
+/**
+ * What a node answers `request` with, simulated on top of the block `base`: the block it made,
+ * fixed by `base` and the request's time override, and each call's outcome from `outcome`.
+ */
+const simulated = (
+  request: SimulateRequest,
+  base: bigint,
+  outcome: (
+    call: SimulatedCall,
+    index: number,
+  ) => { status: string; logs: readonly Log[]; data: Hex; gasUsed?: bigint },
+) => ({
+  number: base + 1n,
+  parentHash: keccak256(toBytes(`block ${base}`)),
+  timestamp: request.blocks[0]!.blockOverrides?.time ?? timeOf(base + 1n),
+  baseFeePerGas: 7n,
+  gasLimit: 30_000_000n,
+  calls: request.blocks[0]!.calls.map((call, index) => ({
+    gasUsed: 50_000n,
+    ...outcome(call, index),
+  })),
+});
+
 /** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. Its
  *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. A contract with no
  *  such function answers with no data, as viem reports it; a read of a contract in `unreadable`
@@ -178,26 +226,21 @@ function client(
 ): PublicClient {
   return {
     getChainId: async () => BASE.id,
-    simulateBlocks: async ({
-      blocks,
-    }: {
-      blocks: Array<{ calls: Array<{ to?: Address; data?: Hex }> }>;
-    }) => {
+    getBlock: async () => ({ number: HEAD, timestamp: timeOf(HEAD) }),
+    simulateBlocks: async (request: SimulateRequest) => {
       if (logs === null) throw new Error("the method eth_simulateV1 does not exist");
-      const reading = blocks[0]!.calls.some(isAllowanceRead);
+      const reading = request.blocks[0]!.calls.some(isAllowanceRead);
 
       return [
-        {
-          calls: blocks[0]!.calls.map((call) =>
-            isAllowanceRead(call)
-              ? remaining === null
-                ? { status: "failure", logs: [], data: "0x" }
-                : { status: "success", logs: [], data: word(remaining ?? reported(logs, call)) }
-              : replayFails && reading
-                ? { status: "failure", logs: [], data: "0x" }
-                : { status: "success", logs, data: "0x" },
-          ),
-        },
+        simulated(request, request.blockNumber ?? HEAD, (call) =>
+          isAllowanceRead(call)
+            ? remaining === null
+              ? { status: "failure", logs: [], data: "0x" }
+              : { status: "success", logs: [], data: word(remaining ?? reported(logs, call)) }
+            : replayFails && reading
+              ? { status: "failure", logs: [], data: "0x" }
+              : { status: "success", logs, data: "0x" },
+        ),
       ];
     },
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
@@ -988,6 +1031,154 @@ describe("the guard", () => {
       unread: "tokens.USDC",
       replayFailed: "tokens.USDC",
     });
+  });
+
+  it("reads every allowance on the block the transaction was simulated on, so no two reads come from different states", async () => {
+    // The cook allows A and B 20 USDC each and has one of them take its 20 back into the Pot: A on
+    // an even block, B on an odd one. Either way it logs the same transfer, Pot to Pot, and leaves
+    // 20 allowed. The chain's head moves on between requests, so a read on a block of its own would
+    // see A's taken on one and B's on the next: 0 and 0.
+    const A = getAddress("0x5555555555555555555555555555555555555555");
+    const B = getAddress("0x7777777777777777777777777777777777777777");
+    const twenty = parseUnits("20", 6);
+    const logs = [
+      approval(USDC, POT, A, twenty),
+      approval(USDC, POT, B, twenty),
+      transfer(USDC, POT, POT, twenty),
+    ];
+    const requests: SimulateRequest[] = [];
+    let head = 99n;
+    const moving = {
+      ...client(logs),
+      getBlock: async () => ({ number: head, timestamp: timeOf(head) }),
+      simulateBlocks: async (request: SimulateRequest) => {
+        requests.push(request);
+        // A request that names no block runs on the head, and the chain moves on.
+        const base = request.blockNumber ?? head++;
+        const taker = base % 2n === 0n ? A : B;
+
+        return [
+          simulated(request, base, (call) => {
+            if (!isAllowanceRead(call)) return { status: "success", logs, data: "0x" };
+            const spender = getAddress(`0x${call.data!.slice(98, 138)}`);
+
+            return { status: "success", logs: [], data: word(spender === taker ? 0n : twenty) };
+          }),
+        ];
+      },
+    } as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const verdict = await guarded({ tokens: { USDC: { perTransaction: "10" } } })
+      .evm(moving, cook)
+      .then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    // Each request's block and the time of the block it simulates: one for all of them.
+    const contexts = requests.map(
+      (request) => `${request.blockNumber}@${request.blocks[0]!.blockOverrides?.time}`,
+    );
+
+    expect({ verdict, requests: requests.length, contexts: [...new Set(contexts)] }).toEqual({
+      verdict: "tokens.USDC",
+      requests: 3,
+      contexts: [expect.stringMatching(/^99@\d+$/) as unknown],
+    });
+  });
+
+  it("refuses an allowance whose replay does not run as the transaction's own simulation did", async () => {
+    // The cook allows a spender 20 USDC; each replay reads 0 left. That stands only where the
+    // replay ran on the same block as the transaction's simulation, and each of its calls returned
+    // the same and used the same gas: otherwise the 0 is of another execution.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const logs = [approval(USDC, POT, SPENDER, parseUnits("20", 6))];
+    const drifting = (drift: "none" | "block" | "returns" | "gas" | "unservable") =>
+      ({
+        ...client(logs),
+        simulateBlocks: async (request: SimulateRequest) => {
+          const replay = request.blocks[0]!.calls.some(isAllowanceRead);
+          if (replay && drift === "unservable") throw new Error("header not found");
+          const base = (request.blockNumber ?? HEAD) + (replay && drift === "block" ? 1n : 0n);
+
+          return [
+            simulated(request, base, (call) =>
+              isAllowanceRead(call)
+                ? { status: "success", logs: [], data: word(0n) }
+                : {
+                    status: "success",
+                    logs,
+                    data: replay && drift === "returns" ? "0x02" : "0x01",
+                    gasUsed: replay && drift === "gas" ? 60_000n : 50_000n,
+                  },
+            ),
+          ];
+        },
+      }) as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const verdict = (drift: Parameters<typeof drifting>[0]) =>
+      guard.evm(drifting(drift), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+
+    expect({
+      none: await verdict("none"),
+      block: await verdict("block"),
+      returns: await verdict("returns"),
+      gas: await verdict("gas"),
+      unservable: await verdict("unservable"),
+    }).toEqual({
+      none: "let through",
+      block: "tokens.USDC",
+      returns: "tokens.USDC",
+      gas: "tokens.USDC",
+      unservable: "tokens.USDC",
+    });
+  });
+
+  it("replays a plan up to the call that leaves an allowance, each call as the plan sends it", async () => {
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const logs = [approval(USDC, POT, SPENDER, parseUnits("20", 6))];
+    const requests: SimulateRequest[] = [];
+    const recording = {
+      ...client(logs),
+      simulateBlocks: async (request: SimulateRequest) => {
+        requests.push(request);
+
+        return [
+          simulated(request, request.blockNumber ?? HEAD, (call) =>
+            isAllowanceRead(call)
+              ? { status: "success", logs: [], data: word(0n) }
+              : { status: "success", logs, data: "0x" },
+          ),
+        ];
+      },
+    } as unknown as PublicClient;
+    // A payment, then a cook whose Pot leaves the allowance.
+    const plan = [
+      { to: USDC, data: "0xa9059cbb" as Hex, value: 0n },
+      {
+        to: POT,
+        data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+        value: 1n,
+      },
+    ];
+    await measureEvm(recording, BASE, WALLET, plan);
+    const sent = (calls: readonly SimulatedCall[]) =>
+      calls.map((call) => `${call.account}>${call.to}:${call.data}:${call.value}`);
+
+    expect(requests.slice(1).map((request) => sent(request.blocks[0]!.calls))).toEqual([
+      [...sent(plan.map((call) => ({ account: WALLET, ...call }))), expect.any(String) as unknown],
+    ]);
   });
 
   it("holds an approval and a transfer of a token together, and reserves the approval in the day's total", async () => {
