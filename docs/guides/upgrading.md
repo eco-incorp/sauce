@@ -215,6 +215,11 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     (`"recipient": "self"`) and of the TypeScript token, deposit and actions APIs is unchanged, so
     a project-wide replace of `self` breaks them. An account you give for a slot derived from the
     Pot, the owner or the authority must be the account its derivation gives, or the command exits 2.
+11. **Test a name instead of calling `available(X)`.** A name the chain lacks is zero there.
+    Where you wrote `available(X)`, write `if (UniswapV3.Factory) { … }`, `if (!USDT) return 0;`,
+    `X != 0` or `X ? a : b`. The branch a test rules out is still not compiled, and the program's
+    bytes do not change. The call is refused, saying so. A use of the name outside such a branch,
+    and `require(X != 0)` on a chain without it, are refused at the use, naming the chain.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,

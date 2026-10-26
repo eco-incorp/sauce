@@ -4470,10 +4470,4 @@ declare global {
   /** The id of the chain the program is compiled for. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
-  /**
-   * Whether the destination chain has a registry contract or token, decided at compile time:
-   * `available(UniswapV3.Factory)`, `available(Arbitrum.UniswapV3.Factory)`, `available(USDT)`.
-   * A branch it rules out (`if`, `?:`, `&&`, `||`) is removed before anything in it resolves.
-   */
-  function available(name: bigint): boolean;
 }

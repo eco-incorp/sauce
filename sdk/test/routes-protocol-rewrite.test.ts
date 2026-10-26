@@ -1,22 +1,33 @@
 /**
- * Full protocol-accessor rewrite -- `Uniswap.UniversalRouter.execute(...)` ->
- * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `pot` -> `ctx.self()`.
- * See `src/routes/protocol-rewrite.ts`'s module doc for the design.
+ * The protocol names a program writes, and the pass that lowers what a module cannot hold.
+ *
+ * A contract of a protocol (`Uniswap.UniversalRouter.execute(...)`, `Base.Uniswap.UniversalRouter`,
+ * `Cctp.TokenMessenger` as an address) is declared by the chain's `@sauce/chain` module, so the
+ * compiler resolves it with no source rewrite: those tests compile the program and hold it to the
+ * program written with the binding or the address spelled out. What `rewriteProtocolAccessors`
+ * still lowers -- `<Protocol>.<method>(...)` through the default contract, a contract bound to
+ * another address (`<…>.<Contract>.at(addr)`, `<…>.<Interface>(addr)`), bare `pot` -> `ctx.self()`
+ * and the refusal of `self` -- is tested on the pass itself. See `src/routes/protocol-rewrite.ts`
+ * and `src/routes/absent-names.ts`.
  */
 import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
-import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
+import {
+  compileSauceProgram,
+  compileSauceRoute,
+  type SauceProgramOptions,
+} from "../src/routes/sauce-route.js";
 import { getDescriptor } from "../src/descriptors/query.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 
 const BASE = requireChain("base");
 const OPTIMISM = requireChain("optimism");
-const ETHEREUM = requireChain("ethereum");
 
 const BASE_UNIVERSAL_ROUTER = "0x6ff5693b99212da76ad316178a184ab56d299b43";
 const BASE_AAVE_POOL = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
 const ETHEREUM_AAVE_POOL = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2";
+const BASE_CCTP_TOKEN_MESSENGER = 232410083228790048339504449763962118892241342301n; // Cctp.TokenMessenger on base
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
@@ -38,121 +49,170 @@ const route = (
     options,
   );
 
-describe("rewriteProtocolAccessors: THE DECISIVE STEP -- a real protocol accessor for a real chain", () => {
-  it("Uniswap.UniversalRouter.execute(...) on Base compiles byte-identically to hand-written IUniswapV4_UniversalRouter.at(<addr>n).execute(...) with NO import line and NO baseDirs", () => {
-    const source = `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); }`;
-    const {
-      source: rewritten,
-      rewrote,
-      contracts,
-      accessorSites,
-    } = rewriteProtocolAccessors(source, BASE);
-    expect(rewrote).toBe(true);
-    expect(accessorSites).toBe(1);
-    expect(rewritten).toContain(
-      `IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER).toString()}n).execute`,
-    );
-    expect(Object.keys(contracts)).toEqual(["IUniswapV4_UniversalRouter"]);
+/** The bytes `source` compiles to for `chain`, names and all. */
+const bytes = (chain: string, source: string, options: SauceProgramOptions = {}): number[] =>
+  Array.from(compileSauceProgram(chain, source, options).bytecode);
 
-    const handWritten = `function main() { IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER)}n).execute("0x0a", ["0x00"], 0n); }`;
+/** The ABI of a registry contract, as a `contracts` entry named `name`. */
+const binding = (name: string, protocol: string, contract: string) => ({
+  [name]: { abi: getDescriptor(protocol, contract)!.abi },
+});
 
-    const a = compile(rewritten, { contracts });
-    const b = compile(handWritten, { contracts });
-    expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
-    expect(a.bytecode[0]!.length).toBeGreaterThan(0);
+/** The address a registry contract is deployed at on `chain`, as a SauceScript integer. */
+const deployedAt = (protocol: string, contract: string, chain: { readonly id: number }): string =>
+  BigInt(getDescriptor(protocol, contract)!.perChainAddress[chain.id]!).toString();
+
+describe("protocol accessors: THE DECISIVE STEP -- a real protocol accessor for a real chain", () => {
+  it("Uniswap.UniversalRouter.execute(...) on Base compiles byte-identically to hand-written IUniswapV4_UniversalRouter.at(<addr>).execute(...) with NO import line and NO baseDirs", () => {
+    const source = `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0); }`;
+    const handWritten = `function main() { IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER)}).execute("0x0a", ["0x00"], 0); }`;
+
+    const a = bytes("base", source);
+    const b = bytes("base", handWritten, {
+      contracts: binding("IUniswapV4_UniversalRouter", "uniswap-v4", "UniversalRouter"),
+    });
+    expect(a).toEqual(b);
+    expect(a.length).toBeGreaterThan(0);
+
+    // The module holds the name: the pass has nothing to rewrite.
+    const pass = rewriteProtocolAccessors(source, BASE);
+    expect(pass.rewrote).toBe(false);
+    expect(pass.source).toBe(source);
+    expect(pass.contracts).toEqual({});
   });
 
   it("end-to-end: a real accessor call on the destination chain produces exactly one cook() call", () => {
-    const built = route("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`);
+    const built = route("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0);`);
     expect(built.calls).toHaveLength(1);
   });
 });
 
-describe("rewriteProtocolAccessors: shape coverage (A-D)", () => {
+describe("protocol accessors: shape coverage (A-D)", () => {
   it("shape A: <Protocol>.<Contract>.<method> on the enclosing chain", () => {
-    const source = `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); }`;
-    const { rewrote, source: out } = rewriteProtocolAccessors(source, BASE);
-    expect(rewrote).toBe(true);
-    expect(out).toContain("IUniswapV4_UniversalRouter.at(");
+    const source = `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0); }`;
+    const handWritten = (chain: { readonly id: number }) =>
+      `function main() { IUniswapV4_UniversalRouter.at(${deployedAt("uniswap-v4", "UniversalRouter", chain)}).execute("0x0a", ["0x00"], 0); }`;
+    const contracts = binding("IUniswapV4_UniversalRouter", "uniswap-v4", "UniversalRouter");
+
+    // Each chain's own deployment: the enclosing chain decides.
+    expect(bytes("optimism", source)).toEqual(
+      bytes("optimism", handWritten(OPTIMISM), { contracts }),
+    );
+    expect(bytes("base", source)).toEqual(bytes("base", handWritten(BASE), { contracts }));
+    expect(bytes("optimism", source)).not.toEqual(bytes("base", source));
   });
 
   it("shape B: <Protocol>.<method> uses the protocol's single default contract", () => {
     const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
-    const { rewrote, source: out, contracts } = rewriteProtocolAccessors(source, BASE);
+    const {
+      rewrote,
+      source: out,
+      contracts,
+      defaultSites,
+      accessorSites,
+    } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(true);
-    expect(out).toContain(`IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}n).getUserAccountData`);
-    expect(Object.keys(contracts)).toEqual(["IAaveV3_Pool"]);
+    expect(out).toBe(`function main() { AaveV3.Pool.getUserAccountData(ctx.self()); }`);
+    expect(defaultSites).toBe(1);
+    expect(accessorSites).toBe(0);
+    expect(contracts).toEqual({});
+
+    const handWritten = `function main() { IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}).getUserAccountData(ctx.self()); }`;
+    expect(bytes("base", source)).toEqual(
+      bytes("base", handWritten, { contracts: binding("IAaveV3_Pool", "aave-v3", "Pool") }),
+    );
   });
 
   it("shape C: <Chain>.<Protocol>.<Contract>.<method> reaches the NAMED chain", () => {
-    const source = `function main() { Base.Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); }`;
-    const { rewrote, source: out } = rewriteProtocolAccessors(source, OPTIMISM);
-    expect(rewrote).toBe(true);
-    expect(out).toContain(`IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER)}n)`);
+    const source = `function main() { Base.Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0); }`;
+    const handWritten = `function main() { IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER)}).execute("0x0a", ["0x00"], 0); }`;
+    const contracts = binding("IUniswapV4_UniversalRouter", "uniswap-v4", "UniversalRouter");
+
+    expect(bytes("optimism", source)).toEqual(bytes("optimism", handWritten, { contracts }));
+    expect(rewriteProtocolAccessors(source, OPTIMISM).rewrote).toBe(false);
   });
 
   it("shape D: <Chain>.<Protocol>.<method> reaches the NAMED chain's default contract", () => {
     const source = `function main() { Base.AaveV3.getUserAccountData(ctx.self()); }`;
-    const { rewrote, source: out } = rewriteProtocolAccessors(source, OPTIMISM);
+    const {
+      rewrote,
+      source: out,
+      defaultSites,
+      accessorSites,
+    } = rewriteProtocolAccessors(source, OPTIMISM);
     expect(rewrote).toBe(true);
-    expect(out).toContain(`IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}n)`);
+    expect(out).toBe(`function main() { Base.AaveV3.Pool.getUserAccountData(ctx.self()); }`);
+    expect(defaultSites).toBe(1);
+    expect(accessorSites).toBe(0);
+
+    const handWritten = `function main() { IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}).getUserAccountData(ctx.self()); }`;
+    expect(bytes("optimism", source)).toEqual(
+      bytes("optimism", handWritten, { contracts: binding("IAaveV3_Pool", "aave-v3", "Pool") }),
+    );
   });
 });
 
-describe("rewriteProtocolAccessors: .view vs .at binding", () => {
-  it("a view/pure method binds via .view(), byte-identical bytecode to .at()", () => {
-    const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
-    const { source: out, contracts } = rewriteProtocolAccessors(source, BASE);
-    expect(out).toContain(".view(");
-
-    const atVariant = out.replace(".view(", ".at(");
-    const a = compile(out, { contracts });
-    const b = compile(atVariant, { contracts });
-    expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
+describe("protocol accessors: .view vs .at binding", () => {
+  it("a view/pure method compiles byte-identically through .view(), .at() and the default contract", () => {
+    const contracts = binding("IAaveV3_Pool", "aave-v3", "Pool");
+    const call = (op: "view" | "at") =>
+      `function main() { IAaveV3_Pool.${op}(${BigInt(BASE_AAVE_POOL)}).getUserAccountData(ctx.self()); }`;
+    const viaView = bytes("base", call("view"), { contracts });
+    const viaAt = bytes("base", call("at"), { contracts });
+    expect(viaView).toEqual(viaAt);
+    expect(bytes("base", `function main() { AaveV3.getUserAccountData(ctx.self()); }`)).toEqual(
+      viaView,
+    );
   });
 
-  it("a nonpayable method binds via .at(), never .view()", () => {
-    const source = `function main() { AaveV3.Pool.supply(ctx.self(), 1n, ctx.self(), 0n); }`;
-    const { source: out } = rewriteProtocolAccessors(source, BASE);
-    expect(out).toContain(".at(");
-    expect(out).not.toContain(".view(");
+  it("a nonpayable method compiles byte-identically to .at()", () => {
+    const source = `function main() { AaveV3.Pool.supply(ctx.self(), 1, ctx.self(), 0); }`;
+    const handWritten = `function main() { IAaveV3_Pool.at(${BigInt(BASE_AAVE_POOL)}).supply(ctx.self(), 1, ctx.self(), 0); }`;
+    expect(bytes("base", source)).toEqual(
+      bytes("base", handWritten, { contracts: binding("IAaveV3_Pool", "aave-v3", "Pool") }),
+    );
   });
 });
 
-describe("rewriteProtocolAccessors: chain-scoped addresses differ", () => {
+describe("protocol accessors: chain-scoped addresses differ", () => {
   it("the same protocol accessor resolves to a DIFFERENT address on Base vs Ethereum", () => {
     const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
-    const onBase = rewriteProtocolAccessors(source, BASE);
-    const onEthereum = rewriteProtocolAccessors(source, ETHEREUM);
-    expect(onBase.source).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
-    expect(onEthereum.source).toContain(`${BigInt(ETHEREUM_AAVE_POOL)}n`);
-    expect(onBase.source).not.toBe(onEthereum.source);
+    const contracts = binding("IAaveV3_Pool", "aave-v3", "Pool");
+    const handWritten = (pool: string) =>
+      `function main() { IAaveV3_Pool.view(${BigInt(pool)}).getUserAccountData(ctx.self()); }`;
+
+    const onBase = bytes("base", source);
+    const onEthereum = bytes("ethereum", source);
+    expect(onBase).toEqual(bytes("base", handWritten(BASE_AAVE_POOL), { contracts }));
+    expect(onEthereum).toEqual(bytes("ethereum", handWritten(ETHEREUM_AAVE_POOL), { contracts }));
+    expect(onBase).not.toEqual(onEthereum);
   });
 });
 
-describe("rewriteProtocolAccessors: qualified ancestor reference", () => {
-  it("Base.AaveV3.getUserAccountData inside an Optimism-enclosing body inlines the BASE address, not Optimism's", () => {
-    const source = `function main() { Base.AaveV3.getUserAccountData(ctx.self()); }`;
-    const { source: out } = rewriteProtocolAccessors(source, OPTIMISM);
-    expect(out).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
+describe("protocol accessors: qualified ancestor reference", () => {
+  it("Base.AaveV3.getUserAccountData inside an Optimism-enclosing body reaches the BASE address, not Optimism's", () => {
+    const contracts = binding("IAaveV3_Pool", "aave-v3", "Pool");
+    const handWritten = (pool: string) =>
+      `function main() { IAaveV3_Pool.view(${BigInt(pool)}).getUserAccountData(ctx.self()); }`;
 
-    const enclosing = rewriteProtocolAccessors(
-      `function main() { AaveV3.getUserAccountData(ctx.self()); }`,
-      OPTIMISM,
+    const named = bytes(
+      "optimism",
+      `function main() { Base.AaveV3.getUserAccountData(ctx.self()); }`,
     );
-    expect(enclosing.source).not.toContain(`${BigInt(BASE_AAVE_POOL)}n`);
+    const enclosing = bytes(
+      "optimism",
+      `function main() { AaveV3.getUserAccountData(ctx.self()); }`,
+    );
+    expect(named).toEqual(bytes("optimism", handWritten(BASE_AAVE_POOL), { contracts }));
+    expect(enclosing).toEqual(
+      bytes("optimism", handWritten(deployedAt("aave-v3", "Pool", OPTIMISM)), { contracts }),
+    );
+    expect(named).not.toEqual(enclosing);
   });
 
   it("nesting rebinds for free: a child compiled for a different destination resolves its own chain's address", () => {
-    const onOptimism = rewriteProtocolAccessors(
-      `function main(){ AaveV3.getUserAccountData(ctx.self()); }`,
-      OPTIMISM,
-    );
-    const onBase = rewriteProtocolAccessors(
-      `function main(){ AaveV3.getUserAccountData(ctx.self()); }`,
-      BASE,
-    );
-    expect(onOptimism.source).not.toEqual(onBase.source);
+    const source = `function main(){ AaveV3.getUserAccountData(ctx.self()); }`;
+    expect(bytes("optimism", source)).not.toEqual(bytes("base", source));
   });
 });
 
@@ -170,13 +230,13 @@ describe("rewriteProtocolAccessors: bare pot -> ctx.self()", () => {
   });
 
   it("skips a member property named pot (x.pot), an object-literal key, and a declared pot", () => {
-    const source = `function main() { let x = 1n; return x.pot + { pot: 1n }.pot; }`;
+    const source = `function main() { let x = 1; return x.pot + { pot: 1 }.pot; }`;
     const { rewrote } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
   });
 
   it("a declared `pot` is the program's where it is in scope", () => {
-    const source = `function main() { let pot = 5n; return pot; }`;
+    const source = `function main() { let pot = 5; return pot; }`;
     const { rewrote, source: out } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
     expect(out).toBe(source);
@@ -315,9 +375,9 @@ describe("rewriteProtocolAccessors: bare self, the Pot's old name, is refused", 
 
   it("leaves a program's own `self` alone, and `self` as a member or a key", () => {
     for (const source of [
-      `function main() { let self = 5n; return self; }`,
+      `function main() { let self = 5; return self; }`,
       `function main(self: Address) { return self; }`,
-      `function main() { let x = 1n; return x.self + { self: 1n }.self + ctx.self(); }`,
+      `function main() { let x = 1; return x.self + { self: 1 }.self + ctx.self(); }`,
     ]) {
       expect(() => rewriteProtocolAccessors(source, BASE)).not.toThrow();
     }
@@ -332,31 +392,38 @@ describe("rewriteProtocolAccessors: bare self, the Pot's old name, is refused", 
   });
 });
 
-describe("rewriteProtocolAccessors: fallback / named errors", () => {
+describe("protocol accessors: fallback / named errors", () => {
   it("an unowned head is left silently untouched", () => {
-    const source = `function main() { SomeRandomThing.Contract.method(1n); }`;
+    const source = `function main() { SomeRandomThing.Contract.method(1); }`;
     const { rewrote, source: out } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
     expect(out).toBe(source);
   });
 
   it("a shadowed namespace head is left silently untouched", () => {
-    const source = `function main() { let Uniswap = 1n; Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); }`;
+    const source = `function main() { let Uniswap = 1; Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0); }`;
     expect(() => rewriteProtocolAccessors(source, BASE)).not.toThrow();
     const { rewrote } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(false);
   });
 
-  it("known protocol, unknown contract -> named error", () => {
-    const source = `function main() { Uniswap.NotAContract.method(1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/Unknown contract 'NotAContract'/);
+  it("known protocol, unknown contract -> located error naming the contracts it has", () => {
+    const source = `function main() { Uniswap.NotAContract.method(1); }`;
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /`Uniswap\.NotAContract` is not a contract of Uniswap: it has .*UniversalRouter/,
+    );
+    expect(() => compileSauceProgram("base", source)).toThrow(/--> main\.js:1:19/);
   });
 
-  it("known contract, not deployed on this chain -> named error", () => {
+  it("known contract, not deployed on this chain -> located error naming the chain and the test that allows it", () => {
     // AaveV3 has no descriptor entry on linea in the starter set.
     const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
-    expect(() => rewriteProtocolAccessors(source, requireChain("linea"))).toThrow(
-      /is not deployed on 'linea'/,
+    expect(() => compileSauceProgram("linea", source)).toThrow(
+      /`AaveV3\.getUserAccountData\(…\)` calls AaveV3\.Pool, which is not deployed on linea\. A contract the chain lacks is zero there, and only a test of it may use it/,
+    );
+    const named = `function main() { AaveV3.Pool.getUserAccountData(ctx.self()); }`;
+    expect(() => compileSauceProgram("linea", named)).toThrow(
+      /`AaveV3\.Pool` is not deployed on linea/,
     );
   });
 
@@ -377,149 +444,317 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
     }
   }
 
-  it("a widened-selector descriptor is refused by default, with a named error quoting the caveat", () => {
-    const source = `function main() { UniswapV4.PoolManager.initialize(1n); }`;
+  // A chain's names are built once and kept for every later compile on it, so a descriptor marked
+  // widened for one compile stays refused on that chain: the compile-level tests mark a contract on
+  // a chain no other test here reads it on (PancakeswapV3.Factory on bsc).
+  const PANCAKE_GET_POOL = `function main() { return PancakeswapV3.Factory.getPool(1, 2, 500); }`;
+
+  it("a widened-selector descriptor is refused by default, with a located error quoting the caveat", () => {
+    whileWidened("pancakeswap-v3", "Factory", () =>
+      expect(() => compileSauceProgram("bsc", PANCAKE_GET_POOL)).toThrow(
+        /pancakeswap-v3\.Factory's vendored ABI is "widened".*synthetic.*pass accessors: \{ allowWidenedSelectors: true \}/,
+      ),
+    );
+    // Bound to another address (shape E), the pass refuses it the same way.
+    const bound = `function main() { return UniswapV4.PoolManager.at(0x1234).extsload(1); }`;
     whileWidened("uniswap-v4", "PoolManager", () =>
-      expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/widened.*synthetic/),
+      expect(() => rewriteProtocolAccessors(bound, BASE)).toThrow(/widened.*synthetic/),
     );
   });
 
   it("allowWidenedSelectors opts in", () => {
-    const source = `function main() { UniswapV4.PoolManager.initialize(1n); }`;
+    const compiled = whileWidened("pancakeswap-v3", "Factory", () =>
+      compileSauceProgram("bsc", PANCAKE_GET_POOL, {
+        accessors: { allowWidenedSelectors: true },
+      }),
+    );
+    expect(compiled.bytecode.length).toBeGreaterThan(0);
+    const bound = `function main() { return UniswapV4.PoolManager.at(0x1234).extsload(1); }`;
     const { rewrote } = whileWidened("uniswap-v4", "PoolManager", () =>
-      rewriteProtocolAccessors(source, BASE, { allowWidenedSelectors: true }),
+      rewriteProtocolAccessors(bound, BASE, { allowWidenedSelectors: true }),
     );
     expect(rewrote).toBe(true);
   });
 
   it("an exact descriptor needs no opt-in: UniswapV4.PoolManager now carries the deployed types", () => {
-    const source = `function main() { UniswapV4.PoolManager.initialize(1n); }`;
-    expect(rewriteProtocolAccessors(source, BASE).rewrote).toBe(true);
+    const source = `function main() { UniswapV4.PoolManager.extsload(0x1234); }`;
+    expect(bytes("base", source).length).toBeGreaterThan(0);
+    const bound = `function main() { return UniswapV4.PoolManager.at(0x1234).extsload(1); }`;
+    expect(rewriteProtocolAccessors(bound, BASE).rewrote).toBe(true);
   });
 
-  it("a family-ambiguous contract -> named error", () => {
-    const source = `function main() { Uniswap.Factory.method(1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/ambiguous/);
+  it("a family-ambiguous contract -> located error naming the members", () => {
+    const source = `function main() { Uniswap.Factory.method(1); }`;
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /`Uniswap\.Factory` is ambiguous under Uniswap \(uniswap-v2, uniswap-v3\): write `UniswapV2\.Factory` or `UniswapV3\.Factory`/,
+    );
   });
 
-  it("an interface descriptor (Erc20.ERC20) -> named error", () => {
-    const source = `function main() { Erc20.ERC20.transfer(ctx.self(), 1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/interface descriptor/);
+  it("an interface descriptor (Erc20.ERC20) -> located error", () => {
+    const source = `function main() { Erc20.ERC20.transfer(ctx.self(), 1); }`;
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /`Erc20\.ERC20` is an interface, with no address of its own: give it the address, `Erc20\.ERC20\(<address>\)\.transfer`/,
+    );
   });
 
-  it("an address-only descriptor (AaveV3.PoolAddressesProvider) -> named error", () => {
-    const source = `function main() { AaveV3.PoolAddressesProvider.method(1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/no ABI vendored/);
+  it("an address-only descriptor (AaveV3.PoolAddressesProvider) -> located error", () => {
+    const source = `function main() { AaveV3.PoolAddressesProvider.method(1); }`;
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /aave-v3\.PoolAddressesProvider has an address but no ABI vendored for this role \(kind: "address-only"\)/,
+    );
   });
 
-  it("a method not in the vendored ABI -> named error", () => {
-    const source = `function main() { AaveV3.Pool.nope(1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(
-      /'nope' is not in .*Pool's vendored ABI/,
+  it("a method not in the vendored ABI -> refused, naming the contract and its methods", () => {
+    const source = `function main() { AaveV3.Pool.nope(1); }`;
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /`AaveV3\.Pool\.nope\(…\)`: `nope` is not in aave-v3\.Pool's vendored ABI \(known methods: supply, .*\)\.\n --> main\.js:1:31/,
     );
   });
 
   it("a binding-name collision with an existing user identifier -> named error", () => {
-    const source = `function main() { let IUniswapV4_UniversalRouter = 1n; Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); }`;
-    // Uniswap is not shadowed, IUniswapV4_UniversalRouter is a different, unrelated identifier that collides post-rewrite.
+    const source = `function main() { let IUniswapV3_Pool = 1; UniswapV3.Pool(0x1234).fee(); }`;
+    // UniswapV3 is not shadowed, IUniswapV3_Pool is a different, unrelated identifier that collides post-rewrite.
     expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/collides with an identifier/);
   });
 
-  it("an svm destination throws via compileSauceRoute -- every starter-set descriptor is EVM-only, so it fails closed on 'not deployed' before an accessor site could ever resolve", () => {
-    expect(() => route("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`)).toThrow(
-      /not deployed on 'solana'/,
+  it("a name of a program's own that looks like a binding is no collision for a contract the module holds", () => {
+    const source = `function main() { let IUniswapV4_UniversalRouter = 1; Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0); }`;
+    expect(() => compileSauceProgram("base", source)).not.toThrow();
+  });
+
+  it("an svm destination is refused by name -- every starter-set descriptor is EVM-only, so it fails closed on 'not deployed' before an accessor site could ever resolve", () => {
+    expect(() => route("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0);`)).toThrow(
+      /`Uniswap\.UniversalRouter` is not deployed on solana/,
     );
   });
 
   it("accessors: false makes an svm destination unaffected by the rewrite entirely (falls through to the compiler's own error)", () => {
     expect(() =>
-      route("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+      route("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0);`, {
         accessors: false,
       }),
     ).toThrow();
   });
+
+  it("a chain outside accessors.chainScope is refused, naming the chain", () => {
+    const source = `function main() { return Optimism.UniswapV3.Factory; }`;
+    expect(() =>
+      compileSauceProgram("base", source, { accessors: { chainScope: ["base"] } }),
+    ).toThrow(
+      /chain 'optimism' \(referenced as 'Optimism\.\.\.\.'\) is outside the allowed chainScope/,
+    );
+    expect(() => compileSauceProgram("base", source)).not.toThrow();
+  });
 });
 
-describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
+describe("protocol accessors: negative controls -- isolation", () => {
   it("U4's ERC20 rewrite stays byte-identical and unaffected", () => {
     const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-    const source = `function main() { USDC.transfer(${USDC}, 5n); }`;
+    const source = `function main() { USDC.transfer(${USDC}, 5); }`;
     const before = rewriteTokenMembers(source, new Set(["USDC"]));
     expect(before.rewrote).toBe(true);
-    expect(before.source).toContain(`__sauce_transfer(USDC, ${USDC}, 5n)`);
+    expect(before.source).toContain(`__sauce_transfer(USDC, ${USDC}, 5)`);
   });
 
   it("a body with zero accessor/self sites compiles byte-identically with accessors on and off", () => {
-    const built1 = route("base", `function main() { return 5n; }`, { accessors: true });
-    const built2 = route("base", `function main() { return 5n; }`, { accessors: false });
+    const built1 = route("base", `function main() { return 5; }`, { accessors: true });
+    const built2 = route("base", `function main() { return 5; }`, { accessors: false });
     expect(built1.calls[0]!.data).toEqual(built2.calls[0]!.data);
   });
 
   it("accessors: false opts out entirely even when the body has a recognizable accessor shape", () => {
     // Left untouched -> the base compiler throws its own generic property-access error.
     expect(() =>
-      route("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+      route("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0);`, {
         accessors: false,
       }),
     ).toThrow();
   });
 });
 
-const BASE_CCTP_TOKEN_MESSENGER = 232410083228790048339504449763962118892241342301n; // Cctp.TokenMessenger on base
-
-describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an address, not a call", () => {
-  it("Cctp.TokenMessenger (Protocol.Contract) resolves to the SAME address literal the underscore define uses", () => {
+describe("protocol accessors: VALUE position -- an accessor used as an address, not a call", () => {
+  it("Cctp.TokenMessenger (Protocol.Contract) is the SAME address literal the underscore define uses", () => {
     const source = `function main() { return Cctp.TokenMessenger; }`;
-    const { source: out, rewrote, valueAccessSites } = rewriteProtocolAccessors(source, BASE);
-    expect(rewrote).toBe(true);
-    expect(valueAccessSites).toBe(1);
-    expect(out).toContain(`${BASE_CCTP_TOKEN_MESSENGER}n`);
-    expect(out).not.toContain("Cctp.TokenMessenger");
+    expect(bytes("base", source)).toEqual(
+      bytes("base", `function main() { return ${BASE_CCTP_TOKEN_MESSENGER}; }`),
+    );
+    expect(BASE_CCTP_TOKEN_MESSENGER).toBe(BigInt(deployedAt("cctp", "TokenMessenger", BASE)));
+
+    // The names module holds it: the pass has nothing to rewrite.
+    const pass = rewriteProtocolAccessors(source, BASE);
+    expect(pass.rewrote).toBe(false);
+    expect(pass.source).toBe(source);
   });
 
-  it("Base.Uniswap.UniversalRouter (Chain.Protocol.Contract) resolves to that chain's address as a value", () => {
+  it("Base.Uniswap.UniversalRouter (Chain.Protocol.Contract) is that chain's address as a value, whatever the enclosing chain", () => {
     const source = `function main() { return Base.Uniswap.UniversalRouter; }`;
-    const { source: out, valueAccessSites } = rewriteProtocolAccessors(source, ETHEREUM); // enclosing chain ignored -- Base wins
-    expect(valueAccessSites).toBe(1);
-    expect(out).toContain(`${BigInt(BASE_UNIVERSAL_ROUTER)}n`);
+    expect(bytes("ethereum", source)).toEqual(
+      bytes("ethereum", `function main() { return ${BigInt(BASE_UNIVERSAL_ROUTER)}; }`), // enclosing chain ignored -- Base wins
+    );
   });
 
   it("chain-qualified value resolves per the NAMED chain (Base vs Ethereum AaveV3 differ)", () => {
-    const onBase = rewriteProtocolAccessors(`function main() { return Base.AaveV3; }`, OPTIMISM);
-    const onEth = rewriteProtocolAccessors(`function main() { return Ethereum.AaveV3; }`, OPTIMISM);
-    expect(onBase.source).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
-    expect(onEth.source).toContain(`${BigInt(ETHEREUM_AAVE_POOL)}n`);
+    const asValue = (address: string) => `function main() { return ${BigInt(address)}; }`;
+    const onBase = bytes("optimism", `function main() { return Base.AaveV3.Pool; }`);
+    const onEth = bytes("optimism", `function main() { return Ethereum.AaveV3.Pool; }`);
+    expect(onBase).toEqual(bytes("optimism", asValue(BASE_AAVE_POOL)));
+    expect(onEth).toEqual(bytes("optimism", asValue(ETHEREUM_AAVE_POOL)));
+    expect(onBase).not.toEqual(onEth);
   });
 
-  it("a call AND a value of the same accessor coexist -- call -> binding, value -> address, no double-rewrite", () => {
-    const source = `function main() { AaveV3.getUserAccountData(address.self); return AaveV3.Pool; }`;
-    const { source: out, accessorSites, valueAccessSites } = rewriteProtocolAccessors(source, BASE);
-    expect(accessorSites).toBe(1); // the call
-    expect(valueAccessSites).toBe(1); // the value
-    expect(out).toContain(`IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}n).getUserAccountData`);
-    expect(out).toContain(`return ${BigInt(BASE_AAVE_POOL)}n;`);
+  it("a call AND a value of the same accessor coexist -- call -> default contract, value -> address, no double-rewrite", () => {
+    const source = `function main() { AaveV3.getUserAccountData(ctx.self()); return AaveV3.Pool; }`;
+    const pass = rewriteProtocolAccessors(source, BASE);
+    expect(pass.defaultSites).toBe(1); // the call
+    expect(pass.accessorSites).toBe(0); // the value is the module's
+    expect(pass.source).toBe(
+      `function main() { AaveV3.Pool.getUserAccountData(ctx.self()); return AaveV3.Pool; }`,
+    );
+
+    const handWritten = `function main() { IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}).getUserAccountData(ctx.self()); return ${BigInt(BASE_AAVE_POOL)}; }`;
+    expect(bytes("base", source)).toEqual(
+      bytes("base", handWritten, { contracts: binding("IAaveV3_Pool", "aave-v3", "Pool") }),
+    );
   });
 
   it("ISOLATION: a non-namespace member value (foo.bar) is left completely untouched", () => {
-    const source = `function main() { let foo = 0n; return foo.bar; }`;
-    const { rewrote, valueAccessSites, source: out } = rewriteProtocolAccessors(source, BASE);
-    expect(valueAccessSites).toBe(0);
+    const source = `function main() { let foo = 0; return foo.bar; }`;
+    const {
+      rewrote,
+      accessorSites,
+      defaultSites,
+      source: out,
+    } = rewriteProtocolAccessors(source, BASE);
+    expect(accessorSites).toBe(0);
+    expect(defaultSites).toBe(0);
     expect(rewrote).toBe(false);
     expect(out).toBe(source);
   });
 
-  it("tells onContract each reference it resolves: as written, with its chain and address", () => {
-    const heard: Array<[string, string, string, string]> = [];
-    rewriteProtocolAccessors(
-      `function main() {
-        Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);
-        USDC.approve(Cctp.TokenMessenger, 1n);
-        Ethereum.AaveV3.Pool.supply(1n, 2n, 3n, 0n);
-      }`,
+  it("shape G: a scalar method on a bound contract, or on a local holding one, reads the address", () => {
+    // 2.6.0 takes `.toBytesBe`/`.toBytesLe` only on an address: "`ABI_0` has no method named
+    // `toBytesBe`" on the binding the names module holds. Each spelling is the literal's bytes.
+    const literal = bytes(
+      "base",
+      `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesBe(32).toBe(); }`,
+    );
+    for (const body of [
+      "return AaveV3.Pool.toBytesBe(32).toBe();",
+      "const pool = AaveV3.Pool;\nreturn pool.toBytesBe(32).toBe();",
+      "return Base.AaveV3.Pool.toBytesBe(32).toBe();",
+    ]) {
+      expect(bytes("base", `function main(): Uint256 {\n${body}\n}`)).toEqual(literal);
+    }
+    expect(
+      bytes("base", "function main(): Uint256 { return AaveV3.Pool.toBytesLe(20).toLe(); }"),
+    ).toEqual(
+      bytes("base", `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesLe(20).toLe(); }`),
+    );
+    const pass = rewriteProtocolAccessors(
+      "function main() { const pool = AaveV3.Pool; return pool.toBytesBe(32); }",
       BASE,
+    );
+    expect(pass.source).toBe(
+      "function main() { const pool = AaveV3.Pool; return pool.address.toBytesBe(32); }",
+    );
+    // An ABI method, a value of another kind, and Solana are left as they are.
+    for (const source of [
+      "function main() { return AaveV3.Pool.getUserAccountData(pot); }",
+      "function main(x: Uint256) { return x.toBytesBe(32); }",
+      "function main() { return AaveV3.PoolAddressesProvider.toBytesBe(32); }",
+    ]) {
+      expect(rewriteProtocolAccessors(source, BASE).source).not.toContain(".address");
+    }
+    expect(
+      rewriteProtocolAccessors(
+        "function main() { return AaveV3.Pool.toBytesBe(32); }",
+        requireChain("solana"),
+      ).source,
+    ).not.toContain(".address");
+  });
+
+  it("shape G follows a local holding a local that holds the contract", () => {
+    // 2.6.0 keeps both unannotated locals the binding, so the scalar method needs `.address` on
+    // the last one too.
+    const literal = bytes(
+      "base",
+      `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesBe(32).toBe(); }`,
+    );
+    for (const body of [
+      "const a = AaveV3.Pool;\nconst b = a;\nreturn b.toBytesBe(32).toBe();",
+      "const a = AaveV3.Pool;\nconst b = a;\nconst c = b;\nreturn c.toBytesBe(32).toBe();",
+    ]) {
+      expect(bytes("base", `function main(): Uint256 {\n${body}\n}`)).toEqual(literal);
+    }
+  });
+
+  it("shape G follows the binding in scope at the read, never a same-named one elsewhere", () => {
+    // `tag`'s `a` is a bool, and an inner block's `a` is the block's: neither is main's alias.
+    for (const source of [
+      "function tag(a: bool): bytes { const b = a; return b.toBytesBe(1); }\nfunction main(): bytes { const a = AaveV3.Pool; const c = a; return c.toBytesBe(32).concat(tag(true)); }",
+      "function main(flag: bool): bytes { const a = AaveV3.Pool; if (flag) { const a = true; const b = a; return b.toBytesBe(1); } const b = a; return b.toBytesBe(32); }",
+    ]) {
+      const out = rewriteProtocolAccessors(source, BASE).source;
+      expect(out).toContain("b.toBytesBe(1)");
+      expect(out).not.toContain("b.address.toBytesBe(1)");
+      expect(out).toMatch(/[bc]\.address\.toBytesBe\(32\)/);
+      expect(() => compileSauceProgram("base", source)).not.toThrow();
+    }
+  });
+
+  it("a namespace a function's own parameter is named after is that function's alone", () => {
+    // `helper`'s parameter `AaveV3` is a number in `helper`; in `main` `AaveV3` is the registry's,
+    // whose default call and shape G are rewritten there as ever.
+    const helper = "function helper(AaveV3: Uint256): Uint256 { return AaveV3 + 1; }\n";
+    const pass = rewriteProtocolAccessors(
+      `${helper}function main(): bytes { AaveV3.getUserAccountData(ctx.self()); return AaveV3.Pool.toBytesBe(32); }`,
+      BASE,
+    );
+    expect(pass.defaultSites).toBe(1);
+    expect(pass.source).toContain("AaveV3.Pool.address.toBytesBe(32)");
+    expect(pass.source).toContain(helper);
+    const literal = bytes(
+      "base",
+      `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesBe(32).toBe() + helper(1); }\n${helper}`,
+    );
+    expect(
+      bytes(
+        "base",
+        `function main(): Uint256 { return AaveV3.Pool.toBytesBe(32).toBe() + helper(1); }\n${helper}`,
+      ),
+    ).toEqual(literal);
+    // A name the compile binds beside the source (a define, a contract, an ambient export) is the
+    // caller's: neither call is the registry's.
+    const bound = rewriteProtocolAccessors(
+      "function main(): bytes { AaveV3.getUserAccountData(ctx.self()); return AaveV3.Pool.toBytesBe(32); }",
+      BASE,
+      {},
+      new Set(["AaveV3"]),
+    );
+    expect(bound.rewrote).toBe(false);
+  });
+
+  it("tells onContract each contract a program uses: as written, with its chain and address -- and not a test of one", () => {
+    const heard: Array<[string, string, string, string]> = [];
+    compileSauceProgram(
+      "base",
+      `function main() {
+        Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0);
+        USDC.approve(Cctp.TokenMessenger, 1);
+        Ethereum.AaveV3.Pool.supply(1, 2, 3, 0);
+        let tested = 0;
+        if (AaveV3.PoolAddressesProvider) { tested = 1; }
+      }`,
       {
-        onContract: (reference, target) =>
-          heard.push([reference, target.protocol, target.chain.slug, target.address.toLowerCase()]),
+        accessors: {
+          onContract: (reference, target) =>
+            heard.push([
+              reference,
+              target.protocol,
+              target.chain.slug,
+              target.address.toLowerCase(),
+            ]),
+        },
       },
     );
     expect(heard).toEqual(
@@ -533,36 +768,46 @@ describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an add
   });
 
   it("END TO END: USDC.approve(Cctp.TokenMessenger, x) compiles as a route (dot form as a spender)", () => {
-    const built = route("base", `function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }`);
+    const built = route("base", `function main() { USDC.approve(Cctp.TokenMessenger, 1000000); }`);
     expect(built.calls).toHaveLength(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
 
-describe("rewriteProtocolAccessors: every registry protocol, every contract kind", () => {
+describe("protocol accessors: every registry protocol, every contract kind", () => {
   it("a formerly unlinked protocol resolves like any other: PancakeswapV3.Factory on Base", () => {
-    const source = `function main() { return PancakeswapV3.Factory.getPool(1n, 2n, 500n); }`;
-    const { source: rewritten, contracts } = rewriteProtocolAccessors(source, BASE);
+    const source = `function main() { return PancakeswapV3.Factory.getPool(1, 2, 500); }`;
     const factory = getDescriptor("pancakeswap-v3", "Factory")!.perChainAddress[8453]!;
-    expect(rewritten).toContain(`IPancakeswapV3_Factory.view(${BigInt(factory)}n).getPool`);
-    expect(Object.keys(contracts)).toEqual(["IPancakeswapV3_Factory"]);
-    expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+    const handWritten = `function main() { return IPancakeswapV3_Factory.view(${BigInt(factory)}).getPool(1, 2, 500); }`;
+    const a = bytes("base", source);
+    expect(a.length).toBeGreaterThan(0);
+    expect(a).toEqual(
+      bytes("base", handWritten, {
+        contracts: binding("IPancakeswapV3_Factory", "pancakeswap-v3", "Factory"),
+      }),
+    );
   });
 
   it("Uniswap V4's StateView and PoolManager.extsload read pool state, on every V4 chain", () => {
-    const source = `function main() {
-      const poolId = 0x1234n;
-      const [sqrtPriceX96, tick, protocolFee, lpFee] = UniswapV4.StateView.getSlot0(poolId);
-      const raw = UniswapV4.PoolManager.extsload(poolId);
-      return sqrtPriceX96 + UniswapV4.StateView.getLiquidity(poolId) + raw;
+    const program = (stateView: string, poolManager: string) => `function main() {
+      const poolId = 0x1234;
+      const [sqrtPriceX96, tick, protocolFee, lpFee] = ${stateView}.getSlot0(poolId);
+      const raw = ${poolManager}.extsload(poolId);
+      return sqrtPriceX96 + ${stateView}.getLiquidity(poolId) + raw;
     }`;
+    const contracts = {
+      ...binding("IUniswapV4_StateView", "uniswap-v4", "StateView"),
+      ...binding("IUniswapV4_PoolManager", "uniswap-v4", "PoolManager"),
+    };
     for (const slug of getDescriptor("uniswap-v4", "StateView")!.chains) {
-      const { source: rewritten, contracts } = rewriteProtocolAccessors(source, requireChain(slug));
-      expect(Object.keys(contracts).sort()).toEqual([
-        "IUniswapV4_PoolManager",
-        "IUniswapV4_StateView",
-      ]);
-      expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+      const chain = requireChain(slug);
+      const handWritten = program(
+        `IUniswapV4_StateView.at(${deployedAt("uniswap-v4", "StateView", chain)})`,
+        `IUniswapV4_PoolManager.at(${deployedAt("uniswap-v4", "PoolManager", chain)})`,
+      );
+      const a = bytes(slug, program("UniswapV4.StateView", "UniswapV4.PoolManager"));
+      expect(a.length).toBeGreaterThan(0);
+      expect(a).toEqual(bytes(slug, handWritten, { contracts }));
     }
     expect(getDescriptor("uniswap-v4", "StateView")!.chains).toEqual(
       getDescriptor("uniswap-v4", "PoolManager")!.chains,
@@ -570,35 +815,33 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
   });
 
   it("shape E: an interface is called at the address the program supplies", () => {
-    const source = `function main() { return Erc4626.Vault.at(0x1234n).deposit(1n, ctx.self()); }`;
-    const { source: rewritten, contracts } = rewriteProtocolAccessors(source, BASE);
+    const source = `function main() { return Erc4626.Vault.at(0x1234).deposit(1, ctx.self()); }`;
+    const { source: rewritten, contracts, accessorSites } = rewriteProtocolAccessors(source, BASE);
     expect(rewritten).toBe(
-      `function main() { return IErc4626_Vault.at(0x1234n).deposit(1n, ctx.self()); }`,
+      `function main() { return IErc4626_Vault.at(0x1234).deposit(1, ctx.self()); }`,
     );
+    expect(accessorSites).toBe(1);
     expect(Object.keys(contracts)).toEqual(["IErc4626_Vault"]);
     expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
   });
 
   it("shape E: a deployed contract's ABI reaches another deployment, still bound .view for a view", () => {
-    const source = `function main() { return UniswapV3.Factory.at(0x1234n).getPool(1n, 2n, 500n); }`;
+    const source = `function main() { return UniswapV3.Factory.at(0x1234).getPool(1, 2, 500); }`;
     expect(rewriteProtocolAccessors(source, BASE).source).toBe(
-      `function main() { return IUniswapV3_Factory.view(0x1234n).getPool(1n, 2n, 500n); }`,
+      `function main() { return IUniswapV3_Factory.view(0x1234).getPool(1, 2, 500); }`,
     );
   });
 
   it("shape E needs a method in the same expression, and one address", () => {
     expect(() =>
-      rewriteProtocolAccessors(`function main() { const v = Erc4626.Vault.at(1n); }`, BASE),
+      rewriteProtocolAccessors(`function main() { const v = Erc4626.Vault.at(1); }`, BASE),
     ).toThrow(/is not a value — call a method on it/);
     expect(() =>
-      rewriteProtocolAccessors(
-        `function main() { Erc4626.Vault.at(1n, 2n).deposit(1n, 1n); }`,
-        BASE,
-      ),
+      rewriteProtocolAccessors(`function main() { Erc4626.Vault.at(1, 2).deposit(1, 1); }`, BASE),
     ).toThrow(/takes exactly one argument/);
     expect(() =>
       rewriteProtocolAccessors(
-        `function main() { AaveV3.PoolAddressesProvider.at(1n).getPool(); }`,
+        `function main() { AaveV3.PoolAddressesProvider.at(1).getPool(); }`,
         BASE,
       ),
     ).toThrow(/there is nothing to bind/);
@@ -606,8 +849,10 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
 
   it("an interface without an address is refused with the spelling that works", () => {
     expect(() =>
-      rewriteProtocolAccessors(`function main() { Erc4626.Vault.deposit(1n, 1n); }`, BASE),
-    ).toThrow(/Erc4626\.Vault\(<address>\)\.<method>\(\.\.\.\)/);
+      compileSauceProgram("base", `function main() { return Erc4626.Vault.deposit(1, 1); }`),
+    ).toThrow(
+      /`Erc4626\.Vault` is an interface, with no address of its own: give it the address, `Erc4626\.Vault\(<address>\)\.deposit`/,
+    );
   });
 
   it("shape F: an interface called with an address is shape E, byte for byte", () => {
@@ -619,6 +864,7 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
       `function main(pool: Address): Uint256 { return IUniswapV3_Pool.view(pool).liquidity(); }`,
     );
     expect(viaCall.source).toBe(viaAt.source);
+    expect(viaCall.accessorSites).toBe(1);
     expect(Object.keys(viaCall.contracts)).toEqual(["IUniswapV3_Pool"]);
     expect(compile(viaCall.source, { contracts: viaCall.contracts }).bytecode[0]).toEqual(
       compile(viaAt.source, { contracts: viaAt.contracts }).bytecode[0],
@@ -628,14 +874,14 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
   it("shape F takes a chain qualifier, a family alias, a nonpayable method and one output", () => {
     expect(
       rewriteProtocolAccessors(
-        `function main() { return Base.Erc4626.Vault(0x1234n).deposit(1n, ctx.self()); }`,
+        `function main() { return Base.Erc4626.Vault(0x1234).deposit(1, ctx.self()); }`,
         BASE,
       ).source,
-    ).toBe(`function main() { return IErc4626_Vault.at(0x1234n).deposit(1n, ctx.self()); }`);
+    ).toBe(`function main() { return IErc4626_Vault.at(0x1234).deposit(1, ctx.self()); }`);
     expect(
-      rewriteProtocolAccessors(`function main() { return Uniswap.Pool(0x1234n).fee(); }`, BASE)
+      rewriteProtocolAccessors(`function main() { return Uniswap.Pool(0x1234).fee(); }`, BASE)
         .source,
-    ).toBe(`function main() { return IUniswapV3_Pool.view(0x1234n).fee(); }`);
+    ).toBe(`function main() { return IUniswapV3_Pool.view(0x1234).fee(); }`);
     const { source, contracts } = rewriteProtocolAccessors(
       `function main(pool: Address): Uint256 { return AerodromeSlipstream.Pool(pool).slot0().sqrtPriceX96; }`,
       BASE,
@@ -645,34 +891,35 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
 
   it("shape F needs a method in the same expression, and one address", () => {
     expect(() =>
-      rewriteProtocolAccessors(`function main() { const v = UniswapV3.Pool(1n); }`, BASE),
+      rewriteProtocolAccessors(`function main() { const v = UniswapV3.Pool(1); }`, BASE),
     ).toThrow(/'UniswapV3\.Pool\(\.\.\.\)' binds a contract to an address, which is not a value/);
     expect(() =>
-      rewriteProtocolAccessors(`function main() { UniswapV3.Pool(1n, 2n).fee(); }`, BASE),
+      rewriteProtocolAccessors(`function main() { UniswapV3.Pool(1, 2).fee(); }`, BASE),
     ).toThrow(/takes exactly one argument/);
   });
 
   it("a deployed contract's name is never called with an address: .at binds another deployment", () => {
-    expect(() =>
-      rewriteProtocolAccessors(
-        `function main() { return UniswapV3.Factory(0x1234n).getPool(1n, 2n, 500n); }`,
-        BASE,
-      ),
-    ).toThrow(
+    const source = `function main() { return UniswapV3.Factory(0x1234).getPool(1, 2, 500); }`;
+    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(
       /'UniswapV3\.Factory\(\.\.\.\)' calls a deployed contract's name: .*'UniswapV3\.Factory\.at\(<address>\)\.<method>\(\.\.\.\)'/,
+    );
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /`UniswapV3\.Factory\(…\)` calls a deployed contract's name: .*`UniswapV3\.Factory\.at\(<address>\)\.<method>\(…\)`/,
     );
   });
 
   it("a program's own function named like an interface is its own", () => {
-    const source = `function Pool(a: Uint256): Uint256 { return a; }\nfunction main() { return Pool(1n); }`;
+    const source = `function Pool(a: Uint256): Uint256 { return a; }\nfunction main() { return Pool(1); }`;
     expect(rewriteProtocolAccessors(source, BASE).rewrote).toBe(false);
   });
 
   it("an address-only contract is its address in value position", () => {
     const source = `function main() { return AaveV3.PoolAddressesProvider; }`;
-    const provider = getDescriptor("aave-v3", "PoolAddressesProvider")!.perChainAddress[8453]!;
-    expect(rewriteProtocolAccessors(source, BASE).source).toBe(
-      `function main() { return ${BigInt(provider)}n; }`,
+    expect(bytes("base", source)).toEqual(
+      bytes(
+        "base",
+        `function main() { return ${deployedAt("aave-v3", "PoolAddressesProvider", BASE)}; }`,
+      ),
     );
   });
 });

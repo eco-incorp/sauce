@@ -122,10 +122,9 @@ test("unsupported names and ABI argument shapes remain TypeScript errors", () =>
     MorphoBlue.Bundler3.at(0x1234n);
     PancakeswapV3.Factory.getPool(USDC, WETH);
     Erc4626.Vault.deposit(1n, 1n);
-    available("USDC");
     export {};
   `);
-  expect(errors).toHaveLength(13);
+  expect(errors).toHaveLength(12);
 });
 
 test("declarations cover every registry token and every protocol namespace, in both languages", () => {
@@ -184,7 +183,7 @@ test("declarations cover every registry token and every protocol namespace, in b
 test("a typed closure over a formerly unlinked namespace typechecks and compiles", () => {
   const body = `
       let pool = 0n;
-      if (available(PancakeswapV3.Factory)) {
+      if (PancakeswapV3.Factory) {
         pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
       }
       const [sqrtPriceX96, tick] = UniswapV4.StateView.getSlot0(0x1234n);
@@ -194,7 +193,7 @@ test("a typed closure over a formerly unlinked namespace typechecks and compiles
   // The same body as a closure, compiled for a chain with every name in it.
   const closure = onBase(() => {
     let pool = 0n;
-    if (available(PancakeswapV3.Factory)) {
+    if (PancakeswapV3.Factory) {
       pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
     }
     const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(0x1234n);

@@ -107,7 +107,7 @@ describe("each rewrite parses annotations on its own", () => {
 }
 function main(to: Address): Uint256 {
   pay(USDC, to, 1n);
-  return Aave.Pool.getUserAccountData(to).totalDebtBase;
+  return AaveV3.getUserAccountData(to).totalDebtBase + UniswapV3.Pool(to).liquidity();
 }`;
 
   it("the token-member pass", () => {
@@ -132,8 +132,15 @@ function main(to: Address): Uint256 {
 
   it("the protocol-accessor pass", () => {
     const out = rewriteProtocolAccessors(annotated, BASE);
+    expect(out.defaultSites).toBe(1);
     expect(out.accessorSites).toBe(1);
+    expect(out.source).toContain(
+      "function pay(token: Address, to: Address, amount: Uint256): void {",
+    );
     expect(out.source).toContain("function main(to: Address): Uint256 {");
+    expect(out.source).toContain(
+      "return AaveV3.Pool.getUserAccountData(to).totalDebtBase + IUniswapV3_Pool.view(to).liquidity();",
+    );
   });
 
   it("reads an annotated parameter as the binding it is", () => {

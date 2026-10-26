@@ -27,6 +27,10 @@ export interface SauceClosureProgramOptions {
   readonly target?: "evm" | "svm";
 }
 
+/** Every name SauceScript gives a program with no declaration: each builtin's root. At run time
+ *  too, for the SDK's check of code a test rules out (`absent-names.ts`). */
+export const BUILTIN_GLOBALS: readonly string[] = ["Array","Int256","Math","Uint256","abi","crypto","ctx","eval","evm","hex","log","program","require","revert","svm"];
+
 /** A field of `abi.decode`'s result, typed from its shape string. */
 export type SauceDecoded<Shape> = Shape extends "bool" | "boolean"
   ? boolean

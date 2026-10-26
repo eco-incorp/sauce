@@ -92,6 +92,12 @@ const doc = (builtin, indent) =>
 const members = new Map();
 const add = (where, text) => members.set(where, [...(members.get(where) ?? []), text]);
 const declared = [];
+/** The receivers a signature writes for a value, not a name a program reads: `bytes.slice`,
+ *  `value.toBytesBe`. */
+const VALUE_RECEIVERS = new Set(["bytes", "value"]);
+/** Every name a program reads with no declaration: each builtin's root (`ctx`, `require`, `Array`
+ *  of `new Array`, the tag of `` hex`…` ``). */
+const globals = new Set();
 
 for (const builtin of builtins) {
   const { signature } = builtin;
@@ -103,6 +109,7 @@ for (const builtin of builtins) {
 
   if (method !== null) {
     const [, receiver, name, params, returns] = method;
+    if (!VALUE_RECEIVERS.has(receiver)) globals.add(receiver);
     // `abi.decode`'s result is shaped by its shape strings, so it is typed from them.
     const text =
       receiver === "abi" && name === "decode"
@@ -115,6 +122,7 @@ for (const builtin of builtins) {
     add(receiver, text);
   } else if (fn !== null) {
     const [, name, params, returns] = fn;
+    globals.add(name);
     if (name === "program") {
       declared.push(
         `${doc(builtin, "  ")}  function program<Args extends unknown[]>(closure: (...args: Args) => unknown, ...args: Args | [...Args, SauceClosureProgramOptions]): SauceClosureProgram;`,
@@ -130,12 +138,14 @@ for (const builtin of builtins) {
     );
   } else if (construct !== null) {
     const [, name, params, returns] = construct;
+    globals.add(name);
     add(
       `new ${name}`,
       `${doc(builtin, "  ")}  new (${splitTop(params).map(tsParam).join(", ")}): ${tsType(returns, "return")};`,
     );
   } else if (tagged !== null) {
     const [, name, returns] = tagged;
+    globals.add(name);
     declared.push(
       `${doc(builtin, "  ")}  function ${name}(strings: TemplateStringsArray): ${tsType(returns, "return")};`,
     );
@@ -201,6 +211,10 @@ export interface SauceClosureProgramOptions {
   readonly chain?: string;
   readonly target?: "evm" | "svm";
 }
+
+/** Every name SauceScript gives a program with no declaration: each builtin's root. At run time
+ *  too, for the SDK's check of code a test rules out (\`absent-names.ts\`). */
+export const BUILTIN_GLOBALS: readonly string[] = ${JSON.stringify([...globals].sort())};
 
 /** A field of \`abi.decode\`'s result, typed from its shape string. */
 export type SauceDecoded<Shape> = Shape extends "bool" | "boolean"

@@ -76,7 +76,8 @@ The `--json` compile lists `defines` (each token and `chainId` with its value) a
 
 ### A name the chain lacks
 
-Base registers no USDT:
+Base registers no USDT. A name the chain lacks is zero there, and a use of it that is not a test of
+it is refused, at the use, naming the chain:
 
 ```sauce chain=base fails
 function main(recipient: Address, amount: Uint256) {
@@ -86,20 +87,21 @@ function main(recipient: Address, amount: Uint256) {
 
 ```text
 sauce compile: pay.sauce.ts does not compile for base
-compileSauceRoute: `USDT` is not a token or protocol on base. Did you mean `USDC`? A token the registry does not carry is `Token(address)`, …
+compileSauceRoute: `USDT` is not a token on base. A token the chain lacks is zero there, and only a test of it may use it: `if (USDT) { … }` compiles the branch only where the chain has it. …
 ```
 
-| Refused                                   | Message                                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| A token called on a chain without it      | `` `USDT` is not a token or protocol on base. Did you mean `USDC`? ``                      |
-| A contract the chain does not have        | `Contract 'CLFactory' (aerodrome-slipstream) is not deployed on 'ethereum' (available: …)` |
-| A symbol the chain lacks, used as a value | `` `TSLAx` `` "is not a declared variable" (`return TSLAx;` compiled for Base)             |
-| A qualified token (`Base.USDC`)           | `'USDC' is not a known protocol or family alias`                                           |
+| Refused                                   | Message                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| A token called on a chain without it      | `` `USDT` is not a token on base. ``                                      |
+| A contract the chain does not have        | `` `AerodromeSlipstream.CLFactory` is not deployed on ethereum. ``        |
+| A symbol the chain lacks, used as a value | `` `TSLAx` is not a token on base. `` (`return TSLAx;` compiled for Base) |
+| A qualified token (`Base.USDC`)           | `` `Base.USDC` is not a protocol on base. ``                              |
 
-Then compile for a chain that has the name, guard it with `available(...)` (`sauce-globals`), or,
-for a token the registry does not carry, take its address as a `main` parameter and use
-`Token(address)`. The same company often has a different symbol per issuer and chain (Tesla is
-`TSLAx` on Ethereum and Solana, `TSLAc` or `bTSLA` on Base): search by name or ticker on each chain.
+Then compile for a chain that has the name, test the name itself (`if (USDT) { … }`, whose branch
+is compiled only where the chain has it, `sauce-globals`), or, for a token the registry does not
+carry, take its address as a `main` parameter and use `Token(address)`. The same company often has
+a different symbol per issuer and chain (Tesla is `TSLAx` on Ethereum and Solana, `TSLAc` or `bTSLA`
+on Base): search by name or ticker on each chain.
 
 ## Another chain's names
 
@@ -214,7 +216,8 @@ or to confirm the deployment on a chain.
    chain's file.
 2. Compile for each chain it is meant for: `sauce compile <file> --chain <slug>` prints the
    bytecode, and `--json` adds what each name resolved to, the size and `main`'s parameters.
-3. Wrap what one chain lacks in `available(...)`, or write the program for the chains that have it.
+3. Put what one chain lacks in a test of the name, `if (X) { … }`, or write the program for the
+   chains that have it.
 4. Confirm every address the program relies on has code on that chain: `eth_getCode` returns more
    than `0x`, or on Solana `getAccountInfo` returns an executable account.
 
