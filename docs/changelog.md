@@ -100,21 +100,30 @@ and engines as 0.99.16.
 
 ### The `sauce` command and the MCP server
 
-- **Now refused** (EVM): a cook, a Pot deployment or a signed cook on a Pot the deployed Kitchen
-  does not put where the SDK predicts it. After the Kitchen's upgrade to kitchen-evm 1.3.0, SDK
-  0.99.15 still predicted the old Pot address. For an owner with no Pot yet, its cook went to an
-  address with no code: it reported success, ran nothing, and the cook's value stayed at that
-  address. Before anything is simulated, built or sent, `simulate`, `tx`, `run`, `sign`, `pot` and
-  `pot --deploy`, and the MCP tools that call them, now read the Kitchen's own `predictPot(owner,
-salt)` and refuse a mismatch, naming both addresses: `the Kitchen … puts the Pot of owner … and
-salt … at <its address>, but this SDK has it at <the SDK's>: this SDK does not match the deployed
-Kitchen …`. The message says to upgrade `@eco-incorp/sauce`.
-- **Now refused** (EVM): a cook on code at the Pot's address that is not a Pot of the pinned
-  release. Its runtime must be the release Pot's, byte for byte apart from its immutables (owner,
-  salt, Kitchen). Its owner, salt and Kitchen must derive its address under the release's Pot
-  init-code hash, and the Kitchen must put that Pot there. A Pot named by `--pot` is checked the
-  same way. A Pot of this release on a Kitchen that has since moved to other Pot code is refused
-  too, where 0.99.16 still cooked on it.
+- **Now refused** (EVM): a cook, a Pot deployment or a signed cook on a Pot not deployed yet that
+  the deployed Kitchen does not put where the SDK predicts it. After the Kitchen's upgrade to
+  kitchen-evm 1.3.0, SDK 0.99.15 still predicted the old Pot address. For an owner with no Pot yet,
+  its cook went to an address with no code: it reported success, ran nothing, and the cook's value
+  stayed at that address. Before anything is simulated, built or sent, `simulate`, `tx`, `run`,
+  `sign`, `pot` and `pot --deploy`, and the MCP tools that call them, now read the Kitchen's own
+  `predictPot(owner, salt)` and refuse a mismatch, naming both addresses: `the Kitchen … puts the Pot
+of owner … and salt … at <its address>, but this SDK has it at <the SDK's>: this SDK does not match
+the deployed Kitchen …`.
+- **Now refused** (EVM): a cook on a deployed Pot of another release. The Pot's release is told from
+  the chain as `sauce pot import` tells it: its owner, salt and Kitchen are read off it, and its
+  address must be that Kitchen's CREATE2 under the Pot init-code hash of a release the SDK records.
+  Compiler output pairs with an engine by exact version, so a Pot of another release cannot run the
+  SDK's programs: `… is a Pot of compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0), which
+@eco-incorp/sauce 0.99.9 to 0.99.15 pair with …`. Code that no release the SDK records minted there
+  is refused too. A Pot of the SDK's own release still cooks after the Kitchen moves on to other
+  Pots, as in 0.99.16.
+- **Changed** (EVM): a refusal of a Pot says which release the deployed Kitchen mints, read from its
+  `potInitCodeHash()`: the compiler, engine and Kitchen versions, and the SDK releases that pinned
+  them in the table above; for a hash no release the SDK records, `the Kitchen is newer than this
+SDK. Upgrade @eco-incorp/sauce (sauce update)`. It says where the SDK deploys the owner's Pot
+  under its own release. Where the command keeps the Pot store (`~/.sauce/pots`, or `sauce mcp`
+  over stdio), it lists the owner's other Pots on that chain, each with its release. The MCP server
+  over HTTP keeps no store, and lists none.
 - **Now refused** (EVM): the same checks run again at every send, for a cook and for
   `Kitchen.deployPot` (`sauce run`, `sauce pot --deploy`, a wallet's send of what another step
   built). A cook to an address with no code is refused there outright.

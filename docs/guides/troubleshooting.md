@@ -89,26 +89,43 @@ and `pot` still work on this one.
 ### `this SDK does not match the deployed Kitchen`
 
 ```text
-sauce tx: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: this SDK does not match the deployed Kitchen, and a cook it sends goes where the Kitchen puts no Pot. Upgrade @eco-incorp/sauce (sauce update) to the release the deployed Kitchen runs. Nothing was simulated, built or sent
+sauce tx: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: this SDK does not match the deployed Kitchen, and a cook it sends goes where the Kitchen puts no Pot. The Kitchen 0x1984… on base mints Pots under init-code hash 0x5d…, which no release this SDK knows records: the Kitchen is newer than this SDK. Upgrade @eco-incorp/sauce (sauce update). Under its release, compiler … (v12-evm …, kitchen-evm …), this SDK deploys the Pot of owner 0xYou and salt 0x00…00 at 0x3c…. Nothing was simulated, built or sent.
+The Pot store /home/you/.sauce/pots holds 1 other Pot of 0xYou on base:
+  0x7e…  private, salt 0x00…01: compiler … (v12-evm …, kitchen-evm …), @eco-incorp/sauce …
 ```
 
-**Cause.** The Kitchen on the chain was upgraded to another release, and it now derives Pot
-addresses differently from your copy of the SDK. Before the command simulates, builds or sends a
-cook, a Pot deployment or a signed cook, it asks the Kitchen where it puts your Pot
-(`predictPot`). A cook sent to the SDK's older address would land on an address with no code: it
-would succeed, run nothing, and leave its value at that address.
+**Cause.** The Kitchen on the chain mints Pots of another release than your copy of the SDK pins,
+and it derives Pot addresses differently. Before the command simulates, builds or sends a cook, a
+Pot deployment or a signed cook on a Pot not deployed yet, it asks the Kitchen where it puts your
+Pot (`predictPot`). A cook sent to the SDK's address would land on an address with no code: it
+would succeed, run nothing, and leave its value at that address. The message says which release
+the Kitchen mints, from its `potInitCodeHash()`. Where the command keeps the Pot store, it lists
+your other Pots on the chain, each with its release.
 
-**Fix.** Upgrade the package (`sauce update`, or `npm i @eco-incorp/sauce@latest` in a project),
-then run the command again.
+**Fix.** When the Kitchen is newer than the SDK, upgrade the package (`sauce update`, or
+`npm i @eco-incorp/sauce@latest` in a project), then run the command again. When the message names
+an older release instead (`mints Pots of compiler …, which @eco-incorp/sauce … pair with`), the
+chain's Kitchen has not been upgraded yet: use one of the SDK versions it names on that chain. A
+listed Pot of your SDK's release still cooks: name it with `--pot <address>`.
 
-### `… has code, but not the code of a Pot this SDK's release deploys`
+### `… is a Pot of compiler …, which @eco-incorp/sauce … pair with`
 
-**Cause.** There is a contract at the Pot's address, but it is not a Pot of the release this SDK
-pins. Its code differs from the release Pot's in more than the Pot's own owner, salt and Kitchen, or
-what it reports about itself does not give its address.
+**Cause.** The Pot you named was minted by another release. Its release is told from the chain:
+its owner, salt and Kitchen are read off it, and its address is that Kitchen's under the release's
+Pot init-code hash. Its engine runs only that release's compiler output, never this SDK's.
 
-**Fix.** Check the Pot you named with `--pot`, or the `--owner` and `--salt` that give it. If it is
-a Pot of a newer release, upgrade the package.
+**Fix.** Cook on it with an SDK version the message names, or cook on a Pot of your SDK's release:
+the message says where the SDK deploys the owner's Pot.
+
+### `… has code, but no release this SDK knows minted a Pot there`
+
+**Cause.** The contract at the Pot's address reports an owner, salt and Kitchen that no release the
+SDK records derives this address from. It is a Pot of a release newer than the SDK, or not a Pot.
+A contract that does not answer a Pot's `owner()`, `userSalt()` and `kitchen()` is refused as `…
+has code, but is not a Pot`.
+
+**Fix.** If the message says the Kitchen is newer than this SDK, upgrade the package. Otherwise
+check the Pot you named with `--pot`, or the `--owner` and `--salt` that give it.
 
 ## The command cannot reach the chain
 

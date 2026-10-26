@@ -623,12 +623,17 @@ put at a terminal (a password, a yes or no) is not here: pass the flags that ans
 - **The endpoint is another chain's** (exit 1). `the RPC endpoint serves chain …`: use the chain's
   own endpoint, or a `--config` file with each chain's under its id.
 - **The package is not the deployed Kitchen's** (exit 1, EVM). `the Kitchen … puts the Pot of
-owner … and salt … at …, but this SDK has it at …`: the chain's Kitchen puts the Pot at another
-  address than this copy of the package does, so a cook it built would reach no Pot.
-  `… has code, but not the code of a Pot this SDK's release deploys…`: the Pot's address holds
-  something other than the package's Pot. Nothing was simulated, built or sent: the user upgrades
-  the package (`sauce update`), then runs the command again. Offline nothing is checked, and the
-  notes say `The Pot's address is NOT checked against the deployed Kitchen`.
+owner … and salt … at …, but this SDK has it at …`: the chain's Kitchen puts a Pot not deployed yet
+  at another address than this copy of the package does, so a cook it built would reach no Pot.
+  `… is a Pot of compiler …` or `… has code, but no release this SDK knows minted a Pot there`: the
+  Pot named was minted by another release, and its engine runs no program this package compiles.
+  The message names the release the chain's Kitchen mints and the package versions that pair with
+  it, or says `the Kitchen is newer than this SDK`. It names where this package deploys the owner's
+  Pot, and lists the owner's other Pots from the Pot store, each with its release. Nothing was
+  simulated, built or sent: when the Kitchen is newer, the user upgrades the package
+  (`sauce update`); a listed Pot of the package's own release still cooks, named with
+  `--pot <address>`. Offline nothing is checked, and the notes say
+  `The Pot's address is NOT checked against the deployed Kitchen`.
 - **No signer** (exit 2). `missing a signer…`: the command sends and was given no key. Pass
   `--wallet <name>` (a Solana wallet on Solana), `--keystore <path>` or, on Solana,
   `--keypair <path>`, with a password source; or build the transaction with `sauce tx` for another

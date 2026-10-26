@@ -341,13 +341,16 @@ chain: whether the released engine and Kitchen are there, the Kitchen's fee, and
 deployed and whose it is. With `--deploy` it sends the deployment, unless the Pot is already there,
 and waits until the endpoint shows the Pot's code.
 
-On an EVM chain the command also asks the deployed Kitchen where it puts the owner's Pot
-(`predictPot`). It asks before `pot` prints or sends a deployment, and before `simulate`, `tx`, `run`
-or `sign` uses the Pot. When the Kitchen's answer is not the SDK's own address, the command refuses
-and names both addresses. The SDK then pins another Kitchen release than the one deployed, and a
-cook sent to the SDK's address would reach no Pot. Code already at that address must be a Pot of the
-SDK's release, which the Kitchen puts there. Offline, nothing is read, and the output says the address is
-not checked ([Troubleshooting](troubleshooting.md#this-sdk-does-not-match-the-deployed-kitchen)).
+On an EVM chain the command also checks the Pot against the chain, before `pot` prints or sends a
+deployment and before `simulate`, `tx`, `run` or `sign` uses the Pot. For a Pot not deployed yet, it
+asks the deployed Kitchen where it puts the owner's Pot (`predictPot`), and refuses when that is not
+the SDK's own address: a cook sent to the SDK's address would reach no Pot. For a deployed Pot, it
+tells the Pot's release from the chain, as `sauce pot import` does, and refuses a Pot of another
+release, whose engine runs no program this SDK compiles. A refusal names the release the deployed
+Kitchen mints and the SDK versions that pair with it, or says the Kitchen is newer than the SDK. It
+says where the SDK deploys the Pot, and lists the owner's other Pots on the chain from the Pot
+store, each with its release. Offline, nothing is read, and the output says the address is not
+checked ([Troubleshooting](troubleshooting.md#this-sdk-does-not-match-the-deployed-kitchen)).
 
 Anyone may deploy a Pot, and it is its owner's either way. So `--deploy` with `--owner <address>`
 deploys another owner's Pot, which your signer sends and pays for. On Solana the owner signs the
