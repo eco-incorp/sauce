@@ -312,6 +312,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           input.accounts ?? {},
           input.via,
           program.derivedAccounts,
+          program.potMention,
         )
       : undefined;
   // On Solana, the accounts main takes that no cook derives, each given by name: what suits each, as

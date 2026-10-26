@@ -53,7 +53,7 @@ import {
   type EntryValue,
 } from "../routes/entry.js";
 import { svmTokenRows } from "../routes/token-registry.js";
-import type { CompiledSauceProgram } from "../routes/sauce-route.js";
+import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import {
   instructionAddresses,
@@ -1158,8 +1158,9 @@ export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): 
 /**
  * Refuses, cooked directly on the engine, where there is no Pot: a program whose own accounts are
  * the Pot's (it uses `pot`: `derived` names `pot`, `pot:<token>`, or an address derived from it),
- * whatever `--account` gives in their place, and the Pot given for a slot that must sign, which
- * only the Kitchen signs for. Any other `pot` given is refused as it resolves
+ * whatever `--account` gives in their place, naming where the program first names the Pot
+ * (`mention`), which makes every account it acts with the Pot's; and the Pot given for a slot that
+ * must sign, which only the Kitchen signs for. Any other `pot` given is refused as it resolves
  * (`svm/account-names.ts`).
  */
 function refusePotOnEngine(
@@ -1167,6 +1168,7 @@ function refusePotOnEngine(
   derived: Readonly<Record<string, string>> | undefined,
   given: Readonly<Record<string, string>>,
   via: CookVia,
+  mention?: SourcePosition,
 ): void {
   if (via !== "engine") return;
   for (const slot of manifest.accounts) {
@@ -1183,7 +1185,13 @@ function refusePotOnEngine(
   if (pot.length === 0) return;
   throw new UsageError(
     `the program uses the Pot (${pot.map(([name, value]) => `${name}: ${value}`).join(", ")}), ` +
-      "and --via engine cooks with no Pot, so there is no Pot to attach: cook through the Kitchen",
+      "and --via engine cooks with no Pot, so there is no Pot to attach: cook through the Kitchen" +
+      (mention === undefined
+        ? ""
+        : `. It names \`pot\` at line ${mention.line}, column ${mention.column}, and a program ` +
+          "that names the Pot anywhere acts as the Pot throughout, its token writes and " +
+          "`ctx.self()` included. To cook it directly, write the signer's own account " +
+          "(`Solana.owner`, or `ctx.self()` as a token holder) where it names `pot`"),
   );
 }
 
@@ -1238,6 +1246,8 @@ export function requireSvmAccounts(
   derived: Readonly<Record<string, string>> | undefined,
   given: Readonly<Record<string, string>>,
   via: CookVia = "kitchen",
+  /** Where the program first names the Pot (`CompiledSauceProgram.potMention`). */
+  potMention?: SourcePosition,
 ): void {
   const names = manifest.accounts.flatMap((entry) => (entry.kind === "slot" ? [entry.name] : []));
   const unknown = Object.keys(given).filter((name) => !names.includes(name));
@@ -1247,7 +1257,7 @@ export function requireSvmAccounts(
         (names.length === 0 ? "" : `; it takes ${names.join(", ")}`),
     );
   }
-  refusePotOnEngine(manifest, derived, given, via);
+  refusePotOnEngine(manifest, derived, given, via, potMention);
   const missing = svmAccountsToGive(manifest, derived, given, via);
   if (missing.length > 0) throw new UsageError(svmAccountsToGiveMessage(missing));
 }
@@ -1764,7 +1774,7 @@ async function prepare(
   const plain = compileProgram(input, files);
   svmPayload(plain, input.args);
   const manifest = plain.manifest ?? { accounts: [] };
-  requireSvmAccounts(manifest, plain.derivedAccounts, input.accounts, via);
+  requireSvmAccounts(manifest, plain.derivedAccounts, input.accounts, via, plain.potMention);
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
   // The slots the token methods added that no `--account` gave: the command derives each.
@@ -1987,6 +1997,8 @@ export async function svmCookSize(
   accountsNamed: Readonly<Record<string, string>>,
   via: CookVia = "kitchen",
   derived: Readonly<Record<string, string>> = {},
+  /** Where the program first names the Pot (`CompiledSauceProgram.potMention`). */
+  potMention?: SourcePosition,
 ): Promise<SvmCookSize> {
   const owner = placeholderKey(0);
   const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
@@ -1996,7 +2008,7 @@ export async function svmCookSize(
   // and no arguments (`pot` is the Pot, a program id is itself); one derived from an argument is a
   // distinct account of its own, as it is in a real cook. A program that uses the Pot is refused
   // cooked directly on the engine, as a cook is.
-  refusePotOnEngine(manifest, derived, accountsNamed, via);
+  refusePotOnEngine(manifest, derived, accountsNamed, via, potMention);
   const given: Record<string, string> = { ...accountsNamed };
   for (const [name, value] of Object.entries(derived)) {
     if (Object.hasOwn(given, name)) continue;

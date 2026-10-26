@@ -346,6 +346,13 @@ export interface CompiledSauceProgram {
    * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
    */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
+   * On Solana, where the program first names the Pot (`pot`, where nothing else binds it), 1-based.
+   * A program that names it anywhere acts as the Pot throughout: every account it acts with, its
+   * token writes' and `ctx.self()`'s included, derives from the Pot (`pot`, `pot:<token>`), which a
+   * cook with no Pot (the engine called directly) cannot attach. Absent where it never names it.
+   */
+  readonly potMention?: SourcePosition;
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
   /** Source after the SDK's rewrites: what the compiler was given. */
@@ -358,6 +365,19 @@ export interface DerivedValue {
   readonly type: "Uint256";
   /** How it is worked out: `stop:<pool>:<token>:<limit>`. */
   readonly derive: string;
+}
+
+/** A place in a program's text, 1-based. */
+export interface SourcePosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+/** Where `offset` falls in `text`, 1-based. */
+function positionOf(text: string, offset: number): SourcePosition {
+  const lines = text.slice(0, offset).split("\n");
+
+  return { line: lines.length, column: lines[lines.length - 1]!.length + 1 };
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
@@ -446,6 +466,7 @@ export function compileSauceProgram(
     ...(derivedValues.length === 0 ? {} : { derivedValues }),
     ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
     ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
+    ...(program.potMention === undefined ? {} : { potMention: program.potMention }),
     entrySignature: program.entrySignature,
     source: program.source,
   };
@@ -475,6 +496,7 @@ function compileForChain(
   readonly derivedValues?: Readonly<Record<string, string>>;
   readonly stoppable?: readonly string[];
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  readonly potMention?: SourcePosition;
   readonly entryParams: RsCompileResult["entryParams"];
   readonly entrySignature: EntrySignature;
 } {
@@ -576,8 +598,8 @@ function compileForChain(
   ) {
     const [read] = freeReadsOf(sauce, POT_NAME);
     if (read !== undefined) {
-      const lines = sauce.slice(0, read.start).split("\n");
-      throw ambientPotRefusal(lines.length, lines[lines.length - 1]!.length + 1);
+      const { line, column } = positionOf(sauce, read.start);
+      throw ambientPotRefusal(line, column);
     }
   }
   // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
@@ -643,6 +665,8 @@ function compileForChain(
   let derivedValues: Readonly<Record<string, string>> | undefined;
   let stoppable: readonly string[] | undefined;
   let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
+  // Where the program first names the Pot, which makes its accounts the Pot's (svm).
+  let potMention: SourcePosition | undefined;
   // The holders the token pass read by a name the program does not declare (EVM).
   let freeHolders: ReadonlyMap<string, string> | undefined;
   if (chain.kind === "svm") {
@@ -668,6 +692,10 @@ function compileForChain(
       derivedValues = lowered.values;
       stoppable = lowered.stoppable;
       stoppableRuns = lowered.stoppableRuns;
+      if (lowered.namesPot === true) {
+        const [read] = freeReadsOf(sauce, POT_NAME);
+        if (read !== undefined) potMention = positionOf(sauce, read.start);
+      }
     }
     if (args !== undefined && Object.keys(derivedValues ?? {}).length > 0) {
       throw new RangeError(
@@ -766,6 +794,7 @@ function compileForChain(
     ...(derivedValues === undefined ? {} : { derivedValues }),
     ...(stoppable === undefined ? {} : { stoppable }),
     ...(stoppableRuns === undefined ? {} : { stoppableRuns }),
+    ...(potMention === undefined ? {} : { potMention }),
   };
 }
 

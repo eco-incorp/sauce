@@ -63,6 +63,11 @@ export interface SvmLoweringResult {
   readonly stoppable?: readonly string[];
   /** How many times each of those inside a loop runs, by its derivation (`SvmLowering.runsOf`). */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
+   * Whether the program names the Pot (`pot`, where nothing else binds it): then every account it
+   * acts with derives from the Pot (`pot`, `pot:<token>`), not `authority`.
+   */
+  readonly namesPot?: boolean;
 }
 
 /** A mint as a call names it. */
@@ -1267,6 +1272,7 @@ export class SvmLowering {
       ...(this.stoppableRuns.size === 0
         ? {}
         : { stoppableRuns: Object.fromEntries(this.stoppableRuns) }),
+      ...(this.authorityDerivation === "pot" ? { namesPot: true } : {}),
     };
   }
 
