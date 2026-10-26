@@ -3,7 +3,7 @@
 import { uniswapV3 } from "@sauce/router";
 
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
-  require(USDC.balanceOf(ctx.self()) >= amountIn, "amountIn is not in the Pot");
+  require(USDC.balanceOf(pot) >= amountIn, "amountIn is not in the Pot");
   const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   require(pool != 0, "no USDC/WETH 0.05% pool");
   return uniswapV3(pool, USDC, WETH, amountIn, 0, minOut, recipient);

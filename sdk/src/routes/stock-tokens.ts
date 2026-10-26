@@ -4,7 +4,7 @@
  * on Solana the xStocks, Ondo's tokens, Backpack Securities' and PreStocks'. `token-registry.ts`
  * merges their rows (`stock-tokens.generated.ts`) into `TOKEN_REGISTRY` and, on Solana, into
  * `SVM_TOKEN_REGISTRY`, so a program names each one by its symbol with no import, as it names
- * `USDC`: `SPCXc.balanceOf(ctx.self())` on Base, `balanceOf(TSLAx, account)` on Solana.
+ * `USDC`: `SPCXc.balanceOf(pot)` on Base, `balanceOf(TSLAx, account)` on Solana.
  *
  * PROVENANCE. Each list is copied from its issuer's own published list (`STOCK_ISSUERS`), never
  * from an aggregator, by `scripts/sync-stock-tokens.mjs`, and every row is then held to the chain:
