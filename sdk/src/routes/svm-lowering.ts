@@ -32,7 +32,7 @@ import {
 } from "./ast-walk.js";
 import { bindingOf, shadowed, walkScoped, type Scope } from "./lexical-scope.js";
 import { parseSauce } from "./parse.js";
-import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { BALANCE_MEMBER, OWNER_NAME, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import {
   applySplices,
   argumentRange,
@@ -652,6 +652,10 @@ export class SvmLowering {
   readonly potReads: ReadonlySet<AstNode>;
   /** Every read of `self` where the program does not bind it: refused, naming `pot`. */
   readonly selfReads: readonly AstNode[];
+  /** Every read of `owner` where the program does not bind it: the Pot's owner's account. */
+  readonly ownerReads: ReadonlySet<AstNode>;
+  /** By name, every read of it where neither the program nor the caller binds it (`freeReads`). */
+  private readonly freeByName = new Map<string, ReadonlySet<AstNode>>();
   /**
    * How the account the program acts with is derived: `pot` where the program names the Pot (in any
    * form: `pot`, `pot.USDC`, `pot.balance`, `pot.signer()`), so its token writes, its `ctx.self()`
@@ -712,10 +716,10 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
-    /** The names the caller binds (its defines, its contract bindings, and a `pot` or `self` an
-     *  ambient module exports): a `pot` or `self` among them is the caller's, and the accounts this
-     *  adds are named apart from them. */
-    bound: ReadonlySet<string> = new Set(),
+    /** The names the caller binds (its defines, its contract bindings, and a `pot`, `self` or
+     *  `owner` an ambient module exports): a `pot`, `self` or `owner` among them is the caller's,
+     *  and the accounts this adds are named apart from them. */
+    private readonly bound: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -738,21 +742,22 @@ export class SvmLowering {
       collectPatternNames(param, this.mainParams);
     }
     this.reads = readsOf(this.program, this.parents);
-    const freeReads = (name: string): AstNode[] =>
-      bound.has(name) ? [] : this.reads.filter((n) => nameOf(n) === name && !this.owns(n, name));
-    this.potReads = new Set(freeReads(POT_NAME));
-    this.selfReads = freeReads(RETIRED_POT_NAME);
+    this.potReads = this.freeReads(POT_NAME);
+    this.selfReads = [...this.freeReads(RETIRED_POT_NAME)];
+    this.ownerReads = this.freeReads(OWNER_NAME);
     this.authorityDerivation = this.potReads.size > 0 ? "pot" : "authority";
     this.index = rowIndex(rows);
     // The accounts this adds to `main` are named apart from every name the program declares, every
     // name the caller binds, and every other name the program reads, which a parameter of `main`
-    // of that name would hide: an ambient module's export among them. The Pot's own `pot` is the
-    // one the Pot's account stands for.
+    // of that name would hide: an ambient module's export among them. The Pot's own `pot` and its
+    // owner's `owner` are the ones the Pot's account and its owner's stand for.
     this.slots = new Slots(
       new Set([
         ...this.declared,
         ...bound,
-        ...this.reads.map(nameOf).filter((name) => name !== POT_NAME && name !== RETIRED_POT_NAME),
+        ...this.reads
+          .map(nameOf)
+          .filter((name) => name !== POT_NAME && name !== RETIRED_POT_NAME && name !== OWNER_NAME),
       ]),
     );
     walk(this.program, (n) => {
@@ -778,6 +783,24 @@ export class SvmLowering {
   /** Whether `name`, read at `node`, is a name the program binds there (`lexical-scope.ts`). */
   owns(node: AstNode, name: string): boolean {
     return shadowed(this.scopes.get(node), name, node.start);
+  }
+
+  /**
+   * Every read of `name` where neither the program binds it there (`owns`) nor the caller binds it
+   * (`bound`): the language's own name, `pot`, `owner` or `Account`, where it reads one.
+   */
+  freeReads(name: string): ReadonlySet<AstNode> {
+    let reads = this.freeByName.get(name);
+    if (reads === undefined) {
+      reads = new Set(
+        this.bound.has(name)
+          ? []
+          : this.reads.filter((n) => nameOf(n) === name && !this.owns(n, name)),
+      );
+      this.freeByName.set(name, reads);
+    }
+
+    return reads;
   }
 
   /**
@@ -970,6 +993,11 @@ export class SvmLowering {
   /** Whether `node` reads the Pot: `pot`, where the program does not bind it. */
   isPot(node: AstNode): boolean {
     return this.potReads.has(node);
+  }
+
+  /** Whether `node` reads the Pot's owner: `owner`, where the program does not bind it. */
+  isOwner(node: AstNode): boolean {
+    return this.ownerReads.has(node);
   }
 
   /** The program's top-level function `name`, `main` aside, where it declares the name once. */

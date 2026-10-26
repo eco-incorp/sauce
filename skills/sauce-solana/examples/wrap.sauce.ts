@@ -19,11 +19,11 @@ function main(lamports: Uint256): Uint256 {
   // The System Program's transfer: instruction 2 (4 bytes), then the lamports (8 bytes).
   let transfer = hex`02000000`;
   svm.call(
-    Solana.systemProgram,
-    [Solana.owner.writable().signer(), potWsol],
+    Account.systemProgram,
+    [owner.writable().signer(), potWsol],
     transfer.concat(lamports.toBytesLe(8)),
   );
   // SPL Token's SyncNative: instruction 17.
-  svm.call(Solana.tokenProgram, [potWsol], hex`11`);
+  svm.call(Account.tokenProgram, [potWsol], hex`11`);
   return pot.WSOL;
 }

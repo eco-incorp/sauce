@@ -210,7 +210,7 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     holds there, write `ctx.balance(x)`. In `--account` values and Solana derivations, `self` is
     `authority` (the Pot through the Kitchen, the owner with `--via engine`). A program that names
     `pot` is refused with `--via engine`, which has no Pot: for a direct cook write the signer's
-    account (`Solana.owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
+    account (`owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
     through the Kitchen. Rename in programs only: the `"self"` value of an actions document
     (`"recipient": "self"`) and of the TypeScript token, deposit and actions APIs is unchanged, so
     a project-wide replace of `self` breaks them. An account you give for a slot derived from the
@@ -230,6 +230,33 @@ outputs, such as `uint128`, can be refused during compilation. For a method with
 output, use the value form and read its result: `const value = call.catch(() => { return 0; });`.
 Successful-return decoding remains outside that single-call catch. Use a general `try` block
 when recovery needs to cover a multi-step operation instead.
+
+## Solana's accounts are `Account` and `owner`
+
+A program for Solana writes the accounts it uses where it uses them as `Account`'s, and the Pot's
+owner as `owner`. `Solana` names the chain and holds no account. Each old spelling is refused,
+naming the new one, and the new one compiles to the same accounts, the same checks and the same
+bytes:
+
+| Write                                                                                                    | for                                                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Account(key)`                                                                                           | `Solana.account(key)`                                                                                   |
+| `Account.pda(program, [seeds])`                                                                          | `Solana.pda(program, [seeds])`                                                                          |
+| `Account.systemProgram`, `.tokenProgram`, `.token2022Program`, `.associatedTokenProgram`, `.memoProgram` | `Solana.systemProgram`, `.tokenProgram`, `.token2022Program`, `.associatedTokenProgram`, `.memoProgram` |
+| `owner` (`owner.address`, `owner.signer()`, `owner.USDC`)                                                | `Solana.owner`                                                                                          |
+
+- **A program that declares `owner` keeps it.** A parameter or local named `owner` is the
+  program's own wherever it is in scope, and the Pot's owner is not named there. Rename yours where
+  the program needs the Pot's owner too.
+- **`Account` is still a type.** `Account<Writable>` declares an account `main` takes; only as a
+  value does `Account` name one.
+- **What a cook takes is unchanged.** The `--account` values (`owner`, `owner:USDC`,
+  `pda:<program>:<seeds>`) and the derivations `sauce compile --json` reports are the same, and so
+  are `USDC.accountOf(holder)`, `USDC.mint`, `USDC.tokenProgram`, `.writable()`, `.signer()` and
+  `pot`.
+- **On an EVM chain** `Account(…)` and `owner` are refused: accounts are Solana's.
+- **In an editor**, the SauceScript types declare `Account` and `owner`, and `Solana` is a chain
+  with no account member, so a retired spelling shows as an error before it compiles.
 
 ## Check settlement pins
 

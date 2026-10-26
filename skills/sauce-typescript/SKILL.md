@@ -251,11 +251,12 @@ address in `deployments` is recorded, not proof of live code.
     mainnet's USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
     `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
     `tokenProgram: "token-2022"`.
-  - A program compiled with the token methods, or writing an account where it uses it, carries
-    `derivedAccounts`: each slot the SDK added to `main`, by name, with its derivation as an
-    `--account` value (`pot:USDC` where the program names `pot`, else `authority:USDC`, `@to:USDC`,
-    `pda:@program:"state",@owner`);
-    `routes.sourceGlobals("solana").accounts` lists the expressions.
+  - A program compiled with the token methods, or writing an account where it uses it
+    (`Account.pda(program, [seeds])`, `Account(key)`, `owner`), carries `derivedAccounts`: each
+    slot the SDK added to `main`, by name, with its derivation as an `--account` value (`pot:USDC`
+    where the program names `pot`, else `authority:USDC`, `@to:USDC`,
+    `pda:@program:"state",@owner`); `routes.sourceGlobals("solana").accounts` lists the
+    expressions. The host's `Solana` export is the chain, and holds no account.
     `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` resolves one to
     the address the cook's `AccountResolution` takes, as `sauce run` does; a venue namespace's
     `slot:@pool:USDC.<part>` also needs `load`, an owned-account loader, through which it reads the

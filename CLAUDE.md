@@ -977,8 +977,9 @@ for the accessor pass's bare `pot`, which becomes `ctx.self()`; on Solana the lo
 every such `pot` itself, as the Pot slot's key, or its account where an `Account` is expected); a
 `pot` the program declares or imports by name, a `defines` key or a `contracts` binding is an
 ordinary variable. A `pot` that only a caller's ambient module exports, read with no import, is
-neither: it is refused where it is read (`pot-sugar.ts#ambientPotRefusal`), so no module's export
-stands in for the Pot with no word in the program (an ambient `self` stays the caller's value). The
+neither: it is refused where it is read (`pot-sugar.ts#ambientNameRefusal`), so no module's export
+stands in for the Pot with no word in the program, and so is an ambient `owner` a program for
+Solana reads, where `owner` is the Pot's owner (an ambient `self` stays the caller's value). The
 SDK never works out an ambient module's exports itself: `rs-compile.ts#ambientNamesOf` asks the
 compiler, compiling the program's own imports, as written, before a `main` that reads nothing and
 an uncalled closure (so the compiler loads the modules the compile does and lowers nothing; the

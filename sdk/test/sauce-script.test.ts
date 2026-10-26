@@ -197,6 +197,22 @@ describe("SauceScript in an editor", () => {
     expect(report(service(files), file)).toEqual([]);
   });
 
+  it("takes Account as a parameter's type and as the value that names an account, and owner", () => {
+    const file = join(work, "accounts.sauce.ts");
+    const files = {
+      [file]:
+        "function size(account: Account): Uint256 {\n  return account.dataLen;\n}\n" +
+        "function main(state: Account<Writable>, program: Address, key: Address): Uint256 {\n" +
+        "  const signer: Account = owner.writable().signer();\n" +
+        '  const vault = Account.pda(program, ["vault", owner, key]).writable();\n' +
+        "  svm.call(Account.systemProgram, [signer, vault], hex`00`);\n" +
+        "  return size(state) + size(Account(key)) + Account.memoProgram.dataLen + owner.USDC +\n" +
+        "    owner.balance;\n}\n",
+    };
+    expect(report(service(files, false), file)).toEqual([]);
+    expect(report(service(files), file)).toEqual([]);
+  });
+
   // TypeScript infers `number` for a plain literal, and the plugin takes it as the integer it is.
   const plain = (name: string, source: string) => {
     const file = join(work, `${name}.sauce.ts`);
@@ -340,8 +356,11 @@ describe("SauceScript in an editor", () => {
         [2305, 2724],
       ],
       // Solana's accounts, and a token's, as a program for it writes them.
-      ["systemProgram", "function main() { const p = Solana.systemProgramm; }\n", missing],
-      ["pda", "function main() { const p = Solana.pda(ctx.self()); }\n", [2554]],
+      ["systemProgram", "function main() { const p = Account.systemProgramm; }\n", missing],
+      ["pda", "function main() { const p = Account.pda(ctx.self()); }\n", [2554]],
+      ["account", "function main() { const a = Account(); }\n", [2554]],
+      // The chain names a chain, and holds no account.
+      ["retired", 'function main() { const p = Solana.pda(ctx.self(), ["a"]); }\n', missing],
       [
         "writable",
         "function main() { const a = USDC.accountOf(ctx.self()).writeable(); }\n",

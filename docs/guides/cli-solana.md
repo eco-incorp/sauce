@@ -35,7 +35,7 @@ or a token as `USDC` (or `mint:USDC`) for its mint.
 ## The accounts
 
 For the token methods (`USDC.transfer(to, amount)`, `pot.USDC`) and every account
-a program writes where it uses it (`USDC.accountOf(to)`, `Solana.pda(program, [seeds])`), compiling
+a program writes where it uses it (`USDC.accountOf(to)`, `Account.pda(program, [seeds])`), compiling
 adds each account the program needs to `main`, with how to find it. `sauce compile --json` lists
 them in its `manifest`, the account manifest: every account, in order, with its role and how it is
 derived.

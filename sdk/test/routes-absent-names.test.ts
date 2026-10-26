@@ -17,7 +17,7 @@ import {
   chainNames,
   INSTALLED_CHAIN_MODULE,
 } from "../src/routes/chain-module.js";
-import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
+import { ambientNameRefusal } from "../src/routes/pot-sugar.js";
 import { ambientNamesOf, compileWithRs, makeResolve } from "../src/routes/rs-compile.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
@@ -1159,7 +1159,7 @@ describe("code a test rules out holds no name nothing gives meaning to: a typo c
     for (const chain of ["optimism", "solana"]) expect(hex(chain, source)).toBe(hex(chain, EMPTY));
   });
 
-  it("the language's names are every root of the SauceScript reference, its `undefined`, and the SDK's `pot` and `Token`", () => {
+  it("the language's names are every root of the SauceScript reference, its `undefined`, the SDK's `pot` and `Token`, and Solana's `Account` and `owner`", () => {
     const { intrinsics } = JSON.parse(
       readFileSync(
         resolve(process.cwd(), "../skills/sauce-script/references/builtins.json"),
@@ -1171,7 +1171,9 @@ describe("code a test rules out holds no name nothing gives meaning to: a typo c
       .filter(({ name }) => name !== "throw" && name !== "unary minus")
       .map(({ name }) => /^[A-Za-z_$][\w$]*/.exec(name.replace(/^new /, ""))![0]);
     expect(roots.length).toBeGreaterThan(50);
-    expect(new Set(LANGUAGE_NAMES)).toEqual(new Set([...roots, "undefined", "pot", "Token"]));
+    expect(new Set(LANGUAGE_NAMES)).toEqual(
+      new Set([...roots, "undefined", "pot", "Token", "Account", "owner"]),
+    );
   });
 });
 
@@ -1343,7 +1345,7 @@ describe("a name the caller binds, by an ambient module or a contract, is the ca
       ),
     ).toBe(build("ronin", "return 1;"));
     expect(refusal("ronin", "function main() {\nreturn pot.WETH;\n}", options)).toBe(
-      ambientPotRefusal(2, 8).message,
+      ambientNameRefusal("pot", 2, 8).message,
     );
   });
 

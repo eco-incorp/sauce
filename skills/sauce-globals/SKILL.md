@@ -66,8 +66,8 @@ token and `pot.balance` the coin. The holder is:
   USDC contract holds (on Solana, `USDC.balance` is the mint's lamports, `USDC.WSOL` its own WSOL
   account's balance);
 - on Solana, one known when the transaction is built, whose account is added to `main`: `pot`,
-  `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a 32-byte key written out
-  (`sauce-solana`).
+  `owner` (the Pot's owner), an `Address` parameter of `main`, a token's mint, or a 32-byte key
+  written out (`sauce-solana`).
 
 A record or a list is not a holder: on one, a property named like a token is refused, since the
 name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an interface with no
@@ -84,7 +84,7 @@ value to a local declared `Address` first. `Token(address)` has no short form: i
 | `.transfer(to, amount)`           | SafeERC20 transfer                                        |
 | `.transferFrom(from, to, amount)` | SafeERC20 transferFrom                                    |
 | `.approve(spender, amount)`       | forceApprove: a non-zero allowance is reset to zero first |
-| `.balanceOf(owner)`               | balance read, the long form of `owner.USDC`               |
+| `.balanceOf(holder)`              | balance read, the long form of `holder.USDC`              |
 
 - **Writes are SafeERC20**: a token that returns nothing (USDT) works when it has code; a `false`
   return, a malformed return or an address with no code reverts the program. A write returns

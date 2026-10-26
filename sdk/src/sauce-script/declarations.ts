@@ -2,8 +2,7 @@
  * The generated half of the SauceScript declarations an editor loads for a program file
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
- * - every chain as a namespace of its contracts (`Base.UniswapV3.Factory`), and Solana with the
- *   accounts a program for it writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
+ * - every chain as a namespace of its contracts (`Base.UniswapV3.Factory`);
  * - every token symbol as a holder's balance (`pot.USDC`, `recipient.TSLAx`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
@@ -184,7 +183,7 @@ export function sauceScriptDeclarations(): string {
   const namespaces = new Map<string, string>();
   const defines = new Set<string>();
   const tokens = new Set<string>();
-  let chains: ReadonlyArray<{ readonly key: string; readonly kind: string }> = [];
+  let chains: ReadonlyArray<{ readonly key: string }> = [];
   for (const chain of CANONICAL_CHAINS) {
     const globals = sourceGlobals(chain);
     chains = globals.chains;
@@ -228,11 +227,7 @@ export function sauceScriptDeclarations(): string {
       .map(([ns, type]) => `  readonly ${ns}: ${sources}.${type};`),
     "}",
     "",
-    ...chains.map((chain) =>
-      chain.kind === "svm"
-        ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts;`
-        : `declare const ${chain.key}: SauceChain;`,
-    ),
+    ...chains.map((chain) => `declare const ${chain.key}: SauceChain;`),
     "",
     "/** A holder's balance of a token, by its symbol: `pot.USDC`, `recipient.TSLAx`, the same read",
     " *  as `USDC.balanceOf(pot)`. The holder is any address: `pot`, a variable, a contract. Its",

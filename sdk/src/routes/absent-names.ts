@@ -75,8 +75,20 @@ import { lexicalBindings } from "./lexical-bindings.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
-import { ACCOUNT_MEMBERS } from "./svm-account-expressions.js";
+import {
+  BALANCE_MEMBER,
+  OWNER_NAME,
+  POT_NAME,
+  RETIRED_POT_NAME,
+  selfRefusal,
+} from "./pot-sugar.js";
+import {
+  ACCOUNT_FACTORY,
+  ACCOUNT_MEMBERS,
+  evmAccountRefusal,
+  RETIRED_ACCOUNT_ROOT,
+  retiredAccountRefusal,
+} from "./svm-account-expressions.js";
 import { SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
 import { TOKEN_FACTORY_NAME } from "./token-rewrite.js";
 import { locatedError, meant, notAToken, notTokenOrProtocol } from "./unknown-global.js";
@@ -142,15 +154,20 @@ export function unknownNameError(
 /**
  * The names the language gives meaning to with no declaration: each builtin's root, generated from
  * the SauceScript reference's `builtins.json` (`BUILTIN_GLOBALS`); `undefined`, which the reference
- * gives a missing static member (`{ a: 1, b: undefined }`) and no builtin is; and the SDK's Pot and
- * `Token(addr)`.
+ * gives a missing static member (`{ a: 1, b: undefined }`) and no builtin is; the SDK's Pot and
+ * `Token(addr)`; and Solana's accounts, `Account(…)` and the Pot's owner, `owner`.
  */
 export const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
   ...BUILTIN_GLOBALS,
   "undefined",
   POT_NAME,
   TOKEN_FACTORY_NAME,
+  ACCOUNT_FACTORY,
+  OWNER_NAME,
 ]);
+
+/** Solana's accounts, which a program compiled for an EVM chain cannot name. */
+const SOLANA_ACCOUNTS: ReadonlySet<string> = new Set([ACCOUNT_FACTORY, OWNER_NAME]);
 
 /** The protocols a Solana venue is written under (`Orca` of `Orca.Whirlpool`): the Solana lowering's. */
 const SVM_VENUE_ROOTS: ReadonlySet<string> = new Set(
@@ -379,8 +396,8 @@ export function checkNames(
   };
 
   /** The chain `node`, an identifier, names in `at`, when it is a chain key there. On a Solana
-   *  chain, and in code a test rules out, a Solana chain's own name (`Solana.pda(…)`) is the
-   *  Solana lowering's. */
+   *  chain, and in code a test rules out, a Solana chain's own name (`Solana.self`) is the Solana
+   *  lowering's. */
   const chainKeyOf = (node: AstNode, at: Scope | undefined): CanonicalChain | undefined => {
     const key = nameOf(node);
     if (shadowed(at, key, node.start) || defined.has(key)) return undefined;
@@ -537,6 +554,25 @@ export function checkNames(
   };
 
   /**
+   * The refusal of `node`, a member, where it spells an account the way `Account` and `owner`
+   * replaced (`Solana.pda`, `Solana.owner`) and the program declares no `Solana` there.
+   */
+  const retiredAccount = (node: AstNode, at: Scope | undefined): string | undefined => {
+    if (node.type !== "MemberExpression" || prop<boolean>(node, "computed")) return undefined;
+    const object = unwrap(prop(node, "object"));
+    const property = prop<AstNode>(node, "property");
+    if (
+      object.type !== "Identifier" ||
+      property.type !== "Identifier" ||
+      nameOf(object) !== RETIRED_ACCOUNT_ROOT ||
+      shadowed(at, RETIRED_ACCOUNT_ROOT, object.start) ||
+      defined.has(RETIRED_ACCOUNT_ROOT)
+    ) {
+      return undefined;
+    }
+    return retiredAccountRefusal(nameOf(property));
+  };
+  /**
    * The registry name `node` reads in `at`, with `role`: a contract (`UniswapV3.Factory`,
    * `Base.UniswapV3.Factory`, `Lido` of `Lido.submit`), a token (`USDT`), or undefined. A protocol or
    * chain read whole, and `available(...)`, are refused here.
@@ -570,6 +606,12 @@ export function checkNames(
       return undefined;
     }
     if (target.type !== "MemberExpression" || prop<boolean>(target, "computed")) return undefined;
+    // An account spelled on Solana's name, whether the program runs it or a test rules it out, on
+    // every chain: refused before a chain's name claims the member (`Solana.owner.dataLen`).
+    for (const member of [target, unwrap(prop(target, "object"))]) {
+      const refusal = retiredAccount(member, at);
+      if (refusal !== undefined) fail(member, refusal);
+    }
     const object = unwrap(prop(target, "object"));
     const property = prop<AstNode>(target, "property");
     if (property.type !== "Identifier") return undefined;
@@ -1322,9 +1364,29 @@ export function checkNames(
           if (validating && isRetiredPot(node, at)) {
             fail(node, selfRefusal(RETIRED_POT_NAME, POT_NAME).message);
           }
+          const name = nameOf(node);
+          // Where a program for an EVM chain runs it, an account is Solana's (`Account(…)`,
+          // `owner`): code a test rules out may name one, which a Solana chain compiles.
+          if (
+            !validating &&
+            chain.kind === "evm" &&
+            SOLANA_ACCOUNTS.has(name) &&
+            !shadowed(at, name, node.start) &&
+            !defined.has(name) &&
+            !Object.hasOwn(options.scalars ?? {}, name)
+          ) {
+            const spelled =
+              name !== ACCOUNT_FACTORY
+                ? name
+                : role === "callee"
+                  ? `${name}(…)`
+                  : role.startsWith(".")
+                    ? `${name}${role}${role === ".pda" ? "(…)" : ""}`
+                    : name;
+            fail(node, evmAccountRefusal(spelled, chain.slug));
+          }
           // In code a test rules out, which the compile here never reads, a name is what the
           // program, the caller, a chain's registry or the language makes it, or reported.
-          const name = nameOf(node);
           if (
             validating &&
             !shadowed(at, name, node.start) &&

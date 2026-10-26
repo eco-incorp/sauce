@@ -306,7 +306,7 @@ const COOK = {
         '`pda:<program>:"seed",@to,u64:7` (an address the program derives for those seeds). ' +
         "sauce_compile's manifest lists them; one with a `derive` (an account the token methods " +
         "added, such as USDC.transfer(to, amount)'s, or one the program writes where it uses it, " +
-        "such as Solana.pda(program, [seeds])) is filled by itself, and named here only to " +
+        "such as Account.pda(program, [seeds])) is filled by itself, and named here only to " +
         "replace it. A slot derived from the Pot (`pot`, `pot:USDC`, `authority` through the " +
         "Kitchen) takes only the Pot's own account, so leave it out to derive it. So does a slot " +
         "derived from the owner (`owner`, `owner:USDC`, `authority` with via engine), and an " +
@@ -1390,8 +1390,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "and eight more, the pool found by key where the venue finds pools by key " +
         "(Orca.Whirlpool.pool(USDC, WSOL, 4)), each pool's accounts derived as the cook is " +
         "built) and the accounts a " +
-        "program writes where it uses them (`accounts`: Solana.pda(program, [seeds]), " +
-        "USDC.accountOf(holder), Solana.systemProgram, …), the chain names, the " +
+        "program writes where it uses them (`accounts`: Account(key), Account.pda(program, " +
+        "[seeds]), Account.systemProgram, owner, USDC.accountOf(holder), …), the chain names, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
         "tokenized stocks (Ethereum and Solana have over a thousand each; Base's include " +
         "Coinbase's, such as SPCXc for SpaceX; Solana's are Token-2022 mints, such as TSLAx), " +

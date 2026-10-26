@@ -28,7 +28,7 @@ export interface SauceTokenSource {
 }
 
 /**
- * An account a program compiled for Solana writes where it uses it (`Solana.pda(…)`,
+ * An account a program compiled for Solana writes where it uses it (`Account.pda(…)`,
  * `USDC.accountOf(holder)`): added to main as a parameter and derived as the cook is built, so what
  * it is made of is known then. Read-only unless `.writable()` or `.signer()` gives it that role.
  */
@@ -41,14 +41,15 @@ export interface SauceSolanaAccountFields {
 }
 export type SauceSolanaAccount = bigint & SauceSolanaAccountFields;
 
-/** The accounts a program compiled for Solana names on `Solana`. */
-export interface SauceSolanaAccounts {
+/**
+ * `Account` as a value, in a program compiled for Solana: the account at a key, the address a
+ * program derives, and the programs a program calls. As a type, `Account` is an account main takes.
+ */
+export interface SauceAccountFactory {
+  /** The account at a key. */
+  (key: bigint): SauceSolanaAccount;
   /** The address `program` derives for the seeds: strings, keys, symbols, an integer's `.toBytesLe(n)`. */
   pda(program: bigint, seeds: readonly (string | bigint | SauceBytes)[]): SauceSolanaAccount;
-  /** The account at a key. */
-  account(key: bigint): SauceSolanaAccount;
-  /** The Pot's owner, who signs the cook. */
-  readonly owner: SauceSolanaAccount;
   readonly systemProgram: SauceSolanaAccount;
   readonly tokenProgram: SauceSolanaAccount;
   readonly token2022Program: SauceSolanaAccount;

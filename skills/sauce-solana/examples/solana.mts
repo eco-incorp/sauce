@@ -301,10 +301,10 @@ check(
 const table = routes.compileSauceProgram(
   "solana",
   "function main(program: Address, to: Address): Uint256 {\n" +
-    "  const dest = Solana.pda(program, [to]).writable();\n" +
-    '  return dest.dataLen + Solana.pda(program, ["state", to]).dataLen + Solana.account(program).dataLen +\n' +
-    "    pot.dataLen + Solana.owner.dataLen + Solana.token2022Program.dataLen +\n" +
-    "    Solana.associatedTokenProgram.dataLen + Solana.memoProgram.dataLen + USDC.mint.dataLen +\n" +
+    "  const dest = Account.pda(program, [to]).writable();\n" +
+    '  return dest.dataLen + Account.pda(program, ["state", to]).dataLen + Account(program).dataLen +\n' +
+    "    pot.dataLen + owner.dataLen + Account.token2022Program.dataLen +\n" +
+    "    Account.associatedTokenProgram.dataLen + Account.memoProgram.dataLen + USDC.mint.dataLen +\n" +
     "    USDC.tokenProgram.dataLen + USDC.accountOf(to).dataLen + USDC.accountOf(to).dataLen;\n}\n",
 );
 const derived = table.derivedAccounts ?? {};
@@ -312,7 +312,7 @@ check(derived.destPda === "pda:@program:@to", "a pda is named for the constant i
 check(derived.statePda === 'pda:@program:"state",@to', "else for its first string seed");
 check(
   derived.programAccount === "@program" && derived.pot === "pot" && derived.owner === "owner",
-  "Solana.account(key), pot and Solana.owner",
+  "Account(key), pot and owner",
 );
 check(
   derived.mintUSDC === "mint:USDC" && derived.toUSDC === "@to:USDC",
@@ -346,7 +346,7 @@ let refused = "";
 try {
   routes.compileSauceProgram(
     "solana",
-    'function main(program: Address): Uint256 {\n  const x = 5;\n  return Solana.pda(program, ["a", x]).dataLen;\n}\n',
+    'function main(program: Address): Uint256 {\n  const x = 5;\n  return Account.pda(program, ["a", x]).dataLen;\n}\n',
   );
 } catch (error) {
   refused = (error as Error).message;
@@ -356,6 +356,25 @@ check(
     refused.includes("`Account` parameter of main"),
   `a seed computed as the program runs is refused: ${refused}`,
 );
+// Accounts are `Account`'s and the owner is `owner`: the chain's name holds none, and an account
+// spelled on it is refused, naming what to write.
+for (const [spelled, instead] of [
+  ["Solana.pda(program, [to]).dataLen", "Account.pda(program, [seeds])"],
+  ["Solana.account(program).dataLen", "Account(key)"],
+  ["Solana.owner.dataLen", "owner"],
+  ["Solana.systemProgram.dataLen", "Account.systemProgram"],
+]) {
+  let retired = "";
+  try {
+    routes.compileSauceProgram(
+      "solana",
+      `function main(program: Address, to: Address): Uint256 {\n  return ${spelled};\n}\n`,
+    );
+  } catch (error) {
+    retired = (error as Error).message;
+  }
+  check(retired.includes(`\`${instead}\``), `${spelled} is refused naming ${instead}: ${retired}`);
+}
 
 console.log(
   `SVM program ${program.bytecode.length} bytes, ${slots.length} account slots, ${args.length}-byte arguments`,

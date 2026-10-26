@@ -255,6 +255,22 @@ declare function Token(address: SauceInt): SauceTokenSource;
  */
 declare const pot: import("../routes/source-globals.generated.js").SauceSolanaAccount;
 
+/**
+ * Solana: the Pot's owner, who signs the cook, as an account (`owner.address`, its key;
+ * `owner.signer()`; `owner.USDC`, its balance of a token). A program that declares its own `owner`
+ * owns the name.
+ */
+declare const owner: import("../routes/source-globals.generated.js").SauceSolanaAccount;
+
+/**
+ * Solana: an account a program writes where it uses it, added to main and derived as the cook is
+ * built: `Account(key)`, the account at a key; `Account.pda(program, [seeds])`, the address a program
+ * derives for the seeds; `Account.systemProgram`, `Account.tokenProgram`, `Account.token2022Program`,
+ * `Account.associatedTokenProgram` and `Account.memoProgram`. As a type, `Account` is an account
+ * `main` takes (`Account<Writable, Signer>`). A program that declares its own `Account` owns the name.
+ */
+declare const Account: import("../routes/source-globals.generated.js").SauceAccountFactory;
+
 // `@sauce/token`, whose functions every program on a chain calls with no import: an EVM token is
 // an address; on Solana the mint is an address, its accounts `Account` slots, and a write names
 // its token program and the authority (`transfer`/`approve` SPL Token only, the checked writes

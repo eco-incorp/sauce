@@ -446,7 +446,7 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
     const program = compile(
       "function main(a: Account, to: Address): Uint256 {\n" +
         "  const vault = USDC.accountOf(to).writable();\n" +
-        "  return a.balance + vault.balance + Solana.pda(Solana.systemProgram, [to]).balance + Solana.systemProgram.balance;\n" +
+        "  return a.balance + vault.balance + Account.pda(Account.systemProgram, [to]).balance + Account.systemProgram.balance;\n" +
         "}\n",
     );
     expect(program.source).toContain(
@@ -460,9 +460,9 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
     });
   });
 
-  it("Solana.owner and pot hold tokens, each account checked to its holder", () => {
+  it("owner and pot hold tokens, each account checked to its holder", () => {
     const program = compile(
-      "function main(): Uint256 {\n  return Solana.owner.USDC + pot.USDC + Solana.owner.balance;\n}\n",
+      "function main(): Uint256 {\n  return owner.USDC + pot.USDC + owner.balance;\n}\n",
     );
     expect(program.source).toContain(
       "return __sauce_svm_balance(USDC, ownerUSDC, owner.address) + __sauce_svm_balance(USDC, potUSDC, pot.address) + ctx.balance(owner.address);",
@@ -543,7 +543,7 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
       ["to", "to: Address"],
       ["a", "a: Account"],
       ["USDC", ""],
-      ["Solana.owner", ""],
+      ["owner", ""],
       ["ctx.self()", ""],
       ["USDC.accountOf(to)", "to: Address"],
     ] as const) {

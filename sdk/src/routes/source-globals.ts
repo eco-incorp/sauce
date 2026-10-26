@@ -9,8 +9,8 @@
  *   key, and the token syntax adds the accounts it moves through to `main`.
  * - **venues**: on Solana, each price-limit venue a program swaps at by its namespace
  *   (`Orca.Whirlpool.swap(pool, …)`, `svm-venue-methods.ts`).
- * - **accounts**: on Solana, the accounts a program writes where it uses them (`Solana.pda(…)`,
- *   `USDC.accountOf(holder)`, `svm-account-expressions.ts`).
+ * - **accounts**: on Solana, the accounts a program writes where it uses them (`Account.pda(…)`,
+ *   `owner`, `USDC.accountOf(holder)`, `svm-account-expressions.ts`).
  * - **protocols**: every `<Protocol>[.<Contract>]` reference the protocol-accessor rewrite resolves
  *   on the chain — through `resolveProtocolContract`, the rewrite's own resolver, not a copy of its
  *   rules — with each contract's address and vendored methods. A family alias (`Uniswap` for

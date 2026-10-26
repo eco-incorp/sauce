@@ -304,14 +304,31 @@ describe("sauce_globals", () => {
   it("lists the accounts a program on Solana writes where it uses them, and compiles one", async () => {
     const { tools } = await mcp.client.listTools();
     const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
-    assert.match(description, /`accounts`: Solana\.pda\(program, \[seeds\]\)/);
+    assert.match(description, /`accounts`: Account\(key\), Account\.pda\(program, \[seeds\]\)/);
     const listed = ok(await mcp.call("sauce_globals", { chain: "solana" })) as {
       accounts: Array<{ expression: string; account: string; derive: string }>;
     };
     assert.deepEqual(
-      listed.accounts.find((one) => one.expression === "Solana.pda(program, [seeds])"),
+      listed.accounts.map((one) => one.expression),
+      [
+        "Account(key)",
+        "Account.pda(program, [seeds])",
+        "Account.systemProgram",
+        "Account.tokenProgram",
+        "Account.token2022Program",
+        "Account.associatedTokenProgram",
+        "Account.memoProgram",
+        "pot",
+        "owner",
+        "<Sym>.accountOf(holder)",
+        "<Sym>.mint",
+        "<Sym>.tokenProgram",
+      ],
+    );
+    assert.deepEqual(
+      listed.accounts.find((one) => one.expression === "Account.pda(program, [seeds])"),
       {
-        expression: "Solana.pda(program, [seeds])",
+        expression: "Account.pda(program, [seeds])",
         account: "the address program derives for the seeds",
         derive: "pda:<program>:<seeds>",
       },
@@ -324,7 +341,7 @@ describe("sauce_globals", () => {
       await mcp.call("sauce_compile", {
         source:
           "function main(program: Address, owner: Address): Uint256 {\n" +
-          '  return Solana.pda(program, ["state", owner]).writable().dataLen;\n}\n',
+          '  return Account.pda(program, ["state", owner]).writable().dataLen;\n}\n',
         chain: "solana",
       }),
     );

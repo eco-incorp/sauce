@@ -220,7 +220,7 @@ The holder can be:
 - **A token's own contract too**: `WETH.balance` is the ETH locked in the WETH contract, and
   `USDC.WETH` is the WETH held by the USDC contract. On Solana, `USDC.balance` is the SOL in the
   USDC mint's account.
-- **On Solana**: `pot`, `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a
+- **On Solana**: `pot`, `owner` (the Pot's owner), an `Address` parameter of `main`, a token's mint, or a
   32-byte key written out. The holder has to be known when the transaction is built, because Sauce
   adds the holder's account to it ([Solana](solana.md)).
 

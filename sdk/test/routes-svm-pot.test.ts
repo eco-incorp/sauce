@@ -58,7 +58,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     const program = compile(
       "function size(a: Account): Uint256 {\n  return a.dataLen;\n}\n" +
         "function main(data: bytes): Uint256 {\n" +
-        "  svm.call(Solana.systemProgram, [pot.signer(), pot.writable(), pot], data);\n" +
+        "  svm.call(Account.systemProgram, [pot.signer(), pot.writable(), pot], data);\n" +
         "  return pot.dataLen + svm.sload(pot, 0, 8).toLe() + size(pot);\n" +
         "}\n",
     );
@@ -84,7 +84,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     ).toBe(
       "`pot.owner` on Solana: an account's `.owner` is the program that owns it, so `pot.owner` " +
         "would be the program that owns the Pot's account, not the Pot's owner. The Pot's owner, " +
-        "who signs the cook, is `Solana.owner` (`Solana.owner.address`, its key).",
+        "who signs the cook, is `owner` (`owner.address`, its key).",
     );
   });
 
@@ -186,11 +186,11 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     expect(
       compile(`${elsewhere("USDC")}function main(): Uint256 {\n  return pot.USDC;\n}\n`).source,
     ).toContain("return __sauce_svm_balance(USDC, potUSDC, pot.address);");
+    // The Pot's owner outside the function that declares an `owner`, its slot named apart from it.
     expect(
-      compile(
-        `${elsewhere("Solana")}function main(): Uint256 {\n  return Solana.owner.balance;\n}\n`,
-      ).source,
-    ).toContain("return ctx.balance(owner.address);");
+      compile(`${elsewhere("owner")}function main(): Uint256 {\n  return owner.balance;\n}\n`)
+        .source,
+    ).toContain("return ctx.balance(owner2.address);");
     // Another scope's record named `pot` does not make the Pot one.
     const record =
       "function size(): Uint256 {\n  const pot = { balance: 7 };\n  return pot.balance;\n}\n";
@@ -291,7 +291,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     }
     // The account expression inside is lowered on its own.
     const pda = compile(
-      'function main(): Uint256 {\n  return (Solana.pda(Solana.systemProgram, ["a"])).balance;\n}\n',
+      'function main(): Uint256 {\n  return (Account.pda(Account.systemProgram, ["a"])).balance;\n}\n',
     );
     expect(pda.source).toContain("return ctx.balance(aPda.address);");
   });
@@ -307,11 +307,11 @@ describe("the retired spellings, refused naming what to write", () => {
     ["return Solana.self.USDC;", "Solana.self.USDC", "pot.USDC"],
     ["return Solana.self.address;", "Solana.self.address", "pot.address"],
     [
-      "svm.call(Solana.systemProgram, [Solana.self.signer()], hex``); return 0;",
+      "svm.call(Account.systemProgram, [Solana.self.signer()], hex``); return 0;",
       "Solana.self.signer()",
       "pot.signer()",
     ],
-    ['return Solana.pda(Solana.systemProgram, ["a", self]).dataLen;', "self", "pot"],
+    ['return Account.pda(Account.systemProgram, ["a", self]).dataLen;', "self", "pot"],
   ])("%s", (body, site, instead) => {
     expect(refusal(`function main(): Uint256 {\n  ${body}\n}\n`)).toBe(
       `\`${site}\`: the Pot is \`pot\`, not \`self\`: write \`${instead}\` (\`pot\` is the Pot's ` +
@@ -346,8 +346,8 @@ describe("where a site stands", () => {
     const program = compile(
       "function held(): Uint256 {\n  return pot.USDC;\n}\n" +
         "function twice(): Uint256 {\n  return held() + held();\n}\n" +
-        "function both(): Uint256 {\n  return twice() + Solana.owner.balance;\n}\n" +
-        "function lamports(extra: Uint256): Uint256 {\n  return Solana.owner.balance + extra;\n}\n" +
+        "function both(): Uint256 {\n  return twice() + owner.balance;\n}\n" +
+        "function lamports(extra: Uint256): Uint256 {\n  return owner.balance + extra;\n}\n" +
         "function main(): Uint256 {\n  return both() + lamports(1) + pot.balance;\n}\n",
     );
     expect(program.source).toContain(
@@ -447,7 +447,7 @@ describe("where a site stands", () => {
     // Anything but a parameter of main is refused: no account expression carries the role.
     expect(
       refusal(
-        `${pay}function main(amount: Uint256) {\n  pay(Solana.pda(Solana.systemProgram, ["a"]), amount);\n}\n`,
+        `${pay}function main(amount: Uint256) {\n  pay(Account.pda(Account.systemProgram, ["a"]), amount);\n}\n`,
       ),
     ).toContain("pass it a parameter of main declared `Account<Writable>`");
     const writable = compile(

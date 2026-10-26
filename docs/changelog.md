@@ -54,25 +54,26 @@ The SDK is still below 1.0, and it has made breaking changes in patch releases. 
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -91,6 +92,49 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK Unreleased
+
+Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as in
+0.99.16. The [upgrade guide](guides/upgrading.md#solanas-accounts-are-account-and-owner) walks
+through the breaking change.
+
+### SauceScript
+
+- **Breaking (Solana): an account a program writes where it uses it is `Account`'s, and the Pot's
+  owner is `owner`.** One spelling each, with no alias:
+
+  | Before                                                                                                  | Now                                    | The account                                 |
+  | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------- |
+  | `Solana.account(key)`                                                                                   | `Account(key)`                         | the account at a key                        |
+  | `Solana.pda(program, [seeds])`                                                                          | `Account.pda(program, [seeds])`        | the address `program` derives for the seeds |
+  | `Solana.systemProgram`, `.tokenProgram`, `.token2022Program`, `.associatedTokenProgram`, `.memoProgram` | `Account.systemProgram` and the others | the program                                 |
+  | `Solana.owner`                                                                                          | `owner`                                | the Pot's owner, who signs the cook         |
+
+  Each new spelling compiles to the accounts, checks and bytes its old one did. The old spellings
+  no longer compile, on any chain and in code a test rules out too, and each error names the new
+  one: `` `Solana.owner`: the Pot's owner is `owner` (`owner.address`, its key; `owner.signer()`) ``.
+  `Solana` names the chain and holds no account. `Account` stays the type of an account `main`
+  takes (`Account<Writable>`). A program that declares its own `owner` or `Account` owns the name
+  where its declaration is in scope (`function main(owner: Address)` reads its argument), and so
+  does a compile whose `defines` or `contracts` give one; an `owner` only an `ambient` module
+  exports, read free on Solana, is refused as such a `pot` is. `USDC.accountOf(holder)`,
+  `USDC.mint`, `USDC.tokenProgram`, `.writable()`, `.signer()`, `pot` and every `--account` value
+  are unchanged. The refusal of `pot.owner` names `owner`.
+
+- **Now refused (EVM): `Account(…)` and `owner`.** Accounts are Solana's: a program compiled for an
+  EVM chain that writes `Account(key)`, `Account.pda(…)`, `Account.<program>` or an `owner` it does
+  not declare is refused at the name. Code a test of a name rules out may write them, for a Solana
+  chain to compile. `Account` as a type is unchanged.
+- **Changed (both): the editor types.** `Account` is declared as a value beside the type, and
+  `owner` as the Pot's owner's account; `Solana`, like every chain, has no account member, so an
+  editor shows a retired spelling as an error.
+
+### Also breaking
+
+- `sauce globals --chain solana`, `sauce_globals` and `routes.sourceGlobals("solana").accounts`
+  list `Account(key)`, `Account.pda(program, [seeds])`, the five programs as `Account.<program>`,
+  `pot` and `owner`, where they listed the `Solana.*` spellings.
 
 ## SDK 0.99.16 — 2026-10-26
 
