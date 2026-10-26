@@ -219,7 +219,7 @@ address.
 | [Seaport](../protocols/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
 | [Silo](../protocols/silo.md) | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` | `Silo.SiloRepository` |
 | [Socket](../protocols/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
-| [Sommelier](../protocols/sommelier.md) | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366D8f2` | `Sommelier.CellarRouter` |
+| [Sommelier](../protocols/sommelier.md) | cellarRouter | `0x1D90366B0154fBcB5101c06a39c25D26cB48e889` | `Sommelier.CellarRouter` |
 | [Spark](../protocols/spark.md) | pool | `0xC13e21B648A5Ee794902342038FF3aDAB66BE987` | `Spark.Pool` |
 | [Spark](../protocols/spark.md) | poolAddressesProvider | `0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE` | `Spark.PoolAddressesProvider` |
 | [Squid Router](../protocols/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
@@ -252,7 +252,7 @@ address.
 | [Uniswap V4](../protocols/uniswap-v4.md) | universalRouter | `0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af` | `UniswapV4.UniversalRouter` |
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x3ee18B2214AFF97000D974cf647E7C347E8fa585` | `Wormhole.TokenBridge` |
-| [Yearn V3](../protocols/yearn-v3.md) | vaultFactory | `0x770D0d1fB036483eD4ABB6D53C1C89FB277d812F` | `YearnV3.VaultFactory` |
+| [Yearn V3](../protocols/yearn-v3.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F` | `YearnV3.VaultFactory` |
 | [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
 | [zkSync Native Bridge](../protocols/zksync-bridge.md) | diamondProxy | `0x32400084C286CF3E17e7B677ea9583e60a000324` | `ZksyncBridge.DiamondProxy` |
 

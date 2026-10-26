@@ -55,4 +55,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Always use wstETH for DeFi integrations (Aave, Uniswap, etc.) since rebasing tokens cause issues
 - submit() requires ETH sent as msg.value. The referral parameter can be zero address
 - Approve stETH to wstETH contract before calling wrap()
-- On Arbitrum, wstETH is the bridged token: an ERC-20 (`balanceOf`, `transfer`, `approve`) with no `wrap`, `unwrap`, `getStETHByWstETH` or `getWstETHByStETH`, so each of those reverts there. Wrap, unwrap and read the stETH rate on Ethereum
+- On Arbitrum, wstETH is the bridged token, `Lido.WstETHBridged` (`WstETHBridgedABI`): an ERC-20 (`balanceOf`, `transfer`, `approve`) with no `wrap`, `unwrap`, `getStETHByWstETH` or `getWstETHByStETH`, each of which reverts there. Wrap, unwrap and read the stETH rate on Ethereum, through `Lido.WstETH`

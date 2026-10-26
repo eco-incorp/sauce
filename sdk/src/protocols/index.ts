@@ -44,7 +44,6 @@ import { protocolInfo as eulerV2 } from "./euler-v2/info.js";
 import { protocolInfo as radiant } from "./radiant/info.js";
 import { protocolInfo as benqi } from "./benqi/info.js";
 import { protocolInfo as moonwell } from "./moonwell/info.js";
-import { protocolInfo as seamless } from "./seamless/info.js";
 import { protocolInfo as fluid } from "./fluid/info.js";
 import { protocolInfo as silo } from "./silo/info.js";
 import { protocolInfo as layerbank } from "./layerbank/info.js";
@@ -203,7 +202,6 @@ export const protocols: Record<string, ProtocolInfo> = {
   radiant: radiant,
   benqi: benqi,
   moonwell: moonwell,
-  seamless: seamless,
   fluid: fluid,
   silo: silo,
   layerbank: layerbank,

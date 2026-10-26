@@ -57,7 +57,7 @@ What Sauce is not:
 
 - **Do many steps as one.** A swap and a payment in a single transaction. If the swap gives too
   little, nothing moves at all.
-- **Use protocols by name.** `UniswapV3.Factory`, `AaveV3.Pool`, `USDC`: Sauce knows 134 protocols
+- **Use protocols by name.** `UniswapV3.Factory`, `AaveV3.Pool`, `USDC`: Sauce knows 133 protocols
   across 41 chains, and the main tokens of 14 of those chains, with no address to copy. On a chain
   with no named token, a program writes the token's address once.
 - **Try before you pay.** `sauce simulate` runs your program on a copy of the chain as it is right

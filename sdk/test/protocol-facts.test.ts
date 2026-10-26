@@ -10,8 +10,8 @@
  *   The templates use the `*To` forms.
  * - GMX V1's `acceptablePrice` is a direction-specific bound on the mark price (BasePositionManager
  *   `_increasePosition`/`_decreasePosition`), not 0 for "market": the templates take it.
- * - The generated pages say which of an ABI's functions a deployment's code lacks (Arbitrum's
- *   bridged wstETH has none of WstETH's wrapping or rate functions).
+ * - The generated pages say which of an ABI's functions a deployment's code lacks (Base's cbETH
+ *   has no `exchangeRate`).
  * - Exported JSDoc of the Solana venues is rendered as Markdown: a bare `a*b` pair is emphasis.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -97,27 +97,25 @@ describe("GMX V1: acceptablePrice is the caller's bound", () => {
 });
 
 describe("generated pages: an ABI's functions a deployment lacks", () => {
-  const lido = read("docs/reference/protocols/lido.md");
+  const cbeth = read("docs/reference/protocols/cbeth.md");
   const row = (chain: string): string =>
-    lido.split("\n").find((line) => line.startsWith(`| [${chain}]`) && line.includes("wstETH"))!;
+    cbeth.split("\n").find((line) => line.startsWith(`| [${chain}]`) && line.includes("cbETH"))!;
 
-  it("marks Arbitrum's bridged wstETH, and only it", () => {
-    for (const fn of ["wrap", "unwrap", "getStETHByWstETH", "getWstETHByStETH"]) {
-      expect(row("Arbitrum One")).toContain(`\`${fn}\``);
-    }
-    expect(row("Arbitrum One")).toContain("not on this deployment");
+  it("marks Base's cbETH, and only it", () => {
+    expect(row("Base")).toContain("`exchangeRate`");
+    expect(row("Base")).toContain("not on this deployment");
     expect(row("Ethereum")).not.toContain("not on this deployment");
   });
 
   // Absent selectors say nothing about what the code does instead: Base's Augustus V5 address is a
   // payable fee splitter whose fallback takes a value-bearing call to any selector and succeeds. So
   // the generated line warns against the call and promises no revert (a protocol's own document may
-  // still state one it has verified, as Lido's does for Arbitrum's bridged wstETH).
+  // still state one it has verified).
   it.each([
     "docs/reference/protocols/paraswap.md",
-    "docs/reference/protocols/lido.md",
+    "docs/reference/protocols/cbeth.md",
     "skills/sauce-protocols/references/registry/paraswap.md",
-    "skills/sauce-protocols/references/registry/lido.md",
+    "skills/sauce-protocols/references/registry/cbeth.md",
   ])("%s warns against the call without promising a revert", (path) => {
     const generated = read(path)
       .split("\n")

@@ -575,7 +575,7 @@ const CHOOSING = {
     "the route, use the pools directly (`sauce-swaps`).",
   ],
   lending: [
-    "- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, Seamless, ZeroLend):",
+    "- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, ZeroLend):",
     "  supply and borrow any listed reserve against all your collateral in that market.",
     "- **One base asset per market** (Compound V3, a Comet per base asset): you borrow only that",
     "  asset, against the market's listed collaterals.",
