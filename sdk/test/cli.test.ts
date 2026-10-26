@@ -973,6 +973,52 @@ describe("sauce compile", () => {
     );
   });
 
+  it("does not blame a guarded unregistered token for an unrelated failure", async () => {
+    const program = file(
+      "guarded.sauce.ts",
+      "function main(r: Address): Uint256 {\n  if (USDT) {\n    USDT.transfer(r, 1);\n  }\n" +
+        "  return nope;\n}\n",
+    );
+    const run = await sauce("compile", program, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain("`nope` is not a declared variable");
+    expect(run.stderr).not.toContain("Token(token).transfer");
+    expect(run.stderr).not.toContain("is not a registered token");
+  });
+
+  it("still names an unregistered token used unguarded", async () => {
+    const program = file(
+      "unguarded.sauce.ts",
+      "function main(r: Address) {\n  USDT.transfer(r, 1);\n}\n",
+    );
+    const run = await sauce("compile", program, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain("hint: USDT is not a registered token on base");
+    expect(run.stderr).toContain("Token(token).transfer");
+  });
+
+  it("names an unregistered token beside another failure only at the use that failed", async () => {
+    // The unguarded use fails first, so it is the one the diagnostic points at.
+    const failing = file(
+      "both.sauce.ts",
+      "function main(r: Address): Uint256 {\n  USDT.transfer(r, 1);\n  return nope;\n}\n",
+    );
+    const run = await sauce("compile", failing, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(`--> ${failing}:2:3`);
+    expect(run.stderr).toContain("hint: USDT is not a registered token on base");
+    // A guarded use of another unregistered token is not named beside it.
+    const mixed = file(
+      "mixed.sauce.ts",
+      "function main(r: Address) {\n  if (DAI) {\n    DAI.transfer(r, 1);\n  }\n" +
+        "  USDT.transfer(r, 1);\n}\n",
+    );
+    const both = await sauce("compile", mixed, "--chain", "base");
+    expect(both.code).toBe(1);
+    expect(both.stderr).toContain("hint: USDT is not a registered token on base");
+    expect(both.stderr).not.toContain("hint: DAI");
+  });
+
   it("names a stock token's symbol in its issuer's case", async () => {
     const program = file(
       "stock.sauce.ts",
