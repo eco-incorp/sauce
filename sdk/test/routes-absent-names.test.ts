@@ -293,6 +293,50 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
     }
   });
 
+  it("a `&&`/`||` inside a `?:` that is a side of another is the bool too, never the operand", () => {
+    // The `?:` side is a test, but its whole is still a side of a value: each `&&`/`||` in its arms
+    // gives the bool, and a binding side there is made one.
+    const factory = getDescriptor("uniswap-v3", "Factory")!
+      .perChainAddress[8453]!.slice(2)
+      .toLowerCase();
+    for (const [body, normalized] of [
+      [
+        "const e: Address = (UniswapV3.Factory ? (0 || UniswapV3.Factory) : 0) || 0;\nreturn e;",
+        "const e: Address = (UniswapV3.Factory ? (0 || !!(UniswapV3.Factory)) : 0) || 0;\nreturn e;",
+      ],
+      [
+        "const e: Address = (i == 0 ? (UniswapV3.QuoterV2 && UniswapV3.Factory) : 0) || 0;\nreturn e;",
+        "const e: Address = (i == 0 ? (!!(UniswapV3.QuoterV2) && !!(UniswapV3.Factory)) : 0) || 0;\nreturn e;",
+      ],
+      [
+        "const e: Address = 1 && (i == 0 ? 0 : (i == 1 ? 0 : (0 || UniswapV3.Factory)));\nreturn e;",
+        "const e: Address = 1 && (i == 0 ? 0 : (i == 1 ? 0 : (0 || !!(UniswapV3.Factory))));\nreturn e;",
+      ],
+    ] as const) {
+      const source = `function main(i: Uint256): Address {\n${body}\n}`;
+      const { dead, bindingSides } = checkNames(source, chainNames(requireChain("base")));
+      expect(withoutDead(source, dead, bindingSides)).toBe(
+        `function main(i: Uint256): Address {\n${normalized}\n}`,
+      );
+      // The `&&`/`||` is a bool, which an Address, or a `?:` whose other arm is a number, does not
+      // take: refused, as on #213, and never the Factory's address.
+      expect(refusal("base", source)).toMatch(
+        /expected a number, found a bool|the `then` arm is a (bool|number), the `else` arm is a (number|bool)/,
+      );
+    }
+    // As a bool, the program compiles, to the bytes the `!!` spelling does.
+    const asBool =
+      "function main(): bool {\nreturn (UniswapV3.Factory ? (0 || UniswapV3.Factory) : 0) || 0;\n}";
+    const program = hex("base", asBool);
+    expect(program).not.toContain(factory);
+    expect(program).toBe(
+      hex(
+        "base",
+        "function main(): bool {\nreturn (UniswapV3.Factory ? (0 || !!(UniswapV3.Factory)) : 0) || 0;\n}",
+      ),
+    );
+  });
+
   it("a token the chain lacks, used: a transfer, a balance, an argument", () => {
     for (const body of [
       "USDT.transfer(0x1234, 1);",

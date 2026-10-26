@@ -819,7 +819,18 @@ export function checkNames(
     }
   };
 
-  const visit = (node: AstNode, mode: Mode, role: Role, at: Scope | undefined): void => {
+  /**
+   * Visits `node` in `mode` (whether a name the chain lacks may appear: only in a `test`), as
+   * `role`. `wrap` says the node's whole is a side of a `&&`/`||` whose whole is a value: through
+   * a `?:` arm or another `&&`/`||`, a `&&`/`||` there makes a contract binding on its side a bool.
+   */
+  const visit = (
+    node: AstNode,
+    mode: Mode,
+    role: Role,
+    at: Scope | undefined,
+    wrap = false,
+  ): void => {
     if (isTypeDeclaration(node.type)) return;
 
     if (isFunction(node)) {
@@ -859,7 +870,9 @@ export function checkNames(
       case "ExportNamedDeclaration":
       case "ExportDefaultDeclaration": {
         const declaration = prop<AstNode | null>(node, "declaration");
-        if (declaration !== null && declaration !== undefined) visit(declaration, mode, role, at);
+        if (declaration !== null && declaration !== undefined) {
+          visit(declaration, mode, role, at, wrap);
+        }
         return;
       }
       case "VariableDeclarator":
@@ -891,7 +904,7 @@ export function checkNames(
           [prop<AstNode>(node, "consequent"), taken !== false],
           [prop<AstNode>(node, "alternate"), taken !== true],
         ] as const) {
-          if (live) visit(arm, mode, "value", at);
+          if (live) visit(arm, mode, "value", at, wrap);
           else dead.push({ start: arm.start, end: arm.end, kind: "expression" });
         }
         return;
@@ -940,23 +953,23 @@ export function checkNames(
         }
         // `&&` and `||` give true or false, never one of their sides, so each side is a test. But
         // 2.6.0 gives a contract binding back as the whole (`0 || UniswapV3.Factory` is its
-        // address): where the whole is a value, a side that is, or may be, one (`bindingKind`) is
-        // made a bool with `!!` (`withoutDead`), as the language has it. A scalar side is left.
-        // Where the left side decides the whole, the right side is not compiled. A side that is
-        // itself `&&` or `||` is read as the whole is.
-        const sideMode = (side: AstNode): Mode =>
-          mode === "value" && unwrap(side).type === "LogicalExpression" ? "value" : "test";
+        // address): where the whole is a value, or a side of one (`wrap`), a side that is, or may
+        // be, one (`bindingKind`) is made a bool with `!!` (`withoutDead`), as the language has it.
+        // A scalar side is left. A side is a side of a value too, through a `?:` arm or another
+        // `&&`/`||` in it, which is how a `&&`/`||` nested anywhere in a side gives the bool. Where
+        // the left side decides the whole, the right side is not compiled.
+        const sides = mode === "value" || wrap;
         const normalize = (side: AstNode): void => {
-          if (mode === "value" && bindingKind(side, at) !== "scalar") {
+          if (sides && bindingKind(side, at) !== "scalar") {
             bindingSides.push({ start: side.start, end: side.end });
           }
         };
         const decided = valueOf(left, at);
         normalize(left);
-        visit(left, sideMode(left), "value", at);
+        visit(left, "test", "value", at, sides);
         if (decided === undefined || decided !== (operator === "||")) {
           normalize(right);
-          visit(right, sideMode(right), "value", at);
+          visit(right, "test", "value", at, sides);
         } else dead.push({ start: right.start, end: right.end, kind: "expression" });
         return;
       }
@@ -1058,7 +1071,7 @@ export function checkNames(
       case "TSNonNullExpression":
       case "TSAsExpression":
       case "TSSatisfiesExpression":
-        visit(prop(node, "expression"), mode, role, at);
+        visit(prop(node, "expression"), mode, role, at, wrap);
         return;
       default:
         break;
