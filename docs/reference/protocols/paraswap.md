@@ -25,7 +25,8 @@ Multi-chain DEX aggregator routing swaps across decentralized exchanges. Support
 
 ## Notes
 
-- Augustus V5 and V6 both deployed on all chains
+- Augustus V6 is deployed on every chain the registry lists; Augustus V5's address holds the router everywhere but Base
+- On Base, Augustus V5's address is not the router: it is a small fee-splitting contract that dispatches none of the router's functions. A call carrying no value reverts; a call carrying value, `simpleSwap` included, succeeds without swapping, and the value goes to two accounts the contract fixed when it was deployed (98.5% and 1.5%). Do not send it anything; on Base the router is Augustus V6
 - Route computation happens off-chain via ParaSwap API - callees/exchangeData come from API
 - Approve srcToken to Augustus contract before swapping
 
@@ -52,7 +53,7 @@ function main() {
 | [BNB Chain](../chains/bsc.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Polygon](../chains/polygon.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
 | [Polygon](../chains/polygon.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
-| [Base](../chains/base.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Base](../chains/base.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5`; not on this deployment: `simpleSwap` |
 | [Base](../chains/base.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Arbitrum One](../chains/arbitrum.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
 | [Arbitrum One](../chains/arbitrum.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
@@ -66,6 +67,8 @@ function main() {
 `import AugustusV5ABI from "./protocols/paraswap/AugustusV5ABI.json";` Speaks for: augustusV5.
 
 - `simpleSwap((address fromToken, address toToken, uint256 fromAmount, uint256 toAmount, uint256 expectedAmount, address[] callees, bytes exchangeData, uint256[] startIndexes, uint256[] values, address beneficiary, address partner, uint256 feePercent, bytes permit, uint256 deadline, bytes16 uuid) data) payable returns (uint256 receivedAmount)`
+
+Not on Base's augustusV5 (`0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57`), whose code does not dispatch them: `simpleSwap`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

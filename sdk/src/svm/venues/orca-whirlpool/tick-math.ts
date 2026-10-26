@@ -1,8 +1,8 @@
 /**
  * Orca Whirlpools tick math — exact transcription of
- * programs/whirlpool/src/math/tick_math.rs sqrt_price_from_tick_index:
- * positive ticks accumulate in Q96 with (r*C) >> 96 steps and a final >> 32,
- * negative ticks accumulate in Q64 with (r*C) >> 64 steps. Verified against
+ * `programs/whirlpool/src/math/tick_math.rs` `sqrt_price_from_tick_index`:
+ * positive ticks accumulate in Q96 with `(r * C) >> 96` steps and a final `>> 32`,
+ * negative ticks accumulate in Q64 with `(r * C) >> 64` steps. Verified against
  * the source's own pinned bit-value test table (see the unit suite).
  *
  * Shared by fetchPoolConfig (deriving the shipped boundary sqrt prices), the

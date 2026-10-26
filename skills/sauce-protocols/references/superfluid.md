@@ -72,7 +72,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 - Flowrate is in tokens per second (int96) - e.g. 1e18 / (30 * 86400) for ~1 token/month
 - Uses Super Tokens - wrapped ERC-20s with streaming capability (wrap before streaming)
-- Same host and cfaForwarder addresses on all 5 chains
+- The CFAForwarder has one address on every chain; the Host's address differs per chain
 - CFAForwarder is the simplified interface; host is the core protocol contract
 - Streams are continuous - balance updates every second without transactions
 - Sender must maintain sufficient Super Token balance; otherwise stream gets liquidated

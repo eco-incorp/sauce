@@ -27,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool`; not on this deployment: `deposit`, `withdraw`, `borrow`, `repay` |
 
 ## ABI
 
@@ -39,3 +39,5 @@ function main() {
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
 - `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)`
+
+Not on Arbitrum One's lendingPool (`0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`), whose code does not dispatch them: `deposit`, `withdraw`, `borrow`, `repay`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.

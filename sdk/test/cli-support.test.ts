@@ -165,6 +165,12 @@ describe("the gate", () => {
     expect(refusal.message).toMatch(
       /^sending the cook is refused: it involves arbitrum \(Arbitrum One, chain id 42161\) and optimism \(Optimism, chain id 10\), preview chains\./,
     );
+    // The label is a write policy: simulation runs wherever the release is deployed, preview or not.
+    expect(refusal.message).toContain("On a preview chain they build and send none.");
+    expect(refusal.message).toContain(
+      "simulate runs wherever the release is deployed on the chain",
+    );
+    expect(refusal.message).not.toMatch(/not deployed|does not run|cannot simulate/);
     expect(() => requireSupported("sending the cook", [optimism!])).toThrow(PreviewChainError);
   });
 });

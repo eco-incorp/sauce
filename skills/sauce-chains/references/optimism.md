@@ -4,7 +4,7 @@
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Optimism a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
-but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
+and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one.
@@ -14,7 +14,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and read; no simulation, and no transaction is built or sent |
+| Support | preview: compile and read; no transaction is built or sent |
 | Slug (`--chain`) | `optimism`; also `op`, `op-mainnet` |
 | Chain id | 10 |
 | Kind | EVM |
@@ -98,7 +98,7 @@ address.
 | [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
 | [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
 | [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
-| [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
+| [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | host | `0x567c4B141ED61923967cA25Ef4906C8781069a10` | `Superfluid.Host` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | factory | `0xFbc12984689e5f15626Bad03Ad60160Fe98B303C` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | router | `0x2ABf469074dc0b54d793850807E6eb5Faf2625b1` | `SushiswapV2.Router` |
 | [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0xAf41a65F786339e7911F4acDAD6BD49426F2Dc6b` | `Synapse.SynapseBridge` |

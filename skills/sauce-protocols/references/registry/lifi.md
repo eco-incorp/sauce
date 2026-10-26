@@ -30,13 +30,13 @@ function main() {
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
 | [Optimism](../../../sauce-chains/references/optimism.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
 | [BNB Chain](../../../sauce-chains/references/bsc.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
-| [Gnosis](../../../sauce-chains/references/gnosis.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [Gnosis](../../../sauce-chains/references/gnosis.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
 | [Polygon](../../../sauce-chains/references/polygon.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
-| [Fantom](../../../sauce-chains/references/fantom.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [Fantom](../../../sauce-chains/references/fantom.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
 | [Arc](../../../sauce-chains/references/arc.md) | lifiDiamond | `0xA4072583658Fae592A3506A42431cb6316a8d40b` | `Lifi.LiFiDiamond` |
 | [Base](../../../sauce-chains/references/base.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
 
 ## ABI
 
@@ -46,3 +46,9 @@ function main() {
 
 - `startBridgeTokensViaAcrossV4((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData, (bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) acrossData) payable`
 - `extractBridgeData(bytes data) pure returns ((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData)`
+
+Not on Gnosis's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
+
+Not on Fantom's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
+
+Not on Avalanche C-Chain's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.

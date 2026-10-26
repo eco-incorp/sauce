@@ -1311,7 +1311,7 @@ const SUPPORTED_ONLY = (what: string): string[] => [
     `${what} only on a supported chain: ${supportedChainNames()}. On ` +
       "any other (a preview chain) it is refused before anything is read or signed, with the " +
       "supported chains and the GitHub issue to ask for that chain with; compile and the reads " +
-      "work there, but simulate does not: the released engine is not deployed there.",
+      "work there, and simulate runs wherever the release is deployed on the chain.",
   ),
 ];
 
@@ -1813,8 +1813,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "to eth_call with state overrides, which gives the result and the gas but no logs. The",
       "output names the route it took.",
       "",
-      "It runs only where the released engine is deployed: on a preview chain (any chain but",
-      `${supportedChainNames()}) it stops with exit 1, the engine not deployed there.`,
+      "It runs where the release's engine and Kitchen are deployed on the chain, preview chain",
+      "or not; where they are not, it stops with exit 1, naming the contract that is missing.",
       "",
       "A Pot that is not deployed yet is deployed in the simulation first, from --owner (and",
       "--salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.",

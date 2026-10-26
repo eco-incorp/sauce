@@ -76,7 +76,8 @@ command, and the MCP server built on it, sends transactions on four of them: **E
 **preview chain**:
 
 - a program compiles there, and every lookup and read works;
-- the released engine is not deployed there, so `sauce simulate` stops with an error;
+- `sauce simulate` does not depend on the label: it runs wherever the release is deployed on the
+  chain, and stops with an error naming the missing contract where it is not;
 - the command builds nothing to sign and sends nothing, and says why: a cook is refused before
   anything is signed.
 

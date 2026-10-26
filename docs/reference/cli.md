@@ -91,9 +91,10 @@ with --no-update-check (any command takes it, before the command too), and for a
 whose --config file says "updateCheck": false.
 
 Transactions are built and sent only on Ethereum, Base, Arc and Solana. Every other chain is a
-preview chain: programs compile there, and globals, price, pools and the Pot's prediction read,
-but the released engine is not deployed there, so simulate fails and no transaction is built or
-sent. Ask for a chain: https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
+preview chain: no cook, Pot deployment or send, but programs compile there and globals, price,
+pools and the Pot's prediction read. Simulate does not depend on the label: it runs wherever the
+release is deployed on the chain. Ask for a chain:
+https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
 
 A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain
 base`); it is never read without one. Its relative imports then resolve against the
@@ -247,8 +248,8 @@ node traces, and each address's net change. An endpoint without eth_simulateV1 f
 to eth_call with state overrides, which gives the result and the gas but no logs. The
 output names the route it took.
 
-It runs only where the released engine is deployed: on a preview chain (any chain but
-Ethereum, Base, Arc and Solana) it stops with exit 1, the engine not deployed there.
+It runs where the release's engine and Kitchen are deployed on the chain, preview chain
+or not; where they are not, it stops with exit 1, naming the contract that is missing.
 
 A Pot that is not deployed yet is deployed in the simulation first, from --owner (and
 --salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.
@@ -412,8 +413,8 @@ a fee above it before anything is sent.
 
 Runs only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
 it is refused before anything is read or signed, with the supported chains and the GitHub issue
-to ask for that chain with; compile and the reads work there, but simulate does not: the
-released engine is not deployed there.
+to ask for that chain with; compile and the reads work there, and simulate runs wherever the
+release is deployed on the chain.
 
 Examples:
   sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json
@@ -650,8 +651,8 @@ above it.
 
 Prints the transaction only on a supported chain: Ethereum, Base, Arc and Solana. On any other
 (a preview chain) it is refused before anything is read or signed, with the supported chains and
-the GitHub issue to ask for that chain with; compile and the reads work there, but simulate does
-not: the released engine is not deployed there.
+the GitHub issue to ask for that chain with; compile and the reads work there, and simulate runs
+wherever the release is deployed on the chain.
 
 Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
@@ -744,8 +745,8 @@ signed cook: the owner signs the cook transaction, and any fee payer may sponsor
 
 Signs and cancels only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a
 preview chain) it is refused before anything is read or signed, with the supported chains and
-the GitHub issue to ask for that chain with; compile and the reads work there, but simulate does
-not: the released engine is not deployed there.
+the GitHub issue to ask for that chain with; compile and the reads work there, and simulate runs
+wherever the release is deployed on the chain.
 
 Examples:
   sauce sign pay.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD \
@@ -815,8 +816,8 @@ What landed is kept as the other commands keep it: a Pot one deployed in the Pot
 
 Sends only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
 it is refused before anything is read or signed, with the supported chains and the GitHub issue
-to ask for that chain with; compile and the reads work there, but simulate does not: the
-released engine is not deployed there.
+to ask for that chain with; compile and the reads work there, and simulate runs wherever the
+release is deployed on the chain.
 
 Examples:
   sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)
@@ -880,8 +881,8 @@ unsigned, as JSON, for the owner to sign anywhere and send with sauce send.
 
 Closes only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
 it is refused before anything is read or signed, with the supported chains and the GitHub issue
-to ask for that chain with; compile and the reads work there, but simulate does not: the
-released engine is not deployed there.
+to ask for that chain with; compile and the reads work there, and simulate runs wherever the
+release is deployed on the chain.
 
 Examples:
   sauce reclaim --chain solana --owner <pubkey>
@@ -955,8 +956,8 @@ Verbs (`sauce pot <verb> --help` for each):
 
 Deploys (or prints the deployment) only on a supported chain: Ethereum, Base, Arc and Solana. On
 any other (a preview chain) it is refused before anything is read or signed, with the supported
-chains and the GitHub issue to ask for that chain with; compile and the reads work there, but
-simulate does not: the released engine is not deployed there.
+chains and the GitHub issue to ask for that chain with; compile and the reads work there, and
+simulate runs wherever the release is deployed on the chain.
 
 Examples:
   sauce pot --owner 0x… --chain base
