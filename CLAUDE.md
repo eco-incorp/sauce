@@ -527,6 +527,76 @@ do not reintroduce a "rewrites cannot parse annotations" workaround. `main`'s si
 type and its void are the compiler's (`entrySignature`, `entryParams`, `args`): nothing reads `main`
 out of the program's text but `mainSignature`, for the `--fund` wrapper.
 
+**A chain's names are a module the compiler is handed, and `checkNames` guards its zeros.**
+`routes/chain-module.ts` writes, per chain, the ambient module `@sauce/chain`: every protocol
+namespace (family aliases included) as an object literal holding every contract the namespace has
+on ANY chain, bound (`ABI.at(address)`, the same bytes as the binding written by hand) where this
+chain has it, its address where the registry has no ABI, and `0` where it lacks it. The chain's own
+tokens, `chainId` and the `<Ns>_<Contract>` keys stay defines. A token symbol some chain registers
+and this one lacks is zero too, but no module declares it: `checkNames` reports each test of one
+(`zeros`) and `withoutDead` writes it `0` where it stands, so a read the check did not see is the
+compiler's undeclared name. Declaring the ~1,800 of them cost about 2 ms on every compile (a
+trivial `main` on Base, mean of 199 after the first, median of three runs: 3.45 ms with them,
+1.50 ms without, against 0.88 ms before the module). The module's text depends only on the chain
+and the namespaces the caller binds (`chainNames`): the plain module is every compile's, and one a
+compile's options make is kept per options, a bounded few, so the compiler's module cache reads
+each once. A name the caller binds is its own everywhere (`defined`): its defines, its contract
+keys, and each registry name its ambient modules export, which `ambientNamesOf` asks the compiler
+for (`bindableNames`). A program that names a chain (`Base.UniswapV3.Factory`) gets that chain's
+module too. Modules and ABIs are served from memory, never a disk, and only to the SDK's own
+installation: the compile hands them to the compiler as
+ambient modules under a specifier drawn once per process (`INSTALLED_CHAIN_MODULE`), which no
+program or module can write; `rs-compile.ts` serves a names module only at the absolute path that
+specifier resolves to (the compiler refuses an absolute import), refuses a relative path into the
+root, and refuses a caller `resolvePackage` that maps any specifier there, located at the import.
+Imported, a name the chain lacks would be the program's own and escape the check; `checkNames`
+still names the import, normalized as the compiler reads it, for the nicer message. The compiler
+decides a test of a zero (`if (X)`, `!X`, `X != 0`, `?:`, `&&`, `||`) and does not compile the
+branch it rules out; that is the whole presence mechanism, and `available(X)` is gone. 2.6.0 has no
+zero that is unusable at run time, so `routes/absent-names.ts#checkNames` reads the program (and
+every module the caller's resolver serves) before any rewrite and refuses, located and naming the
+chain, every use of a name the chain lacks outside a branch a test of it rules out, a `require`
+such a name makes false, a registry name no chain has, a method a registry contract's ABI lacks
+(naming the contract and its methods), and the Pot's balance of an absent token. Code a test rules
+out is read too, as on a chain that takes the branch: only a name this chain lacks is let be there,
+and a misspelt contract, a protocol used as a contract or a method the ABI lacks is refused on every
+chain, so a program that passes on the chain without the venue does not break on the one with it.
+There it also refuses a balance read of an address the text declares (`user: Address`, the Pot) by
+a name no chain registers as a token, and reports (`unknown`) each name nothing it knows gives
+meaning to — not the program's in scope, the caller's, this chain's define, any chain's registry
+name or the language's (`LANGUAGE_NAMES`: `builtins.json`'s roots, generated as `BUILTIN_GLOBALS`,
+with the reference's `undefined` for a missing static member, `pot` and `Token`); `compileForChain`
+drops those another chain's defines give, asks the compiler (`ambientNamesOf`, and the SDK's own
+packages for the other target) about the rest, and refuses the first left, in the live arm's words
+(`unknownNameError`). A module's are asked once its compile ends, never from inside a `resolve`.
+A field of a value whose type the text does not show stays the compiler's, where the branch runs.
+It also reports the code a test rules out (`dead`: an `if` arm, a `?:` arm, the right side of a
+decided `&&`/`||`, the rest of a block after a decided `if` that always exits, its functions,
+exports, types and module declarations kept and checked as if they ran), and each side of a
+`&&`/`||` whose whole is a value, or a side of one through a `?:` arm or a nested `&&`/`||`
+(`wrap`), that is, or may be, a contract binding (`bindingSides`): the language gives a bool, but
+2.6.0 hands a binding back as the whole — measured, a names-module contract, a record field holding
+`<Abi>.at(…)`, an inline `<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of
+aliases, resolved per scope by `lexical-bindings.ts`; a local initialized to `<Abi>.at(…)`, a `?:`,
+a call or a parameter give a bool, and an import or another module's export is taken as one.
+`compileForChain` applies all three in one pass (`withoutDead`: dead code blanked in place, spaces,
+newlines kept, an `if` arm `{ }`, an expression `0`; a binding side written `!!(…)`, which is the
+bool, the same bytes for a constant; a tested absent token `0`) before every rewrite, so the token,
+venue, account and accessor passes never lower ruled-out code — on Solana they would add its
+accounts and checks to `main`, which `available(X)`, removing the branch from the source, never
+did. A module the caller serves gets the same `withoutDead` pass, returned by the `checkModule` hook
+and served by `rs-compile.ts#makeResolve` in place of its text; no other rewrite reads it.
+Its scopes are `lexical-scope.ts`'s, the compiler's: the module's names (a type-only import binds
+none) and a function's parameters everywhere in them, a block's `let`/`const` from its declarator
+on, a loop's or `catch` clause's binding in it — a function-wide shadow set once let a use after an
+inner block reach the zero. What a module cannot hold stays a rewrite in `protocol-rewrite.ts`: an
+interface bound to an address, `.at(address)`, a protocol's default-contract call, and `.address`
+before a scalar method (`.toBytesBe`) on a binding or a local holding one through any chain of
+locals, which 2.6.0 takes only on an address; it reads a namespace as the program's only where the
+program declares it in scope, and as the caller's where the compile binds it. On Solana the module
+holds no EVM contract, and the Solana lowering never sees an absent token: `checkNames` refuses a
+live `pot.<TOKEN>` of one and `withoutDead` has blanked a ruled-out one.
+
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
 `test/fixtures/registry-abi/evidence.json`: the
@@ -913,8 +983,11 @@ SDK never works out an ambient module's exports itself: `rs-compile.ts#ambientNa
 compiler, compiling the program's own imports, as written, before a `main` that reads nothing and
 an uncalled closure (so the compiler loads the modules the compile does and lowers nothing; the
 closure's function is named apart from every define, contract and name the program writes), with
-the compile's own options and one more ambient module exporting the `pot` and `self` the parse
-reads, and reads each name the compiler refuses as exported twice; any other refusal is no answer:
+the compile's own options and one more ambient module exporting the names asked about that the
+program or a module the compiler loads mentions (recorded as the probe's `resolve` serves them,
+identifier escapes decoded, so `L\u0069do` is `Lido`; the
+compiler loads the probe's module last), and reads each name the compiler refuses as exported
+twice; any other refusal is no answer:
 the names stay free, the compile reports its own refusal, and the probe's is thrown where the
 compile succeeds or a rewrite reading the answer refuses; both read the caller's options as
 `sauce-route.ts#readCompileInputs` read them once when the compile began, lists and records
@@ -1020,7 +1093,8 @@ generated ambient declaration import so downstream typed closures see the same d
 The language's own builtins (`ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(c, msg)`,
 value methods, …) are declared beside them in `routes/builtins.generated.ts`, generated by
 `pnpm --filter './sdk' gen-builtins` from the reference's `builtins.json` — its data, not a
-second list. `crypto`, `Math`, `require` and `eval` are host names: the builtins MERGE into the
+second list — with each builtin's root as a run-time list, `BUILTIN_GLOBALS`, which the names
+check reads. `crypto`, `Math`, `require` and `eval` are host names: the builtins MERGE into the
 host's declarations (DOM `Crypto`, Node's `webcrypto.Crypto` and `NodeJS.Require`, lib `Math`)
 rather than redeclaring them, which would clash under Node. `routes-builtins-types.test.ts`
 typechecks a closure using every builtin with DOM, Node, both and neither.
@@ -1412,7 +1486,9 @@ beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`,
   and what it pins). Each fact has one owning skill, and the others point at it rather than repeat
   it: which chains take transactions and the chain-support request links are `sauce-overview`'s,
   the program header `sauce-script`'s, Solana's accounts and running `sauce-solana`'s, namespace
-  members, aliases and `available(...)` `sauce-globals`'s, the units of each flag `sauce-cli`'s.
+  members, aliases and a name a chain lacks (zero there; a test of it, `if (X)`, decided while
+  compiling and its ruled-out branch not compiled; any other use refused at the use, naming the
+  chain) `sauce-globals`'s, the units of each flag `sauce-cli`'s.
   `sauce-overview` is the router: the model, the protocol with a user,
   the rules, the chain policy, and the skill map in layers (Start, Write, Build, Compose, Target,
   Run, Index) with routes by need. `skills:check` holds the first two and last two sections of
@@ -1524,7 +1600,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
   example and selector, with its reason); every value an example program reads having a visible
   source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
-  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `pot`), an import,
+  the language's (a builtin root from `builtins.json`, or `Token`, `pot`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
   `INPUT_EXCEPTIONS` entry, per example and name, with its reason); and the wording rules below.
@@ -1537,7 +1613,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); no RPC endpoint; no Portal or prover; Sauce
-  never described as a multicall; no pointer into the
+  never described as a multicall; no call to `available`, which is removed (a program tests the
+  name itself, `if (X)`), outside a runner that compiles it to pin its refusal; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol

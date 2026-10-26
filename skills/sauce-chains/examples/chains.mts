@@ -101,21 +101,28 @@ for (const chain of CHAINS) {
   console.log(`holdings.sauce.ts on ${chain}: ${rows.map((row) => row.on[chain]).join(", ")}`);
 }
 
-// A name the chain lacks is refused when the file is compiled, in the words the skill quotes.
+// A name the chain lacks is zero there: a use of it that is not a test of it is refused when the
+// file is compiled, at the use, naming the chain, in the words the skill quotes; a test of it
+// compiles, its branch left out.
 const quoted = (message: string, words: string) => {
   check(message.includes(words), `the refusal says "${words}": ${message}`);
   check(skill.includes(words), `the skill quotes "${words}"`);
 };
 quoted(
   refusal("base", "function main(to: Address, amount: Uint256) { USDT.transfer(to, amount); }"),
-  "`USDT` is not a token or protocol on base. Did you mean `USDC`?",
+  "`USDT` is not a token on base.",
 );
+compile(
+  "base",
+  "function main(to: Address, amount: Uint256) { if (USDT) { USDT.transfer(to, amount); } }",
+);
+check(skill.includes("`if (USDT) { … }`"), "the skill says to test the name");
 quoted(
   refusal(
     "ethereum",
     "function main(fee: Uint256): Address { return AerodromeSlipstream.CLFactory.getPool(USDC, WETH, fee); }",
   ),
-  "Contract 'CLFactory' (aerodrome-slipstream) is not deployed on 'ethereum'",
+  "`AerodromeSlipstream.CLFactory` is not deployed on ethereum.",
 );
 // Tesla is a different symbol per issuer and chain: TSLAx on Ethereum and Solana, TSLAc or bTSLA
 // on Base, which refuses TSLAx.
@@ -127,7 +134,10 @@ const tesla = (chain: string) =>
 check(tesla("ethereum").includes("TSLAx") && tesla("solana").includes("TSLAx"), "TSLAx");
 check(tesla("base").join() === "TSLAc,bTSLA", `Tesla on Base is TSLAc or bTSLA: ${tesla("base")}`);
 compile("ethereum", "function main(): Address { return TSLAx; }");
-quoted(refusal("base", "function main(): Address { return TSLAx; }"), "is not a declared variable");
+quoted(
+  refusal("base", "function main(): Address { return TSLAx; }"),
+  "`TSLAx` is not a token on base.",
+);
 
 // Another chain's contract, by its name: its address there, as a value in a program for this one.
 const factoryOnBase = rows.find((row) => row.name === "UniswapV3.Factory")!.on.base;
@@ -153,7 +163,7 @@ check(skill.includes("calls that address on Ethereum"), "the skill says where th
 // A token is never qualified: the symbol is the chain's own, or an address.
 quoted(
   refusal("ethereum", "function main(): Address { return Base.USDC; }"),
-  "'USDC' is not a known protocol or family alias",
+  "`Base.USDC` is not a protocol on base.",
 );
 
 // payout-solana.sauce.ts: written as on an EVM chain, it names no account. Compiling adds each one

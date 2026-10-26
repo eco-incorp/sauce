@@ -93,25 +93,105 @@ check(
   ),
   "Cctp.depositForBurn calls Cctp.TokenMessenger",
 );
-// A namespace absent on the chain is a compile error, unless `available(...)` rules its branch out;
-// a name no chain has is an error either way.
-check(rejects("linea", "function main() { require(UniswapV3.Factory != 0); }"), "absent namespace");
+// A name the chain lacks is zero there. A test of it is decided while the program compiles and the
+// branch it rules out is not compiled; any other use is refused at the use, naming the chain. A
+// name no chain has is an error either way, and there is no `available` call.
+const refusal = (slug: string, body: string): string => {
+  try {
+    routes.compileSauceProgram(slug, body);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  return "";
+};
+const call = "UniswapV3.Factory.getPool(USDC, WETH, 500)";
+for (const slug of ["linea", "solana"]) {
+  check(
+    !rejects(
+      slug,
+      `function main(): Uint256 { if (UniswapV3.Factory) { return ${call}; } return 0; }`,
+    ),
+    `if (UniswapV3.Factory) compiles on ${slug}, its branch left out`,
+  );
+  check(
+    refusal(slug, `function main(): Address { return ${call}; }`).includes(
+      `\`UniswapV3.Factory\` is not deployed on ${slug}.`,
+    ),
+    `a call on UniswapV3.Factory is refused on ${slug}, naming the chain`,
+  );
+}
+// Every test the skill lists compiles to the bytes of the program written without it: on Linea,
+// which lacks the factory, the branch is gone; on Base, which has it, the call is all there is.
+const bytes = (slug: string, body: string): string =>
+  Buffer.from(
+    routes.compileSauceProgram(slug, `function main(): Uint256 {\n${body}\n}`).bytecode,
+  ).toString("hex");
+for (const [tested, absent, present] of [
+  [`if (UniswapV3.Factory) { return ${call}; }\nreturn 0;`, "return 0;", `return ${call};`],
+  [`if (!UniswapV3.Factory) { return 0; }\nreturn ${call};`, "return 0;", `return ${call};`],
+  [`if (UniswapV3.Factory != 0) { return ${call}; }\nreturn 0;`, "return 0;", `return ${call};`],
+  [
+    `if (UniswapV3.Factory == 0) { return 0; } else { return ${call}; }`,
+    "return 0;",
+    `return ${call};`,
+  ],
+  [`return UniswapV3.Factory ? ${call} : 0;`, "return 0;", `return ${call};`],
+]) {
+  check(bytes("linea", tested) === bytes("linea", absent), `${tested} on linea is ${absent}`);
+  check(bytes("base", tested) === bytes("base", present), `${tested} on base is ${present}`);
+}
+// A require of a name the chain lacks rules nothing out: it fails whatever the program does, and
+// is refused; where the chain has the name it compiles.
 check(
-  !rejects(
-    "linea",
-    "function main() { if (available(UniswapV3.Factory)) { require(UniswapV3.Factory != 0); } }",
+  refusal("linea", "function main() { require(UniswapV3.Factory != 0); }").includes(
+    "fails on linea whatever the program does",
   ),
-  "available() removes the branch where the chain lacks the contract",
-);
-// It takes a token symbol too: Base registers no USDT, so the guarded transfer is removed there.
-check(rejects("base", "function main() { USDT.transfer(pot, 1); }"), "no USDT on Base");
-check(
-  !rejects("base", "function main() { if (available(USDT)) { USDT.transfer(pot, 1); } }"),
-  "available(USDT) removes the branch on Base",
+  "require(UniswapV3.Factory != 0) is refused on linea",
 );
 check(
-  rejects("base", "function main() { if (available(UniswapV9.Factory)) { require(false); } }"),
-  "available() of a name no chain has is an error",
+  !rejects("base", "function main() { require(UniswapV3.Factory != 0); }"),
+  "require(UniswapV3.Factory != 0) compiles on base",
+);
+// It takes a token symbol too: Base registers no USDT, so the tested transfer is left out there.
+check(
+  !rejects("base", "function main() { if (USDT) { USDT.transfer(pot, 1); } }"),
+  "if (USDT) leaves the transfer out on Base",
+);
+check(
+  refusal("base", "function main() { USDT.transfer(pot, 1); }").includes(
+    "`USDT` is not a token on base.",
+  ),
+  "a transfer of USDT is refused on Base, naming the chain",
+);
+// A decision held in a variable is live code: the name in its branch is refused.
+check(
+  refusal(
+    "base",
+    "function main() { let has = USDT != 0; if (has) { USDT.transfer(pot, 1); } }",
+  ).includes("`USDT` is not a token on base."),
+  "a branch behind a variable is live",
+);
+check(
+  refusal(
+    "base",
+    "function main(): Uint256 { if (Uniswapp.Factory) { return 1; } return 0; }",
+  ).includes("`Uniswapp` is not a token or protocol on base."),
+  "a name no chain has is an error, even tested",
+);
+check(
+  refusal(
+    "base",
+    "function main(): Uint256 { if (UniswapV3.Factroy) { return 1; } return 0; }",
+  ).includes("`UniswapV3.Factroy` is not a contract of UniswapV3"),
+  "a contract no chain has is an error, even tested",
+);
+// The removed call is refused, in the words that say to test the name.
+check(
+  refusal(
+    "base",
+    "function main(): Uint256 { if (available(UniswapV3.Factory)) { return 1; } return 0; }",
+  ).includes("`available(X)` is removed"),
+  "there is no such call: a program tests the name itself",
 );
 // The Pot's own balance of a symbol, and the chain's id.
 check(

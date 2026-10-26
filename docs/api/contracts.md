@@ -23,7 +23,7 @@ program and in TypeScript:
 | A contract a call returns  | `UniswapV3.Factory.getPool(a, b, 500).fee()`    | the method's `returns`                               |
 | A family alias             | `Uniswap.UniversalRouter`                       | `Base.Uniswap.UniversalRouter`                       |
 | Another chain's address    | `Arbitrum.UniswapV3.Factory`                    | `Arbitrum.UniswapV3.Factory`                         |
-| Whether the chain has it   | `available(UniswapV3.Factory)`                  | `Base.UniswapV3.Factory.available`                   |
+| Whether the chain has it   | `UniswapV3.Factory ? a : b`                     | `Base.UniswapV3.Factory.available`                   |
 
 ## One name, both sides
 
@@ -135,11 +135,14 @@ deployed contract's ABI is bound with `.at(...)` the same way, and a token's wri
 another chain's address, without moving execution there. A protocol with a single deployed
 contract also takes its methods directly (`Cctp.depositForBurn(...)`).
 
-`available(<contract or token symbol>)` is a compile-time `boolean`: whether the chain the program
-is compiled for has it. A branch it rules out is removed before anything in it resolves; see
+Every registry name — each namespace with every contract it has on any chain, each token symbol
+some chain registers — is declared on every chain, and a name the chain a program is compiled for
+lacks is zero there. A test of it (`if (UniswapV3.Factory)`, `!USDT`, `X != 0`, `X ? a : b`) is
+decided at compile time, and the branch it rules out is not compiled; any other use of an absent
+name is refused at the use, naming the chain. See
 [use a venue only where the chain has it](../guides/protocols-and-tokens.md#use-a-venue-only-where-the-chain-has-it).
 
-The declarations a typed closure checks against, for every namespace, token and `available`, ship
+The declarations a typed closure checks against, for every namespace and token, ship
 in the package root's types. The ERC-20 syntax for tokens is in the
 [guide](../guides/protocols-and-tokens.md#token-methods-and-balances).
 

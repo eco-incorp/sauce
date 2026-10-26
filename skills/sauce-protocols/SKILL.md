@@ -41,7 +41,7 @@ input. Namespace members (deployed contract, address only, interface) are `sauce
 | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Which protocol for a job     | the category's "Choosing between them" in [references/index.md](references/index.md)                     |
 | How to name a contract       | the registry file's "In a program" column for your chain                                                 |
-| A chain may lack it          | `if (available(Namespace.Contract)) { … }` (`sauce-globals`)                                             |
+| A chain may lack it          | `if (Namespace.Contract) { … }`: zero where the chain lacks it (`sauce-globals`)                         |
 | A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
 | An address-only factory      | discover the pool off chain and pass its address as a `main` input                                       |
 | A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`)                                                 |
@@ -53,14 +53,15 @@ input. Namespace members (deployed contract, address only, interface) are `sauce
 2. **Read its document's pitfalls** (`references/<slug>.md`) before writing the call: approvals,
    who receives the output, caps and pauses, rebasing receipts.
 3. **Write the call** through the namespace, deciding who receives the output (`sauce-script`).
-   A program meant also for a chain without the protocol asks `available(...)`, decided when it is
-   compiled; the branch it rules out is left out, names and all:
+   A program meant also for a chain without the protocol tests the name, `if (X) { … }`: a name
+   the chain lacks is zero there, the test is decided when the program compiles, and the branch it
+   rules out is not compiled. Any other use of an absent name is refused, naming the chain:
 
 ```sauce chain=base,arbitrum,optimism
 function main(fee: Uint256) {
   const uni = UniswapV3.Factory.getPool(WETH, USDC, fee);
   let pancake = 0;
-  if (available(PancakeswapV3.Factory)) {
+  if (PancakeswapV3.Factory) {
     pancake = PancakeswapV3.Factory.getPool(WETH, USDC, fee);
   }
   require(uni != 0 || pancake != 0, "no WETH/USDC pool at that fee");

@@ -21,7 +21,8 @@
 //      a third-party protocol's own document, no RPC endpoint, no description of Sauce as a
 //      multicall, no "rehearse" for a simulation, and nothing that tells the reader to copy, adapt
 //      or start from an example (the agent writes each program itself: COPY_FRAMING), no skill
-//      named in code (`sauce-<name>`) that the package does not ship; the command is written
+//      named in code (`sauce-<name>`) that the package does not ship, no call to `available(...)`
+//      outside a runner (removed: a program tests the name itself, `if (X)`); the command is written
 //      `sauce …`, `sauce-cli` says in one paragraph how to get it and why never a bare
 //      `npx sauce`, and no other line in the skills writes a bare `npx sauce`; and every protocol
 //      document with a swap template opens with the one pointer to `sauce-swaps`;
@@ -644,6 +645,10 @@ function wording(skill, file) {
         fail(where(i), "names a placeholder address; take it from the SDK or write <address>");
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
+    // A name a chain lacks is zero there and a program tests it, `if (X)`: the call is removed. A
+    // runner is exempt: it compiles the call to pin the refusal, and teaches no program.
+    if (!file.endsWith(".mts") && /\bavailable\(/.test(line))
+      fail(where(i), "calls `available(...)`, which is removed; test the name itself, `if (X)`");
     // A skill named in code is one the package ships: a renamed or removed skill fails here.
     for (const m of line.matchAll(/`(sauce-[a-z0-9-]+)`/g))
       if (!SKILL_NAMES.has(m[1]))

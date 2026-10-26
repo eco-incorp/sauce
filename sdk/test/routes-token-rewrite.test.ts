@@ -7,6 +7,7 @@
 import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import type { Abi } from "viem";
 import { requireChain } from "../src/chains/canonical.js";
+import { getDescriptor } from "../src/descriptors/query.js";
 // Through the public `routes` barrel: a caller of `rewriteTokenMembers` needs `tokenImportLines`
 // beside it to compile the result.
 import { rewriteTokenMembers, tokenImportLines } from "../src/routes/index.js";
@@ -222,11 +223,10 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
 
   it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched, and the compile names it", () => {
     // The point is that the rewrite declines and the compile FAILS CLOSED rather than emitting a
-    // program with an unbound symbol -- and says which name the chain does not have, rather than
-    // leaving the compiler to report an un-lowerable call expression.
+    // program with an unbound symbol -- and says which name the chain does not have, at the use.
     expect(() =>
       compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT, engine: ENGINE }),
-    ).toThrow("`USDC` is not a token or protocol on ronin");
+    ).toThrow(/`USDC` is not a token on ronin\.[\s\S]*--> main\.js:1:1/);
   });
 });
 
@@ -260,11 +260,11 @@ describe("USDT0: Tether's token on the chains whose USDT is USDT0", () => {
 
   it("is refused by name on a chain that has none, and USDT where the token is USDT0", () => {
     expect(() => route("base", `USDT0.transfer(${TO}, 5n);`)).toThrow(
-      "`USDT0` is not a token or protocol on base.",
+      "`USDT0` is not a token on base.",
     );
-    expect(() => route("base", READ)).toThrow("`USDT0` is not a declared variable");
+    expect(() => route("base", READ)).toThrow("`USDT0` is not a token on base.");
     expect(() => route("arbitrum", `USDT.transfer(${TO}, 5n);`)).toThrow(
-      "`USDT` is not a token or protocol on arbitrum. Did you mean `USDC` or `USDT0`?",
+      "`USDT` is not a token on arbitrum. Did you mean `USDC` or `USDT0`?",
     );
   });
 });
@@ -2000,20 +2000,31 @@ describe("`.balance` is a field wherever it was one", () => {
   });
 });
 
-describe("composition: token pass + protocol-accessor pass in ONE compile", () => {
-  it("a body using BOTH Uniswap.UniversalRouter.execute(...) and pot.USDC compiles, both rewritten, ERC20 import exactly once", () => {
-    const compiled = compileSauceRoute(
-      "base",
-      `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); return pot.USDC; }`,
-      { pot: POT, engine: ENGINE },
-    );
-    expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
+describe("composition: token pass + the chain's names in ONE compile", () => {
+  it("a body using BOTH Uniswap.UniversalRouter.execute(...) and pot.USDC compiles, the router the chain's name, ERC20 import exactly once", () => {
+    const body = (router: string) =>
+      `function main() { ${router}.execute("0x0a", ["0x00"], 0n); return pot.USDC; }`;
+    const compiled = compileSauceRoute("base", body("Uniswap.UniversalRouter"), {
+      pot: POT,
+      engine: ENGINE,
+    });
+    // The router is the chain's names module's, which the compiler reads as written.
+    expect(compiled.source).toContain("Uniswap.UniversalRouter.execute(");
     expect(compiled.source).toContain(`IERC20.at(USDC).balanceOf(ctx.self())`);
     const count = (
       compiled.source.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
     ).length;
     expect(count).toBe(1);
-    expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    const router = getDescriptor("uniswap-v4", "UniversalRouter")!;
+    const bound = compileSauceRoute(
+      "base",
+      body(`IUniswapV4_UniversalRouter.at(${router.perChainAddress[8453]!})`),
+      { pot: POT, engine: ENGINE },
+      { contracts: { IUniswapV4_UniversalRouter: { abi: router.abi } } },
+    );
+    expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(
+      Array.from(bound.compiled.bytecode[0]!),
+    );
   });
 });
 

@@ -14,16 +14,21 @@ import type {
   AbiParameter,
   AccountManifest,
   CompileOptions,
+  CompileResult as RsResult,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
+import type { AstNode } from "./ast-walk.js";
 import {
   resolveSdkModule,
   resolveSdkPackage,
   SDK_STD_ROOT,
   sdkStdPath,
 } from "../embedded/resolve.js";
+import { chainModuleText, inChainModuleRoot, namesRefusal } from "./chain-module.js";
+import { parseSauce } from "./parse.js";
+import { locatedError } from "./unknown-global.js";
 import { compile } from "../wasm-compiler.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
@@ -109,28 +114,78 @@ function toInlineContracts(
  *
  * The compiler hands `resolve` a specifier already joined against its importer's directory (a
  * relative import two hops deep arrives as `./sub/b.js`), so no importer directory is re-derived
- * here. The SDK's standard library is never offered to the caller's `resolve`: `@sauce/token`
- * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
- * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
+ * here. The SDK's standard library and the chain's names modules are never offered to the caller's
+ * `resolve`: `@sauce/token` resolves to the SDK's copy whatever the caller supplies. Every other
+ * path reaches the caller's `resolve` before the SDK's embedded ABIs, so a caller can serve its own
+ * `./artifacts/IERC20.json`. `check` reads each SauceScript module the caller serves.
+ *
+ * The chain's names are served to their installed specifier alone: a relative import that reaches
+ * one (`./@eco-incorp/sauce/./chain/base.js`, from any module) is told to `refuse` and finds
+ * nothing, since a name the chain lacks imported under the program's own name escapes the check.
  */
-export function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+export function makeResolve(
+  source: string,
+  own: ResolveModule | undefined,
+  check?: (path: string, bytes: Uint8Array) => Uint8Array | undefined,
+  refuse?: (error: Error) => void,
+  /** The names modules this compile alone serves (`RsCompileInput.modules`). */
+  modules?: ReadonlyMap<string, string>,
+): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
+  const utf8 = new TextEncoder();
 
   return (path) => {
     if (path === ENTRY) return entryBytes;
+    const names = chainModuleText(path, modules);
+    if (names !== undefined) return utf8.encode(names);
+    if (path.startsWith("./") && inChainModuleRoot(path)) {
+      refuse?.(new Error(`compileSauceRoute: ${namesRefusal(`\`${path}\` is`)}`));
+      return undefined;
+    }
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
-      if (bytes !== undefined && bytes !== null) return bytes;
+      if (bytes !== undefined && bytes !== null) {
+        return (!path.endsWith(".json") && check?.(path, bytes)) || bytes;
+      }
     }
 
     return resolveSdkModule(path);
   };
 }
 
-/** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
-export function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
-  return (specifier, importer) =>
-    resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
+/**
+ * Bare specifiers: the compile's own (the chain's names), the SDK's standard library, then the
+ * caller's `resolvePackage`, which may map none to the chain's names: such a mapping is told to
+ * `refuse`, with the specifier and its importer, and declined.
+ */
+export function makeResolvePackage(
+  own: ResolvePackage | undefined,
+  packages?: Readonly<Record<string, string>>,
+  refuse?: (specifier: string, importer: string, path: string) => void,
+): ResolvePackage {
+  return (specifier, importer) => {
+    const sdk = packages?.[specifier] ?? resolveSdkPackage(specifier);
+    if (sdk !== undefined) return sdk;
+    const path = own?.(specifier, importer);
+    if (path === undefined || path === null) return undefined;
+    if (inChainModuleRoot(path)) {
+      refuse?.(specifier, importer, path);
+      return undefined;
+    }
+
+    return path;
+  };
+}
+
+/** The import or re-export of `program` from `specifier`. */
+function importOf(program: AstNode, specifier: string): AstNode | undefined {
+  return (program.body as AstNode[]).find(
+    (statement) =>
+      (statement.type === "ImportDeclaration" ||
+        statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportAllDeclaration") &&
+      (statement.source as { value?: unknown } | null)?.value === specifier,
+  );
 }
 
 /**
@@ -237,6 +292,16 @@ export interface RsCompileInput {
   ambient?: string[];
   /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
   args?: readonly (bigint | boolean | string)[];
+  /** Bare specifiers the compile serves itself, ahead of the standard library and the caller's:
+   *  the chain's names modules (`INSTALLED_CHAIN_MODULE`), by the path `chainModuleText` serves. */
+  packages?: Readonly<Record<string, string>>;
+  /** Reads each SauceScript module the caller's `resolve` serves, by its path and text, and throws
+   *  to refuse it, or returns the text to compile in its place: the entry is the caller's to read
+   *  before it compiles. */
+  checkModule?: (path: string, text: string) => string | undefined;
+  /** The names modules this compile made for its own options, by their path under the names'
+   *  root: served to this compile alone, and dropped with it, so a process keeps none. */
+  modules?: ReadonlyMap<string, string>;
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -253,12 +318,16 @@ export interface RsCompileResult extends CompileResult {
 /** What a probe compiles with: a compile's options, without its program and `main`'s arguments. */
 export type RsProbeInput = Omit<RsCompileInput, "source" | "args">;
 
-/** The options a compile and a probe of it share, so the two cannot be given different ones. */
-function sharedOptions(input: RsProbeInput): Omit<CompileOptions, "resolve"> {
+/** The options a compile and a probe of it share, so the two cannot be given different ones: the
+ *  chain's names among the packages, and a caller mapping into them told to `refusePackage`. */
+function sharedOptions(
+  input: RsProbeInput,
+  refusePackage?: (specifier: string, importer: string, path: string) => void,
+): Omit<CompileOptions, "resolve"> {
   return {
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolvePackage: makeResolvePackage(input.resolvePackage),
+    resolvePackage: makeResolvePackage(input.resolvePackage, input.packages, refusePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),
@@ -298,17 +367,42 @@ function probeHelper(taken: ReadonlySet<string>): string {
 /** The compiler's refusal of a name two ambient modules export, which names it. */
 const EXPORTED_TWICE = /`([A-Za-z_$][\w$]*)` is exported by more than one ambient module/;
 
+/** Every name a module's text may read, its escapes decoded (`unescaped`): a superset of its
+ *  identifiers, its comments' and strings' words included, which only ever asks the probe about a
+ *  name more. */
+const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
+
+/** An escape a name may be written with: `\u0069`, `\u{69}`. */
+const ESCAPE = /\\u(?:\{([0-9a-fA-F]+)\}|([0-9a-fA-F]{4}))/g;
+
+/**
+ * `text` with each escape written as the character it spells, so `L\u0069do` reads as `Lido`: the
+ * name the compiler reads there. An escape past the last code point, which no name holds, stays.
+ */
+function unescaped(text: string): string {
+  return text.replace(ESCAPE, (escape, braced: string | undefined, digits: string | undefined) => {
+    const code = parseInt(braced ?? digits!, 16);
+    return code > 0x10ffff ? escape : String.fromCodePoint(code);
+  });
+}
+
 /**
  * The names among `names` that one of `input.ambient`'s modules exports, as the compiler finds them:
  * the compiler is asked, never the SDK. A probe compiles `imports`, the program's own import
  * declarations as written, then a `main` that reads nothing (`probeProgram`), at the program's path
- * with `input`'s options and one more ambient module, which exports every name asked about. The
+ * with `input`'s options and one more ambient module, which exports the names asked about. The
  * compiler loads an entry's imports before the ambient modules and loads a module once, so with the
  * same imports it loads the same modules, each where the compile does (a `resolvePackage` that
  * answers by importer included). It refuses a name two ambient modules export, naming it, so each
  * name it refuses is one a caller's module exports; it is set aside and the rest asked again. A
  * compile the probe's names do not trouble ends the probe. `declared` is every name the program
  * writes, which the probe's own function is named apart from, with the defines and contracts.
+ *
+ * Only a name the compile reads can matter, so only those are asked: a name the program writes, or
+ * one a module the compiler loads mentions, recorded as the probe's `resolve` serves it. The
+ * compiler loads the probe's module last, after the entry's imports and each ambient module before
+ * it, so its exports are written once every other module is read; a module loaded after it, which
+ * mentions a name it did not export, is asked about again.
  *
  * Any other refusal is no answer and is thrown as the compiler raised it.
  *
@@ -324,9 +418,11 @@ export function ambientNamesOf(
   const found = new Set<string>();
   const asked = new Set(names);
   if (asked.size === 0 || input.ambient === undefined || input.ambient.length === 0) return found;
+  // Every name the compile reads: the program's, then each module's as the compiler loads it.
+  const mentioned = new Set(declared);
   const helper = probeHelper(
     new Set([
-      ...declared,
+      ...mentioned,
       ...Object.keys(input.defines ?? {}),
       ...Object.keys(input.baseDefines ?? {}),
       ...Object.keys(input.contracts ?? {}),
@@ -335,21 +431,42 @@ export function ambientNamesOf(
   const program = makeResolve([...imports, probeProgram(helper)].join("\n"), input.resolve);
   const options = sharedOptions(input);
   const ambient = [...input.ambient, PROBE_MODULE];
-  while (asked.size > 0) {
-    const exports = new TextEncoder().encode(
-      [...asked].map((name) => `export const ${name} = 0;`).join("\n"),
-    );
+  const decoder = new TextDecoder();
+  for (;;) {
+    // Written by the compile's `resolve`, which narrowing does not follow.
+    let exported = undefined as ReadonlySet<string> | undefined;
     try {
       compile({
         ...options,
         ambient,
-        resolve: (path) => (path === PROBE_MODULE ? exports : program(path)),
+        resolve: (path) => {
+          if (path === PROBE_MODULE) {
+            exported = new Set([...asked].filter((name) => mentioned.has(name)));
+            return new TextEncoder().encode(
+              [...exported].map((name) => `export const ${name} = 0;`).join("\n"),
+            );
+          }
+          const bytes = program(path);
+          if (bytes !== undefined && bytes !== null && !path.endsWith(".json")) {
+            const text = unescaped(decoder.decode(bytes));
+            for (const [name] of text.matchAll(IDENTIFIER)) mentioned.add(name);
+          }
+          return bytes;
+        },
       });
-      break;
     } catch (error) {
       const name = exportedTwice(error);
-      if (name === undefined || !asked.delete(name)) throw error;
+      if (name === undefined || exported?.has(name) !== true) throw error;
+      asked.delete(name);
       found.add(name);
+      continue;
+    }
+    const served: ReadonlySet<string> | undefined = exported;
+    if (
+      served === undefined ||
+      [...asked].every((name) => served.has(name) || !mentioned.has(name))
+    ) {
+      break;
     }
   }
 
@@ -374,11 +491,53 @@ function exportedTwice(error: unknown): string | undefined {
  * returns none, and an SVM caller that needs the attach contract compiles through `svm/` directly.
  */
 export function compileWithRs(input: RsCompileInput): RsCompileResult {
-  const result = compile({
-    ...sharedOptions(input),
-    resolve: makeResolve(input.source, input.resolve),
-    ...(input.args === undefined ? {} : { args: [...input.args] }),
-  });
+  // A module refused while the compiler resolves it is refused once the compile ends, whatever the
+  // compiler made of it: an error thrown inside `resolve` would be the compiler's to word.
+  let refused: unknown;
+  const refuse = (error: unknown): void => {
+    refused ??= error;
+  };
+  // The text of each module the program and the caller wrote, by the path an importer is reported
+  // by, to locate an import refused while it resolves.
+  const texts = new Map<string, string>([[`./${ENTRY}`, input.source]]);
+  const check = (path: string, bytes: Uint8Array): Uint8Array | undefined => {
+    const text = new TextDecoder().decode(bytes);
+    texts.set(path, text);
+    if (refused !== undefined || input.checkModule === undefined) return undefined;
+    try {
+      const replaced = input.checkModule(path, text);
+      return replaced === undefined ? undefined : new TextEncoder().encode(replaced);
+    } catch (error) {
+      refuse(error);
+      return undefined;
+    }
+  };
+  const refusePackage = (specifier: string, importer: string, path: string): void => {
+    const message = `compileSauceRoute: ${namesRefusal(`\`${specifier}\` resolves to \`${path}\`,`)}`;
+    const text = texts.get(importer);
+    let at: AstNode | undefined;
+    try {
+      at = text === undefined ? undefined : importOf(parseSauce(text), specifier);
+    } catch {
+      at = undefined;
+    }
+    refuse(
+      at === undefined
+        ? new Error(message)
+        : locatedError(text!, importer === `./${ENTRY}` ? ENTRY : importer, at, message),
+    );
+  };
+  let result: RsResult;
+  try {
+    result = compile({
+      ...sharedOptions(input, refusePackage),
+      resolve: makeResolve(input.source, input.resolve, check, refuse, input.modules),
+      ...(input.args === undefined ? {} : { args: [...input.args] }),
+    });
+  } catch (error) {
+    throw refused ?? error;
+  }
+  if (refused !== undefined) throw refused;
 
   const compiled: RsCompileResult = {
     bytecode: [result.bytecode],

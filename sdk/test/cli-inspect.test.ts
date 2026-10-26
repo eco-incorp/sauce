@@ -1,6 +1,6 @@
 /**
  * `sauce globals`, `sauce inspect` and `sauce verify`, in process and offline — and the two SDK
- * pieces they stand on: `sourceGlobals` (held to the protocol-accessor rewrite it lists for, in both
+ * pieces they stand on: `sourceGlobals` (held to the names a program compiles with, in both
  * directions) and `decodeEntryArguments` (held to `encodeEntryArguments`, strictly). Reading a
  * transaction back off a chain is `cli.e2e.test.ts`.
  */
@@ -29,7 +29,6 @@ import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "../src/routes/accessor-index.js";
 import { chainDefines } from "../src/routes/ambient.js";
 import { decodeEntryArguments, encodeEntryArguments } from "../src/routes/entry.js";
-import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
@@ -88,7 +87,7 @@ const file = (name: string, text: string): string => {
 // ---------------------------------------------------------------------------------------------
 
 describe("sourceGlobals: the names a program on a chain may use", () => {
-  it("lists exactly the namespaces and contracts the accessor rewrite resolves, at its addresses", () => {
+  it("lists exactly the namespaces and contracts a program may name, at the addresses they compile to", () => {
     for (const slug of ["ethereum", "base", "arbitrum"]) {
       const chain = requireChain(slug);
       const listed = new Map<string, string>();
@@ -104,19 +103,24 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
           ns.kind === "protocol" ? [...ns.contracts.keys()] : [...ns.contractOwners.keys()];
         for (const name of names) {
           const reference = `${key}.${name}`;
-          let rewritten: string | undefined;
+          let compiled: number[] | undefined;
           try {
-            rewritten = rewriteProtocolAccessors(
-              `function main() { const a = ${reference}; }`,
-              chain,
-            ).source;
+            compiled = Array.from(
+              compileSauceProgram(chain, `function main() { return ${reference}; }`).bytecode,
+            );
           } catch {
-            rewritten = undefined;
+            compiled = undefined;
           }
           const address = listed.get(reference);
           // Listed if and only if a program may write it, and at the address it compiles to.
-          expect([reference, rewritten !== undefined]).toEqual([reference, address !== undefined]);
-          if (address !== undefined) expect(rewritten).toContain(`${BigInt(address)}n`);
+          expect([reference, compiled !== undefined]).toEqual([reference, address !== undefined]);
+          if (address !== undefined) {
+            const literal = compileSauceProgram(
+              chain,
+              `function main() { return ${BigInt(address)}; }`,
+            ).bytecode;
+            expect([reference, compiled]).toEqual([reference, Array.from(literal)]);
+          }
         }
       }
     }
