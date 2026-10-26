@@ -23,7 +23,7 @@ program and in TypeScript:
 | A contract a call returns  | `UniswapV3.Factory.getPool(a, b, 500).fee()`    | the method's `returns`                               |
 | A family alias             | `Uniswap.UniversalRouter`                       | `Base.Uniswap.UniversalRouter`                       |
 | Another chain's address    | `Arbitrum.UniswapV3.Factory`                    | `Arbitrum.UniswapV3.Factory`                         |
-| Whether the chain has it   | `if (UniswapV3.Factory)`                        | `Base.UniswapV3.Factory.available`                   |
+| Whether the chain has it   | `UniswapV3.Factory ? a : b`                     | `Base.UniswapV3.Factory.available`                   |
 
 ## One name, both sides
 

@@ -217,7 +217,7 @@ Every name the registry has (each protocol namespace with every contract it has 
 token symbol some chain registers) is declared on every chain. A name the chain being compiled for
 lacks is **zero** there.
 
-- A **test** of such a name in a condition (`if`, `?:`, `!`, `require`) is decided while the
+- A **test** of such a name in a condition (`if`, `?:`, `!`) is decided while the
   program compiles, and the branch it rules out is not compiled at all, so it may call the absent
   contract. The spelling to use is `if (X)`; `if (!X) { return 0; }` (a guard that returns drops
   the rest of its block where `X` is absent), `X != 0`, `X == 0`, `X ? a : b`, `X && …` and
@@ -227,10 +227,11 @@ lacks is **zero** there.
   chain as a contract address. `require(X != 0)` on a chain without `X` is refused as well: it
   would fail whatever the program does.
 - A decision is made only from registry names, `true`/`false`, `!`, `&&`, `||` and comparisons with
-  `0`. A branch behind any other value (`let has = X != 0; if (has) { … }`) is live code, and an
-  absent name in it is refused. Outside a condition `X && Y` is the value `X` or `Y` itself, a use
-  of `X`; a decision kept in a value compares, `X != 0 && Y != 0`. A helper function is checked as
-  if it ran: it tests the name itself, or is refused on a chain that lacks the name.
+  `0` (`== 0` or `!= 0`; `X > 0` is a use of `X`). A branch behind any other value
+  (`let has = X != 0; if (has) { … }`) is live code, and an absent name in it is refused. Outside a
+  condition `X && Y` and `X || Y` give true or false and each side is a test, so
+  `const both = X && Y` compiles where `X` is absent. A helper function is checked as if it ran: it
+  tests the name itself, or is refused on a chain that lacks the name.
 - A name no chain has (`Uniswapp`, or a contract its namespace does not have) is refused where it
   is written, with the names it is nearest, so a typo cannot quietly drop a branch.
 - There is no `available` call: test the name itself. Calling it is refused.

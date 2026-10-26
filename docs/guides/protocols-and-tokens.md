@@ -145,7 +145,7 @@ without USDC or WETH, it returns 0 and calls nothing. The guard on the tokens is
 compile everywhere: a token the chain lacks is refused in any branch that is kept.
 [registry-names.ts](../examples/registry-names.ts) compiles it for Base and Optimism.
 
-- In a condition (`if`, `?:`, `!`, `require`), a test is `if (X)`, `if (!X) return 0;` (a guard
+- In a condition (`if`, `?:`, `!`), a test is `if (X)`, `if (!X) return 0;` (a guard
   that returns removes the rest of its block where `X` is absent), `X != 0`, `X == 0`,
   `X ? a : b`, `X && …` and `X || …`. `X` is a contract
   (`UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
@@ -157,11 +157,11 @@ compile everywhere: a token the chain lacks is refused in any branch that is kep
   a test of it may use it: …". So a zero never reaches the chain as a contract address.
   `require(X != 0)` on a chain without `X` is refused too: it would fail whatever the program does.
 - A decision is made only from registry names, `true`/`false`, `!`, `&&`, `||` and comparisons
-  with `0`. A branch behind any other value (`const has = X != 0; if (has) ...`) is live code, and
-  a name the chain lacks in it is refused. Outside a condition, `X && Y` is the value `X` or `Y`
-  itself, so it is a use of `X`; to keep a decision in a value, compare: `X != 0 && Y != 0`. A
-  helper function is checked as if it ran: it tests the name itself, or is refused on a chain that
-  lacks the name.
+  with `0` (`== 0` or `!= 0`; `X > 0` is a use of `X`). A branch behind any other value
+  (`const has = X != 0; if (has) ...`) is live code, and a name the chain lacks in it is refused.
+  Outside a condition, `X && Y` and `X || Y` give true or false, as they do for any scalar, and each
+  side is a test: `const both = X && Y` compiles where `X` is absent. A helper function is checked
+  as if it ran: it tests the name itself, or is refused on a chain that lacks the name.
 - A name the registry does not know on any chain is an error, as are an ambiguous family name and
   an interface, so a typo cannot quietly drop a branch.
 - The old `available` call is removed, and calling it is refused at the call: test the name

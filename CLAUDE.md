@@ -555,7 +555,7 @@ be, a contract binding (`bindingSides`): the language gives a bool, but 2.6.0 ha
 as the whole — measured, a names-module contract, a record field holding `<Abi>.at(…)`, an inline
 `<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of aliases, resolved per scope by
 `lexical-bindings.ts`; a local initialized to `<Abi>.at(…)`, a `?:`, a call or a parameter give a
-bool, and an import is taken as one. `compileForChain` applies both in one pass before every rewrite
+bool, and an import is taken as one. `compileForChain` applies both in one pass
 (`withoutDead`: dead code blanked in place, spaces, newlines kept, an `if` arm `{ }`, an expression
 `0`; a binding side written `!!(…)`, which is the bool, the same bytes for a constant)
 before every rewrite, so the token, venue, account and accessor passes never lower ruled-out code
