@@ -1110,7 +1110,7 @@ describe("a name the caller binds, by an ambient module or a contract, is the ca
         inputs: [{ name: "owner", type: "address" }],
         outputs: [{ name: "", type: "uint256" }],
       },
-    ];
+    ] as const;
     const source = "function main(a: Address): Uint256 { return Lido.at(a).balanceOf(a); }";
     expect(hex("base", source, { contracts: { Lido: { abi } } })).toBe(
       hex("base", source.replaceAll("Lido", "Erc20"), { contracts: { Erc20: { abi } } }),
