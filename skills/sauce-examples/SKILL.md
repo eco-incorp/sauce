@@ -24,7 +24,8 @@ correct program does a thing, and is not a template to fill in.
 
 - **A program names no chain**: `--chain` picks one, and the chains a row lists are the ones it is
   checked on. A chain marked (preview) compiles there, and its cook is checked to be refused
-  (`sauce-overview`); simulate and run its transaction on a supported chain.
+  (`sauce-overview`); simulate it wherever the release is deployed, and send its transaction on a
+  supported chain.
 - **Each program's header** says what it does, gives the `sauce` command that runs it with every
   `main` parameter named, what each is and its units, and one run on a supported chain with real
   values (`sauce-script` owns the format).

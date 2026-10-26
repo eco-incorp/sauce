@@ -76,7 +76,7 @@ new one. No flag lifts the refusal ([Supported and preview chains](cli.md#suppor
 ### `the released engine … is not deployed on <chain>`
 
 ```text
-sauce simulate: the released engine 0x0F50… is not deployed on arbitrum: this SDK's cook cannot run there
+sauce simulate: the released engine 0x0F50… is not deployed on gnosis: this SDK's cook cannot run there
 ```
 
 **Cause.** `sauce simulate` runs the cook on the release's engine and Kitchen, and they are not
