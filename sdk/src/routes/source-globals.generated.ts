@@ -809,6 +809,21 @@ export interface LidoWstETHMethods {
   "getWstETHByStETH"(arg0: (bigint | number)): SauceCall<bigint>;
 }
 
+export interface LidoWstETHBridgedMethods {
+  "name"(): SauceCall<SauceBytes>;
+  "symbol"(): SauceCall<SauceBytes>;
+  "decimals"(): SauceCall<bigint>;
+  "totalSupply"(): SauceCall<bigint>;
+  "balanceOf"(arg0: (bigint | number)): SauceCall<bigint>;
+  "allowance"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<bigint>;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<boolean>;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<boolean>;
+  "transferFrom"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<boolean>;
+  "increaseAllowance"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<boolean>;
+  "decreaseAllowance"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<boolean>;
+  "bridge"(): SauceCall<bigint>;
+}
+
 export interface LifiDiamondMethods {
   "startBridgeTokensViaAcrossV4"(arg0: { "transactionId": (bigint | number); "bridge": (string | SauceBytes); "integrator": (string | SauceBytes); "referrer": (bigint | number); "sendingAssetId": (bigint | number); "receiver": (bigint | number); "minAmount": (bigint | number); "destinationChainId": (bigint | number); "hasSourceSwaps": boolean; "hasDestinationCall": boolean }, arg1: { "receiverAddress": (bigint | number); "refundAddress": (bigint | number); "sendingAssetId": (bigint | number); "receivingAssetId": (bigint | number); "outputAmount": (bigint | number); "outputAmountMultiplier": (bigint | number); "exclusiveRelayer": (bigint | number); "quoteTimestamp": (bigint | number); "fillDeadline": (bigint | number); "exclusivityParameter": (bigint | number); "message": (string | SauceBytes) }): SauceCall<void>;
   "extractBridgeData"(arg0: (string | SauceBytes)): SauceCall<{ "transactionId": bigint; "bridge": SauceBytes; "integrator": SauceBytes; "referrer": bigint; "sendingAssetId": bigint; "receiver": bigint; "minAmount": bigint; "destinationChainId": bigint; "hasSourceSwaps": boolean; "hasDestinationCall": boolean }>;
@@ -1136,13 +1151,6 @@ export interface ScrollBridgeScrollL1GatewayRouterMethods {
 
 export interface ScrollBridgeScrollL1MessengerMethods {
   "sendMessage"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes), arg3: (bigint | number)): SauceCall<void>;
-}
-
-export interface SeamlessPoolMethods {
-  "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
-  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
-  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): SauceCall<void>;
-  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<bigint>;
 }
 
 export interface SeaportSeaportMethods {
@@ -1916,6 +1924,7 @@ export interface LevelFinanceSource extends LevelFinanceLiquidityPoolMethods {
 export interface LidoSource {
   readonly StETH: SauceContract<LidoLidoMethods>;
   readonly WstETH: SauceContract<LidoWstETHMethods>;
+  readonly WstETHBridged: SauceContract<LidoWstETHBridgedMethods>;
 }
 
 export interface LifiSource extends LifiDiamondMethods {
@@ -2098,11 +2107,6 @@ export interface ScrollBridgeSource {
   readonly L1ScrollMessenger: SauceContract<ScrollBridgeScrollL1MessengerMethods>;
   readonly L2ScrollMessenger: bigint;
   readonly L2GatewayRouter: bigint;
-}
-
-export interface SeamlessSource extends SeamlessPoolMethods {
-  readonly Pool: SauceContract<SeamlessPoolMethods>;
-  readonly PoolAddressesProvider: bigint;
 }
 
 export interface SeaportSource extends SeaportSeaportMethods {
@@ -2531,7 +2535,6 @@ declare global {
   const Sablier: SablierSource;
   const Safe: SafeSource;
   const ScrollBridge: ScrollBridgeSource;
-  const Seamless: SeamlessSource;
   const Seaport: SeaportSource;
   const Silo: SiloSource;
   const Socket: SocketSource;

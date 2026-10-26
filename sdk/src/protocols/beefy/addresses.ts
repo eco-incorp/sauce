@@ -16,13 +16,6 @@ export const deployments: ChainDeployment[] = [
     },
   },
   {
-    chainId: 137,
-    chainName: "Polygon",
-    addresses: {
-      BIFI: "0xFbdd194376De19A88f4a68671C339563C427310D",
-    },
-  },
-  {
     chainId: 42161,
     chainName: "Arbitrum",
     addresses: {
@@ -34,13 +27,6 @@ export const deployments: ChainDeployment[] = [
     chainName: "Optimism",
     addresses: {
       BIFI: "0x4E720DD3Ac5CFe1e1fbDE4935f386Bb1C66F4642",
-    },
-  },
-  {
-    chainId: 8453,
-    chainName: "Base",
-    addresses: {
-      BIFI: "0xc55E93C62874D8100dBd2DfE307EDc1036ad5434",
     },
   },
   {

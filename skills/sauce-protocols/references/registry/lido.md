@@ -29,7 +29,7 @@ function main() {
 | --- | --- | --- | --- |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | stETH | `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84` | `Lido.StETH` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | wstETH | `0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0` | `Lido.WstETH` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETH`; not on this deployment: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETHBridged` |
 
 ## ABI
 
@@ -50,4 +50,19 @@ function main() {
 - `getStETHByWstETH(uint256 _wstETHAmount) view returns (uint256)`
 - `getWstETHByStETH(uint256 _stETHAmount) view returns (uint256)`
 
-Not on Arbitrum One's wstETH (`0x5979D7b546E38E414F7E9822514be443A4800529`), whose code does not dispatch them: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
+### `WstETHBridgedABI`
+
+`import WstETHBridgedABI from "./protocols/lido/WstETHBridgedABI.json";` Speaks for: wstETH.
+
+- `name() view returns (string)`
+- `symbol() view returns (string)`
+- `decimals() view returns (uint8)`
+- `totalSupply() view returns (uint256)`
+- `balanceOf(address account) view returns (uint256)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `bridge() view returns (address)`

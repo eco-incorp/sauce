@@ -33,7 +33,7 @@ On Ethereum, `Sommelier` is a namespace: its contracts need no import.
 
 ```ts
 function main() {
-  // Ethereum's cellarRouter, `0x6b7f87279982d919Bbf85182DDeAB179B366D8f2`.
+  // Ethereum's cellarRouter, `0x1D90366B0154fBcB5101c06a39c25D26cB48e889`.
   require(Sommelier.CellarRouter != 0);
 }
 ```
@@ -42,7 +42,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../chains/ethereum.md) | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366D8f2` | `Sommelier.CellarRouter` |
+| [Ethereum](../chains/ethereum.md) | cellarRouter | `0x1D90366B0154fBcB5101c06a39c25D26cB48e889` | `Sommelier.CellarRouter` |
 
 ## ABI
 

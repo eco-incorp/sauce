@@ -204,8 +204,6 @@ import * as safeAbis from "../protocols/safe/abis.js";
 import { deployments as safeDeployments } from "../protocols/safe/addresses.js";
 import * as scrollBridgeAbis from "../protocols/scroll-bridge/abis.js";
 import { deployments as scrollBridgeDeployments } from "../protocols/scroll-bridge/addresses.js";
-import * as seamlessAbis from "../protocols/seamless/abis.js";
-import { deployments as seamlessDeployments } from "../protocols/seamless/addresses.js";
 import * as seaportAbis from "../protocols/seaport/abis.js";
 import { deployments as seaportDeployments } from "../protocols/seaport/addresses.js";
 import * as siloAbis from "../protocols/silo/abis.js";
@@ -375,7 +373,6 @@ export const PROTOCOL_SOURCES = {
   "sablier": { abis: sablierAbis, deployments: sablierDeployments },
   "safe": { abis: safeAbis, deployments: safeDeployments },
   "scroll-bridge": { abis: scrollBridgeAbis, deployments: scrollBridgeDeployments },
-  "seamless": { abis: seamlessAbis, deployments: seamlessDeployments },
   "seaport": { abis: seaportAbis, deployments: seaportDeployments },
   "silo": { abis: siloAbis, deployments: siloDeployments },
   "socket": { abis: socketAbis, deployments: socketDeployments },
@@ -411,7 +408,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 313 contracts across 134 protocols. */
+/** One entry per contract: 312 contracts across 133 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -569,7 +566,8 @@ export const CONTRACT_LINKS = [
   { protocol: "layerzero", contract: "EndpointV2", kind: "singleton", roleKey: "endpointV2", abiExport: "LayerZeroEndpointV2ABI" },
   { protocol: "level-finance", contract: "LiquidityPool", kind: "singleton", roleKey: "liquidityPool", abiExport: "LiquidityPoolABI" },
   { protocol: "lido", contract: "StETH", kind: "singleton", roleKey: "stETH", abiExport: "LidoABI" },
-  { protocol: "lido", contract: "WstETH", kind: "singleton", roleKey: "wstETH", abiExport: "WstETHABI", caveats: ["wrap(uint256) is not available on arbitrum: Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH","unwrap(uint256) is not available on arbitrum: Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH","getStETHByWstETH(uint256) is not available on arbitrum: Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH","getWstETHByStETH(uint256) is not available on arbitrum: Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"] },
+  { protocol: "lido", contract: "WstETH", kind: "singleton", roleKey: "wstETH", abiExport: "WstETHABI", chains: [1] },
+  { protocol: "lido", contract: "WstETHBridged", kind: "singleton", roleKey: "wstETH", abiExport: "WstETHBridgedABI", chains: [42161] },
   { protocol: "lifi", contract: "LiFiDiamond", kind: "singleton", roleKey: "lifiDiamond", abiExport: "LiFiDiamondABI", caveats: ["startBridgeTokensViaAcrossV4((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(bytes32,bytes32,bytes32,bytes32,uint256,uint128,bytes32,uint32,uint32,uint32,bytes)) is not available on gnosis: this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector","startBridgeTokensViaAcrossV4((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(bytes32,bytes32,bytes32,bytes32,uint256,uint128,bytes32,uint32,uint32,uint32,bytes)) is not available on fantom: this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector","startBridgeTokensViaAcrossV4((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(bytes32,bytes32,bytes32,bytes32,uint256,uint128,bytes32,uint32,uint32,uint32,bytes)) is not available on avalanche: this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector"] },
   { protocol: "linea-bridge", contract: "L1MessageService", kind: "singleton", roleKey: "l1MessageService", abiExport: "LineaL1MessageServiceABI" },
   { protocol: "linea-bridge", contract: "L2MessageService", kind: "address-only", roleKey: "l2MessageService", caveats: ["the registry has no ABI for this contract: its address only"] },
@@ -647,8 +645,6 @@ export const CONTRACT_LINKS = [
   { protocol: "scroll-bridge", contract: "L1ScrollMessenger", kind: "singleton", roleKey: "l1ScrollMessenger", abiExport: "ScrollL1MessengerABI" },
   { protocol: "scroll-bridge", contract: "L2ScrollMessenger", kind: "address-only", roleKey: "l2ScrollMessenger", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "scroll-bridge", contract: "L2GatewayRouter", kind: "address-only", roleKey: "l2GatewayRouter", caveats: ["the registry has no ABI for this contract: its address only"] },
-  { protocol: "seamless", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "SeamlessPoolABI" },
-  { protocol: "seamless", contract: "PoolAddressesProvider", kind: "address-only", roleKey: "poolAddressesProvider", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "seaport", contract: "SeaportV16", kind: "singleton", roleKey: "seaportV16", abiExport: "SeaportABI" },
   { protocol: "silo", contract: "Silo", kind: "interface", abiExport: "SiloABI" },
   { protocol: "silo", contract: "SiloRepository", kind: "singleton", roleKey: "siloRepository", abiExport: "SiloRepositoryABI" },
@@ -1140,6 +1136,7 @@ export interface LevelFinanceContracts {
 export interface LidoContracts {
   readonly StETH: Contract<typeof lidoAbis.LidoABI>;
   readonly WstETH: Contract<typeof lidoAbis.WstETHABI>;
+  readonly WstETHBridged: Contract<typeof lidoAbis.WstETHBridgedABI>;
 }
 
 export interface LifiContracts {
@@ -1322,11 +1319,6 @@ export interface ScrollBridgeContracts {
   readonly L1ScrollMessenger: Contract<typeof scrollBridgeAbis.ScrollL1MessengerABI>;
   readonly L2ScrollMessenger: AddressOnlyContract;
   readonly L2GatewayRouter: AddressOnlyContract;
-}
-
-export interface SeamlessContracts {
-  readonly Pool: Contract<typeof seamlessAbis.SeamlessPoolABI>;
-  readonly PoolAddressesProvider: AddressOnlyContract;
 }
 
 export interface SeaportContracts {
@@ -1721,7 +1713,6 @@ export interface ChainContracts {
   readonly Sablier: SablierContracts;
   readonly Safe: SafeContracts;
   readonly ScrollBridge: ScrollBridgeContracts;
-  readonly Seamless: SeamlessContracts;
   readonly Seaport: SeaportContracts;
   readonly Silo: SiloContracts;
   readonly Socket: SocketContracts;

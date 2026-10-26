@@ -31,12 +31,14 @@ The SDK carries the address book in its **registries**, which ship inside the pa
 | --------- | ------------------------------------------------------------------------------------------- |
 | Chains    | The 41 chains a program can name, each with a slug (`base`), aliases (`eth`) and a chain id |
 | Tokens    | Each chain's token symbols with their addresses and decimals, tokenized stocks included     |
-| Protocols | 134 protocols, each with its contracts per chain and the ABI of each one                    |
+| Protocols | 133 protocols, each with its contracts per chain and the ABI of each one                    |
 
 Each registry row is checked, in the SDK's own tests, against the contract deployed at its address:
-a token's symbol and decimals, a protocol contract's functions. A token symbol is in the registry
-because someone recorded it, not because a chain has it: only 14 of the 41 chains register token
-symbols. On the others, a program names a token by address with `Token(address)`.
+a token's symbol and decimals, and the functions of each protocol contract the registry has an ABI
+for. A contract the registry records by its address only is not checked against the chain. A token
+symbol is in the registry because someone recorded it, not because a chain has it: only 14 of the
+41 chains register token symbols. On the others, a program names a token by address with
+`Token(address)`.
 
 Names follow fixed rules. A protocol's **namespace** is its registry name in PascalCase
 (`uniswap-v3` is `UniswapV3`), and its members are its contracts (`UniswapV3.Factory`). An
