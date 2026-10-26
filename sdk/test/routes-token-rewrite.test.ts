@@ -776,6 +776,10 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
       NATIVE("UniswapV4.PoolManager.ETH", "ETH", "base", "UniswapV4.PoolManager.balance"),
     ],
     ["const self = who; return self.ETH;", NATIVE("self.ETH", "ETH", "base", "self.balance")],
+    [
+      "return (who == 0 ? who : pot).ETH;",
+      NATIVE("(who == 0 ? who : pot).ETH", "ETH", "base", "(who == 0 ? who : pot).balance"),
+    ],
   ])("on base, `%s` is refused", (body, message) => {
     expect(refusal("base", body)).toBe(message);
   });

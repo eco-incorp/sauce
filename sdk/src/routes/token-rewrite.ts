@@ -686,7 +686,8 @@ function collectBalanceSites(
     if (balance === undefined && resolveHolder(n, name, "token", scope, here) === undefined) {
       return;
     }
-    const holder = source.slice(object.start, object.end);
+    // The holder as written, its parentheses with it: `(c ? a : b).ETH` is `(c ? a : b).balance`.
+    const holder = source.slice(n.start, (n.property as AstNode).start).replace(/\s*\??\.\s*$/, "");
     throw nativeSymbolRefusal(
       site,
       name,
