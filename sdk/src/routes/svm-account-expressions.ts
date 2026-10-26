@@ -593,12 +593,14 @@ export function collectAccountExpressions(l: SvmLowering): void {
   const roots: Root[] = [];
   /**
    * A bare name an account stands for (`pot`): its account where the program uses it as one
-   * (`standsAsAccount`), else its key, `key()`. Either way the slot is held by its signature: the
-   * Pot signs only through the Kitchen, so an account a transaction's builder puts in its place
-   * that is not the Pot fails at the engine, as `Solana.self` did. Its balances (`pot.USDC`,
-   * `pot.balance`) are the token syntax's, and a method on it (`pot.toBytesBe(32)`) is its key's.
-   * `pot.owner` is refused: an account's `.owner` is the program that owns it, which is not the
-   * Pot's owner.
+   * (`standsAsAccount`), else its key, `key()`. Either way the slot is `Account<Signer>`, the slot
+   * `Solana.self` was: a cook signs for it, and the Pot signs only through the Kitchen, so a use
+   * that signs as the Pot fails with another account in its place. The engine checks the role
+   * where a signature is used, not at the entry: what keeps another account out of a read is
+   * whoever builds the transaction (`sdk/test/svm/direct-engine.e2e.test.ts` measures both). Its
+   * balances (`pot.USDC`, `pot.balance`) are the token syntax's, and a method on it
+   * (`pot.toBytesBe(32)`) is its key's. `pot.owner` is refused: an account's `.owner` is the
+   * program that owns it, which is not the Pot's owner.
    */
   const collectBare = (n: AstNode, known: Known, key: () => string): void => {
     const parent = parents.get(n);

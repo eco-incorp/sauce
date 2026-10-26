@@ -73,8 +73,8 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     expect(roles(program)).toEqual({ systemProgram: "readonly", pot: "writable_signer" });
   });
 
-  it("is held by the Pot's signature wherever it is named, and refuses pot.owner", () => {
-    // Only the Kitchen signs for the Pot: an account put in its slot that is not the Pot fails.
+  it("is the slot Solana.self was, Account<Signer>, wherever it is named, and refuses pot.owner", () => {
+    // A cook signs for it; only the Kitchen signs for the Pot (direct-engine.e2e measures the hold).
     for (const body of ["return pot;", "return svm.sload(pot, 0, 8).toLe();"]) {
       const program = compile(`function main(): Uint256 {\n  ${body}\n}\n`);
       expect(roles(program).pot).toBe("readonly_signer");

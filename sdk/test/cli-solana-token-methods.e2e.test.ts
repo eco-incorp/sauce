@@ -968,6 +968,14 @@ describeSvm("the token methods on Solana: every account derived by the command",
     it("bare pot is the Pot's key: the address the Kitchen derives, and the one pot.balance reads", async () => {
       const file = program("pot-key", "function main(): Address {\n  return pot;\n}\n");
       expect(json(await simulate(file, ...assumed))).toMatchObject({ ok: true, returned: pot });
+      // Its slot must sign (`Account<Signer>`): the Kitchen signs for the Pot, and the cook lands.
+      const compiled = json(await sauce("compile", file, "--chain", "solana", "--json")) as {
+        manifest: { accounts: { name: string; requires: string }[] };
+      };
+      expect(compiled.manifest.accounts).toEqual([
+        expect.objectContaining({ name: "pot", requires: "readonly_signer" }),
+      ]);
+      expect(json(await run(file))).toMatchObject({ cook: { status: "success" } });
       const lamports = program(
         "pot-lamports",
         'function main(): Uint256 {\n  require(ctx.balance(pot) == pot.balance, "two balances");\n  return pot.balance;\n}\n',
