@@ -126,6 +126,9 @@ an effect, with no error. Two of the fixes refuse code that used to compile:
   Write the fields in the declared order where the value is built. A list written in the call
   itself is still reordered.
 
+The settlement program compiles to the same 410 bytes and hash as under 2.6.0, so its pin is
+unchanged.
+
 ### The registry
 
 - **Fixed** (EVM): three of the fifteen mixed-case addresses 0.99.16 rewrote with a valid checksum
