@@ -92,28 +92,6 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK Unreleased
-
-Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. Same compiler
-and engines as 0.99.16.
-
-**Also breaking:**
-
-- The Pot is `"pot"` outside programs too, with no alias, as it is `pot` inside them:
-  - Actions documents (`@eco-incorp/sauce/actions`, `sauce actions` and every command that takes a
-    document, the MCP server's `sauce_actions`): a `recipient`, `onBehalfOf` or `owner` of `"pot"`
-    is the executing Pot. `"self"` is refused at its path:
-    `actions[1].recipient: the Pot is "pot", not "self": write "pot"`. The JSON Schema's recipient
-    takes `"pot"`, and the `Recipient` type is `` `0x${string}` | "pot" ``. The SauceScript a
-    document lowers to (what `sauce actions` prints and `compileProgram(...).source` returns) names
-    the Pot `pot` and its native balance `pot.balance`; the bytecode is the same. A split swap
-    compiled with no `chain` keeps the compiler's `ctx.self()`. `compileSplitSwap`'s
-    `sweep.recipient` takes `"pot"` and refuses `"self"` at `sweep.recipient`.
-  - `token.Token.balanceOf({ token, owner: "pot" })` and `token.evmBalanceExpression` read the
-    Pot's balance; `owner: "self"` is refused, naming `"pot"`.
-  - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
-    is `bigint | "pot" | null`.
-
 ## SDK 0.99.16 — 2026-10-26
 
 Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0.
@@ -402,6 +380,20 @@ upgrade authority, which can replace them after the check.
 
 **Also breaking:**
 
+- The Pot is `"pot"` outside programs too, with no alias, as it is `pot` inside them:
+  - Actions documents (`@eco-incorp/sauce/actions`, `sauce actions` and every command that takes a
+    document, the MCP server's `sauce_actions`): a `recipient`, `onBehalfOf` or `owner` of `"pot"`
+    is the executing Pot. `"self"` is refused at its path:
+    `actions[1].recipient: the Pot is "pot", not "self": write "pot"`. The JSON Schema's recipient
+    takes `"pot"`, and the `Recipient` type is `` `0x${string}` | "pot" ``. The SauceScript a
+    document lowers to (what `sauce actions` prints and `compileProgram(...).source` returns) names
+    the Pot `pot` and its native balance `pot.balance`; the bytecode is the same. A split swap
+    compiled with no `chain` keeps the compiler's `ctx.self()`. `compileSplitSwap`'s
+    `sweep.recipient` takes `"pot"` and refuses `"self"` at `sweep.recipient`.
+  - `token.Token.balanceOf({ token, owner: "pot" })` and `token.evmBalanceExpression` read the
+    Pot's balance; `owner: "self"` is refused, naming `"pot"`.
+  - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
+    is `bigint | "pot" | null`.
 - `routes`: the compile option `accessors: { selfSugar }` is `accessors: { potSugar }`, for the
   bare `pot` rewrite; a bare `self` is refused either way.
 - Solana derivations: `CompiledSauceProgram.derivedAccounts` and a manifest slot's `derive` name the
