@@ -341,6 +341,14 @@ chain: whether the released engine and Kitchen are there, the Kitchen's fee, and
 deployed and whose it is. With `--deploy` it sends the deployment, unless the Pot is already there,
 and waits until the endpoint shows the Pot's code.
 
+On an EVM chain the command also asks the deployed Kitchen where it puts the owner's Pot
+(`predictPot`). It asks before `pot` prints or sends a deployment, and before `simulate`, `tx`, `run`
+or `sign` uses the Pot. When the Kitchen's answer is not the SDK's own address, the command refuses
+and names both addresses. The SDK then pins another Kitchen release than the one deployed, and a
+cook sent to the SDK's address would reach no Pot. Code already at that address must be a Pot of the
+SDK's release, which the Kitchen puts there. Offline, nothing is read, and the output says the address is
+not checked ([Troubleshooting](troubleshooting.md#this-sdk-does-not-match-the-deployed-kitchen)).
+
 Anyone may deploy a Pot, and it is its owner's either way. So `--deploy` with `--owner <address>`
 deploys another owner's Pot, which your signer sends and pays for. On Solana the owner signs the
 creation, so there the signer creates its own. `--format cast` prints the deployment as a

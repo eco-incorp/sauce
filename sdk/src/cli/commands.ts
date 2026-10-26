@@ -49,7 +49,8 @@ import {
   awaitPot,
   connect,
   requireCookContracts,
-  requirePotDerivation,
+  requirePot,
+  POT_UNCHECKED,
   potState,
   releasedContracts,
   sendAndWait,
@@ -842,8 +843,12 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         `is. Give its --owner (and --salt) to plan its deployment, or deploy it first`,
     );
   }
-  if (client !== undefined && state !== undefined && !state.deployed) {
-    await requirePotDerivation(client, input.chain);
+  if (client !== undefined && state !== undefined) {
+    await requirePot(client, input.chain, {
+      ...input.target,
+      pot: cook.pot,
+      deployed: state.deployed,
+    });
   }
   const value = valueOf(input.value, fee, input.chain);
   const target = input.target;
@@ -970,7 +975,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
         ...feeFloorNotes(input.chain),
-        ...(client === undefined ? [UNVERIFIED_COOK] : []),
+        ...(client === undefined ? [UNVERIFIED_COOK, POT_UNCHECKED] : []),
       ],
     };
   }
@@ -985,7 +990,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
     ...feeFloorNotes(input.chain),
-    ...(client === undefined ? [UNVERIFIED_COOK] : []),
+    ...(client === undefined ? [UNVERIFIED_COOK, POT_UNCHECKED] : []),
   ];
   const json = {
     chainId: input.chain.id,
@@ -1062,7 +1067,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         `is. Deploy it first: ${deployHint(input.chain, target)}`,
     );
   }
-  if (!state.deployed) await requirePotDerivation(client, input.chain);
+  await requirePot(client, input.chain, { ...target, pot: cook.pot, deployed: state.deployed });
   if (state.deployed && state.owner !== signer) {
     throw new CliError(
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
@@ -1288,6 +1293,16 @@ export async function potStatusCommand(
   const pot = predicted.json.pot as Address;
   const client = await connect(input.rpcUrl, input.chain);
   const [released, state] = await Promise.all([releasedContracts(client), potState(client, pot)]);
+  // The deployment it prints is refused where the Kitchen would put the Pot elsewhere; where the
+  // Kitchen has no code, the lines below say so.
+  if (released.kitchen.deployed) {
+    await requirePot(client, input.chain, {
+      owner: input.owner,
+      salt: input.salt,
+      pot,
+      deployed: state.deployed,
+    });
+  }
   const deployment = deploymentLines(input.chain, released, pot, state);
   const json = { ...predicted.json, deployment: deployment.json };
 
@@ -1319,6 +1334,12 @@ export async function potDeployCommand(
     );
   }
   const state = await potState(client, pot);
+  await requirePot(client, input.chain, {
+    owner: input.owner,
+    salt: input.salt,
+    pot,
+    deployed: state.deployed,
+  });
   if (state.deployed) {
     const json = { ...predicted.json, deployed: true, owner: state.owner };
     const note = `Pot ${pot} is already deployed on ${input.chain.slug}, owned by ${state.owner}.`;

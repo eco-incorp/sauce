@@ -26,8 +26,10 @@ export {
   connectAt,
   endpointFor,
   kitchenFee,
+  POT_UNCHECKED,
   potState,
   registeredBalances,
+  requirePot,
 } from "../../sdk/dist/cli/chain.js";
 export {
   compileCommand,

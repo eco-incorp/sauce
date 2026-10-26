@@ -23,13 +23,7 @@ import { CliError } from "./args.js";
 import { entryReturnType } from "../routes/entry.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
 import { assumeTokenBalance } from "./assume.js";
-import {
-  balanceReader,
-  connectAt,
-  potState,
-  requireCookContracts,
-  requirePotDerivation,
-} from "./chain.js";
+import { balanceReader, connectAt, potState, requireCookContracts, requirePot } from "./chain.js";
 import {
   type ChainAccess,
   type CliFiles,
@@ -263,7 +257,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
         "give its --owner (and --salt) instead, and the simulation deploys it first",
     );
   }
-  if (!state.deployed) await requirePotDerivation(client, input.chain);
+  await requirePot(client, input.chain, { ...target, pot: cook.pot, deployed: state.deployed });
   const owner = state.deployed ? state.owner! : (target as { readonly owner: Address }).owner;
   const deploy = state.deployed ? undefined : { salt: (target as { readonly salt: Hex }).salt };
   const kitchen = kitchenAddress();

@@ -44,7 +44,15 @@ import {
   type SignedCookExecution,
 } from "../evm/engine.js";
 import { CliError, UsageError } from "./args.js";
-import { connect, kitchenFee, reasonOf, sendAndWait, type Sent } from "./chain.js";
+import {
+  connect,
+  kitchenFee,
+  POT_UNCHECKED,
+  reasonOf,
+  requirePot,
+  sendAndWait,
+  type Sent,
+} from "./chain.js";
 import {
   compileProgram,
   kitchenAddress,
@@ -200,7 +208,15 @@ export async function signCommand(
   let deployPot: { chainId: number; to: Address; data: Hex; value: Hex } | undefined;
   let read: { fee: bigint; balance: bigint; now: bigint } | undefined;
   if (client !== undefined) {
-    if (await hasCode(client, pot)) {
+    const deployed = await hasCode(client, pot);
+    if (!deployed && !("owner" in target)) {
+      throw new CliError(
+        `Pot ${pot} has no code on ${chain.slug}, and --pot does not say whose it is: name it by ` +
+          "--owner (and --salt), so the result carries its deployment",
+      );
+    }
+    await requirePot(client, chain, { ...target, pot, deployed });
+    if (deployed) {
       owner = await signedCookOwner(client, pot);
     } else if ("owner" in target) {
       deployPot = {
@@ -209,11 +225,6 @@ export async function signCommand(
         data: v12Kitchen.encodeDeployPot(target.owner, target.salt),
         value: hexQuantity(0n),
       };
-    } else {
-      throw new CliError(
-        `Pot ${pot} has no code on ${chain.slug}, and --pot does not say whose it is: name it by ` +
-          "--owner (and --salt), so the result carries its deployment",
-      );
     }
     if (signer !== undefined && owner !== undefined && getAddress(signer.address) !== owner) {
       throw new CliError(
@@ -351,6 +362,7 @@ export async function signCommand(
             "signed by the owner. A cook that reverts leaves its nonce unused, so the same " +
             "signature can be submitted again until the deadline.",
         ]),
+    ...(read === undefined ? [POT_UNCHECKED] : []),
   ];
 
   return { text: JSON.stringify(json, null, 2), json, notes };

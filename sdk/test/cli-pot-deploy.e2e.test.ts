@@ -196,7 +196,7 @@ describeEvm("a command deploys the Pot it needs", () => {
     await nothingSent(fresh.address, fresh.pot);
   }, 120_000);
 
-  it("rejects a different Kitchen's new-Pot derivation but still cooks on an existing explicit Pot", async () => {
+  it("refuses every cook once the Kitchen derives Pots another way, on a new Pot and an existing one", async () => {
     const existing = await owner("existing-before-factory-change");
     await local.send(
       local.deployer,
@@ -272,26 +272,28 @@ describeEvm("a command deploys the Pot it needs", () => {
           ...["--salt", "new-after-factory-change", "--args", "41"],
         );
         expect(refused.code).toBe(1);
-        expect(refused.stdout + refused.stderr).toContain("potInitCodeHash");
+        expect(refused.stdout + refused.stderr).toContain(
+          `puts the Pot of owner ${fresh.address} and salt ${fresh.salt} at ${actualPot}, but ` +
+            `this SDK has it at ${fresh.pot}: this SDK does not match the deployed Kitchen`,
+        );
       }
       await nothingSent(fresh.address, fresh.pot);
+      // A Pot of this release still runs, but the Kitchen no longer puts it where it is: the SDK
+      // is not the deployed Kitchen's, and says so rather than cook on its own idea of the Pots.
       for (const command of ["tx", "simulate", "run"]) {
-        const result = await sauceWith(
+        const refused = await sauceWith(
           NO_TERMINAL,
           ...[command, program, "--chain", "ethereum", "--rpc-url", local.rpcUrl],
           ...["--pot", existing.pot],
           ...(command === "run" ? ["--private-key", existing.key, "--yes"] : []),
-          ...(command === "tx" ? [] : ["--json"]),
           ...["--args", "41"],
         );
-        if (result.code !== 0) {
-          throw new Error(`${command} exited ${result.code}: ${result.stderr}${result.stdout}`);
-        }
-        if (command === "simulate") {
-          expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, returned: "42" });
-        }
+        expect(refused.code).toBe(1);
+        expect(refused.stdout + refused.stderr).toMatch(
+          /this SDK does not match the deployed Kitchen.*Upgrade @eco-incorp\/sauce/s,
+        );
       }
-      expect(await local.publicClient.getTransactionCount({ address: existing.address })).toBe(1);
+      expect(await local.publicClient.getTransactionCount({ address: existing.address })).toBe(0);
     } finally {
       await local.send(
         local.deployer,

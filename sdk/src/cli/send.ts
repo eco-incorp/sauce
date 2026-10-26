@@ -53,6 +53,7 @@ import {
   broadcastRefusal,
   connect,
   landed,
+  requireSendable,
   simulate,
   type Sent,
   type SignedCall,
@@ -519,6 +520,14 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
     );
     let reservation: Reservation | undefined;
     if (!known) {
+      // A cook or a Pot's deployment, held to the deployed Kitchen first, as every send is.
+      try {
+        await requireSendable(client, request);
+      } catch (error) {
+        if (!(error instanceof CliError)) throw error;
+        sent.push(refused(error.message));
+        break;
+      }
       // Rehearsed as it was signed, on what the transactions before it left.
       const rehearsal = await simulate(client, tx.from, request);
       if (!rehearsal.ok) {

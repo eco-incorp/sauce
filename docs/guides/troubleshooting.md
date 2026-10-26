@@ -86,6 +86,30 @@ a preview chain simulates wherever the release is deployed on it.
 **Fix.** Simulate on a chain where the release is deployed. `compile`, `globals`, `price`, `pools`
 and `pot` still work on this one.
 
+### `this SDK does not match the deployed Kitchen`
+
+```text
+sauce tx: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: this SDK does not match the deployed Kitchen, and a cook it sends goes where the Kitchen puts no Pot. Upgrade @eco-incorp/sauce (sauce update) to the release the deployed Kitchen runs. Nothing was simulated, built or sent
+```
+
+**Cause.** The Kitchen on the chain was upgraded to another release, and it now derives Pot
+addresses differently from your copy of the SDK. Before the command simulates, builds or sends a
+cook, a Pot deployment or a signed cook, it asks the Kitchen where it puts your Pot
+(`predictPot`). A cook sent to the SDK's older address would land on an address with no code: it
+would succeed, run nothing, and leave its value at that address.
+
+**Fix.** Upgrade the package (`sauce update`, or `npm i @eco-incorp/sauce@latest` in a project),
+then run the command again.
+
+### `… has code, but not the code of a Pot this SDK's release deploys`
+
+**Cause.** There is a contract at the Pot's address, but it is not a Pot of the release this SDK
+pins. Its code differs from the release Pot's in more than the Pot's own owner, salt and Kitchen, or
+what it reports about itself does not give its address.
+
+**Fix.** Check the Pot you named with `--pot`, or the `--owner` and `--salt` that give it. If it is
+a Pot of a newer release, upgrade the package.
+
 ## The command cannot reach the chain
 
 ### `missing --rpc-url <url> (or --config <file>)`

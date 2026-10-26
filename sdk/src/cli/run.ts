@@ -43,7 +43,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, connectAt, endpointFor } from "./chain.js";
+import { chainServedBy, connect, connectAt, endpointFor, POT_UNCHECKED } from "./chain.js";
 import {
   type Approver,
   type ArgsInput,
@@ -2605,7 +2605,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...saltOf(args),
         };
 
-        return rpcUrl === undefined ? potCommand(target) : potStatusCommand({ ...target, rpcUrl });
+        if (rpcUrl !== undefined) return potStatusCommand({ ...target, rpcUrl });
+        const predicted = potCommand(target);
+
+        // A preview chain's prediction carries no deployment, so nothing is taken on trust.
+        return predicted.cast === undefined
+          ? predicted
+          : { ...predicted, notes: [...(predicted.notes ?? []), POT_UNCHECKED] };
       }
       if (stringFlag(args, "format") === "cast") {
         throw new UsageError("--format cast prints the unsigned transaction; --deploy sends it");
