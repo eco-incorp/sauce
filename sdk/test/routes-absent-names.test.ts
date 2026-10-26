@@ -996,6 +996,70 @@ describe("a registry contract's members are its ABI's methods and the balances r
   });
 });
 
+describe("a name the caller binds, by an ambient module or a contract, is the caller's on every chain", () => {
+  // The registry's names are one module the compiler reads beside the caller's; a name the caller
+  // binds is never the registry's zero, whether or not the chain has it.
+  const served = (text: string) => ({
+    ambient: ["./caller.js"],
+    resolve: (path: string) =>
+      path.replace(/^\.\//, "") === "caller.js" ? new TextEncoder().encode(text) : undefined,
+  });
+  const A = "0x1111111111111111111111111111111111111111";
+  const B = "0x2222222222222222222222222222222222222222";
+
+  it.each([
+    ["base", `export const USDT = ${A};`, "return USDT;", `return ${A};`],
+    ["ronin", "export const USDT = 5;", "return USDT;", "return 5;"],
+    ["ronin", "export const pot = { WETH: 1 };", "return pot.WETH;", "return 1;"],
+    ["base", "export const Lido = 1;", "return Lido;", "return 1;"],
+    [
+      "base",
+      `export const USDT = ${B};`,
+      `if (USDT) { return USDT; } return ${A};`,
+      `return ${B};`,
+    ],
+    [
+      "base",
+      `export const UniswapV3 = { Factory: ${B} };`,
+      "return UniswapV3.Factory;",
+      `return ${B};`,
+    ],
+    ["base", `export const Optimism = ${B};`, "return Optimism;", `return ${B};`],
+  ])("on %s, ambient `%s`: `%s`", (chain, module, body, literal) => {
+    expect(build(chain, body, served(module))).toBe(build(chain, literal));
+  });
+
+  it("a contract the caller binds under a protocol's name is its own", () => {
+    const abi = [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "owner", type: "address" }],
+        outputs: [{ name: "", type: "uint256" }],
+      },
+    ];
+    const source = "function main(a: Address): Uint256 { return Lido.at(a).balanceOf(a); }";
+    expect(hex("base", source, { contracts: { Lido: { abi } } })).toBe(
+      hex("base", source.replaceAll("Lido", "Erc20"), { contracts: { Erc20: { abi } } }),
+    );
+  });
+
+  it("a binding carrier through the caller's own export is the bool under && and ||", () => {
+    // The caller's module holds a registry contract; under `||` as a value it is the bool.
+    const module =
+      'import IERC20 from "./artifacts/IERC20.json";\nexport const k = IERC20.at(0x1111111111111111111111111111111111111111);';
+    const options = {
+      ambient: ["./caller.js"],
+      resolve: (path: string) =>
+        path.replace(/^\.\//, "") === "caller.js" ? new TextEncoder().encode(module) : undefined,
+    };
+    expect(hex("base", "function main(): bool { return k || 0; }", options)).toBe(
+      hex("base", "function main(): bool { return !!(k) || 0; }", options),
+    );
+  });
+});
+
 describe("available(X) is gone", () => {
   it("calling it says to test the name itself", () => {
     const message = refusal(

@@ -38,6 +38,7 @@ import type { AccessorTarget } from "./protocol-rewrite.js";
 import { CANONICAL_CHAINS, requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { isTypeDeclaration, type AstNode } from "./ast-walk.js";
+import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "./accessor-index.js";
 import {
   CHAIN_MODULE,
   inChainModuleRoot,
@@ -154,6 +155,21 @@ const BINDING_CONSTRUCTORS: ReadonlySet<string> = new Set(["at", "view", "lib"])
 /** The function `available(X)` was. */
 const AVAILABLE = "available";
 
+/**
+ * Every name the check reads as the registry's that a caller may bind instead, by a define, a
+ * contract binding or an ambient module's export: each namespace, chain key and token symbol some
+ * chain registers and `tokens` does not (one it has is a define, which no export replaces), and
+ * `available`. A name the caller binds is the caller's, never the registry's (`defined`).
+ */
+export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
+  return [
+    ...NAMESPACE_KEYS,
+    ...CHAIN_KEY_SET,
+    ...[...everySymbol()].filter((symbol) => !tokens.has(symbol)),
+    AVAILABLE,
+  ];
+}
+
 type Mode = "test" | "value";
 /** What the node is to its parent: the callee of a call, the object of a member, the object of a
  *  `.at(…)` binding call, or the object a member is read from (`.getPool`), or anything else. */
@@ -237,8 +253,12 @@ export function checkNames(
   source: string,
   names: ChainNames,
   options: NameCheckOptions & {
-    /** The caller's defines: a define of a name is its value, and decides nothing here. */
+    /** The names the caller binds beside the source, each its own value and never the registry's:
+     *  its defines and contract bindings, and what its ambient modules export (`bindableNames`). */
     readonly defined?: ReadonlySet<string>;
+    /** The compile's defines, the chain's and the caller's, by name: each a word, never a contract
+     *  binding. */
+    readonly scalars?: Readonly<Record<string, unknown>>;
     /** The module's path, as an error locates it: the entry is `main.js`, as the compiler names it. */
     readonly file?: string;
   } = {},
@@ -591,12 +611,23 @@ export function checkNames(
   const bindings = lexicalBindings(program);
 
   /**
+   * Whether `name`, which the program does not declare, is a word: a define of the compile, a
+   * token of the registry or the Pot. Any other name the program does not declare is a module's it
+   * is handed (an ambient module's export), which this pass does not read: it may be a binding.
+   */
+  const isWord = (name: string): boolean =>
+    (options.scalars !== undefined && Object.hasOwn(options.scalars, name)) ||
+    names.tokens.has(name) ||
+    names.absentTokens.has(name) ||
+    (name === POT_NAME && !defined.has(POT_NAME));
+
+  /**
    * Whether `node`, a side of `&&`/`||`, is a contract binding the compiler hands back as the whole
-   * (`binding`), may be one (`unsure`: an import or a field of one, whose module this pass does not
-   * read), or is not (`scalar`). Measured on 2.6.0: a contract the names module binds (or a record
-   * field holding `<Abi>.at(…)`), an inline `<Abi>.at(…)`, and a `const`/`let` alias of either,
-   * through any chain of aliases, are bindings; a local initialized to `<Abi>.at(…)`, a `?:`, a
-   * call's result, a parameter and any scalar give a bool.
+   * (`binding`), may be one (`unsure`: an import or a module's export, or a field of one, whose
+   * module this pass does not read), or is not (`scalar`). Measured on 2.6.0: a contract the names
+   * module binds (or a record field holding `<Abi>.at(…)`), an inline `<Abi>.at(…)`, and a
+   * `const`/`let` alias of either, through any chain of aliases, are bindings; a local initialized
+   * to `<Abi>.at(…)`, a `?:`, a call's result, a parameter and any scalar give a bool.
    */
   const bindingKind = (
     node: AstNode,
@@ -635,7 +666,9 @@ export function checkNames(
       );
       return kinds.includes("binding") ? "binding" : kinds.includes("unsure") ? "unsure" : "scalar";
     }
-    if (shadowed(at, nameOf(target), target.start) === false) return "scalar";
+    if (shadowed(at, nameOf(target), target.start) === false) {
+      return isWord(nameOf(target)) ? "scalar" : "unsure";
+    }
     const declaration = bindings.declarationOf(target);
     if (declaration === undefined || seen.has(declaration)) return "scalar";
     if (declaration.type !== "VariableDeclarator") return "unsure";
@@ -681,8 +714,8 @@ export function checkNames(
 
   /**
    * The literals `node` may hold, records or lists, followed through the local it names and the
-   * member it reads at each level (`ns[1]`), with the declarations passed; `unsure` for an import,
-   * whose module this pass does not read.
+   * member it reads at each level (`ns[1]`), with the declarations passed; `unsure` for an import
+   * or a module's export, whose module this pass does not read.
    */
   const holdersOf = (
     node: AstNode,
@@ -693,7 +726,12 @@ export function checkNames(
     }
     if (node.type === "Identifier") {
       const declaration = bindings.declarationOf(node);
-      if (declaration === undefined || seen.has(declaration)) return [];
+      if (declaration === undefined) {
+        // A parameter, or a name the program does not declare: a module's export may hold one.
+        const name = nameOf(node);
+        return shadowed(bindings.scopeAt(node), name, node.start) || isWord(name) ? [] : "unsure";
+      }
+      if (seen.has(declaration)) return [];
       if (declaration.type !== "VariableDeclarator") return "unsure";
       return holdersOf(unwrap(prop(declaration, "init")), new Set([...seen, declaration]));
     }

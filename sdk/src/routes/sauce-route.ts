@@ -38,7 +38,7 @@ import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { checkNames, withoutDead } from "./absent-names.js";
+import { bindableNames, checkNames, withoutDead } from "./absent-names.js";
 import {
   INSTALLED_CHAIN_MODULE,
   CHAIN_MODULE_ROOT,
@@ -520,13 +520,13 @@ function compileForChain(
         ? chainValues
         : { ...chainValues, ...inputs.defines };
 
-  // The names the compile binds beside the source: the caller's defines, its contract bindings and,
-  // of the Pot's two names, each a caller's ambient module exports. The compiler says which:
-  // `ambientNamesOf` asks it, with this compile's own options and the program's own imports, so a
-  // module is found exactly where the compile finds it. It asks only where it can matter: the SDK's
-  // own packages (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export
-  // neither name, and a name the program does not read (`probeQuestions`) is none the rewrites
-  // touch. A `pot` or `self` that is one of them is the caller's value, never the Pot.
+  // The names the compile binds beside the source: the caller's defines, its contract bindings and
+  // each name its ambient modules export that a pass reads as the SDK's: the Pot's two names and
+  // every registry name (`bindableNames`). The compiler says which: `ambientNamesOf` asks it, with
+  // this compile's own options and the program's own imports, so a module is found exactly where
+  // the compile finds it. It asks only where it can matter: the SDK's own packages
+  // (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export none of them. A
+  // name among them is the caller's value, never the Pot and never the registry's.
   //
   // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
   // with the same options as the compile, so its refusal is one the compile raises too: the probe's
@@ -555,7 +555,7 @@ function compileForChain(
           contracts: inputs.contracts,
           ambient,
         },
-        probe.names,
+        [...probe.names, ...bindableNames(tokenMap)],
         probe.imports,
         probe.declared,
       );
@@ -589,19 +589,21 @@ function compileForChain(
   // are the module the compiler is handed (chain-module.ts).
   const accessorOpts: ProtocolRewriteOptions =
     typeof inputs.accessors === "object" ? inputs.accessors : {};
-  const defined = new Set(Object.keys(inputs.defines ?? {}));
+  // A name the caller binds is its own: the module does not declare it, and the check reads it as
+  // the caller's value.
   const names = chainNames(chain, {
     ...(inputs.tokens === undefined ? {} : { tokens: tokenMap }),
-    defined,
+    defined: bound,
     namespaces: inputs.accessors !== false,
     allowWidenedSelectors: accessorOpts.allowWidenedSelectors === true,
   });
   const checks = {
-    defined,
+    defined: bound,
+    ...(defines === undefined ? {} : { scalars: defines }),
     ...(accessorOpts.chainScope === undefined ? {} : { chainScope: accessorOpts.chainScope }),
     ...(accessorOpts.onContract === undefined ? {} : { onContract: accessorOpts.onContract }),
   };
-  const named = checkNames(source, names, checks);
+  const named = readingBound(() => checkNames(source, names, checks));
   // What a test rules out the compiler never compiles, and no pass below may read: a token write,
   // a balance, a venue call or a binding there would add an account, a check or a binding of its
   // own. Blanked in place, so every position the passes and the compiler report is the program's.
