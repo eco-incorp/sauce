@@ -307,7 +307,10 @@ const COOK = {
         "sauce_compile's manifest lists them; one with a `derive` (an account the token methods " +
         "added, such as USDC.transfer(to, amount)'s, or one the program writes where it uses it, " +
         "such as Solana.pda(program, [seeds])) is filled by itself, and named here only to " +
-        "replace it.",
+        "replace it. A slot derived from the Pot (`pot`, `pot:USDC`, `authority` through the " +
+        "Kitchen) takes only the Pot's own account, so leave it out to derive it. So does a slot " +
+        "derived from the owner (`owner`, `owner:USDC`, `authority` with via engine), and an " +
+        "address one of them seeds: any other account there is refused.",
     ),
   via: z
     .enum(["kitchen", "engine"])

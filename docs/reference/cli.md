@@ -226,7 +226,7 @@ EVM chains only:
       --private-key <hex>    Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
+      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused
       --accounts <json|file>          The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file
       --via <kitchen|engine>          The Kitchen's cook on the Pot (default), or the engine's own, with no Pot
       --max-execution-fee <lamports>  Refuse a cook whose execution fee is above this
@@ -269,8 +269,10 @@ account main takes given as --account NAME=<address | pot | owner> and an Addres
 argument as a base58 public key. `pot:USDC` (or pot:<mint>) is the Pot's own token account
 for that mint, its associated token account under the mint's token program; owner:USDC the
 owner's; mint:USDC the mint and program:USDC its token program (SPL Token or Token-2022),
-the accounts a checked write takes. An account the cluster does not have is named in a
-note. Where main declares a return type, what it
+the accounts a checked write takes. A slot derived from the Pot, the owner or the
+authority takes only the account its derivation gives: another is refused before anything
+is built. An account the cluster does not have is named in a note. Where main declares a
+return type, what it
 returned is read as that type. A Pot the Kitchen has not created is created first, in the
 same transaction. --via engine simulates the engine's own paid cook instead: no Kitchen and
 no Pot (so no pot or pot:<token> account, and no program that uses pot), --owner signing as
@@ -351,7 +353,7 @@ EVM chains only:
       --sweep                Return what is left of each funded token afterwards
 
 Solana only:
-      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
+      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused
       --accounts <json|file>          The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file
       --via <kitchen|engine>          The Kitchen's cook on the Pot (default), or the engine's own, with no Pot
       --max-execution-fee <lamports>  Refuse a cook whose execution fee is above this
@@ -617,7 +619,7 @@ EVM chains only:
       --fund <TOKEN:amount>  Transfer tokens from the owner into the Pot before the cook: USDC:1.5 (whole tokens); ETH:0.01 rides as its value
 
 Solana only:
-      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
+      --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused
       --accounts <json|file>          The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file
       --via <kitchen|engine>          The Kitchen's cook on the Pot (default), or the engine's own, with no Pot
       --max-execution-fee <lamports>  Refuse a cook whose execution fee is above this

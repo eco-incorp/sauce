@@ -975,7 +975,18 @@ decimals, an argument's mint the checked write with its decimals read on chain. 
 account is checked on chain after the write (owner bytes 32–64), so a builder cannot redirect it; an
 explicit `Account` in a holder's place is paid as attached, unchecked (documented). Holders, mints
 and pools must be known at build time (`pot`/`ctx.self()`, an `Address` parameter, a 32-byte key);
-anything else, a call in a helper, and a script are refused. `compileSauceRoute` refuses derived
+anything else is refused. A site in a top-level function takes the accounts as a trailing
+`__sauce_accounts: Account[]`, passed at each call (`svm-lowering.ts#threadHelpers`); a script is
+wrapped in the `main` they are added to (`scriptAsMain`). A site in a function inside another, and
+a helper used other than by calling it by name, are refused, as is a helper `main` never reaches
+that would add accounts. A program that names `pot` anywhere derives its accounts from `pot`, and
+one that does not from `authority` (`CompiledSauceProgram.potMention` is where; `--via engine`
+refuses the first, naming it). A bare `pot` is `Account<Signer>`, the slot `Solana.self` was; the
+engine checks a signature where the program uses one, not at the entry
+(`svm/direct-engine.e2e.test.ts` measures it). The cook commands refuse any `--account` given for a
+slot derived from a cook role (`pot`, `owner`, `authority`, their token accounts and the addresses
+they seed: `svmCookRoles`, `cli/solana.ts#refuseSubstitutedRole`) that is not the account its
+derivation gives. `compileSauceRoute` refuses derived
 accounts: a route's `execution.accounts` precede the compile. Executed in
 `cli-solana-token-methods.e2e.test.ts` and `cli-solana-venues.e2e.test.ts`.
 

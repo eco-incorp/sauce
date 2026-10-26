@@ -208,8 +208,14 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     (`pot.signer()`, `pot.writable()`). Each old spelling is refused, naming the new one. On a
     contract call's result, `.balance` reads the field a struct may have: for the coin an address
     holds there, write `ctx.balance(x)`. In `--account` values and Solana derivations, `self` is
-    `authority` (the Pot through the Kitchen, the owner with `--via engine`), and a program that
-    names `pot` is refused with `--via engine`.
+    `authority` (the Pot through the Kitchen, the owner with `--via engine`). A program that names
+    `pot` is refused with `--via engine`, which has no Pot: for a direct cook write the signer's
+    account (`Solana.owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
+    through the Kitchen. Rename in programs only: the `"self"` value of an actions document
+    (`"recipient": "self"`) and of the TypeScript token, deposit and actions APIs is unchanged, so
+    a project-wide replace of `self` breaks them. An account you give for a slot derived from the
+    Pot, the owner or the authority must be the account its derivation gives, or the command exits
+    2.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,
