@@ -14,7 +14,6 @@ import {
   custom,
   decodeAbiParameters,
   decodeErrorResult,
-  encodeFunctionData,
   getAddress,
   hexToBytes,
   http,
@@ -23,6 +22,7 @@ import {
   RpcRequestError,
   TransactionReceiptNotFoundError,
   toFunctionSelector,
+  zeroAddress,
   type Abi,
   type Address,
   type ContractFunctionParameters,
@@ -37,19 +37,33 @@ import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" }
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
+import {
+  sdkCompilerVersion,
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12ReleaseSet,
+} from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
-import { v12Kitchen, v12KitchenAbi, v12Pot } from "../evm/engine.js";
+import { v12KitchenAbi, v12Pot } from "../evm/engine.js";
 import { kitchenExecutionFee } from "../evm/execution-fee.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
 import { guardOf } from "./policy.js";
-import { keepLanded, sayKept } from "./keep.js";
+import { keepLanded, keptPots, sayKept } from "./keep.js";
 import type { PotKind, PotRecord } from "./pot-store.js";
-import { probeDeployment, type ProbedPot } from "./pot-probe.js";
-import { answered, evmPotsDeployed, releasePotKind } from "./pots.js";
+import {
+  answered,
+  evmKitchenRelease,
+  evmPotRelease,
+  evmPotsDeployed,
+  evmRelease,
+  ownerPotsText,
+  ownReleasePot,
+  pairedSdkReleases,
+  releaseText,
+} from "./pots.js";
 
 /** A transaction to send or simulate. */
 export interface TxRequest {
@@ -395,69 +409,95 @@ export async function requireCookContracts(
   return released.kitchen.executionFee ?? kitchenFee(client, chain);
 }
 
-/** The ending of every refusal of a Pot: what the user does about it, and that nothing happened. */
-const UPGRADE =
-  "Upgrade @eco-incorp/sauce (sauce update) to the release the deployed Kitchen runs. Nothing was " +
-  "simulated, built or sent";
+/** What every refusal of a Pot says last. */
+const NOTHING_SENT = "Nothing was simulated, built or sent.";
+
+/** `paired` SDK releases (`pots.ts#pairedSdkReleases`) pair with a release: one, or several. */
+const pairWith = (paired: string): string =>
+  `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
 
 /**
- * Where the deployed Kitchen puts the Pot of `owner` and `salt` of `kind`: its own
- * `predictPot(owner, salt[, routerFixed])`, or `predictSharedPot(salt)` for a Shared Pot.
+ * Which release the deployed Kitchen mints, as a refusal says it: the release whose Kitchen and Pot
+ * init-code hash it reports (`potInitCodeHash()`), by its compiler and components and the SDK
+ * releases that pinned it; for a hash no release this SDK knows records, that the Kitchen is newer
+ * than this SDK and to upgrade it.
  */
-async function kitchenPredicts(
-  client: PublicClient,
-  chain: CanonicalChain,
-  owner: Address,
-  salt: Hex,
-  kind: PotKind,
-  sdk: Address,
-): Promise<Address> {
+async function kitchenRelease(client: PublicClient, chain: CanonicalChain): Promise<string> {
   const kitchen = getAddress(v12KitchenAddress());
-  const functionName = kind === "shared" ? "predictSharedPot" : "predictPot";
-  const at = { address: kitchen, abi: v12KitchenAbi } as const;
+  const it = `The Kitchen ${kitchen} on ${chain.slug}`;
+  let hash: Hex;
   try {
-    return getAddress(
-      kind === "shared"
-        ? await client.readContract({ ...at, functionName: "predictSharedPot", args: [salt] })
-        : kind === "private"
-          ? await client.readContract({ ...at, functionName: "predictPot", args: [owner, salt] })
-          : await client.readContract({
-              ...at,
-              functionName: "predictPot",
-              args: [owner, salt, true],
-            }),
-    );
+    hash = await client.readContract({
+      address: kitchen,
+      abi: v12KitchenAbi,
+      functionName: "potInitCodeHash",
+    });
   } catch (error) {
-    if (!answered(error)) {
-      throw new CliError(`reading the Kitchen's ${functionName}() failed: ${reasonOf(error)}`);
-    }
-    throw new CliError(
-      `the Kitchen ${kitchen} on ${chain.slug} does not answer ${functionName}() for the Pot ` +
-        `of owner ${owner} and salt ${salt}, which this SDK has at ${sdk}: this SDK does not ` +
-        `match the deployed Kitchen. ${UPGRADE}`,
+    return (
+      `${it} does not say which release it mints (its potInitCodeHash() ` +
+      `${answered(error) ? "answers nothing" : `could not be read: ${reasonOf(error)}`}). If it ` +
+      "is newer than this SDK, upgrade @eco-incorp/sauce (sauce update)."
     );
   }
+  const family = evmKitchenRelease(kitchen, hash);
+  if (family === undefined) {
+    return (
+      `${it} mints Pots under init-code hash ${hash.toLowerCase()}, which no release this SDK ` +
+      "knows records: the Kitchen is newer than this SDK. Upgrade @eco-incorp/sauce (sauce update)."
+    );
+  }
+  if (family.sets.some((set) => set.compiler === sdkCompilerVersion())) {
+    return `${it} mints Pots of ${releaseText(evmRelease(v12ReleaseSet()))}, the release this SDK pins.`;
+  }
+  const release = evmRelease(family.sets[0]!);
+  const paired = pairedSdkReleases(release);
+
+  return paired === undefined
+    ? `${it} mints Pots of ${releaseText(release)}, which no SDK release this one knows pinned.`
+    : `${it} mints Pots of ${releaseText(release)}, which ${pairWith(paired)}.`;
 }
 
-/** The refusal of a Kitchen that puts a Pot elsewhere than this SDK does. */
-const mispredicted = (
+/**
+ * A refusal of a Pot: `headline`, which release the deployed Kitchen mints, and, for a Pot whose
+ * owner and salt are known, where this SDK deploys that Pot under the release it pins and, where the
+ * scope keeps the Pot store (`keep.ts#keptPots`: the command, a local MCP server; never the HTTP
+ * server), the owner's other Pots there, each with its release.
+ */
+async function potRefusal(
+  client: PublicClient,
   chain: CanonicalChain,
-  owner: Address,
-  salt: Hex,
-  live: Address,
-  sdk: Address,
-): CliError =>
-  new CliError(
-    `the Kitchen ${getAddress(v12KitchenAddress())} on ${chain.slug} puts the Pot of owner ` +
-      `${owner} and salt ${salt} at ${live}, but this SDK has it at ${sdk}: this SDK does not ` +
-      `match the deployed Kitchen, and a cook it sends goes where the Kitchen puts no Pot. ${UPGRADE}`,
-  );
+  headline: string,
+  of?: {
+    readonly owner: Address;
+    readonly salt: Hex;
+    readonly kind: PotKind;
+    readonly pot: Address;
+  },
+): Promise<CliError> {
+  const said = [headline, await kitchenRelease(client, chain)];
+  const store = keptPots();
+  let listed: string | undefined;
+  if (of !== undefined) {
+    said.push(
+      `Under its release, ${releaseText(evmRelease(v12ReleaseSet()))}, this SDK deploys the ` +
+        `${of.kind === "shared" ? `Shared Pot of salt ${of.salt}` : `Pot of owner ${of.owner} and salt ${of.salt}`} ` +
+        `at ${ownReleasePot(of.owner, of.salt, of.kind)}.`,
+    );
+    if (store !== undefined && of.owner !== zeroAddress) {
+      listed = ownerPotsText(store, chain, of.owner, of.pot);
+    }
+  }
+  said.push(NOTHING_SENT);
+
+  return new CliError([said.join(" "), ...(listed === undefined ? [] : [listed])].join("\n"));
+}
 
 /**
- * Refuses a Pot the deployed Kitchen does not put where this SDK says it is: the Kitchen's own
- * `predictPot(owner, salt)` must be the SDK's `v12PredictPot(owner, salt)`. A Kitchen upgraded to
- * other Pot code derives another address; an SDK that still predicts the old one would send its
- * cook to an address with no code, which "succeeds", runs nothing, and keeps the cook's value.
+ * Refuses a Pot not deployed yet that the deployed Kitchen does not put where this SDK deploys it:
+ * the Kitchen's own `predictPot(owner, salt)` must be the SDK's `v12PredictPot(owner, salt)`. A
+ * Kitchen upgraded to other Pot code derives another address; an SDK that still predicts the old one
+ * would send its cook to an address with no code, which "succeeds", runs nothing, and keeps the
+ * cook's value.
  */
 export async function requireKitchenPredicts(
   client: PublicClient,
@@ -465,29 +505,57 @@ export async function requireKitchenPredicts(
   owner: Address,
   salt: Hex,
 ): Promise<void> {
+  const kitchen = getAddress(v12KitchenAddress());
   const sdk = getAddress(v12PredictPot(owner, salt));
-  const live = await kitchenPredicts(client, chain, owner, salt, "private", sdk);
-  if (live !== sdk) throw mispredicted(chain, owner, salt, live, sdk);
+  const of = { owner: getAddress(owner), salt, kind: "private", pot: sdk } as const;
+  let live: Address;
+  try {
+    live = getAddress(
+      await client.readContract({
+        address: kitchen,
+        abi: v12KitchenAbi,
+        functionName: "predictPot",
+        args: [owner, salt],
+      }),
+    );
+  } catch (error) {
+    if (!answered(error)) {
+      throw new CliError(`reading the Kitchen's predictPot() failed: ${reasonOf(error)}`);
+    }
+    throw await potRefusal(
+      client,
+      chain,
+      `the Kitchen ${kitchen} on ${chain.slug} does not answer predictPot() for the Pot of owner ` +
+        `${owner} and salt ${salt}, which this SDK has at ${sdk}: this SDK does not match the ` +
+        "deployed Kitchen.",
+      of,
+    );
+  }
+  if (live !== sdk) {
+    throw await potRefusal(
+      client,
+      chain,
+      `the Kitchen ${kitchen} on ${chain.slug} puts the Pot of owner ${owner} and salt ${salt} at ` +
+        `${live}, but this SDK has it at ${sdk}: this SDK does not match the deployed Kitchen, and ` +
+        "a cook it sends goes where the Kitchen puts no Pot.",
+      of,
+    );
+  }
 }
 
 /**
- * Refuses code at `pot` that is not a Pot of this SDK's release, or that the deployed Kitchen does
- * not put there. Read off it, its owner, salt and Kitchen must give its address as the release
- * Kitchen's CREATE2 under the release's Pot init-code hash (`pots.ts#releasePotKind`); the
- * Kitchen's own prediction for that owner, salt and kind must be this address; and its code must
- * be, byte for byte, what the Kitchen deploys there for them — found by deploying it again in an
- * `eth_call` that sees the address empty (`pot-probe.ts`), so every immutable is checked too.
+ * Refuses code at `pot` that is not a Pot of the release this SDK pins, told from the chain as
+ * `pots.ts` tells a Pot's release: its owner, salt and Kitchen read off it, its address that
+ * Kitchen's CREATE2 under a release's Pot init-code hash (`evmPotRelease`). Compiler output pairs
+ * with an engine by exact version, so a Pot of another release cannot run this SDK's programs; one
+ * no release this SDK knows minted is refused too. A Pot of this release is taken whatever the
+ * deployed Kitchen mints now: its engine is its release's.
  */
 export async function requireReleasePot(
   client: PublicClient,
   chain: CanonicalChain,
   pot: Address,
 ): Promise<void> {
-  const refuse = (why: string): CliError =>
-    new CliError(
-      `${pot} on ${chain.slug} has code, but not the code of a Pot this SDK's release deploys ` +
-        `(${why}): this SDK does not match the deployed Pot. ${UPGRADE}`,
-    );
   const read = async <T>(
     functionName: "owner" | "userSalt" | "kitchen",
   ): Promise<T | undefined> => {
@@ -504,51 +572,49 @@ export async function requireReleasePot(
     read<Address>("kitchen"),
   ]);
   if (owner === undefined || salt === undefined || kitchen === undefined) {
-    throw refuse("it does not answer a Pot's owner(), userSalt() and kitchen()");
-  }
-  const kind = releasePotKind({ kitchen, owner, salt, pot });
-  if (kind === undefined) {
-    throw refuse(
-      `it says it is Kitchen ${kitchen}'s, for owner ${owner} and salt ${salt}, and the ` +
-        `release's Kitchen ${getAddress(v12KitchenAddress())} puts no such Pot there`,
+    throw await potRefusal(
+      client,
+      chain,
+      `${pot} on ${chain.slug} has code, but is not a Pot: it does not answer a Pot's owner(), ` +
+        "userSalt() and kitchen().",
     );
   }
-  const live = await kitchenPredicts(client, chain, owner, salt, kind, pot);
-  if (live !== getAddress(pot)) throw mispredicted(chain, owner, salt, live, getAddress(pot));
-  const data =
-    kind === "shared"
-      ? encodeFunctionData({ abi: v12KitchenAbi, functionName: "deploySharedPot", args: [salt] })
-      : kind === "private"
-        ? v12Kitchen.encodeDeployPot(owner, salt)
-        : encodeFunctionData({
-            abi: v12KitchenAbi,
-            functionName: "deployPot",
-            args: [owner, salt, true],
-          });
-  let probed: ProbedPot;
-  try {
-    probed = await probeDeployment(client, {
-      kitchen: getAddress(v12KitchenAddress()),
-      from: owner,
-      data,
-      cleared: pot,
-    });
-  } catch (error) {
-    if (error instanceof CliError) throw error;
-    throw new CliError(`deploying the Pot again, in a simulation, failed: ${revertReason(error)}`);
+  const found = evmPotRelease({ kitchen, owner, salt, pot });
+  if (found?.family.sets.some((set) => set.compiler === sdkCompilerVersion())) return;
+  const of = {
+    owner: getAddress(owner),
+    salt,
+    kind: found?.kind ?? (owner === zeroAddress ? "shared" : "private"),
+    pot: getAddress(pot),
+  } as const;
+  if (found === undefined) {
+    throw await potRefusal(
+      client,
+      chain,
+      `${pot} on ${chain.slug} has code, but no release this SDK knows minted a Pot there: it says ` +
+        `it is Kitchen ${kitchen}'s, for owner ${owner} and salt ${salt}.`,
+      of,
+    );
   }
-  const code = await request("the Pot's code", () => client.getCode({ address: pot }));
-  if (probed.pot !== getAddress(pot) || code?.toLowerCase() !== probed.code.toLowerCase()) {
-    throw refuse("its runtime is not the code the Kitchen deploys there for its owner and salt");
-  }
+  const release = evmRelease(found.family.sets[0]!);
+  const paired = pairedSdkReleases(release);
+  throw await potRefusal(
+    client,
+    chain,
+    `${pot} on ${chain.slug} is a Pot of ${releaseText(release)}` +
+      `${paired === undefined ? "" : `, which ${pairWith(paired)}`}, as its address under Kitchen ` +
+      `${kitchen} shows: this SDK compiles with compiler ${sdkCompilerVersion()}, whose programs ` +
+      "that Pot's engine does not run.",
+    of,
+  );
 }
 
 /**
  * The Pot a cook, a Pot deployment or a signed cook names, checked against the chain before
- * anything is simulated, built or sent: code there must be a Pot of this SDK's release that the
- * deployed Kitchen puts there ({@link requireReleasePot}); with none, the Kitchen must put the
- * owner's Pot where this SDK predicts it ({@link requireKitchenPredicts}). A Pot with no code and
- * no owner known is the caller's to refuse.
+ * anything is simulated, built or sent: code there must be a Pot of the release this SDK pins
+ * ({@link requireReleasePot}); with none, the Kitchen must put the owner's Pot where this SDK
+ * deploys it ({@link requireKitchenPredicts}). A Pot with no code and no owner known is the caller's
+ * to refuse.
  */
 export async function requirePot(
   client: PublicClient,

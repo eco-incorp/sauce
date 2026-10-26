@@ -76,13 +76,96 @@ const sdkVersion = (): string =>
     }
   ).version);
 
+let sdkTable: ReadonlyArray<Readonly<Record<string, string>>> | undefined;
+
+/**
+ * Every released SDK and the releases it pinned, as the changelog's table under "Which versions
+ * work together" lists them: one row per release, each cell keyed by its column's name lowercased
+ * (`sdk`, `compiler`, `v12-evm`, `kitchen-evm`, …). The release process keeps that table and
+ * `docs:check` holds it to `releases.json`, so it is the one place an SDK version is paired with the
+ * compiler, engines and Kitchens it shipped. `docs/changelog.md` ships in the package three levels
+ * above `sdk/{src,dist}/cli`, as the manifest does. Read once; empty where it is not there.
+ */
+const sdkReleases = (): ReadonlyArray<Readonly<Record<string, string>>> =>
+  (sdkTable ??= readSdkReleases());
+
+function readSdkReleases(): Array<Record<string, string>> {
+  let text: string;
+  try {
+    text = readFileSync(new URL("../../../docs/changelog.md", import.meta.url), "utf8");
+  } catch {
+    return [];
+  }
+  const section = /^## Which versions work together\s*$([^]*?)(?=^## |(?![^]))/m.exec(text)?.[1];
+  // The header, the separator under it, then a row per release.
+  const [header, , ...rows] = (section ?? "")
+    .split("\n")
+    .filter((line) => line.trim().startsWith("|"))
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split("|")
+        .map((cell) => cell.trim()),
+    );
+  if (header === undefined) return [];
+
+  return (
+    rows
+      .map((cells) =>
+        Object.fromEntries(
+          header.map((column, index) => [column.toLowerCase(), cells[index] ?? ""]),
+        ),
+      )
+      // The row of a release not out yet names no version.
+      .filter((row) => /^\d+\.\d+\.\d+$/.test(row.sdk ?? ""))
+  );
+}
+
+/**
+ * The SDK releases that pinned `release` (a record's: its compiler and each component's version), as
+ * the changelog's table lists them: `0.99.9 to 0.99.15` for consecutive releases, runs apart joined
+ * by commas. `undefined` when none did, or the table is not there.
+ */
+export function pairedSdkReleases(release: Readonly<Record<string, string>>): string | undefined {
+  const ordered = sdkReleases()
+    .map((row) => ({ sdk: row.sdk!, row, parts: row.sdk!.split(".").map(Number) }))
+    .sort(
+      (a, b) => a.parts[0]! - b.parts[0]! || a.parts[1]! - b.parts[1]! || a.parts[2]! - b.parts[2]!,
+    );
+  const runs: string[][] = [];
+  let run: string[] | undefined;
+  for (const { sdk, row } of ordered) {
+    if (Object.entries(release).every(([component, version]) => row[component] === version)) {
+      if (run === undefined) runs.push((run = []));
+      run.push(sdk);
+    } else {
+      run = undefined;
+    }
+  }
+
+  return runs.length === 0
+    ? undefined
+    : runs.map((one) => (one.length === 1 ? one[0] : `${one[0]} to ${one.at(-1)}`)).join(", ");
+}
+
+/** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
+export const releaseText = (release: PotRecord["release"]): string => {
+  if (release === undefined) return "release unknown";
+  const { compiler, ...components } = release;
+
+  return `compiler ${compiler} (${Object.entries(components)
+    .map(([component, version]) => `${component} ${version}`)
+    .join(", ")})`;
+};
+
 // ---------------------------------------------------------------------------------------------
 // Which release minted a Pot
 // ---------------------------------------------------------------------------------------------
 
 /** One Kitchen and the init-code hash its Pots are minted under, with every release set that
  *  minted them: the SDK's own first, then the newest. */
-interface PotFamily {
+export interface PotFamily {
   readonly kitchen: Address;
   readonly potInitCodeHash: Hex;
   readonly sets: readonly V12ReleaseSet[];
@@ -181,31 +264,40 @@ export function evmPotRelease(input: {
 }
 
 /**
- * The kind of Pot `pot` is, when it is a Pot of the release this SDK pins, Kitchen `kitchen`'s for
- * (`owner`, `salt`): the Kitchen is the release's, and the Pot's address is that Kitchen's CREATE2
- * of its owner and salt under the release's Pot init-code hash — so its code can only be the code
- * that release deploys. `undefined` for anything else.
+ * The release Kitchen `kitchen` mints under when it reports Pot init-code hash `potInitCodeHash`
+ * (its `potInitCodeHash()`): the family a known release records. `undefined` for a hash no release
+ * the SDK knows records — a Kitchen upgraded past this SDK.
  */
-export function releasePotKind(input: {
-  readonly kitchen: Address;
-  readonly owner: Address;
-  readonly salt: Hex;
-  readonly pot: Address;
-}): PotKind | undefined {
-  const derivation = v12PotDerivation();
-  const kitchen = getAddress(derivation.deployer);
-  if (getAddress(input.kitchen) !== kitchen) return undefined;
-  const pot = getAddress(input.pot);
+export const evmKitchenRelease = (
+  kitchen: string,
+  potInitCodeHash: string,
+): PotFamily | undefined =>
+  potFamilies().find(
+    (family) =>
+      family.kitchen === getAddress(kitchen) &&
+      family.potInitCodeHash === potInitCodeHash.toLowerCase(),
+  );
 
-  return candidates(
-    { kitchen, potInitCodeHash: derivation.initCodeHash.toLowerCase() as Hex },
-    getAddress(input.owner),
-    input.salt,
-  ).find((one) => one.pot === pot)?.kind;
+/**
+ * The Pot of kind `kind` the release this SDK pins mints for (`owner`, `salt`): its Kitchen's
+ * CREATE2 under its Pot init-code hash, where this SDK deploys that Pot.
+ */
+export function ownReleasePot(owner: Address, salt: Hex, kind: PotKind): Address {
+  const derivation = v12PotDerivation();
+  const own = candidates(
+    {
+      kitchen: getAddress(derivation.deployer),
+      potInitCodeHash: derivation.initCodeHash.toLowerCase() as Hex,
+    },
+    getAddress(owner),
+    salt,
+  );
+
+  return (own.find((one) => one.kind === kind) ?? own[0]!).pot;
 }
 
 /** The EVM part of a release set, as a record names it. */
-const evmRelease = (set: V12ReleaseSet): Record<string, string> => ({
+export const evmRelease = (set: V12ReleaseSet): Record<string, string> => ({
   compiler: set.compiler,
   "v12-evm": set["v12-evm"].version,
   "kitchen-evm": set["kitchen-evm"].version,
@@ -563,6 +655,54 @@ export function keepPots(store: PotStore, landed: Landed): string[] {
       );
     }
   });
+}
+
+/**
+ * What `store` holds of `owner`'s other Pots on `chain` (every one but `except`), for a refusal of a
+ * Pot: a line saying how many, then each with its kind, salt and release, and the SDK releases that
+ * pinned that release. A Pot recorded twice (another deployment kept beside its first) is listed
+ * once. A store that cannot be read says so.
+ */
+export function ownerPotsText(
+  store: PotStore,
+  chain: CanonicalChain,
+  owner: Address,
+  except: Address,
+): string {
+  let records: PotRecord[];
+  try {
+    records = store.list().pots;
+  } catch (error) {
+    return (
+      `The Pot store ${store.dir} could not be read: ` +
+      (error instanceof Error ? error.message : String(error))
+    );
+  }
+  const listed = new Set<string>([except.toLowerCase()]);
+  const pots = records.filter((record) => {
+    const pot = record.pot.toLowerCase();
+    if (record.chainId !== chain.id || record.owner.toLowerCase() !== owner.toLowerCase()) {
+      return false;
+    }
+    if (listed.has(pot)) return false;
+    listed.add(pot);
+
+    return true;
+  });
+  const whose = `of ${owner} on ${chain.slug}`;
+  if (pots.length === 0) return `The Pot store ${store.dir} holds no other Pot ${whose}.`;
+
+  return [
+    `The Pot store ${store.dir} holds ${pots.length} other Pot${pots.length === 1 ? "" : "s"} ${whose}:`,
+    ...pots.map((record) => {
+      const paired = record.release === undefined ? undefined : pairedSdkReleases(record.release);
+
+      return (
+        `  ${record.pot}  ${record.kind}, salt ${record.salt}: ${releaseText(record.release)}` +
+        (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`)
+      );
+    }),
+  ].join("\n");
 }
 
 // ---------------------------------------------------------------------------------------------

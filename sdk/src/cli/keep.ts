@@ -14,7 +14,9 @@
  * for the command it runs, and the LOCAL MCP server (over stdio) for each tool call
  * (`mcp/src/tools.ts`), so an agent with only the server keeps what the command would. Nothing
  * else sets one, so a send outside a scope — the HTTP server, a test — keeps nothing. Each scope
- * is its call's own (`AsyncLocalStorage`), so two at once in one process keep apart.
+ * is its call's own (`AsyncLocalStorage`), so two at once in one process keep apart. What a scope
+ * keeps is read there too: a refusal of a Pot lists the owner's other Pots from its Pot store
+ * ({@link keptPots}).
  *
  * NODE-ONLY, like the rest of `cli/`.
  */
@@ -78,6 +80,10 @@ export const keepsAny = (stores: LocalStores): boolean =>
 export function sayKept(line: string): void {
   scopes.getStore()?.say(line);
 }
+
+/** The Pot store of the scope this runs in, where it keeps one: the store a refusal of a Pot lists
+ *  the owner's other Pots from. `undefined` outside a scope (the HTTP server, a test). */
+export const keptPots = (): PotStore | undefined => scopes.getStore()?.stores.pots;
 
 /** Hands `landed` to each store of the scope it runs in, which says what it kept. */
 export async function keepLanded(landed: Landed): Promise<void> {

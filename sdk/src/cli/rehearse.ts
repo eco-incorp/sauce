@@ -19,6 +19,7 @@
  *      the gas, not what the cook moved, and it cannot run `before`'s transactions ahead of the cook.
  */
 import {
+  concat,
   decodeFunctionResult,
   encodeFunctionData,
   getAddress,
@@ -27,6 +28,7 @@ import {
   numberToHex,
   pad,
   parseAbi,
+  sliceHex,
   toHex,
   type Address,
   type Hex,
@@ -35,11 +37,9 @@ import {
 } from "viem";
 
 import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
-import { v12Kitchen } from "../evm/engine.js";
 import { CliError } from "./args.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
 import { revertReason, type TxRequest } from "./chain.js";
-import { probeDeployment, type ProbedPot } from "./pot-probe.js";
 import type { RawLog } from "../evm/effects.js";
 
 export type RehearsalPath = "eth_simulateV1" | "eth_call";
@@ -109,6 +109,36 @@ const POT = parseAbi([
   "function router() view returns (address)",
   "function owner() view returns (address)",
 ]);
+
+/**
+ * The probe's init code, followed by `kitchen`, `owner` and `salt` (32 bytes each). Its constructor:
+ *
+ *   mem[0..0x44]  = deployPot(owner, salt)        PUSH4 ff9763ac … MSTORE; CODECOPY the two words
+ *   mem[0xa0]     = Kitchen.deployPot(…)          CALL, bubbling a revert
+ *   mem[0xc0]     = pot.router()                  STATICCALL, bubbling a revert
+ *   mem[0xe0..]   = pot's runtime code            EXTCODECOPY
+ *   RETURN mem[0xa0 .. 0xe0 + size]               pot, router, code
+ *
+ * An `eth_call` creation answers with what the constructor returns, so the answer is the Pot that
+ * `Kitchen.deployPot` deploys. Its first byte is a zero (the Pot's address word), as a creation's
+ * return must not start with 0xef.
+ */
+const POT_PROBE: Hex = `0x${[
+  "63ff9763ac60e01b600052", //  PUSH4 deployPot  PUSH1 e0 SHL  PUSH1 0 MSTORE
+  "604061008a600439", //        CODECOPY(0x04, 0x8a, 0x40): owner, salt
+  "602061006a608039", //        CODECOPY(0x80, 0x6a, 0x20): kitchen
+  "602060a06044600060006080515af1", // CALL(gas, kitchen, 0, 0, 0x44, 0xa0, 0x20)
+  "1561005f57", //              ISZERO PUSH2 fail JUMPI
+  "63f887ea4060e01b600052", //  PUSH4 router  PUSH1 e0 SHL  PUSH1 0 MSTORE
+  "602060c06004600060a0515afa", // STATICCALL(gas, pot, 0, 4, 0xc0, 0x20)
+  "1561005f57", //              ISZERO PUSH2 fail JUMPI
+  "60a0513b80600060e060a0513c", // EXTCODESIZE(pot) DUP1; EXTCODECOPY(pot, 0xe0, 0, size)
+  "60400160a0f3", //            RETURN(0xa0, size + 0x40)
+  "5b3d600060003e3d6000fd", //  fail: RETURNDATACOPY(0, 0, size) REVERT(0, size)
+].join("")}`;
+
+/** `0x6a`: where the probe's arguments start, which its two CODECOPYs name. */
+const PROBE_ARGS_AT = 0x6a;
 
 /** The fewest gas a cook can take over its intrinsic cost: the Pot's dispatch, the Kitchen's fee
  *  read and the engine's delegatecall, cold. An estimate below it ran on no Pot code. */
@@ -252,25 +282,35 @@ const NATIVE_EMITTER = getAddress("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
 /**
  * The Pot `Kitchen.deployPot(owner, salt)` would deploy, as an `eth_call` creation of the probe
- * (`pot-probe.ts`) finds it — its address, Router and runtime code — or the deploy's revert reason.
+ * finds it — its address, Router and runtime code — or the deploy's revert reason.
  */
 export async function probePot(
   client: PublicClient,
   kitchen: Address,
   owner: Address,
   salt: Hex,
-): Promise<ProbedPot | { readonly reason: string }> {
+): Promise<
+  | { readonly pot: Address; readonly router: Address; readonly code: Hex }
+  | { readonly reason: string }
+> {
+  let answer: Hex | undefined;
   try {
-    return await probeDeployment(client, {
-      kitchen,
-      from: owner,
-      data: v12Kitchen.encodeDeployPot(owner, salt),
-    });
+    ({ data: answer } = await client.call({
+      account: owner,
+      data: concat([POT_PROBE, pad(kitchen, { size: 32 }), pad(owner, { size: 32 }), salt]),
+    }));
   } catch (error) {
-    if (error instanceof CliError) throw error;
-
     return { reason: revertReason(error) };
   }
+  if (answer === undefined || answer.length < 2 + 64 * 2 + 2) {
+    throw new CliError("the endpoint answered the Pot's deployment with no code");
+  }
+
+  return {
+    pot: getAddress(sliceHex(answer, 12, 32)),
+    router: getAddress(sliceHex(answer, 44, 64)),
+    code: sliceHex(answer, 64),
+  };
 }
 
 /**
@@ -420,3 +460,6 @@ export async function rehearse(client: PublicClient, input: RehearsalInput): Pro
     return viaEthCall(client, input, `the endpoint did not run eth_simulateV1: ${why}`);
   }
 }
+
+/** The probe's init code and where its arguments start, for the test that pins the assembly. */
+export const potProbe = { code: POT_PROBE, argsAt: PROBE_ARGS_AT } as const;

@@ -49,10 +49,12 @@ import { PotStore } from "../src/cli/pot-store.js";
 import type { Sent } from "../src/cli/chain.js";
 import { keeping, keepLanded } from "../src/cli/keep.js";
 import {
+  evmKitchenRelease,
   evmPotRelease,
   evmPotsDeployed,
   importSvmPot,
   keepPots,
+  pairedSdkReleases,
   svmPotsCreated,
 } from "../src/cli/pots.js";
 import {
@@ -139,6 +141,43 @@ describe("which release minted an EVM Pot", () => {
       evmPotRelease({ kitchen: KITCHEN, owner: OWNER, salt: `0x${"00".repeat(32)}`, pot }),
     ).toBeUndefined();
     expect(evmPotRelease({ kitchen: SENDER, owner: OWNER, salt: SALT, pot })).toBeUndefined();
+  });
+});
+
+describe("the release a Kitchen mints, and the SDK releases that pair with it", () => {
+  it("tells a release by its Kitchen and the Pot init-code hash it reports", () => {
+    for (const set of V12_RELEASE_SETS) {
+      const { kitchen, potInitCodeHash } = set["kitchen-evm"];
+      const family = evmKitchenRelease(
+        kitchen!,
+        potInitCodeHash!.toUpperCase().replace("0X", "0x"),
+      );
+      expect(family?.sets.map((one) => one.compiler)).toContain(set.compiler);
+    }
+    const hash = own["kitchen-evm"].potInitCodeHash!;
+    expect(evmKitchenRelease(KITCHEN, keccak256("0x01"))).toBeUndefined();
+    expect(evmKitchenRelease(SENDER, hash)).toBeUndefined();
+  });
+
+  it("names the SDK releases that pinned a release, from the changelog's table", () => {
+    // Each EVM release, and the SDK releases that shipped its compiler, engine and Kitchen.
+    expect(
+      pairedSdkReleases({ compiler: "2.3.0", "v12-evm": "1.0.1", "kitchen-evm": "1.0.0" }),
+    ).toBe("0.99.2 to 0.99.4");
+    expect(
+      pairedSdkReleases({ compiler: "2.4.0", "v12-evm": "1.1.0", "kitchen-evm": "1.1.0" }),
+    ).toBe("0.99.5 to 0.99.8");
+    expect(
+      pairedSdkReleases({ compiler: "2.5.0", "v12-evm": "1.2.0", "kitchen-evm": "1.2.0" }),
+    ).toBe("0.99.9 to 0.99.15");
+    // A Solana release is held to its own components: compiler 2.3.0 shipped three engines.
+    expect(
+      pairedSdkReleases({ compiler: "2.3.0", "v12-svm": "1.1.0", "kitchen-svm": "1.0.0" }),
+    ).toBe("0.99.3");
+    // None pinned this pairing.
+    expect(
+      pairedSdkReleases({ compiler: "2.5.0", "v12-evm": "1.1.0", "kitchen-evm": "1.2.0" }),
+    ).toBeUndefined();
   });
 });
 
