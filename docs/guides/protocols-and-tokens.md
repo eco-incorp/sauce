@@ -208,10 +208,12 @@ The holder can be:
 
 Because `<anything>.USDC` reads a balance, a record or a list cannot have a field named like a
 token: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to name the field otherwise
-(`usdc` is fine). `.balance` on a record or a list reads its field, and so it does on a contract
-call's result unless the registry records that result as an address
-(`UniswapV4.StateView.poolManager().balance` is the PoolManager's coin): write `ctx.balance(x)` for
-the coin there.
+(`usdc` is fine). `.balance` is the coin only where the program's text shows an address. It reads
+the field on a record or a list, on a contract call's result (unless the registry records that
+result as an address: `UniswapV4.StateView.poolManager().balance` is the PoolManager's coin), on
+`abi.decode`'s result, on a name imported from a module, and on a local bound to or destructured
+from one of those. Write `ctx.balance(x)` for the coin there, or bind the value to a local declared
+`Address` first.
 
 A token named with `Token(address)` has no short form: write `Token(address).balanceOf(holder)`.
 

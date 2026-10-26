@@ -1860,6 +1860,53 @@ describe("`.balance` is a field wherever it was one", () => {
     expect(hex(decoded("a.balance"))).toBe(hex(decoded("ctx.balance(a)")));
   });
 
+  // Through the compile, not the token pass alone: each program that keeps `.balance` a field
+  // compiles as the same program with the field named otherwise does, bytes or refusal alike.
+  it.each([
+    [
+      "a list's record",
+      "interface Leg { balance: Uint256 }\n" +
+        "function main(legs: Leg[]): Uint256 { let t = 0; for (const leg of legs) { t += leg.balance; } return legs[0].balance + t; }",
+    ],
+    [
+      "a record the program's own function returns",
+      "interface Leg { balance: Uint256 }\n" +
+        "function leg(): Leg { return { balance: 1 }; }\nfunction main(): Uint256 { return leg().balance; }",
+    ],
+    [
+      "abi.decode's result",
+      'function main(d: bytes): Uint256 { return abi.decode(d, ["Uint256"]).balance; }',
+    ],
+    [
+      "a local bound to abi.decode's result",
+      'function main(d: bytes): Uint256 { const r = abi.decode(d, ["Uint256"]); return r.balance; }',
+    ],
+    [
+      "an element of abi.decode's result",
+      'function main(d: bytes): Uint256 { return abi.decode(d, ["{Uint256, Uint256}"])[0].balance; }',
+    ],
+    [
+      "a local destructured from abi.decode's result",
+      'function main(d: bytes): Uint256 { const [w, n] = abi.decode(d, ["{Uint256, Uint256}", "Uint256"]); return w.balance + n; }',
+    ],
+    [
+      "a record destructured past a skipped element",
+      "function main(row: { to: Address; wallet: { balance: Uint256 } }): Uint256 {\n" +
+        "  const [, wallet] = row;\n  return wallet.balance;\n}",
+    ],
+  ])("%s compiles as a field named otherwise does", (_what, source) => {
+    const outcome = (text: string): string => {
+      try {
+        return hex(text);
+      } catch (error) {
+        return `refused: ${(error as Error).message}`;
+      }
+    };
+    // `deposit` is as long as `balance`, so a refusal's byte offsets are the same.
+    const renamed = outcome(source.replace(/\bbalance\b/g, "deposit"));
+    expect(outcome(source)).toBe(renamed.replace(/\bdeposit\b/g, "balance"));
+  });
+
   it("an element of a contract call's result: a struct's field", () => {
     const positions = (field: string): Abi => [
       {

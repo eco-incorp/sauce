@@ -228,7 +228,10 @@ interface BigInt {
   toBytesLe(width: SauceInt): SauceBytes;
   /**
    * A holder's native-coin balance: `pot.balance`, `recipient.balance` — wei on an EVM chain,
-   * lamports on Solana. On a record, a list or a contract call's result, `balance` is its field.
+   * lamports on Solana. Only where the program's text shows an address: on a record, a list, a
+   * contract call's result the registry does not record as an address, `abi.decode`'s result, a
+   * name imported from a module, or a local bound to or destructured from one of those,
+   * `balance` is its field. Write `ctx.balance(x)` for the coin there.
    */
   readonly balance: bigint;
 }

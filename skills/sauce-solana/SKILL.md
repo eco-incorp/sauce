@@ -87,7 +87,10 @@ comes from.
 
 - **Nothing to attach.** `sauce run`, `simulate` and `tx` derive every such slot from the owner, the
   Pot and `main`'s arguments, so the program runs with `--args` alone. `sauce compile --json` lists
-  each slot with its `derive`; `--account NAME=<value>` replaces one.
+  each slot with its `derive`. `--account NAME=<value>` gives a slot another account, except a slot
+  derived from the Pot, the owner or the authority (their token accounts, and an address one of
+  them seeds): that slot takes only the account its derivation gives, by role or by key, and any
+  other is refused before anything is built.
 - **A holder** is `pot`, the Pot; `ctx.self()`, the account that signs the engine call;
   `Solana.owner`; a parameter of `main` declared `Address`; a token's mint (`USDC.WSOL`, the USDC
   mint's own WSOL account); or a 32-byte key written out. Its balance is `<holder>.<TOKEN>`
@@ -114,10 +117,18 @@ comes from.
   and after.
 - **A recipient with no token account yet**: `sauce run` creates its associated token account
   before the cook, the owner paying the rent, asking first or with `--yes`.
-- **The methods stand in `main` itself**, not in a helper, in a file that has a `main`: the added
-  accounts are `main`'s parameters. A program that names `pot` runs only through the Kitchen. One
-  that does not (`USDC.transfer(to, amount)` alone) derives its paying accounts from `authority`, so
-  cooked directly (`--via engine`) the signer's own token accounts pay.
+- **In `main`, or in a top-level function `main` calls.** The added accounts are `main`'s
+  parameters, passed to each top-level function that uses them; a script with no `main` is given
+  one. A function inside another, and a helper used as a value (a `.catch` handler), are refused,
+  and so is a helper `main` never reaches that would add accounts. In a helper an `Address`
+  parameter is not a holder: take the holder from `main`.
+- **One mention of `pot` makes the program the Pot's.** A program that names `pot` anywhere acts as
+  the Pot throughout: its token methods derive their paying accounts from `pot` (`pot:USDC`), and it
+  runs only through the Kitchen. One that never names it (`USDC.transfer(to, amount)` alone) derives
+  them from `authority` (`authority:USDC`), so it runs either way, and cooked directly
+  (`--via engine`) the signer's own token accounts pay. Adding `require(to != pot)` to that program
+  makes it the first kind, and `--via engine` refuses it at that mention: for a direct cook, write
+  the signer's own account there (`Solana.owner`, or `ctx.self()` as a token holder).
 
 The methods lower to the `@sauce/token` functions (below), which a program can also call with the
 accounts written out.

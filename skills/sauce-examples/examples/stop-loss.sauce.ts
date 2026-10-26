@@ -61,7 +61,7 @@ function main(
   }
   // The limit decides how much sells, so no minimum is known before the swap; the average is held
   // to the floor after it.
-  const received = uniswapV3(pool, WETH, USDC, held, limit, 0, ctx.self());
+  const received = uniswapV3(pool, WETH, USDC, held, limit, 0, pot);
   const sold = held - pot.WETH;
   require(received >= Math.mulDiv(sold, floor, 10 ** 18), "sold below the floor");
   return { price, triggered, sold, received };
