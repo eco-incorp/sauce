@@ -814,6 +814,25 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
       }),
     ).toThrow(SELF("self", "pot"));
   });
+
+  // A label is no read of a name: one named `pot` or `self` is a label like any other, which the
+  // compiler refuses as SauceScript has none, on every chain.
+  it.each(["pot", "self"])("a label named `%s` is refused as any label is", (name) => {
+    const source = (label: string) =>
+      `function main(): Uint256 {\n  ${label}: for (let i = 0; i < 2; i++) {\n    continue ${label};\n  }\n  return 1;\n}\n`;
+    for (const chain of ["base", "solana"]) {
+      let message = "";
+      try {
+        compileSauceProgram(chain, source(name));
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain("this statement is not supported in SauceScript");
+      expect(() => compileSauceProgram(chain, source("outer"))).toThrow(
+        "this statement is not supported in SauceScript",
+      );
+    }
+  });
 });
 
 // --- a name the caller binds is the caller's ------------------------------------------------------
@@ -1521,6 +1540,65 @@ describe.each([
       const built = route(given);
       expect(mutated()).toBe(true);
       expect(built).toEqual(route(asGiven(make)));
+    },
+  );
+
+  // The same for the options the rewrites read after the probe has run the caller's `resolve`: a
+  // swap's `stops` (Solana) and an `accessors` record (EVM). `tokens` is resolved before any
+  // callback runs, so no mutation reaches it today; its row holds the outcome should that move.
+  const SWAP =
+    "function main(amountIn: Uint256, limit: Uint256): Uint256 {\n" +
+    '  require(pot.balance >= 0, "no Pot");\n' +
+    "  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 400), USDC, WSOL, amountIn, limit, 0);\n}\n";
+  const TOKEN = "function main(): Uint256 { return FOO.balanceOf(pot); }";
+  const later: Array<[string, string, () => Given, (given: Given) => void]> =
+    arm === "svm"
+      ? [
+          [
+            "adds a stop to its `stops`",
+            SWAP,
+            () => ({ ambient: ["./other.js"], stops: [] }),
+            (given) => {
+              (given.stops as string[]).push(compileSauceProgram(chain, SWAP).stoppable![0]!);
+            },
+          ],
+        ]
+      : [
+          [
+            "turns off the `pot` sugar in its `accessors` record",
+            PROGRAM,
+            () => ({ ambient: ["./other.js"], accessors: {} }),
+            (given) => {
+              if (typeof given.accessors === "object") given.accessors.potSugar = false;
+            },
+          ],
+          [
+            "gives a symbol of its `tokens` another address",
+            TOKEN,
+            () => ({
+              ambient: ["./other.js"],
+              tokens: { FOO: "0x5555555555555555555555555555555555555555" },
+            }),
+            (given) => {
+              (given.tokens as Record<string, string>).FOO =
+                "0x7777777777777777777777777777777777777777";
+            },
+          ],
+        ];
+
+  it.each(later)(
+    "compileSauceProgram, whose resolver %s, reads it as it was given",
+    (_, source, make, mutate) => {
+      const asMade = build(source, asGiven(make));
+      expect(asMade).not.toHaveProperty("refused");
+      const { given, mutated } = mutating(make, mutate);
+      const built = build(source, given);
+      expect(mutated()).toBe(true);
+      expect(built).toEqual(asMade);
+      // What the mutation would have compiled, had the compile read it: another program.
+      const changed = make();
+      mutate(changed);
+      expect(build(source, { ...changed, ...served(MUTABLE_MODULES) })).not.toEqual(asMade);
     },
   );
 
