@@ -195,11 +195,11 @@
  * mid-transaction), so it starts and ends at zero every trade; this
  * adapter attaches it but never reads its balance.
  */
-import { address, getAddressCodec, getBase58Decoder } from "@solana/kit";
+import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
+import { pairKeyRegistry, type DirectedPair } from "../pair-keys.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "mswap";
@@ -226,7 +226,6 @@ const YIELD_VARIANT_SCALED_UI = 1;
 const YIELD_VARIANT_CRANK = 2;
 
 const codec = getAddressCodec();
-const b58 = getBase58Decoder();
 
 function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): boolean {
   return discriminator.every((byte, i) => data[i] === byte);
@@ -235,15 +234,12 @@ function readAddress(data: Uint8Array, offset: number): Address {
   return codec.decode(data.subarray(offset, offset + 32)) as Address;
 }
 
-// ── discovery key (no per-pair on-chain account — see module doc) ──────────
-const PAIR_BY_KEY = new Map<string, { inMint: Address; outMint: Address }>();
+// ── discovery key (no per-pair on-chain account — see module doc and `../pair-keys.ts`) ──
+const PAIR_KEYS = pairKeyRegistry(SLUG);
 
 /** Mint synthetic per-directed-pair discovery key (mirrors `sanctumInfinityPoolKey`). */
 export function mswapPoolKey(inMint: Address, outMint: Address): Address {
-  const digest = sha256(`${inMint}\0${outMint}`);
-  const key = address(b58.decode(digest));
-  PAIR_BY_KEY.set(key as string, { inMint, outMint });
-  return key;
+  return PAIR_KEYS.key(inMint, outMint);
 }
 
 // ── SwapGlobal decode ────────────────────────────────────────────────────────
@@ -350,15 +346,20 @@ async function findAta(owner: Address, mint: Address, tokenProgram: Address): Pr
  * PDA the swap CPI needs. Self-drops (throws) on ANY of: either mint not
  * whitelisted, either leg a "ScaledUi" deploy, either leg missing
  * `SWAP_GLOBAL_ID` from its own `wrap_authorities` — all LIVE checks, never
- * a hardcoded mint exclusion.
+ * a hardcoded mint exclusion. A refused pair's discovery key is forgotten.
  */
 export async function fetchMSwapPoolConfig(
   load: AccountLoader,
   pool: Address,
 ): Promise<MSwapPoolConfig> {
-  const pair = PAIR_BY_KEY.get(pool as unknown as string);
-  if (pair === undefined)
-    throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
+  return PAIR_KEYS.resolve(pool, (pair) => fetchMSwapPair(load, pool, pair));
+}
+
+async function fetchMSwapPair(
+  load: AccountLoader,
+  pool: Address,
+  pair: DirectedPair,
+): Promise<MSwapPoolConfig> {
   if (pair.inMint === pair.outMint) throw new Error(`${SLUG}: in/out mint are identical`);
 
   const swapGlobalData = await load(SWAP_GLOBAL_ID);

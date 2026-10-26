@@ -110,7 +110,7 @@
  * consumes more of the existing one per slot than most families.
  */
 import { address, getAddressEncoder } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
+import { pairKeyRegistry } from "../pair-keys.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
@@ -240,25 +240,17 @@ export interface SanctumInfinityPoolConfig extends PoolConfig {
 }
 
 // ── directed-pair discovery key (see the consuming app SVM discovery module's
-// `withSanctumInfinity`) ──────────────────────────────────────────────────
+// `withSanctumInfinity`, and `../pair-keys.ts`) ───────────────────────────
 //
 // Infinity has no per-pair on-chain account, so there is no real address to
-// hand `fetchPoolConfig` the way every other family does. Instead, the
-// discovery wrapper mints a DETERMINISTIC, PURELY LOCAL synthetic "pool"
-// key per (inMint, outMint) request (sha256, so it round-trips through the
-// `Address` brand as a plain 32-byte value — it is NEVER read on-chain) and
-// registers the pair in this module-level map. `fetchPoolConfig` looks the
-// pair back up here; a key that was never minted (a stale/foreign
-// candidate) throws, which `resolveSvmPoolSpec` swallows into a harmless
-// drop, exactly like a wrong-owner spoof on any other family.
-const PAIR_BY_KEY = new Map<string, { inMint: Address; outMint: Address }>();
+// hand `fetchPoolConfig` the way every other family does. The discovery
+// wrapper mints a synthetic key per (inMint, outMint) request, and this
+// venue's bounded registry remembers the pair behind it.
+const PAIR_KEYS = pairKeyRegistry(SLUG);
 
 /** Mint (or re-mint, idempotently) the synthetic discovery key for a directed pair. */
 export function sanctumInfinityPoolKey(inMint: Address, outMint: Address): Address {
-  const digest = sha256(`${inMint}\0${outMint}`);
-  const key = address(base58Encode(digest));
-  PAIR_BY_KEY.set(key as string, { inMint, outMint });
-  return key;
+  return PAIR_KEYS.key(inMint, outMint);
 }
 
 const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -432,65 +424,66 @@ export const sanctumInfinity = {
    * the src side — see `verify_swap_v2`).
    */
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SanctumInfinityPoolConfig> {
-    const pair = PAIR_BY_KEY.get(pool as unknown as string);
-    if (pair === undefined)
-      throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
-    if (pair.inMint === pair.outMint) throw new Error(`${SLUG}: in/out mint are identical`);
+    return PAIR_KEYS.resolve(pool, async (pair) => {
+      if (pair.inMint === pair.outMint) throw new Error(`${SLUG}: in/out mint are identical`);
 
-    // The swap CPI is legacy-SPL (Tokenkeg) only for now, so SELF-DROP the pair
-    // if either mint is Token-2022 (or carries an un-routable extension) — the
-    // thrown error is the graceful-drop signal (SvmRoute drops the venue on a
-    // fetchPoolConfig throw). An unreadable mint falls back to the legacy
-    // assumption, keeping the byte-identical legacy path.
-    const mints = [pair.inMint, pair.outMint];
-    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
-    for (let mi = 0; mi < mints.length; mi++) {
-      const mint = mints[mi]!;
-      const mintData = mintDatas[mi]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(
-          `${SLUG}: dropping pair — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
-        );
+      // The swap CPI is legacy-SPL (Tokenkeg) only for now, so SELF-DROP the pair
+      // if either mint is Token-2022 (or carries an un-routable extension) — the
+      // thrown error is the graceful-drop signal (SvmRoute drops the venue on a
+      // fetchPoolConfig throw). An unreadable mint falls back to the legacy
+      // assumption, keeping the byte-identical legacy path.
+      const mints = [pair.inMint, pair.outMint];
+      const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+      for (let mi = 0; mi < mints.length; mi++) {
+        const mint = mints[mi]!;
+        const mintData = mintDatas[mi]!;
+        if (mintData === null) continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+          throw new Error(
+            `${SLUG}: dropping pair — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+          );
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+          throw new Error(
+            `${SLUG}: dropping pair — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+          );
+        }
       }
-      const { blocking } = parseMintExtensions(mintData);
-      if (blocking.length > 0) {
+
+      const [poolStateData, lstStateList, slab] = await Promise.all([
+        load(POOL_STATE_ID),
+        load(LST_STATE_LIST_ID),
+        load(SLAB_ID),
+      ]);
+      if (poolStateData === null)
+        throw new Error(`${SLUG}: pool_state ${POOL_STATE_ID} does not exist`);
+      if (poolStateData[13] !== 0) throw new Error(`${SLUG}: pool is disabled`);
+      if (poolStateData[14] !== 0) throw new Error(`${SLUG}: pool is rebalancing`);
+      if (lstStateList === null) throw new Error(`${SLUG}: lst_state_list does not exist`);
+      if (slab === null) throw new Error(`${SLUG}: slab does not exist`);
+
+      const [inLeg, outLeg] = await Promise.all([
+        resolveInfinityLeg(load, pair.inMint, lstStateList),
+        resolveInfinityLeg(load, pair.outMint, lstStateList),
+      ]);
+      if (inLeg.isInputDisabled)
+        throw new Error(`${SLUG}: input LST ${pair.inMint} has input disabled`);
+
+      const inFees = readSlabFees(slab, pair.inMint);
+      const outFees = readSlabFees(slab, pair.outMint);
+      inLeg.inpFeeNanos = inFees.inpFeeNanos;
+      outLeg.outFeeNanos = outFees.outFeeNanos;
+      const feeNanosSum = inFees.inpFeeNanos + outFees.outFeeNanos;
+      if (feeNanosSum < 0n)
         throw new Error(
-          `${SLUG}: dropping pair — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+          `${SLUG}: ${pair.inMint}->${pair.outMint} is net-negative-fee (disallowed)`,
         );
-      }
-    }
+      if (feeNanosSum > 1_000_000_000n)
+        throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} fee exceeds 100%`);
 
-    const [poolStateData, lstStateList, slab] = await Promise.all([
-      load(POOL_STATE_ID),
-      load(LST_STATE_LIST_ID),
-      load(SLAB_ID),
-    ]);
-    if (poolStateData === null)
-      throw new Error(`${SLUG}: pool_state ${POOL_STATE_ID} does not exist`);
-    if (poolStateData[13] !== 0) throw new Error(`${SLUG}: pool is disabled`);
-    if (poolStateData[14] !== 0) throw new Error(`${SLUG}: pool is rebalancing`);
-    if (lstStateList === null) throw new Error(`${SLUG}: lst_state_list does not exist`);
-    if (slab === null) throw new Error(`${SLUG}: slab does not exist`);
-
-    const [inLeg, outLeg] = await Promise.all([
-      resolveInfinityLeg(load, pair.inMint, lstStateList),
-      resolveInfinityLeg(load, pair.outMint, lstStateList),
-    ]);
-    if (inLeg.isInputDisabled)
-      throw new Error(`${SLUG}: input LST ${pair.inMint} has input disabled`);
-
-    const inFees = readSlabFees(slab, pair.inMint);
-    const outFees = readSlabFees(slab, pair.outMint);
-    inLeg.inpFeeNanos = inFees.inpFeeNanos;
-    outLeg.outFeeNanos = outFees.outFeeNanos;
-    const feeNanosSum = inFees.inpFeeNanos + outFees.outFeeNanos;
-    if (feeNanosSum < 0n)
-      throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} is net-negative-fee (disallowed)`);
-    if (feeNanosSum > 1_000_000_000n)
-      throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} fee exceeds 100%`);
-
-    return { venue: SLUG, pool, in: inLeg, out: outLeg };
+      return { venue: SLUG, pool, in: inLeg, out: outLeg };
+    });
   },
 
   quoteAccounts(base: PoolConfig): VenueAccount[] {
@@ -512,12 +505,12 @@ export const sanctumInfinity = {
 
 /** Test/tooling seam: clear the discovery-key registry between fixtures. */
 export function __resetSanctumInfinityKeysForTest(): void {
-  PAIR_BY_KEY.clear();
+  PAIR_KEYS.clear();
 }
 
 /** Test/tooling seam: look up a previously-minted discovery key (mirrors what `fetchPoolConfig` does). */
 export function sanctumInfinityLookupPair(
   pool: Address,
 ): { inMint: Address; outMint: Address } | undefined {
-  return PAIR_BY_KEY.get(pool as unknown as string);
+  return PAIR_KEYS.lookup(pool);
 }
