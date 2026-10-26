@@ -10,7 +10,7 @@ Legacy version of Aave lending protocol.
 ## Pitfalls for a program
 
 - The supply call is `deposit`, not `supply`; approve the LendingPool first.
-- `onBehalfOf` receives the aTokens. The caller is the Pot, so `ctx.self()` keeps them in the
+- `onBehalfOf` receives the aTokens. The caller is the Pot, so `pot` keeps them in the
   Pot, not in the user's wallet: choose which, and pass the wallet as a `main` parameter to
   deliver them.
 - aTokens are rebasing: measure balances as deltas.
@@ -19,7 +19,7 @@ Legacy version of Aave lending protocol.
 
 ## In a Sauce program
 
-Deposit the Pot's USDC for `onBehalfOf`, the user's wallet or the Pot (`ctx.self()`):
+Deposit the Pot's USDC for `onBehalfOf`, the user's wallet or the Pot (`pot`):
 
 ```sauce chain=ethereum
 function main(onBehalfOf: Address, amount: Uint256) {
@@ -61,7 +61,7 @@ function main(
 - `lendingPoolAddress`: LendingPool contract for the target chain
 - `asset`: ERC-20 token address to deposit
 - `amount`: Amount in token's native decimals (e.g. 1e6 for 1 USDC). Use `type(uint256).max` to deposit entire balance
-- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
+- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `pot` to keep it in the Pot
 - Requires ERC-20 approval to the LendingPool before calling
 
 ### withdraw

@@ -57,7 +57,7 @@ short, and compiles to the same bytes. `.<SYMBOL>` is always a registered token;
 `recipient.balance` is `ctx.balance(recipient)`. On Arc, whose coin is USDC, `pot.USDC` is the
 token and `pot.balance` the coin. The holder is:
 
-- on an EVM chain, any address: `pot` or `ctx.self()`, a variable or parameter, an address written
+- on an EVM chain, any address: `pot`, a variable or parameter, an address written
   out, a protocol contract (`Aave.Pool`), a contract at an address (`UniswapV3.Pool(pool)` or
   `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that returns an address
   (`UniswapV4.StateView.poolManager()`); a program that declares its own `pot` owns the name and
@@ -103,7 +103,7 @@ value to a local declared `Address` first. `Token(address)` has no short form: i
 function main(payee: Address, amount: Uint256) {
   require(pot.USDT >= amount, "not enough USDT");
   USDT.transfer(payee, amount);
-  require(allowance(USDT, ctx.self(), payee) == 0, "no allowance left standing");
+  require(allowance(USDT, pot, payee) == 0, "no allowance left standing");
 }
 ```
 

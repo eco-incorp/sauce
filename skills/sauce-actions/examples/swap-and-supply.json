@@ -9,7 +9,7 @@
       "factory": "UniswapV3.Factory",
       "fee": 500,
       "amountOutMin": "1",
-      "recipient": "self",
+      "recipient": "pot",
       "saveOutputAs": "usdc"
     },
     { "type": "approve", "token": "USDC", "spender": "AaveV3.Pool", "amountRef": "usdc" },
@@ -17,7 +17,7 @@
       "type": "aaveV3Supply",
       "pool": "AaveV3.Pool",
       "token": "USDC",
-      "onBehalfOf": "self",
+      "onBehalfOf": "pot",
       "amountRef": "usdc"
     }
   ]

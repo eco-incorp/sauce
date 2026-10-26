@@ -56,7 +56,7 @@ returns an object whose `.source` field is a program `routes.compileSauceProgram
 other (its `imports` and `statement` are the same program in parts). A literal amount is encoded into
 the calldata rather than appearing as a decimal in that source.
 
-`TokenCall.toCall()` instead returns `{ target, data, value }` for a fixed EVM call. Values that require runtime state, such as `amount: "balance"` or balance owner `"self"`, must be compiled. `.statement(target)` emits a transfer/approval statement; `.expression(target)` emits a balance read. `Token.program(specs, { target })` combines several operations into one program.
+`TokenCall.toCall()` instead returns `{ target, data, value }` for a fixed EVM call. Values that require runtime state, such as `amount: "balance"` or the balance owner `"pot"` (the Pot), must be compiled. `.statement(target)` emits a transfer/approval statement; `.expression(target)` emits a balance read. `Token.program(specs, { target })` combines several operations into one program.
 
 Use `Token.approve({ token, spender, amount })` for approvals and `Token.balanceOf({ token, owner })` for reads. SVM specs name account references instead of ERC-20 addresses; see [Solana](solana.md).
 
@@ -77,7 +77,7 @@ function main(pool: Address, amountIn: Uint256, minOut: Uint256, recipient: Addr
 }
 ```
 
-The last argument decides where the output ends: your wallet, or `ctx.self()` to keep it in the Pot,
+The last argument decides where the output ends: your wallet, or `pot` to keep it in the Pot,
 where only another cook moves it
 ([Where a program's results end](../concepts/kitchen-pot-cook.md#where-a-programs-results-end)).
 

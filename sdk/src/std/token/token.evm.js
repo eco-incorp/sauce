@@ -90,7 +90,7 @@ export function approve(token: Address, spender: Address, amount: Uint256): void
 // THE PULLS: moving tokens INTO the program from the account that holds them. Each is a SafeERC20
 // `safeTransferFrom`, however it is authorised:
 //
-//   - a standing allowance: `transferFrom(token, owner, ctx.self(), amount)`, above;
+//   - a standing allowance: `transferFrom(token, owner, pot, amount)`, above;
 //   - an EIP-2612 signature: `permit(...)` sets that allowance, then the same `transferFrom`;
 //   - a Permit2 signature: `permitTransferFrom(...)`, where Permit2 itself does the transfer, with
 //     Solmate's `SafeTransferLib.safeTransferFrom` (empty or `true` returndata, else revert).
@@ -132,7 +132,7 @@ export function permit(
   require(permitNonce(token, owner) == before + 1n);
 }
 
-// Permit2 SignatureTransfer: `amount` of `token` from `owner` to this program (`ctx.self()`) on
+// Permit2 SignatureTransfer: `amount` of `token` from `owner` to this program (`pot`) on
 // `owner`'s one-time EIP-712 signature over `PermitTransferFrom(TokenPermissions(token, amount),
 // spender, nonce, deadline)`, the spender being this program — the caller Permit2 checks it
 // against. `permit2` is the Permit2 deployment (`Permit2.Permit2` in a route body). Permit2 spends

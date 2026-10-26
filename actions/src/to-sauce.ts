@@ -26,10 +26,13 @@
  *
  * AMOUNTS AND OUTPUTS. An action's amount is its `amount`, the local an earlier action saved under
  * its `amountRef`, or the previous action's output. Its output is what it delivered to the Pot
- * (`ctx.self()`) for a swap, a wrap or a stake and for an Aave withdrawal — the venue's return value
+ * (`pot`) for a swap, a wrap or a stake and for an Aave withdrawal — the venue's return value
  * where that is the amount, a balance delta around the call where it is not — the value read for a
  * source action, and otherwise its own amount, passed through. An action whose output a later
  * action spends delivers to the Pot whatever its `recipient` says.
+ *
+ * THE POT. The generated program names the Pot the way the emitter says (`emit.ts#PotNames`):
+ * `pot` and `pot.balance` for a chain, the compiler's builtins for a split swap with none.
  */
 import {
   bindBytes,
@@ -53,7 +56,7 @@ import {
 import { CONTRACT_NAME_RE, isName, NATIVE } from "./names.js";
 import { safeApproveStatements, safeTransferStatements, type WordArg } from "./registry.js";
 import { consumesPrevious } from "./semantics.js";
-import { ACTION_SPECS } from "./spec.js";
+import { ACTION_SPECS, POT } from "./spec.js";
 
 import type {
   Action,
@@ -112,7 +115,6 @@ const AAVE_VARIABLE_RATE = 2n;
 const CCTP_FINALIZED = 2000;
 
 const ZERO = "0";
-const SELF = "ctx.self()";
 
 /** An integer field, as the decimal literal the emitted source carries. */
 function word(value: string | number | bigint): Expr {
@@ -133,9 +135,9 @@ function addr(value: string | bigint): Expr {
   return `0x${BigInt(value).toString(16).padStart(40, "0")}`;
 }
 
-/** A recipient field: an address, or the Pot for `"self"`. */
-function recipient(value: Recipient): Expr {
-  return value === "self" ? SELF : addr(value);
+/** A recipient field: an address, or the Pot for `"pot"`. */
+function recipient(l: Lowering, value: Recipient): Expr {
+  return value === POT ? l.pot : addr(value);
 }
 
 /** A bytes32 field (a pool id). */
@@ -205,6 +207,11 @@ class Lowering {
     readonly where: string,
   ) {}
 
+  /** The Pot's address, as the program names it. */
+  get pot(): Expr {
+    return this.emit.pot.address;
+  }
+
   /** `IBinding.at(target).method(args)` — the expression, not yet a statement. */
   call<B extends BindingName>(binding: B, target: Expr, method: MethodName<B>, args: Expr[]): Expr {
     this.used.add(binding);
@@ -228,7 +235,7 @@ class Lowering {
     const prefix = this.emit.name("e");
     const statements =
       fn === "approve"
-        ? safeApproveStatements(prefix, token, this.wordArg(first), this.wordArg(amount))
+        ? safeApproveStatements(prefix, token, this.wordArg(first), this.wordArg(amount), this.pot)
         : safeTransferStatements(prefix, token, this.wordArg(first), this.wordArg(amount));
     this.stmts.push(...statements);
   }
@@ -276,8 +283,8 @@ class Lowering {
   }
 
   /** The Pot's balance of `token`, as a bound local. */
-  selfBalance(token: Expr): Expr {
-    return this.bind("bal", this.call("IErc20", token, "balanceOf", [SELF]));
+  potBalance(token: Expr): Expr {
+    return this.bind("bal", this.call("IErc20", token, "balanceOf", [this.pot]));
   }
 
   /**
@@ -288,12 +295,12 @@ class Lowering {
   assetBalance(asset: string): Expr {
     const native = asset === NATIVE || (/^0x/i.test(asset) && BigInt(asset) === 0n);
 
-    return native ? this.nativeBalance() : this.selfBalance(addr(asset));
+    return native ? this.nativeBalance() : this.potBalance(addr(asset));
   }
 
   /** The Pot's native balance, as a bound local. */
   nativeBalance(): Expr {
-    return this.bind("nat", "ctx.selfBalance()");
+    return this.bind("nat", this.emit.pot.balance);
   }
 
   /** `fn(args)`, a call into `@sauce/router` — the expression, not yet a statement. */
@@ -561,8 +568,8 @@ export function lowerAction(
  * Where a swap action's output goes: the Pot when a later action spends it, else its recipient.
  * Every `@sauce/router` function returns what the recipient received, which is the action's output.
  */
-function swapRecipient(action: { recipient: Recipient }, needsOutput: boolean): Expr {
-  return needsOutput ? SELF : recipient(action.recipient);
+function swapRecipient(l: Lowering, action: { recipient: Recipient }, needsOutput: boolean): Expr {
+  return needsOutput ? l.pot : recipient(l, action.recipient);
 }
 
 function uniswapV2Swap(
@@ -585,7 +592,7 @@ function uniswapV2Swap(
     amountIn,
     word(action.feePpm ?? 0),
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -617,7 +624,7 @@ function uniswapV3Swap(
     amountIn,
     word(action.sqrtPriceLimitX96 ?? "0"),
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -639,7 +646,7 @@ function uniswapV4Swap(
     action.hooks === undefined ? ZERO : addr(action.hooks),
     word(action.sqrtPriceLimitX96 ?? "0"),
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -660,7 +667,7 @@ function curveSwap(
     word(action.j),
     flag(action.indexType === "uint256"),
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -679,7 +686,7 @@ function balancerV2Swap(
     amountIn,
     b32(action.poolId),
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -699,7 +706,7 @@ function dodoV2Swap(
     addr(action.baseToken),
     addr(action.quoteToken),
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -738,7 +745,7 @@ function traderJoeLBSwap(
     tokenX,
     tokenY,
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -756,7 +763,7 @@ function woofiSwap(
     addr(action.tokenOut),
     amountIn,
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -774,7 +781,7 @@ function maverickV2Swap(
     addr(action.tokenOut),
     amountIn,
     word(action.amountOutMin),
-    swapRecipient(action, needsOutput),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -811,9 +818,9 @@ function balancerV2BatchSwap(
     ),
   );
   const funds = record({
-    sender: SELF,
+    sender: l.pot,
     fromInternalBalance: flag(false),
-    recipient: needsOutput ? SELF : recipient(action.recipient),
+    recipient: swapRecipient(l, action, needsOutput),
     toInternalBalance: flag(false),
   });
 
@@ -858,7 +865,7 @@ function curveRouterNGSwap(
     amountIn,
     word(action.amountOutMin),
     list(pools.map(addr)),
-    needsOutput ? SELF : recipient(action.recipient),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -981,13 +988,13 @@ function fraxswapSwap(
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(addr(action.path[action.path.length - 1]!)),
+    () => l.potBalance(addr(action.path[action.path.length - 1]!)),
     () =>
       l.exec("IUniswapV2Router", addr(action.router), "swapExactTokensForTokens", [
         amountIn,
         word(action.amountOutMin),
         list(action.path.map(addr)),
-        needsOutput ? SELF : recipient(action.recipient),
+        swapRecipient(l, action, needsOutput),
         word(action.deadline),
       ]),
     amountIn,
@@ -1004,7 +1011,7 @@ function fluidDexT1Swap(
     flag(action.swap0to1),
     amountIn,
     word(action.amountOutMin),
-    needsOutput ? SELF : recipient(action.recipient),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
@@ -1021,7 +1028,7 @@ function acrossBridge(l: Lowering, action: AcrossBridgeAction, amount: Expr): Ac
   const fee = BigInt(action.relayerFee);
   const outputAmount = fee === 0n ? amount : l.bind("out", `${amount} - ${word(fee)}`);
   l.exec("IAcrossSpokePool", addr(action.spokePool), "depositV3", [
-    SELF, // depositor
+    l.pot, // depositor
     addr(action.recipient),
     addr(action.token), // inputToken
     addr(action.token), // outputToken: the same token on the destination
@@ -1057,7 +1064,7 @@ function stargateBridge(l: Lowering, action: StargateBridgeAction, amount: Expr)
   l.valueCall("IStargatePool", pool, nativeFee, "send", [
     sendParam,
     record({ nativeFee, lzTokenFee: ZERO }),
-    SELF,
+    l.pot,
   ]);
 
   return l.result(amount);
@@ -1148,7 +1155,7 @@ function lidoStake(
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(stETH),
+    () => l.potBalance(stETH),
     () =>
       l.valueCall("ILido", stETH, amount, "submit", [
         addr(action.referral ?? "0x0000000000000000000000000000000000000000"),
@@ -1160,7 +1167,7 @@ function lidoStake(
 function lidoUnstake(l: Lowering, action: LidoUnstakeAction, amount: Expr): ActionResult {
   l.exec("ILidoWithdrawalQueue", addr(action.withdrawalQueue), "requestWithdrawals", [
     list([amount]),
-    recipient(action.owner),
+    recipient(l, action.owner),
   ]);
 
   return l.result(amount);
@@ -1175,7 +1182,7 @@ function rocketPoolStake(
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(addr(action.rETH)),
+    () => l.potBalance(addr(action.rETH)),
     () => l.valueCall("IRocketDepositPool", addr(action.depositPool), amount, "deposit", []),
     amount,
   );
@@ -1206,7 +1213,7 @@ function etherFiStake(
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(addr(action.eETH)),
+    () => l.potBalance(addr(action.eETH)),
     () => l.valueCall("IEtherFiLiquidityPool", addr(action.liquidityPool), amount, "deposit", []),
     amount,
   );
@@ -1220,7 +1227,7 @@ function aaveV3Supply(l: Lowering, action: AaveV3SupplyAction, amount: Expr): Ac
   l.exec("IAaveV3Pool", addr(action.pool), "supply", [
     addr(action.token),
     amount,
-    recipient(action.onBehalfOf),
+    recipient(l, action.onBehalfOf),
     word(action.referralCode ?? 0),
   ]);
 
@@ -1237,7 +1244,7 @@ function aaveV3Withdraw(
   const call = l.call("IAaveV3Pool", addr(action.pool), "withdraw", [
     addr(action.token),
     amount,
-    recipient(action.recipient),
+    recipient(l, action.recipient),
   ]);
 
   return captured(l, needsOutput, call, amount);
@@ -1249,7 +1256,7 @@ function aaveV3Borrow(l: Lowering, action: AaveV3BorrowAction, amount: Expr): Ac
     amount,
     word(AAVE_VARIABLE_RATE),
     word(action.referralCode ?? 0),
-    recipient(action.onBehalfOf),
+    recipient(l, action.onBehalfOf),
   ]);
 
   return l.result(amount);
@@ -1260,7 +1267,7 @@ function aaveV3Repay(l: Lowering, action: AaveV3RepayAction, amount: Expr): Acti
     addr(action.token),
     amount,
     word(AAVE_VARIABLE_RATE),
-    recipient(action.onBehalfOf),
+    recipient(l, action.onBehalfOf),
   ]);
 
   return l.result(amount);
@@ -1287,7 +1294,7 @@ function compoundV3Withdraw(
 // ---------------------------------------------------------------------------
 
 function transfer(l: Lowering, action: TransferAction, amount: Expr): ActionResult {
-  l.erc20Write("transfer", addr(action.token), recipient(action.recipient), amount);
+  l.erc20Write("transfer", addr(action.token), recipient(l, action.recipient), amount);
 
   return l.result(amount);
 }
@@ -1314,7 +1321,7 @@ function permit2Approve(l: Lowering, action: Permit2ApproveAction, amount: Expr)
 // ---------------------------------------------------------------------------
 
 function balanceOf(l: Lowering, action: BalanceOfAction): ActionResult {
-  return l.result(l.selfBalance(addr(action.token)));
+  return l.result(l.potBalance(addr(action.token)));
 }
 
 function argument(l: Lowering, action: ArgumentAction): ActionResult {

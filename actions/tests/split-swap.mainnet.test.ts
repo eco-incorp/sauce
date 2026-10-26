@@ -35,7 +35,7 @@ const uniswapV3 = (fee: 100 | 500): SwapAction => ({
   tokenIn: USDC,
   tokenOut: USDT,
   amountOutMin: "1",
-  recipient: "self",
+  recipient: "pot",
 });
 const CANDIDATES: SwapAction[] = [
   uniswapV3(100),
@@ -49,7 +49,7 @@ const CANDIDATES: SwapAction[] = [
     j: 2,
     indexType: "int128",
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
   },
   {
     type: "uniswapV2Swap",
@@ -57,7 +57,7 @@ const CANDIDATES: SwapAction[] = [
     tokenIn: USDC,
     tokenOut: USDT,
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
   },
 ];
 

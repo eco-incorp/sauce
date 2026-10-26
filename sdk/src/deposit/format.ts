@@ -4,7 +4,7 @@ export function formatBigint(value: bigint): string {
   return `${value.toString()}n`;
 }
 
-/** A resolved address field: `bigint` -> its numeric literal, `"self"` -> `ctx.self()`. */
-export function formatAddressField(value: bigint | "self"): string {
-  return value === "self" ? "ctx.self()" : formatBigint(value);
+/** A resolved address field: `bigint` -> its numeric literal, `"pot"` -> `ctx.self()`. */
+export function formatAddressField(value: bigint | "pot"): string {
+  return value === "pot" ? "ctx.self()" : formatBigint(value);
 }

@@ -729,20 +729,11 @@
       },
       "WstETHABI": {
         "roles": ["wstETH"],
-        "exempt": {
-          "wrap(uint256)": {
-            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
-          },
-          "unwrap(uint256)": {
-            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
-          },
-          "getStETHByWstETH(uint256)": {
-            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
-          },
-          "getWstETHByStETH(uint256)": {
-            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
-          }
-        }
+        "chains": [1]
+      },
+      "WstETHBridgedABI": {
+        "roles": ["wstETH"],
+        "chains": [42161]
       }
     },
     "lifi": {
@@ -1135,11 +1126,6 @@
       },
       "ScrollL1MessengerABI": {
         "roles": ["l1ScrollMessenger"]
-      }
-    },
-    "seamless": {
-      "SeamlessPoolABI": {
-        "roles": ["pool"]
       }
     },
     "seaport": {

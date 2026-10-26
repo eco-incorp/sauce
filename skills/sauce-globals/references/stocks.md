@@ -3,7 +3,7 @@
 # Stock tokens
 
 A tokenized stock is a token like any other: a program compiled for its chain names it by its
-symbol with no import (`SPCXc.balanceOf(ctx.self())` on Base), and amounts are in its smallest
+symbol with no import (`SPCXc.balanceOf(pot)` on Base), and amounts are in its smallest
 units (its decimals). The symbol is the issuer's own ticker for the token, with a `.` written
 `_` (`BRK.Bx` is `BRK_Bx`). Their addresses are in the chain's stocks file in `sauce-chains`.
 

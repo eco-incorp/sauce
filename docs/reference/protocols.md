@@ -86,11 +86,11 @@ the route, use the pools directly ([the `@sauce/router` reference](../api/router
 | [ParaSwap](protocols/paraswap.md) | — | `Paraswap`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | [0x Protocol](protocols/zerox.md) | — | `Zerox`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
-## Lending (17)
+## Lending (16)
 
 ### Choosing between them
 
-- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, Seamless, ZeroLend):
+- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, ZeroLend):
   supply and borrow any listed reserve against all your collateral in that market.
 - **One base asset per market** (Compound V3, a Comet per base asset): you borrow only that
   asset, against the market's listed collaterals.
@@ -118,7 +118,6 @@ prices, and a position below its liquidation threshold can be liquidated by anyo
 | [Moonwell](protocols/moonwell.md) | — | `Moonwell`: base | base |
 | [Morpho Blue](protocols/morpho-blue.md) | — | `MorphoBlue`: ethereum, monad, arc, base | ethereum, monad, arc, base |
 | [Radiant](protocols/radiant.md) | — | `Radiant`: arbitrum | arbitrum |
-| [Seamless](protocols/seamless.md) | — | `Seamless`: base | base |
 | [Silo](protocols/silo.md) | — | `Silo`: ethereum, arbitrum | ethereum, arbitrum |
 | [Spark](protocols/spark.md) | — | `Spark`: ethereum | ethereum |
 | [Venus](protocols/venus.md) | — | `Venus`: bsc | bsc |
@@ -253,7 +252,7 @@ Olympus stakes OHM into its staked forms.
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Arrakis Finance](protocols/arrakis.md) | — | `Arrakis`: ethereum | ethereum |
-| [Beefy Finance](protocols/beefy.md) | — | `Beefy`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Beefy Finance](protocols/beefy.md) | — | `Beefy`: ethereum, optimism, bsc, arbitrum, avalanche | ethereum, optimism, bsc, arbitrum, avalanche |
 | [Convex Finance](protocols/convex.md) | — | `Convex`: ethereum | ethereum |
 | [Gamma Strategies](protocols/gamma.md) | — | `Gamma`: ethereum, polygon | ethereum, polygon |
 | [Harvest Finance](protocols/harvest.md) | — | `Harvest`: ethereum | ethereum |

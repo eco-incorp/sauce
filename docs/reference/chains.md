@@ -26,7 +26,7 @@ section says.
 | [Gnosis](chains/gnosis.md) | `gnosis` | 100 | EVM | preview | — | 0 | 4 |
 | [Fuse](chains/fuse.md) | `fuse` | 122 | EVM | preview | — | 0 | 0 |
 | [Unichain](chains/unichain.md) | `unichain` | 130 | EVM | preview | 10 | 1 | 3 |
-| [Polygon](chains/polygon.md) | `polygon` | 137 | EVM | preview | 7 | 4 | 40 |
+| [Polygon](chains/polygon.md) | `polygon` | 137 | EVM | preview | 7 | 4 | 39 |
 | [Monad](chains/monad.md) | `monad` | 143 | EVM | preview | 15 | 3 | 8 |
 | [Sonic](chains/sonic.md) | `sonic` | 146 | EVM | preview | 13 | 0 | 2 |
 | [Manta Pacific](chains/manta.md) | `manta` | 169 | EVM | preview | — | 0 | 0 |
@@ -45,7 +45,7 @@ section says.
 | [Arc](chains/arc.md) | `arc` | 5042 | EVM | supported | 26 | 4 | 23 |
 | [ZetaChain](chains/zetachain.md) | `zetachain` | 7000 | EVM | preview | — | 0 | 0 |
 | [Klaytn](chains/klaytn.md) | `klaytn` | 8217 | EVM | preview | — | 0 | 0 |
-| [Base](chains/base.md) | `base` | 8453 | EVM | supported | 6 | 69 | 47 |
+| [Base](chains/base.md) | `base` | 8453 | EVM | supported | 6 | 69 | 45 |
 | [Evmos](chains/evmos.md) | `evmos` | 9001 | EVM | preview | — | 0 | 0 |
 | [Plasma](chains/plasma.md) | `plasma` | 9745 | EVM | preview | — | 1 | 0 |
 | [Mode](chains/mode.md) | `mode` | 34443 | EVM | preview | — | 0 | 2 |

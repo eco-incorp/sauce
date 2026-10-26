@@ -22,7 +22,7 @@ const program = parseProgram({
       factory: "UniswapV3.Factory", // the pool is read from the factory while the program runs
       fee: 500,
       amountOutMin: "1",
-      recipient: "self",
+      recipient: "pot",
     },
   ],
 });
@@ -54,7 +54,7 @@ lowers to and its bytecode, and `sauce tx`, `simulate` and `run` take the docume
   name the factory and its key (`fee`, `tickSpacing`, `binStep`); the program reads the pool from
   the factory while it runs and reverts if there is none.
 - **Types follow the JSON.** Every type the package exports is exactly the document it describes:
-  amounts are base-10 strings, `"self"` is the executing Pot, and `parseProgram` returns the same
+  amounts are base-10 strings, `"pot"` is the executing Pot, and `parseProgram` returns the same
   shape it accepts.
 - **Composition is part of the document.** An action spends its `amount`, an earlier output named
   with `saveOutputAs`/`amountRef`, or the previous action's output. A `balanceOf` action spends what

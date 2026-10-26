@@ -96,7 +96,7 @@ function afterFee(amount: Uint256): Uint256 {
 
 // Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
 // owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
-// `ctx.self()` there would keep them in the Pot.
+// `pot` there would keep them in the Pot.
 const held = pot.USDC;
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
@@ -184,7 +184,7 @@ Each read is a call; the complete list, per target, is section 6 of
 
 | Read                                                                                                         | EVM                                                     | Solana                                                    |
 | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
-| `ctx.self()`                                                                                                 | the executing contract: the Pot, which holds balances   | the engine's program id; the Pot only as a token's holder |
+| `ctx.self()`                                                                                                 | the executing contract: the Pot; a program writes `pot` | the engine's program id; the Pot only as a token's holder |
 | `ctx.msgSender()`                                                                                            | the immediate caller: the owner, in a cook on their Pot | the first signer among the accounts the engine receives   |
 | `ctx.msgData()`                                                                                              | the program's whole input                               | the instruction data                                      |
 | `ctx.timestamp()`, `ctx.chainId()`, `ctx.selfBalance()`                                                      | yes                                                     | yes                                                       |
@@ -252,15 +252,15 @@ function main(vault: Address, shares: Uint256): Uint256 {
 
 ### Who receives what a call produces
 
-Every call comes from the Pot. A call that credits its caller, or names `ctx.self()` as its
+Every call comes from the Pot. A call that credits its caller, or names `pot` as its
 beneficiary, leaves the output in the Pot. A call that names a beneficiary (a lending market's
 `onBehalfOf`, a vault's `receiver`, a swap's `recipient`, a bridge's `to`) credits that address:
-make it a `main` parameter, the user's wallet or `ctx.self()` as the user chose (`sauce-overview`
+make it a `main` parameter, the user's wallet or `pot` as the user chose (`sauce-overview`
 says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner.
 
 ```sauce chain=base,ethereum
 // Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
-// user's wallet, or the Pot itself (`ctx.self()`) when the user keeps the position there.
+// user's wallet, or the Pot itself (`pot`) when the user keeps the position there.
 function main(onBehalfOf: Address, amount: Uint256) {
   USDC.approve(AaveV3.Pool, amount);
   AaveV3.Pool.supply(USDC, amount, onBehalfOf, 0);

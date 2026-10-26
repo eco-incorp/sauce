@@ -47,7 +47,7 @@ function main(
     { poolId: buyPool, assetInIndex: 1, assetOutIndex: 0, amount: 0, userData: hex`` },
   ];
   const funds = {
-    sender: ctx.self(),
+    sender: pot,
     fromInternalBalance: false,
     recipient,
     toInternalBalance: false,

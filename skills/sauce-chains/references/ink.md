@@ -31,9 +31,9 @@ chain does not have it.
 ```sauce chain=ink
 function main() {
   // `USDT0` is Ink's USDT0: `0x0200C29006150606B650577BBE7B6248F58470c1`.
-  const held = USDT0.balanceOf(ctx.self());
+  const held = USDT0.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDT0).balanceOf(ctx.self()) == held);
+  require(Token(USDT0).balanceOf(pot) == held);
   // `UniswapV4.PoolManager` is Ink's poolManager: `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32`.
   require(UniswapV4.PoolManager != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.

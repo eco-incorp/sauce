@@ -37,7 +37,7 @@ const VARIABLE = 2;
 function depositCollateral(asset: Address, amount: Uint256): Uint256 {
   require(AaveV3.Pool);
   approve(asset, AaveV3.Pool, amount);
-  AaveV3.Pool.supply(asset, amount, ctx.self(), 0);
+  AaveV3.Pool.supply(asset, amount, pot, 0);
   return amount;
 }
 
@@ -51,7 +51,7 @@ function approveBorrower(borrower: Address, amount: Uint256, asset: Address): Ui
 function repayBorrower(amount: Uint256, asset: Address): Uint256 {
   require(AaveV3.Pool);
   approve(asset, AaveV3.Pool, amount);
-  const repaid = AaveV3.Pool.repay(asset, amount, VARIABLE, ctx.self());
+  const repaid = AaveV3.Pool.repay(asset, amount, VARIABLE, pot);
   // A repayment above the debt pays the debt: the allowance for the rest does not stand.
   if (repaid < amount) {
     approve(asset, AaveV3.Pool, 0);
@@ -62,7 +62,7 @@ function repayBorrower(amount: Uint256, asset: Address): Uint256 {
 function withdrawCollateral(asset: Address, to: Address): Uint256 {
   require(AaveV3.Pool);
   const aToken = AaveV3Delegation.at(AaveV3.Pool).getReserveAToken(asset);
-  const assetBalance = Token(aToken).balanceOf(ctx.self());
+  const assetBalance = Token(aToken).balanceOf(pot);
   return AaveV3.Pool.withdraw(asset, assetBalance, to);
 }
 

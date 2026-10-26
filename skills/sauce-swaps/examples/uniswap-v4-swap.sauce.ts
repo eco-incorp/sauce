@@ -67,9 +67,9 @@ function swapExactInputSingle(key: PoolKey, amountIn: Uint256, minAmountOut: Uin
     abi.encode(key.currency0, amountIn),
     abi.encode(key.currency1, minAmountOut),
   ];
-  const before = Token(key.currency1).balanceOf(ctx.self());
+  const before = Token(key.currency1).balanceOf(pot);
   UniswapV4.UniversalRouter.execute(V4_SWAP, [abi.encode(actions, params)], ctx.timestamp() + 20);
-  const amountOut = Token(key.currency1).balanceOf(ctx.self()) - before;
+  const amountOut = Token(key.currency1).balanceOf(pot) - before;
   require(amountOut >= minAmountOut, "Insufficient output amount");
   return amountOut;
 }

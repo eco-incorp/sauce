@@ -671,9 +671,9 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     }
   });
 
-  it('a "self" recipient is the Pot', async () => {
+  it('a "pot" recipient is the Pot', async () => {
     const receipt = await env.cook(
-      compiled({ type: "transfer", amount: "5", token: A, recipient: "self" }),
+      compiled({ type: "transfer", amount: "5", token: A, recipient: "pot" }),
     );
     assert.equal(
       recordedCalls(receipt, [A as Address])[0]!.data,

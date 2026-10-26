@@ -22,7 +22,7 @@ Minimal and gas-efficient lending primitive with permissionless market creation.
 ## In a Sauce program
 
 Supply the loan asset to a market given as `main`'s input, for `onBehalf`: the user's wallet, or
-the Pot (`ctx.self()`) to keep the position there. Morpho keeps the position in its own books, not
+the Pot (`pot`) to keep the position there. Morpho keeps the position in its own books, not
 as a token, so it shows in no token balance:
 
 ```sauce chain=base,ethereum

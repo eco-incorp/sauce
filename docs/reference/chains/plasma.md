@@ -36,9 +36,9 @@ chain does not have it.
 ```ts
 function main() {
   // `USDT0` is Plasma's USDT0: `0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb`.
-  const held = USDT0.balanceOf(ctx.self());
+  const held = USDT0.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDT0).balanceOf(ctx.self()) == held);
+  require(Token(USDT0).balanceOf(pot) == held);
 }
 ```
 

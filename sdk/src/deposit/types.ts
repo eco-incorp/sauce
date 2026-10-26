@@ -50,7 +50,7 @@ export interface ExtraFieldSpec {
  *
  * `token` names the asset for a typed-ABI template. Omit it for WETH wrap/unwrap and Lido stake;
  * WETH unwrap uses `target` as its token address, while wrap and stake use native ETH.
- * `beneficiary` defaults to `ctx.self()` and must be omitted on a `beneficiary: "unsupported"`
+ * `beneficiary` defaults to the Pot and must be omitted on a `beneficiary: "unsupported"`
  * template (every such protocol credits `msg.sender` unconditionally — accepting one would silently
  * send the position to the wrong account).
  */
@@ -65,7 +65,7 @@ export interface DepositSpec {
   /** Required for typed-ABI templates; omit for WETH wrap/unwrap and Lido stake. */
   token?: AddressInput;
   amount: AmountInput;
-  /** Defaults to `ctx.self()`. Must be omitted on a `beneficiary: "unsupported"` template. */
+  /** Defaults to the Pot. Must be omitted on a `beneficiary: "unsupported"` template. */
   beneficiary?: AddressInput;
   /** Defaults to `"exact"`. See {@link ApprovalPolicy}. */
   approvalPolicy?: ApprovalPolicy;
@@ -88,7 +88,7 @@ export type DepositSourceSpec =
   DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "max" });
 
 /**
- * A {@link DepositSpec}, fully normalized — bigint scalars (+ the `"self"` sentinel for a defaulted
+ * A {@link DepositSpec}, fully normalized — bigint scalars (+ the `"pot"` sentinel for a defaulted
  * `beneficiary`), plus the resolved {@link DepositTemplate}.
  * `amount` stays a passthrough of whatever `toDeposit` was handed for the runtime-amount shapes
  * (`"balance"` etc.) so a caller can tell a concrete deposit from a source-only one apart.
@@ -98,7 +98,7 @@ export interface NormalizedDeposit {
   target: bigint;
   token: bigint | null;
   amount: bigint | "balance" | "max";
-  beneficiary: bigint | "self" | null;
+  beneficiary: bigint | "pot" | null;
   approvalPolicy: ApprovalPolicy;
   extra: Readonly<Record<string, bigint>>;
 }

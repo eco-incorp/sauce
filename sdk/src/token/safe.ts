@@ -215,27 +215,30 @@ export function safeTransferStatements(
  *
  * Emits, in order: read the current allowance from this contract to `spender`; if it is non-zero,
  * `approve(spender, 0)` and check that; then `approve(spender, amount)` and check that. A token
- * that refuses either call still reverts the whole execution.
+ * that refuses either call still reverts the whole execution. `pot` is the executing contract as
+ * the program names it: the compiler's `ctx.self()` by default, so the statements compile with no
+ * SDK rewrite; `pot` where the caller compiles through the SDK's program compile.
  */
 export function safeApproveStatements(
   prefix: string,
   token: string,
   spender: WordArg,
   amount: WordArg,
+  pot = "ctx.self()",
 ): readonly string[] {
-  const selfVar = `${prefix}self`;
+  const potVar = `${prefix}pot`;
   const allowanceVar = `${prefix}cur`;
-  const statements: string[] = [`const ${selfVar} = ctx.self();`];
+  const statements: string[] = [`const ${potVar} = ${pot};`];
 
   // `allowance(owner, spender)` — a `uint256` return, so this one is safe to decode normally. The
   // owner is the executing contract, which is only known at run time, so it is spliced like any
   // other run-time word.
-  const query = chunksFor("allowance", [{ local: selfVar }, spender]);
+  const query = chunksFor("allowance", [{ local: potVar }, spender]);
   const queryVars = query.map((chunk, i) => {
     statements.push(`const ${prefix}q${i} = hex\`${chunk.slice(2)}\`;`);
     return `${prefix}q${i}`;
   });
-  let queryExpr = `${queryVars[0]!}.concat(${selfVar}.toBytesBe(32))`;
+  let queryExpr = `${queryVars[0]!}.concat(${potVar}.toBytesBe(32))`;
   if (query[1] !== "0x") queryExpr += `.concat(${queryVars[1]!})`;
   if (isLocal(spender)) {
     queryExpr += `.concat(${spender.local}.toBytesBe(32))`;

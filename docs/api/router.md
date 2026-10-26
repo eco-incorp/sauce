@@ -16,7 +16,7 @@ import { curve, uniswapV2 } from "@sauce/router";
 import { balanceOf } from "@sauce/token";
 
 // Ethereum: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for USDT in
-// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `ctx.self()`, so a later
+// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `pot`, so a later
 // cook spends it (pass the wallet instead to deliver it). The tokens, the factory and the pool are
 // the registry's names; the amounts are only known when this runs.
 //
@@ -26,10 +26,10 @@ import { balanceOf } from "@sauce/token";
 //                     whole transaction reverts
 function main(minOut: Uint256) {
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
-  const sold = balanceOf(WETH, ctx.self());
-  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());
+  const sold = balanceOf(WETH, pot);
+  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, pot);
   // USDC is the 3pool's coin 1 and USDT its coin 2.
-  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self());
+  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, pot);
 }
 ```
 
@@ -78,7 +78,7 @@ Addresses are `Address`, amounts and the other numbers `Uint256`, and `uint256In
   floor, except for `woofi`, which requires a positive one. Where the venue enforces a floor
   itself — Curve's `min_dy`, the Balancer Vault's `limit`, WooPPV2's `minToAmount` — `minOut` is
   that floor; otherwise the function checks it against the amount the venue reports.
-- **`recipient`** receives the output; `ctx.self()` keeps it in the Pot.
+- **`recipient`** receives the output; `pot` keeps it in the Pot.
 - **The return value** is what the recipient received: the amount the pool or the Router reports,
   or, for Curve, whose 3pool-era pools report nothing, the Pot's balance change.
 
@@ -90,10 +90,11 @@ first (V2, DODO, LB, WOOFi) or approves exactly the input for the pool to pull (
 which leaves a zero allowance.
 
 Uniswap V3 and its forks, Uniswap V4, Maverick V2 and PancakeSwap Infinity pools re-enter their
-caller mid-swap to be paid, which a program cannot answer. Those functions call the Pot's Router — `ctx.self()`, whose
-fallback delegatecalls it — and the Router answers the callback, paying from the Pot exactly what
-the pool asks for, up to `amountIn`. The library checks V3 and Maverick token pairs. These functions
-use the paired execution Router, whose exact-input methods return `(amountInUsed, amountOut)`.
+caller mid-swap to be paid, which a program cannot answer. Those functions call the Pot's Router
+through the Pot, whose fallback delegatecalls it, and the Router answers the callback, paying from
+the Pot exactly what the pool asks for, up to `amountIn`. The library checks V3 and Maverick token
+pairs. These functions use the paired execution Router, whose exact-input methods return
+`(amountInUsed, amountOut)`.
 It answers Synthra V3 and UnitFlow V3 callbacks too. A private Pot runs the Router it was minted
 with until its owner moves it, unless its Router was fixed at creation; see [the Pot's Router](../concepts/architecture.md#a-pots-router).
 

@@ -81,11 +81,11 @@ the route, use the pools directly (`sauce-swaps`).
 | [ParaSwap](paraswap.md) ([registry](registry/paraswap.md)) | — | `Paraswap`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | [0x Protocol](zerox.md) ([registry](registry/zerox.md)) | — | `Zerox`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
-## Lending (17)
+## Lending (16)
 
 ### Choosing between them
 
-- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, Seamless, ZeroLend):
+- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, ZeroLend):
   supply and borrow any listed reserve against all your collateral in that market.
 - **One base asset per market** (Compound V3, a Comet per base asset): you borrow only that
   asset, against the market's listed collaterals.
@@ -113,7 +113,6 @@ prices, and a position below its liquidation threshold can be liquidated by anyo
 | [Moonwell](moonwell.md) ([registry](registry/moonwell.md)) | — | `Moonwell`: base | base |
 | [Morpho Blue](morpho-blue.md) ([registry](registry/morpho-blue.md)) | — | `MorphoBlue`: ethereum, monad, arc, base | ethereum, monad, arc, base |
 | [Radiant](radiant.md) ([registry](registry/radiant.md)) | — | `Radiant`: arbitrum | arbitrum |
-| [Seamless](seamless.md) ([registry](registry/seamless.md)) | — | `Seamless`: base | base |
 | [Silo](silo.md) ([registry](registry/silo.md)) | — | `Silo`: ethereum, arbitrum | ethereum, arbitrum |
 | [Spark](spark.md) ([registry](registry/spark.md)) | — | `Spark`: ethereum | ethereum |
 | [Venus](venus.md) ([registry](registry/venus.md)) | — | `Venus`: bsc | bsc |
@@ -248,7 +247,7 @@ Olympus stakes OHM into its staked forms.
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Arrakis Finance](arrakis.md) ([registry](registry/arrakis.md)) | — | `Arrakis`: ethereum | ethereum |
-| [Beefy Finance](beefy.md) ([registry](registry/beefy.md)) | — | `Beefy`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Beefy Finance](beefy.md) ([registry](registry/beefy.md)) | — | `Beefy`: ethereum, optimism, bsc, arbitrum, avalanche | ethereum, optimism, bsc, arbitrum, avalanche |
 | [Convex Finance](convex.md) ([registry](registry/convex.md)) | — | `Convex`: ethereum | ethereum |
 | [Gamma Strategies](gamma.md) ([registry](registry/gamma.md)) | — | `Gamma`: ethereum, polygon | ethereum, polygon |
 | [Harvest Finance](harvest.md) ([registry](registry/harvest.md)) | — | `Harvest`: ethereum | ethereum |

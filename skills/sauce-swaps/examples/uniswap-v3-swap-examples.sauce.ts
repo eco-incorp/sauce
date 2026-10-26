@@ -117,7 +117,7 @@ function main(
   recipient: Address,
 ): Uint256 {
   require(Maker.Dai);
-  const spendable = balanceOf(Maker.Dai, ctx.self());
+  const spendable = balanceOf(Maker.Dai, pot);
   require(spendable >= (exactOutput ? limit : amount), "the DAI to spend is not in the Pot");
   if (multihop) {
     return exactOutput

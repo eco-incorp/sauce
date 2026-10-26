@@ -39,7 +39,7 @@ Single-asset lending protocol (Comet) with isolated markets per base asset. Each
 
 ## In a Sauce program
 
-Supply the Pot's USDC to the USDC market for `onBehalfOf` (the user's wallet, or `ctx.self()` to
+Supply the Pot's USDC to the USDC market for `onBehalfOf` (the user's wallet, or `pot` to
 keep the position in the Pot) and check it was credited:
 
 ```ts
