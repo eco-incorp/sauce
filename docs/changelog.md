@@ -224,7 +224,13 @@ upgrade authority, which can replace them after the check.
   replaces "Contract 'X' (slug) is not deployed on 'chain'", "`X` is not a token or protocol on
   chain" and the compiler's "is not a declared variable". `require(X != 0)` on a chain without `X`
   is refused as well, since it fails whatever the program does. A name no chain has is an error on
-  every chain, tested or not.
+  every chain, tested or not, and so in a branch a test rules out: a misspelt contract, a protocol
+  used as a contract or a method the contract does not have is refused on the chain without the
+  venue too, so a program that compiles there compiles where the branch runs. A method a registry
+  contract lacks is refused naming the contract and its methods: "`UniswapV3.Factory.getPol(…)`:
+  `getPol` is not in uniswap-v3.Factory's vendored ABI (known methods: getPool, createPool). Did
+  you mean `getPool`?". A name the caller binds (a define, a `contracts` entry, an export of an
+  `ambient` module) is the caller's on every chain, whatever the registry has it as.
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
   assignments on success, or rolls them all back before handling failure. Work before the block
   remains. A sole external-call block has the narrower `.catch()` boundary: successful-return

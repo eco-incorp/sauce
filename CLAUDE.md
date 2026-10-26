@@ -531,11 +531,20 @@ out of the program's text but `mainSignature`, for the `--fund` wrapper.
 `routes/chain-module.ts` writes, per chain, the ambient module `@sauce/chain`: every protocol
 namespace (family aliases included) as an object literal holding every contract the namespace has
 on ANY chain, bound (`ABI.at(address)`, the same bytes as the binding written by hand) where this
-chain has it, its address where the registry has no ABI, and `0` where it lacks it; and every token
-symbol some chain registers and this one lacks as `export const X = 0`. The chain's own tokens,
-`chainId` and the `<Ns>_<Contract>` keys stay defines. A program that names a chain
-(`Base.UniswapV3.Factory`) gets that chain's module too. Modules and ABIs are served from memory,
-never a disk, and only to the SDK's own installation: the compile hands them to the compiler as
+chain has it, its address where the registry has no ABI, and `0` where it lacks it. The chain's own
+tokens, `chainId` and the `<Ns>_<Contract>` keys stay defines. A token symbol some chain registers
+and this one lacks is zero too, but no module declares it: `checkNames` reports each test of one
+(`zeros`) and `withoutDead` writes it `0` where it stands, so a read the check did not see is the
+compiler's undeclared name. Declaring the ~1,800 of them cost about 2 ms on every compile (a
+trivial `main` on Base, mean of 199 after the first, median of three runs: 3.45 ms with them,
+1.50 ms without, against 0.88 ms before the module). The module's text depends only on the chain
+and the namespaces the caller binds (`chainNames`): the plain module is every compile's, and one a
+compile's options make is kept per options, a bounded few, so the compiler's module cache reads
+each once. A name the caller binds is its own everywhere (`defined`): its defines, its contract
+keys, and each registry name its ambient modules export, which `ambientNamesOf` asks the compiler
+for (`bindableNames`). A program that names a chain (`Base.UniswapV3.Factory`) gets that chain's
+module too. Modules and ABIs are served from memory, never a disk, and only to the SDK's own
+installation: the compile hands them to the compiler as
 ambient modules under a specifier drawn once per process (`INSTALLED_CHAIN_MODULE`), which no
 program or module can write; `rs-compile.ts` serves a names module only at the absolute path that
 specifier resolves to (the compiler refuses an absolute import), refuses a relative path into the
@@ -547,31 +556,37 @@ branch it rules out; that is the whole presence mechanism, and `available(X)` is
 zero that is unusable at run time, so `routes/absent-names.ts#checkNames` reads the program (and
 every module the caller's resolver serves) before any rewrite and refuses, located and naming the
 chain, every use of a name the chain lacks outside a branch a test of it rules out, a `require`
-such a name makes false, a registry name no chain has, and the Pot's balance of an absent token. It
-also reports the code a test rules out (`dead`: an `if` arm, a `?:` arm, the right side of a
-decided `&&`/`||`, the rest of a block after a decided `if` that always exits, its functions, types
-and module declarations kept), and each side of a `&&`/`||` whose whole is a value that is, or may
-be, a contract binding (`bindingSides`): the language gives a bool, but 2.6.0 hands a binding back
-as the whole — measured, a names-module contract, a record field holding `<Abi>.at(…)`, an inline
-`<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of aliases, resolved per scope by
-`lexical-bindings.ts`; a local initialized to `<Abi>.at(…)`, a `?:`, a call or a parameter give a
-bool, and an import is taken as one. `compileForChain` applies both in one pass
-(`withoutDead`: dead code blanked in place, spaces, newlines kept, an `if` arm `{ }`, an expression
-`0`; a binding side written `!!(…)`, which is the bool, the same bytes for a constant)
-before every rewrite, so the token, venue, account and accessor passes never lower ruled-out code
-— on Solana they would add its accounts and checks to `main`, which `available(X)`, removing the
-branch from the source, never did. A module the caller serves gets the same `withoutDead` pass,
-returned by the `checkModule` hook and served by `rs-compile.ts#makeResolve` in place of its text;
-no other rewrite reads it.
+such a name makes false, a registry name no chain has, a method a registry contract's ABI lacks
+(naming the contract and its methods), and the Pot's balance of an absent token. Code a test rules
+out is read too, as on a chain that takes the branch: only a name this chain lacks is let be there,
+and a misspelt contract, a protocol used as a contract or a method the ABI lacks is refused on every
+chain, so a program that passes on the chain without the venue does not break on the one with it.
+It also reports the code a test rules out (`dead`: an `if` arm, a `?:` arm, the right side of a
+decided `&&`/`||`, the rest of a block after a decided `if` that always exits, its functions,
+exports, types and module declarations kept and checked as if they ran), and each side of a
+`&&`/`||` whose whole is a value, or a side of one through a `?:` arm or a nested `&&`/`||`
+(`wrap`), that is, or may be, a contract binding (`bindingSides`): the language gives a bool, but
+2.6.0 hands a binding back as the whole — measured, a names-module contract, a record field holding
+`<Abi>.at(…)`, an inline `<Abi>.at(…)`, and a `const`/`let` alias of one through any chain of
+aliases, resolved per scope by `lexical-bindings.ts`; a local initialized to `<Abi>.at(…)`, a `?:`,
+a call or a parameter give a bool, and an import or another module's export is taken as one.
+`compileForChain` applies all three in one pass (`withoutDead`: dead code blanked in place, spaces,
+newlines kept, an `if` arm `{ }`, an expression `0`; a binding side written `!!(…)`, which is the
+bool, the same bytes for a constant; a tested absent token `0`) before every rewrite, so the token,
+venue, account and accessor passes never lower ruled-out code — on Solana they would add its
+accounts and checks to `main`, which `available(X)`, removing the branch from the source, never
+did. A module the caller serves gets the same `withoutDead` pass, returned by the `checkModule` hook
+and served by `rs-compile.ts#makeResolve` in place of its text; no other rewrite reads it.
 Its scopes are `lexical-scope.ts`'s, the compiler's: the module's names (a type-only import binds
 none) and a function's parameters everywhere in them, a block's `let`/`const` from its declarator
 on, a loop's or `catch` clause's binding in it — a function-wide shadow set once let a use after an
 inner block reach the zero. What a module cannot hold stays a rewrite in `protocol-rewrite.ts`: an
 interface bound to an address, `.at(address)`, a protocol's default-contract call, and `.address`
 before a scalar method (`.toBytesBe`) on a binding or a local holding one through any chain of
-locals, which 2.6.0 takes only on an address. On Solana the module holds no EVM contract;
-`pot.<TOKEN>` of a token Solana lacks is left to the compiler as `ctx.self().<TOKEN>`, only ever
-under a test.
+locals, which 2.6.0 takes only on an address; it reads a namespace as the program's only where the
+program declares it in scope, and as the caller's where the compile binds it. On Solana the module
+holds no EVM contract, and the Solana lowering never sees an absent token: `checkNames` refuses a
+live `pot.<TOKEN>` of one and `withoutDead` has blanked a ruled-out one.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
