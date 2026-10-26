@@ -671,6 +671,8 @@ const CHAIN_NOTES = {
     "- `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei",
     "  reads as 0. Compare a native amount with a token amount only after converting one to the",
     "  other's scale.",
+    "- In a program, `pot.USDC` is the Pot's 6-decimal `USDC` token balance and `pot.balance` its",
+    "  18-decimal native one: the same money at the two scales.",
     "- Every native amount has 18 decimals: an execution fee or a cook's value. `1_000_000` of native",
     "  value is 10^-12 USDC, not 1 USDC.",
     "- A transaction whose `maxFeePerGas` is below the minimum base fee (the table above) is never",

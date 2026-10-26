@@ -45,12 +45,11 @@ function main(
   deadline: Uint256,
   signature: bytes
 ) {
-  const self = ctx.self();
   const permit = { permitted: { token: token, amount: amount }, nonce: nonce, deadline: deadline };
-  const details = { to: self, requestedAmount: amount };
-  const before = Token(token).balanceOf(self);
+  const details = { to: pot, requestedAmount: amount };
+  const before = Token(token).balanceOf(pot);
   Permit2.Permit2.permitTransferFrom(permit, details, owner, signature);
-  require(Token(token).balanceOf(self) - before == amount, "the permit moved another amount");
+  require(Token(token).balanceOf(pot) - before == amount, "the permit moved another amount");
 }
 ```
 

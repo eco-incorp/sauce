@@ -63,7 +63,7 @@ The `sauce` command builds it, and signs and sends it or hands it to another wal
 
 Running as the Pot is what makes a program useful:
 
-- `ctx.self()` is the Pot, and so is `self`: `self.USDC` is what the Pot holds.
+- `ctx.self()` is the Pot, and so is `pot`: `pot.USDC` is what the Pot holds.
 - Every call the program makes comes from the Pot. A protocol sees the Pot as its caller, an
   approval is the Pot's, and a swap's output lands in the Pot unless the program names another
   recipient.
@@ -77,12 +77,12 @@ The quick start's program shows the first and the third:
 
 ```js
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
 
-`self.USDC` reads the Pot's balance, and `USDC.transfer` pays from the Pot. `main`'s arguments
+`pot.USDC` reads the Pot's balance, and `USDC.transfer` pays from the Pot. `main`'s arguments
 travel in the cook, after the program, so one compiled program serves every call with different
 values. A pool that calls back in the middle of a swap reaches the Pot again, and the Pot hands that
 callback to its Router, a helper contract for swaps: [A Pot's Router](architecture.md#a-pots-router)
@@ -189,8 +189,8 @@ The three roles are the same, and Solana's accounts change the details:
   pays its rent, Solana's deposit for storing an account, and a run asks before creating it.
 - A **cook** is the Kitchen's instruction, signed by the owner. The Kitchen charges its fee in
   lamports, then runs the program on the engine and signs for the Pot.
-- In a program there, `ctx.self()` is the engine's program id, not the Pot; `self` as a token
-  holder is still the Pot.
+- In a program there, `ctx.self()` is the engine's program id, not the Pot; `pot` is still
+  the Pot.
 - A program can also run directly on the engine, with no Pot. It then has only the signers its
   transaction gives it.
 

@@ -35,7 +35,7 @@ it inside that transaction. Here is a whole program, the one the quick start run
 //   to: Address       who gets the USDC, an address on the chain it runs on
 //   amount: Uint256   how much, in USDC's smallest unit: USDC has 6 decimals, so 1000000 is 1 USDC
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```

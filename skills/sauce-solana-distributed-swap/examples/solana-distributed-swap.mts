@@ -59,12 +59,12 @@ check(!/^import /m.test(code), "the program imports nothing");
 check(!/0x[0-9a-fA-F]{64}|[1-9A-HJ-NP-Za-km-z]{32,44}/.test(code), "the program writes no address");
 const LOOPS = [
   ...code.matchAll(
-    /for \(const (\w+) of \[([\d, ]+)\]\) \{\n {4}bought \+= (\w+\.\w+)\.swap\(\n {6}\3\.pool\(USDC, SPCX_US, \1\),\n {6}USDC,\n {6}SPCX_US,\n {6}self\.USDC - kept,\n {6}priceLimit,\n {6}0,\n {4}\);\n {2}\}/g,
+    /for \(const (\w+) of \[([\d, ]+)\]\) \{\n {4}bought \+= (\w+\.\w+)\.swap\(\n {6}\3\.pool\(USDC, SPCX_US, \1\),\n {6}USDC,\n {6}SPCX_US,\n {6}pot\.USDC - kept,\n {6}priceLimit,\n {6}0,\n {4}\);\n {2}\}/g,
   ),
 ].map((m) => ({ venue: m[3]!, key: m[1]!, keys: m[2]!.split(", ").map(Number) }));
 const CALLS = [
   ...code.matchAll(
-    /\n {2}bought \+= (\w+\.\w+)\.swap\(\n {4}\1\.pool\(USDC, SPCX_US, (\d+)\),\n {4}USDC,\n {4}SPCX_US,\n {4}self\.USDC - kept,\n {4}priceLimit,\n {4}0,\n {2}\);/g,
+    /\n {2}bought \+= (\w+\.\w+)\.swap\(\n {4}\1\.pool\(USDC, SPCX_US, (\d+)\),\n {4}USDC,\n {4}SPCX_US,\n {4}pot\.USDC - kept,\n {4}priceLimit,\n {4}0,\n {2}\);/g,
   ),
 ].map((m) => ({ venue: m[1]!, keys: [Number(m[2]!)] }));
 check(
@@ -237,9 +237,9 @@ check(
 check(
   [...new Set(derived.filter((one) => !one.startsWith("slot:")))].sort().join() ===
     [
-      "self",
-      "self:USDC",
-      "self:SPCX_US",
+      "pot",
+      "pot:USDC",
+      "pot:SPCX_US",
       "mint:USDC",
       "mint:SPCX_US",
       "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",

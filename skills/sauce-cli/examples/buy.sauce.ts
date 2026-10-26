@@ -30,7 +30,6 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ): { pool: Address; spent: Uint256; bought: Uint256 } {
-  const self = ctx.self();
   // Paying USDC lowers a pool's price where USDC is its token0 (the lower address) and raises it
   // where USDC is its token1, so a pool can still trade while its price is on the far side.
   const usdcIsToken0 = USDC < token;
@@ -51,14 +50,14 @@ function main(
     }
   }
   require(pool != 0, "no pool of USDC and this token has liquidity short of the limit");
-  const before = self.USDC;
+  const before = pot.USDC;
   require(before >= budget, "the budget is not in the Pot");
 
   const bought = uniswapV3(pool, USDC, token, budget, sqrtPriceLimitX96, 0, recipient);
   require(bought >= minOut, "bought less than minOut");
 
   // What the pool took, measured; the rest of the budget goes to the recipient too.
-  const spent = before - self.USDC;
+  const spent = before - pot.USDC;
   if (spent < budget) {
     USDC.transfer(recipient, budget - spent);
   }

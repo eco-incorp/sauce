@@ -25,11 +25,10 @@ Buy PT with calldata from Pendle's API, checked by the PT received:
 
 ```sauce chain=arbitrum,ethereum
 function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint256, call: bytes) {
-  const self = ctx.self();
-  const before = Token(pt).balanceOf(self);
+  const before = Token(pt).balanceOf(pot);
   Token(tokenIn).approve(Pendle.Router, amountIn);
   evm.call(Pendle.Router, 0, call);
-  const out = Token(pt).balanceOf(self) - before;
+  const out = Token(pt).balanceOf(pot) - before;
   require(out >= minPtOut, "below minPtOut");
 }
 ```

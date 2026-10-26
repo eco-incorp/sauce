@@ -47,8 +47,6 @@ export interface SauceSolanaAccounts {
   pda(program: bigint, seeds: readonly (string | bigint | SauceBytes)[]): SauceSolanaAccount;
   /** The account at a key. */
   account(key: bigint): SauceSolanaAccount;
-  /** The authority the program acts with: the Pot, or the signer when cooked directly. */
-  readonly self: SauceSolanaAccount;
   /** The Pot's owner, who signs the cook. */
   readonly owner: SauceSolanaAccount;
   readonly systemProgram: SauceSolanaAccount;

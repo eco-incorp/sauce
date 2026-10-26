@@ -7,7 +7,7 @@
  *     writes (call position):  `<Sym>.transfer/.approve/.transferFrom(...)` -> `@sauce/token`'s function
  *     read (call position):    `<Sym>.balanceOf(...)`                       -> `IERC20.at(<Sym>).balanceOf(...)`
  *     sugar (value position):  `<holder>.<Sym>`                             -> `IERC20.at(<Sym>).balanceOf(<holder>)`
- *                              `<holder>.<native coin>`                     -> `ctx.selfBalance()`, `ctx.balance(<holder>)`
+ *                              `<holder>.balance`, the native coin          -> `ctx.selfBalance()`, `ctx.balance(<holder>)`
  *
  *   `rewriteTokenFactory` — the `Token(<addr>)` wrapper, for any address:
  *     `Token(<addr>).<write>(...)`, and `t.<write>(...)` on `const t = Token(<addr>)` -> `@sauce/token`
@@ -33,18 +33,25 @@
  *
  * RECOGNITION IS DISJOINT BY CONSTRUCTION, not by priority ordering: a symbol write or read needs
  * `<Sym>` as the member chain's HEAD with a REWRITABLE_METHODS member under a CALL parent; the
- * balance sugar needs `<Sym>` as the MEMBER with a non-call, non-lvalue parent and a HOLDER as the
- * object. A token symbol can never satisfy both shapes for the same node, so the site lists never
- * overlap. `USDC.balanceOf(x)` is the read's (and `token-registry.ts`'s module-eval guard -- no
- * registry symbol may equal a REWRITABLE_METHODS name -- keeps that permanent); `x.USDC` is the
- * sugar's, and so is `USDC.WETH`: the WETH the USDC contract holds.
+ * balance sugar needs `<Sym>` (or `balance`) as the MEMBER with a non-call, non-lvalue parent and a
+ * HOLDER as the object. A token symbol can never satisfy both shapes for the same node, so the site
+ * lists never overlap. `USDC.balanceOf(x)` is the read's (and `token-registry.ts`'s module-eval
+ * guard -- no registry symbol may equal a REWRITABLE_METHODS name -- keeps that permanent); `x.USDC`
+ * is the sugar's, and so is `USDC.WETH`: the WETH the USDC contract holds.
  *
- * Shadowing-aware, CONSERVATIVELY, on the TOKEN name only: if a name anywhere in the WHOLE program
- * is bound (`let`/`const`, a parameter, an import, ...), EVERY occurrence of it is left un-rewritten,
- * rather than re-deriving the compiler's own scoping rules. A user who declares `USDC` or `Token`
- * owns the name. The sugar's HOLDER name is deliberately NOT shadow-checked -- a local variable IS
- * the intended holder -- but for `self`, which is the Pot (`ctx.self()`) only while the program
- * declares no `self` of its own: `const self = ctx.self(); self.USDC` reads the local.
+ * `.<Sym>` is always a registered token, even where the chain's native coin has the same symbol
+ * (Arc's USDC); the native coin is `.balance`. Its old spelling, `<holder>.<native symbol>`, is
+ * refused where it read a holder's coin, naming `.balance` (`pot-sugar.ts`). `.balance` is not
+ * reserved: on a value that may have a field of that name (`balance-holder.ts#readsField`) it stays
+ * the field.
+ *
+ * Shadowing-aware on the TOKEN name: where the program binds the name (`let`/`const`, a parameter,
+ * an import, ...) in scope at a site, as the compiler scopes it (`lexical-scope.ts`), the site is
+ * left un-rewritten: a user who declares `USDC` owns the name there. `Token` is whole-program
+ * (`rewriteTokenFactory`). The sugar's HOLDER name is deliberately NOT shadow-checked -- a local
+ * variable IS the intended holder -- but for `pot`, which is the Pot (`ctx.self()`) where the
+ * program declares no `pot` in scope: `const pot = ctx.self(); pot.USDC` reads the local. `self`,
+ * the Pot's old name, is refused where the program declares no `self`.
  *
  * A symbol method outside REWRITABLE_METHODS is left untouched and fails closed at compile. A `Token(...)` call in any position this module cannot lower is REFUSED with an
  * error naming the spellings that work — never passed through as the typed binding, which would
@@ -53,21 +60,31 @@
 import {
   walk,
   collectDeclaredNames,
-  collectPatternNames,
+  collectPatternBinders,
   countDeclarations,
   type AstNode,
 } from "./ast-walk.js";
+import { shadowed as shadowedAt, walkScoped, type Scope } from "./lexical-scope.js";
 import { formatBigint } from "../deposit/format.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import { isChainKey, namedContractKind, resolveNamespace } from "./accessor-index.js";
 import {
   holderShapes,
   notAnAddress,
+  readsField,
   reservedNameError,
   type HolderShapes,
 } from "./balance-holder.js";
+import {
+  BALANCE_MEMBER,
+  nativeSymbolRefusal,
+  POT_NAME,
+  RETIRED_POT_NAME,
+  selfRefusal,
+} from "./pot-sugar.js";
 import { decomposeMemberChain } from "./protocol-rewrite.js";
 import { parseSauce } from "./parse.js";
+import { blankLiterals } from "./rs-compile.js";
 
 /**
  * The ERC-20 writes the token syntax offers: each lowers to the `@sauce/token` function of the same
@@ -131,6 +148,12 @@ export interface TokenRewriteResult extends TokenImports {
   readonly memberSites: number;
   /** Count of `<holder>.<Sym>` balance-sugar sites rewritten. */
   readonly balanceSites: number;
+  /**
+   * Each holder read as an address by a name the program does not declare (an ambient module's
+   * export, a define), by name: the first read, as written (`limits.balance`). The compile's
+   * refusal of the name there is reported as that read's (`unknown-global.ts#freeHolderError`).
+   */
+  readonly freeHolders?: ReadonlyMap<string, string>;
 }
 
 export interface Splice {
@@ -182,6 +205,31 @@ export function methodCall(node: AstNode): MethodCall | undefined {
     object,
     method: (property as unknown as { name: string }).name,
   };
+}
+
+/**
+ * `node`, an argument of `call`, with the parentheses around it, which the parser leaves out of its
+ * range, and never the call's own. `code` is the source with its comments blanked
+ * (`blankLiterals`), so none is read as a parenthesis.
+ */
+export function argumentRange(
+  code: string,
+  call: AstNode,
+  node: AstNode,
+): { readonly start: number; readonly end: number } {
+  const opens: number[] = [];
+  for (let i = node.start - 1; i >= 0 && /[\s(]/.test(code[i]!); i--) {
+    if (code[i] === "(") opens.push(i);
+  }
+  // Before the call's first argument, the furthest is the call's own.
+  if (((call as { arguments?: AstNode[] }).arguments ?? [])[0] === node) opens.pop();
+  let end = node.end;
+  // Up to the call's own closing parenthesis, its last character.
+  for (let i = node.end; i < call.end - 1 && /[\s)]/.test(code[i]!); i++) {
+    if (code[i] === ")") end = i + 1;
+  }
+
+  return { start: opens.at(-1) ?? node.start, end };
 }
 
 /** Every call that is a whole statement on its own — the only place a write can stand. */
@@ -240,14 +288,23 @@ function assertLocalsFree(declared: ReadonlySet<string>, writes: ReadonlySet<Saf
   }
 }
 
-/** `<receiver>.<write>(a, b)` -> `<local>(<receiver>, a, b)`, for a receiver that is a name. */
-function nameWriteSplice(site: MethodCall, name: string, statements: ReadonlySet<AstNode>): Splice {
+/**
+ * `<receiver>.<write>(a, b)` -> `<local>(<receiver>, a, b)`, for a receiver that is a name: from the
+ * call's own start, which a parenthesized callee's parentheses are inside, to its first argument
+ * with its own (`argumentRange`). `code` is the source blanked.
+ */
+function nameWriteSplice(
+  site: MethodCall,
+  name: string,
+  statements: ReadonlySet<AstNode>,
+  code: string,
+): Splice {
   const method = site.method as SafeWrite;
   const [first] = writeArguments(site.call, method, name, statements);
 
   return {
-    start: site.callee.start,
-    end: first!.start,
+    start: site.call.start,
+    end: argumentRange(code, site.call, first!).start,
     replacement: `${SAFE_WRITES[method].local}(${name}, `,
   };
 }
@@ -259,21 +316,22 @@ function nameWriteSplice(site: MethodCall, name: string, statements: ReadonlySet
 function collectMemberCallSites(
   program: AstNode,
   tokens: TokenSymbols,
-  shadowed: ReadonlySet<string>,
   writes: Set<SafeWrite>,
+  source: string,
 ): { sites: Splice[]; reads: number } {
   const sites: Splice[] = [];
   const statements = statementCalls(program);
+  let code: string | undefined;
   let reads = 0;
-  walk(program, (n) => {
+  walkScoped(program, (n, here) => {
     const site = methodCall(n);
     if (!site || site.object.type !== "Identifier") return;
     const symbol = (site.object as unknown as { name: string }).name;
     if (!tokens.has(symbol)) return;
-    if (shadowed.has(symbol)) return;
+    if (shadowedAt(here, symbol, site.object.start)) return;
     if (!REWRITABLE_METHODS.has(site.method)) return;
     if (isSafeWrite(site.method)) {
-      sites.push(nameWriteSplice(site, symbol, statements));
+      sites.push(nameWriteSplice(site, symbol, statements, (code ??= blankLiterals(source))));
       writes.add(site.method);
       return;
     }
@@ -319,7 +377,7 @@ export function collectValuePositionExclusions(program: AstNode): ReadonlySet<As
 
 /** A balance read's holder, as the rewrite emits it. */
 type Holder =
-  /** The Pot: `self`, while the program declares no `self` of its own, or `ctx.self()`. */
+  /** The Pot: `pot`, while the program declares no `pot` of its own, or `ctx.self()`. */
   | { readonly kind: "pot" }
   /** An address written out, in the exact value of its raw text. */
   | { readonly kind: "literal"; readonly value: string }
@@ -334,11 +392,11 @@ const BINDINGS: ReadonlySet<string> = new Set(["at", "view", "lib"]);
 interface HolderScope {
   readonly tokens: TokenSymbols;
   readonly shadowed: ReadonlySet<string>;
-  /** The names the program's imports bind, and of them those an ABI (a `.json` module) gives. */
-  readonly imported: ReadonlySet<string>;
-  readonly abis: ReadonlySet<string>;
-  /** The names the program binds to a value: a local, a parameter, a function. */
-  readonly values: ReadonlySet<string>;
+  /** The names the compile binds beside the source (a define, a contract binding, an ambient
+   *  module's export): a `pot` or `self` among them is the caller's value, never the Pot. */
+  readonly bound: ReadonlySet<string>;
+  /** The identifiers an import of an ABI (a `.json` module) declares. */
+  readonly abis: ReadonlySet<AstNode>;
   readonly shapes: HolderShapes;
   readonly source: string;
 }
@@ -361,24 +419,52 @@ function isCtxSelf(node: AstNode, shadowed: ReadonlySet<string>): boolean {
  * Whether `node` names a contract type, whose `.at(…)`, `.view(…)` and `.lib(…)` bind it to an
  * address: a registry contract or interface (`UniswapV3.Pool`, `Base.UniswapV3.Factory`), an ABI
  * imported from a `.json` module, or a name the program does not declare (a caller's `contracts`
- * binding, a declared `interface`). A value is not one — a bound contract, a call's result, or any
- * name the program binds to a value, an import of the same name included — and keeping its call
- * whole is the safe side: a contract type kept whole is refused by the compile, never miscompiled.
+ * binding, a declared `interface`). A value is not one — a bound contract, a call's result, or a
+ * name the program binds to a value where it is read — and keeping its call whole is the safe side:
+ * a contract type kept whole is refused by the compile, never miscompiled.
  */
-function isContractType(node: AstNode, scope: HolderScope): boolean {
+function isContractType(
+  node: AstNode,
+  binders: ReadonlyMap<AstNode, AstNode>,
+  abis: ReadonlySet<AstNode>,
+  shadowed: ReadonlySet<string>,
+): boolean {
   if (node.type === "Identifier") {
-    const name = (node as unknown as { name: string }).name;
-    // A name the program binds to a value anywhere — a local, a parameter, a function — is that
-    // value, an import of the same name shadowed; an import is a contract type only from an ABI.
-    if (scope.values.has(name)) return false;
-    return scope.imported.has(name) ? scope.abis.has(name) : true;
+    // The binding in scope where it is read: an import is a contract type only from an ABI, and
+    // any other the program makes (a local, a parameter, a function) is a value.
+    const binder = binders.get(node);
+    return binder === undefined || abis.has(binder);
   }
   const chain = decomposeMemberChain(node);
   return (
     chain !== undefined &&
-    registryRoot(chain.head, scope.shadowed) &&
+    registryRoot(chain.head, shadowed) &&
     namedContractKind(chain.head, chain.path) !== undefined
   );
+}
+
+/** `X.at(a)`, `X.view(a)`, `X.lib(a)` on a contract type `X`, or `<Ns>.<Interface>(a)`: a contract
+ *  bound to the address `a`, which it is. */
+function boundAddress(
+  call: AstNode,
+  binders: ReadonlyMap<AstNode, AstNode>,
+  abis: ReadonlySet<AstNode>,
+  shadowed: ReadonlySet<string>,
+): AstNode | undefined {
+  if (call.type !== "CallExpression") return undefined;
+  const args = (call as { arguments?: AstNode[] }).arguments ?? [];
+  if (args.length !== 1 || args[0]!.type === "SpreadElement") return undefined;
+  const site = methodCall(call);
+  // On a contract already bound, `.at(…)` is one of its own methods, whose result is the holder.
+  if (site !== undefined && BINDINGS.has(site.method)) {
+    return isContractType(site.object, binders, abis, shadowed) ? args[0] : undefined;
+  }
+  const chain = decomposeMemberChain(call.callee as AstNode);
+  return chain !== undefined &&
+    registryRoot(chain.head, shadowed) &&
+    namedContractKind(chain.head, chain.path) === "interface"
+    ? args[0]
+    : undefined;
 }
 
 /** A registry root the program has not declared itself: a chain key or a protocol namespace. */
@@ -386,37 +472,70 @@ function registryRoot(name: string, shadowed: ReadonlySet<string>): boolean {
   return !shadowed.has(name) && (isChainKey(name) || resolveNamespace(name) !== undefined);
 }
 
+/** `pot` or `self` as `node` reads it where neither the program (in scope there) nor the compile
+ *  binds it: the Pot, or its retired name. Decided before any holder shape: a helper's own `pot`
+ *  record is not this one. */
+function freePotName(
+  node: AstNode,
+  scope: HolderScope,
+  here: Scope | undefined,
+): string | undefined {
+  if (node.type !== "Identifier") return undefined;
+  const name = (node as unknown as { name: string }).name;
+  return (name === POT_NAME || name === RETIRED_POT_NAME) &&
+    !shadowedAt(here, name, node.start) &&
+    !scope.bound.has(name)
+    ? name
+    : undefined;
+}
+
 /**
  * The holder in `<holder>.<name>`, or `undefined` where the member is not the shorthand's to read:
- * a chain's or a protocol's own member (`Base.USDC`, `Maker.Dai`), which the accessor pass owns.
- * Any address-valued holder takes it — `self`, `ctx.self()`, a variable, an address written out, a
+ * a chain's or a protocol's own member (`Base.USDC`, `Maker.Dai`), which the accessor pass owns,
+ * and, for `balance`, a field (`readsField`: a record's, or a contract call's result's).
+ * Any address-valued holder takes it — `pot`, `ctx.self()`, a variable, an address written out, a
  * protocol contract (`UniswapV4.PoolManager`), a contract bound to an address (`X.at(a)`, whose
- * address is the holder), a call that returns an address, a token's own contract (`WETH.ETH`).
- * Refused, by name: an interface that has no address, and a holder the program says is a record or
- * a list.
+ * address is the holder), a call that returns an address, a token's own contract (`WETH.balance`).
+ * Refused, by name: `self` (the Pot is `pot`), an interface that has no address, and, for a token,
+ * a holder the program says is a record or a list.
  */
 function resolveHolder(
   member: AstNode,
   name: string,
-  kind: "token" | "native coin",
+  kind: "token" | "balance",
   scope: HolderScope,
+  /** The names the program declares where `member` is read. */
+  here: Scope | undefined,
 ): Holder | undefined {
   const object = member.object as AstNode;
   const spelled = `\`${scope.source.slice(member.start, member.end)}\``;
   const text = scope.source.slice(object.start, object.end);
   const refuse = (why: string): Error => new Error(`${spelled}: ${why}`);
+  const free = freePotName(object, scope, here);
+  if (free === RETIRED_POT_NAME) {
+    throw selfRefusal(
+      scope.source.slice(member.start, member.end),
+      `${POT_NAME}.${kind === "token" ? name : BALANCE_MEMBER}`,
+    );
+  }
+  if (free === POT_NAME) return { kind: "pot" };
   const what = notAnAddress(object, scope.shapes);
-  if (what !== undefined) throw reservedNameError(spelled, text, what, name, kind);
+  if (what !== undefined) {
+    if (kind === "balance") return undefined;
+    throw reservedNameError(spelled, text, what, name);
+  }
+  // A value whose type the text does not show may be a struct with a field of the name.
+  const field = kind === "balance" && readsField(object, scope.shapes);
   switch (object.type) {
     case "Identifier": {
       const holder = (object as unknown as { name: string }).name;
-      if (holder === "self" && !scope.shadowed.has("self")) return { kind: "pot" };
       // Reserved defensively -- no longer a compiler namespace root (address.* was dropped for
       // gated ctx.*), but a bare `address` holder is still excluded rather than re-opened.
       if (holder === "address" && !scope.shadowed.has("address")) return undefined;
       if (registryRoot(holder, scope.shadowed)) return undefined;
-      // A token's own contract is a holder like any other: `WETH.ETH` is the ETH the WETH contract
-      // holds, `USDC.WETH` the WETH the USDC contract does. The symbol is its address's define.
+      if (field) return undefined;
+      // A token's own contract is a holder like any other: `WETH.balance` is the ETH the WETH
+      // contract holds, `USDC.WETH` the WETH the USDC contract does. The symbol is its address's define.
       return { kind: "expression", node: object };
     }
     case "Literal": {
@@ -432,13 +551,16 @@ function resolveHolder(
     case "MemberExpression": {
       const chain = decomposeMemberChain(object);
       if (chain === undefined || !registryRoot(chain.head, scope.shadowed)) {
-        return { kind: "expression", node: object };
+        // `p.to.balance`: a field of a record whose declaration types it, else what `field` says.
+        return field ? undefined : { kind: "expression", node: object };
       }
       // `<Ns>.<Contract>` or `<Chain>.<Ns>.<Contract>`: a contract's address, which the accessor
       // pass resolves (or refuses: an ambiguous alias, a contract not on the chain). A bare
-      // namespace or a chain's token is the accessor pass's own member.
+      // namespace or a chain's token is the accessor pass's own member, and so is a contract the
+      // registry names by the whole path, `balance` included.
       const segments = isChainKey(chain.head) ? chain.path : [chain.head, ...chain.path];
       if (segments.length < 2) return undefined;
+      if (namedContractKind(chain.head, [...chain.path, name]) !== undefined) return undefined;
       if (namedContractKind(chain.head, chain.path) === "interface") {
         throw refuse(
           `\`${text}\` is an interface, with no address of its own: give it the address, ` +
@@ -449,34 +571,19 @@ function resolveHolder(
     }
     case "CallExpression": {
       if (isCtxSelf(object, scope.shadowed)) return { kind: "pot" };
-      const args = (object as { arguments?: AstNode[] }).arguments ?? [];
-      const callee = object.callee as AstNode;
-      const site = methodCall(object);
-      // `X.at(<address>)` binds a contract to an address only where `X` is a contract type; on a
-      // contract already bound, `.at(…)` is one of its own methods, whose result is the holder.
-      const bound =
-        site !== undefined && BINDINGS.has(site.method)
-          ? isContractType(site.object, scope)
-          : (() => {
-              // `<Ns>.<Interface>(<address>)`, the same binding as `.at(<address>)`.
-              const chain = decomposeMemberChain(callee);
-              return (
-                chain !== undefined &&
-                registryRoot(chain.head, scope.shadowed) &&
-                namedContractKind(chain.head, chain.path) === "interface"
-              );
-            })();
-      if (bound && args.length === 1 && args[0]!.type !== "SpreadElement") {
-        return { kind: "expression", node: args[0]! };
-      }
+      // `X.at(<address>)`, `<Ns>.<Interface>(<address>)`: a contract bound to the address, whose
+      // balance is the address's.
+      const address = boundAddress(object, scope.shapes.binders, scope.abis, scope.shadowed);
+      if (address !== undefined) return { kind: "expression", node: address };
+      if (field) return undefined;
       return { kind: "expression", node: object };
     }
     default:
-      return { kind: "expression", node: object };
+      return field ? undefined : { kind: "expression", node: object };
   }
 }
 
-/** The chain's native coin, which `<holder>.<symbol>` reads the balance of too. */
+/** The chain's native coin, whose old spelling `<holder>.<symbol>` is refused, naming `.balance`. */
 export interface NativeCoin {
   readonly symbol: string;
   /** The chain's slug, for a message. */
@@ -511,80 +618,107 @@ function collectBalanceSites(
   program: AstNode,
   tokens: TokenSymbols,
   shadowed: ReadonlySet<string>,
+  bound: ReadonlySet<string>,
   excluded: ReadonlySet<AstNode>,
   source: string,
   native: NativeCoin | undefined,
-): { readonly sites: Splice[]; readonly count: number; readonly tokenReads: number } {
+): {
+  readonly sites: Splice[];
+  readonly count: number;
+  readonly tokenReads: number;
+  readonly freeHolders: ReadonlyMap<string, string>;
+} {
   const sites: Splice[] = [];
   let count = 0;
   let tokenReads = 0;
-  // Each import's local names, and how many times each name is imported: a name bound more often
-  // than that is bound to a value too.
-  const imported = new Map<string, number>();
-  const abis = new Set<string>();
+  // The identifiers each import of an ABI (a `.json` module) declares: a contract type.
+  const abis = new Set<AstNode>();
   walk(program, (n) => {
     if (n.type !== "ImportDeclaration") return;
     const from = (n.source as { value?: unknown } | undefined)?.value;
+    if (typeof from !== "string" || !from.endsWith(".json")) return;
     for (const specifier of (n as { specifiers?: AstNode[] }).specifiers ?? []) {
-      collectPatternNames(specifier.local, {
-        add: (name: string) => {
-          imported.set(name, (imported.get(name) ?? 0) + 1);
-          if (typeof from === "string" && from.endsWith(".json")) abis.add(name);
-        },
-      });
+      collectPatternBinders(specifier.local, (local) => abis.add(local));
     }
   });
-  const values = new Set(
-    [...countDeclarations(program)]
-      .filter(([name, count]) => count > (imported.get(name) ?? 0))
-      .map(([name]) => name),
-  );
   const scope: HolderScope = {
     tokens,
     shadowed,
-    imported: new Set(imported.keys()),
+    bound,
     abis,
-    values,
-    shapes: holderShapes(program),
+    shapes: holderShapes(
+      program,
+      (call, binders) => boundAddress(call, binders, abis, shadowed) !== undefined,
+    ),
     source,
   };
-  walk(program, (n) => {
+  const freeHolders = new Map<string, string>();
+  /** A holder read as an address by a name the program does not declare there. */
+  const recordFree = (holder: Holder, site: string): void => {
+    if (holder.kind !== "expression" || holder.node.type !== "Identifier") return;
+    const name = (holder.node as unknown as { name: string }).name;
+    if (!scope.shapes.binders.has(holder.node) && !freeHolders.has(name)) {
+      freeHolders.set(name, site);
+    }
+  };
+  walkScoped(program, (n, here) => {
     if (n.type !== "MemberExpression") return;
     if ((n as { computed?: boolean }).computed) return;
     if (excluded.has(n)) return;
     const property = (n as { property?: AstNode }).property;
     if (!property || property.type !== "Identifier") return;
     const name = (property as unknown as { name: string }).name;
-    if (shadowed.has(name)) return;
-    const isNative = native !== undefined && name === native.symbol;
-    if (!tokens.has(name) && !isNative) return;
-    const holder = resolveHolder(n, name, tokens.has(name) ? "token" : "native coin", scope);
-    if (holder === undefined) return;
-    if (isNative && tokens.has(name)) {
-      const address = tokens instanceof Map ? tokens.get(name) : undefined;
-      throw new Error(
-        `\`${source.slice(n.start, n.end)}\`: on ${native.chain}, ${name} is both the native coin and ` +
-          `the token${address === undefined ? "" : ` at ${formatBigint(address)}`}, so ` +
-          `\`<holder>.${name}\` would not say which: write \`ctx.balance(<holder>)\` ` +
-          `(\`ctx.selfBalance()\` for the Pot) for the native coin, or \`${name}.balanceOf(<holder>)\` for the token.`,
-      );
+    const site = source.slice(n.start, n.end);
+    // `.<SYMBOL>` is always a registered token: on Arc, whose native coin is USDC, `pot.USDC` is the
+    // token, and the coin is `pot.balance`.
+    if (tokens.has(name)) {
+      if (shadowedAt(here, name, n.start)) return;
+      const holder = resolveHolder(n, name, "token", scope, here);
+      if (holder === undefined) return;
+      recordFree(holder, site);
+      // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
+      // spellings are one program under any value the compile gives the symbol, a define included.
+      sites.push(...balanceSplices(n, holder, (at) => `IERC20.at(${name}).balanceOf(${at})`));
+      count++;
+      tokenReads++;
+      return;
     }
-    count++;
-    if (isNative) {
+    // A member, never a name the program binds: `const balance = …` leaves `pot.balance` alone.
+    if (name === BALANCE_MEMBER) {
+      const holder = resolveHolder(n, name, "balance", scope, here);
+      if (holder === undefined) return;
+      recordFree(holder, site);
       // The Pot's native balance is the executing contract's own; any other holder's is read at it.
       sites.push(
         ...(holder.kind === "pot"
           ? [{ start: n.start, end: n.end, replacement: "ctx.selfBalance()" }]
           : balanceSplices(n, holder, (at) => `ctx.balance(${at})`)),
       );
+      count++;
       return;
     }
-    // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
-    // spellings are one program under any value the compile gives the symbol, a define included.
-    sites.push(...balanceSplices(n, holder, (at) => `IERC20.at(${name}).balanceOf(${at})`));
-    tokenReads++;
+    // `<holder>.ETH`, the native coin's old spelling, refused where a holder's balance was read:
+    // on a record or a list it is the field it says.
+    if (native === undefined || name !== native.symbol || shadowedAt(here, name, n.start)) return;
+    const object = n.object as AstNode;
+    const free = freePotName(object, scope, here) !== undefined;
+    if (!free && notAnAddress(object, scope.shapes) !== undefined) return;
+    const balance = resolveHolder(n, name, "balance", scope, here);
+    if (balance === undefined && resolveHolder(n, name, "token", scope, here) === undefined) {
+      return;
+    }
+    // The holder as written, its parentheses with it: `(c ? a : b).ETH` is `(c ? a : b).balance`.
+    const holder = source.slice(n.start, (n.property as AstNode).start).replace(/\s*\??\.\s*$/, "");
+    throw nativeSymbolRefusal(
+      site,
+      name,
+      native.chain,
+      balance === undefined
+        ? `ctx.balance(${holder})`
+        : `${balance.kind === "pot" ? POT_NAME : holder}.${BALANCE_MEMBER}`,
+    );
   });
-  return { sites, count, tokenReads };
+  return { sites, count, tokenReads, freeHolders };
 }
 
 // -- Token(addr): the wrapper, in call-receiver and binding position ------------------------------
@@ -736,6 +870,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
   let erc20 = false;
   const lowered = new Set<AstNode>();
   const statements = statementCalls(program);
+  const code = blankLiterals(source);
 
   // `Token(a).<method>(...)`.
   walk(program, (n) => {
@@ -751,14 +886,19 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
         statements,
       );
       // `Token(` -> `<local>(` and `).<method>(` -> `, `, leaving the address and the arguments in
-      // place so a rewrite inside either splices on its own.
+      // place so a rewrite inside either splices on its own: from the call's own start, which a
+      // parenthesized callee's parentheses are inside, and to the first argument with its own.
       splices.push(
         {
-          start: site.object.start,
+          start: site.call.start,
           end: address.start,
           replacement: `${SAFE_WRITES[site.method].local}(`,
         },
-        { start: address.end, end: first!.start, replacement: ", " },
+        {
+          start: address.end,
+          end: argumentRange(code, site.call, first!).start,
+          replacement: ", ",
+        },
       );
       writes.add(site.method);
       return;
@@ -787,7 +927,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
     );
     for (const site of calls) {
       if (isSafeWrite(site.method)) {
-        splices.push(nameWriteSplice(site, name, statements));
+        splices.push(nameWriteSplice(site, name, statements, code));
         writes.add(site.method);
         continue;
       }
@@ -824,11 +964,14 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
  * lowering and the disjointness argument. Purely textual surgery over the ORIGINAL source, driven by
  * parser ranges — never a re-print of the AST, so everything else (formatting, comments, unrelated
  * code) survives byte-for-byte. Prepend `tokenImportLines(result)` before compiling the result.
+ * `bound` names what the compile binds beside the source (a define, a contract binding, an ambient
+ * module's export): a `pot` or `self` among them is an ordinary holder, never the Pot.
  */
 export function rewriteTokenMembers(
   source: string,
   tokens: TokenSymbols,
   native?: NativeCoin,
+  bound: ReadonlySet<string> = new Set(),
 ): TokenRewriteResult {
   const none: TokenRewriteResult = {
     source,
@@ -844,9 +987,17 @@ export function rewriteTokenMembers(
   const shadowed = collectDeclaredNames(program);
 
   const writes = new Set<SafeWrite>();
-  const members = collectMemberCallSites(program, tokens, shadowed, writes);
+  const members = collectMemberCallSites(program, tokens, writes, source);
   const exclusions = collectValuePositionExclusions(program);
-  const balances = collectBalanceSites(program, tokens, shadowed, exclusions, source, native);
+  const balances = collectBalanceSites(
+    program,
+    tokens,
+    shadowed,
+    bound,
+    exclusions,
+    source,
+    native,
+  );
 
   const allSites = [...members.sites, ...balances.sites];
   if (allSites.length === 0) return none;
@@ -860,5 +1011,6 @@ export function rewriteTokenMembers(
     writes,
     // A symbol read and a token balance both name the typed binding; a write does not.
     erc20: members.reads > 0 || balances.tokenReads > 0,
+    ...(balances.freeHolders.size === 0 ? {} : { freeHolders: balances.freeHolders }),
   };
 }

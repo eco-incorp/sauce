@@ -882,8 +882,12 @@ lowered only when the name is declared once in the whole program, never reassign
 called as `t.<method>(...)`: the binding then holds the ADDRESS and each call is lowered by name.
 Any other `Token(...)` — an argument, a value, a reassigned or passed binding — is REFUSED with an
 error naming the safe spellings, never passed through as the typed call (which would be the
-unchecked write again). Both rewrites are shadow-safe (a program that binds `Token` or a symbol owns
-the name) and svm-rejected: the SVM arm's writes need SPL account slots the sugar has nowhere to put.
+unchecked write again). Both rewrites are shadow-safe and svm-rejected: a program that binds
+`Token` anywhere owns the name everywhere, and one that binds a symbol owns it where that binding is
+in scope, as the compiler scopes it (`routes/lexical-scope.ts`: a module's names and a function's
+parameters everywhere in them, a block's `let`/`const` from its declarator to the block's end, a
+loop's or a `catch` clause's binding in the loop or the clause; probed on the pinned compiler). The
+SVM arm's writes need SPL account slots the sugar has nowhere to put.
 The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
 needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
 `@sauce/token` _export_ a real `Token` value (blocked by the M1 subset).
@@ -896,18 +900,45 @@ text stays in place for the accessor pass after it (`UniswapV4.PoolManager.WETH`
 registry contract or interface, an ABI imported from a `.json` module, a name the program does not
 declare; never a name it binds to a value, which shadows an import of that name — and
 `<Ns>.<Interface>(a)` unwrap to `a` (on a bound contract `.at(…)` is its own method), a
-token's own contract is one (`WETH.ETH`; on Solana a mint, its token accounts derived off its key),
-an undeclared `self` or `ctx.self()` is the Pot and a declared `self` an ordinary variable (as on
-Solana, and for the accessor pass's bare `self`). The chain's native coin
-(`chains/index.ts#nativeCoinSymbol`) takes it too: `ctx.selfBalance()`/`ctx.balance(h)` on an EVM
-chain, `ctx.balance(<account>.address)` on Solana, refused where a token shares the symbol (Arc's
-USDC). Being textual it sees no types, so it refuses by name what the program's text says is not an
-address — a record or a list (`balance-holder.ts`), an interface with no address — and a misspelled symbol is named once the compile fails, from the compiler's byte span
+token's own contract is one (`WETH.balance`; on Solana a mint, its token accounts derived off its
+key), a `pot` the program does not declare where it is read (`lexical-scope.ts`), nor the compile
+binds (a `defines` key or a `contracts` binding), or `ctx.self()`, is the Pot (as on Solana, and
+for the accessor pass's bare `pot`, which becomes `ctx.self()`; on Solana the lowering consumes
+every such `pot` itself, as the Pot slot's key, or its account where an `Account` is expected); a
+`pot` the program declares or imports by name, a `defines` key or a `contracts` binding is an
+ordinary variable. A `pot` that only a caller's ambient module exports, read with no import, is
+neither: it is refused where it is read (`pot-sugar.ts#ambientPotRefusal`), so no module's export
+stands in for the Pot with no word in the program (an ambient `self` stays the caller's value). The
+SDK never works out an ambient module's exports itself: `rs-compile.ts#ambientNamesOf` asks the
+compiler, compiling the program's own imports, as written, before a `main` that reads nothing and
+an uncalled closure (so the compiler loads the modules the compile does and lowers nothing; the
+closure's function is named apart from every define, contract and name the program writes), with
+the compile's own options and one more ambient module exporting the `pot` and `self` the parse
+reads, and reads each name the compiler refuses as exported twice; any other refusal is no answer:
+the names stay free, the compile reports its own refusal, and the probe's is thrown where the
+compile succeeds or a rewrite reading the answer refuses; both read the caller's options as
+`sauce-route.ts#readCompileInputs` read them once when the compile began, lists and records
+copied, so a callback changing the caller's objects reaches neither, and the caller's resolvers
+through one snapshot per compile, `firstAnswers`; nothing of it is remembered between compiles,
+the compiler's own caches keep it cheap. `.<SYMBOL>` is always a registered token; the chain's
+native coin is `<holder>.balance`:
+`ctx.selfBalance()`/`ctx.balance(h)` on an EVM chain, `ctx.balance(<account>.address)` on Solana,
+so on Arc `pot.USDC` is the 6-decimal token and `pot.balance` the coin. `.balance` on a record, a
+list or a contract call's result (`market.userCollateral(a, b).balance`), `X.at(a).balance()` and a
+namespace's own member keep their meaning. The retired spellings (an undeclared `self`,
+`self.<TOKEN>`, `<holder>.<native symbol>`, `Solana.self`) are refused naming the new one
+(`routes/pot-sugar.ts`). Being textual it sees no types, so it refuses by name what the program's
+text says is not an address — a record or a list (`balance-holder.ts`), an interface with no
+address — and a misspelled symbol is named once the compile fails, from the compiler's byte span
 (`unknown-global.ts#unknownBalanceError`). A struct a contract call returns is not seen: a field of
-one named like a token would be read as a balance.
+one named like a token would be read as a balance. `balance` is the other way round
+(`balance-holder.ts#readsField`): on a contract call's result, a value imported from a module or a
+record field the declaration does not type, `.balance` is left as the field it may be, and only
+where the registry records the result as an address (`contract-results.ts`) is it the native coin;
+`x.balance` the compiler then finds no field of names `ctx.balance(x)`.
 
 **On Solana the token methods and the venue namespaces add their accounts to `main`.**
-`USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)`,
+`USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `pot.USDC`, `Token(mint)`,
 `<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)` (the nine
 price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`,
 `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
@@ -931,7 +962,8 @@ engine with a collector per syntax (`svm-token-rewrite.ts`, `svm-venue-methods.t
 becomes its library function (`@sauce/token`'s SVM arm; for a namespace the venue's OWN
 `@sauce/router` function, `orcaWhirlpool`) and every account it takes is appended to `main` as an
 `Account` parameter, with how it is derived written as an `--account` value in
-`CompiledSauceProgram.derivedAccounts` (`self:USDC`, `@to:USDC`, `mint:USDC`, a program id,
+`CompiledSauceProgram.derivedAccounts` (`pot:USDC` where the program names `pot` in any form, else
+`authority:USDC`; `@to:USDC`, `mint:USDC`, a program id,
 `slot:@pool:USDC.vaultA`, `slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`, where a key with no pool,
 or an account at its address the venue does not own, resolves to an empty slot of nine System
 programs). The CLI's `prepare` refuses a cook naming more than the 64 accounts a transaction locks,
@@ -944,8 +976,19 @@ slot with it under `--account`, so the CLI and MCP share it. SPL Token mints tak
 decimals, an argument's mint the checked write with its decimals read on chain. Every holder's token
 account is checked on chain after the write (owner bytes 32–64), so a builder cannot redirect it; an
 explicit `Account` in a holder's place is paid as attached, unchecked (documented). Holders, mints
-and pools must be known at build time (`self`/`ctx.self()`, an `Address` parameter, a 32-byte key);
-anything else, a call in a helper, and a script are refused. `compileSauceRoute` refuses derived
+and pools must be known at build time (`pot`/`ctx.self()`, an `Address` parameter, a 32-byte key);
+anything else is refused. A site in a top-level function takes the accounts as a trailing
+`__sauce_accounts: Account[]`, passed at each call (`svm-lowering.ts#threadHelpers`); a script is
+wrapped in the `main` they are added to (`scriptAsMain`). A site in a function inside another, and
+a helper used other than by calling it by name, are refused, as is a helper `main` never reaches
+that would add accounts. A program that names `pot` anywhere derives its accounts from `pot`, and
+one that does not from `authority` (`CompiledSauceProgram.potMention` is where; `--via engine`
+refuses the first, naming it). A bare `pot` is `Account<Signer>`, the slot `Solana.self` was; the
+engine checks a signature where the program uses one, not at the entry
+(`svm/direct-engine.e2e.test.ts` measures it). The cook commands refuse any `--account` given for a
+slot derived from a cook role (`pot`, `owner`, `authority`, their token accounts and the addresses
+they seed: `svmCookRoles`, `cli/solana.ts#refuseSubstitutedRole`) that is not the account its
+derivation gives. `compileSauceRoute` refuses derived
 accounts: a route's `execution.accounts` precede the compile. Executed in
 `cli-solana-token-methods.e2e.test.ts` and `cli-solana-venues.e2e.test.ts`.
 
@@ -1478,7 +1521,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
   example and selector, with its reason); every value an example program reads having a visible
   source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
-  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
+  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `pot`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
   `INPUT_EXCEPTIONS` entry, per example and name, with its reason); and the wording rules below.

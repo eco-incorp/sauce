@@ -226,6 +226,14 @@ interface BigInt {
   toBytesBe(width: SauceInt): SauceBytes;
   /** The value as `width` little-endian bytes. */
   toBytesLe(width: SauceInt): SauceBytes;
+  /**
+   * A holder's native-coin balance: `pot.balance`, `recipient.balance` — wei on an EVM chain,
+   * lamports on Solana. Only where the program's text shows an address: on a record, a list, a
+   * contract call's result the registry does not record as an address, `abi.decode`'s result, a
+   * name imported from a module, or a local bound to or destructured from one of those,
+   * `balance` is its field. Write `ctx.balance(x)` for the coin there.
+   */
+  readonly balance: bigint;
 }
 
 interface ArrayConstructor {
@@ -240,10 +248,12 @@ interface ArrayConstructor {
 declare function Token(address: SauceInt): SauceTokenSource;
 
 /**
- * The program's own account as a token holder (the Pot, cooked through the Kitchen), and its
- * balances by symbol: `self.USDC` is its USDC, as `USDC.balanceOf(self)`.
+ * The Pot: its address (`ctx.self()` on an EVM chain), and on Solana its account, which a call's
+ * account list takes (`pot.writable()`, `pot.signer()`). Its balances: `pot.USDC` of a token the
+ * chain registers, `pot.balance` of the native coin. A program that declares its own `pot` owns
+ * the name.
  */
-declare const self: bigint & { readonly [symbol: string]: bigint };
+declare const pot: import("../routes/source-globals.generated.js").SauceSolanaAccount;
 
 // `@sauce/token`, whose functions every program on a chain calls with no import: an EVM token is
 // an address; on Solana the mint is an address, its accounts `Account` slots, and a write names

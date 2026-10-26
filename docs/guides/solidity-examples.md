@@ -42,7 +42,7 @@ not ship with.
 | Example | Ported from | Solidity lines (code) | Sauce lines (code) |
 | --- | --- | ---: | ---: |
 | [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 130 (84) |
-| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 78 (31) |
+| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 77 (30) |
 | [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 169 (121) |
 | [Aave V3: credit delegation](#aave-v3-credit-delegation) | [aave/code-examples-protocol, `MyV2CreditDelegation.sol`](https://github.com/aave/code-examples-protocol/blob/c343d266d04f210e1de9a7f008fdbc8ad63e5c22/V2/Credit%20Delegation/MyV2CreditDelegation.sol) | 83 (33) | 81 (42) |
 | [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 203 (141) |
@@ -191,7 +191,7 @@ function main(
 
 ## Uniswap V3: a flash, as a flash swap
 
-Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 78 lines, 31 of them code.
+Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 77 lines, 30 of them code.
 
 ```ts
 // Uniswap's flash example, ported: `PairFlash` borrows from one Uniswap V3 pool, trades the loan
@@ -246,27 +246,26 @@ function main(
   payer: Address,
 ): Uint256 {
   require(UniswapV3.Factory);
-  const self = ctx.self();
   const borrowPool = UniswapV3.Factory.getPool(tokenIn, tokenOut, borrowFee);
   const repayPool = UniswapV3.Factory.getPool(tokenIn, tokenOut, repayFee);
   require(borrowPool != 0 && repayPool != 0, "no pool at those fee tiers");
-  const inBefore = Token(tokenIn).balanceOf(self);
-  const outBefore = Token(tokenOut).balanceOf(self);
+  const inBefore = Token(tokenIn).balanceOf(pot);
+  const outBefore = Token(tokenOut).balanceOf(pot);
 
   // The callback: the borrow pool has sent `tokenOut` and is not paid yet. Sell what it sent back
   // for at least what it is owed, into the Pot, which pays it.
   const repay = program(() => {
-    const received = Token(tokenOut).balanceOf(self) - outBefore;
-    uniswapV3(repayPool, tokenOut, tokenIn, received, 0, amountIn, self);
+    const received = Token(tokenOut).balanceOf(pot) - outBefore;
+    uniswapV3(repayPool, tokenOut, tokenIn, received, 0, amountIn, pot);
   });
   // The swap the Router runs around it, as the calldata of its own `swapV3`.
   const swapV3 = (crypto.keccak256("swapV3(address,address,bool,uint256,uint160,address)") >> 224)
     .toBytesBe(4)
-    .concat(abi.encode(borrowPool, tokenIn, tokenIn < tokenOut, amountIn, 0, self));
-  SauceRouterFlash.at(self).flash(repay.code.concat(repay.args), swapV3);
+    .concat(abi.encode(borrowPool, tokenIn, tokenIn < tokenOut, amountIn, 0, pot));
+  SauceRouterFlash.at(pot).flash(repay.code.concat(repay.args), swapV3);
 
   // What the repayment left of `tokenIn`, beyond what the Pot held: the profit.
-  const profit = Token(tokenIn).balanceOf(self) - inBefore;
+  const profit = Token(tokenIn).balanceOf(pot) - inBefore;
   if (profit > 0) {
     Token(tokenIn).transfer(payer, profit);
   }

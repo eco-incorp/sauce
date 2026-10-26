@@ -50,27 +50,26 @@ function main(
   payer: Address,
 ): Uint256 {
   require(UniswapV3.Factory);
-  const self = ctx.self();
   const borrowPool = UniswapV3.Factory.getPool(tokenIn, tokenOut, borrowFee);
   const repayPool = UniswapV3.Factory.getPool(tokenIn, tokenOut, repayFee);
   require(borrowPool != 0 && repayPool != 0, "no pool at those fee tiers");
-  const inBefore = Token(tokenIn).balanceOf(self);
-  const outBefore = Token(tokenOut).balanceOf(self);
+  const inBefore = Token(tokenIn).balanceOf(pot);
+  const outBefore = Token(tokenOut).balanceOf(pot);
 
   // The callback: the borrow pool has sent `tokenOut` and is not paid yet. Sell what it sent back
   // for at least what it is owed, into the Pot, which pays it.
   const repay = program(() => {
-    const received = Token(tokenOut).balanceOf(self) - outBefore;
-    uniswapV3(repayPool, tokenOut, tokenIn, received, 0, amountIn, self);
+    const received = Token(tokenOut).balanceOf(pot) - outBefore;
+    uniswapV3(repayPool, tokenOut, tokenIn, received, 0, amountIn, pot);
   });
   // The swap the Router runs around it, as the calldata of its own `swapV3`.
   const swapV3 = (crypto.keccak256("swapV3(address,address,bool,uint256,uint160,address)") >> 224)
     .toBytesBe(4)
-    .concat(abi.encode(borrowPool, tokenIn, tokenIn < tokenOut, amountIn, 0, self));
-  SauceRouterFlash.at(self).flash(repay.code.concat(repay.args), swapV3);
+    .concat(abi.encode(borrowPool, tokenIn, tokenIn < tokenOut, amountIn, 0, pot));
+  SauceRouterFlash.at(pot).flash(repay.code.concat(repay.args), swapV3);
 
   // What the repayment left of `tokenIn`, beyond what the Pot held: the profit.
-  const profit = Token(tokenIn).balanceOf(self) - inBefore;
+  const profit = Token(tokenIn).balanceOf(pot) - inBefore;
   if (profit > 0) {
     Token(tokenIn).transfer(payer, profit);
   }

@@ -1535,7 +1535,7 @@ for (const file of [
   if (existsSync(file)) keys(JSON.parse(read(file)));
 }
 // SauceScript keywords and builtins, JavaScript keywords, and tool names.
-for (const word of `main require throw ctx evm svm abi hex Math self catch at owner dataLen Uint256 Int256 fromBits program
+for (const word of `main require throw ctx evm svm abi hex Math pot balance catch at owner dataLen Uint256 Int256 fromBits program
   Address Account Writable Signer bytes bool string void true false null undefined bigint number
   boolean const let function return if else for while break continue of in new import from export
   default interface type await async typeof pnpm node npm npx tsc git cast sauce`.split(/\s+/))
@@ -1680,11 +1680,6 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     [...contracts, ...aliases, ...interfaces, ...venues].map((n) => n.split(".")[0]),
   );
   const symbols = new Set(GLOBALS.tokens.flatMap((entry) => entry.tokens.map((t) => t.symbol)));
-  // Every chain's native coin, which the balance shorthand reads as it reads a token (`self.ETH`).
-  for (const chain of sdk.CANONICAL_CHAINS) {
-    const coin = sdk.nativeCoinSymbol(chain);
-    if (coin !== undefined) symbols.add(coin);
-  }
   const chainNames = new Set(GLOBALS.chains.map((c) => c.key));
   // A family's member namespaces, from the contracts its aliases name: `Uniswap` -> UniswapV2, …
   const members = new Map();
@@ -1733,7 +1728,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
       ...text.matchAll(
         /(?<![\w.])([A-Z][A-Z0-9]{2,})\.(?:transfer|transferFrom|approve|balanceOf)\(/g,
       ),
-      ...text.matchAll(/\bself\.([A-Z][A-Z0-9]{2,})\b/g),
+      ...text.matchAll(/\bpot\.([A-Z][A-Z0-9]{2,})\b/g),
       ...text.matchAll(
         /(?<![\w.])(?:transfer|transferFrom|approve|balanceOf|allowance)\(([A-Z][A-Z0-9]{2,})\b/g,
       ),

@@ -43,11 +43,13 @@
  *                            the cook is built (`svm/pool-slot.ts`): its tick arrays depend on the
  *                            direction, so the slot is the token paid's. A pool by key is written
  *                            `Orca.Whirlpool(USDC,WSOL,4)` there.
- *   self, self:USDC          the authority, and the account it pays from
+ *   pot, pot:USDC            the account the program acts with, and the account it pays from: the
+ *                            Pot (`authority`, `authority:USDC` where the program never names `pot`:
+ *                            the account that signs the engine call)
  *   mint:USDC, mint:WSOL     the two mints
  *   the two token programs and the memo program, by their ids
  *
- * and what is bought lands in the authority's own account for the token bought (`self:WSOL`), which
+ * and what is bought lands in that account's own account for the token bought (`pot:WSOL`), which
  * Crema and Phoenix require and which a program then forwards with the token methods. The pool and
  * both tokens are derived as the transaction is built, so each is known then: a registered symbol,
  * a parameter of `main` declared `Address`, or a 32-byte key; the amounts are any value.
@@ -393,7 +395,7 @@ export function collectVenueMethods(l: SvmLowering): void {
   });
 
   function lowerSwap(site: MethodCall, namespace: string, spelled: string): void {
-    l.requireInMain(site.call, spelled, "a venue's swap");
+    l.requirePlaced(site.call, spelled, "a venue's swap");
     const args = (site.call as { arguments?: AstNode[] }).arguments ?? [];
     const params = paramsOf(namespace);
     if (args.length !== params.length || args.some((arg) => arg.type === "SpreadElement")) {
@@ -422,14 +424,14 @@ export function collectVenueMethods(l: SvmLowering): void {
     );
     const trader = [
       l.authority(),
-      l.tokenAccount({ kind: "self" }, tokenIn, true, spelled).account,
+      l.tokenAccount({ kind: "authority" }, tokenIn, true, spelled).account,
       l.mintAccount(tokenIn),
       l.mintAccount(tokenOut),
       l.account(TOKEN_PROGRAM_ID, "tokenProgram", {}),
       l.account(TOKEN_2022_PROGRAM_ID, "token2022Program", {}),
       l.account(MEMO_PROGRAM, "memoProgram", {}),
     ];
-    const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
+    const recipient = l.tokenAccount({ kind: "authority" }, tokenOut, true, spelled).account;
     // A swap a stop could hold, by its stop's derivation, for the cook's builder, which works the
     // stop out from the pool paying `tokenIn` and the limit it is given (main's parameter or a
     // number written out). Only one compiled to be held (`stopped`) calls the Stopped form, with the
@@ -469,7 +471,7 @@ export function collectVenueMethods(l: SvmLowering): void {
       // main's parameter as it was given: never declared again nor assigned to.
       const name = nameOf(node);
       const given =
-        l.param(name)?.type === "Uint256" &&
+        l.param(node)?.type === "Uint256" &&
         (l.declarations.get(name) ?? 0) === 1 &&
         !assigned.has(name);
       return given ? `@${name}` : "";
@@ -559,7 +561,7 @@ export function collectVenueMethods(l: SvmLowering): void {
           `${capitalized(program.toLowerCase())}${key}${refinement === undefined ? "" : `x${refinement}`}`,
       };
     }
-    if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address") {
+    if (node.type === "Identifier" && l.param(node)?.kind === "address") {
       return { name: `@${nameOf(node)}`, stem: nameOf(node) };
     }
     const key = keyLiteral(node, l.source);

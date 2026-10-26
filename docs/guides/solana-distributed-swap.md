@@ -177,8 +177,8 @@ function main(
   maxAvgPrice: Uint256,
   recipient: Address,
 ): { spent: Uint256; bought: Uint256; unspent: Uint256 } {
-  require(self.USDC >= budget, "budget is not in the Pot");
-  const kept = self.USDC - budget; // the Pot's other USDC, never spent
+  require(pot.USDC >= budget, "budget is not in the Pot");
+  const kept = pot.USDC - budget; // the Pot's other USDC, never spent
 
   // Each pool in turn, offered what is left of the budget.
   let bought = 0;
@@ -187,7 +187,7 @@ function main(
       Raydium.CLMM.pool(USDC, SPCX_US, fee),
       USDC,
       SPCX_US,
-      self.USDC - kept,
+      pot.USDC - kept,
       priceLimit,
       0,
     );
@@ -196,7 +196,7 @@ function main(
     Byreal.CLMM.pool(USDC, SPCX_US, 1000),
     USDC,
     SPCX_US,
-    self.USDC - kept,
+    pot.USDC - kept,
     priceLimit,
     0,
   );
@@ -204,12 +204,12 @@ function main(
     Pancakeswap.CLMM.pool(USDC, SPCX_US, 800),
     USDC,
     SPCX_US,
-    self.USDC - kept,
+    pot.USDC - kept,
     priceLimit,
     0,
   );
 
-  const unspent = self.USDC - kept;
+  const unspent = pot.USDC - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
@@ -231,9 +231,9 @@ function main(
   which the command derives from the mint's program; the swaps and the transfer of a Token-2022
   token take the mint too.
 - **The paying side.** Through the Kitchen the program acts as the Pot: the budget is in the Pot's
-  USDC account, what is bought lands in its SPCX_US account, and `self.USDC` is the Pot's USDC
+  USDC account, what is bought lands in its SPCX_US account, and `pot.USDC` is the Pot's USDC
   balance. `kept` is whatever else of it the Pot holds, so only the budget is ever offered.
-- **Each pool** is offered all of the budget still unspent, `self.USDC - kept`, with a floor of
+- **Each pool** is offered all of the budget still unspent, `pot.USDC - kept`, with a floor of
   `0`: the totals are checked once, after the pools.
 - **`swap`** returns `0` at once for a key with no pool or a spent budget. A concentrated-liquidity
   pool: it skips one whose fee is more than one rate or whose swaps are off, reads the mints and
@@ -253,7 +253,7 @@ function main(
 **Other pools.** Each venue is one loop over its keys, or one call with its key written in. A venue
 is one more loop or call of the same shape after the others, its namespace and keys in Raydium's or
 Byreal's place, and a key is one more in its list. Another pair is the symbols in every call and in
-`self.USDC`. The keys here are chosen for SPCX_US/USDC: `sauce pools` gives another pair's. Keep to
+`pot.USDC`. The keys here are chosen for SPCX_US/USDC: `sauce pools` gives another pair's. Keep to
 what fits in one cook (below).
 
 ## Inputs and units

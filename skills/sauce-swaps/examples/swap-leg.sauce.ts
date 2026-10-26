@@ -33,17 +33,16 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ) {
-  const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
   require(pool != 0, "no pool at that fee tier");
-  const inBefore = Token(tokenIn).balanceOf(self);
+  const inBefore = Token(tokenIn).balanceOf(pot);
   require(inBefore >= amountIn, "amountIn is not in the Pot");
 
   uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient);
 
   // The rest of amountIn: what the pool did not take. Not the Pot's whole balance, which may hold
   // more of the token for other uses.
-  const unspent = amountIn - (inBefore - Token(tokenIn).balanceOf(self));
+  const unspent = amountIn - (inBefore - Token(tokenIn).balanceOf(pot));
   if (unspent > 0) {
     Token(tokenIn).transfer(recipient, unspent);
   }

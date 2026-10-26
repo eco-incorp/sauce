@@ -45,7 +45,7 @@ USDC from the Pot for WETH on Uniswap V3, `swap.sauce.ts`:
 import { uniswapV3 } from "@sauce/router";
 
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
-  require(self.USDC >= amountIn, "amountIn is not in the Pot");
+  require(pot.USDC >= amountIn, "amountIn is not in the Pot");
   const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   return uniswapV3(pool, USDC, WETH, amountIn, 0, minOut, recipient);
 }

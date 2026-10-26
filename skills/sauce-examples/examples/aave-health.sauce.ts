@@ -25,8 +25,7 @@ function main(
   target: Uint256,
 ): { before: Uint256; after: Uint256; repaid: Uint256 } {
   require(trigger > 1000000000000000000 && target >= trigger, "need 1 < trigger <= target");
-  const self = ctx.self();
-  const account = AaveV3.Pool.getUserAccountData(self);
+  const account = AaveV3.Pool.getUserAccountData(pot);
   const before = account.healthFactor;
   if (account.totalDebtBase == 0 || before >= trigger) {
     return { before, after: before, repaid: 0 };
@@ -42,7 +41,7 @@ function main(
   // The Pot's USDC debt, in USDC base units, and its worth at Aave's price for USDC. Debt in other
   // tokens stays; the USDC debt to keep is what is left of debtAtTarget beside it.
   const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
-  const owed = Token(debtToken).balanceOf(self);
+  const owed = Token(debtToken).balanceOf(pot);
   const oracle = AaveV3Reads.at(AaveV3.PoolAddressesProvider).getPriceOracle();
   const usdcPrice = AaveV3Reads.at(oracle).getAssetPrice(USDC); // base currency per USDC
   const owedValue = Math.mulDiv(owed, usdcPrice, 1000000);
@@ -54,12 +53,12 @@ function main(
   if (repay > owed) {
     repay = owed;
   }
-  const held = self.USDC;
+  const held = pot.USDC;
   if (repay > held) {
     repay = held;
   }
   require(repay > 0, "no USDC debt, or no USDC to repay it with");
   USDC.approve(AaveV3.Pool, repay);
-  const repaid = AaveV3.Pool.repay(USDC, repay, 2, self);
-  return { before, after: AaveV3.Pool.getUserAccountData(self).healthFactor, repaid };
+  const repaid = AaveV3.Pool.repay(USDC, repay, 2, pot);
+  return { before, after: AaveV3.Pool.getUserAccountData(pot).healthFactor, repaid };
 }

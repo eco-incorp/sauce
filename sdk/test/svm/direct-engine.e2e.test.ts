@@ -349,6 +349,91 @@ describeSvm("the engine's two Solana entry points: through the Kitchen, and dire
         expectOk(await run(cook(via, check, [signing])));
       },
     );
+
+    /**
+     * A bare `pot` is the slot `Solana.self` was: `pot: Account<Signer>`, compiled to the same
+     * bytes. What that role holds, measured on the released engine and Kitchen: the engine checks a
+     * signature where the program uses one (a write, a call that needs the account to sign), not
+     * at the entry. A read of `pot` takes whatever account fills the slot; a use that signs as the
+     * Pot fails unless the Pot signs, which only a Kitchen cook of the Pot's owner makes it do. So
+     * an account put in the Pot's place is refused where the program acts as the Pot, and what
+     * keeps it out of a read is whoever builds the transaction: on Solana the owner, who alone can
+     * cook the Pot, through the cook commands' check on `--account` (`refuseSubstitutedRole`).
+     */
+    describe("a bare pot is the slot Solana.self was", () => {
+      const MEMO = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr" as Address;
+      const bare = program("function main(): Address {\n  return pot;\n}\n");
+      // What `return Solana.self.address;` lowered to before `pot`: the same slot, by name.
+      const solanaSelf = program(
+        "function main(pot: Account<Signer>): Address {\n  return pot.address;\n}\n",
+      );
+      // The memo program requires every account it is given to sign: a use that signs as the Pot.
+      const signs = program(
+        "function main(memo: Account): Address {\n" +
+          "  svm.call(memo, [pot.signer()], hex`68`);\n" +
+          "  return pot;\n}\n",
+      );
+      const standIn = (): Address => {
+        const at = randomAddress();
+        harness.svm.setAccount({
+          address: at,
+          data: new Uint8Array(8),
+          executable: false,
+          lamports: lamports(10_000_000n),
+          programAddress: harness.programId,
+          space: 8n,
+        });
+
+        return at;
+      };
+      const readonly = (at: Address): TailAccount => ({ address: at, role: AccountRole.READONLY });
+
+      it("compiles to Solana.self's slot, byte for byte: one the manifest says must sign", () => {
+        expect(bare.manifest).toEqual(solanaSelf.manifest);
+        expect(bare.manifest?.accounts).toEqual([
+          expect.objectContaining({ kind: "slot", name: "pot", requires: "readonly_signer" }),
+        ]);
+        expect(Buffer.from(bare.bytecode).toString("hex")).toBe(
+          Buffer.from(solanaSelf.bytecode).toString("hex"),
+        );
+      });
+
+      it("kitchen: the Pot fills it, and the program returns the Pot", async () => {
+        const result = await run(cook("kitchen", bare.bytecode, [readonly(harness.pot)]));
+
+        expect(toBigInt(expectOk(result).returnData)).toBe(word(harness.pot));
+      });
+
+      it.each(VIAS)(
+        "%s: a read takes the account in the slot, signed or not: the engine checks no role at the entry",
+        async (via) => {
+          const at = standIn();
+          for (const code of [bare.bytecode, solanaSelf.bytecode]) {
+            const result = await run(cook(via, code, [readonly(at)]));
+            expect(toBigInt(expectOk(result).returnData)).toBe(word(at));
+          }
+        },
+      );
+
+      it("kitchen: a use that signs as the Pot runs with the Pot", async () => {
+        const result = await run(
+          cook("kitchen", signs.bytecode, [readonly(MEMO), readonly(harness.pot)]),
+        );
+
+        expect(toBigInt(expectOk(result).returnData)).toBe(word(harness.pot));
+      });
+
+      it.each(VIAS)(
+        "%s: a use that signs as the Pot fails with another account in its slot",
+        async (via) => {
+          const failed = expectFail(
+            await run(cook(via, signs.bytecode, [readonly(MEMO), readonly(standIn())])),
+          );
+
+          expect(failed.logs.join("\n")).toMatch(/missing required signature/i);
+        },
+      );
+    });
   });
 
   describe("staged programs", () => {

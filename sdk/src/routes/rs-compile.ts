@@ -13,18 +13,25 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
+  CompileOptions,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
-import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
+import {
+  resolveSdkModule,
+  resolveSdkPackage,
+  SDK_STD_ROOT,
+  sdkStdPath,
+} from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
-const ENTRY = "main.js";
+/** The path the compiler gives the program's own source. */
+export const ENTRY = "main.js";
 
 /** v1/v12 both compile through the RS compiler's single EVM backend; svm maps 1:1. */
-function mapTarget(target: CompileTarget): RsTarget {
+export function mapTarget(target: CompileTarget): RsTarget {
   return target === "svm" ? "svm" : "evm";
 }
 
@@ -106,7 +113,7 @@ function toInlineContracts(
  * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
  * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
  */
-function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+export function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
 
   return (path) => {
@@ -121,9 +128,41 @@ function makeResolve(source: string, own: ResolveModule | undefined): ResolveMod
 }
 
 /** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
-function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
+export function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
   return (specifier, importer) =>
     resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
+}
+
+/**
+ * `fn`, answering each argument list as it first did: the same bytes or path, or the same error
+ * thrown again. One compile reads the caller's `resolve` and `resolvePackage` through one of these
+ * each, so its probe of the names they bind (`ambientNamesOf`) and the compile itself read the same
+ * modules, however the caller answers when asked again. Bytes are kept as a copy of what was first
+ * served, since a resolver may hand out one buffer and write the next module into it. It is the
+ * compile's own: the next compile makes its own, and asks the caller afresh.
+ */
+export function firstAnswers<A extends readonly string[], R>(
+  fn: (...args: A) => R,
+): (...args: A) => R {
+  const answers = new Map<string, { readonly value: R } | { readonly error: unknown }>();
+
+  return (...args) => {
+    const key = JSON.stringify(args);
+    let answer = answers.get(key);
+    if (answer === undefined) {
+      try {
+        const value = fn(...args);
+        // A copy of a `Uint8Array` is one, whatever its subclass (a Node `Buffer`'s `slice` is a view).
+        answer = { value: value instanceof Uint8Array ? (Uint8Array.from(value) as R) : value };
+      } catch (error) {
+        answer = { error };
+      }
+      answers.set(key, answer);
+    }
+    if ("error" in answer) throw answer.error;
+
+    return answer.value;
+  };
 }
 
 /**
@@ -211,6 +250,120 @@ export interface RsCompileResult extends CompileResult {
   entrySignature: EntrySignature;
 }
 
+/** What a probe compiles with: a compile's options, without its program and `main`'s arguments. */
+export type RsProbeInput = Omit<RsCompileInput, "source" | "args">;
+
+/** The options a compile and a probe of it share, so the two cannot be given different ones. */
+function sharedOptions(input: RsProbeInput): Omit<CompileOptions, "resolve"> {
+  return {
+    target: mapTarget(input.target),
+    entry: ENTRY,
+    resolvePackage: makeResolvePackage(input.resolvePackage),
+    inlineContracts: toInlineContracts(input.contracts),
+    ambient: input.ambient,
+    defines: toRsDefines(input.defines, input.baseDefines),
+  };
+}
+
+/**
+ * The module a probe adds to the ambient ones, exporting each name the probe asks about. It stands
+ * under the SDK's standard library, whose paths never reach the caller's `resolve`
+ * (`makeResolve`), so no module a caller serves, ambient or imported, is at it.
+ */
+const PROBE_MODULE = `.${SDK_STD_ROOT}/__sauce_probe.js`;
+/**
+ * The probe's program after the program's own imports: a `main` that reads nothing, so no name it
+ * binds is its own, and a function nothing calls that writes a closure. A compile with a closure
+ * lowers only what its `main` reaches, so the probe lowers nothing. One without would lower every
+ * function of every module, which the compile of a program that has one does not, and could fail
+ * on a function only a closure's program can compile. Never lowered, the function reads nothing a
+ * caller binds: `program` may be a caller's name too.
+ */
+function probeProgram(helper: string): string {
+  return `function main(): void {}\nfunction ${helper}(): void {\n  program(() => 0);\n}\n`;
+}
+
+/**
+ * The name of the probe's function: the first of `__sauce_probe`, `__sauce_probe2`, … no name in
+ * `taken` is, for the compiler refuses a function beside a define, an import or a contract binding
+ * of its name. An ambient export of it is no matter: a module's own name hides one.
+ */
+function probeHelper(taken: ReadonlySet<string>): string {
+  let name = "__sauce_probe";
+  for (let n = 2; taken.has(name); n++) name = `__sauce_probe${n}`;
+
+  return name;
+}
+
+/** The compiler's refusal of a name two ambient modules export, which names it. */
+const EXPORTED_TWICE = /`([A-Za-z_$][\w$]*)` is exported by more than one ambient module/;
+
+/**
+ * The names among `names` that one of `input.ambient`'s modules exports, as the compiler finds them:
+ * the compiler is asked, never the SDK. A probe compiles `imports`, the program's own import
+ * declarations as written, then a `main` that reads nothing (`probeProgram`), at the program's path
+ * with `input`'s options and one more ambient module, which exports every name asked about. The
+ * compiler loads an entry's imports before the ambient modules and loads a module once, so with the
+ * same imports it loads the same modules, each where the compile does (a `resolvePackage` that
+ * answers by importer included). It refuses a name two ambient modules export, naming it, so each
+ * name it refuses is one a caller's module exports; it is set aside and the rest asked again. A
+ * compile the probe's names do not trouble ends the probe. `declared` is every name the program
+ * writes, which the probe's own function is named apart from, with the defines and contracts.
+ *
+ * Any other refusal is no answer and is thrown as the compiler raised it.
+ *
+ * Nothing is remembered between calls: one `resolve` may serve other text on the next compile. The
+ * compiler's own caches, keyed by each module's text, keep a probe that reads nothing new cheap.
+ */
+export function ambientNamesOf(
+  input: RsProbeInput,
+  names: Iterable<string>,
+  imports: readonly string[],
+  declared: Iterable<string>,
+): Set<string> {
+  const found = new Set<string>();
+  const asked = new Set(names);
+  if (asked.size === 0 || input.ambient === undefined || input.ambient.length === 0) return found;
+  const helper = probeHelper(
+    new Set([
+      ...declared,
+      ...Object.keys(input.defines ?? {}),
+      ...Object.keys(input.baseDefines ?? {}),
+      ...Object.keys(input.contracts ?? {}),
+    ]),
+  );
+  const program = makeResolve([...imports, probeProgram(helper)].join("\n"), input.resolve);
+  const options = sharedOptions(input);
+  const ambient = [...input.ambient, PROBE_MODULE];
+  while (asked.size > 0) {
+    const exports = new TextEncoder().encode(
+      [...asked].map((name) => `export const ${name} = 0;`).join("\n"),
+    );
+    try {
+      compile({
+        ...options,
+        ambient,
+        resolve: (path) => (path === PROBE_MODULE ? exports : program(path)),
+      });
+      break;
+    } catch (error) {
+      const name = exportedTwice(error);
+      if (name === undefined || !asked.delete(name)) throw error;
+      found.add(name);
+    }
+  }
+
+  return found;
+}
+
+/** The name the compiler refused for being exported by two ambient modules, if it refused one. */
+function exportedTwice(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  // The rendered report sets the rule in bold: its escapes are not part of the words.
+  // eslint-disable-next-line no-control-regex
+  return EXPORTED_TWICE.exec(error.message.replace(/\u001b\[[0-9;]*m/g, ""))?.[1];
+}
+
 /**
  * Compiles `input.source` and adapts the result to the seam's own `CompileResult`, so
  * `compileSauceRoute` can slot it into `CompiledSauceRoute`.
@@ -222,13 +375,8 @@ export interface RsCompileResult extends CompileResult {
  */
 export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
-    target: mapTarget(input.target),
-    entry: ENTRY,
+    ...sharedOptions(input),
     resolve: makeResolve(input.source, input.resolve),
-    resolvePackage: makeResolvePackage(input.resolvePackage),
-    inlineContracts: toInlineContracts(input.contracts),
-    ambient: input.ambient,
-    defines: toRsDefines(input.defines, input.baseDefines),
     ...(input.args === undefined ? {} : { args: [...input.args] }),
   });
 

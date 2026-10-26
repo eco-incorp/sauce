@@ -34,7 +34,7 @@ or a token as `USDC` (or `mint:USDC`) for its mint.
 
 ## The accounts
 
-For the token methods (`USDC.transfer(to, amount)`, `self.USDC`) and every account
+For the token methods (`USDC.transfer(to, amount)`, `pot.USDC`) and every account
 a program writes where it uses it (`USDC.accountOf(to)`, `Solana.pda(program, [seeds])`), compiling
 adds each account the program needs to `main`, with how to find it. `sauce compile --json` lists
 them in its `manifest`, the account manifest: every account, in order, with its role and how it is
@@ -165,9 +165,10 @@ by side.
 The value language `--account` takes, and `derive` in the manifest uses:
 
 - an address in base58, or as the same 32 bytes in `0x` hex;
-- `self`: the Pot, or the signer with `--via engine`; `pot`; `owner`; `system`: the System Program;
+- `pot`: the Pot; `owner`; `authority`: the account that signs the engine call, the Pot through the
+  Kitchen and the owner with `--via engine`; `system`: the System Program;
 - `@to`: `main`'s argument `to`;
-- `<holder>:<token>`: an associated token account. The holder is `pot`, `owner`, `self`, `@to` or a
+- `<holder>:<token>`: an associated token account. The holder is `pot`, `owner`, `authority`, `@to` or a
   base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`. It
   is the holder's account for the mint, under the token program that owns the mint. A registered
   symbol's program is the registry's; any other mint's is read from the cluster. A tokenized stock
@@ -179,7 +180,7 @@ The value language `--account` takes, and `derive` in the manifest uses:
   the pool on the cluster: what a venue's namespace (`Orca.Whirlpool.swap(pool, …)`) adds;
 - `pda:<program>:<seeds>`: the program-derived address (PDA) a program computes from its seeds,
   with no key behind it; seeds comma-separated. A seed is
-  `"text"` or a bare word, a key (`pot`, `owner`, `self`, `@to`, base58), `mint:USDC`, an integer
+  `"text"` or a bare word, a key (`pot`, `owner`, `authority`, `@to`, base58), `mint:USDC`, an integer
   (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.
 
 Whatever a derived account is made of must be known when the transaction is built. An `--account`
@@ -190,7 +191,9 @@ the JSON object to save as the `--accounts` file. `simulate` notes each account 
 the cluster does not have (a guard on it fails with no message of its own). Every Solana key the
 command takes (`--owner`, `--lookup-table`, a token in `--assume-balance`, a wallet policy) is
 base58 or `0x` hex. With `--via engine` there is no Pot, so no `pot:` account, and
-`NAME=pot` for a slot that must sign is refused, since nothing signs for a Pot there. The
+`NAME=pot` for a slot that must sign is refused, since nothing signs for a Pot there; a program
+that names `pot` is refused there too. A program that never names it (`USDC.transfer(to, amount)`
+alone) derives its paying accounts from `authority`, and runs either way. The
 [Solana guide](solana.md#the-token-methods-every-account-derived) has what the lowering checks and
 requires.
 

@@ -13,7 +13,7 @@ function main(recipients: Address[], amount: Uint256, limit: Uint256): Uint256 {
     if (paid + amount > limit) {
       break;
     }
-    require(self.USDC >= amount, "not enough USDC");
+    require(pot.USDC >= amount, "not enough USDC");
     USDC.transfer(to, amount);
     paid += amount;
   }

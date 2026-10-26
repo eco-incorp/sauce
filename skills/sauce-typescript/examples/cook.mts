@@ -33,7 +33,7 @@ const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // through the rel
 
 // 2. The program, compiled for its chain with that chain's names, as `sauce compile` does.
 const source = `function main(recipient: Address, floor: Uint256) {
-  const held = self.USDC;
+  const held = pot.USDC;
   require(held >= floor, "the Pot holds less than floor");
   USDC.transfer(recipient, held);
 }`;

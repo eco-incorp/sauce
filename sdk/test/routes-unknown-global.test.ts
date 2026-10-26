@@ -7,7 +7,7 @@
  * yet". The route compiler knows what the chain has, so it says which name is unknown, on which
  * chain, and what it probably meant.
  */
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const EXECUTION = {
   pot: "0x1111111111111111111111111111111111111111",
@@ -63,7 +63,7 @@ describe("a name the program or the compile gives meaning to is not unknown", ()
       "an import",
       'import ISauceRouter from "./artifacts/ISauceRouter.json";\nfunction main() { ISauceRouter.at(ctx.self()); }',
     ],
-    ["the `self` sugar", "function main(): Uint256 { return self.USDC; }"],
+    ["the `pot` sugar", "function main(): Uint256 { return pot.USDC + pot.balance; }"],
   ])("%s", (_name, source) => {
     expect(() => compileOn("base", source)).not.toThrow(/is not a token or protocol/);
   });
@@ -78,6 +78,35 @@ describe("a name the program or the compile gives meaning to is not unknown", ()
     });
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  // The same compile failing for a reason of its own reports that reason, not the ambient name:
+  // the compiler says where it failed, and an unknown name elsewhere did not make it fail.
+  it.each([
+    ["`CFG`, a constant", "export const CFG = { fee: 30 };", "return CFG.fee + missing();"],
+    [
+      "`self`, the Pot's retired name",
+      "export const self = 0x6666666666666666666666666666666666666666;",
+      "return self.toBytesBe(32).length + missing();",
+    ],
+  ])("an ambient module's %s hides no error the compile raises elsewhere", (_name, lib, body) => {
+    const options = {
+      ambient: ["./lib.ts"],
+      resolve: (path: string) => (path === "./lib.ts" ? new TextEncoder().encode(lib) : undefined),
+    };
+    for (const compile of [
+      () => compileOn("base", `function main(): Uint256 { ${body} }`, options),
+      () => compileSauceProgram("base", `function main(): Uint256 { ${body} }`, options),
+    ]) {
+      let message = "";
+      try {
+        compile();
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain("`missing` is called but never declared");
+      expect(message).not.toMatch(/is not a token or protocol|the Pot is `pot`, not `self`/);
+    }
   });
 
   it("a contract binding the caller supplies", () => {

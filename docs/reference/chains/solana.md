@@ -90,9 +90,9 @@ the account it names. Each is read-only unless `.writable()` or `.signer()` give
 
 | Expression | The account | Derived as |
 | --- | --- | --- |
+| `pot` | the Pot, which the program acts with through the Kitchen | `pot` |
 | `Solana.pda(program, [seeds])` | the address program derives for the seeds | `pda:<program>:<seeds>` |
 | `Solana.account(key)` | the account at a key | `<key>` |
-| `Solana.self` | the Pot (the signer, cooked directly) | `self` |
 | `Solana.owner` | the Pot's owner, who signs the cook | `owner` |
 | `Solana.systemProgram` | the System Program | `11111111111111111111111111111111` |
 | `Solana.tokenProgram` | SPL Token | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` |

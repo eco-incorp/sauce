@@ -21,7 +21,7 @@ for (const slug of ["ethereum", "optimism"]) {
 // Writes lower to @sauce/token in every spelling; reads stay typed IERC20 calls.
 const writes = routes.compileSauceProgram(
   "ethereum",
-  "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, ctx.self(), amount); require(self.USDC > 0); }",
+  "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, ctx.self(), amount); require(pot.USDC > 0); }",
 ).source;
 check(/__sauce_transfer\(USDT,/.test(writes), "USDT.transfer is SafeERC20");
 check(/__sauce_approve\(USDT,/.test(writes), "USDT.approve is forceApprove");
@@ -29,8 +29,8 @@ check(/__sauce_transferFrom\(t,/.test(writes), "a bound Token's transferFrom is 
 check(/IERC20\.at\(USDC\)\.balanceOf\(ctx\.self\(\)\)/.test(writes), "reads are plain typed calls");
 check(!/IERC20\.at\([^)]*\)\.(transfer|approve|transferFrom)\(/.test(writes), "no raw writes");
 
-// A balance is `<holder>.<TOKEN>`, `<TOKEN>.balanceOf(<holder>)` to the byte: the Pot as `self`, a
-// parameter or variable, an address written out, and a program's own `self`.
+// A balance is `<holder>.<TOKEN>`, `<TOKEN>.balanceOf(<holder>)` to the byte: the Pot as `pot`, a
+// parameter or variable, an address written out, and a program's own `pot`. The coin is `.balance`.
 const reads = (body: string) =>
   routes.compileSauceProgram("ethereum", `function main(who: Address): Uint256 { ${body} }`)
     .bytecode;
@@ -39,10 +39,12 @@ const holder = routes
   .sourceGlobals("ethereum")
   .tokens.find((one) => one.symbol === "USDC")!.address;
 const spellings: Array<[short: string, long: string]> = [
-  ["return self.USDC;", "return USDC.balanceOf(ctx.self());"],
+  ["return pot.USDC;", "return USDC.balanceOf(ctx.self());"],
   ["return who.TSLAx;", "return TSLAx.balanceOf(who);"],
   [`return ${holder}.WETH;`, `return WETH.balanceOf(${holder});`],
-  ["const self = who; return self.USDT;", "const self = who; return USDT.balanceOf(self);"],
+  ["const pot = who; return pot.USDT;", "const pot = who; return USDT.balanceOf(pot);"],
+  ["return pot.balance;", "return ctx.selfBalance();"],
+  ["return who.balance;", "return ctx.balance(who);"],
 ];
 for (const [short, long] of spellings) {
   check(Buffer.from(reads(short)).equals(Buffer.from(reads(long))), `${short} is ${long}`);
@@ -70,7 +72,7 @@ check(
 check(
   !rejects(
     "base",
-    'import { IERC20 as Erc20 } from "./artifacts/IERC20.json";\nfunction main(t: Address) { require(Erc20.at(t).balanceOf(ctx.self()) > self.USDC); }',
+    'import { IERC20 as Erc20 } from "./artifacts/IERC20.json";\nfunction main(t: Address) { require(Erc20.at(t).balanceOf(ctx.self()) > pot.USDC); }',
   ),
   "IERC20 imported under another name, beside a token read",
 );
@@ -113,8 +115,8 @@ check(
 );
 // The Pot's own balance of a symbol, and the chain's id.
 check(
-  !rejects("base", "function main() { require(self.USDC >= 0 && chainId == 8453); }"),
-  "self.USDC and chainId",
+  !rejects("base", "function main() { require(pot.USDC >= 0 && chainId == 8453); }"),
+  "pot.USDC and chainId",
 );
 console.log(
   writes

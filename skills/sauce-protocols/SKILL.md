@@ -85,11 +85,11 @@ sauce run pools.sauce.ts --chain base --keystore <keystore> \
 | Solidity            | SauceScript       |
 | ------------------- | ----------------- |
 | `msg.sender`        | `ctx.msgSender()` |
-| `address(this)`     | `ctx.self()`      |
+| `address(this)`     | `pot`             |
 | `type(uint256).max` | `~0`              |
 
-- **"The caller" or "self" is the Pot** in a Sauce program: what lands there stays in the Pot, not
-  in the user's wallet, until another cook moves it.
+- **"The caller", `address(this)` or "this contract" is the Pot**, `pot`, in a Sauce program: what
+  lands there stays in the Pot, not in the user's wallet, until another cook moves it.
 
 ## Porting a protocol's own example
 

@@ -15,7 +15,7 @@
 //
 //   sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000
 function main(lamports: Uint256): Uint256 {
-  const potWsol = WSOL.accountOf(Solana.self).writable();
+  const potWsol = WSOL.accountOf(pot).writable();
   // The System Program's transfer: instruction 2 (4 bytes), then the lamports (8 bytes).
   let transfer = hex`02000000`;
   svm.call(
@@ -25,5 +25,5 @@ function main(lamports: Uint256): Uint256 {
   );
   // SPL Token's SyncNative: instruction 17.
   svm.call(Solana.tokenProgram, [potWsol], hex`11`);
-  return self.WSOL;
+  return pot.WSOL;
 }

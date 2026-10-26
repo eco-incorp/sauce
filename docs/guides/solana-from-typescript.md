@@ -57,7 +57,7 @@ import { routes } from "@eco-incorp/sauce";
 
 const source = `
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 `;
@@ -70,8 +70,8 @@ console.log("derived accounts:", program.derivedAccounts);
 ```text
 main's arguments: to: Address, amount: Uint256
 derived accounts: {
-  potUSDC: 'self:USDC',
-  pot: 'self',
+  potUSDC: 'pot:USDC',
+  pot: 'pot',
   tokenProgram: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
   toUSDC: '@to:USDC'
 }

@@ -207,8 +207,8 @@ const pay = routes.compileSauceProgram(
 check(
   JSON.stringify(pay.derivedAccounts) ===
     JSON.stringify({
-      potUSDC: "self:USDC",
-      pot: "self",
+      potUSDC: "pot:USDC",
+      pot: "pot",
       tokenProgram: TOKEN_PROGRAM_ID,
       toUSDC: "@to:USDC",
     }),
@@ -238,7 +238,7 @@ check(
   "Base adds no account",
 );
 // The command derives each from the cook: `@to:USDC` is the associated USDC account of main's
-// argument `to`, `self:USDC` the Pot's, `self` the Pot itself.
+// argument `to`, `pot:USDC` the Pot's, `pot` the Pot itself.
 const recipient = (await generateKeyPairSigner()).address;
 const named = { chain: requireChain("solana"), owner: owner.address, pot: pot.address };
 const toUsdc = await resolveSvmAccountName("@to:USDC", { ...named, args: { to: recipient } });
@@ -251,7 +251,10 @@ const [ata] = await getProgramDerivedAddress({
   ],
 });
 check(toUsdc.value === ata, "@to:USDC is the recipient's associated USDC account");
-check((await resolveSvmAccountName("self", named)).value === "pot", "self is the Pot");
+check(
+  (await resolveSvmAccountName("authority", named)).value === "pot",
+  "authority is the Pot through the Kitchen",
+);
 // A Token-2022 mint takes the checked write and its mint as one more account.
 const stock = routes.compileSauceProgram(
   "solana",
@@ -273,8 +276,8 @@ const wrapRoles = Object.fromEntries(
 check(
   JSON.stringify(wrap.derivedAccounts) ===
     JSON.stringify({
-      potWSOL: "self:WSOL",
-      pot: "self",
+      potWSOL: "pot:WSOL",
+      pot: "pot",
       systemProgram: "11111111111111111111111111111111",
       owner: "owner",
       tokenProgram: TOKEN_PROGRAM_ID,
@@ -300,7 +303,7 @@ const table = routes.compileSauceProgram(
   "function main(program: Address, to: Address): Uint256 {\n" +
     "  const dest = Solana.pda(program, [to]).writable();\n" +
     '  return dest.dataLen + Solana.pda(program, ["state", to]).dataLen + Solana.account(program).dataLen +\n' +
-    "    Solana.self.dataLen + Solana.owner.dataLen + Solana.token2022Program.dataLen +\n" +
+    "    pot.dataLen + Solana.owner.dataLen + Solana.token2022Program.dataLen +\n" +
     "    Solana.associatedTokenProgram.dataLen + Solana.memoProgram.dataLen + USDC.mint.dataLen +\n" +
     "    USDC.tokenProgram.dataLen + USDC.accountOf(to).dataLen + USDC.accountOf(to).dataLen;\n}\n",
 );
@@ -308,8 +311,8 @@ const derived = table.derivedAccounts ?? {};
 check(derived.destPda === "pda:@program:@to", "a pda is named for the constant it initializes");
 check(derived.statePda === 'pda:@program:"state",@to', "else for its first string seed");
 check(
-  derived.programAccount === "@program" && derived.pot === "self" && derived.owner === "owner",
-  "Solana.account(key), Solana.self and Solana.owner",
+  derived.programAccount === "@program" && derived.pot === "pot" && derived.owner === "owner",
+  "Solana.account(key), pot and Solana.owner",
 );
 check(
   derived.mintUSDC === "mint:USDC" && derived.toUSDC === "@to:USDC",

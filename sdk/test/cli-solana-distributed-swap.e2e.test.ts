@@ -546,7 +546,7 @@ describeSvm(
         greedy,
         "function main(priceLimit: Uint256): Uint256 {\n  let bought = 0;\n" +
           swaps
-            .map((swap) => `  bought += ${swap}, USDC, WSOL, self.USDC, priceLimit, 0);\n`)
+            .map((swap) => `  bought += ${swap}, USDC, WSOL, pot.USDC, priceLimit, 0);\n`)
             .join("") +
           "  return bought;\n}\n",
       );

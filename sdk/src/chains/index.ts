@@ -290,7 +290,8 @@ const NATIVE_SYMBOLS: Readonly<Record<string, string>> = {
 /**
  * The symbol of `chain`'s native coin — ETH, SOL, AVAX, … — as `chains` records it, or for a
  * canonical chain it does not carry, as the table above does. A program reads a holder's balance of
- * it as `<holder>.<symbol>` (`self.ETH`).
+ * the coin as `<holder>.balance` (`pot.balance`); `<holder>.<symbol>` is refused, naming it, unless
+ * the symbol is also a token the chain registers (Arc's USDC), which it then reads.
  */
 export function nativeCoinSymbol(chain: CanonicalChain): string | undefined {
   return chains[chain.id]?.nativeCurrency.symbol ?? NATIVE_SYMBOLS[chain.slug];

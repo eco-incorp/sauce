@@ -45,28 +45,34 @@ A symbol is that chain's token address: a value (`balanceOf(USDC, account)`) or 
 methods. Any other ERC-20 is `Token(address)`, or bound once: `const t = Token(address);` (declared
 once, never reassigned, used only as `t.<method>(...)`).
 
-**A balance is `<holder>.<TOKEN>`: any address or contract, then a token's symbol.** `self.USDC` is
-the USDC the Pot holds, `recipient.TSLAx` the TSLAx `recipient` holds, `UniswapV4.PoolManager.WETH`
-the WETH in the PoolManager. It is `USDC.balanceOf(holder)` written short, and compiles to the same
-bytes. The native coin takes it too: `self.ETH` is `ctx.selfBalance()`, `recipient.ETH` is
-`ctx.balance(recipient)`, and on Solana `self.SOL` is the Pot's lamports. The holder is:
+**A balance is `<holder>.<TOKEN>`: any address or contract, then a token's symbol.** `pot` is the
+Pot, and `pot.USDC` the USDC it holds, `recipient.TSLAx` the TSLAx `recipient` holds,
+`UniswapV4.PoolManager.WETH` the WETH in the PoolManager. It is `USDC.balanceOf(holder)` written
+short, and compiles to the same bytes. `.<SYMBOL>` is always a registered token; the native coin is
+`.balance` (wei on an EVM chain, lamports on Solana): `pot.balance` is `ctx.selfBalance()`,
+`recipient.balance` is `ctx.balance(recipient)`. On Arc, whose coin is USDC, `pot.USDC` is the
+token and `pot.balance` the coin. The holder is:
 
-- on an EVM chain, any address: `self` (the Pot) or `ctx.self()`, a variable or parameter, an
-  address written out, a protocol contract (`Aave.Pool`), a contract at an address
-  (`UniswapV3.Pool(pool)` or `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that
-  returns an address (`UniswapV4.StateView.poolManager()`); a program that declares its own `self`
+- on an EVM chain, any address: `pot` or `ctx.self()`, a variable or parameter, an address written
+  out, a protocol contract (`Aave.Pool`), a contract at an address (`UniswapV3.Pool(pool)` or
+  `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that returns an address
+  (`UniswapV4.StateView.poolManager()`); a program that declares its own `pot` owns the name and
   reads that variable;
-- a token's own contract too: `WETH.ETH` is the ETH locked in WETH, `USDC.WETH` the WETH the USDC
-  contract holds (on Solana, `USDC.SOL` is the mint's lamports, `USDC.WSOL` its own WSOL account's
-  balance);
-- on Solana, one known when the transaction is built, whose account is added to `main`: `self` (the
-  Pot), `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a 32-byte key written
-  out ([Solana](../guides/solana.md)).
+- a token's own contract too: `WETH.balance` is the ETH locked in WETH, `USDC.WETH` the WETH the
+  USDC contract holds (on Solana, `USDC.balance` is the mint's lamports, `USDC.WSOL` its own WSOL
+  account's balance);
+- on Solana, one known when the transaction is built, whose account is added to `main`: `pot`,
+  `Solana.owner`, an `Address` parameter of `main`, a token's mint, or a 32-byte key written out
+  ([Solana](../guides/solana.md)).
 
-A record or a list is not a holder: on one, a property named like a token or the native coin is
-refused, since the name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an
-interface with no address (`UniswapV3.Pool.WETH`). Where the native coin and a token share a symbol (Arc's USDC), the
-shorthand is refused for it. `Token(address)` has no short form: its balance is
+A record or a list is not a holder: on one, a property named like a token is refused, since the
+name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an interface with no
+address (`UniswapV3.Pool.WETH`). `.balance` is the coin only where the program's text shows an
+address. It reads the field on a record or a list, on a contract call's result (unless the
+registry records that result as an address: `UniswapV4.StateView.poolManager().balance` is the
+PoolManager's coin), on `abi.decode`'s result, on a name imported from a module, and on a local
+bound to or destructured from one of those: write `ctx.balance(x)` for the coin there, or bind the
+value to a local declared `Address` first. `Token(address)` has no short form: its balance is
 `Token(address).balanceOf(holder)`.
 
 | Method                            | Behaviour                                                 |
@@ -91,7 +97,7 @@ shorthand is refused for it. `Token(address)` has no short form: its balance is
 
 ```ts
 function main(payee: Address, amount: Uint256) {
-  require(self.USDT >= amount, "not enough USDT");
+  require(pot.USDT >= amount, "not enough USDT");
   USDT.transfer(payee, amount);
   require(allowance(USDT, ctx.self(), payee) == 0, "no allowance left standing");
 }
@@ -215,7 +221,7 @@ Devnet's mints differ: [Solana](chains/solana.md) lists them.
 ## Tokenized stocks
 
 A tokenized stock is a token like any other, named by its symbol with no import:
-`self.SPCXc`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
+`pot.SPCXc`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
 functions, a token a swap buys or sells.
 
 | Chain    | Issuers (example symbols)                                                                                                                                   |
@@ -249,7 +255,7 @@ functions, a token a swap buys or sells.
 
 ```ts
 function main(recipient: Address, amount: Uint256) {
-  require(self.SPCXc >= amount, "not enough SPCXc");
+  require(pot.SPCXc >= amount, "not enough SPCXc");
   SPCXc.transfer(recipient, amount);
 }
 ```

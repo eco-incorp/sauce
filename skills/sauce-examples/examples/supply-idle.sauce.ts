@@ -25,29 +25,28 @@ function main(
   reserve: Uint256,
   minMove: Uint256,
 ): { supplied: Uint256; withdrawn: Uint256; liquid: Uint256; deposited: Uint256 } {
-  const self = ctx.self();
   const aToken = AaveV3Reads.at(AaveV3.Pool).getReserveAToken(USDC);
   require(aToken != 0, "USDC is not listed on this Aave V3 pool");
-  const liquid = self.USDC;
-  const deposited = Token(aToken).balanceOf(self); // the Pot's supplied USDC, interest included
+  const liquid = pot.USDC;
+  const deposited = Token(aToken).balanceOf(pot); // the Pot's supplied USDC, interest included
 
   let supplied: Uint256 = 0;
   let withdrawn: Uint256 = 0;
   if (liquid > reserve && liquid - reserve >= minMove) {
     supplied = liquid - reserve;
     USDC.approve(AaveV3.Pool, supplied);
-    AaveV3.Pool.supply(USDC, supplied, self, 0);
+    AaveV3.Pool.supply(USDC, supplied, pot, 0);
   } else if (liquid < reserve) {
     const shortfall = reserve - liquid;
     const wanted = shortfall < deposited ? shortfall : deposited;
     if (wanted > 0 && wanted >= minMove) {
-      withdrawn = AaveV3.Pool.withdraw(USDC, wanted, self);
+      withdrawn = AaveV3.Pool.withdraw(USDC, wanted, pot);
     }
   }
   return {
     supplied,
     withdrawn,
-    liquid: self.USDC,
-    deposited: Token(aToken).balanceOf(self),
+    liquid: pot.USDC,
+    deposited: Token(aToken).balanceOf(pot),
   };
 }

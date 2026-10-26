@@ -3,7 +3,8 @@
  *
  * For example, a Base route's `Uniswap.UniversalRouter.execute(...)` becomes
  * `IUniswapV4_UniversalRouter.at(<base-address>).execute(...)`, with the descriptor's ABI supplied
- * as a compiler binding. Bare `self` is rewritten to `ctx.self()` in the same pass.
+ * as a compiler binding. Bare `pot` is rewritten to `ctx.self()` in the same pass, and a bare `self`
+ * (the Pot's old name) is refused, naming `pot`.
  *
  * Recognized call shapes:
  *   (A) `<Protocol>.<Contract>.<method>(...)`        — enclosing chain
@@ -37,7 +38,7 @@ import { requireChain, type CanonicalChain, type ChainRef } from "../chains/cano
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
 import { formatBigint } from "../deposit/format.js";
-import { walk, collectDeclaredNames, type AstNode } from "./ast-walk.js";
+import { walk, collectDeclaredNames, collectPatternBinders, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
 import {
   chainSlugForKey,
@@ -47,6 +48,8 @@ import {
   type Namespace,
 } from "./accessor-index.js";
 import { parseSauce } from "./parse.js";
+import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
+import { shadowed as shadowedAt, walkScoped } from "./lexical-scope.js";
 
 export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
@@ -57,8 +60,9 @@ export interface ProtocolRewriteOptions {
   /** Restricts a chain-QUALIFIED accessor (shapes C/D) to a named allowlist. Default: any canonical
    *  chain. */
   chainScope?: readonly ChainRef[];
-  /** Rewrites bare `self` -> `ctx.self()` in read position. Default `true`. */
-  selfSugar?: boolean;
+  /** Rewrites bare `pot` -> `ctx.self()` in read position. Default `true`. A bare `self` is refused
+   *  either way. */
+  potSugar?: boolean;
   /** Caller-supplied `compile.contracts` bundle this rewrite's own synthesized bindings must not
    *  silently collide with (a same-name entry with a DIFFERENT ABI throws). */
   existingContracts?: Readonly<ContractsConfig>;
@@ -72,14 +76,14 @@ export interface ProtocolRewriteOptions {
 
 export interface ProtocolRewriteResult {
   readonly source: string;
-  /** True if at least one accessor or `self` site was rewritten. */
+  /** True if at least one accessor or `pot` site was rewritten. */
   readonly rewrote: boolean;
   /** One entry per REFERENCED descriptor -- merge straight into `compile()`'s own `contracts`. */
   readonly contracts: ContractsConfig;
-  /** Count of accessor call sites rewritten (excludes `self` sites) -- for tests/diagnostics. */
+  /** Count of accessor call sites rewritten (excludes `pot` sites) -- for tests/diagnostics. */
   readonly accessorSites: number;
-  /** Count of bare `self` sites rewritten. */
-  readonly selfSites: number;
+  /** Count of bare `pot` sites rewritten. */
+  readonly potSites: number;
   /** Count of bare `<Protocol>.<Contract>` VALUE-position sites resolved to an address literal. */
   readonly valueAccessSites: number;
 }
@@ -612,26 +616,30 @@ function resolveCandidate(
   };
 }
 
-// -- self-sugar: bare `self` -> `ctx.self()` in genuine read position -------------------------
+// -- pot-sugar: bare `pot` -> `ctx.self()` in genuine read position --------------------------------
 
-/** Collects, by node identity, every Identifier node that must NEVER be treated as a `self` READ
- *  even if its name happens to be `"self"`: a declarator id, a function/arrow parameter, a
- *  non-computed member property, a non-computed object-literal key, an assignment target, or an
- *  update-expression operand. */
-function collectSelfExclusions(program: AstNode): ReadonlySet<AstNode> {
+/** Collects, by node identity, every Identifier node that must NEVER be treated as a READ of a name
+ *  (`pot`, or the refused `self`): a name a declarator, a function/arrow parameter or a `catch`
+ *  clause binds, however its pattern destructures (`const [pot] = t`, `catch (pot)`), a
+ *  non-computed member property, a non-computed object-literal key, an assignment target, an
+ *  update-expression operand, a label (`pot: for (…)`, `continue pot`), or a name in an import or
+ *  export specifier (`import { pot as holder }` names a module's export, and binds `holder`). */
+function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
+  const exclude = (node: AstNode): void => {
+    excluded.add(node);
+  };
   walk(program, (n) => {
-    if (n.type === "VariableDeclarator") {
-      const id = (n as { id?: AstNode }).id;
-      if (id?.type === "Identifier") excluded.add(id);
-    }
+    if (n.type === "VariableDeclarator") collectPatternBinders(n.id, exclude);
+    if (n.type === "CatchClause") collectPatternBinders(n.param, exclude);
     if (
       n.type === "FunctionDeclaration" ||
       n.type === "FunctionExpression" ||
       n.type === "ArrowFunctionExpression"
     ) {
-      const params = (n as { params?: AstNode[] }).params ?? [];
-      for (const p of params) if (p.type === "Identifier") excluded.add(p);
+      for (const param of (n.params as AstNode[] | undefined) ?? []) {
+        collectPatternBinders(param, exclude);
+      }
     }
     if (n.type === "MemberExpression" && !(n as { computed?: boolean }).computed) {
       const property = (n as { property?: AstNode }).property;
@@ -649,39 +657,69 @@ function collectSelfExclusions(program: AstNode): ReadonlySet<AstNode> {
       const argument = (n as { argument?: AstNode }).argument;
       if (argument?.type === "Identifier") excluded.add(argument);
     }
+    if (
+      n.type === "LabeledStatement" ||
+      n.type === "BreakStatement" ||
+      n.type === "ContinueStatement"
+    ) {
+      const label = (n as { label?: AstNode | null }).label;
+      if (label?.type === "Identifier") excluded.add(label);
+    }
+    if (
+      n.type === "ImportSpecifier" ||
+      n.type === "ImportDefaultSpecifier" ||
+      n.type === "ImportNamespaceSpecifier" ||
+      n.type === "ExportSpecifier"
+    ) {
+      walk(n, (name) => excluded.add(name));
+    }
   });
   return excluded;
 }
 
-function collectSelfSites(
+/** The bare reads of `name` where the program does not declare it (`lexical-scope.ts`), unless the
+ *  compile binds it (`bound`): every `pot` the sugar rewrites. */
+function bareReads(
   program: AstNode,
+  name: string,
   excluded: ReadonlySet<AstNode>,
-  shadowed: ReadonlySet<string>,
-): Splice[] {
-  if (shadowed.has("self")) return [];
-  const sites: Splice[] = [];
-  walk(program, (n) => {
+  bound: ReadonlySet<string>,
+): AstNode[] {
+  if (bound.has(name)) return [];
+  const reads: AstNode[] = [];
+  walkScoped(program, (n, at) => {
     if (
       n.type === "Identifier" &&
-      (n as unknown as { name: string }).name === "self" &&
-      !excluded.has(n)
+      (n as unknown as { name: string }).name === name &&
+      !excluded.has(n) &&
+      !shadowedAt(at, name, n.start)
     ) {
-      sites.push({ start: n.start, end: n.end, replacement: "ctx.self()" });
+      reads.push(n);
     }
   });
-  return sites;
+  return reads;
+}
+
+/** The reads of `name` in `source` where the program does not declare it (`lexical-scope.ts`). */
+export function freeReadsOf(source: string, name: string): AstNode[] {
+  const program = parseSauce(source);
+  return bareReads(program, name, collectReadExclusions(program), new Set());
 }
 
 /**
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
- * `opts.selfSugar === false`, every bare `self` read, over `source` for the enclosing/destination
- * `chain`. Edits use parser ranges over the original source, preserving unrelated formatting,
- * comments, and code byte-for-byte.
+ * `opts.potSugar === false`, every bare `pot` read where the program declares no `pot`
+ * (`lexical-scope.ts`), over `source` for the enclosing/destination `chain`; refuses a bare `self`
+ * read where the program declares no `self` (the Pot is `pot`). A `pot` or `self` in `bound` — a
+ * name the compile gives a value beside the source: a define, a contract binding, an ambient
+ * module's export — is that value, so neither is touched. Edits use parser ranges over the original
+ * source, preserving unrelated formatting, comments, and code byte-for-byte.
  */
 export function rewriteProtocolAccessors(
   source: string,
   chain: CanonicalChain,
   opts: ProtocolRewriteOptions = {},
+  bound: ReadonlySet<string> = new Set(),
 ): ProtocolRewriteResult {
   // A module parse, annotations included -- this pass runs unconditionally (default ON), so it
   // must take whatever the compiler does, including a source that ALREADY carries a leading
@@ -734,9 +772,27 @@ export function rewriteProtocolAccessors(
     }
   }
 
-  const selfSugar = opts.selfSugar ?? true;
-  const excluded = selfSugar ? collectSelfExclusions(program) : new Set<AstNode>();
-  const selfSites = selfSugar ? collectSelfSites(program, excluded, shadowed) : [];
+  const excluded = collectReadExclusions(program);
+  // A shorthand field's value (`{ pot }`) is a read spelled as its key: the field is written out.
+  const shorthand = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "Property" && n.shorthand === true) shorthand.add(n.value as AstNode);
+  });
+  const [retired] = bareReads(program, RETIRED_POT_NAME, excluded, bound);
+  if (retired !== undefined) {
+    throw selfRefusal(
+      RETIRED_POT_NAME,
+      shorthand.has(retired) ? `${RETIRED_POT_NAME}: ${POT_NAME}` : POT_NAME,
+    );
+  }
+  const potSites: Splice[] =
+    (opts.potSugar ?? true)
+      ? bareReads(program, POT_NAME, excluded, bound).map((n) => ({
+          start: n.start,
+          end: n.end,
+          replacement: shorthand.has(n) ? `${POT_NAME}: ctx.self()` : "ctx.self()",
+        }))
+      : [];
 
   // Bare `<Protocol>.<Contract>` / `<Chain>.<Protocol>[.<Contract>]` in value position -> its
   // on-chain address literal. Terminal by construction (never a call callee), so it can't overlap a
@@ -750,14 +806,14 @@ export function rewriteProtocolAccessors(
     opts.onContract,
   );
 
-  const allSites = [...resolved, ...selfSites, ...valueSites];
+  const allSites = [...resolved, ...potSites, ...valueSites];
   if (allSites.length === 0) {
     return {
       source,
       rewrote: false,
       contracts: {},
       accessorSites: 0,
-      selfSites: 0,
+      potSites: 0,
       valueAccessSites: 0,
     };
   }
@@ -773,7 +829,7 @@ export function rewriteProtocolAccessors(
     rewrote: true,
     contracts,
     accessorSites: resolved.length,
-    selfSites: selfSites.length,
+    potSites: potSites.length,
     valueAccessSites: valueSites.length,
   };
 }

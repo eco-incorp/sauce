@@ -160,12 +160,27 @@ describe("a method called on a registry call's result", () => {
     sameProgram(chained, explicit, ["base", "ethereum"]);
   });
 
+  it("reads the native coin of an address a call returns, its receiver in parentheses or not", () => {
+    const explicit = `function main(): Uint256 {
+  return ctx.balance(UniswapV4.StateView.poolManager());
+}`;
+    for (const read of [
+      "UniswapV4.StateView.poolManager().balance",
+      "(UniswapV4.StateView.poolManager()).balance",
+      "( UniswapV4.StateView.poolManager() ).balance",
+    ]) {
+      const chained = `function main(): Uint256 {\n  return ${read};\n}`;
+      expect(rewriteContractResults(chained, BASE).source).toBe(explicit);
+      sameProgram(chained, explicit, ["base"]);
+    }
+  });
+
   it("leaves the language's value methods, members that are not called, and the rest alone", () => {
     const source = `function main(): Uint256 {
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   const word = pool.toBytesBe(32);
   require(word.length == 32);
-  return UniswapV3.Factory.getPool(WETH, USDC, 500).catch(() => { return 0; }) + self.USDC;
+  return UniswapV3.Factory.getPool(WETH, USDC, 500).catch(() => { return 0; }) + pot.USDC;
 }`;
     expect(rewriteContractResults(source, BASE)).toEqual({ source, rewrote: false, sites: 0 });
     expect(compileSauceProgram("base", source).bytecode.length).toBeGreaterThan(0);

@@ -532,7 +532,7 @@ describe("sauce compile", () => {
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
     const report = appliedDefines(
       "function main(to: Address, payee: { bps: Uint256 }): Uint256 {\n" +
-        "  return self.WETH + to.USDC + payee.bps + Base.USDC;\n}\n",
+        "  return pot.WETH + to.USDC + payee.bps + Base.USDC;\n}\n",
       requireChain("ethereum"),
       { bps: 1n },
     );
@@ -673,6 +673,31 @@ describe("sauce compile", () => {
     expect(run.stderr).toMatch(/past Solana's 1232: `sauce run` stages the program/);
   });
 
+  it("--via engine refuses a program that names the Pot, at the mention that makes it the Pot's", async () => {
+    const to = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    // The transfer alone acts with `authority`, the account that signs the engine call.
+    const transfer = file(
+      "transfer.sauce.ts",
+      "function main(to: Address) {\n  USDC.transfer(to, 1);\n}\n",
+    );
+    const direct = ["compile", "--chain", "solana", "--json", "--via", "engine", "--args", to];
+    expect((await sauce(direct[0]!, transfer, ...direct.slice(1))).code).toBe(0);
+    // One unrelated mention of `pot` makes every account it acts with the Pot's.
+    const mentioned = file(
+      "mentioned.sauce.ts",
+      'function main(to: Address) {\n  USDC.transfer(to, 1);\n  require(to != pot, "not the Pot");\n}\n',
+    );
+    const refused = await sauce(direct[0]!, mentioned, ...direct.slice(1));
+    expect(refused.code).toBe(2);
+    expect(refused.stderr).toContain(
+      "the program uses the Pot (pot: pot, potUSDC: pot:USDC), and --via engine cooks with no " +
+        "Pot, so there is no Pot to attach: cook through the Kitchen. It names `pot` at line 3, " +
+        "column 17, and a program that names the Pot anywhere acts as the Pot throughout, its " +
+        "token writes and `ctx.self()` included. To cook it directly, write the signer's own " +
+        "account (`Solana.owner`, or `ctx.self()` as a token holder) where it names `pot`",
+    );
+  });
+
   it("names each account a Solana cook cannot derive, what suits it, and the file that gives them all", async () => {
     const program = file(
       "sweep.sauce.ts",
@@ -689,20 +714,32 @@ describe("sauce compile", () => {
       {
         name: "source",
         requires: "writable",
-        forms: ["pot:<token>", "owner:<token>", "@<argument>:<token>", "<address>"],
+        forms: [
+          "pot:<token>",
+          "owner:<token>",
+          "authority:<token>",
+          "@<argument>:<token>",
+          "<address>",
+        ],
       },
       {
         name: "dest",
         requires: "writable",
-        forms: ["pot:<token>", "owner:<token>", "@<argument>:<token>", "<address>"],
+        forms: [
+          "pot:<token>",
+          "owner:<token>",
+          "authority:<token>",
+          "@<argument>:<token>",
+          "<address>",
+        ],
       },
-      { name: "authority", requires: "readonly_signer", forms: ["pot", "owner"] },
+      { name: "authority", requires: "readonly_signer", forms: ["pot", "owner", "authority"] },
     ]);
     // Cooked directly, nothing signs for a Pot, and no Pot holds a token account.
     const direct = json(
       await sauce("compile", program, "--chain", "solana", "--json", "--via", "engine"),
     ).accountsToGive as { name: string; forms: string[] }[];
-    expect(direct.find((slot) => slot.name === "authority")!.forms).toEqual(["owner"]);
+    expect(direct.find((slot) => slot.name === "authority")!.forms).toEqual(["owner", "authority"]);
     expect(direct.find((slot) => slot.name === "source")!.forms[0]).toBe("owner:<token>");
 
     // A cook is refused for them before any endpoint is read, with the file to fill in.

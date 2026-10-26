@@ -13,6 +13,8 @@ import {
   isSvmAccountName,
   resolveSvmAccountName,
   SvmAccountNameError,
+  svmNamesPot,
+  svmCookRoles,
   svmPublicKey,
   type SvmAccountNameContext,
 } from "../../src/svm/account-names.js";
@@ -42,14 +44,128 @@ const ctx = (more: Partial<SvmAccountNameContext> = {}): SvmAccountNameContext =
 });
 
 describe("svm account names", () => {
-  it("pot, owner and self keep their roles; self is the Pot, or the owner cooked directly", async () => {
+  it("pot, owner and authority keep their roles; authority is the Pot, or the owner cooked directly", async () => {
     expect(await resolveSvmAccountName("pot", ctx())).toEqual({ value: "pot", kind: "pot" });
     expect(await resolveSvmAccountName("owner", ctx())).toEqual({ value: "owner", kind: "owner" });
-    expect(await resolveSvmAccountName("self", ctx())).toEqual({ value: "pot", kind: "pot" });
-    expect(await resolveSvmAccountName("self", ctx({ via: "engine" }))).toEqual({
+    expect(await resolveSvmAccountName("authority", ctx())).toEqual({ value: "pot", kind: "pot" });
+    expect(await resolveSvmAccountName("authority", ctx({ via: "kitchen" }))).toEqual({
+      value: "pot",
+      kind: "pot",
+    });
+    expect(await resolveSvmAccountName("authority", ctx({ via: "engine" }))).toEqual({
       value: "owner",
       kind: "owner",
     });
+  });
+
+  it("authority as a token account's holder and as a seed: the Pot through the Kitchen, the owner directly", async () => {
+    expect(await resolveSvmAccountName("authority:USDC", ctx())).toEqual({
+      value: await svmTokenAccount({ mint: USDC, tokenProgram: TOKEN_PROGRAM_ID }, POT),
+      label: "the Pot's USDC account",
+      kind: "account",
+      account: { mint: USDC, holder: POT, program: TOKEN_PROGRAM_ID },
+    });
+    expect(await resolveSvmAccountName("authority:USDC", ctx({ via: "engine" }))).toEqual({
+      value: await svmTokenAccount({ mint: USDC, tokenProgram: TOKEN_PROGRAM_ID }, OWNER),
+      label: "the owner's USDC account",
+      kind: "account",
+      account: { mint: USDC, holder: OWNER, program: TOKEN_PROGRAM_ID },
+    });
+    const program = key(9);
+    const pda = async (seed: Address) =>
+      (
+        await getProgramDerivedAddress({
+          programAddress: program,
+          seeds: [getAddressCodec().encode(seed)],
+        })
+      )[0];
+    expect((await resolveSvmAccountName(`pda:${program}:authority`, ctx())).value).toBe(
+      await pda(POT),
+    );
+    expect(
+      (await resolveSvmAccountName(`pda:${program}:authority`, ctx({ via: "engine" }))).value,
+    ).toBe(await pda(OWNER));
+  });
+
+  it("every pot form is the Pot through the Kitchen, and refused cooked directly on the engine", async () => {
+    const program = key(9);
+    expect(await resolveSvmAccountName("pot:USDC", ctx())).toMatchObject({
+      account: { holder: POT },
+    });
+    expect((await resolveSvmAccountName(`pda:${program}:pot`, ctx())).value).toBe(
+      (
+        await getProgramDerivedAddress({
+          programAddress: program,
+          seeds: [getAddressCodec().encode(POT)],
+        })
+      )[0],
+    );
+    const engine = ctx({ via: "engine" });
+    for (const name of ["pot", `pda:${program}:pot`, `pda:${program}:"x",pot`]) {
+      await expect(resolveSvmAccountName(name, engine)).rejects.toThrow(
+        "--via engine cooks with no Pot, so there is no Pot to pass: give the account by its " +
+          "address (owner for the owner, authority for the account that signs the engine call), " +
+          "or cook through the Kitchen",
+      );
+    }
+    await expect(resolveSvmAccountName("pot:USDC", engine)).rejects.toThrow(
+      "--via engine cooks with no Pot, so there is no Pot's token account to pass: give the " +
+        "account the program reads by its address (owner:USDC or authority:USDC for the owner's), " +
+        "or cook through the Kitchen",
+    );
+    // What names the Pot, which a program's derivations name where it uses `pot`.
+    for (const name of ["pot", "pot:USDC", `pda:${program}:pot`, `pda:${program}:"a",pot`]) {
+      expect(svmNamesPot(name)).toBe(true);
+    }
+    for (const name of [
+      "authority",
+      "authority:USDC",
+      "owner",
+      "@to:USDC",
+      `pda:${program}:"pot"`,
+    ]) {
+      expect(svmNamesPot(name)).toBe(false);
+    }
+  });
+
+  it("knows which cook roles a derivation is made of: pot, owner and authority, however deep", () => {
+    const program = key(9);
+    const roles = (name: string) => [...svmCookRoles(name)].sort();
+    for (const [name, expected] of [
+      ["pot", ["pot"]],
+      ["pot:USDC", ["pot"]],
+      ["owner", ["owner"]],
+      ["owner:USDC", ["owner"]],
+      ["authority", ["authority"]],
+      ["authority:USDC", ["authority"]],
+      [`pda:${program}:pot`, ["pot"]],
+      [`pda:${program}:"a",authority`, ["authority"]],
+      [`pda:${program}:owner,pot`, ["owner", "pot"]],
+    ] as const) {
+      expect(roles(name)).toEqual(expected);
+    }
+    for (const name of ["@to:USDC", `pda:${program}:"pot"`, "mint:USDC", "program:USDC", program]) {
+      expect(roles(name)).toEqual([]);
+    }
+  });
+
+  it("refuses self, the name authority had, naming pot through the Kitchen and authority on the engine", async () => {
+    const program = key(9);
+    for (const [name, pot, authority] of [
+      ["self", "pot", "authority"],
+      ["self:USDC", "pot:USDC", "authority:USDC"],
+      [`pda:${program}:"a",self`, `pda:${program}:"a",pot`, `pda:${program}:"a",authority`],
+    ] as const) {
+      await expect(resolveSvmAccountName(name, ctx())).rejects.toThrow(
+        `'${name}' names no account: self is retired. Write '${pot}' (the Pot), or ` +
+          `'${authority}' (the account that signs the engine call: the Pot through the Kitchen, ` +
+          "the owner with --via engine)",
+      );
+      await expect(resolveSvmAccountName(name, ctx({ via: "engine" }))).rejects.toThrow(
+        `'${name}' names no account: self is retired. Write '${authority}' (the account that ` +
+          "signs the engine call, the owner with --via engine)",
+      );
+    }
   });
 
   it("an address is itself, @<param> main's argument, and system the System Program", async () => {
@@ -90,7 +206,7 @@ describe("svm account names", () => {
   });
 
   it("a holder's token account, under the program that owns the mint", async () => {
-    expect(await resolveSvmAccountName("self:USDC", ctx())).toEqual({
+    expect(await resolveSvmAccountName("pot:USDC", ctx())).toEqual({
       value: await svmTokenAccount({ mint: USDC, tokenProgram: TOKEN_PROGRAM_ID }, POT),
       label: "the Pot's USDC account",
       kind: "account",
@@ -101,7 +217,7 @@ describe("svm account names", () => {
       label: "main's argument to's PYUSD account",
       account: { holder: TO, program: TOKEN_2022_PROGRAM_ID },
     });
-    expect(await resolveSvmAccountName("self:usdc", ctx({ via: "engine" }))).toMatchObject({
+    expect(await resolveSvmAccountName("authority:usdc", ctx({ via: "engine" }))).toMatchObject({
       label: "the owner's USDC account",
       account: { holder: OWNER },
     });
@@ -199,7 +315,7 @@ describe("svm account names", () => {
     expect(
       (
         await resolveSvmAccountName(
-          `pda:${program}:vault,"pot",self,@to,mint:USDC,u8:7,u64:@index,0xdead`,
+          `pda:${program}:vault,"pot",pot,@to,mint:USDC,u8:7,u64:@index,0xdead`,
           ctx({ integers: { index: 300n } }),
         )
       ).value,
@@ -242,7 +358,7 @@ describe("svm account names", () => {
   it("refuses the System Program as a token's holder, by name", async () => {
     await expect(resolveSvmAccountName("system:USDC", ctx())).rejects.toThrow(
       "system:USDC: system is the System Program, which holds no token account: name the " +
-        "holder, pot, owner, self, @<argument> or a base58 key",
+        "holder, pot, owner, authority, @<argument> or a base58 key",
     );
   });
 
@@ -262,11 +378,11 @@ describe("svm account names", () => {
   it("knows its own language", () => {
     for (const name of [
       "pot",
-      "self",
+      "authority",
       "system",
       "@to",
       TO,
-      "self:USDC",
+      "authority:USDC",
       "@to:@mint",
       `${TO}:USDC`,
       "mint:@m",
@@ -281,7 +397,7 @@ describe("svm account names", () => {
       "@",
       "@1x",
       "pot:US-DC",
-      "self:USDC:x",
+      "authority:USDC:x",
       "system:USDC",
       "pda:",
       `pda:${TO}`,

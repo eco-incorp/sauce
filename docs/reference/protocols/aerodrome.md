@@ -38,13 +38,12 @@ Sell the Pot's USDC for WETH on the volatile pool:
 
 ```ts
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
-  const self = ctx.self();
   require(Aerodrome.PoolFactory.getPool(USDC, WETH, false) != 0, "no volatile USDC/WETH pool");
   const routes = [{ from: USDC, to: WETH, stable: false, factory: Aerodrome.PoolFactory }];
-  const before = WETH.balanceOf(self);
+  const before = WETH.balanceOf(pot);
   USDC.approve(Aerodrome.Router, amountIn);
-  Aerodrome.Router.swapExactTokensForTokens(amountIn, minOut, routes, self, ctx.timestamp());
-  const out = WETH.balanceOf(self) - before;
+  Aerodrome.Router.swapExactTokensForTokens(amountIn, minOut, routes, pot, ctx.timestamp());
+  const out = WETH.balanceOf(pot) - before;
   require(out >= minOut, "below minOut");
   WETH.transfer(recipient, out);
 }

@@ -40,7 +40,6 @@ up the USDC/WETH pool on the chain's Uniswap V3 factory and reads what the Pot h
 
 ```sauce chain=ethereum,base
 function main(fee: Uint256): { pool: Address; usdc: Uint256; weth: Uint256; bcspx: Uint256 } {
-  const pot = ctx.self();
   const pool = UniswapV3.Factory.getPool(USDC, WETH, fee);
   require(pool != 0, "no USDC/WETH pool at that fee on this chain");
   return {
@@ -130,7 +129,7 @@ a Token-2022 mint) from the Pot:
 
 ```sauce chain=solana
 function main(recipient: Address, cash: Uint256, shares: Uint256): Uint256 {
-  require(self.USDC >= cash, "not enough USDC");
+  require(pot.USDC >= cash, "not enough USDC");
   USDC.transfer(recipient, cash);
   const before = recipient.TSLAx;
   TSLAx.transfer(recipient, shares);

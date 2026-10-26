@@ -14,7 +14,6 @@
 //   sauce simulate holdings.sauce.ts --chain base --owner <address> --args 500
 //   sauce compile holdings.sauce.ts --chain base --json
 function main(fee: Uint256): { pool: Address; usdc: Uint256; weth: Uint256; bcspx: Uint256 } {
-  const pot = ctx.self();
   // This chain's factory, asked for this chain's pair: the pool is another contract on each chain.
   const pool = UniswapV3.Factory.getPool(USDC, WETH, fee);
   require(pool != 0, "no USDC/WETH pool at that fee on this chain");

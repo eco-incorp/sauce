@@ -23,11 +23,10 @@ Forward a 1inch quote for the Pot, checked by the WETH received:
 
 ```sauce chain=base,arbitrum
 function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Address) {
-  const self = ctx.self();
-  const before = WETH.balanceOf(self);
+  const before = WETH.balanceOf(pot);
   USDC.approve(Oneinch.AggregationRouterV6, amountIn);
   evm.call(Oneinch.AggregationRouterV6, 0, call);
-  const out = WETH.balanceOf(self) - before;
+  const out = WETH.balanceOf(pot) - before;
   require(out >= minOut, "below minOut");
   USDC.approve(Oneinch.AggregationRouterV6, 0);
   WETH.transfer(recipient, out);

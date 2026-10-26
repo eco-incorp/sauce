@@ -32,7 +32,7 @@ Make a new file, `pay-list.sauce.ts`, with the quick start's program in it, with
 
 ```js
 function main(to: Address, amount: Uint256) {
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
@@ -81,7 +81,7 @@ stops the program when `amount` is above it:
 ```js
 function main(to: Address, amount: Uint256, limit: Uint256) {
   require(amount <= limit, "more than the limit");
-  require(self.USDC >= amount, "not enough USDC");
+  require(pot.USDC >= amount, "not enough USDC");
   USDC.transfer(to, amount);
 }
 ```
@@ -142,7 +142,7 @@ of addresses, and loop over it with `for (const to of recipients)`. The limit no
 ```js
 function main(recipients: Address[], amount: Uint256, limit: Uint256) {
   require(amount * recipients.length <= limit, "more than the limit");
-  require(self.USDC >= amount * recipients.length, "not enough USDC");
+  require(pot.USDC >= amount * recipients.length, "not enough USDC");
   for (const to of recipients) {
     USDC.transfer(to, amount);
   }
@@ -186,7 +186,7 @@ function main(recipients: Address[], amount: Uint256, limit: Uint256): Uint256 {
     if (paid + amount > limit) {
       break;
     }
-    require(self.USDC >= amount, "not enough USDC");
+    require(pot.USDC >= amount, "not enough USDC");
     USDC.transfer(to, amount);
     paid += amount;
   }
@@ -244,7 +244,7 @@ function main(recipients: Address[], amount: Uint256, limit: Uint256): Uint256 {
     if (paid + amount > limit) {
       break;
     }
-    require(self.USDC >= amount, "not enough USDC");
+    require(pot.USDC >= amount, "not enough USDC");
     USDC.transfer(to, amount);
     paid += amount;
   }
@@ -278,7 +278,7 @@ function main(to: Address, amount: Uint256, reserve: Uint256): bool {
   let paid = false;
   try {
     USDC.transfer(to, amount);
-    require(self.USDC >= reserve, "keep the reserve");
+    require(pot.USDC >= reserve, "keep the reserve");
     paid = true;
   } catch (error) {
     log(error);

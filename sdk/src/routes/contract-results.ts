@@ -26,7 +26,10 @@
  * It runs BEFORE the token pass (`sauce-route.ts`), whose `Token(...)` lowering a token's writes
  * rely on, and claims only CALLS: `pool.USDC`, a member that is not called, is the token pass's
  * balance read. A builtin value method (`.catch(...)`, `.toBytesBe(...)`) is the compiler's, on any
- * result.
+ * result. The one member it claims is `.balance` on a result the registry says is an ADDRESS
+ * (`UniswapV4.StateView.poolManager().balance` -> `ctx.balance(UniswapV4.StateView.poolManager())`):
+ * the token pass leaves `.balance` on a call's result as its field (a struct may have one), and only
+ * here is it known to be an address.
  *
  * A method called on an address a registry function returns that the registry does not know the
  * contract of is refused here, naming the explicit spelling, rather than reaching the compiler as a
@@ -41,7 +44,13 @@ import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
 import { parseSauce } from "./parse.js";
 import { decomposeMemberChain, resolveContractReference } from "./protocol-rewrite.js";
-import { methodCall, SAFE_WRITES, TOKEN_FACTORY_NAME } from "./token-rewrite.js";
+import {
+  collectValuePositionExclusions,
+  methodCall,
+  SAFE_WRITES,
+  TOKEN_FACTORY_NAME,
+} from "./token-rewrite.js";
+import { BALANCE_MEMBER } from "./pot-sugar.js";
 
 /**
  * The language's own methods on a value (`skills/sauce-script/references/builtins.json`'s `method`
@@ -291,7 +300,13 @@ export function rewriteContractResults(
     return source.slice(node.start, node.end);
   };
 
-  const inserts: { readonly at: number; readonly span: number; readonly text: string }[] = [];
+  /** Text put in at `at`, over the `cut` characters there; `span` orders inserts at one offset. */
+  const inserts: {
+    readonly at: number;
+    readonly span: number;
+    readonly text: string;
+    readonly cut?: number;
+  }[] = [];
   walk(program, (n) => {
     const site = methodCall(n);
     if (site === undefined || VALUE_METHODS.has(site.method)) return;
@@ -327,6 +342,28 @@ export function rewriteContractResults(
         : `${named(contract)}.at(`;
     const span = object.end - object.start;
     inserts.push({ at: object.start, span, text: open }, { at: object.end, span, text: ")" });
+  });
+
+  // `<result>.balance` on a result the registry says is an address: the address's native coin. On
+  // any other value it is left as written, a field of a struct where the result is one.
+  const exclusions = collectValuePositionExclusions(program);
+  walk(program, (n) => {
+    if (n.type !== "MemberExpression" || (n as { computed?: boolean }).computed) return;
+    const property = n.property as AstNode;
+    if (exclusions.has(n) || property.type !== "Identifier") return;
+    if ((property as unknown as { name: string }).name !== BALANCE_MEMBER) return;
+    const object = n.object as AstNode;
+    // A contract the program names or binds is the token pass's holder.
+    if (reference(object) !== undefined || bound(object) !== undefined) return;
+    const output = result(object);
+    if (output === undefined || outputAt(output.method, output.path)?.type !== "address") return;
+    // Over the whole member, as `token-rewrite.ts#balanceSplices` does: a parenthesized receiver's
+    // `(` and `)` lie outside `object`, between it and the member's own bounds.
+    const span = n.end - n.start;
+    inserts.push(
+      { at: n.start, span, text: "ctx.balance(", cut: object.start - n.start },
+      { at: object.end, span, text: ")", cut: n.end - object.end },
+    );
   });
 
   /**
@@ -373,7 +410,7 @@ export function rewriteContractResults(
   // so the longer one's text lands outside it: `Erc20.ERC20(UniswapV3.Pool(...).token0())`.
   let out = source;
   for (const insert of [...inserts].sort((a, b) => b.at - a.at || a.span - b.span)) {
-    out = out.slice(0, insert.at) + insert.text + out.slice(insert.at);
+    out = out.slice(0, insert.at) + insert.text + out.slice(insert.at + (insert.cut ?? 0));
   }
   return { source: out, rewrote: true, sites: inserts.length / 2 };
 }

@@ -22,7 +22,11 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
+import { ambientNamesOf, compileWithRs, firstAnswers, type RsCompileResult } from "./rs-compile.js";
+import { resolveSdkPackage } from "../embedded/resolve.js";
+import { ambientPotRefusal, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { walk, type AstNode } from "./ast-walk.js";
+import { parseSauce } from "./parse.js";
 import {
   rewriteTokenFactory,
   rewriteTokenMembers,
@@ -33,9 +37,13 @@ import {
 import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
-import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
+import {
+  freeReadsOf,
+  rewriteProtocolAccessors,
+  type ProtocolRewriteOptions,
+} from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
-import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
+import { freeHolderError, unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
@@ -81,7 +89,7 @@ export interface SauceCompileOptions {
   /** Parsed ABI bindings merged with the protocol-accessor rewrite's bindings and adapted to the
    *  compiler's inlineContracts option. A same-named binding with a different ABI throws. */
   contracts?: ContractsConfig;
-  /** Resolve registered protocol calls and addresses, and rewrite bare `self` to `ctx.self()`.
+  /** Resolve registered protocol calls and addresses, and rewrite bare `pot` to `ctx.self()`.
    *  Enabled by default; pass false to disable this pass or an options object to configure it.
    *  Contract accessor rewrites require an EVM destination. */
   accessors?: boolean | ProtocolRewriteOptions;
@@ -129,6 +137,50 @@ export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAI
 type ChainRefResolved = ReturnType<typeof requireChain>;
 
 type DefineValue = bigint | boolean | number;
+
+/**
+ * A compile's options, read once as it begins, before any of the caller's callbacks runs. The
+ * probe of the names the caller binds and the compile both read these and never the caller's
+ * objects, which a `resolve` may change while it runs: the lists and records are copies the SDK
+ * alone holds. A contract's ABI is kept as given, by reference: the accessor pass tells a caller's
+ * binding from the registry's by its ABI's identity, and an ABI's contents bind no name.
+ */
+interface CompileInputs {
+  readonly target: CompileTarget | undefined;
+  readonly tokens: SauceCompileOptions["tokens"];
+  readonly resolve: ResolveModule | undefined;
+  readonly resolvePackage: ResolvePackage | undefined;
+  readonly defines: Readonly<Record<string, DefineValue>> | undefined;
+  readonly contracts: Readonly<ContractsConfig> | undefined;
+  readonly accessors: boolean | ProtocolRewriteOptions | undefined;
+  readonly ambient: string[] | undefined;
+  /** On Solana, the swaps at a price to hold to a stop (`SauceProgramOptions.stops`). */
+  readonly stops: readonly string[];
+}
+
+/** `options` read once (`CompileInputs`): each property read one time, each list and record copied. */
+function readCompileInputs(
+  options: SauceCompileOptions,
+  stops: readonly string[] = [],
+): CompileInputs {
+  const { target, tokens, resolve, resolvePackage, defines, contracts, accessors, ambient } =
+    options;
+
+  return {
+    target,
+    tokens: tokens === undefined ? undefined : { ...tokens },
+    resolve,
+    resolvePackage,
+    defines: defines === undefined ? undefined : { ...defines },
+    contracts:
+      contracts === undefined
+        ? undefined
+        : Object.fromEntries(Object.entries(contracts).map(([name, { abi }]) => [name, { abi }])),
+    accessors: typeof accessors === "object" ? { ...accessors } : accessors,
+    ambient: ambient === undefined ? undefined : [...ambient],
+    stops: [...stops],
+  };
+}
 
 /**
  * The chain-scoped values a compile gets beyond the caller's options. Internal to the SDK — passed
@@ -210,7 +262,7 @@ export function compileScopedRoute(
   const { chain, compiled, source, derivedAccounts } = compileForChain(
     destination,
     sauce,
-    options,
+    readCompileInputs(options),
     scope,
   );
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
@@ -268,9 +320,11 @@ export interface CompiledSauceProgram {
   readonly manifest?: AccountManifest;
   /**
    * The accounts the SDK added to `main` for the token methods (`USDC.transfer(to, amount)` on
-   * Solana), by parameter name: how each is derived, as an `--account` value — `self:USDC`, the
-   * Pot's USDC account; `@to:USDC`, the USDC account of main's argument `to`. `sauce` fills each
-   * from the cook (`svm/account-names.ts#resolveSvmAccountName`). Absent when it added none.
+   * Solana), by parameter name: how each is derived, as an `--account` value — `pot:USDC`, the
+   * Pot's USDC account (`authority:USDC` where the program never names `pot`: the account of
+   * whoever signs the engine call); `@to:USDC`, the USDC account of main's argument `to`. `sauce`
+   * fills each from the cook (`svm/account-names.ts#resolveSvmAccountName`). Absent when it added
+   * none.
    */
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**
@@ -292,6 +346,13 @@ export interface CompiledSauceProgram {
    * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
    */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
+   * On Solana, where the program first names the Pot (`pot`, where nothing else binds it), 1-based.
+   * A program that names it anywhere acts as the Pot throughout: every account it acts with, its
+   * token writes' and `ctx.self()`'s included, derives from the Pot (`pot`, `pot:<token>`), which a
+   * cook with no Pot (the engine called directly) cannot attach. Absent where it never names it.
+   */
+  readonly potMention?: SourcePosition;
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
   /** Source after the SDK's rewrites: what the compiler was given. */
@@ -304,6 +365,19 @@ export interface DerivedValue {
   readonly type: "Uint256";
   /** How it is worked out: `stop:<pool>:<token>:<limit>`. */
   readonly derive: string;
+}
+
+/** A place in a program's text, 1-based. */
+export interface SourcePosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+/** Where `offset` falls in `text`, 1-based. */
+function positionOf(text: string, offset: number): SourcePosition {
+  const lines = text.slice(0, offset).split("\n");
+
+  return { line: lines.length, column: lines[lines.length - 1]!.length + 1 };
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
@@ -344,25 +418,25 @@ export function compileSauceProgram(
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
   const { args, stops, ...compile } = options;
+  const inputs = readCompileInputs(compile, stops);
   // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
   // NAMES travel as a scope for this program's chain, never in `defines`, so `defines` stays exactly
   // what the caller wrote.
-  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
+  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(inputs.ambient ?? [])]));
   const scope: RouteScope = {
-    chainDefines: (on) => definesOf(on, compile.tokens),
+    chainDefines: (on) => definesOf(on, inputs.tokens),
   };
   const program = compileForChain(
     resolved,
     source,
-    { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
+    { ...inputs, ambient: ambient.length > 0 ? ambient : inputs.ambient },
     scope,
-    stops,
     args === undefined ? undefined : entryWords(args),
   );
   if (args !== undefined) {
     checkEntryWords(args, program.entrySignature);
     const taken = program.entrySignature.params.find((param) =>
-      Object.hasOwn(compile.defines ?? {}, param.name),
+      Object.hasOwn(inputs.defines ?? {}, param.name),
     );
     if (taken !== undefined) {
       throw new RangeError(
@@ -392,6 +466,7 @@ export function compileSauceProgram(
     ...(derivedValues.length === 0 ? {} : { derivedValues }),
     ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
     ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
+    ...(program.potMention === undefined ? {} : { potMention: program.potMention }),
     entrySignature: program.entrySignature,
     source: program.source,
   };
@@ -401,15 +476,14 @@ export function compileSauceProgram(
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
  * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
  * because the bytecode depends on none of them — and none of the chain's ambient bundle beyond what
- * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller.
+ * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller. It reads the
+ * caller's options only as `inputs` holds them (`readCompileInputs`), never the caller's objects.
  */
 function compileForChain(
   destination: ChainRef,
   sauce: string,
-  options: SauceCompileOptions,
+  inputs: CompileInputs,
   scope: RouteScope,
-  /** On Solana, the swaps at a price to hold to a stop (`SauceProgramOptions.stops`). */
-  stops: readonly string[] = [],
   /** `main`'s arguments the program is compiled for, as words (`entryWords`). */
   args?: readonly (bigint | boolean | string)[],
 ): {
@@ -422,11 +496,12 @@ function compileForChain(
   readonly derivedValues?: Readonly<Record<string, string>>;
   readonly stoppable?: readonly string[];
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  readonly potMention?: SourcePosition;
   readonly entryParams: RsCompileResult["entryParams"];
   readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
-  const target = options.target ?? defaultTargetFor(chain.kind);
+  const target = inputs.target ?? defaultTargetFor(chain.kind);
 
   if (chain.kind === "svm" && target !== "svm") {
     throw new Error(
@@ -443,9 +518,101 @@ function compileForChain(
   // token-registry.ts#resolveTokenMap). Computed unconditionally: the registry may supply symbols
   // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
   // On svm they are values only: the token syntax below still throws there, by name.
-  const tokenMap = resolveTokenMap(chain, options.tokens);
-  // The chain's native coin, which `<holder>.<symbol>` reads the balance of as a token's is.
+  const tokenMap = resolveTokenMap(chain, inputs.tokens);
+  // The chain's native coin, whose old spelling `<holder>.<symbol>` the token pass refuses, naming
+  // `<holder>.balance`.
   const native = nativeCoinSymbol(chain);
+  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
+  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
+  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
+  // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the
+  // SAME registry, so the token symbols agree), and the caller's own defines over both.
+  const scoped = scope.chainDefines?.(chain);
+  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
+  // over as they are when the caller adds none, so the compile adapter converts them once.
+  const chainValues =
+    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
+  const defines: Readonly<Record<string, DefineValue>> | undefined =
+    chainValues === undefined
+      ? inputs.defines
+      : inputs.defines === undefined || Object.keys(inputs.defines).length === 0
+        ? chainValues
+        : { ...chainValues, ...inputs.defines };
+
+  // The names the compile binds beside the source: the caller's defines, its contract bindings and,
+  // of the Pot's two names, each a caller's ambient module exports. The compiler says which:
+  // `ambientNamesOf` asks it, with this compile's own options and the program's own imports, so a
+  // module is found exactly where the compile finds it. It asks only where it can matter: the SDK's
+  // own packages (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export
+  // neither name, and a name the program does not read (`probeQuestions`) is none the rewrites
+  // touch. A `self` that is one of them is the caller's value; a `pot` only an ambient module
+  // exports is refused where the program reads it free (`ambientPotRefusal`), so no module's export
+  // stands in for the Pot with no word in the program.
+  //
+  // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
+  // with the same options as the compile, so its refusal is one the compile raises too: the probe's
+  // names are left free and the compile below reports its own refusal. Were the compile to succeed
+  // anyway, the probe's refusal is thrown instead, so nothing compiles on an answer never given.
+  const ambient = inputs.ambient ?? [];
+  // The caller's resolvers, as this compile reads them: each answers a question as it first did, so
+  // the probe and the compile read the same modules (`firstAnswers`). The next compile asks afresh.
+  const resolve = inputs.resolve === undefined ? undefined : firstAnswers(inputs.resolve);
+  const resolvePackage =
+    inputs.resolvePackage === undefined ? undefined : firstAnswers(inputs.resolvePackage);
+  const probe = ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
+    ? undefined
+    : probeQuestions(sauce);
+  let callerNames: ReadonlySet<string> = new Set();
+  let probeRefusal: { readonly error: unknown } | undefined;
+  if (probe !== undefined) {
+    try {
+      callerNames = ambientNamesOf(
+        {
+          target,
+          resolve,
+          resolvePackage,
+          defines,
+          ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
+          contracts: inputs.contracts,
+          ambient,
+        },
+        probe.names,
+        probe.imports,
+        probe.declared,
+      );
+    } catch (error) {
+      probeRefusal = { error };
+    }
+  }
+  const bound = new Set([
+    ...Object.keys(inputs.defines ?? {}),
+    ...Object.keys(inputs.contracts ?? {}),
+    ...callerNames,
+  ]);
+  // A define or a contract binding of `pot` is the caller's, given by that name; an import of it is
+  // the program's own, which no free read is.
+  if (
+    callerNames.has(POT_NAME) &&
+    !Object.hasOwn(inputs.defines ?? {}, POT_NAME) &&
+    !Object.hasOwn(inputs.contracts ?? {}, POT_NAME)
+  ) {
+    const [read] = freeReadsOf(sauce, POT_NAME);
+    if (read !== undefined) {
+      const { line, column } = positionOf(sauce, read.start);
+      throw ambientPotRefusal(line, column);
+    }
+  }
+  // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
+  // rewrite makes then rests on no answer, and the probe's own refusal, which the compile would
+  // raise too, is reported in its place.
+  const readingBound = <T>(rewrite: () => T): T => {
+    if (probeRefusal === undefined) return rewrite();
+    try {
+      return rewrite();
+    } catch {
+      throw probeRefusal.error;
+    }
+  };
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. The compiler tells the two apart; nothing here has to.
@@ -460,39 +627,23 @@ function compileForChain(
   // (`UniswapV3.Pool(<the call>).liquidity()`, a token's writes `Token(<the call>).transfer(...)`),
   // which the token and accessor passes below lower as written. It claims only calls, never
   // `<result>.<Sym>`, the token pass's balance read. EVM only, as contract bindings are.
-  if (options.accessors !== false && chain.kind === "evm") {
+  if (inputs.accessors !== false && chain.kind === "evm") {
     source = rewriteContractResults(source, chain).source;
   }
 
-  let contracts: ContractsConfig | undefined = options.contracts;
-  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
-  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
-  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
-  // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the
-  // SAME registry, so the token symbols agree), and the caller's own defines over both.
-  const scoped = scope.chainDefines?.(chain);
-  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
-  // over as they are when the caller adds none, so the compile adapter converts them once.
-  const chainValues =
-    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
-  const defines: Readonly<Record<string, DefineValue>> | undefined =
-    chainValues === undefined
-      ? options.defines
-      : options.defines === undefined || Object.keys(options.defines).length === 0
-        ? chainValues
-        : { ...chainValues, ...options.defines };
+  let contracts: ContractsConfig | undefined = inputs.contracts;
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
-  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
-  // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
+  // pass. The accessor pass's `pot` sugar rewrites a bare `pot` Identifier -> `ctx.self()`
+  // textually; if it ran first, `pot.USDC` would become `ctx.self().USDC` and the balance
   // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
   // other direction: the accessor pass cannot claim the token pass's output (`__sauce_<write>(...)`
   // is a bare call, and `IERC20` is neither a namespace nor a chain key and its call sits
   // mid-chain, which `decomposeMemberChain` declines), and its
   // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
   // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
-  // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
-  // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
+  // pass's pot-sugar too (`self` there is a member PROPERTY, never a bare read). See
+  // routes-token-rewrite.test.ts's composition test for the regression lock.
   // Two ERC20 rewrites: the `<Sym>.transfer(...)` symbol syntax (when the chain has resolved token
   // symbols) and the `Token(addr)` global wrapper (always — it takes an arbitrary address, not a
   // registry symbol). Both lower a WRITE to `@sauce/token`'s SafeERC20 function and a READ to the
@@ -514,19 +665,26 @@ function compileForChain(
   let derivedValues: Readonly<Record<string, string>> | undefined;
   let stoppable: readonly string[] | undefined;
   let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
+  // Where the program first names the Pot, which makes its accounts the Pot's (svm).
+  let potMention: SourcePosition | undefined;
+  // The holders the token pass read by a name the program does not declare (EVM).
+  let freeHolders: ReadonlyMap<string, string> | undefined;
   if (chain.kind === "svm") {
-    const lowered = rewriteSvmTokenSyntax(
-      source,
-      svmTokenValues(tokenMap, options.defines),
-      svmTokenRows(chain),
-      // The caller's values, which a holder may name as a key: its defines.
-      new Map(
-        Object.entries(options.defines ?? {}).filter(
-          (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
+    const lowered = readingBound(() =>
+      rewriteSvmTokenSyntax(
+        source,
+        svmTokenValues(tokenMap, inputs.defines),
+        svmTokenRows(chain),
+        // The caller's values, which a holder may name as a key: its defines.
+        new Map(
+          Object.entries(inputs.defines ?? {}).filter(
+            (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
+          ),
         ),
+        native,
+        new Set(inputs.stops),
+        bound,
       ),
-      native,
-      new Set(stops),
     );
     if (lowered.rewrote) {
       source = lowered.source;
@@ -534,6 +692,10 @@ function compileForChain(
       derivedValues = lowered.values;
       stoppable = lowered.stoppable;
       stoppableRuns = lowered.stoppableRuns;
+      if (lowered.namesPot === true) {
+        const [read] = freeReadsOf(sauce, POT_NAME);
+        if (read !== undefined) potMention = positionOf(sauce, read.start);
+      }
     }
     if (args !== undefined && Object.keys(derivedValues ?? {}).length > 0) {
       throw new RangeError(
@@ -542,24 +704,31 @@ function compileForChain(
       );
     }
   } else {
-    absorb(
+    const members = readingBound(() =>
       rewriteTokenMembers(
         source,
         tokenMap,
         native === undefined ? undefined : { symbol: native, chain: chain.slug },
+        bound,
       ),
     );
+    freeHolders = members.freeHolders;
+    absorb(members);
     absorb(rewriteTokenFactory(source));
     if (tokenRewrote) source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
 
-  if (options.accessors !== false) {
+  if (inputs.accessors !== false) {
     const accessorOpts: ProtocolRewriteOptions =
-      typeof options.accessors === "object" ? options.accessors : {};
-    const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
-      ...accessorOpts,
-      existingContracts: contracts,
-    });
+      typeof inputs.accessors === "object" ? inputs.accessors : {};
+    const rewrittenAccessors = readingBound(() =>
+      rewriteProtocolAccessors(
+        source,
+        chain,
+        { ...accessorOpts, existingContracts: contracts },
+        bound,
+      ),
+    );
     if (rewrittenAccessors.rewrote) {
       if (chain.kind === "svm") {
         throw new Error(
@@ -577,19 +746,21 @@ function compileForChain(
     rs = compileWithRs({
       source,
       target,
-      resolve: options.resolve,
-      resolvePackage: options.resolvePackage,
+      resolve,
+      resolvePackage,
       defines,
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
-      ambient: options.ambient,
+      ambient: inputs.ambient,
       ...(args === undefined ? {} : { args }),
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower. Asked only of a program the compiler refused.
+    // the compiler could not lower; a holder read by a name the program does not declare, as the
+    // read. Asked only of a program the compiler refused.
     throw (
-      unknownBalanceError(source, chain, { tokens: tokenMap.keys(), native }, error) ??
+      freeHolderError(source, freeHolders, error) ??
+      unknownBalanceError(source, chain, { tokens: tokenMap.keys() }, error) ??
       unknownGlobalError(
         source,
         chain,
@@ -603,6 +774,8 @@ function compileForChain(
       error
     );
   }
+  // The compile succeeded where the probe was refused: no answer the probe gave stands behind it.
+  if (probeRefusal !== undefined) throw probeRefusal.error;
   const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
@@ -621,6 +794,7 @@ function compileForChain(
     ...(derivedValues === undefined ? {} : { derivedValues }),
     ...(stoppable === undefined ? {} : { stoppable }),
     ...(stoppableRuns === undefined ? {} : { stoppableRuns }),
+    ...(potMention === undefined ? {} : { potMention }),
   };
 }
 
@@ -641,4 +815,43 @@ function svmTokenValues(
   for (const [name, value] of own) values.set(name, value as bigint);
 
   return values;
+}
+
+/**
+ * What the probe asks about `sauce`, from the parse every rewrite reads it with (`parseSauce`): the
+ * Pot's names (`pot`, `self`) among the identifiers it reads, as the parser names them (an escaped
+ * spelling, `p\u006ft`, is the name it spells; a member's name, `ctx.self()`, is none); its import
+ * declarations as written, which the probe's entry repeats so that the compiler loads the modules
+ * the compile does; and every identifier it writes, an import's binding included, which the probe's
+ * own function is named apart from. A program that does not parse asks nothing: no rewrite reads
+ * it either.
+ */
+function probeQuestions(sauce: string): {
+  readonly names: readonly string[];
+  readonly imports: readonly string[];
+  readonly declared: ReadonlySet<string>;
+} {
+  let program: AstNode;
+  try {
+    program = parseSauce(sauce);
+  } catch {
+    return { names: [], imports: [], declared: new Set() };
+  }
+  const members = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "MemberExpression" && n.computed !== true) members.add(n.property as AstNode);
+  });
+  const names = new Set<string>();
+  const declared = new Set<string>();
+  walk(program, (n) => {
+    const name = (n as { name?: unknown }).name;
+    if (n.type !== "Identifier" || typeof name !== "string") return;
+    declared.add(name);
+    if (!members.has(n) && (name === POT_NAME || name === RETIRED_POT_NAME)) names.add(name);
+  });
+  const imports = (program.body as AstNode[])
+    .filter((statement) => statement.type === "ImportDeclaration")
+    .map((statement) => sauce.slice(statement.start, statement.end));
+
+  return { names: [...names], imports, declared };
 }
