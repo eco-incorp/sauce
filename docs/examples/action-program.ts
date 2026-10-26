@@ -19,7 +19,7 @@ const json = `{
       "tokenIn": "USDC",
       "tokenOut": "WETH",
       "amountOutMin": "1",
-      "recipient": "self"
+      "recipient": "pot"
     }
   ]
 }`;

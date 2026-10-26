@@ -33,15 +33,38 @@ export interface Fragment {
   readonly expr: Expr;
 }
 
-/** Allocates identifiers that are unique within one generated program. */
-export interface Emitter {
-  name(prefix: string): string;
+/**
+ * How a generated program names the Pot: its address, and its native balance.
+ *
+ * `pot` and `pot.balance` where the program compiles through the SDK's program compile for a chain,
+ * which reads them; the compiler's own `ctx.self()` and `ctx.selfBalance()` where it compiles
+ * without one (a split swap that names no chain), which has no `pot`. Both compile to the same
+ * bytes.
+ */
+export interface PotNames {
+  readonly address: Expr;
+  readonly balance: Expr;
 }
 
-export function newEmitter(): Emitter {
+/** The Pot as a program for a chain names it. */
+export const POT_NAMES: PotNames = { address: "pot", balance: "pot.balance" };
+
+/** The Pot as the compiler names it, for a program compiled with no chain. */
+export const COMPILER_POT_NAMES: PotNames = {
+  address: "ctx.self()",
+  balance: "ctx.selfBalance()",
+};
+
+/** Allocates identifiers that are unique within one generated program, and names its Pot. */
+export interface Emitter {
+  name(prefix: string): string;
+  readonly pot: PotNames;
+}
+
+export function newEmitter(pot: PotNames = POT_NAMES): Emitter {
   let counter = 0;
 
-  return { name: (prefix) => `${prefix}${counter++}` };
+  return { name: (prefix) => `${prefix}${counter++}`, pot };
 }
 
 /** A ref name becomes an identifier in the emitted source, so it has to be spellable as one. */

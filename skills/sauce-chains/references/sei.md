@@ -31,9 +31,9 @@ chain does not have it.
 ```sauce chain=sei
 function main() {
   // `USDT0` is Sei's USDT0: `0x9151434b16b9763660705744891fA906F660EcC5`.
-  const held = USDT0.balanceOf(ctx.self());
+  const held = USDT0.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDT0).balanceOf(ctx.self()) == held);
+  require(Token(USDT0).balanceOf(pot) == held);
   // `CircleGateway.GatewayMinter` is Sei's gatewayMinter: `0x2222222d7164433c4C09B0b0D809a9b52C04C205`.
   require(CircleGateway.GatewayMinter != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.

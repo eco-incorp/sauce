@@ -211,15 +211,19 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     `authority` (the Pot through the Kitchen, the owner with `--via engine`). A program that names
     `pot` is refused with `--via engine`, which has no Pot: for a direct cook write the signer's
     account (`Solana.owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
-    through the Kitchen. Rename in programs only: the `"self"` value of an actions document
-    (`"recipient": "self"`) and of the TypeScript token, deposit and actions APIs is unchanged, so
-    a project-wide replace of `self` breaks them. An account you give for a slot derived from the
-    Pot, the owner or the authority must be the account its derivation gives, or the command exits 2.
+    through the Kitchen. An account you give for a slot derived from the Pot, the owner or the
+    authority must be the account its derivation gives, or the command exits 2.
 11. **Test a name instead of calling `available(X)`.** A name the chain lacks is zero there.
     Where you wrote `available(X)`, write `if (UniswapV3.Factory) { … }`, `if (!USDT) return 0;`,
     `X != 0` or `X ? a : b`. The branch a test rules out is still not compiled, and the program's
     bytes do not change. The call is refused, saying so. A use of the name outside such a branch,
     and `require(X != 0)` on a chain without it, are refused at the use, naming the chain.
+12. **Write `"pot"` for the Pot outside programs too** (the release after 0.99.16). In an actions
+    document, a `recipient`, `onBehalfOf` or `owner` of `"self"` is refused: write `"pot"`. In
+    TypeScript, write `Token.balanceOf({ token, owner: "pot" })` for the Pot's balance, and read a
+    defaulted deposit beneficiary from `toDeposit` as `"pot"`. `ctx.self()` and
+    `ctx.selfBalance()`, the compiler's own names, still compile; in a program the SDK compiles
+    for an EVM chain, write `pot` and `pot.balance` for them.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,
@@ -230,6 +234,21 @@ outputs, such as `uint128`, can be refused during compilation. For a method with
 output, use the value form and read its result: `const value = call.catch(() => { return 0; });`.
 Successful-return decoding remains outside that single-call catch. Use a general `try` block
 when recovery needs to cover a multi-step operation instead.
+
+## Moving from compiler 2.6.0 to 2.6.1
+
+Compiler 2.6.1 pairs with the same engines and Kitchens as 2.6.0, so Pots and their addresses do
+not change. Recompile anyway: 2.6.1 fixes programs that compiled to the wrong behaviour, and it
+refuses three forms that 2.6.0 compiled wrongly (EVM):
+
+- **A helper that returns an array or a signed integer from inside a `try`** needs a return-type
+  annotation, as it already did outside a `try`: `function helper(): Int256 { … }`.
+- **The `return`s of one `try` block must agree in type**, in `main` too.
+- **A list of structs held in a local and passed to a contract call** must write each struct's
+  fields in the order the contract declares them. Write the fields in that order where the list is
+  built, or write the list in the call itself, where it is still reordered.
+
+The [changelog](../changelog.md#sdk-unreleased) quotes each error.
 
 ## Check settlement pins
 

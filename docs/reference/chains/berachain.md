@@ -36,9 +36,9 @@ chain does not have it.
 ```ts
 function main() {
   // `USDT0` is Berachain's USDT0: `0x779Ded0c9e1022225f8E0630b35a9b54bE713736`.
-  const held = USDT0.balanceOf(ctx.self());
+  const held = USDT0.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDT0).balanceOf(ctx.self()) == held);
+  require(Token(USDT0).balanceOf(pot) == held);
 }
 ```
 

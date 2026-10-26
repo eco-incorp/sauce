@@ -75,17 +75,17 @@ function withdraw(comet: Address, asset: Address, amount: Uint256): Uint256 {
 
 function repayFullBorrow(comet: Address): Uint256 {
   const baseAsset = Comet.at(comet).baseToken();
-  const before = Token(baseAsset).balanceOf(ctx.self());
+  const before = Token(baseAsset).balanceOf(pot);
   // Supplying the maximum repays exactly the borrow: the allowance for the rest goes back to zero.
   approve(baseAsset, comet, MAX_UINT);
   Comet.at(comet).supply(baseAsset, MAX_UINT);
   approve(baseAsset, comet, 0);
-  return before - Token(baseAsset).balanceOf(ctx.self());
+  return before - Token(baseAsset).balanceOf(pot);
 }
 
 function claimCometRewards(comet: Address, rewards: Address): Uint256 {
-  const owed = Comet.at(rewards).getRewardOwed(comet, ctx.self());
-  Comet.at(rewards).claim(comet, ctx.self(), true);
+  const owed = Comet.at(rewards).getRewardOwed(comet, pot);
+  Comet.at(rewards).claim(comet, pot, true);
   return owed.owed;
 }
 
@@ -193,11 +193,11 @@ function main(
     borrowApr: getBorrowApr(comet),
     rewardAprForSupplyBase: getRewardApr(comet, rewardFeed, false),
     rewardAprForBorrowBase: getRewardApr(comet, rewardFeed, true),
-    borrowable: getBorrowableAmount(comet, ctx.self()),
+    borrowable: getBorrowableAmount(comet, pot),
     borrowCollateralFactor,
     liquidateCollateralFactor,
     price: Comet.at(comet).getPrice(feed),
-    rewardsOwed: Comet.at(rewards).getRewardOwed(comet, ctx.self()).owed,
+    rewardsOwed: Comet.at(rewards).getRewardOwed(comet, pot).owed,
     tvl: getTvl(comet),
   };
 }

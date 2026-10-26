@@ -126,7 +126,7 @@ export type Arg = string | bigint | number | boolean;
 
 function literal(arg: Arg): string {
   if (typeof arg === "boolean") return String(arg);
-  if (arg === "self") return "ctx.self()";
+  if (arg === "pot") return "ctx.self()";
   return `${BigInt(arg)}n`;
 }
 
@@ -287,11 +287,9 @@ export function runtimeCall(
   name: string,
   args: readonly { readonly type: "address" | "uint256" | "bool"; readonly value: Arg }[],
 ): Uint8Array {
-  const params = args.map(
-    (a, i) => `${a.value === "self" ? "" : `p${i}: ${PARAM[a.type]!.sauce}`}`,
-  );
+  const params = args.map((a, i) => `${a.value === "pot" ? "" : `p${i}: ${PARAM[a.type]!.sauce}`}`);
   const declared = params.filter((p) => p !== "");
-  const passed = args.map((a, i) => (a.value === "self" ? "ctx.self()" : `p${i}`));
+  const passed = args.map((a, i) => (a.value === "pot" ? "ctx.self()" : `p${i}`));
   const source = [
     `import { ${name} } from "@sauce/router";`,
     "",
@@ -301,7 +299,7 @@ export function runtimeCall(
     "",
   ].join("\n");
   const bytecode = compileStandalone(source);
-  const values = args.filter((a) => a.value !== "self");
+  const values = args.filter((a) => a.value !== "pot");
   const encoded = encodeAbiParameters(
     values.map((a) => PARAM[a.type]!.abi),
     values.map((a) =>

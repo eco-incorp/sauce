@@ -84,7 +84,7 @@ function supply(id: Uint256, amount: Uint256): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
   approve(params.loanToken, MorphoBlue.Morpho, amount);
-  const [assets, shares] = MorphoBlue.Morpho.supply(params, amount, 0, ctx.self(), hex``);
+  const [assets, shares] = MorphoBlue.Morpho.supply(params, amount, 0, pot, hex``);
   return { assets: assets, shares: shares };
 }
 
@@ -92,14 +92,14 @@ function supplyCollateral(id: Uint256, amount: Uint256): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
   approve(params.collateralToken, MorphoBlue.Morpho, amount);
-  MorphoBlue.Morpho.supplyCollateral(params, amount, ctx.self(), hex``);
+  MorphoBlue.Morpho.supplyCollateral(params, amount, pot, hex``);
   return { assets: amount, shares: 0 };
 }
 
 function withdrawCollateral(id: Uint256, amount: Uint256, receiver: Address): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
-  MorphoBlue.Morpho.withdrawCollateral(params, amount, ctx.self(), receiver);
+  MorphoBlue.Morpho.withdrawCollateral(params, amount, pot, receiver);
   return { assets: amount, shares: 0 };
 }
 
@@ -110,7 +110,7 @@ function withdraw(id: Uint256, step: Uint256, amount: Uint256, receiver: Address
   const morpho = MorphoReads.at(MorphoBlue.Morpho);
   const params = morpho.idToMarketParams(id);
   morpho.accrueInterest(params);
-  const supplyShares = morpho.position(id, ctx.self()).supplyShares;
+  const supplyShares = morpho.position(id, pot).supplyShares;
   let assets = amount;
   let shares = 0;
   if (step == 5) {
@@ -133,20 +133,14 @@ function withdraw(id: Uint256, step: Uint256, amount: Uint256, receiver: Address
       shares = supplyShares;
     }
   }
-  const [withdrawn, burned] = MorphoBlue.Morpho.withdraw(
-    params,
-    assets,
-    shares,
-    ctx.self(),
-    receiver,
-  );
+  const [withdrawn, burned] = MorphoBlue.Morpho.withdraw(params, assets, shares, pot, receiver);
   return { assets: withdrawn, shares: burned };
 }
 
 function borrow(id: Uint256, amount: Uint256, receiver: Address): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
-  const [assets, shares] = MorphoBlue.Morpho.borrow(params, amount, 0, ctx.self(), receiver);
+  const [assets, shares] = MorphoBlue.Morpho.borrow(params, amount, 0, pot, receiver);
   return { assets: assets, shares: shares };
 }
 
@@ -158,7 +152,7 @@ function repay(id: Uint256, step: Uint256, amount: Uint256): Moved {
   const params = morpho.idToMarketParams(id);
   morpho.accrueInterest(params);
   const market = morpho.market(id);
-  const borrowShares = morpho.position(id, ctx.self()).borrowShares;
+  const borrowShares = morpho.position(id, pot).borrowShares;
   let assets = amount;
   let shares = 0;
   if (step == 10) {
@@ -180,7 +174,7 @@ function repay(id: Uint256, step: Uint256, amount: Uint256): Moved {
     params,
     shares > 0 ? 0 : assets,
     shares,
-    ctx.self(),
+    pot,
     hex``,
   );
   return { assets: repaid, shares: burned };
@@ -214,7 +208,7 @@ function main(step: Uint256, id: Uint256, amount: Uint256, receiver: Address): S
   const params = morpho.idToMarketParams(id);
   morpho.accrueInterest(params);
   const market = morpho.market(id);
-  const position = morpho.position(id, ctx.self());
+  const position = morpho.position(id, pot);
   let borrowApy = 0;
   let supplyApy = 0;
   if (params.irm != 0) {

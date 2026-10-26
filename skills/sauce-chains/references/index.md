@@ -24,7 +24,7 @@ preview chain's file links its own.
 | [Gnosis](gnosis.md) | `gnosis` | 100 | EVM | preview | — | 0 | 4 |
 | [Fuse](fuse.md) | `fuse` | 122 | EVM | preview | — | 0 | 0 |
 | [Unichain](unichain.md) | `unichain` | 130 | EVM | preview | 10 | 1 | 3 |
-| [Polygon](polygon.md) | `polygon` | 137 | EVM | preview | 7 | 4 | 40 |
+| [Polygon](polygon.md) | `polygon` | 137 | EVM | preview | 7 | 4 | 39 |
 | [Monad](monad.md) | `monad` | 143 | EVM | preview | 15 | 3 | 8 |
 | [Sonic](sonic.md) | `sonic` | 146 | EVM | preview | 13 | 0 | 2 |
 | [Manta Pacific](manta.md) | `manta` | 169 | EVM | preview | — | 0 | 0 |
@@ -43,7 +43,7 @@ preview chain's file links its own.
 | [Arc](arc.md) | `arc` | 5042 | EVM | supported | 26 | 4 | 23 |
 | [ZetaChain](zetachain.md) | `zetachain` | 7000 | EVM | preview | — | 0 | 0 |
 | [Klaytn](klaytn.md) | `klaytn` | 8217 | EVM | preview | — | 0 | 0 |
-| [Base](base.md) | `base` | 8453 | EVM | supported | 6 | 69 | 47 |
+| [Base](base.md) | `base` | 8453 | EVM | supported | 6 | 69 | 45 |
 | [Evmos](evmos.md) | `evmos` | 9001 | EVM | preview | — | 0 | 0 |
 | [Plasma](plasma.md) | `plasma` | 9745 | EVM | preview | — | 1 | 0 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | preview | — | 0 | 2 |

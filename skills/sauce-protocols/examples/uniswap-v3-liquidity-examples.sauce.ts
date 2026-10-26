@@ -64,7 +64,7 @@ function mintNewPosition(amount0ToMint: Uint256, amount1ToMint: Uint256): Moved 
     amount1Desired: amount1ToMint,
     amount0Min: 0,
     amount1Min: 0,
-    recipient: ctx.self(),
+    recipient: pot,
     deadline: ctx.timestamp(),
   });
   // What the position did not take stays in the Pot; the allowance for it does not stand.
@@ -137,11 +137,7 @@ function increaseLiquidityCurrentRange(
 
 function retrieveNFT(tokenId: Uint256, owner: Address): Moved {
   require(UniswapV3.NonfungiblePositionManager);
-  UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).safeTransferFrom(
-    ctx.self(),
-    owner,
-    tokenId,
-  );
+  UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).safeTransferFrom(pot, owner, tokenId);
   return { tokenId, liquidity: 0, amount0: 0, amount1: 0 };
 }
 

@@ -52,29 +52,28 @@ The SDK is still below 1.0, and it has made breaking changes in patch releases. 
 
 ## Which versions work together
 
-Each SDK release and the five releases it pins. The top row is what `main` pins when no SDK release
-carries it yet.
+Each SDK release and the five releases it pins:
 
-| SDK          | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------------ | -------- | ------- | ----------- | ------- | ----------- |
-| (unreleased) | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16      | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15      | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14      | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13      | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12      | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11      | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10      | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9       | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8       | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7       | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6       | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5       | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4       | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3       | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2       | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1       | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0       | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -93,6 +92,73 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK Unreleased
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
+and Kitchens are 0.99.16's; only the compiler moves. Recompile programs.
+
+### SauceScript
+
+Compiler 2.6.1 fixes five cases where a program compiled, ran, and gave a wrong value or skipped
+an effect, with no error. Two of the fixes refuse code that used to compile:
+
+- **Fixed** (EVM): A storage, transient-storage, balance or code read inside a loop that changes
+  it was computed once, before the loop, when optimizing (the default), so the optimized and
+  unoptimized programs gave different answers. The read now runs on every iteration.
+- **Fixed** (both): Taking one element of an array literal on the spot, as in
+  `[chargeFee(), 7][1]`, skipped the calls in the other elements, and so their writes. Every
+  element now runs, in order. An element that can revert (a division by zero, an index out of
+  range) now runs too, and reverts, when a later element writes: `[1 / zero, 7, charge()][1]`
+  reverts where it gave 7.
+- **Now refused** (EVM): A helper with no return-type annotation that returns an array or a signed
+  integer from inside a `try`. It returned a raw word where the caller expected the value. The
+  error is the one the same `return` gives outside a `try`: "returning an array of 3 × number from
+  a function other than `main` needs a return-type annotation …", or "a helper returning a signed
+  integer needs an explicit `: Int256` return annotation". Annotate the helper's return type.
+- **Now refused** (EVM): `return`s in one `try` block that disagree in type, in `main` too: "this
+  `try` block's `return`s disagree in type: … every `return` in it must agree, or the function
+  needs a return-type annotation". Only the first was checked before.
+- **Now refused** (EVM): A list of structs held in a local and passed to a contract call whose
+  struct declares its fields in another order. The fields were encoded in the order written, so
+  the contract received them swapped: "this argument's fields name `IFoo.f()`'s components (a, b)
+  in another order, and it is not a literal written here, so there is nothing left to reorder …".
+  Write the fields in the declared order where the value is built. A list written in the call
+  itself is still reordered.
+
+### The registry
+
+- **Fixed** (EVM): three of the fifteen mixed-case addresses 0.99.16 rewrote with a valid checksum
+  have no code, and a fourth is the wrong contract; the next entries fix them.
+- **Removed** (EVM): Seamless, wound down in 2026, and with it the `Seamless` namespace on Base.
+  Its `PoolAddressesProvider` row had no code: the pool's own provider is another address.
+- **Fixed** (EVM): Yearn V3's `VaultFactory` on Ethereum is Yearn's v3.0.4 factory,
+  `0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F`. The registry had an address one character off,
+  with no code.
+- **Fixed** (EVM): `Sommelier.CellarRouter` is Sommelier's Cellar Router. The registry had the
+  address of one of its Cellars, ETH-BTC Trend.
+- **Removed** (EVM): `Beefy.BIFI` on Polygon, where the address has no code, and on Base, where it
+  is the bridged mooBIFI vault share, not BIFI.
+- **Breaking** (EVM): On Arbitrum, Lido's wstETH is `Lido.WstETHBridged`, the bridged ERC-20, with
+  its own ABI (`WstETHBridgedABI`). `Lido.WstETH` is on Ethereum only. `Lido.WstETH.wrap(…)` and the
+  stETH-rate reads compiled on Arbitrum and reverted there; they no longer compile there.
+
+**Also breaking:**
+
+- The Pot is `"pot"` outside programs too, with no alias, as it is `pot` inside them:
+  - Actions documents (`@eco-incorp/sauce/actions`, `sauce actions` and every command that takes a
+    document, the MCP server's `sauce_actions`): a `recipient`, `onBehalfOf` or `owner` of `"pot"`
+    is the executing Pot. `"self"` is refused at its path:
+    `actions[1].recipient: the Pot is "pot", not "self": write "pot"`. The JSON Schema's recipient
+    takes `"pot"`, and the `Recipient` type is `` `0x${string}` | "pot" ``. The SauceScript a
+    document lowers to (what `sauce actions` prints and `compileProgram(...).source` returns) names
+    the Pot `pot` and its native balance `pot.balance`; the bytecode is the same. A split swap
+    compiled with no `chain` keeps the compiler's `ctx.self()`. `compileSplitSwap`'s
+    `sweep.recipient` takes `"pot"` and refuses `"self"` at `sweep.recipient`.
+  - `token.Token.balanceOf({ token, owner: "pot" })` and `token.evmBalanceExpression` read the
+    Pot's balance; `owner: "self"` is refused, naming `"pot"`.
+  - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
+    is `bigint | "pot" | null`.
 
 ## SDK 0.99.16 — 2026-10-26
 

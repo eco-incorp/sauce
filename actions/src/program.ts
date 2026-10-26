@@ -15,6 +15,9 @@ import { getAddress } from "viem";
 import {
   ACTION_SPECS,
   ACTION_TYPES,
+  POT,
+  RETIRED_POT,
+  RETIRED_POT_MESSAGE,
   type ActionSpec,
   type FieldDef,
   type FieldKind,
@@ -114,7 +117,8 @@ class Checker {
         this.named(path, value, kind);
         break;
       case "recipient":
-        if (value !== "self") this.address(path, value, ' or "self"');
+        if (value === RETIRED_POT) this.fail(path, RETIRED_POT_MESSAGE);
+        else if (value !== POT) this.address(path, value, ` or "${POT}"`);
         break;
       case "remoteRecipient":
         if (typeof value === "string" && BYTES32_RE.test(value)) break;
