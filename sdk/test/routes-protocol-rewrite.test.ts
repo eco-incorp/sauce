@@ -504,9 +504,11 @@ describe("protocol accessors: fallback / named errors", () => {
     );
   });
 
-  it("a method not in the vendored ABI -> the compiler's error naming the method", () => {
+  it("a method not in the vendored ABI -> refused, naming the contract and its methods", () => {
     const source = `function main() { AaveV3.Pool.nope(1); }`;
-    expect(() => compileSauceProgram("base", source)).toThrow(/has no method named `nope`/);
+    expect(() => compileSauceProgram("base", source)).toThrow(
+      /`AaveV3\.Pool\.nope\(…\)`: `nope` is not in aave-v3\.Pool's vendored ABI \(known methods: supply, .*\)\.\n --> main\.js:1:31/,
+    );
   });
 
   it("a binding-name collision with an existing user identifier -> named error", () => {

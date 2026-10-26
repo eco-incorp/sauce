@@ -234,7 +234,7 @@ function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>)
 }
 
 /** The scalar methods 2.6.0 refuses on a contract binding: "`ABI_0` has no method named …". */
-const SCALAR_METHODS: ReadonlySet<string> = new Set(["toBytesBe", "toBytesLe"]);
+export const SCALAR_METHODS: ReadonlySet<string> = new Set(["toBytesBe", "toBytesLe"]);
 
 /**
  * Shape G: `.address` before a scalar method whose receiver is a contract the names module binds

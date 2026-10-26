@@ -295,7 +295,7 @@ function namespaceLiteral(
 
 /** Every token symbol some chain registers: what a chain without one declares zero. */
 let registrySymbols: ReadonlySet<string> | undefined;
-function everySymbol(): ReadonlySet<string> {
+export function everySymbol(): ReadonlySet<string> {
   registrySymbols ??= new Set(
     CANONICAL_CHAINS.flatMap((chain) => [...resolveTokenMap(chain).keys()]).filter((symbol) =>
       IDENTIFIER.test(symbol),

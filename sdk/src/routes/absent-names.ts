@@ -36,6 +36,7 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import type { AccessorTarget } from "./protocol-rewrite.js";
 
 import { CANONICAL_CHAINS, requireChain } from "../chains/canonical.js";
+import { nativeCoinSymbol } from "../chains/index.js";
 import { isTypeDeclaration, type AstNode } from "./ast-walk.js";
 import {
   CHAIN_MODULE,
@@ -43,6 +44,7 @@ import {
   namesRefusal,
   chainNamespaces,
   chainOfKey,
+  everySymbol,
   type ChainNames,
   type NameEntry,
   type NamespaceEntry,
@@ -62,8 +64,10 @@ import {
 } from "./lexical-scope.js";
 import { lexicalBindings } from "./lexical-bindings.js";
 import { parseSauce } from "./parse.js";
+import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { BALANCE_MEMBER, POT_NAME } from "./pot-sugar.js";
+import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
+import { ACCOUNT_MEMBERS } from "./svm-account-expressions.js";
 import { SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
 import { locatedError, nearMatches } from "./unknown-global.js";
 
@@ -186,6 +190,17 @@ function listed(slugs: readonly string[]): string {
     : `${slugs.slice(0, 8).join(", ")} and ${slugs.length - 8} more`;
 }
 
+/** Every chain's native coin's symbol. */
+let natives: ReadonlySet<string> | undefined;
+function nativeSymbols(): ReadonlySet<string> {
+  natives ??= new Set(
+    CANONICAL_CHAINS.map((on) => nativeCoinSymbol(on)).filter(
+      (symbol): symbol is string => symbol !== undefined,
+    ),
+  );
+  return natives;
+}
+
 /** ` Did you mean `A` or `B`?` for the `candidates` nearest `name`, or nothing. */
 function meant(name: string, candidates: Iterable<string>): string {
   const near = nearMatches(name, candidates);
@@ -235,6 +250,9 @@ export function checkNames(
   const chainKeys = new Map<number, CanonicalChain>();
   const dead: DeadCode[] = [];
   const bindingSides: { start: number; end: number }[] = [];
+  /** Whether the visit is in code a test of names rules out (`ruledOut`): there nothing is reported
+   *  and a name this chain lacks is let be, and what no chain can have is refused as anywhere. */
+  let validating = false;
 
   const fail = (node: AstNode, message: string): never => {
     throw locatedError(source, options.file ?? "main.js", node, `compileSauceRoute: ${message}`);
@@ -255,12 +273,13 @@ export function checkNames(
   };
 
   /** The chain `node`, an identifier, names in `at`, when it is a chain key there. On a Solana
-   *  chain, its own name (`Solana.pda(…)`) is the Solana lowering's. */
+   *  chain, and in code a test rules out, a Solana chain's own name (`Solana.pda(…)`) is the
+   *  Solana lowering's. */
   const chainKeyOf = (node: AstNode, at: Scope | undefined): CanonicalChain | undefined => {
     const key = nameOf(node);
     if (shadowed(at, key, node.start) || defined.has(key)) return undefined;
     const on = chainOfKey(key);
-    return on !== undefined && chain.kind === "svm" && on.kind === "svm" ? undefined : on;
+    return on?.kind === "svm" && (chain.kind === "svm" || validating) ? undefined : on;
   };
 
   /** Whether `node` is the Pot, `pot` or `ctx.self()`, where the program does not declare either. */
@@ -425,8 +444,12 @@ export function checkNames(
     if (property.type !== "Identifier") return undefined;
     const name = nameOf(property);
     if (object.type === "Identifier") {
-      // A Solana venue (`Orca.Whirlpool`, `Pancakeswap.CLMM`) is the Solana lowering's name.
-      if (chain.kind === "svm" && `${nameOf(object)}.${name}` in SVM_VENUE_NAMESPACES) {
+      // A Solana venue (`Orca.Whirlpool`, `Pancakeswap.CLMM`) is the Solana lowering's name: on a
+      // Solana chain, and in code a test rules out, which a Solana chain may take.
+      if (
+        (chain.kind === "svm" || validating) &&
+        `${nameOf(object)}.${name}` in SVM_VENUE_NAMESPACES
+      ) {
         return undefined;
       }
       const namespace = namespaceOf(object, at);
@@ -473,9 +496,10 @@ export function checkNames(
     return undefined;
   };
 
-  /** A chain the program names by key: refused outside the scope, and on a Solana chain. */
+  /** A chain the program names by key: refused outside the scope, and on a Solana chain where it
+   *  runs. Code a test rules out compiles nowhere it names. */
   const named = (on: CanonicalChain, node: AstNode): void => {
-    if (chain.kind !== "evm") {
+    if (chain.kind !== "evm" && !validating) {
       fail(
         node,
         `\`${nameOf(node)}\`: a chain's contracts by name are EVM addresses, which a program for ` +
@@ -488,7 +512,7 @@ export function checkNames(
         `chain '${on.slug}' (referenced as '${nameOf(node)}....') is outside the allowed chainScope`,
       );
     }
-    chainKeys.set(on.id, on);
+    if (!validating) chainKeys.set(on.id, on);
   };
 
   /** Whether `reference` is a name its chain has (true), lacks (false), or neither is known. */
@@ -734,7 +758,7 @@ export function checkNames(
   const use = (reference: Reference, mode: Mode, role: Role): void => {
     const asTest = mode === "test" && role === "value";
     if (reference.kind === "token") {
-      if (reference.present === false && !asTest) {
+      if (reference.present === false && !asTest && !validating) {
         const elsewhere = CANONICAL_CHAINS.filter((on) =>
           resolveTokenMap(on).has(reference.symbol),
         ).map((on) => on.slug);
@@ -752,7 +776,7 @@ export function checkNames(
       return;
     }
     const { entry } = reference;
-    if (entry.kind === "absent" && !asTest && role !== "at") {
+    if (entry.kind === "absent" && !asTest && role !== "at" && !validating) {
       const where = entry.descriptor.chains;
       const contract = `${reference.namespace.key}.${reference.contract}`;
       const deployed = [...reference.namespace.members]
@@ -771,7 +795,12 @@ export function checkNames(
           (where.length === 0 ? "" : ` It is deployed on ${listed(where)}.`),
       );
     }
-    if ((entry.kind === "deployed" || entry.kind === "address") && !asTest && role !== "at") {
+    if (
+      (entry.kind === "deployed" || entry.kind === "address") &&
+      !asTest &&
+      role !== "at" &&
+      !validating
+    ) {
       options.onContract?.(reference.shown, {
         chain: reference.chain,
         protocol: entry.descriptor.protocol,
@@ -782,12 +811,104 @@ export function checkNames(
     }
   };
 
-  /** Visits the statements of a list in its own scope, skipping the rest after a decided `if` that
-   *  always exits. */
+  /**
+   * The value a test of names has here: none while code a test rules out is checked
+   * (`validating`), where every branch is read as on a chain that may take it.
+   */
+  const decide = (test: AstNode, at: Scope | undefined): boolean | undefined =>
+    validating ? undefined : valueOf(test, at);
+
+  /**
+   * Code a test rules out: reported for the compile to blank, and checked as on any chain, so a
+   * program that passes here does not break on a chain where the branch is taken. Only a name this
+   * chain lacks is let be there: a name no chain can have is refused as anywhere else.
+   */
+  const ruledOut = (
+    node: AstNode,
+    kind: DeadCode["kind"],
+    at: Scope | undefined,
+    mode: Mode,
+  ): void => {
+    if (validating) {
+      visit(node, mode, "value", at);
+      return;
+    }
+    dead.push({ start: node.start, end: node.end, kind });
+    validating = true;
+    try {
+      visit(node, mode, "value", at);
+    } finally {
+      validating = false;
+    }
+  };
+
+  /** Whether `node` is a read of `self`, the Pot's retired name, where neither the program nor the
+   *  compile binds it. */
+  const isRetiredPot = (node: AstNode, at: Scope | undefined): boolean =>
+    node.type === "Identifier" &&
+    nameOf(node) === RETIRED_POT_NAME &&
+    !shadowed(at, RETIRED_POT_NAME, node.start) &&
+    !defined.has(RETIRED_POT_NAME);
+
+  /**
+   * `<contract>.<read>` of a registry contract, `node`, as `role`: called, a method its ABI has;
+   * read, its balance of a token or of the native coin. Refused, naming the contract, otherwise.
+   */
+  const contractMember = (node: AstNode, read: string, role: Role, at: Scope | undefined): void => {
+    let owner: Reference | undefined;
+    try {
+      owner = referenceOf(prop(node, "object"), at, `.${read}`);
+    } catch {
+      return;
+    }
+    if (owner?.kind !== "contract" || owner.viaDefault !== undefined) return;
+    const { entry } = owner;
+    if (entry.kind !== "deployed" && entry.kind !== "absent") return;
+    const { protocol, contract } = entry.descriptor;
+    const methods = [...new Set(entry.descriptor.methods.map((method) => method.name))];
+    const known = `${protocol}.${contract}'s vendored ABI (known methods: ${methods.join(", ")})`;
+    const property = prop<AstNode>(node, "property");
+    if (role === "callee") {
+      // A scalar method reads the contract's address (`protocol-rewrite.ts`, shape G).
+      if (methods.includes(read) || SCALAR_METHODS.has(read)) return;
+      fail(
+        property,
+        `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${known}.` + meant(read, methods),
+      );
+    }
+    // Read, the binding's address, or a balance: of the native coin, or of a token the chain has.
+    // Another chain's token, and a native coin's symbol, are the balance shorthand's to refuse, as
+    // they are on any holder.
+    if (read === BALANCE_MEMBER || read === "address" || names.tokens.has(read)) return;
+    if (defined.has(read)) return;
+    if (nativeSymbols().has(read)) return;
+    if (names.absentTokens.has(read)) {
+      use({ kind: "token", node: property, symbol: read, present: false }, "value", "value");
+      return;
+    }
+    if (methods.includes(read)) {
+      fail(
+        property,
+        `\`${owner.shown}.${read}\` is a method of ${protocol}.${contract}: call it, ` +
+          `\`${owner.shown}.${read}(…)\`.`,
+      );
+    }
+    fail(
+      property,
+      `\`${owner.shown}.${read}\`: \`${read}\` is neither a method of ${known} nor a token ` +
+        `${validating ? "any chain" : chain.slug} registers.` +
+        meant(read, [...methods, ...names.tokens.keys(), BALANCE_MEMBER]) +
+        ` \`<holder>.<TOKEN>\` reads the holder's balance of a token, and ` +
+        `\`<holder>.${BALANCE_MEMBER}\` its native coin.`,
+    );
+  };
+
+  /** Visits the statements of a list in its own scope; the rest after a decided `if` that always
+   *  exits is ruled out. */
   const statements = (list: readonly AstNode[], outer: Scope | undefined): void => {
     const at = blockScope(list, outer);
     let unreachable = false;
-    let ruledOut = false;
+    let guarded = false;
     for (const statement of list) {
       if (unreachable) {
         // A function declared in a dead tail is still declared: it may be called from before. An
@@ -796,11 +917,11 @@ export function checkNames(
         if (statement.type === "FunctionDeclaration" || statement.type.startsWith("Export")) {
           visit(statement, "value", "value", at);
         } else if (
-          ruledOut &&
+          guarded &&
           !isTypeDeclaration(statement.type) &&
           statement.type !== "ImportDeclaration"
         ) {
-          dead.push({ start: statement.start, end: statement.end, kind: "tail" });
+          ruledOut(statement, "tail", at, "value");
         }
         continue;
       }
@@ -810,11 +931,11 @@ export function checkNames(
       }
       if (
         statement.type === "IfStatement" &&
-        valueOf(prop(statement, "test"), at) !== undefined &&
+        decide(prop(statement, "test"), at) !== undefined &&
         exits(statement, at)
       ) {
         unreachable = true;
-        ruledOut = true;
+        guarded = true;
       }
     }
   };
@@ -887,25 +1008,25 @@ export function checkNames(
         return;
       case "IfStatement": {
         visit(prop(node, "test"), "test", "value", at);
-        const taken = valueOf(prop(node, "test"), at);
+        const taken = decide(prop(node, "test"), at);
         const consequent = prop<AstNode>(node, "consequent");
         const alternate = prop<AstNode | null>(node, "alternate");
         if (taken !== false) visit(consequent, "value", "value", at);
-        else dead.push({ start: consequent.start, end: consequent.end, kind: "statement" });
+        else ruledOut(consequent, "statement", at, "value");
         if (!alternate) return;
         if (taken !== true) visit(alternate, "value", "value", at);
-        else dead.push({ start: alternate.start, end: alternate.end, kind: "statement" });
+        else ruledOut(alternate, "statement", at, "value");
         return;
       }
       case "ConditionalExpression": {
         visit(prop(node, "test"), "test", "value", at);
-        const taken = valueOf(prop(node, "test"), at);
+        const taken = decide(prop(node, "test"), at);
         for (const [arm, live] of [
           [prop<AstNode>(node, "consequent"), taken !== false],
           [prop<AstNode>(node, "alternate"), taken !== true],
         ] as const) {
           if (live) visit(arm, mode, "value", at, wrap);
-          else dead.push({ start: arm.start, end: arm.end, kind: "expression" });
+          else ruledOut(arm, "expression", at, mode);
         }
         return;
       }
@@ -958,19 +1079,19 @@ export function checkNames(
         // A scalar side is left. A side is a side of a value too, through a `?:` arm or another
         // `&&`/`||` in it, which is how a `&&`/`||` nested anywhere in a side gives the bool. Where
         // the left side decides the whole, the right side is not compiled.
-        const sides = mode === "value" || wrap;
+        const sides = !validating && (mode === "value" || wrap);
         const normalize = (side: AstNode): void => {
           if (sides && bindingKind(side, at) !== "scalar") {
             bindingSides.push({ start: side.start, end: side.end });
           }
         };
-        const decided = valueOf(left, at);
+        const decided = decide(left, at);
         normalize(left);
         visit(left, "test", "value", at, sides);
         if (decided === undefined || decided !== (operator === "||")) {
           normalize(right);
           visit(right, "test", "value", at, sides);
-        } else dead.push({ start: right.start, end: right.end, kind: "expression" });
+        } else ruledOut(right, "expression", at, "test");
         return;
       }
       case "BinaryExpression": {
@@ -1004,7 +1125,7 @@ export function checkNames(
           nameOf(target) === "require" &&
           !shadowed(at, "require", target.start);
         const absent =
-          required && condition !== undefined && valueOf(condition, at) === false
+          required && condition !== undefined && decide(condition, at) === false
             ? absentIn(condition, at)
             : undefined;
         if (absent !== undefined) {
@@ -1041,27 +1162,57 @@ export function checkNames(
           use(reference, mode, role);
           return;
         }
-        if (node.type === "MemberExpression") {
-          const property = prop<AstNode>(node, "property");
-          const read =
-            !prop<boolean>(node, "computed") && property.type === "Identifier"
-              ? nameOf(property)
-              : "[…]";
-          // The Pot's balance of a token the chain lacks (`pot.WETH`, `ctx.self().WETH`) is a use of
-          // the token, refused where a test of it does not rule the read out. The Pot is never a
-          // record, so no field of that name can be meant; another holder's may be one, which the
-          // compile reads or refuses.
-          if (
-            names.absentTokens.has(read) &&
-            !defined.has(read) &&
-            !shadowed(at, read, node.start) &&
-            isThePot(prop(node, "object"), at)
-          ) {
-            use({ kind: "token", node: property, symbol: read, present: false }, "value", "value");
+        if (node.type === "Identifier") {
+          if (validating && isRetiredPot(node, at)) {
+            fail(node, selfRefusal(RETIRED_POT_NAME, POT_NAME).message);
           }
-          visit(prop(node, "object"), "value", `.${read}`, at);
-          if (prop<boolean>(node, "computed")) visit(prop(node, "property"), "value", "value", at);
+          return;
         }
+        const property = prop<AstNode>(node, "property");
+        const read =
+          !prop<boolean>(node, "computed") && property.type === "Identifier"
+            ? nameOf(property)
+            : "[…]";
+        const object = prop<AstNode>(node, "object");
+        if (validating && read !== "[…]" && isRetiredPot(unwrap(object), at)) {
+          fail(node, selfRefusal(`${RETIRED_POT_NAME}.${read}`, `${POT_NAME}.${read}`).message);
+        }
+        // The Pot's balance of a token the chain lacks (`pot.WETH`, `ctx.self().WETH`) is a use of
+        // the token, refused where a test of it does not rule the read out. The Pot is never a
+        // record, so no field of that name can be meant; another holder's may be one, which the
+        // compile reads or refuses.
+        if (
+          names.absentTokens.has(read) &&
+          !defined.has(read) &&
+          !shadowed(at, read, node.start) &&
+          isThePot(object, at)
+        ) {
+          use({ kind: "token", node: property, symbol: read, present: false }, "value", "value");
+        } else if (
+          validating &&
+          read !== "[…]" &&
+          read !== BALANCE_MEMBER &&
+          !names.tokens.has(read) &&
+          !defined.has(read) &&
+          !everySymbol().has(read) &&
+          !ACCOUNT_MEMBERS.has(read) &&
+          !nativeSymbols().has(read) &&
+          role !== "callee" &&
+          isThePot(object, at)
+        ) {
+          // Code a test rules out holds no read of the Pot that is no member it has on any chain:
+          // a token, `balance`, a native coin's symbol or, on Solana, an account's field or role.
+          fail(
+            property,
+            `\`${read}\` is not a token any chain registers.` +
+              meant(read, [...everySymbol(), ...names.tokens.keys()]) +
+              ` \`<holder>.<TOKEN>\` reads the holder's balance of a token, and ` +
+              `\`<holder>.${BALANCE_MEMBER}\` its native coin.`,
+          );
+        }
+        visit(object, "value", `.${read}`, at);
+        if (prop<boolean>(node, "computed")) visit(property, "value", "value", at);
+        else if (read !== "[…]") contractMember(node, read, role, at);
         return;
       }
       case "Property":

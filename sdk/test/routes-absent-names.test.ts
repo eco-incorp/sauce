@@ -864,6 +864,138 @@ describe("what a chain can lack", () => {
   });
 });
 
+describe("code a test rules out is still checked as on any chain: only a name the chain lacks is let be", () => {
+  // A program that passes on the chain without the venue must not break on the one with it: what
+  // no chain can have is refused in a ruled-out branch too.
+  it("the reviewer's program: a misspelt contract behind a venue test is refused on Base and Optimism", () => {
+    const source =
+      "function main(): Uint256 { if (PancakeswapV3.Factory) { return UniswapV3.Factroy.getPool(USDC, WETH, 500); } return 0; }";
+    for (const chain of ["base", "optimism"]) {
+      const message = refusal(chain, source);
+      expect(message).toMatch(
+        /`UniswapV3\.Factroy` is not a contract of UniswapV3: it has Factory, .* Did you mean `Factory`\?/,
+      );
+      expect(message).toMatch(/--> main\.js:1:64/);
+    }
+  });
+
+  it.each([
+    ["an if arm", "if (PancakeswapV3.Factory) { return ${X}; }\nreturn 0;"],
+    ["an else arm", "if (!PancakeswapV3.Factory) { return 0; } else { return ${X}; }"],
+    ["a ?: arm", "return PancakeswapV3.Factory ? ${X} : 0;"],
+    ["the right side of &&", "if (PancakeswapV3.Factory && ${X} > 0) { return 1; }\nreturn 0;"],
+    [
+      "the rest of a block after a guard",
+      "if (!PancakeswapV3.Factory) { return 0; }\nreturn ${X};",
+    ],
+    [
+      "a branch inside a ruled-out branch",
+      "if (PancakeswapV3.Factory) { if (UniswapV3.Factory) { return ${X}; } }\nreturn 0;",
+    ],
+  ])("in %s on a chain without the venue", (_where, shape) => {
+    for (const [what, error] of [
+      [
+        "UniswapV3.Factroy.getPool(USDC, WETH, 500)",
+        /`UniswapV3\.Factroy` is not a contract of UniswapV3/,
+      ],
+      ["UniswapV3.getPool(USDC, WETH, 500)", /`UniswapV3\.getPool` is not a contract of UniswapV3/],
+      ["(UniswapV3 != 0 ? 1 : 0)", /`UniswapV3` is a protocol, not a contract/],
+      ["(Uniswap.Factory != 0 ? 1 : 0)", /ambiguous under Uniswap/],
+      [
+        "(Erc4626.Vault != 0 ? 1 : 0)",
+        /`Erc4626\.Vault` is an interface, with no address of its own/,
+      ],
+      ["(Base.UniswapV3 != 0 ? 1 : 0)", /`Base\.UniswapV3` is a protocol, not a contract/],
+      ["(available(UniswapV3.Factory) ? 1 : 0)", /`available\(X\)` is removed/],
+      [
+        "PancakeswapV3.Factory.getPol(USDC, WETH, 500)",
+        /`getPol` is not in pancakeswap-v3\.Factory's vendored ABI \(known methods: .*getPool.*\)/,
+      ],
+      ["pot.USDCC", /`USDCC` is not a token any chain registers\. Did you mean `USDC`\?/],
+      ["self.USDC", /the Pot is `pot`, not `self`: write `pot\.USDC`/],
+    ] as const) {
+      const source = `function main(): Uint256 {\n${shape.replace("${X}", what)}\n}`;
+      const message = refusal("optimism", source);
+      expect(message).toMatch(error);
+      expect(message).toMatch(/--> main\.js:\d+:\d+/);
+    }
+  });
+
+  it("a name this chain lacks, a token another chain registers and another chain's venue are let be", () => {
+    // Optimism has no PancakeSwap V3 factory; Base registers no WSOL; Solana's venues are names
+    // only a Solana compile lowers. Each is in code its test rules out, which compiles to nothing.
+    for (const [chain, body, nothing] of [
+      [
+        "optimism",
+        "if (PancakeswapV3.Factory) { return PancakeswapV3.Factory.getPool(USDC, WETH, 500) + pot.USDT + pot.WSOL; }\nreturn 0;",
+        "return 0;",
+      ],
+      [
+        "optimism",
+        "if (PancakeswapV3.Factory) { return Base.PancakeswapV3.Factory.getPool(USDC, WETH, 500); }\nreturn 0;",
+        "return 0;",
+      ],
+    ] as const) {
+      expect(build(chain, body)).toBe(build(chain, nothing));
+    }
+    const crossChain =
+      "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n  if (UniswapV3.Factory) { return 1; }\n  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, priceLimit, 1);\n}";
+    expect(hex("base", crossChain)).toBe(
+      hex(
+        "base",
+        "function main(pool: Address, amountIn: Uint256, priceLimit: Uint256): Uint256 {\n  return 1;\n}",
+      ),
+    );
+    expect(() => hex("solana", crossChain)).not.toThrow();
+  });
+});
+
+describe("a registry contract's members are its ABI's methods and the balances read of it", () => {
+  it("a method its ABI lacks is refused, naming the contract and its methods", () => {
+    const message = refusal(
+      "base",
+      "function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPol(a, b, 500); }",
+    );
+    expect(message).toMatch(
+      /`UniswapV3\.Factory\.getPol\(…\)`: `getPol` is not in uniswap-v3\.Factory's vendored ABI \(known methods: getPool, createPool\)\. Did you mean `getPool`\?/,
+    );
+    expect(message).toMatch(/--> main\.js:1:75/);
+    // Named on another chain, the same.
+    expect(
+      refusal(
+        "optimism",
+        "function main(a: Address, b: Address): Uint256 { return Base.UniswapV3.Factory.getPol(a, b, 500); }",
+      ),
+    ).toMatch(/`Base\.UniswapV3\.Factory\.getPol\(…\)`: `getPol` is not in uniswap-v3\.Factory's/);
+  });
+
+  it("a member read of it is a balance: a token the chain lacks, a method uncalled and a name it has not are refused", () => {
+    expect(refusal("base", "function main(): Uint256 { return UniswapV3.Factory.USDT; }")).toMatch(
+      /`USDT` is not a token on base\.[\s\S]*--> main\.js:1:53/,
+    );
+    expect(
+      refusal("base", "function main(): Uint256 { return UniswapV3.Factory.getPool; }"),
+    ).toMatch(/`UniswapV3\.Factory\.getPool` is a method of uniswap-v3\.Factory: call it/);
+    expect(refusal("base", "function main(): Uint256 { return UniswapV3.Factory.Foo; }")).toMatch(
+      /`UniswapV3\.Factory\.Foo`: `Foo` is neither a method of uniswap-v3\.Factory's vendored ABI \(known methods: getPool, createPool\) nor a token base registers/,
+    );
+    // Its balance of a token the chain has, and of its native coin, are read as ever.
+    expect(() =>
+      hex(
+        "base",
+        "function main(): Uint256 { return UniswapV3.Factory.USDC + UniswapV3.Factory.balance; }",
+      ),
+    ).not.toThrow();
+    // Its address, read or through a scalar method, is the binding's.
+    for (const body of [
+      "function main(): Address { return UniswapV3.Factory.address; }",
+      "function main(): Uint256 { return UniswapV3.Factory.toBytesBe(32).toBe(); }",
+    ]) {
+      expect(() => hex("base", body)).not.toThrow();
+    }
+  });
+});
+
 describe("available(X) is gone", () => {
   it("calling it says to test the name itself", () => {
     const message = refusal(
