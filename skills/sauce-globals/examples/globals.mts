@@ -120,6 +120,38 @@ for (const slug of ["linea", "solana"]) {
     `a call on UniswapV3.Factory is refused on ${slug}, naming the chain`,
   );
 }
+// Every test the skill lists compiles to the bytes of the program written without it: on Linea,
+// which lacks the factory, the branch is gone; on Base, which has it, the call is all there is.
+const bytes = (slug: string, body: string): string =>
+  Buffer.from(
+    routes.compileSauceProgram(slug, `function main(): Uint256 {\n${body}\n}`).bytecode,
+  ).toString("hex");
+for (const [tested, absent, present] of [
+  [`if (UniswapV3.Factory) { return ${call}; }\nreturn 0;`, "return 0;", `return ${call};`],
+  [`if (!UniswapV3.Factory) { return 0; }\nreturn ${call};`, "return 0;", `return ${call};`],
+  [`if (UniswapV3.Factory != 0) { return ${call}; }\nreturn 0;`, "return 0;", `return ${call};`],
+  [
+    `if (UniswapV3.Factory == 0) { return 0; } else { return ${call}; }`,
+    "return 0;",
+    `return ${call};`,
+  ],
+  [`return UniswapV3.Factory ? ${call} : 0;`, "return 0;", `return ${call};`],
+]) {
+  check(bytes("linea", tested) === bytes("linea", absent), `${tested} on linea is ${absent}`);
+  check(bytes("base", tested) === bytes("base", present), `${tested} on base is ${present}`);
+}
+// A require of a name the chain lacks rules nothing out: it fails whatever the program does, and
+// is refused; where the chain has the name it compiles.
+check(
+  refusal("linea", "function main() { require(UniswapV3.Factory != 0); }").includes(
+    "fails on linea whatever the program does",
+  ),
+  "require(UniswapV3.Factory != 0) is refused on linea",
+);
+check(
+  !rejects("base", "function main() { require(UniswapV3.Factory != 0); }"),
+  "require(UniswapV3.Factory != 0) compiles on base",
+);
 // It takes a token symbol too: Base registers no USDT, so the tested transfer is left out there.
 check(
   !rejects("base", "function main() { if (USDT) { USDT.transfer(pot, 1); } }"),

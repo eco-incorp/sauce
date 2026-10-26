@@ -1263,6 +1263,24 @@ export function checkNames(
               `\`<holder>.${BALANCE_MEMBER}\` its native coin.`,
           );
         }
+        // `(A && B).getPool(…)` on contracts: `&&` and `||` give a bool, which has no method. Said
+        // here, at the choice, rather than by the compiler, which cannot say where.
+        const choice = unwrap(object);
+        if (
+          role === "callee" &&
+          choice.type === "LogicalExpression" &&
+          ["&&", "||"].includes(prop<string>(choice, "operator")) &&
+          [prop<AstNode>(choice, "left"), prop<AstNode>(choice, "right")].some(
+            (side) => bindingKind(side, at) !== "scalar",
+          )
+        ) {
+          fail(
+            choice,
+            `\`${source.slice(choice.start, choice.end)}\` is true or false, which has no method ` +
+              `\`${read}\`: \`&&\` and \`||\` give a bool. Choose the contract with \`?:\`: ` +
+              "`X ? X : Y`.",
+          );
+        }
         visit(object, "value", `.${read}`, at);
         if (prop<boolean>(node, "computed")) visit(property, "value", "value", at);
         else if (read !== "[…]") contractMember(node, read, role, at);

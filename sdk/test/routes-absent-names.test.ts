@@ -196,10 +196,59 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
       "a method of a choice between contracts",
       "require((ctx.timestamp() == 0 ? PancakeswapV3.Factory : UniswapV3.Factory).getPool(USDC, WETH, 500) != 0);\nreturn 1;",
     ],
+    [
+      "in a for loop's body",
+      "for (let i = 0; i < 2; i++) { USDC.approve(PancakeswapV3.Factory, i); }",
+    ],
+    [
+      "in a for-of loop's body",
+      "for (const i of [1, 2]) { USDC.approve(PancakeswapV3.Factory, i); }",
+    ],
+    [
+      "in a while loop's body",
+      "let i = 0;\nwhile (i < 2) { USDC.approve(PancakeswapV3.Factory, i); i = i + 1; }",
+    ],
+    [
+      "in a do-while loop's body",
+      "let i = 0;\ndo { USDC.approve(PancakeswapV3.Factory, i); i = i + 1; } while (i < 2);",
+    ],
+    ["in a try block", "try { USDC.approve(PancakeswapV3.Factory, 1); } catch (e) { }"],
+    [
+      "in a catch block",
+      "try { USDC.approve(USDC, 1); } catch (e) { USDC.approve(PancakeswapV3.Factory, 1); }",
+    ],
   ])("%s", (_what, body) => {
     const message = refusal("optimism", `function main() {\n${body}\n}`);
     expect(message).toMatch(/`PancakeswapV3\.Factory` is not deployed on optimism/);
     expect(message).toMatch(/--> main\.js:\d+:\d+/);
+  });
+
+  it("a method called on `&&` or `||` of contracts is refused at the choice: it is a bool", () => {
+    for (const chain of ["optimism", "base"]) {
+      const message = refusal(
+        chain,
+        "function main() {\nrequire((PancakeswapV3.Factory && UniswapV3.Factory).getPool(USDC, WETH, 500) != 0);\n}",
+      );
+      expect(message).toMatch(
+        /`PancakeswapV3\.Factory && UniswapV3\.Factory` is true or false, which has no method `getPool`: `&&` and `\|\|` give a bool\. Choose the contract with `\?:`/,
+      );
+      expect(message).toMatch(/--> main\.js:2:10/);
+    }
+  });
+
+  it("a chain's contract by name in a program for Solana is refused, located, where it runs", () => {
+    const message = refusal(
+      "solana",
+      "function main(): Address {\n  return Base.UniswapV3.Factory;\n}",
+    );
+    expect(message).toMatch(
+      /`Base`: a chain's contracts by name are EVM addresses, which a program for solana cannot use\./,
+    );
+    expect(message).toMatch(/--> main\.js:2:10/);
+    // In a branch a test of a name Solana lacks rules out, it compiles to nothing.
+    expect(
+      build("solana", "if (UniswapV3.Factory) { return Base.UniswapV3.Factory; }\nreturn 0;"),
+    ).toBe(build("solana", "return 0;"));
   });
 
   it("an export after a guard that rules the chain out is still checked", () => {
@@ -1104,9 +1153,12 @@ describe("available(X) is gone", () => {
 });
 
 /**
- * The bytes `available(X)` compiled to before it was removed (compiler 2.6.0), each beside the same
- * decision written as a test of the name and as a comparison with zero, on a chain with the name and
- * one without. Moving from one spelling to the other moves no byte.
+ * The bytes `available(X)` compiled to before it was removed, each beside the same decision written
+ * as a test of the name and as a comparison with zero, on a chain with the name and one without.
+ * Moving from one spelling to the other moves no byte. Captured with `@eco-incorp/sauce-compiler`
+ * 2.6.0 from npm, the build the lockfile pins by its integrity
+ * `sha512-AKZKjPMnYZ6xHQSnFg5RO220s2X9ubQgiD4+7tE/6g3eKQUcGSz0N9qCRL6u7hWoP5P2GXrGbearJh/Dvs11mg==`
+ * (the package records no source commit), at 39d592422, the SDK commit before the removal.
  */
 const BEFORE: readonly { chain: string; available: string; bytecode: string }[] = [
   {
@@ -1259,20 +1311,22 @@ const SPELLINGS: Record<string, (source: string) => string> = {
 };
 
 describe("a test of the name compiles to the bytes available(X) did", () => {
+  // Every capture in both spellings: `const both = X && Y` holds a bool, each side a test, so it
+  // compiles where `X` is absent as `available(X) && available(Y)` did.
   const cases = BEFORE.flatMap((entry) =>
-    Object.entries(SPELLINGS)
-      // A decision held as a value is a comparison: `&&` gives true or false, so a contract under
-      // it, where the whole is a value, is refused.
-      .filter(([spelling]) => spelling !== "if (X)" || !entry.available.includes("const both"))
-      .map(
-        ([spelling, spell]) =>
-          [
-            `${entry.chain}, ${spelling}: ${spell(entry.available)}`,
-            spell(entry.available),
-            entry,
-          ] as const,
-      ),
+    Object.entries(SPELLINGS).map(
+      ([spelling, spell]) =>
+        [
+          `${entry.chain}, ${spelling}: ${spell(entry.available)}`,
+          spell(entry.available),
+          entry,
+        ] as const,
+    ),
   );
+  it("compiles each of the 21 captures in both spellings: 42 programs", () => {
+    expect(BEFORE).toHaveLength(21);
+    expect(cases).toHaveLength(42);
+  });
   it.each(cases)("%s", (_name, source, { chain, bytecode }) => {
     expect(hex(chain, source)).toBe(bytecode);
   });
