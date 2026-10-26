@@ -319,7 +319,7 @@ describe("sauce_globals", () => {
         "Account.associatedTokenProgram",
         "Account.memoProgram",
         "pot",
-        "owner",
+        "pot.owner",
         "<Sym>.accountOf(holder)",
         "<Sym>.mint",
         "<Sym>.tokenProgram",

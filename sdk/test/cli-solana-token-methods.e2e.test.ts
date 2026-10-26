@@ -379,9 +379,9 @@ describeSvm("the token methods on Solana: every account derived by the command",
   it("runs the sauce-solana wrap example as its header says: the owner's SOL into the Pot's WSOL", async () => {
     const file = join(HERE, "../../skills/sauce-solana/examples/wrap.sauce.ts");
     const text = readFileSync(file, "utf8");
-    // Its accounts are `Account`'s and the owner is `owner`: no spelling on Solana's name.
+    // Its accounts are `Account`'s and the owner is `pot.owner`: no spelling on Solana's name.
     expect(text).toContain("Account.systemProgram");
-    expect(text).toContain("owner.writable().signer()");
+    expect(text).toContain("pot.owner.writable().signer()");
     expect(text).not.toMatch(/\bSolana\./);
     const header = text
       .split("\n")
@@ -919,7 +919,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const file = program(
       "accounts-pda",
       "function main(kitchen: Address, salt: Uint256): Uint256 {\n" +
-        '  const found = Account.pda(kitchen, ["pot", owner, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
+        '  const found = Account.pda(kitchen, ["pot", pot.owner, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
         '  require(found.address == pot, "not the Pot");\n' +
         "  return found.dataLen;\n" +
         "}\n",
@@ -1197,8 +1197,8 @@ describeSvm("the token methods on Solana: every account derived by the command",
     // One rule for every role a cook fills: a slot the lowering derived from the Pot, the owner or
     // the authority (their token accounts and the addresses they seed included) takes only the
     // account its derivation gives, on every command that builds the cook, through the Kitchen and
-    // cooked directly. `--account owner=<another key>` with `return owner.address;` used to return
-    // the other key.
+    // cooked directly. `--account owner=<another key>` with `return pot.owner.address;` used to
+    // return the other key.
     const tx = (file: string, ...rest: string[]) =>
       sauce(
         ...["tx", file, "--chain", "solana", "--rpc-url", SOLANA_URL],
@@ -1208,11 +1208,11 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const programs = {
       pot: "function main(): Address {\n  return pot;\n}\n",
       potToken: "function main(): Uint256 {\n  return pot.USDC;\n}\n",
-      owner: "function main(): Address {\n  return owner.address;\n}\n",
-      ownerToken: "function main(): Uint256 {\n  return owner.USDC;\n}\n",
+      owner: "function main(): Address {\n  return pot.owner.address;\n}\n",
+      ownerToken: "function main(): Uint256 {\n  return pot.owner.USDC;\n}\n",
       pays: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
       ownerSeeded:
-        'function main(program: Address): Uint256 {\n  return Account.pda(program, ["vault", owner]).dataLen;\n}\n',
+        'function main(program: Address): Uint256 {\n  return Account.pda(program, ["vault", pot.owner]).dataLen;\n}\n',
     };
     let to: Address;
     let ownerUsdc: Address;

@@ -19,7 +19,7 @@ import {
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { ambientNamesOf } from "../src/routes/rs-compile.js";
 import { chainAmbient } from "../src/routes/ambient.js";
-import { ambientNameRefusal } from "../src/routes/pot-sugar.js";
+import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -1056,7 +1056,7 @@ describe.each([
   const exported = (source = PROGRAM) => {
     const lines = source.slice(0, source.indexOf("return p") + "return ".length).split("\n");
     return {
-      refused: ambientNameRefusal("pot", lines.length, lines[lines.length - 1]!.length + 1).message,
+      refused: ambientPotRefusal(lines.length, lines[lines.length - 1]!.length + 1).message,
     };
   };
 

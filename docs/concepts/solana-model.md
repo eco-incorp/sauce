@@ -30,9 +30,9 @@ yourself. [Solana from the command line](../guides/cli-solana.md) shows both.
 A program names an account where it uses it, and compiling adds it to the manifest with how it is
 derived: `Account(key)` for the account at a known key, `Account.pda(program, [seeds])` for an
 address a program derives, `Account.systemProgram` and the other programs by name, `pot` for your
-Pot and `owner` for you, its owner. These are words of the language, as an `Account` parameter's
-type is. `Solana` names the chain, as `Base` does, and holds no account: an account belongs to the
-transaction that lists it, not to the chain.
+Pot and `pot.owner` for you, its owner. These are words of the language, as an `Account`
+parameter's type is. `Solana` names the chain, as `Base` does, and holds no account: an account
+belongs to the transaction that lists it, not to the chain.
 
 Three kinds of derived address appear in a manifest:
 
@@ -81,7 +81,7 @@ Kitchen signs for the Pot when it runs a cook, so the program can spend tokens w
 the Pot, and nothing else can.
 
 Programs run by the engine, which sees the Pot as one of its accounts. In a program `ctx.self()`
-is the engine's program id, not the Pot; `pot` is the Pot, and `owner` its owner, who signs the
+is the engine's program id, not the Pot; `pot` is the Pot, and `pot.owner` its owner, who signs the
 cook.
 
 ## Why a program is staged

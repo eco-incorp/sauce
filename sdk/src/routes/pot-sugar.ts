@@ -1,35 +1,63 @@
 /**
- * The holder sugar's one vocabulary, shared by the EVM (`token-rewrite.ts`, `protocol-rewrite.ts`)
- * and Solana (`svm-token-rewrite.ts`, `svm-account-expressions.ts`) lowerings, so a refusal reads
- * the same on either:
+ * The holder sugar's one vocabulary, shared by the EVM (`token-rewrite.ts`, `protocol-rewrite.ts`,
+ * `pot-owner.ts`) and Solana (`svm-token-rewrite.ts`, `svm-account-expressions.ts`) lowerings, so a
+ * refusal reads the same on either:
  *
  *   `pot`                 the Pot's address (EVM: `ctx.self()`; Solana: the Pot account's key)
+ *   `pot.owner`           the Pot's owner (EVM: the Pot's `owner()`; Solana: the owner's account,
+ *                         which signs the cook)
  *   `pot.<TOKEN>`         the Pot's balance of a token the chain registers
  *   `<holder>.<TOKEN>`    a holder's balance of a registered token
  *   `<holder>.balance`    a holder's native-coin balance (wei on EVM, lamports on Solana)
- *   `owner`               Solana: the Pot's owner, who signs the cook, as an account
  *
  * `.<SYMBOL>` always means a registered token: a chain whose native coin is also a registered
  * token (Arc's USDC) reads the token, and the coin is `.balance`. A program that declares its own
- * `pot` or `owner` (an import included), or a compile that gives it one (a define, a contract
- * binding), owns the name. A `pot` only an ambient module exports is refused where the program
- * reads it (`ambientNameRefusal`): it would replace the Pot with no word in the program, and so is
- * an `owner` on Solana. The old spellings — bare `self`, `self.<TOKEN>`, `Solana.self`,
- * `Solana.owner` and `<holder>.<native symbol>` — are refused by name, each naming what to write
- * instead.
+ * `pot` (an import included), or a compile that gives it one (a define, a contract binding), owns
+ * the name, `pot.owner` with it. A `pot` only an ambient module exports is refused where the
+ * program reads it (`ambientPotRefusal`): it would replace the Pot with no word in the program. The
+ * old spellings — bare `self`, `self.<TOKEN>`, `Solana.self` and `<holder>.<native symbol>` — are
+ * refused by name, each naming what to write instead.
  */
+import { walk, type AstNode } from "./ast-walk.js";
 
 /** The Pot, as a program spells it. */
 export const POT_NAME = "pot";
 
-/** The Pot's owner, as a program compiled for Solana spells it. */
-export const OWNER_NAME = "owner";
+/** The Pot's member that is its owner: `pot.owner`. */
+export const OWNER_MEMBER = "owner";
 
 /** The member that reads a holder's native-coin balance. */
 export const BALANCE_MEMBER = "balance";
 
 /** The name the language no longer has for the Pot. */
 export const RETIRED_POT_NAME = "self";
+
+/**
+ * Every `pot.owner` in `program` that is read, not called, by the `pot` it is read on: the Pot's
+ * owner, which reads no Pot. Whether that `pot` is the Pot (one neither the program nor the
+ * compile binds there) is the caller's to decide.
+ */
+export function potOwners(program: AstNode): ReadonlyMap<AstNode, AstNode> {
+  const owners = new Map<AstNode, AstNode>();
+  const called = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "CallExpression") called.add(n.callee as AstNode);
+    if (n.type !== "MemberExpression" || n.computed === true || n.optional === true) return;
+    const object = n.object as AstNode;
+    const property = n.property as AstNode;
+    if (
+      object.type === "Identifier" &&
+      object.name === POT_NAME &&
+      property.type === "Identifier" &&
+      property.name === OWNER_MEMBER
+    ) {
+      owners.set(object, n);
+    }
+  });
+  for (const [pot, member] of owners) if (called.has(member)) owners.delete(pot);
+
+  return owners;
+}
 
 /** The refusal of `self` for the Pot: `site` is the text refused, `instead` what to write. */
 export function selfRefusal(site: string, instead: string): Error {
@@ -40,24 +68,16 @@ export function selfRefusal(site: string, instead: string): Error {
 }
 
 /**
- * The refusal of `name` — the Pot, `pot`, or on Solana its owner, `owner` — that the program reads
- * with no declaration of its own where only an ambient module exports one: the module's value would
- * stand in for the Pot or its owner. `line` and `column`, 1-based, are where the program reads it.
+ * The refusal of a `pot` the program reads with no declaration of its own where only an ambient
+ * module exports one: the module's value would stand in for the Pot. `line` and `column`, 1-based,
+ * are where the program reads it.
  */
-export function ambientNameRefusal(name: string, line: number, column: number): Error {
-  const [what, instead] =
-    name === POT_NAME
-      ? ["the Pot", "Write `ctx.self()` for the Pot"]
-      : [
-          "the Pot's owner",
-          "Take the Pot's owner as an `Account<Signer>` parameter of main, passed as " +
-            "`--account <name>=owner`",
-        ];
+export function ambientPotRefusal(line: number, column: number): Error {
   return new Error(
-    `\`${name}\` at line ${line}, column ${column}: an ambient module exports \`${name}\`, and ` +
-      `the program reads it with no import, so it would read that module's value and not ${what}. ` +
-      `${instead}, or import it by name (\`import { ${name} } from "<module>"\`) for the module's ` +
-      "value.",
+    `\`pot\` at line ${line}, column ${column}: an ambient module exports \`pot\`, and the ` +
+      "program reads it with no import, so it would read that module's value and not the Pot. " +
+      'Write `ctx.self()` for the Pot, or import it by name (`import { pot } from "<module>"`) ' +
+      "for the module's value.",
   );
 }
 

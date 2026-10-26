@@ -977,9 +977,8 @@ for the accessor pass's bare `pot`, which becomes `ctx.self()`; on Solana the lo
 every such `pot` itself, as the Pot slot's key, or its account where an `Account` is expected); a
 `pot` the program declares or imports by name, a `defines` key or a `contracts` binding is an
 ordinary variable. A `pot` that only a caller's ambient module exports, read with no import, is
-neither: it is refused where it is read (`pot-sugar.ts#ambientNameRefusal`), so no module's export
-stands in for the Pot with no word in the program, and so is an ambient `owner` a program for
-Solana reads, where `owner` is the Pot's owner (an ambient `self` stays the caller's value). The
+neither: it is refused where it is read (`pot-sugar.ts#ambientPotRefusal`), so no module's export
+stands in for the Pot with no word in the program (an ambient `self` stays the caller's value). The
 SDK never works out an ambient module's exports itself: `rs-compile.ts#ambientNamesOf` asks the
 compiler, compiling the program's own imports, as written, before a `main` that reads nothing and
 an uncalled closure (so the compiler loads the modules the compile does and lowers nothing; the
@@ -1057,7 +1056,10 @@ wrapped in the `main` they are added to (`scriptAsMain`). A site in a function i
 a helper used other than by calling it by name, are refused, as is a helper `main` never reaches
 that would add accounts. A program that names `pot` anywhere derives its accounts from `pot`, and
 one that does not from `authority` (`CompiledSauceProgram.potMention` is where; `--via engine`
-refuses the first, naming it). A bare `pot` is `Account<Signer>`, the slot `Solana.self` was; the
+refuses the first, naming it). `pot.owner`, read and not called, is the Pot's owner and no mention
+of the Pot (`pot-sugar.ts#potOwners`): the owner's account on Solana, and on an EVM chain the Pot's
+`owner()`, through a binding the compile adds (`pot-owner.ts`, lowered before the token pass). A
+bare `pot` is `Account<Signer>`, the slot `Solana.self` was; the
 engine checks a signature where the program uses one, not at the entry
 (`svm/direct-engine.e2e.test.ts` measures it). The cook commands refuse any `--account` given for a
 slot derived from a cook role (`pot`, `owner`, `authority`, their token accounts and the addresses

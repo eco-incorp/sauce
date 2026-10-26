@@ -53,16 +53,16 @@ short, and compiles to the same bytes. `.<SYMBOL>` is always a registered token;
 `recipient.balance` is `ctx.balance(recipient)`. On Arc, whose coin is USDC, `pot.USDC` is the
 token and `pot.balance` the coin. The holder is:
 
-- on an EVM chain, any address: `pot`, a variable or parameter, an address written
-  out, a protocol contract (`Aave.Pool`), a contract at an address (`UniswapV3.Pool(pool)` or
-  `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that returns an address
-  (`UniswapV4.StateView.poolManager()`); a program that declares its own `pot` owns the name and
-  reads that variable;
+- on an EVM chain, any address: `pot`, `pot.owner` (the Pot's owner, its `owner()`), a variable or
+  parameter, an address written out, a protocol contract (`Aave.Pool`), a contract at an address
+  (`UniswapV3.Pool(pool)` or `UniswapV3.Pool.at(pool)`: the address is the holder), or a call that
+  returns an address (`UniswapV4.StateView.poolManager()`); a program that declares its own `pot`
+  owns the name, its `pot.owner` too, and reads that variable;
 - a token's own contract too: `WETH.balance` is the ETH locked in WETH, `USDC.WETH` the WETH the
   USDC contract holds (on Solana, `USDC.balance` is the mint's lamports, `USDC.WSOL` its own WSOL
   account's balance);
 - on Solana, one known when the transaction is built, whose account is added to `main`: `pot`,
-  `owner` (the Pot's owner), an `Address` parameter of `main`, a token's mint, or a 32-byte key
+  `pot.owner` (the Pot's owner), an `Address` parameter of `main`, a token's mint, or a 32-byte key
   written out ([Solana](../guides/solana.md)).
 
 A record or a list is not a holder: on one, a property named like a token is refused, since the

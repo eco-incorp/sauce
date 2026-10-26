@@ -75,13 +75,7 @@ import { lexicalBindings } from "./lexical-bindings.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
-import {
-  BALANCE_MEMBER,
-  OWNER_NAME,
-  POT_NAME,
-  RETIRED_POT_NAME,
-  selfRefusal,
-} from "./pot-sugar.js";
+import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 import {
   ACCOUNT_FACTORY,
   ACCOUNT_MEMBERS,
@@ -155,7 +149,7 @@ export function unknownNameError(
  * The names the language gives meaning to with no declaration: each builtin's root, generated from
  * the SauceScript reference's `builtins.json` (`BUILTIN_GLOBALS`); `undefined`, which the reference
  * gives a missing static member (`{ a: 1, b: undefined }`) and no builtin is; the SDK's Pot and
- * `Token(addr)`; and Solana's accounts, `Account(…)` and the Pot's owner, `owner`.
+ * `Token(addr)`; and Solana's `Account(…)`.
  */
 export const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
   ...BUILTIN_GLOBALS,
@@ -163,11 +157,7 @@ export const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
   POT_NAME,
   TOKEN_FACTORY_NAME,
   ACCOUNT_FACTORY,
-  OWNER_NAME,
 ]);
-
-/** Solana's accounts, which a program compiled for an EVM chain cannot name. */
-const SOLANA_ACCOUNTS: ReadonlySet<string> = new Set([ACCOUNT_FACTORY, OWNER_NAME]);
 
 /** The protocols a Solana venue is written under (`Orca` of `Orca.Whirlpool`): the Solana lowering's. */
 const SVM_VENUE_ROOTS: ReadonlySet<string> = new Set(
@@ -554,7 +544,7 @@ export function checkNames(
   };
 
   /**
-   * The refusal of `node`, a member, where it spells an account the way `Account` and `owner`
+   * The refusal of `node`, a member, where it spells an account the way `Account` and `pot.owner`
    * replaced (`Solana.pda`, `Solana.owner`) and the program declares no `Solana` there.
    */
   const retiredAccount = (node: AstNode, at: Scope | undefined): string | undefined => {
@@ -1365,24 +1355,22 @@ export function checkNames(
             fail(node, selfRefusal(RETIRED_POT_NAME, POT_NAME).message);
           }
           const name = nameOf(node);
-          // Where a program for an EVM chain runs it, an account is Solana's (`Account(…)`,
-          // `owner`): code a test rules out may name one, which a Solana chain compiles.
+          // Where a program for an EVM chain runs it, an account is Solana's (`Account(…)`): code a
+          // test rules out may name one, which a Solana chain compiles.
           if (
             !validating &&
             chain.kind === "evm" &&
-            SOLANA_ACCOUNTS.has(name) &&
+            name === ACCOUNT_FACTORY &&
             !shadowed(at, name, node.start) &&
             !defined.has(name) &&
             !Object.hasOwn(options.scalars ?? {}, name)
           ) {
             const spelled =
-              name !== ACCOUNT_FACTORY
-                ? name
-                : role === "callee"
-                  ? `${name}(…)`
-                  : role.startsWith(".")
-                    ? `${name}${role}${role === ".pda" ? "(…)" : ""}`
-                    : name;
+              role === "callee"
+                ? `${name}(…)`
+                : role.startsWith(".")
+                  ? `${name}${role}${role === ".pda" ? "(…)" : ""}`
+                  : name;
             fail(node, evmAccountRefusal(spelled, chain.slug));
           }
           // In code a test rules out, which the compile here never reads, a name is what the

@@ -1,25 +1,30 @@
 /**
- * Accounts as expressions on Solana (`svm-account-expressions.ts`): `pot`, `owner`, `Account(…)`,
+ * Accounts as expressions on Solana (`svm-account-expressions.ts`): `pot`, `pot.owner`, `Account(…)`,
  * `Account.pda(…)`, the program accounts, `USDC.accountOf(…)`, `USDC.mint` and `USDC.tokenProgram`,
  * each lowered to a parameter added to `main` with how it is derived, its role from
  * `.writable()`/`.signer()`. Compiled through the real compiler; executed in
- * `cli-solana-token-methods.e2e.test.ts`.
+ * `cli-solana-token-methods.e2e.test.ts`. On an EVM chain `pot.owner` is the Pot's `owner()`
+ * (`pot-owner.ts`), executed in `evm/pot-owner.e2e.test.ts`.
  *
- * Every program in `fixtures/svm-account-spellings` compiled, in the spelling `Account.*` and `owner`
- * retired (`Solana.pda(…)`, `Solana.account(…)`, `Solana.owner`, `Solana.<x>Program`), to what its
- * `retired.json` records; written the new way, it compiles to the same accounts, roles and source,
- * and so to the same bytecode.
+ * Every program in `fixtures/svm-account-spellings` compiled, in the spelling `Account.*` and
+ * `pot.owner` retired (`Solana.pda(…)`, `Solana.account(…)`, `Solana.owner`, `Solana.<x>Program`),
+ * to what its `retired.json` records; written the new way, it compiles to the same accounts, roles
+ * and source, and so to the same bytecode.
  */
 import { readFileSync } from "node:fs";
 import { getAddressCodec } from "@solana/kit";
 
 import { CASES, RETIRED, migrated } from "./fixtures/svm-account-spellings/cases.js";
+import { POT_OWNER_ABI, rewritePotOwner } from "../src/routes/pot-owner.js";
 import {
   compileSauceProgram,
   type CompiledSauceProgram,
   type SauceProgramOptions,
 } from "../src/routes/sauce-route.js";
 import { hexKey } from "../src/routes/svm-lowering.js";
+import { rewriteSvmTokenSyntax } from "../src/routes/svm-token-rewrite.js";
+import { svmTokenRows } from "../src/routes/token-registry.js";
+import { requireChain } from "../src/chains/canonical.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../src/svm/token-program.js";
 
 const compile = (source: string, options: SauceProgramOptions = {}) =>
@@ -104,7 +109,7 @@ describe("accounts as expressions on Solana", () => {
 
   it("holds the owner by its signature wherever an account is made of it", () => {
     const program = compile(
-      "function main(): Uint256 {\n  return PYUSD.accountOf(owner).dataLen + PYUSD.mint.dataLen;\n}\n",
+      "function main(): Uint256 {\n  return PYUSD.accountOf(pot.owner).dataLen + PYUSD.mint.dataLen;\n}\n",
     );
     expect(roles(program)).toMatchObject({ owner: "readonly_signer", ownerPYUSD: "readonly" });
     expect(program.source).toContain(
@@ -119,7 +124,7 @@ describe("accounts as expressions on Solana", () => {
     const program = compile(
       "function main(user: Address, index: Uint256): Uint256 {\n" +
         "  const vault = Account.pda(Account.associatedTokenProgram, [\n" +
-        '    "vault-state", user, pot, owner, ctx.self(), USDC, USDC.mint,\n' +
+        '    "vault-state", user, pot, pot.owner, ctx.self(), USDC, USDC.mint,\n' +
         `    Account.tokenProgram, index.toBytesLe(8), (7).toBytesLe(2), ${key}, hex\`0102\`,\n` +
         "  ]);\n" +
         "  return vault.dataLen;\n}\n",
@@ -169,7 +174,7 @@ describe("accounts as expressions on Solana", () => {
   it("names a Token-2022 mint's program, and the owner's and the Pot's accounts", () => {
     const program = compile(
       "function main(): Uint256 {\n" +
-        "  return PYUSD.tokenProgram.dataLen + PYUSD.accountOf(owner).dataLen +\n" +
+        "  return PYUSD.tokenProgram.dataLen + PYUSD.accountOf(pot.owner).dataLen +\n" +
         "    PYUSD.accountOf(pot).dataLen;\n}\n",
     );
     // Each holder's key, which the check compares with, is an account too: the owner and the Pot.
@@ -192,7 +197,7 @@ describe("accounts as expressions on Solana", () => {
       ).toThrow(
         "`Account.pda(…)` on Solana: the seed `x` must be known when the transaction is built — a " +
           "string, a parameter of main declared `Address`, an integer parameter's `.toBytesLe(n)`, " +
-          "`pot`, `ctx.self()`, `owner`, a token symbol",
+          "`pot`, `ctx.self()`, `pot.owner`, a token symbol",
       );
     });
 
@@ -258,12 +263,12 @@ describe("accounts as expressions on Solana", () => {
       expect(() =>
         compile("function main(p: Address): Uint256 {\n  return Account.pda(p).dataLen;\n}\n"),
       ).toThrow("`Account.pda(…)` takes 2 arguments (program, [seeds…]).");
-      // An account's `.owner` is the program that owns it: the Pot's owner is `owner`.
+      // An account's `.owner` is the program that owns it: the Pot's owner is `pot.owner`.
       expect(() =>
         compile("function main(): Uint256 {\n  return Account.owner.dataLen;\n}\n"),
       ).toThrow(
-        "`Account.owner` on Solana: the Pot's owner is `owner` (`owner.address`, its key; " +
-          "`owner.signer()`); an account's `.owner` is the program that owns it.",
+        "`Account.owner` on Solana: the Pot's owner is `pot.owner` (`pot.owner.address`, its key; " +
+          "`pot.owner.signer()`); an account's `.owner` is the program that owns it.",
       );
       const members =
         "`Account` names an account: `Account(key)`, `Account.pda(program, [seeds])`, " +
@@ -341,6 +346,24 @@ describe("accounts as expressions on Solana", () => {
     );
     expect(program.source).toContain("const c: Account = account1;");
   });
+
+  it("takes the Pot's key as Account's: Account(pot) is the Pot's own account, its .owner the program that owns it", () => {
+    for (const key of ["pot", "pot.address"]) {
+      const program = compile(`function main(): Address {\n  return Account(${key}).owner;\n}\n`);
+      // The slot the Pot is everywhere: `Account<Signer>`, derived `pot`, whose `.owner` is the
+      // compiler's field, the program that owns the Pot's account.
+      expect(program.source).toBe(
+        "function main(pot: Account<Signer>): Address {\n  return pot.owner;\n}\n",
+      );
+      expect(program.derivedAccounts).toEqual({ pot: "pot" });
+    }
+    // One account however it is written.
+    const both = compile(
+      "function main(): Uint256 {\n  return Account(pot).dataLen + Account(pot.address).dataLen + pot.dataLen;\n}\n",
+    );
+    expect(both.source).toContain("return pot.dataLen + pot.dataLen + pot.dataLen;");
+    expect(both.derivedAccounts).toEqual({ pot: "pot" });
+  });
 });
 
 describe("every account spelling, written the new way, compiles as the retired one did", () => {
@@ -384,9 +407,96 @@ describe("the retired spellings, each refused naming what to write", () => {
   });
 });
 
-describe("owner, the Pot's owner", () => {
-  it("is the name of a program that declares it, wherever it does", () => {
-    // Main's parameter, a top-level constant, a local, and the binding of the Pot's key.
+describe("pot.owner, the Pot's owner", () => {
+  it("is the owner's account: its key, and a holder and a seed of its own", () => {
+    const program = compile("function main(): Address {\n  return pot.owner.address;\n}\n");
+    expect(program.source).toBe(
+      "function main(owner: Account): Address {\n  return owner.address;\n}\n",
+    );
+    expect(program.derivedAccounts).toEqual({ owner: "owner" });
+    // Held by its signature where an account is made of it, as `Solana.owner` was.
+    const made = compile(
+      "function main(program: Address): Uint256 {\n" +
+        '  return USDC.accountOf(pot.owner).dataLen + Account.pda(program, ["v", pot.owner]).dataLen;\n}\n',
+    );
+    expect(made.derivedAccounts).toMatchObject({
+      ownerUSDC: "owner:USDC",
+      owner: "owner",
+      vPda: 'pda:@program:"v",owner',
+    });
+    expect(roles(made)).toMatchObject({ owner: "readonly_signer" });
+  });
+
+  it("names no Pot: a program that reads only its owner acts as the authority", () => {
+    const program = compile(
+      "function main(to: Address, amount: Uint256) {\n" +
+        "  USDC.transfer(to, amount);\n" +
+        '  require(pot.owner.address != to, "to is the owner");\n}\n',
+    );
+    expect(program.derivedAccounts).toMatchObject({
+      pot: "authority",
+      potUSDC: "authority:USDC",
+      owner: "owner",
+    });
+    expect(program.potMention).toBeUndefined();
+    // A program that names the Pot too acts as the Pot, and its mention is the Pot's.
+    const both = compile(
+      "function main(to: Address, amount: Uint256) {\n" +
+        '  require(pot.owner.address != to, "to is the owner");\n' +
+        "  USDC.transfer(to, amount);\n" +
+        '  require(pot.USDC > 0, "empty");\n}\n',
+    );
+    expect(both.derivedAccounts).toMatchObject({ pot: "pot", potUSDC: "pot:USDC" });
+    expect(both.potMention).toEqual({ line: 4, column: 11 });
+  });
+
+  it("leaves a called pot.owner(…) to the compiler, which calls nothing of that name", () => {
+    for (const chain of ["solana", "base"]) {
+      expect(() =>
+        compileOn(chain, "function main(): Address {\n  return pot.owner();\n}\n"),
+      ).toThrow("this call does not name a function, builtin, or contract method in scope");
+    }
+  });
+
+  it("is the program's where the program or the compile gives it a pot, on either chain", () => {
+    const record =
+      "function main(): Uint256 {\n  const pot = { owner: 7 };\n  return pot.owner;\n}\n";
+    const imported =
+      'import { pot } from "./lib.js";\nfunction main(): Uint256 {\n  return pot.owner;\n}\n';
+    const lib = {
+      resolve: (path: string) =>
+        path === "./lib.js"
+          ? new TextEncoder().encode("export const pot = { owner: 7 };\n")
+          : undefined,
+    };
+    const free = "function main(): Uint256 {\n  return pot.owner;\n}\n";
+    for (const chain of ["solana", "base"]) {
+      expect(compileOn(chain, record).source).toBe(record);
+      expect(compileOn(chain, imported, lib).source).toBe(imported);
+      // A define's `pot` is the caller's value, whose `.owner` the compiler reads, and refuses.
+      expect(() => compileOn(chain, free, { defines: { pot: 5n } })).toThrow("compilation failed");
+    }
+    const param = "function main(pot: Account): Address {\n  return pot.owner;\n}\n";
+    expect(compile(param).source).toBe(param);
+    // A `pot` the caller binds (a define, a contract binding) is never lowered, on either chain.
+    const bound = new Set(["pot"]);
+    const solana = requireChain("solana");
+    expect(
+      rewriteSvmTokenSyntax(
+        free,
+        new Map(),
+        svmTokenRows(solana),
+        undefined,
+        "SOL",
+        undefined,
+        bound,
+      ).rewrote,
+    ).toBe(false);
+    expect(rewritePotOwner(free, bound)).toEqual({ source: free });
+  });
+
+  it("leaves owner an ordinary name: a program's own, and undeclared, no name at all", () => {
+    // Main's parameter, a top-level constant, a local, and the binding of an account's key.
     for (const own of [
       "function main(owner: Address): Uint256 {\n  return owner;\n}\n",
       "const owner = 7;\nfunction main(): Uint256 {\n  return owner;\n}\n",
@@ -396,42 +506,71 @@ describe("owner, the Pot's owner", () => {
       expect(program.derivedAccounts).toBeUndefined();
       expect(program.source).toBe(own);
     }
-  });
-
-  it("is the program's only where its declaration is in scope", () => {
+    for (const chain of ["solana", "base"]) {
+      expect(() => compileOn(chain, "function main(): Address {\n  return owner;\n}\n")).toThrow(
+        "`owner` is not a declared variable",
+      );
+    }
+    // A program's own `owner` and the Pot's, side by side: the owner's slot named apart from it.
     const program = compile(
       "function check(owner: Address): Uint256 {\n  return owner;\n}\n" +
-        "function main(): Uint256 {\n  return check(owner.address);\n}\n",
+        "function main(): Uint256 {\n  return check(pot.owner.address);\n}\n",
     );
-    // `check`'s parameter takes the name, so the owner's slot is named apart from it.
     expect(program.derivedAccounts).toEqual({ owner2: "owner" });
-    expect(program.source).toContain("function check(owner: Address): Uint256 {\n  return owner;");
     expect(program.source).toContain("return check(owner2.address);");
   });
+});
 
-  it("is the caller's value where the compile binds it", () => {
-    const source = "function main(): Uint256 {\n  return owner;\n}\n";
-    const program = compile(source, { defines: { owner: 5n } });
-    expect(program.derivedAccounts).toBeUndefined();
-    expect(program.source).toBe(source);
+describe("pot.owner on an EVM chain: the Pot's owner()", () => {
+  const potOwner = { PotOwner: { abi: [...POT_OWNER_ABI] } };
+
+  it("binds owner() as the released Pot's ABI declares it", () => {
+    const pot = JSON.parse(
+      readFileSync(new URL("../src/artifacts/V12Pot.json", import.meta.url), "utf8"),
+    ) as { abi: readonly unknown[] };
+    expect(POT_OWNER_ABI).toHaveLength(1);
+    expect(pot.abi).toContainEqual(POT_OWNER_ABI[0]);
   });
 
-  it("is written out in a record's shorthand field, as its own field would be", () => {
-    const shorthand = compile(
-      "function main(): Uint256 {\n  const r = { owner };\n  return r.owner.dataLen;\n}\n",
+  it.each(["base", "ethereum"])("on %s, compiles to the Pot's owner() read", (chain) => {
+    const program = compileOn(chain, "function main(): Address {\n  return pot.owner;\n}\n");
+    expect(program.derivedAccounts).toBeUndefined();
+    expect(hex(program.bytecode)).toBe(
+      hex(
+        compileOn(
+          chain,
+          "function main(): Address {\n  return PotOwner.view(ctx.self()).owner();\n}\n",
+          {
+            contracts: potOwner,
+          },
+        ).bytecode,
+      ),
     );
-    const field = compile(
-      "function main(): Uint256 {\n  const r = { owner: owner };\n  return r.owner.dataLen;\n}\n",
+    // Its balances are the owner's, the native coin's and a token's, each a read of owner().
+    const balances = compileOn(
+      chain,
+      "function main(): Uint256 {\n  return pot.owner.balance + pot.owner.USDC;\n}\n",
     );
-    expect(shorthand.source).toContain("const r = { owner: owner };");
-    expect(shorthand.derivedAccounts).toEqual({ owner: "owner" });
-    expect(hex(shorthand.bytecode)).toBe(hex(field.bytecode));
-    // Its slot named apart, where a declaration elsewhere takes `owner`.
-    const apart = compile(
-      "function id(owner: Uint256): Uint256 {\n  return owner;\n}\n" +
-        "function main(): Uint256 {\n  const r = { owner };\n  return r.owner.dataLen + id(1);\n}\n",
+    expect(hex(balances.bytecode)).toBe(
+      hex(
+        compileOn(
+          chain,
+          "function main(): Uint256 {\n" +
+            "  return ctx.balance(PotOwner.view(ctx.self()).owner()) +\n" +
+            "    USDC.balanceOf(PotOwner.view(ctx.self()).owner());\n}\n",
+          { contracts: potOwner },
+        ).bytecode,
+      ),
     );
-    expect(apart.source).toContain("const r = { owner: owner2 };");
+  });
+
+  it("refuses a program that takes the name its read goes through", () => {
+    expect(() =>
+      compileOn(
+        "base",
+        "function main(): Address {\n  const __sauce_Pot = 1;\n  return pot.owner;\n}\n",
+      ),
+    ).toThrow("`__sauce_Pot` is reserved");
   });
 });
 
@@ -446,8 +585,7 @@ describe("accounts are Solana's", () => {
       "`Account.systemProgram`",
       "function main(): Uint256 {\n  return Account.systemProgram.dataLen;\n}\n",
     ],
-    ["`owner`", "function main(): Uint256 {\n  return owner.dataLen;\n}\n"],
-    ["`owner`", "function main(): Uint256 {\n  return owner;\n}\n"],
+    ["`Account`", "function main(): Uint256 {\n  const make = Account;\n  return 1;\n}\n"],
   ];
 
   it.each(reads)("refuses %s on an EVM chain", (spelled, source) => {
@@ -477,7 +615,7 @@ describe("accounts are Solana's", () => {
       compileOn(
         "base",
         "function main(): Uint256 {\n" +
-          "  if (WSOL) {\n    return Account.systemProgram.dataLen + owner.dataLen + Account(pot).dataLen;\n  }\n" +
+          "  if (WSOL) {\n    return Account.systemProgram.dataLen + pot.owner.dataLen + Account(pot).dataLen;\n  }\n" +
           "  return 1;\n}\n",
       ),
     ).not.toThrow();

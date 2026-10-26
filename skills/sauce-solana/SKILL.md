@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Everything Solana changes about a Sauce program. The token methods as on an EVM chain (USDC.transfer(to, amount), pot.USDC, Token(mint)) with every account derived and checked on chain; any other account written where it is used (Account.pda(program, seeds), Account(key), owner, USDC.accountOf(holder), .writable()) or taken as an Account parameter with Writable/Signer roles; the account manifest and every --account name; binding a slot to the Pot; token accounts; @sauce/token for SPL Token and Token-2022 and its extensions (fees, pauses, frozen accounts, hooks); svm.call and svm.sload; transaction size; running on the owner's Pot or the engine (--via engine), simulating in a local copy, staging, plans for other signers, lookup tables, rent left open. Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or a Solana cook that does not fit one transaction.
+description: Everything Solana changes about a Sauce program. The token methods as on an EVM chain (USDC.transfer(to, amount), pot.USDC, Token(mint)) with every account derived and checked on chain; any other account written where it is used (Account.pda(program, seeds), Account(key), pot.owner, USDC.accountOf(holder), .writable()) or taken as an Account parameter with Writable/Signer roles; the account manifest and every --account name; binding a slot to the Pot; token accounts; @sauce/token for SPL Token and Token-2022 and its extensions (fees, pauses, frozen accounts, hooks); svm.call and svm.sload; transaction size; running on the owner's Pot or the engine (--via engine), simulating in a local copy, staging, plans for other signers, lookup tables, rent left open. Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or a Solana cook that does not fit one transaction.
 ---
 
 # Sauce on Solana
@@ -26,7 +26,7 @@ is `sauce-solana-distributed-swap`'s.
 
 - **Every account is known before the transaction runs.** A program gets an account three ways:
   compiling **derives** it for a token method; compiling **adds** it where an expression names it
-  (`Account.pda(...)`, `owner`, `USDC.accountOf(...)`); or the program declares it as an
+  (`Account.pda(...)`, `pot.owner`, `USDC.accountOf(...)`); or the program declares it as an
   **`Account` parameter** of `main`, attached with `--account`. Compiling returns them all, in
   order with their roles, as the **account manifest**.
 - **Every holder and seed must be known when the cook is built**: `ctx.self()`, an `Address`
@@ -53,11 +53,11 @@ is `sauce-solana-distributed-swap`'s.
   (`Orca.Whirlpool.pool(USDC, WSOL, 4)`, `sauce-swaps`). `sauce globals --chain solana` lists the
   mints (devnet's too), the venues and the account expressions.
 
-| The account                                                                           | Write                                                                                                                        |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| A token account a token method moves through                                          | nothing: `USDC.transfer(to, amount)` derives it                                                                              |
-| An account derivable from known values (a PDA, an ATA, a program, the Pot, the owner) | the expression where it is used: `Account.pda(program, [seeds])`, `USDC.accountOf(holder)`, `Account.systemProgram`, `owner` |
-| An account computed as the program runs, or whose identity the caller supplies        | an `Account` parameter, attached with `--account NAME=<value>`                                                               |
+| The account                                                                           | Write                                                                                                                            |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| A token account a token method moves through                                          | nothing: `USDC.transfer(to, amount)` derives it                                                                                  |
+| An account derivable from known values (a PDA, an ATA, a program, the Pot, the owner) | the expression where it is used: `Account.pda(program, [seeds])`, `USDC.accountOf(holder)`, `Account.systemProgram`, `pot.owner` |
+| An account computed as the program runs, or whose identity the caller supplies        | an `Account` parameter, attached with `--account NAME=<value>`                                                                   |
 
 ## The token methods
 
@@ -91,7 +91,7 @@ comes from.
   derived from the Pot, the owner or the authority (their token accounts, and an address one of
   them seeds): that slot takes only the account its derivation gives, by role or by key, and any
   other is refused before anything is built.
-- **A holder** is `pot`, the Pot; `ctx.self()`, the account that signs the engine call; `owner`,
+- **A holder** is `pot`, the Pot; `ctx.self()`, the account that signs the engine call; `pot.owner`,
   the Pot's owner; a parameter of `main` declared `Address`; a token's mint (`USDC.WSOL`, the USDC
   mint's own WSOL account); or a 32-byte key written out. Its balance is `<holder>.<TOKEN>`
   (`pot.USDC`, `to.USDC`), the same read as `USDC.balanceOf(to)`, and its lamports
@@ -128,7 +128,8 @@ comes from.
   them from `authority` (`authority:USDC`), so it runs either way, and cooked directly
   (`--via engine`) the signer's own token accounts pay. Adding `require(to != pot)` to that program
   makes it the first kind, and `--via engine` refuses it at that mention: for a direct cook, write
-  the signer's own account there (`owner`, or `ctx.self()` as a token holder).
+  the signer's own account there (`pot.owner`, which names no Pot, or `ctx.self()` as a token
+  holder).
 
 The methods lower to the `@sauce/token` functions (below), which a program can also call with the
 accounts written out.
@@ -146,7 +147,7 @@ function main(lamports: Uint256): Uint256 {
   let transfer = hex`02000000`;
   svm.call(
     Account.systemProgram,
-    [owner.writable().signer(), potWsol],
+    [pot.owner.writable().signer(), potWsol],
     transfer.concat(lamports.toBytesLe(8)),
   );
   svm.call(Account.tokenProgram, [potWsol], hex`11`);
@@ -168,23 +169,26 @@ sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000
 | `Account.associatedTokenProgram` | the Associated Token Account program        | its id                               |
 | `Account.memoProgram`            | the Memo program                            | its id                               |
 | `pot`                            | the Pot                                     | `pot`                                |
-| `owner`                          | the Pot's owner, who signs the cook         | `owner`                              |
+| `pot.owner`                      | the Pot's owner, who signs the cook         | `owner`                              |
 | `USDC.accountOf(holder)`         | the holder's associated USDC account        | `pot:USDC`, `owner:USDC`, `@to:USDC` |
 | `USDC.mint`                      | USDC's mint                                 | `mint:USDC`                          |
 | `USDC.tokenProgram`              | the token program that owns the mint        | its id                               |
 
-- **`Account` and `owner`.** `Account` is the type of an account `main` takes
+- **`Account` and `pot.owner`.** `Account` is the type of an account `main` takes
   (`Account<Writable>`), and as a value the account a program writes where it uses it: called with a
-  key, `.pda(…)`, or a program. `owner` is the Pot's owner's account wherever it stands
-  (`owner.address` its key, `owner.USDC` its balance). A program that declares its own `Account` or
-  `owner` (a parameter, a local) owns the name. `Solana` is the chain's name and holds no account:
-  `Solana.pda(…)`, `Solana.account(…)`, `Solana.owner` and `Solana.systemProgram` are refused, each
-  naming what to write. On an EVM chain `Account(…)` and `owner` are refused: accounts are Solana's.
+  key, `.pda(…)`, or a program. `pot.owner` is the Pot's owner's account wherever it stands
+  (`pot.owner.address` its key, `pot.owner.USDC` its balance), and names no Pot. Any other
+  account's `.owner` is the program that owns it: the Pot's is `Account(pot.address).owner`. A
+  program that declares its own `Account` or `pot` (a parameter, a local) owns the name, `pot.owner`
+  with `pot`. `Solana` is the chain's name and holds no account: `Solana.pda(…)`,
+  `Solana.account(…)`, `Solana.owner` and `Solana.systemProgram` are refused, each naming what to
+  write. On an EVM chain `Account(…)` is refused, accounts being Solana's, and `pot.owner` is the
+  Pot's owner's address.
 - **Roles.** Each account is read-only. `.writable()` and `.signer()` give it the role a call needs,
-  and they chain: `owner.writable().signer()`. An account written more than once is one slot, with
-  every role any of its uses gives it.
+  and they chain: `pot.owner.writable().signer()`. An account written more than once is one slot,
+  with every role any of its uses gives it.
 - **Known when the transaction is built.** A program, key or holder is a parameter of `main`
-  declared `Address`, a 32-byte key written out, `ctx.self()`, `pot` or `owner`, or a program
+  declared `Address`, a 32-byte key written out, `ctx.self()`, `pot` or `pot.owner`, or a program
   account such as `Account.tokenProgram`. A seed can be any of those, and also a token symbol or
   `USDC.mint` (the mint's key), a string of 32 bytes at most, `.toBytesLe(n)` of an integer
   parameter or literal (`n` 1, 2, 4, 8 or 16), or ``hex`…` ``. A seed computed as the program runs

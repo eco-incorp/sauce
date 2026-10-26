@@ -666,7 +666,11 @@ function bareReads(
 
 /** The reads of `name` in `source` where the program does not declare it (`lexical-scope.ts`). */
 export function freeReadsOf(source: string, name: string): AstNode[] {
-  const program = parseSauce(source);
+  return freeReadsIn(parseSauce(source), name);
+}
+
+/** The reads of `name` in `program` where it does not declare it (`lexical-scope.ts`). */
+export function freeReadsIn(program: AstNode, name: string): AstNode[] {
   return bareReads(program, name, collectReadExclusions(program), new Set());
 }
 

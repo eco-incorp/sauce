@@ -1,9 +1,9 @@
 // Wraps `lamports` of the owner's SOL into the Pot's WSOL account: the System Program's transfer,
 // which the owner signs, then SPL Token's SyncNative, which counts the account's new lamports as
-// WSOL. Each account is written where it is used — the System Program, the owner, the Pot's WSOL
-// account, SPL Token — and compiling adds it to main with how it is derived, read-only unless
-// `.writable()` or `.signer()` gives it that role (`sauce compile --json` lists them). The command
-// derives every one, so it is given none. Returns the Pot's WSOL balance after.
+// WSOL. Each account is written where it is used — the System Program, the owner (`pot.owner`), the
+// Pot's WSOL account, SPL Token — and compiling adds it to main with how it is derived, read-only
+// unless `.writable()` or `.signer()` gives it that role (`sauce compile --json` lists them). The
+// command derives every one, so it is given none. Returns the Pot's WSOL balance after.
 //
 //   sauce run wrap.sauce.ts --chain <chain> --keypair <keypair> --args <lamports>
 //
@@ -20,7 +20,7 @@ function main(lamports: Uint256): Uint256 {
   let transfer = hex`02000000`;
   svm.call(
     Account.systemProgram,
-    [owner.writable().signer(), potWsol],
+    [pot.owner.writable().signer(), potWsol],
     transfer.concat(lamports.toBytesLe(8)),
   );
   // SPL Token's SyncNative: instruction 17.

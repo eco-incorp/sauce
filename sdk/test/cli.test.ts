@@ -694,7 +694,7 @@ describe("sauce compile", () => {
         "Pot, so there is no Pot to attach: cook through the Kitchen. It names `pot` at line 3, " +
         "column 17, and a program that names the Pot anywhere acts as the Pot throughout, its " +
         "token writes and `ctx.self()` included. To cook it directly, write the signer's own " +
-        "account (`owner`, or `ctx.self()` as a token holder) where it names `pot`",
+        "account (`pot.owner`, or `ctx.self()` as a token holder) where it names `pot`",
     );
   });
 

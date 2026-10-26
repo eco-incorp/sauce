@@ -197,17 +197,18 @@ describe("SauceScript in an editor", () => {
     expect(report(service(files), file)).toEqual([]);
   });
 
-  it("takes Account as a parameter's type and as the value that names an account, and owner", () => {
+  it("takes Account as a parameter's type and as the value that names an account, and pot.owner", () => {
     const file = join(work, "accounts.sauce.ts");
     const files = {
       [file]:
         "function size(account: Account): Uint256 {\n  return account.dataLen;\n}\n" +
         "function main(state: Account<Writable>, program: Address, key: Address): Uint256 {\n" +
-        "  const signer: Account = owner.writable().signer();\n" +
-        '  const vault = Account.pda(program, ["vault", owner, key]).writable();\n' +
+        "  const signer: Account = pot.owner.writable().signer();\n" +
+        '  const vault = Account.pda(program, ["vault", pot.owner, key]).writable();\n' +
         "  svm.call(Account.systemProgram, [signer, vault], hex`00`);\n" +
-        "  return size(state) + size(Account(key)) + Account.memoProgram.dataLen + owner.USDC +\n" +
-        "    owner.balance;\n}\n",
+        '  require(pot.owner.address != key, "key is the owner");\n' +
+        "  return size(state) + size(Account(key)) + Account.memoProgram.dataLen +\n" +
+        "    pot.owner.USDC + pot.owner.balance + Account(pot.address).owner;\n}\n",
     };
     expect(report(service(files, false), file)).toEqual([]);
     expect(report(service(files), file)).toEqual([]);
@@ -361,6 +362,9 @@ describe("SauceScript in an editor", () => {
       ["account", "function main() { const a = Account(); }\n", [2554]],
       // The chain names a chain, and holds no account.
       ["retired", 'function main() { const p = Solana.pda(ctx.self(), ["a"]); }\n', missing],
+      // The Pot's owner is `pot.owner`: a bare `owner` is a name never declared.
+      ["owner", "function main() { const o = owner.address; }\n", [2304, 2552]],
+      ["potOwner", "function main() { const o = pot.ownr; }\n", missing],
       [
         "writable",
         "function main() { const a = USDC.accountOf(ctx.self()).writeable(); }\n",

@@ -1,5 +1,5 @@
 /**
- * The Solana account spellings a program had before `Account.*` and `owner`, as programs: each one
+ * The Solana account spellings a program had before `Account.*` and `pot.owner`, as programs: each
  * written in the retired spelling (`Solana.pda(…)`, `Solana.account(…)`, `Solana.owner`,
  * `Solana.<x>Program`). `retired.json` beside it holds what each compiled to in that spelling, on
  * main at 6034ed045 before the spellings were retired: the accounts added to `main` with how each
@@ -8,8 +8,8 @@
  * holds each program, written the new way (`migrated`), to the same accounts, roles and source, and
  * to the bytecode of that source.
  *
- * A program here declares no `owner` of its own: a declared `owner` owns the name, and the Pot's
- * owner is then written no other way.
+ * A program here declares no `pot` of its own: a declared `pot` owns the name, and `pot.owner`
+ * with it.
  */
 
 /** A program in the retired spelling. */
@@ -187,7 +187,8 @@ export const RETIRED: readonly RetiredSpelling[] = [
     spelling: "Solana.owner",
     read: "Solana.owner.dataLen",
     refusal:
-      "`Solana.owner`: the Pot's owner is `owner` (`owner.address`, its key; `owner.signer()`)",
+      "`Solana.owner`: the Pot's owner is `pot.owner` (`pot.owner.address`, its key; " +
+      "`pot.owner.signer()`)",
   },
   ...[
     "systemProgram",
@@ -205,7 +206,7 @@ export const RETIRED: readonly RetiredSpelling[] = [
 /**
  * A program in the retired spelling, written the new way: `Solana.pda`, `Solana.account`, the five
  * program accounts and `Solana.owner` as `Account.pda`, `Account(…)`, `Account.<program>` and
- * `owner`.
+ * `pot.owner`.
  */
 export function migrated(old: string): string {
   return old
@@ -214,5 +215,5 @@ export function migrated(old: string): string {
       /\bSolana\.(pda|systemProgram|tokenProgram|token2022Program|associatedTokenProgram|memoProgram)\b/g,
       "Account.$1",
     )
-    .replace(/\bSolana\.owner\b/g, "owner");
+    .replace(/\bSolana\.owner\b/g, "pot.owner");
 }

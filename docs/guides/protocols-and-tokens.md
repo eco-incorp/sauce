@@ -212,17 +212,18 @@ Arc, whose coin is USDC, `pot.USDC` is the 6-decimal token and `pot.balance` the
 
 The holder can be:
 
-- **On an EVM chain**: any address. That is `pot`, a variable or parameter of the program, an
-  address written out, a protocol contract (`Aave.Pool`), a contract given an address
-  (`UniswapV3.Pool(pool).USDC` reads `pool`'s balance), or a call that returns an address
-  (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named `pot`
-  owns the name and reads that variable's balance.
+- **On an EVM chain**: any address. That is `pot`, `pot.owner` (your Pot's owner, read from the
+  Pot's `owner()`), a variable or parameter of the program, an address written out, a protocol
+  contract (`Aave.Pool`), a contract given an address (`UniswapV3.Pool(pool).USDC` reads `pool`'s
+  balance), or a call that returns an address (`UniswapV4.StateView.poolManager().USDC`). A program
+  that declares its own variable named `pot` owns the name, its `pot.owner` too, and reads that
+  variable's balance.
 - **A token's own contract too**: `WETH.balance` is the ETH locked in the WETH contract, and
   `USDC.WETH` is the WETH held by the USDC contract. On Solana, `USDC.balance` is the SOL in the
   USDC mint's account.
-- **On Solana**: `pot`, `owner` (the Pot's owner), an `Address` parameter of `main`, a token's mint, or a
-  32-byte key written out. The holder has to be known when the transaction is built, because Sauce
-  adds the holder's account to it ([Solana](solana.md)).
+- **On Solana**: `pot`, `pot.owner` (the Pot's owner), an `Address` parameter of `main`, a token's
+  mint, or a 32-byte key written out. The holder has to be known when the transaction is built,
+  because Sauce adds the holder's account to it ([Solana](solana.md)).
 
 Because `<anything>.USDC` reads a balance, a record or a list cannot have a field named like a
 token: Sauce refuses `payee.USDC` when `payee` is a record, and asks you to name the field otherwise

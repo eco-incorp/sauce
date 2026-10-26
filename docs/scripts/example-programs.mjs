@@ -143,9 +143,9 @@ export function executedExamplesProblems({
 export function registryNames(sdk, protocols, builtins) {
   const addresses = new Map();
   const selectors = new Map();
-  // The SDK's own source-level names: the `Token(...)` wrapper, bare `pot`, and Solana's accounts,
-  // `Account(…)` and bare `owner`.
-  const globals = new Set(["Token", "pot", "Account", "owner"]);
+  // The SDK's own source-level names: the `Token(...)` wrapper, bare `pot` (its `pot.owner` with
+  // it), and Solana's `Account(…)`.
+  const globals = new Set(["Token", "pot", "Account"]);
   const add = (map, key, name) => map.set(key, (map.get(key) ?? new Set()).add(name));
   for (const chain of sdk.CANONICAL_CHAINS) {
     const sourceGlobals = sdk.routes.sourceGlobals(chain.slug);

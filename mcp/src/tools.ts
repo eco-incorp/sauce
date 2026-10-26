@@ -1391,7 +1391,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "(Orca.Whirlpool.pool(USDC, WSOL, 4)), each pool's accounts derived as the cook is " +
         "built) and the accounts a " +
         "program writes where it uses them (`accounts`: Account(key), Account.pda(program, " +
-        "[seeds]), Account.systemProgram, owner, USDC.accountOf(holder), …), the chain names, the " +
+        "[seeds]), Account.systemProgram, pot.owner, USDC.accountOf(holder), …), the chain names, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
         "tokenized stocks (Ethereum and Solana have over a thousand each; Base's include " +
         "Coinbase's, such as SPCXc for SpaceX; Solana's are Token-2022 mints, such as TSLAx), " +

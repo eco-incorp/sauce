@@ -28,8 +28,8 @@ supplies (`USDC`, `UniswapV3.Factory`) are `sauce-globals`'s; running a program 
 - **A balance is `<holder>.<TOKEN>`, on any address or contract**: `pot` is the Pot and `pot.USDC`
   its USDC, `recipient.USDC` a parameter's, the same read as `USDC.balanceOf(recipient)`. The native
   coin is `.balance` (wei on an EVM chain, lamports on Solana): `pot.balance` is
-  `ctx.selfBalance()`. Which holders each target takes, and the token methods, are
-  `sauce-globals`'s.
+  `ctx.selfBalance()`. `pot.owner` is the Pot's owner, and `pot.owner.USDC` its USDC. Which holders
+  each target takes, and the token methods, are `sauce-globals`'s.
 - Its inputs are `main`'s parameters, taken in declaration order, ABI-encoded and appended to the
   bytecode: one compiled program serves every value. `--args` passes them (`sauce-cli`).
 - Integers are checked `Uint256` or `Int256`; amounts are in smallest units.

@@ -73,19 +73,20 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     expect(roles(program)).toEqual({ systemProgram: "readonly", pot: "writable_signer" });
   });
 
-  it("is the slot Solana.self was, Account<Signer>, wherever it is named, and refuses pot.owner", () => {
+  it("is the slot Solana.self was, Account<Signer>, wherever it is named; its pot.owner is the owner's", () => {
     // A cook signs for it; only the Kitchen signs for the Pot (direct-engine.e2e measures the hold).
     for (const body of ["return pot;", "return svm.sload(pot, 0, 8).toLe();"]) {
       const program = compile(`function main(): Uint256 {\n  ${body}\n}\n`);
       expect(roles(program).pot).toBe("readonly_signer");
     }
-    expect(
-      refusal('function main(caller: Address) {\n  require(caller == pot.owner, "owner");\n}\n'),
-    ).toBe(
-      "`pot.owner` on Solana: an account's `.owner` is the program that owns it, so `pot.owner` " +
-        "would be the program that owns the Pot's account, not the Pot's owner. The Pot's owner, " +
-        "who signs the cook, is `owner` (`owner.address`, its key).",
+    // `pot.owner` is the Pot's owner, the account `Solana.owner` was, and names no Pot.
+    const owner = compile(
+      'function main(caller: Address) {\n  require(caller == pot.owner.address, "owner");\n}\n',
     );
+    expect(owner.source).toBe(
+      'function main(caller: Address, owner: Account) {\n  require(caller == owner.address, "owner");\n}\n',
+    );
+    expect(owner.derivedAccounts).toEqual({ owner: "owner" });
   });
 
   it("is an account for a function @sauce/token declares one for", () => {
@@ -188,7 +189,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     ).toContain("return __sauce_svm_balance(USDC, potUSDC, pot.address);");
     // The Pot's owner outside the function that declares an `owner`, its slot named apart from it.
     expect(
-      compile(`${elsewhere("owner")}function main(): Uint256 {\n  return owner.balance;\n}\n`)
+      compile(`${elsewhere("owner")}function main(): Uint256 {\n  return pot.owner.balance;\n}\n`)
         .source,
     ).toContain("return ctx.balance(owner2.address);");
     // Another scope's record named `pot` does not make the Pot one.
@@ -346,8 +347,8 @@ describe("where a site stands", () => {
     const program = compile(
       "function held(): Uint256 {\n  return pot.USDC;\n}\n" +
         "function twice(): Uint256 {\n  return held() + held();\n}\n" +
-        "function both(): Uint256 {\n  return twice() + owner.balance;\n}\n" +
-        "function lamports(extra: Uint256): Uint256 {\n  return owner.balance + extra;\n}\n" +
+        "function both(): Uint256 {\n  return twice() + pot.owner.balance;\n}\n" +
+        "function lamports(extra: Uint256): Uint256 {\n  return pot.owner.balance + extra;\n}\n" +
         "function main(): Uint256 {\n  return both() + lamports(1) + pot.balance;\n}\n",
     );
     expect(program.source).toContain(

@@ -30,7 +30,7 @@ import {
   type RsProbeInput,
 } from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
-import { ambientNameRefusal, OWNER_NAME, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { ambientPotRefusal, POT_NAME, potOwners, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import {
@@ -44,10 +44,12 @@ import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import {
+  freeReadsIn,
   freeReadsOf,
   rewriteProtocolAccessors,
   type ProtocolRewriteOptions,
 } from "./protocol-rewrite.js";
+import { rewritePotOwner } from "./pot-owner.js";
 import {
   bindableNames,
   checkNames,
@@ -568,8 +570,8 @@ function compileForChain(
   // and of the Pot's two names it asks only those the program reads (`probeQuestions`), the rest
   // being none the rewrites touch. A name among them is the caller's value, never the Pot and never
   // the registry's; a `pot` only an ambient module exports is refused where the program reads it
-  // free (`ambientNameRefusal`), so no module's export stands in for the Pot with no word in the
-  // program, and so is an `owner` on Solana, where it is the Pot's owner.
+  // free (`ambientPotRefusal`), so no module's export stands in for the Pot with no word in the
+  // program.
   //
   // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
   // with the same options as the compile, so its refusal is one the compile raises too: the probe's
@@ -612,19 +614,17 @@ function compileForChain(
     ...Object.keys(inputs.contracts ?? {}),
     ...callerNames,
   ]);
-  // A define or a contract binding of `pot` (or `owner`) is the caller's, given by that name; an
-  // import of it is the program's own, which no free read is.
-  for (const name of chain.kind === "svm" ? [POT_NAME, OWNER_NAME] : [POT_NAME]) {
-    if (
-      callerNames.has(name) &&
-      !Object.hasOwn(inputs.defines ?? {}, name) &&
-      !Object.hasOwn(inputs.contracts ?? {}, name)
-    ) {
-      const [read] = freeReadsOf(sauce, name);
-      if (read !== undefined) {
-        const { line, column } = positionOf(sauce, read.start);
-        throw ambientNameRefusal(name, line, column);
-      }
+  // A define or a contract binding of `pot` is the caller's, given by that name; an import of it is
+  // the program's own, which no free read is.
+  if (
+    callerNames.has(POT_NAME) &&
+    !Object.hasOwn(inputs.defines ?? {}, POT_NAME) &&
+    !Object.hasOwn(inputs.contracts ?? {}, POT_NAME)
+  ) {
+    const [read] = freeReadsOf(sauce, POT_NAME);
+    if (read !== undefined) {
+      const { line, column } = positionOf(sauce, read.start);
+      throw ambientPotRefusal(line, column);
     }
   }
   // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
@@ -782,7 +782,10 @@ function compileForChain(
       stoppable = lowered.stoppable;
       stoppableRuns = lowered.stoppableRuns;
       if (lowered.namesPot === true) {
-        const [read] = freeReadsOf(sauce, POT_NAME);
+        // Its first read of the Pot: a `pot.owner` reads the Pot's owner, and names no Pot.
+        const program = parseSauce(sauce);
+        const owners = potOwners(program);
+        const [read] = freeReadsIn(program, POT_NAME).filter((one) => !owners.has(one));
         if (read !== undefined) potMention = positionOf(sauce, read.start);
       }
     }
@@ -793,6 +796,11 @@ function compileForChain(
       );
     }
   } else {
+    // `pot.owner`, the Pot's `owner()`, before the token pass, which would read it as a member of
+    // the Pot; its `.<TOKEN>` is then the token pass's, on the address it returns.
+    const owner = readingBound(() => rewritePotOwner(source, bound));
+    source = owner.source;
+    if (owner.contracts !== undefined) contracts = { ...contracts, ...owner.contracts };
     const members = readingBound(() =>
       rewriteTokenMembers(
         source,
@@ -961,12 +969,12 @@ function svmTokenValues(
 
 /**
  * What the probe asks about `sauce`, from the parse every rewrite reads it with (`parseSauce`): the
- * Pot's names (`pot`, `self`) and its owner's (`owner`) among the identifiers it reads, as the
- * parser names them (an escaped spelling, `p\u006ft`, is the name it spells; a member's name,
- * `ctx.self()`, is none); its import declarations as written, which the probe's entry repeats so
- * that the compiler loads the modules the compile does; and every identifier it writes, an import's
- * binding included, which the probe's own function is named apart from. A program that does not
- * parse asks nothing: no rewrite reads it either.
+ * Pot's names (`pot`, `self`) among the identifiers it reads, as the parser names them (an escaped
+ * spelling, `p\u006ft`, is the name it spells; a member's name, `ctx.self()`, is none); its import
+ * declarations as written, which the probe's entry repeats so that the compiler loads the modules
+ * the compile does; and every identifier it writes, an import's binding included, which the probe's
+ * own function is named apart from. A program that does not parse asks nothing: no rewrite reads
+ * it either.
  */
 function probeQuestions(sauce: string): {
   readonly names: readonly string[];
@@ -989,9 +997,7 @@ function probeQuestions(sauce: string): {
     const name = (n as { name?: unknown }).name;
     if (n.type !== "Identifier" || typeof name !== "string") return;
     declared.add(name);
-    if (!members.has(n) && [POT_NAME, RETIRED_POT_NAME, OWNER_NAME].includes(name)) {
-      names.add(name);
-    }
+    if (!members.has(n) && (name === POT_NAME || name === RETIRED_POT_NAME)) names.add(name);
   });
   const imports = (program.body as AstNode[])
     .filter((statement) => statement.type === "ImportDeclaration")

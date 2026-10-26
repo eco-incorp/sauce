@@ -460,9 +460,9 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
     });
   });
 
-  it("owner and pot hold tokens, each account checked to its holder", () => {
+  it("pot.owner and pot hold tokens, each account checked to its holder", () => {
     const program = compile(
-      "function main(): Uint256 {\n  return owner.USDC + pot.USDC + owner.balance;\n}\n",
+      "function main(): Uint256 {\n  return pot.owner.USDC + pot.USDC + pot.owner.balance;\n}\n",
     );
     expect(program.source).toContain(
       "return __sauce_svm_balance(USDC, ownerUSDC, owner.address) + __sauce_svm_balance(USDC, potUSDC, pot.address) + ctx.balance(owner.address);",
@@ -518,7 +518,12 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
     expect(refusal("function main(): Uint256 {\n  return pot.USDCC;\n}\n")).toBe(
       "`pot.USDCC` on Solana: `USDCC` is not a token solana registers. Did you mean `USDC`? " +
         "`pot.<TOKEN>` reads the Pot's balance of a token and `pot.balance` its lamports; " +
-        "`pot.address`, `pot.dataLen`, `pot.signer()` and `pot.writable()` are its account's.",
+        "`pot.address`, `pot.dataLen`, `pot.signer()` and `pot.writable()` are its account's, " +
+        "and `pot.owner` its owner's.",
+    );
+    // The Pot's members are said too: its owner is `pot.owner`.
+    expect(refusal("function main(): Address {\n  return pot.ownr;\n}\n")).toMatch(
+      /^`pot\.ownr` on Solana: `ownr` is not a token solana registers\. Did you mean `owner`\?/,
     );
     // A token the program declares a name of its own for is said to be hidden, not misspelled.
     expect(refusal("function main(): Uint256 {\n  const USDC = 5;\n  return pot.USDC;\n}\n")).toBe(
@@ -543,7 +548,7 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
       ["to", "to: Address"],
       ["a", "a: Account"],
       ["USDC", ""],
-      ["owner", ""],
+      ["pot.owner", ""],
       ["ctx.self()", ""],
       ["USDC.accountOf(to)", "to: Address"],
     ] as const) {

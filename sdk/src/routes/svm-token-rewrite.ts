@@ -96,6 +96,7 @@ import { holderShapes, notAnAddress, readsField, reservedNameError } from "./bal
 import {
   BALANCE_MEMBER,
   nativeSymbolRefusal,
+  OWNER_MEMBER,
   POT_NAME,
   RETIRED_POT_NAME,
   selfRefusal,
@@ -434,7 +435,7 @@ function collectTokenMethods(l: SvmLowering): void {
 
   /** The account the program acts with, as the program names it: `pot`, or `ctx.self()`. */
   const isAuthority = (node: AstNode): boolean => l.isPot(node) || isCtxSelf(node, l.declared);
-  /** A balance's holder: what the token methods take, or `owner`. */
+  /** A balance's holder: what the token methods take, or `pot.owner`. */
   const balanceHolder = (node: AstNode, spelled: string): Holder => {
     if (l.isOwner(node)) {
       const owner = `${l.account("owner", "owner", { signer: true })}.address`;
@@ -457,7 +458,7 @@ function collectTokenMethods(l: SvmLowering): void {
   const shapes = holderShapes(program);
   /**
    * Whether `node` is a holder of Solana's own, whose `.balance` is its lamports whatever its text's
-   * type: the Pot, `ctx.self()`, `owner`, or an account (an `Account` parameter, an account
+   * type: the Pot, `ctx.self()`, `pot.owner`, or an account (an `Account` parameter, an account
    * expression, a local bound to one).
    */
   const solanaHolder = (node: AstNode): boolean =>
@@ -491,11 +492,10 @@ function collectTokenMethods(l: SvmLowering): void {
             `the program's \`${name}\`.`,
         );
       }
-      const members = [...ACCOUNT_MEMBERS].filter((member) => member !== "owner");
       const near = nearMatches(name, [
         ...l.tokens.keys(),
         BALANCE_MEMBER,
-        ...(l.isPot(object) ? members : []),
+        ...(l.isPot(object) ? ACCOUNT_MEMBERS : []),
       ]);
       throw new Error(
         `${spelled} on Solana: \`${name}\` is not a token solana registers.` +
@@ -506,7 +506,8 @@ function collectTokenMethods(l: SvmLowering): void {
           `\`${holderText}.${BALANCE_MEMBER}\` its lamports` +
           (l.isPot(object)
             ? `; \`${POT_NAME}.address\`, \`${POT_NAME}.dataLen\`, \`${POT_NAME}.signer()\` and ` +
-              `\`${POT_NAME}.writable()\` are its account's.`
+              `\`${POT_NAME}.writable()\` are its account's, and \`${POT_NAME}.${OWNER_MEMBER}\` ` +
+              "its owner's."
             : "."),
       );
     }

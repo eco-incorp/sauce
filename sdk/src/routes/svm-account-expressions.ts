@@ -8,7 +8,7 @@
  *   Account.systemProgram, Account.tokenProgram, Account.token2022Program,
  *   Account.associatedTokenProgram, Account.memoProgram
  *   pot                              the Pot, which the program acts with through the Kitchen
- *   owner                            the Pot's owner, who signs the cook
+ *   pot.owner                        the Pot's owner, who signs the cook
  *   USDC.accountOf(holder)           the holder's associated USDC account
  *   USDC.mint, USDC.tokenProgram     the mint, and the token program that owns it
  *
@@ -17,24 +17,25 @@
  * account written twice is one parameter. Each is derived when the cook is built
  * (`svm/account-names.ts`), so what it is made of must be known then: a program, a holder or a seed
  * is a parameter of `main` (an `Address`, or an integer's `.toBytesLe(n)`), a key written out, a
- * string, a token symbol, `pot`, `ctx.self()` or `owner`. A program builds an account from a value
- * only it knows by taking that account as an `Account` parameter of `main`.
+ * string, a token symbol, `pot`, `ctx.self()` or `pot.owner`. A program builds an account from a
+ * value only it knows by taking that account as an `Account` parameter of `main`.
  *
  * `Account` is also the type of an account, which a parameter or a local declares
- * (`Account<Writable>`): only `Account` read as a value is one of these. `Account`, `pot` and
- * `owner` are the program's own where it declares them, and the caller's where the compile binds
- * them. They replace `Solana.account(…)`, `Solana.pda(…)`, `Solana.<program>` and `Solana.owner`,
- * each refused naming what to write (`retiredAccountRefusal`, which the names check applies on
- * every chain); on an EVM chain they are refused too, accounts being Solana's
+ * (`Account<Writable>`): only `Account` read as a value is one of these. `Account` and `pot` are
+ * the program's own where it declares them (`pot.owner` with `pot`), and the caller's where the
+ * compile binds them. They replace `Solana.account(…)`, `Solana.pda(…)`, `Solana.<program>` and
+ * `Solana.owner`, each refused naming what to write (`retiredAccountRefusal`, which the names check
+ * applies on every chain); on an EVM chain `Account` is refused too, accounts being Solana's
  * (`evmAccountRefusal`).
  *
  * `pot` is the Pot's key where a value is wanted (`return pot`, `require(x == pot)`,
  * `const holder = pot`), and its account where one is: with a role (`pot.signer()`), read for a
- * field (`pot.address`, `pot.owner`, `pot.dataLen`), as `svm.call`'s program or one of its
- * accounts, `svm.sload`'s and `svm.sstore`'s account, a local declared `Account`, and an argument
- * a function declares `Account` (the program's own, and `@sauce/token`'s and `@sauce/router`'s).
- * Its balances are the token syntax's (`pot.USDC`, `pot.balance`). `owner` is the owner's account
- * wherever it stands, and its balances are the token syntax's too (`owner.USDC`, `owner.balance`).
+ * field (`pot.address`, `pot.dataLen`), as `svm.call`'s program or one of its accounts,
+ * `svm.sload`'s and `svm.sstore`'s account, a local declared `Account`, and an argument a function
+ * declares `Account` (the program's own, and `@sauce/token`'s and `@sauce/router`'s). Its balances
+ * are the token syntax's (`pot.USDC`, `pot.balance`). `pot.owner` is the owner's account wherever
+ * it stands, and its balances are the token syntax's too (`pot.owner.USDC`, `pot.owner.balance`).
+ * Any other account's `.owner` is the program that owns it: the Pot's is `Account(pot).owner`.
  *
  * What an account expression lowers to is the parameter's name: `svm.call(Account.systemProgram, …)`
  * becomes `svm.call(systemProgram, …)`, with `systemProgram: Account` added to `main`.
@@ -52,13 +53,13 @@ import {
   type Holder,
   type SvmLowering,
 } from "./svm-lowering.js";
-import { BALANCE_MEMBER, OWNER_NAME, POT_NAME } from "./pot-sugar.js";
+import { BALANCE_MEMBER, OWNER_MEMBER, POT_NAME } from "./pot-sugar.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 /** What names an account where a program uses it: `Account(key)`, `Account.pda(…)`, its programs. */
 export const ACCOUNT_FACTORY = "Account";
 
-/** Solana's own name, which held the accounts before `Account` and `owner` (`Solana.pda(…)`). */
+/** Solana's own name, which held the accounts before `Account` and `pot.owner` (`Solana.pda(…)`). */
 export const RETIRED_ACCOUNT_ROOT = "Solana";
 
 /** An account a name stands for: its derivation, its parameter's name and what it is. */
@@ -75,7 +76,7 @@ const POT: Known = {
   account: "the Pot, which the program acts with through the Kitchen",
 };
 
-/** The Pot's owner, `owner`, where the program does not declare the name. */
+/** The Pot's owner, `pot.owner`, where the program does not declare `pot`. */
 const OWNER: Known = {
   derivation: "owner",
   base: "owner",
@@ -138,7 +139,7 @@ export const SVM_ACCOUNT_EXPRESSIONS: readonly SvmAccountExpression[] = [
     derive: known.derivation,
   })),
   { expression: POT_NAME, account: POT.account, derive: POT.derivation },
-  { expression: OWNER_NAME, account: OWNER.account, derive: OWNER.derivation },
+  { expression: `${POT_NAME}.${OWNER_MEMBER}`, account: OWNER.account, derive: OWNER.derivation },
   {
     expression: "<Sym>.accountOf(holder)",
     account: "the holder's associated account for the token",
@@ -190,19 +191,21 @@ function stemOf(text: string): string | undefined {
 }
 
 /**
- * The account expressions' words, which the cheap "nothing to lower" scan looks for: `Account`,
- * `owner`, and `Solana`, whose `Solana.self` the lowering refuses, naming `pot`.
+ * The account expressions' words, which the cheap "nothing to lower" scan looks for: `Account`, and
+ * `Solana`, whose `Solana.self` the lowering refuses, naming `pot`.
  */
 export const ACCOUNT_EXPRESSION_WORDS: ReadonlySet<string> = new Set([
   ACCOUNT_FACTORY,
-  OWNER_NAME,
   RETIRED_ACCOUNT_ROOT,
 ]);
 
+/** The Pot's owner, as a program writes it. */
+const POT_OWNER = `${POT_NAME}.${OWNER_MEMBER}`;
+
 /** Who the Pot's owner is, and how a program reads its key and asks for its signature. */
 const OWNER_IS =
-  `the Pot's owner is \`${OWNER_NAME}\` (\`${OWNER_NAME}.address\`, its key; ` +
-  `\`${OWNER_NAME}.signer()\`)`;
+  `the Pot's owner is \`${POT_OWNER}\` (\`${POT_OWNER}.address\`, its key; ` +
+  `\`${POT_OWNER}.signer()\`)`;
 
 /** What `Account` names, for a use of it that names none of them. */
 const FACTORY_FORMS =
@@ -215,7 +218,7 @@ const FACTORY_FORMS =
   ".";
 
 /**
- * The refusal of `Solana.<member>`, an account spelled the way `Account` and `owner` replaced,
+ * The refusal of `Solana.<member>`, an account spelled the way `Account` and `pot.owner` replaced,
  * naming what to write: undefined for any other member of `Solana`.
  */
 export function retiredAccountRefusal(member: string): string | undefined {
@@ -236,17 +239,13 @@ export function retiredAccountRefusal(member: string): string | undefined {
 
 /**
  * The refusal of an account a program compiled for Solana names — `spelled`, its `Account(…)`,
- * `Account.pda(…)`, `Account.<program>` or `owner` — in a program compiled for `chain`, an EVM
- * chain.
+ * `Account.pda(…)` or `Account.<program>` — in a program compiled for `chain`, an EVM chain.
  */
 export function evmAccountRefusal(spelled: string, chain: string): string {
-  const declare =
-    spelled === OWNER_NAME
-      ? `\`${OWNER_NAME}\` is the Pot's owner's account there. An owner a program for an EVM ` +
-        `chain takes is a parameter of main declared \`Address\`, which owns the name.`
-      : "A program for an EVM chain names an address, a parameter of main declared `Address`.";
-
-  return `\`${spelled}\` on ${chain}: accounts are Solana's. ${declare}`;
+  return (
+    `\`${spelled}\` on ${chain}: accounts are Solana's. A program for an EVM chain names an ` +
+    "address, a parameter of main declared `Address`."
+  );
 }
 
 /** Whether `node` reads `Account` where neither the program nor the caller binds it. */
@@ -266,7 +265,7 @@ function programOfFactory(l: SvmLowering, node: AstNode): string | undefined {
 
 /**
  * Refuses `Account` read as anything but one of the accounts it names — `Account(key)`,
- * `Account.pda(…)`, `Account.<program>` — naming them; `Account.owner` names `owner`, the Pot's.
+ * `Account.pda(…)`, `Account.<program>` — naming them; `Account.owner` names `pot.owner`, the Pot's.
  */
 function refuseOtherFactoryUses(l: SvmLowering): void {
   for (const n of l.freeReads(ACCOUNT_FACTORY)) {
@@ -327,8 +326,8 @@ function standsAsAccount(l: SvmLowering, n: AstNode): boolean {
 }
 
 /**
- * Whether `node` is an account: a bare name's (`pot`, `owner`), an account expression
- * (`Account(key)`, `Account.pda(…)`, `Account.systemProgram`, `USDC.accountOf(x)`, `USDC.mint`),
+ * Whether `node` is an account: `pot`'s or `pot.owner`'s, an account expression (`Account(key)`,
+ * `Account.pda(…)`, `Account.systemProgram`, `USDC.accountOf(x)`, `USDC.mint`),
  * `svm.remainingAccount(i)`, an `Account` parameter, or a local bound once to one of them — with any
  * roles chained on it. A local holds what its declared type says, else what its value is lowered
  * to: `const holder = pot` holds the Pot's key. Its `.balance` is its lamports, by its key.
@@ -526,7 +525,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
       new Error(
         `${spelled} on Solana: the seed \`${text(node)}\` must be known when the transaction is ` +
           "built — a string, a parameter of main declared `Address`, an integer parameter's " +
-          `\`.toBytesLe(n)\`, \`pot\`, \`ctx.self()\`, \`${OWNER_NAME}\`, a token symbol, a ` +
+          `\`.toBytesLe(n)\`, \`pot\`, \`ctx.self()\`, \`${POT_OWNER}\`, a token symbol, a ` +
           "32-byte key, or hex`…`. For an account derived from what only the program knows, take " +
           "it as an `Account` parameter of main.",
       );
@@ -632,9 +631,9 @@ export function collectAccountExpressions(l: SvmLowering): void {
   };
 
   /**
-   * A token's holder for `accountOf`: what the token methods take, or `owner`. The account attached
-   * is held to the holder's: owned by a token program, of the token's mint, and the holder's, as the
-   * token methods hold each account they move through.
+   * A token's holder for `accountOf`: what the token methods take, or `pot.owner`. The account
+   * attached is held to the holder's: owned by a token program, of the token's mint, and the
+   * holder's, as the token methods hold each account they move through.
    */
   const holderAccount = (node: AstNode, symbol: string, spelled: string): Described => {
     const token = l.symbolToken(symbol);
@@ -689,25 +688,10 @@ export function collectAccountExpressions(l: SvmLowering): void {
    * where a signature is used, not at the entry: what keeps another account out of a read is
    * whoever builds the transaction (`sdk/test/svm/direct-engine.e2e.test.ts` measures both). Its
    * balances (`pot.USDC`, `pot.balance`) are the token syntax's, and a method on it
-   * (`pot.toBytesBe(32)`) is its key's. `pot.owner` is refused: an account's `.owner` is the
-   * program that owns it, which is not the Pot's owner.
+   * (`pot.toBytesBe(32)`) is its key's. Its `pot.owner` is none of these: that is the owner's.
    */
   const collectBare = (n: AstNode, known: Known, key: () => string): void => {
     const parent = parents.get(n);
-    if (
-      parent?.type === "MemberExpression" &&
-      parent.object === n &&
-      parent.computed !== true &&
-      (parent.property as AstNode).type === "Identifier" &&
-      nameOf(parent.property as AstNode) === "owner"
-    ) {
-      throw new Error(
-        `\`${text(parent)}\` on Solana: an account's \`.owner\` is the program that owns it, so ` +
-          `\`${text(parent)}\` would be the program that owns the Pot's account, not the Pot's ` +
-          `owner. The Pot's owner, who signs the cook, is \`${OWNER_NAME}\` ` +
-          `(\`${OWNER_NAME}.address\`, its key).`,
-      );
-    }
     if (standsAsAccount(l, n)) {
       roots.push({
         node: n,
@@ -738,7 +722,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
       );
     });
   };
-  /** Whether `node`, an account's root, is the holder of a balance: `owner.USDC`, `owner.balance`. */
+  /** Whether `node`, an account's root, holds a balance: `pot.owner.USDC`, `pot.owner.balance`. */
   const holdsBalance = (node: AstNode, lamports: boolean): boolean => {
     const parent = parents.get(node);
     if (
@@ -769,6 +753,10 @@ export function collectAccountExpressions(l: SvmLowering): void {
             if (args.length !== 1)
               throw new Error(`${spelled} takes 1 argument (key), got ${args.length}.`);
             const key = args[0]!;
+            // The Pot's own account, by its key: the slot `pot` is.
+            if (l.isPot(key) || isPotAddress(l, key)) {
+              return { derivation: POT.derivation, base: POT.base, signer: true };
+            }
             if (key.type === "Identifier" && l.param(key)?.kind === "address") {
               return {
                 derivation: `@${nameOf(key)}`,
@@ -832,13 +820,10 @@ export function collectAccountExpressions(l: SvmLowering): void {
       collectBare(n, POT, () => `${l.pot({ signer: true })}.address`);
       return;
     }
-    if (n.type === "Identifier" && l.isOwner(n)) {
-      const parent = parents.get(n);
-      // `owner(…)` calls no account; `owner.USDC` and `owner.balance` are the token methods' to
-      // lower whole, the owner a holder of a balance.
-      if ((parent?.type === "CallExpression" && parent.callee === n) || holdsBalance(n, true)) {
-        return;
-      }
+    if (l.isOwner(n)) {
+      // `pot.owner.USDC` and `pot.owner.balance` are the token methods' to lower whole, the owner a
+      // holder of a balance.
+      if (holdsBalance(n, true)) return;
       // The owner is what the cook attaches, and held by its signature where `.signer()` asks.
       roots.push({ node: n, describe: () => OWNER });
       return;
@@ -937,22 +922,26 @@ export function collectAccountExpressions(l: SvmLowering): void {
       top = call;
     }
     const spelled = `\`${text(root.node)}\``;
-    const parent = parents.get(top);
-    // `{ owner }` is `{ owner: <its slot> }`: the field keeps its name.
-    const shorthand =
-      parent?.type === "Property" && parent.shorthand === true && parent.value === top;
     l.site(top, () => {
       l.requirePlaced(top, spelled, "an account");
       const { derivation, base, check, signer } = root.describe();
       const slot = l.account(derivation, base, { ...role, signer: role.signer || signer === true });
       if (check !== undefined) l.prologue(slot, check(slot));
-      l.splices.push(
-        shorthand
-          ? { start: top.end, end: top.end, replacement: `: ${slot}` }
-          : { start: top.start, end: top.end, replacement: slot },
-      );
+      l.splices.push({ start: top.start, end: top.end, replacement: slot });
     });
   }
+}
+
+/** `pot.address`, the Pot's key read off its account. */
+function isPotAddress(l: SvmLowering, node: AstNode): boolean {
+  if (node.type !== "MemberExpression" || node.computed === true) return false;
+  const property = node.property as AstNode;
+
+  return (
+    l.isPot(node.object as AstNode) &&
+    property.type === "Identifier" &&
+    nameOf(property) === "address"
+  );
 }
 
 /** The derivation of a token's program: its id where the registry records it. */

@@ -303,7 +303,7 @@ describe("sauce globals", () => {
     );
     const out = json(await sauce("globals", "--chain", "solana", "--json"));
     expect(out.accounts).toContainEqual({
-      expression: "owner",
+      expression: "pot.owner",
       account: "the Pot's owner, who signs the cook",
       derive: "owner",
     });

@@ -98,7 +98,7 @@ the account it names. Each is read-only unless `.writable()` or `.signer()` give
 | `Account.associatedTokenProgram` | the Associated Token Account program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` |
 | `Account.memoProgram` | the Memo program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
 | `pot` | the Pot, which the program acts with through the Kitchen | `pot` |
-| `owner` | the Pot's owner, who signs the cook | `owner` |
+| `pot.owner` | the Pot's owner, who signs the cook | `owner` |
 | `<Sym>.accountOf(holder)` | the holder's associated account for the token | `<holder>:<Sym>` |
 | `<Sym>.mint` | the token's mint | `mint:<Sym>` |
 | `<Sym>.tokenProgram` | the token program that owns the mint | `program:<Sym>` |

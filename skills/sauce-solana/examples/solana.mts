@@ -303,7 +303,7 @@ const table = routes.compileSauceProgram(
   "function main(program: Address, to: Address): Uint256 {\n" +
     "  const dest = Account.pda(program, [to]).writable();\n" +
     '  return dest.dataLen + Account.pda(program, ["state", to]).dataLen + Account(program).dataLen +\n' +
-    "    pot.dataLen + owner.dataLen + Account.token2022Program.dataLen +\n" +
+    "    pot.dataLen + pot.owner.dataLen + Account.token2022Program.dataLen +\n" +
     "    Account.associatedTokenProgram.dataLen + Account.memoProgram.dataLen + USDC.mint.dataLen +\n" +
     "    USDC.tokenProgram.dataLen + USDC.accountOf(to).dataLen + USDC.accountOf(to).dataLen;\n}\n",
 );
@@ -312,7 +312,7 @@ check(derived.destPda === "pda:@program:@to", "a pda is named for the constant i
 check(derived.statePda === 'pda:@program:"state",@to', "else for its first string seed");
 check(
   derived.programAccount === "@program" && derived.pot === "pot" && derived.owner === "owner",
-  "Account(key), pot and owner",
+  "Account(key), pot and pot.owner",
 );
 check(
   derived.mintUSDC === "mint:USDC" && derived.toUSDC === "@to:USDC",
@@ -356,12 +356,12 @@ check(
     refused.includes("`Account` parameter of main"),
   `a seed computed as the program runs is refused: ${refused}`,
 );
-// Accounts are `Account`'s and the owner is `owner`: the chain's name holds none, and an account
-// spelled on it is refused, naming what to write.
+// Accounts are `Account`'s and the owner is `pot.owner`: the chain's name holds none, and an
+// account spelled on it is refused, naming what to write.
 for (const [spelled, instead] of [
   ["Solana.pda(program, [to]).dataLen", "Account.pda(program, [seeds])"],
   ["Solana.account(program).dataLen", "Account(key)"],
-  ["Solana.owner.dataLen", "owner"],
+  ["Solana.owner.dataLen", "pot.owner"],
   ["Solana.systemProgram.dataLen", "Account.systemProgram"],
 ]) {
   let retired = "";
