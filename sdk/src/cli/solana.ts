@@ -68,7 +68,7 @@ import {
   resolveSvmAccountName,
   SvmAccountNameError,
   svmNamesPot,
-  svmPotDerived,
+  svmCookRoles,
   svmPublicKey,
   SYSTEM_HOLDER,
   type ResolvedSvmAccountName,
@@ -1196,25 +1196,27 @@ function refusePotOnEngine(
 }
 
 /**
- * Refuses, through the Kitchen, any account given in place of one the program derives from the Pot
- * (`svmPotDerived`: `pot`, `pot:<token>`, `authority`, an address the Pot seeds) that is not the one
- * its derivation gives. The program takes such a slot as its own Pot — `pot` is its key,
- * `pot.balance` and `pot.<TOKEN>` read it, `pot.signer()` signs as it, and the checks the lowering
- * writes compare against that same slot — so another account there would stand in for the Pot. The
- * Pot itself is taken however it is given (`pot`, `authority`, its address). Cooked directly on the
- * engine (`via: "engine"`) there is no Pot, and nothing changes.
+ * Refuses any account given in place of one the program derives from a role of the cook
+ * (`svmCookRoles`: `pot`, `owner`, `authority`, their token accounts, an address one of them seeds)
+ * that is not the one its derivation gives. The program takes such a slot as that role — `pot` is
+ * its key, `pot.balance` and `pot.<TOKEN>` read it, `pot.signer()` signs as it, `Solana.owner` is
+ * the owner's, and the checks the lowering writes compare against that same slot — so another
+ * account there would stand in for the Pot or its owner. The role's own account is taken however
+ * it is given (`pot`, `authority`, `owner`, its address). `authority` is the Pot through the
+ * Kitchen and the owner cooked directly (`via: "engine"`), where the Pot's slots are refused first
+ * (`refusePotOnEngine`).
  */
-async function refuseSubstitutedPot(
+async function refuseSubstitutedRole(
   derived: Readonly<Record<string, string>> | undefined,
   given: Readonly<Record<string, string>>,
   ctx: SvmAccountNameContext,
 ): Promise<void> {
-  if (ctx.via === "engine") return;
   const keyOf = (resolved: ResolvedSvmAccountName): Address =>
     resolved.value === "pot" ? ctx.pot : resolved.value === "owner" ? ctx.owner : resolved.value;
   for (const [name, derivation] of Object.entries(derived ?? {})) {
     const value = given[name];
-    if (value === undefined || !svmPotDerived(derivation, ctx.via)) continue;
+    const roles = svmCookRoles(derivation);
+    if (value === undefined || roles.size === 0) continue;
     let expected: Address;
     let actual: Address;
     try {
@@ -1227,11 +1229,15 @@ async function refuseSubstitutedPot(
       throw error;
     }
     if (actual === expected) continue;
+    const pot = roles.has("pot") || (roles.has("authority") && ctx.via !== "engine");
     throw new UsageError(
-      `--account ${name}=${value}: the account ${name} is derived from the Pot, as ${derivation} ` +
-        `(${expected}), and ${value === actual ? value : `${value} (${actual})`} is another account. ` +
-        `Through the Kitchen nothing stands in for the Pot: give ${derivation} or ${expected}, or ` +
-        "leave the account out to derive it.",
+      `--account ${name}=${value}: the account ${name} is derived from ` +
+        `${pot ? "the Pot" : "the owner"}, as ${derivation} (${expected}), and ` +
+        `${value === actual ? value : `${value} (${actual})`} is another account. ` +
+        (pot
+          ? "Through the Kitchen nothing stands in for the Pot"
+          : "Nothing stands in for the owner, who signs the cook") +
+        `: give ${derivation} or ${expected}, or leave the account out to derive it.`,
     );
   }
 }
@@ -1786,8 +1792,9 @@ async function prepare(
   // the pools and tick arrays a swap's stop is worked out from.
   const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
   const keyArguments = svmKeyArguments(plain, input.args);
-  // The Pot's own slots are the Pot's, whatever --account gives: refused before anything is built.
-  await refuseSubstitutedPot(plain.derivedAccounts, input.accounts, {
+  // A slot derived from the Pot, its owner or the authority is that account, whatever --account
+  // gives: refused before anything is built.
+  await refuseSubstitutedRole(plain.derivedAccounts, input.accounts, {
     chain: input.chain,
     owner: input.owner,
     pot,

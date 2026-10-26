@@ -358,7 +358,7 @@ describeSvm("the engine's two Solana entry points: through the Kitchen, and dire
      * Pot fails unless the Pot signs, which only a Kitchen cook of the Pot's owner makes it do. So
      * an account put in the Pot's place is refused where the program acts as the Pot, and what
      * keeps it out of a read is whoever builds the transaction: on Solana the owner, who alone can
-     * cook the Pot, through the cook commands' check on `--account` (`refuseSubstitutedPot`).
+     * cook the Pot, through the cook commands' check on `--account` (`refuseSubstitutedRole`).
      */
     describe("a bare pot is the slot Solana.self was", () => {
       const MEMO = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr" as Address;

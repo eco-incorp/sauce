@@ -403,6 +403,55 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     assert.equal(typeof out.pot, "string");
   });
 
+  it("refuses another key in any slot derived from a cook role: the owner's and the authority's too", async () => {
+    const someone = "SysvarRent111111111111111111111111111111111";
+    const to = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    const pays = "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
+    const cases = [
+      ["function main(): Address {\n  return Solana.owner.address;\n}\n", "owner", "owner", "the owner", []],
+      ["function main(): Uint256 {\n  return Solana.owner.USDC;\n}\n", "ownerUSDC", "owner:USDC", "the owner", []],
+      [pays, "pot", "authority", "the Pot", [to, "1"]],
+      [pays, "potUSDC", "authority:USDC", "the Pot", [to, "1"]],
+    ] as const;
+    for (const tool of ["sauce_tx", "sauce_simulate"]) {
+      for (const [source, slot, derivation, whose, args] of cases) {
+        asked.length = 0;
+        const refused = failed(
+          await mcp.call(tool, {
+            source,
+            chain: "solana",
+            owner: OWNER,
+            accounts: { [slot]: someone },
+            ...(args.length === 0 ? {} : { args: [...args] }),
+            rpcUrl: url,
+          }),
+        );
+        assert.ok(
+          refused.startsWith(
+            `accounts ${slot}=${someone}: the account ${slot} is derived from ${whose}, as ` +
+              `${derivation} (`,
+          ),
+          `${tool} ${slot}: ${refused}`,
+        );
+        assert.ok(!asked.includes("getLatestBlockhash"), `${tool} built nothing`);
+      }
+    }
+    // The owner itself, by role or by key, is its own slot: the cook is built.
+    for (const given of ["owner", OWNER]) {
+      asked.length = 0;
+      const out = ok(
+        await mcp.call("sauce_tx", {
+          source: cases[0][0],
+          chain: "solana",
+          owner: OWNER,
+          accounts: { owner: given },
+          rpcUrl: url,
+        }),
+      );
+      assert.equal(typeof out.pot, "string");
+    }
+  });
+
   it("refuses via and maxExecutionFee on an EVM chain", async () => {
     for (const extra of [{ via: "engine" }, { maxExecutionFee: "5000" }]) {
       const refused = failed(
