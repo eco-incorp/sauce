@@ -34,7 +34,7 @@ import type { ContractsConfig } from "./compile-types.js";
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
-import { walk, collectDeclaredNames, collectPatternBinders, type AstNode } from "./ast-walk.js";
+import { walk, collectPatternBinders, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
 import { lexicalBindings } from "./lexical-bindings.js";
 import {
@@ -46,7 +46,12 @@ import {
 } from "./accessor-index.js";
 import { parseSauce } from "./parse.js";
 import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
-import { shadowed as shadowedAt, walkScoped } from "./lexical-scope.js";
+import { shadowed as shadowedAt, walkScoped, type Scope } from "./lexical-scope.js";
+
+/** Whether `head`, read where `node` starts, is a name the program declares in scope there
+ *  (`lexical-scope.ts`), or one the compile binds beside the source: the program's or the
+ *  caller's own, never a registry namespace or chain. */
+type Owned = (head: string, node: AstNode) => boolean;
 
 export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
@@ -129,10 +134,7 @@ interface DefaultCandidate {
   readonly path: readonly string[];
 }
 
-function collectDefaultCandidates(
-  program: AstNode,
-  shadowed: ReadonlySet<string>,
-): DefaultCandidate[] {
+function collectDefaultCandidates(program: AstNode, owned: Owned): DefaultCandidate[] {
   const out: DefaultCandidate[] = [];
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
@@ -141,7 +143,7 @@ function collectDefaultCandidates(
     const decomposed = decomposeMemberChain(callee);
     if (decomposed === undefined) return;
     const { head, path } = decomposed;
-    if (shadowed.has(head)) return;
+    if (owned(head, callee)) return;
     // Only a recognized head (namespace key or chain key) is a candidate at all -- an unrecognized
     // head is left completely untouched (isolation).
     const chainKey = isChainKey(head);
@@ -185,7 +187,7 @@ interface BoundCandidate {
  * call, because a bound contract is not a value Sauce can hold: anything else spelled
  * `<…>.<Contract>.at(...)` or `<…>.<Interface>(...)` on a recognized namespace is refused by name.
  */
-function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>): BoundCandidate[] {
+function collectBoundCandidates(program: AstNode, owned: Owned): BoundCandidate[] {
   const calledOn = new Map<AstNode, string>();
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
@@ -206,7 +208,7 @@ function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>)
     const decomposed = decomposeMemberChain(callee);
     if (decomposed === undefined) return;
     const { head, path } = decomposed;
-    if (shadowed.has(head)) return;
+    if (owned(head, callee)) return;
     if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
     const viaAt = path.length >= 2 && path[path.length - 1] === "at";
     if (!viaAt && namedContractKind(head, path) !== "interface") return;
@@ -244,13 +246,13 @@ export const SCALAR_METHODS: ReadonlySet<string> = new Set(["toBytesBe", "toByte
  * (`lexical-bindings.ts`), so a same-named local or parameter elsewhere is never taken for it. On
  * the EVM `.address` is the address itself on any scalar.
  */
-function collectAddressReads(program: AstNode, shadowed: ReadonlySet<string>): Splice[] {
+function collectAddressReads(program: AstNode, owned: Owned): Splice[] {
   const nameOf = (node: AstNode): string => (node as unknown as { name: string }).name;
   const isBinding = (node: AstNode | null | undefined): boolean => {
     if (!node) return false;
     const decomposed = decomposeMemberChain(node);
     if (decomposed === undefined || decomposed.path.length === 0) return false;
-    if (shadowed.has(decomposed.head)) return false;
+    if (owned(decomposed.head, node)) return false;
     return namedContractKind(decomposed.head, decomposed.path) === "singleton";
   };
   const bindings = lexicalBindings(program);
@@ -673,16 +675,22 @@ export function rewriteProtocolAccessors(
   // must take whatever the compiler does, including a source that ALREADY carries a leading
   // `import { X } from "./X.json";` line.
   const program = parseSauce(source);
-  const shadowed = collectDeclaredNames(program);
+  // A name is the program's where it declares it in scope (a parameter named `UniswapV3` in one
+  // function leaves `main`'s `UniswapV3` the registry's), and the caller's where the compile binds
+  // it (`bound`).
+  const scopes = new Map<AstNode, Scope | undefined>();
+  walkScoped(program, (n, at) => scopes.set(n, at));
+  const owned: Owned = (head, node) =>
+    bound.has(head) || shadowedAt(scopes.get(node), head, node.start);
 
   const chainScope = opts.chainScope
     ? new Set(opts.chainScope.map((ref) => requireChain(ref).id))
     : undefined;
 
-  const defaults = collectDefaultCandidates(program, shadowed).map(throughDefault);
-  const addressReads = chain.kind === "evm" ? collectAddressReads(program, shadowed) : [];
+  const defaults = collectDefaultCandidates(program, owned).map(throughDefault);
+  const addressReads = chain.kind === "evm" ? collectAddressReads(program, owned) : [];
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
-  const resolved = collectBoundCandidates(program, shadowed).map((c) =>
+  const resolved = collectBoundCandidates(program, owned).map((c) =>
     resolveBound(c, chain, chainScope, allowWidenedSelectors),
   );
 

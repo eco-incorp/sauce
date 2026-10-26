@@ -702,6 +702,38 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
     }
   });
 
+  it("a namespace a function's own parameter is named after is that function's alone", () => {
+    // `helper`'s parameter `AaveV3` is a number in `helper`; in `main` `AaveV3` is the registry's,
+    // whose default call and shape G are rewritten there as ever.
+    const helper = "function helper(AaveV3: Uint256): Uint256 { return AaveV3 + 1; }\n";
+    const pass = rewriteProtocolAccessors(
+      `${helper}function main(): bytes { AaveV3.getUserAccountData(ctx.self()); return AaveV3.Pool.toBytesBe(32); }`,
+      BASE,
+    );
+    expect(pass.defaultSites).toBe(1);
+    expect(pass.source).toContain("AaveV3.Pool.address.toBytesBe(32)");
+    expect(pass.source).toContain(helper);
+    const literal = bytes(
+      "base",
+      `function main(): Uint256 { return ${BASE_AAVE_POOL}.toBytesBe(32).toBe() + helper(1); }\n${helper}`,
+    );
+    expect(
+      bytes(
+        "base",
+        `function main(): Uint256 { return AaveV3.Pool.toBytesBe(32).toBe() + helper(1); }\n${helper}`,
+      ),
+    ).toEqual(literal);
+    // A name the compile binds beside the source (a define, a contract, an ambient export) is the
+    // caller's: neither call is the registry's.
+    const bound = rewriteProtocolAccessors(
+      "function main(): bytes { AaveV3.getUserAccountData(ctx.self()); return AaveV3.Pool.toBytesBe(32); }",
+      BASE,
+      {},
+      new Set(["AaveV3"]),
+    );
+    expect(bound.rewrote).toBe(false);
+  });
+
   it("tells onContract each contract a program uses: as written, with its chain and address -- and not a test of one", () => {
     const heard: Array<[string, string, string, string]> = [];
     compileSauceProgram(
