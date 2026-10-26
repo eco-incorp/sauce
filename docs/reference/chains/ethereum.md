@@ -229,7 +229,7 @@ address.
 | [Stargate](../protocols/stargate.md) | poolUSDC | `0xc026395860Db2d07ee33e05fE50ed7bD583189C7` | `Stargate.PoolUSDC` |
 | [Stargate](../protocols/stargate.md) | poolUSDT | `0x933597a323Eb81cAe705C5bC29985172fd5A3973` | `Stargate.PoolUSDT` |
 | [Superfluid](../protocols/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
-| [Superfluid](../protocols/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
+| [Superfluid](../protocols/superfluid.md) | host | `0x4E583d9390082B65Bef884b629DFA426114CED6d` | `Superfluid.Host` |
 | [SushiSwap V2](../protocols/sushiswap-v2.md) | factory | `0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../protocols/sushiswap-v2.md) | router | `0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F` | `SushiswapV2.Router` |
 | [Swell](../protocols/swell.md) | rswETH | `0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0` | `Swell.RswETH` |

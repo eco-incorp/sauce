@@ -27,11 +27,11 @@ Decentralized perpetual exchange with multi-asset liquidity pool (GLP). Supports
 
 ## Notes
 
-- TVL: $500M+. Execution fee of 200000000000000 wei (0.0002 ETH) required for position requests
+- Execution fee: each request's `msg.value` must equal its `_executionFee`, which must be at least the PositionRouter's `minExecutionFee()` (read it). The fee goes to whoever executes or cancels the request
 - Must call router.approvePlugin(positionRouter) once before using position operations
 - Path: for longs, path=[collateral]. For shorts, path=[stablecoin]. For swaps, path=[tokenIn, tokenOut]
 - sizeDelta is position size in USD with 30 decimals
-- acceptablePrice: 0 for market price
+- `acceptablePrice` (USD, 30 decimals) bounds the mark price at execution, and its direction depends on the request; there is no market-price sentinel, and 0 is not one. A long increase or a short decrease executes only while the mark price is at most `acceptablePrice` (pass the highest price you accept); a short increase or a long decrease only while it is at least `acceptablePrice` (pass the lowest). When the mark price is outside the bound, the execution reverts and the keeper cancels the request, so 0 never executes a long increase or a short decrease
 
 ## Its names in a program
 

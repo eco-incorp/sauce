@@ -117,8 +117,8 @@ creates it the first time it needs it.
 ## Supported chains
 
 Sauce sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**. Every other chain it
-knows is a preview chain: programs compile there, but the released engine is not deployed there, so
-nothing is simulated and the `sauce` command sends nothing. [Chains](docs/reference/chains.md) lists them all, and how to ask for one.
+knows is a preview chain: programs compile there and simulate wherever the release is deployed on
+the chain, but the `sauce` command builds and sends no transaction. [Chains](docs/reference/chains.md) lists them all, and how to ask for one.
 
 ## From your application
 

@@ -112,9 +112,10 @@ MCP server build and send its cooks and Pot deployments, where before they only 
 simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
 
 On a preview chain the `sauce` command's help, its refusals, the MCP server's instructions and tool
-descriptions, the skills and this manual no longer say a program simulates there: `sauce simulate`
-stops there with exit 1 (`the released engine … is not deployed on <chain>`). Compile,
-`globals`, `price`, `pools` and `pot`'s prediction work there.
+descriptions, the skills and this manual state the policy: the command and the MCP server build and
+send no transaction there. Compile, `globals`, `price`, `pools` and `pot`'s prediction work there,
+and `sauce simulate` runs wherever the release is deployed on the chain, preview or not; where it
+is not, it stops with exit 1 (`the released engine … is not deployed on <chain>`).
 
 Wallet policies on Solana measure the actual Pot named by each cook, including non-canonical
 Pot addresses, accounts loaded through lookup tables and cooks a program the transaction calls

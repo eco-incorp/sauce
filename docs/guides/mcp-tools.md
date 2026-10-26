@@ -331,8 +331,8 @@ chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
 `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify` and `sauce_pot`'s
 prediction and reads. So an agent can write a program for any protocol on any chain.
-`sauce_simulate` cannot run there: the released engine is not deployed on a preview chain, so it
-returns an error. Simulate on a supported chain.
+`sauce_simulate` does not depend on the label: it runs wherever the release is deployed on the
+chain, and returns an error naming the missing contract where it is not.
 
 `sauce_tx`, `sauce_signed_cook` and `sauce_sign` are refused there, before any endpoint is reached.
 

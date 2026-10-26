@@ -27,7 +27,7 @@ Protocol for real-time finance enabling continuous token streams (per-second pay
 
 - Flowrate is in tokens per second (int96) - e.g. 1e18 / (30 * 86400) for ~1 token/month
 - Uses Super Tokens - wrapped ERC-20s with streaming capability (wrap before streaming)
-- Same host and cfaForwarder addresses on all 5 chains
+- The CFAForwarder has one address on every chain; the Host's address differs per chain
 - CFAForwarder is the simplified interface; host is the core protocol contract
 - Streams are continuous - balance updates every second without transactions
 - Sender must maintain sufficient Super Token balance; otherwise stream gets liquidated
@@ -49,15 +49,15 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Ethereum](../chains/ethereum.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
-| [Ethereum](../chains/ethereum.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
+| [Ethereum](../chains/ethereum.md) | host | `0x4E583d9390082B65Bef884b629DFA426114CED6d` | `Superfluid.Host` |
 | [Optimism](../chains/optimism.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
-| [Optimism](../chains/optimism.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
+| [Optimism](../chains/optimism.md) | host | `0x567c4B141ED61923967cA25Ef4906C8781069a10` | `Superfluid.Host` |
 | [Polygon](../chains/polygon.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
 | [Polygon](../chains/polygon.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
 | [Base](../chains/base.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
-| [Base](../chains/base.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
+| [Base](../chains/base.md) | host | `0x4C073B3baB6d8826b8C5b229f3cfdC1eC6E47E74` | `Superfluid.Host` |
 | [Arbitrum One](../chains/arbitrum.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
-| [Arbitrum One](../chains/arbitrum.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
+| [Arbitrum One](../chains/arbitrum.md) | host | `0xCf8Acb4eF033efF16E8080aed4c7D5B9285D2192` | `Superfluid.Host` |
 
 ## ABI
 
