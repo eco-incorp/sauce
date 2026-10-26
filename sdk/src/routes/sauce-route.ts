@@ -39,7 +39,7 @@ import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
-import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
+import { freeHolderError, unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
@@ -624,6 +624,8 @@ function compileForChain(
   let derivedValues: Readonly<Record<string, string>> | undefined;
   let stoppable: readonly string[] | undefined;
   let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
+  // The holders the token pass read by a name the program does not declare (EVM).
+  let freeHolders: ReadonlyMap<string, string> | undefined;
   if (chain.kind === "svm") {
     const lowered = readingBound(() =>
       rewriteSvmTokenSyntax(
@@ -655,16 +657,16 @@ function compileForChain(
       );
     }
   } else {
-    absorb(
-      readingBound(() =>
-        rewriteTokenMembers(
-          source,
-          tokenMap,
-          native === undefined ? undefined : { symbol: native, chain: chain.slug },
-          bound,
-        ),
+    const members = readingBound(() =>
+      rewriteTokenMembers(
+        source,
+        tokenMap,
+        native === undefined ? undefined : { symbol: native, chain: chain.slug },
+        bound,
       ),
     );
+    freeHolders = members.freeHolders;
+    absorb(members);
     absorb(rewriteTokenFactory(source));
     if (tokenRewrote) source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
@@ -707,8 +709,10 @@ function compileForChain(
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower. Asked only of a program the compiler refused.
+    // the compiler could not lower; a holder read by a name the program does not declare, as the
+    // read. Asked only of a program the compiler refused.
     throw (
+      freeHolderError(source, freeHolders, error) ??
       unknownBalanceError(source, chain, { tokens: tokenMap.keys() }, error) ??
       unknownGlobalError(
         source,

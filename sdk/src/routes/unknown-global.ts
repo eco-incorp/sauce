@@ -101,6 +101,59 @@ function headline(error: unknown): string | undefined {
 }
 
 /**
+ * For a compile that failed at a holder the balance shorthand read by a name the program does not
+ * declare (`limits.balance`, lowered to `ctx.balance(limits)`, `limits` an ambient module's record),
+ * an error naming that read. Such a name's type is not in the program's text, so the shorthand takes
+ * it for an address, as it does a define; a record is read for its field once the program imports
+ * it by name. The compiler says where it failed (`(bytes a..b)`): only a failure at the name, as the
+ * argument of the read it was lowered to, is reported; any other stands.
+ */
+export function freeHolderError(
+  source: string,
+  holders: ReadonlyMap<string, string> | undefined,
+  cause: unknown,
+): Error | undefined {
+  if (holders === undefined || holders.size === 0) return undefined;
+  const message = String((cause as Error | undefined)?.message ?? cause).replace(STYLE, "");
+  const at = /\(bytes (\d+)\.\.(\d+)\)/.exec(message);
+  if (at === null) return undefined;
+  // The compiler counts bytes; the parse counts UTF-16 units.
+  const bytes = new TextEncoder().encode(source);
+  const unit = (offset: number): number =>
+    new TextDecoder().decode(bytes.subarray(0, offset)).length;
+  const [start, end] = [unit(Number(at[1])), unit(Number(at[2]))];
+  const name = source.slice(start, end);
+  const read = holders.get(name);
+  if (read === undefined) return undefined;
+  // The name as the argument of `ctx.balance(…)` or `….balanceOf(…)`, the reads the shorthand lowers to.
+  let lowered = false;
+  walk(parseSauce(source), (node) => {
+    if (lowered || node.type !== "CallExpression") return;
+    const callee = node.callee as AstNode;
+    const method =
+      callee.type === "MemberExpression" && (callee.property as AstNode).type === "Identifier"
+        ? (callee.property as unknown as { name: string }).name
+        : undefined;
+    if (method !== "balance" && method !== "balanceOf") return;
+    lowered = ((node.arguments as AstNode[] | undefined) ?? []).some(
+      (argument) => argument.start === start && argument.end === end,
+    );
+  });
+  if (!lowered) return undefined;
+  const compiler = headline(cause);
+  return new Error(
+    `compileSauceRoute: \`${read}\` read a balance of \`${name}\`, taking it for an address, and ` +
+      `the compiler refused \`${name}\` there: ${compiler ?? "it is not one"}.` +
+      (read.endsWith(`.${BALANCE_MEMBER}`)
+        ? ` The program does not declare \`${name}\`, so its text does not say what it is (an ` +
+          "ambient module's export, a define): for a field of a record, import it by name " +
+          `(\`import { ${name} } from "<module>"\`), and its \`.${BALANCE_MEMBER}\` is that field.`
+        : ""),
+    { cause },
+  );
+}
+
+/**
  * For a compile that failed with `cause`: an error naming the first member access (`X.y`,
  * `X.y(...)`) whose root `X` nothing gives meaning to on `chain`, with the chain's near matches
  * among its tokens and protocols. `undefined` when there is none, and the compiler's error stands.

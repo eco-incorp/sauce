@@ -1592,6 +1592,69 @@ describe("`.balance` is a field wherever it was one", () => {
     );
   });
 
+  describe("a holder only an ambient module declares", () => {
+    const HOLDER = "0x6666666666666666666666666666666666666666";
+    const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const ambient = (module: string) => ({
+      ambient: ["./lib.js"],
+      resolve: (path: string) =>
+        path === "./lib.js" ? new TextEncoder().encode(module) : undefined,
+    });
+    const build = (module: string, source: string) =>
+      Buffer.from(compileSauceProgram("base", source, ambient(module)).bytecode).toString("hex");
+    const refused = (module: string, source: string) => {
+      try {
+        compileSauceProgram("base", source, ambient(module));
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`compiled: ${source}`);
+    };
+    const RECORD = "export const limits = { balance: 5, cap: 7 };";
+
+    it("an address: its .balance is its native coin", () => {
+      const module = `export const limits = ${HOLDER};`;
+      expect(build(module, "function main(): Uint256 { return limits.balance; }")).toBe(
+        build(module, `function main(): Uint256 { return ctx.balance(${HOLDER}); }`),
+      );
+    });
+
+    it("anything else is refused naming the read, and an import by name reads its field", () => {
+      const why = (read: string) =>
+        `compileSauceRoute: \`${read}\` read a balance of \`limits\`, taking it for an address, and the ` +
+        "compiler refused `limits` there: ";
+      const field =
+        " The program does not declare `limits`, so its text does not say what it is (an ambient " +
+        'module\'s export, a define): for a field of a record, import it by name (`import { limits } from "<module>"`), ' +
+        "and its `.balance` is that field.";
+      expect(refused(RECORD, "function main(): Uint256 { return limits.balance; }")).toMatch(
+        new RegExp(
+          `^${escape(why("limits.balance"))}a module-scope lookup table .*${escape(field)}$`,
+        ),
+      );
+      expect(
+        refused(
+          "export function limits(): Uint256 { return 1; }",
+          "function main(): Uint256 { return limits.balance + 1; }",
+        ),
+      ).toBe(`${why("limits.balance")}\`limits\` is not a declared variable.${field}`);
+      // A token's balance is read of an address only: no field takes the name.
+      expect(refused(RECORD, "function main(): Uint256 { return limits.USDC; }")).toMatch(
+        new RegExp(
+          `^${escape(why("limits.USDC"))}a module-scope lookup table [^]*has no run-time form[^]*\\.$`,
+        ),
+      );
+      // Imported by name, its type is the module's, and `.balance` the record's field.
+      const imported = 'import { limits } from "./lib.js";\n';
+      expect(build(RECORD, `${imported}function main(): Uint256 { return limits.balance; }`)).toBe(
+        build(
+          "export const limits = { amount: 5, cap: 7 };",
+          `${imported}function main(): Uint256 { return limits.amount; }`,
+        ),
+      );
+    });
+  });
+
   it("a record's field selected by its position", () => {
     const program = (field: string, read: string) =>
       `function main(row: { wallet: { ${field}: Uint256 }; to: Address }): Uint256 { return ${read}; }`;

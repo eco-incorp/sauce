@@ -148,6 +148,12 @@ export interface TokenRewriteResult extends TokenImports {
   readonly memberSites: number;
   /** Count of `<holder>.<Sym>` balance-sugar sites rewritten. */
   readonly balanceSites: number;
+  /**
+   * Each holder read as an address by a name the program does not declare (an ambient module's
+   * export, a define), by name: the first read, as written (`limits.balance`). The compile's
+   * refusal of the name there is reported as that read's (`unknown-global.ts#freeHolderError`).
+   */
+  readonly freeHolders?: ReadonlyMap<string, string>;
 }
 
 export interface Splice {
@@ -616,7 +622,12 @@ function collectBalanceSites(
   excluded: ReadonlySet<AstNode>,
   source: string,
   native: NativeCoin | undefined,
-): { readonly sites: Splice[]; readonly count: number; readonly tokenReads: number } {
+): {
+  readonly sites: Splice[];
+  readonly count: number;
+  readonly tokenReads: number;
+  readonly freeHolders: ReadonlyMap<string, string>;
+} {
   const sites: Splice[] = [];
   let count = 0;
   let tokenReads = 0;
@@ -641,6 +652,15 @@ function collectBalanceSites(
     ),
     source,
   };
+  const freeHolders = new Map<string, string>();
+  /** A holder read as an address by a name the program does not declare there. */
+  const recordFree = (holder: Holder, site: string): void => {
+    if (holder.kind !== "expression" || holder.node.type !== "Identifier") return;
+    const name = (holder.node as unknown as { name: string }).name;
+    if (!scope.shapes.binders.has(holder.node) && !freeHolders.has(name)) {
+      freeHolders.set(name, site);
+    }
+  };
   walkScoped(program, (n, here) => {
     if (n.type !== "MemberExpression") return;
     if ((n as { computed?: boolean }).computed) return;
@@ -655,6 +675,7 @@ function collectBalanceSites(
       if (shadowedAt(here, name, n.start)) return;
       const holder = resolveHolder(n, name, "token", scope, here);
       if (holder === undefined) return;
+      recordFree(holder, site);
       // The symbol, not its address: exactly what `<Sym>.balanceOf(<holder>)` lowers to, so the two
       // spellings are one program under any value the compile gives the symbol, a define included.
       sites.push(...balanceSplices(n, holder, (at) => `IERC20.at(${name}).balanceOf(${at})`));
@@ -666,6 +687,7 @@ function collectBalanceSites(
     if (name === BALANCE_MEMBER) {
       const holder = resolveHolder(n, name, "balance", scope, here);
       if (holder === undefined) return;
+      recordFree(holder, site);
       // The Pot's native balance is the executing contract's own; any other holder's is read at it.
       sites.push(
         ...(holder.kind === "pot"
@@ -696,7 +718,7 @@ function collectBalanceSites(
         : `${balance.kind === "pot" ? POT_NAME : holder}.${BALANCE_MEMBER}`,
     );
   });
-  return { sites, count, tokenReads };
+  return { sites, count, tokenReads, freeHolders };
 }
 
 // -- Token(addr): the wrapper, in call-receiver and binding position ------------------------------
@@ -989,5 +1011,6 @@ export function rewriteTokenMembers(
     writes,
     // A symbol read and a token balance both name the typed binding; a write does not.
     erc20: members.reads > 0 || balances.tokenReads > 0,
+    ...(balances.freeHolders.size === 0 ? {} : { freeHolders: balances.freeHolders }),
   };
 }
