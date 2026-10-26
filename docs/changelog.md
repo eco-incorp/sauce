@@ -133,6 +133,15 @@ through Solana's new account spellings.
   that writes `Account(key)`, `Account.pda(…)` or `Account.<program>` is refused at the name. Code a
   test of a name rules out may write them, for a Solana chain to compile. `Account` as a type is
   unchanged.
+- **Now refused (both): a write to a member of the Pot** (`pot.owner = x`, `pot.balance += 1`,
+  `pot[0] = 1`): a member of the Pot is read, never written. A program's own `pot` is its own to
+  write.
+- **Now refused (Solana): an `Account` only an `ambient` module exports**, read with no import, as
+  such a `pot` is: the module's value would stand in for the account factory. On an EVM chain it is
+  the caller's value.
+- **Changed (both): a retired spelling's refusal names a binding in the way.** Where the program
+  declares its own `pot` or `Account` there, or the compile binds one, the refusal says that what it
+  names would read that binding, and to rename it first.
 - **Changed (both): the editor types.** `Account` is declared as a value beside the type, and
   `pot.owner` as the Pot's owner's account; `Solana`, like every chain, has no account member, so
   an editor shows a retired spelling as an error.

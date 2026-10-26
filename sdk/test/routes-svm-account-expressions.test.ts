@@ -400,6 +400,39 @@ describe("the retired spellings, each refused naming what to write", () => {
     expect(() => compileOn("base", main(`  return ${read};`))).toThrow(refusal);
   });
 
+  it("says to rename the program's own pot or Account first, which the new spelling would read", () => {
+    const rename = (name: string) =>
+      `. This program declares its own \`${name}\` here, which that would read: rename it first`;
+    const owner = RETIRED.find((one) => one.spelling === "Solana.owner")!;
+    // `Solana.owner` is `pot.owner`, which a program's own `pot` would read.
+    expect(() =>
+      compile("function main(pot: Account): Address {\n  return Solana.owner.address;\n}\n"),
+    ).toThrow(`${owner.refusal}${rename("pot")}`);
+    // The other spellings are `Account`'s, which a program's own `Account` would read.
+    for (const { read, refusal } of RETIRED.filter((one) => one !== owner)) {
+      expect(() =>
+        compile(
+          `function main(program: Address, key: Address, Account: Uint256): Uint256 {\n  return ${read};\n}\n`,
+        ),
+      ).toThrow(`${refusal}${rename("Account")}`);
+    }
+    // A compile that binds the name gives it the caller's value, which the advice says.
+    expect(() => compile(main(`  return ${owner.read};`), { defines: { pot: 5n } })).toThrow(
+      `${owner.refusal}. The compile binds its own \`pot\`, which that would read: rename that first`,
+    );
+    // A declaration out of scope there reads nothing of it: the advice is the plain one.
+    let plain = "";
+    try {
+      compile(
+        `function id(pot: Uint256): Uint256 {\n  return pot;\n}\n${main(`  return ${owner.read} + id(1);`)}`,
+      );
+    } catch (error) {
+      plain = (error as Error).message;
+    }
+    expect(plain).toContain(owner.refusal);
+    expect(plain).not.toContain("rename it first");
+  });
+
   it("leaves Solana's own names alone where the program declares Solana", () => {
     const own =
       "function main(): Uint256 {\n  const Solana = { owner: 7 };\n  return Solana.owner;\n}\n";
@@ -521,6 +554,30 @@ describe("pot.owner, the Pot's owner", () => {
   });
 });
 
+describe("the Pot's members are read, never written", () => {
+  it.each(["solana", "base"])("refuses a write to one on %s", (chain) => {
+    for (const [statement, target] of [
+      ["pot.owner = other;", "pot.owner"],
+      ["pot.balance += 1;", "pot.balance"],
+      ["pot.USDC++;", "pot.USDC"],
+      ["pot[0] = 1;", "pot[0]"],
+    ] as const) {
+      expect(() =>
+        compileOn(
+          chain,
+          `function main(other: Address): Uint256 {\n  ${statement}\n  return 1;\n}\n`,
+        ),
+      ).toThrow(`\`${target}\` is written: a member of the Pot is read, never written`);
+    }
+  });
+
+  it("leaves a program's own pot to the program", () => {
+    const own =
+      "function main(): Uint256 {\n  const pot = new Array(2);\n  pot[0] = 7;\n  return pot[0];\n}\n";
+    for (const chain of ["solana", "base"]) expect(compileOn(chain, own).source).toBe(own);
+  });
+});
+
 describe("pot.owner on an EVM chain: the Pot's owner()", () => {
   const potOwner = { PotOwner: { abi: [...POT_OWNER_ABI] } };
 
@@ -619,5 +676,23 @@ describe("accounts are Solana's", () => {
           "  return 1;\n}\n",
       ),
     ).not.toThrow();
+  });
+
+  it("refuses on Solana an Account only an ambient module exports, read free, and on Base compiles the module's", () => {
+    const module = "export function Account(k: Uint256): Uint256 {\n  return k + 1;\n}\n";
+    const resolve = (path: string) =>
+      path === "./caller.ts" ? new TextEncoder().encode(module) : undefined;
+    const source = "function main(k: Uint256): Uint256 {\n  return Account(k);\n}\n";
+    expect(() => compile(source, { ambient: ["./caller.ts"], resolve })).toThrow(
+      "`Account` at line 2, column 10: an ambient module exports `Account`, and the program reads " +
+        "it with no import, so it would read that module's value and not Solana's account factory.",
+    );
+    // Imported by name, it is the program's own, on either chain.
+    const imported = `import { Account } from "./caller.ts";\n${source}`;
+    expect(compile(imported, { resolve }).derivedAccounts).toBeUndefined();
+    // On an EVM chain the module's `Account` is the caller's value, as if the program imported it.
+    expect(hex(compileOn("base", source, { ambient: ["./caller.ts"], resolve }).bytecode)).toBe(
+      hex(compileOn("base", imported, { resolve }).bytecode),
+    );
   });
 });

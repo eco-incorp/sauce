@@ -33,15 +33,18 @@ export const BALANCE_MEMBER = "balance";
 export const RETIRED_POT_NAME = "self";
 
 /**
- * Every `pot.owner` in `program` that is read, not called, by the `pot` it is read on: the Pot's
- * owner, which reads no Pot. Whether that `pot` is the Pot (one neither the program nor the
- * compile binds there) is the caller's to decide.
+ * Every `pot.owner` in `program` that is read, not called or written, by the `pot` it is read on:
+ * the Pot's owner, which reads no Pot. Whether that `pot` is the Pot (one neither the program nor
+ * the compile binds there) is the caller's to decide.
  */
 export function potOwners(program: AstNode): ReadonlyMap<AstNode, AstNode> {
   const owners = new Map<AstNode, AstNode>();
-  const called = new Set<AstNode>();
+  /** Each callee, assignment target and update target: a member there is no read. */
+  const unread = new Set<AstNode>();
   walk(program, (n) => {
-    if (n.type === "CallExpression") called.add(n.callee as AstNode);
+    if (n.type === "CallExpression") unread.add(n.callee as AstNode);
+    if (n.type === "AssignmentExpression") unread.add(n.left as AstNode);
+    if (n.type === "UpdateExpression") unread.add(n.argument as AstNode);
     if (n.type !== "MemberExpression" || n.computed === true || n.optional === true) return;
     const object = n.object as AstNode;
     const property = n.property as AstNode;
@@ -54,7 +57,7 @@ export function potOwners(program: AstNode): ReadonlyMap<AstNode, AstNode> {
       owners.set(object, n);
     }
   });
-  for (const [pot, member] of owners) if (called.has(member)) owners.delete(pot);
+  for (const [pot, member] of owners) if (unread.has(member)) owners.delete(pot);
 
   return owners;
 }
@@ -64,6 +67,17 @@ export function selfRefusal(site: string, instead: string): Error {
   return new Error(
     `\`${site}\`: the Pot is \`pot\`, not \`self\`: write \`${instead}\` (\`pot\` is the Pot's ` +
       "address, `pot.<TOKEN>` its balance of a token, `pot.balance` its native coin).",
+  );
+}
+
+/**
+ * The refusal of a write to `site`, a member of the Pot (`pot.owner`, `pot.USDC`): each is read,
+ * never written.
+ */
+export function potWriteRefusal(site: string): Error {
+  return new Error(
+    `\`${site}\` is written: a member of the Pot is read, never written (\`pot.owner\` is its ` +
+      "owner, `pot.<TOKEN>` and `pot.balance` its balances). Keep the value in a local of your own.",
   );
 }
 

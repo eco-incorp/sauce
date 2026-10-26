@@ -248,6 +248,20 @@ export function evmAccountRefusal(spelled: string, chain: string): string {
   );
 }
 
+/**
+ * The refusal of an `Account` a program compiled for Solana reads with no declaration of its own
+ * where only an ambient module exports one: the module's value would stand in for the account
+ * factory. `line` and `column`, 1-based, are where the program reads it.
+ */
+export function ambientAccountRefusal(line: number, column: number): Error {
+  return new Error(
+    `\`${ACCOUNT_FACTORY}\` at line ${line}, column ${column}: an ambient module exports ` +
+      `\`${ACCOUNT_FACTORY}\`, and the program reads it with no import, so it would read that ` +
+      "module's value and not Solana's account factory. Rename the module's export, or import it " +
+      `by name (\`import { ${ACCOUNT_FACTORY} } from "<module>"\`) for the module's value.`,
+  );
+}
+
 /** Whether `node` reads `Account` where neither the program nor the caller binds it. */
 const isFactory = (l: SvmLowering, node: AstNode | undefined): boolean =>
   node !== undefined && l.freeReads(ACCOUNT_FACTORY).has(node);

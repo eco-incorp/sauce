@@ -75,7 +75,14 @@ import { lexicalBindings } from "./lexical-bindings.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
+import {
+  BALANCE_MEMBER,
+  OWNER_MEMBER,
+  POT_NAME,
+  potWriteRefusal,
+  RETIRED_POT_NAME,
+  selfRefusal,
+} from "./pot-sugar.js";
 import {
   ACCOUNT_FACTORY,
   ACCOUNT_MEMBERS,
@@ -253,10 +260,11 @@ const BINDING_CONSTRUCTORS: ReadonlySet<string> = new Set(["at", "view", "lib"])
 const AVAILABLE = "available";
 
 /**
- * Every name the check reads as the registry's that a caller may bind instead, by a define, a
- * contract binding or an ambient module's export: each namespace, chain key and token symbol some
- * chain registers and `tokens` does not (one it has is a define, which no export replaces), and
- * `available`. A name the caller binds is the caller's, never the registry's (`defined`).
+ * Every name the check reads as the registry's or the SDK's that a caller may bind instead, by a
+ * define, a contract binding or an ambient module's export: each namespace, chain key and token
+ * symbol some chain registers and `tokens` does not (one it has is a define, which no export
+ * replaces), `available`, and Solana's `Account`. A name the caller binds is the caller's, never the
+ * registry's (`defined`).
  */
 export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
   return [
@@ -264,6 +272,7 @@ export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
     ...CHAIN_KEY_SET,
     ...[...everySymbol()].filter((symbol) => !tokens.has(symbol)),
     AVAILABLE,
+    ACCOUNT_FACTORY,
   ];
 }
 
@@ -545,7 +554,9 @@ export function checkNames(
 
   /**
    * The refusal of `node`, a member, where it spells an account the way `Account` and `pot.owner`
-   * replaced (`Solana.pda`, `Solana.owner`) and the program declares no `Solana` there.
+   * replaced (`Solana.pda`, `Solana.owner`) and the program declares no `Solana` there. Where what
+   * it says to write would read the program's own `pot` or `Account` there, or the caller's, it
+   * says so.
    */
   const retiredAccount = (node: AstNode, at: Scope | undefined): string | undefined => {
     if (node.type !== "MemberExpression" || prop<boolean>(node, "computed")) return undefined;
@@ -560,7 +571,19 @@ export function checkNames(
     ) {
       return undefined;
     }
-    return retiredAccountRefusal(nameOf(property));
+    const refusal = retiredAccountRefusal(nameOf(property));
+    if (refusal === undefined) return undefined;
+    const replacement = nameOf(property) === OWNER_MEMBER ? POT_NAME : ACCOUNT_FACTORY;
+    if (shadowed(at, replacement, object.start)) {
+      return (
+        `${refusal}. This program declares its own \`${replacement}\` here, which that would ` +
+        "read: rename it first"
+      );
+    }
+    return defined.has(replacement)
+      ? `${refusal}. The compile binds its own \`${replacement}\`, which that would read: rename ` +
+          "that first"
+      : refusal;
   };
   /**
    * The registry name `node` reads in `at`, with `role`: a contract (`UniswapV3.Factory`,
@@ -1471,6 +1494,25 @@ export function checkNames(
       case "TSSatisfiesExpression":
         visit(prop(node, "expression"), mode, role, at, wrap);
         return;
+      case "AssignmentExpression":
+      case "UpdateExpression": {
+        // A member of the Pot is read, never written: `pot.owner = x` would make the owner the
+        // program reads another account, and `pot.USDC = x` a balance.
+        const target = unwrap(
+          prop<AstNode>(node, node.type === "UpdateExpression" ? "argument" : "left"),
+        );
+        const object = target.type === "MemberExpression" ? unwrap(prop(target, "object")) : target;
+        if (
+          object !== target &&
+          object.type === "Identifier" &&
+          nameOf(object) === POT_NAME &&
+          !shadowed(at, POT_NAME, object.start) &&
+          !defined.has(POT_NAME)
+        ) {
+          fail(target, potWriteRefusal(source.slice(target.start, target.end)).message);
+        }
+        break;
+      }
       default:
         break;
     }
