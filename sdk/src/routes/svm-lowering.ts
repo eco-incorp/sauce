@@ -691,10 +691,6 @@ export class SvmLowering {
      *  ambient module exports): a `pot` or `self` among them is the caller's, and the accounts this
      *  adds are named apart from them. */
     bound: ReadonlySet<string> = new Set(),
-    /** The token symbols some chain registers and this one lacks, which the chain's names hold as
-     *  zero (`chain-module.ts`): a read of one is the compiler's, which compiles it only in a branch
-     *  a test of the name rules out. */
-    private readonly absent: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);
@@ -751,12 +747,6 @@ export class SvmLowering {
   /** Whether `name`, read at `node`, is a name the program binds there (`lexical-scope.ts`). */
   owns(node: AstNode, name: string): boolean {
     return shadowed(this.scopes.get(node), name, node.start);
-  }
-
-  /** Whether `name`, read at `at`, is a token some chain registers and this one lacks, which the
-   *  program binds not there. */
-  isAbsentToken(name: string, at: AstNode): boolean {
-    return this.absent.has(name) && !this.owns(at, name);
   }
 
   /**

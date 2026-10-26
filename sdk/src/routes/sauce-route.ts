@@ -668,7 +668,6 @@ function compileForChain(
         native,
         new Set(inputs.stops),
         bound,
-        names.absentTokens,
       ),
     );
     if (lowered.rewrote) {
@@ -709,12 +708,7 @@ function compileForChain(
       ),
     );
     if (rewrittenAccessors.rewrote) {
-      // A call through a protocol's default contract is a name the module holds, and decided on any
-      // chain; a binding or `pot` is EVM only.
-      if (
-        chain.kind === "svm" &&
-        (rewrittenAccessors.accessorSites > 0 || rewrittenAccessors.potSites > 0)
-      ) {
+      if (chain.kind === "svm") {
         throw new Error(
           `compileSauceRoute: destination '${chain.slug}' is svm — the protocol-accessor rewrite ` +
             "(options.accessors) is EVM-only; contract bindings are not supported on target 'svm'.",
