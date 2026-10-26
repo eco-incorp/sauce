@@ -471,8 +471,8 @@ upgrade authority, which can replace them after the check.
 - **Fixed**: every EVM address in the protocol registry is written EIP-55 checksummed. Fifteen were
   mixed-case with a wrong checksum (Ethena's USDe on Ethereum among them), which viem's
   `getAddress` refuses, and 52 were all lowercase. Only the letters' case changes. Three of the
-  fifteen named no contract, a character of the address being wrong, and a fourth named the wrong
-  contract; the next entries fix them.
+  fifteen are addresses with no code, and a fourth is the wrong contract; the next entries fix
+  them.
 - **Removed** (EVM): Seamless, wound down in 2026, and with it the `Seamless` namespace on Base.
   Its `PoolAddressesProvider` row had no code: the pool's own provider is another address.
 - **Fixed** (EVM): Yearn V3's `VaultFactory` on Ethereum is Yearn's v3.0.4 factory,
