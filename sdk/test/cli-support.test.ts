@@ -132,7 +132,9 @@ function expectRefused(
     `is refused: it involves ${chain.slug} (${chain.name}, chain id ${chain.id}), a preview chain.`,
   );
   if (action !== undefined) expect(run.stderr).toMatch(action);
-  expect(run.stderr).toContain("only on Ethereum, Base, Arc and Solana");
+  expect(run.stderr).toContain(
+    "only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia.",
+  );
   expect(run.stderr).toContain(chainSupportRequest(chain).newIssueUrl);
   expect(run.stderr).toContain(chainSupportRequest(chain).searchUrl);
 }
@@ -159,6 +161,8 @@ describe("the gate", () => {
       { slug: "base", id: 8453, name: "Base" },
       { slug: "arc", id: 5042, name: "Arc" },
       { slug: "solana", id: 1399811149, name: "Solana" },
+      { slug: "arc-testnet", id: 5042002, name: "Arc Testnet" },
+      { slug: "base-sepolia", id: 84532, name: "Base Sepolia" },
     ]);
     expect(refusal.previewChains.map((chain) => chain.slug)).toEqual(["arbitrum", "optimism"]);
     expect(refusal.previewChains[0]!.request).toEqual(chainSupportRequest("arbitrum"));
@@ -208,6 +212,20 @@ describe("refused on a preview chain, before any network call", () => {
     expect(base.stderr).not.toMatch(/is refused/);
     expect(base.code).toBe(0);
     expect(JSON.parse(base.stdout)).toMatchObject({ chainId: 8453 });
+  });
+
+  it("builds a cook on each testnet the release is deployed on", async () => {
+    const pay = file("pay.sauce.ts", PAY);
+    const flags = ["--owner", OWNER, "--define", `RECIPIENT=${RECIPIENT}`, "--value", "0"];
+    for (const [slug, chainId] of [
+      ["arc-testnet", 5042002],
+      ["base-sepolia", 84532],
+    ] as const) {
+      const run = await sauce("tx", pay, "--chain", slug, ...flags);
+      expect([slug, run.stderr]).not.toEqual([slug, expect.stringMatching(/is refused/)]);
+      expect([slug, run.code]).toEqual([slug, 0]);
+      expect(JSON.parse(run.stdout)).toMatchObject({ chainId });
+    }
   });
 
   it("sauce pot --deploy, and a pot's deployment as a cast line", async () => {

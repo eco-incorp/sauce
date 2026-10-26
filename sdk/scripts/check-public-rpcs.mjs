@@ -10,7 +10,8 @@
 //     whether `eth_simulateV1` runs that call with `validation: false` and `traceTransfers`, as the
 //     command sends it: an endpoint flagged `simulateV1` must run it (one flagged false that runs it
 //     is noted, not failed: false only keeps the command from sending it there).
-//   - Solana: `getGenesisHash` is mainnet's, `getSlot` answers a slot, and the USDC mint reads;
+//   - Solana: `getGenesisHash` is the cluster's (mainnet's, devnet's), `getSlot` answers a slot,
+//     and the cluster's USDC mint reads;
 //     and whether a filtered `getProgramAccounts` answers: an endpoint flagged `programAccounts`
 //     must answer it.
 // It prints a line per endpoint and exits 1 when any fails or its flag is wrong. The endpoints are
@@ -29,9 +30,17 @@ const { CANONICAL_CHAINS } = load(join(SDK, "src/chains/canonical.ts"));
 const { values } = parseArgs({ options: { chains: { type: "string" } } });
 const only = values.chains === undefined ? undefined : values.chains.split(",").map(Number);
 
-const SOLANA = 1399811149;
-const SOLANA_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+/** Each Solana chain's cluster, by the chain id the SDK gives it: its genesis and its USDC mint. */
+const SOLANA_CLUSTERS = {
+  1399811149: {
+    genesis: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+    usdc: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  },
+  1399811150: {
+    genesis: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+    usdc: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  },
+};
 /** An address with no code, given code that returns its storage slot 0, and slot 0 set to 42. */
 const PROBE = "0x00000000000000000000000000000000005a0ce1";
 const OVERRIDE = {
@@ -84,12 +93,12 @@ async function checkEvm(chainId, url) {
   }
 }
 
-/** What is wrong with a Solana endpoint, or `undefined`. */
-async function checkSolana(url) {
+/** What is wrong with an endpoint of the Solana cluster `cluster`, or `undefined`. */
+async function checkSolana(url, cluster) {
   const genesis = await rpc(url, "getGenesisHash", []);
-  if (genesis !== SOLANA_GENESIS) return { problem: `serves the cluster of genesis ${genesis}` };
+  if (genesis !== cluster.genesis) return { problem: `serves the cluster of genesis ${genesis}` };
   if (typeof (await rpc(url, "getSlot", [])) !== "number") return { problem: "answered no slot" };
-  const mint = await rpc(url, "getAccountInfo", [USDC_MINT, { encoding: "base64" }]);
+  const mint = await rpc(url, "getAccountInfo", [cluster.usdc, { encoding: "base64" }]);
   if (mint?.value === null || mint?.value === undefined) return { problem: "read no USDC mint" };
   // A filtered scan, as `sauce pools` sends one: Raydium CLMM's 1,544-byte pools holding USDC.
   const scan = await rpc(url, "getProgramAccounts", [
@@ -97,7 +106,7 @@ async function checkSolana(url) {
     {
       encoding: "base64",
       dataSlice: { offset: 0, length: 0 },
-      filters: [{ dataSize: 1544 }, { memcmp: { offset: 105, bytes: USDC_MINT } }],
+      filters: [{ dataSize: 1544 }, { memcmp: { offset: 105, bytes: cluster.usdc } }],
     },
   ]).catch(() => undefined);
 
@@ -113,7 +122,9 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
   for (const { url, simulateV1, programAccounts } of list) {
     let found;
     try {
-      found = chainId === SOLANA ? await checkSolana(url) : await checkEvm(chainId, url);
+      const cluster = SOLANA_CLUSTERS[chainId];
+      found =
+        cluster !== undefined ? await checkSolana(url, cluster) : await checkEvm(chainId, url);
     } catch (error) {
       found = { problem: error.cause?.code ?? error.message };
     }
@@ -131,7 +142,7 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
         : "";
     console.log(
       `  ${problem === undefined ? "ok  " : "FAIL"} ${slug.padEnd(10)} ${url}` +
-        (chainId === SOLANA
+        (SOLANA_CLUSTERS[chainId] !== undefined
           ? `  programAccounts=${found.programAccounts ?? "?"}`
           : `  simulateV1=${found.simulateV1 ?? "?"}`) +
         (problem === undefined ? note : `  -- ${problem}`),

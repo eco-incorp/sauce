@@ -99,6 +99,23 @@ export const CANONICAL_CHAINS = [
   { id: 7777777, slug: "zora", name: "Zora", kind: "evm", aliases: [] },
   { id: 1313161554, slug: "aurora", name: "Aurora", kind: "evm", aliases: [] },
 
+  // --- EVM testnets, present in `chains` (`testnet: true`) ---
+  // A testnet is here where the release is deployed or is to be. Measured 2026-10-26: Base Sepolia
+  // (block 50656897) and Arc Testnet (block 69241283) hold the engine, Router, Kitchen proxy and its
+  // implementation at V12Deployments.json's addresses, each with mainnet's code (keccak of the
+  // runtime equal to Base's), the proxy's EIP-1967 slot naming the implementation and `router()`
+  // the Router. Ethereum Sepolia (block 12000992) holds none of them yet, only CreateX: it is a
+  // preview chain until they are there. Arbitrum Sepolia has no engine and is not here.
+  { id: 84532, slug: "base-sepolia", name: "Base Sepolia", kind: "evm", aliases: [] },
+  { id: 5042002, slug: "arc-testnet", name: "Arc Testnet", kind: "evm", aliases: [] },
+  {
+    id: 11155111,
+    slug: "sepolia",
+    name: "Ethereum Sepolia",
+    kind: "evm",
+    aliases: ["ethereum-sepolia", "eth-sepolia"],
+  },
+
   // --- EVM, NOT in `chains` ---
   { id: 130, slug: "unichain", name: "Unichain", kind: "evm", aliases: [] },
   { id: 143, slug: "monad", name: "Monad", kind: "evm", aliases: [] },
@@ -107,13 +124,23 @@ export const CANONICAL_CHAINS = [
   { id: 9745, slug: "plasma", name: "Plasma", kind: "evm", aliases: [] },
   { id: 57073, slug: "ink", name: "Ink", kind: "evm", aliases: [] },
 
-  // --- SVM (1) ---
+  // --- SVM (2) ---
   {
     id: 1399811149,
     slug: "solana",
     name: "Solana",
     kind: "svm",
     aliases: ["sol", "mainnet-beta", "solana-mainnet"],
+  },
+  // Solana's devnet cluster, under the CHAIN_ID the devnet engine build reports
+  // (`svm/engine.ts#ENGINE_CHAIN_IDS`), so a program compiled for it reads the chain id it runs on.
+  // The release's program ids are the same on every cluster.
+  {
+    id: 1399811150,
+    slug: "solana-devnet",
+    name: "Solana Devnet",
+    kind: "svm",
+    aliases: ["devnet"],
   },
 ] as const satisfies readonly CanonicalChain[];
 

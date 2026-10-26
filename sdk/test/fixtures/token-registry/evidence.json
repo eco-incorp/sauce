@@ -1892,6 +1892,25 @@
         "0x779Ded0c9e1022225f8E0630b35a9b54bE713736": {"code":2227,"symbol":"USD₮0","decimals":6}
       }
     },
+    "84532": {
+      "block": 50664107,
+      "tokens": {
+        "0x036CbD53842c5426634e7929541eC2318f3dCF7e": {"code":1798,"symbol":"USDC","decimals":6}
+      }
+    },
+    "5042002": {
+      "block": 69243397,
+      "tokens": {
+        "0x3600000000000000000000000000000000000000": {"code":1798,"symbol":"USDC","decimals":6},
+        "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a": {"code":1798,"symbol":"EURC","decimals":6}
+      }
+    },
+    "11155111": {
+      "block": 12001055,
+      "tokens": {
+        "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238": {"code":1798,"symbol":"USDC","decimals":6}
+      }
+    },
     "1399811149": {
       "slot": 452558968,
       "tokens": {

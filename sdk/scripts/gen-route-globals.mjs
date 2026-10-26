@@ -46,6 +46,8 @@ function pascalOfSlug(slug) {
 }
 
 const load = createTsLoader(SDK_DIR);
+/** The Solana cluster a chain is: the venue accessors are mainnet's alone. */
+const { svmClusterOf } = load("src/routes/token-registry.ts");
 
 function loadCanonicalChains() {
   const chains = load("src/chains/canonical.ts").CANONICAL_CHAINS;
@@ -93,9 +95,9 @@ function render(chains, tokensByChain) {
     seen.set(name, c.slug);
     // svm chains additionally carry the svm venue accessor tree
     // (`Solana.RaydiumCpSwap`, ...) -- see routes/composed.ts's matching
-    // runtime `origin.chain.kind === "svm"` branch. Derived from `c.kind`,
-    // not a hardcoded slug, so a second svm chain gets this for free.
-    const svm = c.kind === "svm" ? " & SvmVenueAccessors" : "";
+    // runtime `svmVenuesOn` branch: Solana's mainnet only, where the venues'
+    // pools are, by the chain's cluster rather than a hardcoded slug.
+    const svm = svmClusterOf(c) === "mainnet-beta" ? " & SvmVenueAccessors" : "";
     const symbols = tokensByChain.get(c.id) ?? [];
     const tokens =
       symbols.length > 0

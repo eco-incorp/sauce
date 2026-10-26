@@ -118,8 +118,9 @@ describe("the list", () => {
         for (const part of [...parsed.pathname.split("/"), ...parsed.searchParams.values()]) {
           expect(part.length >= 20 && /\d/.test(part)).toBe(false);
         }
-        // Solana's endpoints have no eth_simulateV1 to flag; every EVM one is flagged.
-        expect(simulateV1 === undefined).toBe(id === String(requireChain("solana").id));
+        // Solana's endpoints, mainnet's and devnet's, have no eth_simulateV1 to flag; every EVM
+        // one is flagged.
+        expect(simulateV1 === undefined).toBe(requireChain(Number(id)).kind === "svm");
       }
     }
   });

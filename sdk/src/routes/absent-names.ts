@@ -77,7 +77,7 @@ import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 import { ACCOUNT_MEMBERS } from "./svm-account-expressions.js";
-import { SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
+import { SVM_VENUE_NAMESPACES, svmVenuesOn } from "./svm-venue-methods.js";
 import { TOKEN_FACTORY_NAME } from "./token-rewrite.js";
 import { locatedError, meant, notAToken, notTokenOrProtocol } from "./unknown-global.js";
 
@@ -576,11 +576,19 @@ export function checkNames(
     const name = nameOf(property);
     if (object.type === "Identifier") {
       // A Solana venue (`Orca.Whirlpool`, `Pancakeswap.CLMM`) is the Solana lowering's name: on a
-      // Solana chain, and in code a test rules out, which a Solana chain may take.
+      // Solana chain, and in code a test rules out, which a Solana chain may take. Its pools are
+      // mainnet's: on another cluster the name is refused.
       if (
         (chain.kind === "svm" || validating) &&
         `${nameOf(object)}.${name}` in SVM_VENUE_NAMESPACES
       ) {
+        if (chain.kind === "svm" && !svmVenuesOn(chain)) {
+          fail(
+            target,
+            `\`${nameOf(object)}.${name}\` is not on ${chain.slug}: the Solana venues are ` +
+              "mainnet's programs and pools.",
+          );
+        }
         return undefined;
       }
       const namespace = namespaceOf(object, at);

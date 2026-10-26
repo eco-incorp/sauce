@@ -118,6 +118,27 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     expect(knownTokenSymbols(requireChain("ronin"))).toEqual([]);
   });
 
+  it("registers the stablecoins Circle publishes on the testnets", () => {
+    const testnets = Object.fromEntries(
+      ["arc-testnet", "base-sepolia", "sepolia"].map((slug) => [
+        slug,
+        TOKEN_REGISTRY[requireChain(slug).id]!.map((row) => [
+          row.symbol,
+          row.address,
+          row.decimals,
+        ]),
+      ]),
+    );
+    expect(testnets).toEqual({
+      "arc-testnet": [
+        ["USDC", "0x3600000000000000000000000000000000000000", 6],
+        ["EURC", "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", 6],
+      ],
+      "base-sepolia": [["USDC", "0x036CbD53842c5426634e7929541eC2318f3dCF7e", 6]],
+      sepolia: [["USDC", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", 6]],
+    });
+  });
+
   it("solana registers its cluster's mints, legacy SPL Token and Token-2022 alike", () => {
     // Less its stock mints, which `token-registry-evidence.test.ts` holds.
     const stocks = new Set(

@@ -54,6 +54,7 @@
  * both tokens are derived as the transaction is built, so each is known then: a registered symbol,
  * a parameter of `main` declared `Address`, or a 32-byte key; the amounts are any value.
  */
+import type { CanonicalChain } from "../chains/canonical.js";
 import { countDeclarations, walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import { applySplices, methodCall, type MethodCall, type Splice } from "./token-rewrite.js";
@@ -73,6 +74,7 @@ import {
   type SvmPoolRefinement,
 } from "../svm/pool-keys.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
+import { svmClusterOf } from "./token-registry.js";
 
 const ROUTER = "@sauce/router";
 const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
@@ -132,6 +134,14 @@ export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> =
   "Phoenix.Market": venue("Phoenix.Market", "Phoenix", "phoenix"),
   "Meteora.DLMM": venue("Meteora.DLMM", "Meteora DLMM", "meteoraDlmm", true),
 };
+
+/**
+ * Whether a program compiled for `chain` may swap at the venues above: on Solana's mainnet only,
+ * where their programs and pools are. On devnet a venue name is refused.
+ */
+export function svmVenuesOn(chain: CanonicalChain): boolean {
+  return svmClusterOf(chain) === "mainnet-beta";
+}
 
 const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "priceLimit", "minOut"];
 const EXACT_PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "minOut"];

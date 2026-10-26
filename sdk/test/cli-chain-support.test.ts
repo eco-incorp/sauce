@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalChains, requireChain } from "../src/chains/canonical.js";
 import * as chains from "../src/chains/index.js";
+import { getChain } from "../src/chains/index.js";
 import * as root from "../src/index.js";
 import {
   CHAIN_SUPPORT_FIELDS,
@@ -24,6 +25,8 @@ import {
   isSupportedChain,
   previewChains,
   SUPPORTED_CHAIN_SLUGS,
+  SUPPORTED_TESTNET_SLUGS,
+  supportedChainNames,
   supportedChains,
 } from "../src/cli/support.js";
 
@@ -49,9 +52,18 @@ const query = (url: string): Record<string, string> =>
   Object.fromEntries(new URL(url).searchParams.entries());
 
 describe("support levels", () => {
-  it("supports Ethereum, Base, Arc and Solana, and previews every other chain", () => {
-    expect([...SUPPORTED_CHAIN_SLUGS]).toEqual(["ethereum", "base", "arc", "solana"]);
-    expect(supportedChains().map((chain) => chain.id)).toEqual([1, 8453, 5042, 1399811149]);
+  it("supports Ethereum, Base, Arc and Solana and two testnets, and previews every other chain", () => {
+    expect([...SUPPORTED_CHAIN_SLUGS]).toEqual([
+      "ethereum",
+      "base",
+      "arc",
+      "solana",
+      "arc-testnet",
+      "base-sepolia",
+    ]);
+    expect(supportedChains().map((chain) => chain.id)).toEqual([
+      1, 8453, 5042, 1399811149, 5042002, 84532,
+    ]);
     for (const chain of canonicalChains) {
       const supported = (SUPPORTED_CHAIN_SLUGS as readonly string[]).includes(chain.slug);
       expect([chain.slug, chainSupport(chain)]).toEqual([
@@ -60,13 +72,42 @@ describe("support levels", () => {
       ]);
       expect(isSupportedChain(chain)).toBe(supported);
     }
-    expect(previewChains()).toHaveLength(canonicalChains.length - 4);
+    expect(previewChains()).toHaveLength(canonicalChains.length - 6);
     expect(previewChains().map((chain) => chain.id)).toEqual(
       canonicalChains
         .filter((chain) => !SUPPORTED_CHAIN_SLUGS.includes(chain.slug as never))
         .map((chain) => chain.id)
         .sort((a, b) => a - b),
     );
+  });
+
+  it("holds the testnets in one constant, and names them apart from the mainnets", () => {
+    expect([...SUPPORTED_TESTNET_SLUGS]).toEqual(["arc-testnet", "base-sepolia"]);
+    expect(SUPPORTED_CHAIN_SLUGS.slice(-SUPPORTED_TESTNET_SLUGS.length)).toEqual([
+      ...SUPPORTED_TESTNET_SLUGS,
+    ]);
+    for (const chain of supportedChains()) {
+      expect([chain.slug, getChain(chain.id)?.testnet ?? false]).toEqual([
+        chain.slug,
+        (SUPPORTED_TESTNET_SLUGS as readonly string[]).includes(chain.slug),
+      ]);
+    }
+    expect(supportedChainNames()).toBe(
+      "Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia",
+    );
+  });
+
+  it("takes the testnets by slug, name and chain id", () => {
+    for (const ref of [
+      "arc-testnet",
+      "Arc Testnet",
+      5042002,
+      "base-sepolia",
+      "Base Sepolia",
+      84532,
+    ]) {
+      expect([ref, chainSupport(ref)]).toEqual([ref, "supported"]);
+    }
   });
 
   it("takes any spelling the registry resolves, and refuses a chain it does not have", () => {

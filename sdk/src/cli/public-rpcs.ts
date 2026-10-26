@@ -209,14 +209,34 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
     { url: "https://rpc.blast.io", simulateV1: false },
     { url: "https://blast-rpc.publicnode.com", simulateV1: false },
   ],
+  // Base Sepolia (testnet), checked 2026-10-26
+  84532: [
+    { url: "https://sepolia.base.org", simulateV1: true },
+    { url: "https://base-sepolia-rpc.publicnode.com", simulateV1: true },
+    // Its eth_simulateV1 ran on one check of two.
+    { url: "https://base-sepolia.api.onfinality.io/public", simulateV1: false },
+  ],
   // Scroll
   534352: [
     { url: "https://rpc.scroll.io", simulateV1: false },
     { url: "https://scroll-rpc.publicnode.com", simulateV1: false },
     { url: "https://1rpc.io/scroll", simulateV1: false },
   ],
+  // Arc Testnet, checked 2026-10-26: dRPC is the endpoint Arc's docs list; Circle's own runs no
+  // eth_simulateV1 ("method not supported"), so it is tried last.
+  5042002: [
+    { url: "https://rpc.drpc.testnet.arc.io", simulateV1: true },
+    { url: "https://arc-testnet-rpc.publicnode.com", simulateV1: true },
+    { url: "https://rpc.testnet.arc.io", simulateV1: false },
+  ],
   // Zora
   7777777: [{ url: "https://rpc.zora.energy", simulateV1: true }],
+  // Ethereum Sepolia (testnet), checked 2026-10-26: Tatum's and 1rpc's keyless endpoints refused
+  // or dropped the state-override eth_call, and dRPC serves Sepolia on paid plans only.
+  11155111: [
+    { url: "https://ethereum-sepolia-rpc.publicnode.com", simulateV1: true },
+    { url: "https://sepolia.gateway.tenderly.co", simulateV1: false },
+  ],
   // Aurora
   1313161554: [
     { url: "https://mainnet.aurora.dev", simulateV1: false },
@@ -227,4 +247,7 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
     { url: "https://api.mainnet-beta.solana.com", programAccounts: true },
     { url: "https://solana-rpc.publicnode.com", programAccounts: false },
   ],
+  // Solana devnet, under the chain id the SDK gives it (the devnet engine's CHAIN_ID), checked
+  // 2026-10-26
+  1399811150: [{ url: "https://api.devnet.solana.com", programAccounts: true }],
 };

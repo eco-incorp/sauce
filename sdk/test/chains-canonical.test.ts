@@ -29,8 +29,8 @@ import {
 import { listProtocols } from "../src/protocols/index.js";
 
 describe("canonical chain registry: structural invariants", () => {
-  it("has exactly 41 entries", () => {
-    expect(canonicalChains.length).toBe(41);
+  it("has exactly 45 entries", () => {
+    expect(canonicalChains.length).toBe(45);
   });
 
   it("has unique ids and unique slugs", () => {
@@ -73,7 +73,7 @@ describe("canonical chain registry: structural invariants", () => {
 describe("canonical chain registry: superset of `chains` (additivity)", () => {
   it("covers every id in `chains`, byte-identical name, kind evm", () => {
     const ids = Object.keys(chains).map(Number);
-    expect(ids.length).toBe(34); // guards a vacuously-true loop; also pins the known EVM-only count
+    expect(ids.length).toBe(37); // guards a vacuously-true loop; also pins the known EVM-only count
     for (const id of ids) {
       const canonical = chainById(id);
       expect(canonical).toBeDefined();
@@ -120,13 +120,15 @@ describe("canonical chain registry: Solana / SVM", () => {
   });
 
   it("evmChains/svmChains partition correctly", () => {
-    expect(svmChains().length).toBe(1);
-    expect(evmChains().length).toBe(40);
+    expect(svmChains().map((chain) => chain.slug)).toEqual(["solana", "solana-devnet"]);
+    expect(evmChains().length).toBe(43);
   });
 
   it("is absent from the EVM-only `chains` export (additivity, reverse direction)", () => {
-    expect(getChain(1399811149)).toBeUndefined();
-    expect(Object.keys(chains).map(Number)).not.toContain(1399811149);
+    for (const id of [1399811149, 1399811150]) {
+      expect(getChain(id)).toBeUndefined();
+      expect(Object.keys(chains).map(Number)).not.toContain(id);
+    }
   });
 });
 
@@ -174,7 +176,7 @@ describe("canonical chain registry: lookup semantics", () => {
 describe("canonical chain registry: non-regression of existing exports", () => {
   it("getAllChainIds is unaffected and matches `chains` keys", () => {
     const ids = getAllChainIds();
-    expect(ids.length).toBe(34);
+    expect(ids.length).toBe(37);
     expect(ids.sort((a, b) => a - b)).toEqual(
       Object.keys(chains)
         .map(Number)
@@ -237,8 +239,8 @@ describe("Arc: the native coin is USDC, which is also an ERC-20", () => {
     });
   });
 
-  it("is the only chain whose native coin is an ERC-20, so the only one needing no wrapped native", () => {
-    expect(getAllChainIds().filter((id) => nativeErc20(id) !== undefined)).toEqual([5042]);
+  it("is the only chain, with its testnet, whose native coin is an ERC-20", () => {
+    expect(getAllChainIds().filter((id) => nativeErc20(id) !== undefined)).toEqual([5042, 5042002]);
     expect(nativeErc20(1)).toBeUndefined();
     expect(nativeErc20(999_999)).toBeUndefined();
   });
@@ -250,6 +252,38 @@ describe("Arc: the native coin is USDC, which is also an ERC-20", () => {
     expect(nativeToErc20Amount(5042, 10n ** 12n)).toBe(1n);
     expect(() => nativeToErc20Amount(1, 1n)).toThrow(/not an ERC-20/);
     expect(() => nativeToErc20Amount(5042, -1n)).toThrow(/negative/);
+  });
+});
+
+describe("testnets: each marked a testnet", () => {
+  it("registers Base Sepolia, Arc Testnet and Ethereum Sepolia, and every other chain as a mainnet", () => {
+    expect(
+      Object.values(chains)
+        .filter((chain) => chain.testnet)
+        .map((chain) => [chain.id, chain.name]),
+    ).toEqual([
+      [84532, "Base Sepolia"],
+      [5042002, "Arc Testnet"],
+      [11155111, "Ethereum Sepolia"],
+    ]);
+    expect(requireChain("arc-testnet")).toMatchObject({ id: 5042002, kind: "evm" });
+    expect(requireChain("base-sepolia")).toMatchObject({ id: 84532, kind: "evm" });
+    expect(requireChain("sepolia")).toMatchObject({ id: 11155111, kind: "evm" });
+    expect(requireChain("Arc Testnet").slug).toBe("arc-testnet");
+    expect(requireChain("Ethereum Sepolia").slug).toBe("sepolia");
+    expect(requireChain(84532n).slug).toBe("base-sepolia");
+  });
+
+  it("gives Arc Testnet Arc's native model: USDC, 18 decimals over a 6-decimal ERC-20, and the fee floor", () => {
+    expect(getChain(5042002)?.nativeCurrency).toEqual(getChain(5042)?.nativeCurrency);
+    expect(getChain(5042002)?.minBaseFeePerGas).toBe(20_000_000_000n);
+    expect(nativeToErc20Amount(5042002, 10n ** 12n)).toBe(1n);
+  });
+
+  it("gives Base Sepolia and Ethereum Sepolia Ether, as their mainnets", () => {
+    expect(getChain(84532)?.nativeCurrency).toEqual(getChain(8453)?.nativeCurrency);
+    expect(getChain(11155111)?.nativeCurrency).toEqual(getChain(1)?.nativeCurrency);
+    expect(getChain(84532)?.minBaseFeePerGas).toBeUndefined();
   });
 });
 
