@@ -211,10 +211,14 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     `authority` (the Pot through the Kitchen, the owner with `--via engine`). A program that names
     `pot` is refused with `--via engine`, which has no Pot: for a direct cook write the signer's
     account (`Solana.owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
-    through the Kitchen. Rename in programs only: the `"self"` value of an actions document
-    (`"recipient": "self"`) and of the TypeScript token, deposit and actions APIs is unchanged, so
-    a project-wide replace of `self` breaks them. An account you give for a slot derived from the
-    Pot, the owner or the authority must be the account its derivation gives, or the command exits 2.
+    through the Kitchen. An account you give for a slot derived from the Pot, the owner or the
+    authority must be the account its derivation gives, or the command exits 2.
+11. **Write `"pot"` for the Pot outside programs too.** In an actions document, a `recipient`,
+    `onBehalfOf` or `owner` of `"self"` is refused: write `"pot"`. In TypeScript, write
+    `Token.balanceOf({ token, owner: "pot" })` for the Pot's balance, and read a defaulted deposit
+    beneficiary from `toDeposit` as `"pot"`. `ctx.self()` and `ctx.selfBalance()`, the compiler's
+    own names, still compile; in a program the SDK compiles for an EVM chain, write `pot` and
+    `pot.balance` for them.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,
