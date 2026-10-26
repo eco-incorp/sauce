@@ -367,9 +367,24 @@ function probeHelper(taken: ReadonlySet<string>): string {
 /** The compiler's refusal of a name two ambient modules export, which names it. */
 const EXPORTED_TWICE = /`([A-Za-z_$][\w$]*)` is exported by more than one ambient module/;
 
-/** Every name a module's text may read: a superset of its identifiers, its comments' and strings'
- *  words included, which only ever asks the probe about a name more. */
+/** Every name a module's text may read, its escapes decoded (`unescaped`): a superset of its
+ *  identifiers, its comments' and strings' words included, which only ever asks the probe about a
+ *  name more. */
 const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
+
+/** An escape a name may be written with: `\u0069`, `\u{69}`. */
+const ESCAPE = /\\u(?:\{([0-9a-fA-F]+)\}|([0-9a-fA-F]{4}))/g;
+
+/**
+ * `text` with each escape written as the character it spells, so `L\u0069do` reads as `Lido`: the
+ * name the compiler reads there. An escape past the last code point, which no name holds, stays.
+ */
+function unescaped(text: string): string {
+  return text.replace(ESCAPE, (escape, braced: string | undefined, digits: string | undefined) => {
+    const code = parseInt(braced ?? digits!, 16);
+    return code > 0x10ffff ? escape : String.fromCodePoint(code);
+  });
+}
 
 /**
  * The names among `names` that one of `input.ambient`'s modules exports, as the compiler finds them:
@@ -433,7 +448,8 @@ export function ambientNamesOf(
           }
           const bytes = program(path);
           if (bytes !== undefined && bytes !== null && !path.endsWith(".json")) {
-            for (const [name] of decoder.decode(bytes).matchAll(IDENTIFIER)) mentioned.add(name);
+            const text = unescaped(decoder.decode(bytes));
+            for (const [name] of text.matchAll(IDENTIFIER)) mentioned.add(name);
           }
           return bytes;
         },

@@ -984,7 +984,8 @@ compiler, compiling the program's own imports, as written, before a `main` that 
 an uncalled closure (so the compiler loads the modules the compile does and lowers nothing; the
 closure's function is named apart from every define, contract and name the program writes), with
 the compile's own options and one more ambient module exporting the names asked about that the
-program or a module the compiler loads mentions (recorded as the probe's `resolve` serves them; the
+program or a module the compiler loads mentions (recorded as the probe's `resolve` serves them,
+identifier escapes decoded, so `L\u0069do` is `Lido`; the
 compiler loads the probe's module last), and reads each name the compiler refuses as exported
 twice; any other refusal is no answer:
 the names stay free, the compile reports its own refusal, and the probe's is thrown where the

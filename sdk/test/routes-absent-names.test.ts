@@ -1205,6 +1205,52 @@ describe("the probe of the caller's ambient modules asks only about names the co
     ).toEqual(new Set(["USDT"]));
   });
 
+  // A name a module writes with an escape is the name it spells: `L\u0069do` is `Lido`.
+  it.each([
+    ["a four-digit escape", String.raw`L\u0069do`, String.raw`l\u0069mits`],
+    ["a braced escape", String.raw`L\u{69}do`, String.raw`l\u{69}mits`],
+  ])("a caller's name written with %s is the caller's", (_escape, lido, limits) => {
+    const options = (files: Record<string, string>) => ({
+      ambient: ["./caller.js"],
+      resolve: (path: string) => {
+        const text = files[path.replace(/^\.\//, "")];
+        return text === undefined ? undefined : new TextEncoder().encode(text);
+      },
+    });
+    const seven = hex("base", "function main(): Uint256 { return 7; }");
+    // The reviewer's: the caller's module and the module the entry imports both write it escaped.
+    expect(
+      hex(
+        "base",
+        'import { pick } from "./lib.js"; function main(): Uint256 { return pick(); }',
+        options({
+          "caller.js": `export const ${lido} = 7;`,
+          "lib.js": `export function pick(): Uint256 { return ${lido}; }`,
+        }),
+      ),
+    ).toBe(seven);
+    // The entry writes it escaped.
+    expect(
+      hex(
+        "base",
+        `function main(): Uint256 { return ${lido}; }`,
+        options({ "caller.js": `export const ${lido} = 7;` }),
+      ),
+    ).toBe(seven);
+    // A module's ruled-out code reads a caller's export written escaped: the caller's there too.
+    const library = (statement: string) =>
+      `export function pick(user: Address): Uint256 { if (PancakeswapV3.Factory) { ${statement} } return 0; }`;
+    const entry =
+      'import { pick } from "./lib.js"; function main(user: Address): Uint256 { return pick(user); }';
+    const caller = `export const ${limits} = 3;`;
+    expect(
+      hex(
+        "optimism",
+        entry,
+        options({ "caller.js": caller, "lib.js": library(`return ${limits};`) }),
+      ),
+    ).toBe(hex("optimism", entry, options({ "caller.js": caller, "lib.js": library("") })));
+  });
 });
 
 describe("a registry contract's members are its ABI's methods and the balances read of it", () => {
