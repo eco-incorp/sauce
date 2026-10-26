@@ -176,6 +176,25 @@ describe("split swap — approvals and the sweep", () => {
     assert.doesNotMatch(source(swap(2, 1)), /a9059cbb/);
   });
 
+  it('takes "pot" as the sweep\'s recipient, and refuses "self" at sweep.recipient, naming "pot"', () => {
+    assert.match(source(swap(2, 1, { sweep: { token: USDT, recipient: "pot" } })), /ctx\.self\(\)/);
+    assert.throws(
+      () =>
+        compileSplitSwap(
+          swap(2, 1, {
+            sweep: { token: USDT, recipient: "self" } as unknown as SplitSwap["sweep"],
+          }),
+        ),
+      (error: unknown) =>
+        error instanceof ProgramError &&
+        error.issues.some(
+          (issue) =>
+            issue.path === "sweep.recipient" &&
+            issue.message === 'the Pot is "pot", not "self": write "pot"',
+        ),
+    );
+  });
+
   it("rejects an approval without an amount", () => {
     const { amount: _, ...bare } = approve(CURVE_ROUTER_NG);
     assert.throws(

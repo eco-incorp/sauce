@@ -44,6 +44,7 @@ import { compiled, type CompiledProgram } from "./compose.js";
 import { resolveNames, usesNames } from "./names.js";
 import { parseActions } from "./program.js";
 import { ProgramError, type ProgramIssue } from "./semantics.js";
+import { RETIRED_POT, RETIRED_POT_MESSAGE } from "./spec.js";
 import { lowerAction, routerImport, type ActionResult, type RouterFunction } from "./to-sauce.js";
 import { quoteCall, type QuoteOptions } from "./to-quote.js";
 import type { Action, ApproveAction, Recipient, SwapAction, Token } from "./types.js";
@@ -112,6 +113,9 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   });
   let sweep = swap.sweep;
   const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
+  if ((sweep?.recipient as string | undefined) === RETIRED_POT) {
+    throw new ProgramError([{ path: "sweep.recipient", message: RETIRED_POT_MESSAGE }], chain);
+  }
   const sweepAction: Action[] =
     sweep === undefined ? [] : [{ type: "transfer", amount: "0", ...sweep }];
   if (usesNames([...candidates, ...approvals, ...sweepAction])) {

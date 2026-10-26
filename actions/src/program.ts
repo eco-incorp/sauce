@@ -17,6 +17,7 @@ import {
   ACTION_TYPES,
   POT,
   RETIRED_POT,
+  RETIRED_POT_MESSAGE,
   type ActionSpec,
   type FieldDef,
   type FieldKind,
@@ -116,8 +117,7 @@ class Checker {
         this.named(path, value, kind);
         break;
       case "recipient":
-        if (value === RETIRED_POT)
-          this.fail(path, `the Pot is "${POT}", not "${RETIRED_POT}": write "${POT}"`);
+        if (value === RETIRED_POT) this.fail(path, RETIRED_POT_MESSAGE);
         else if (value !== POT) this.address(path, value, ` or "${POT}"`);
         break;
       case "remoteRecipient":

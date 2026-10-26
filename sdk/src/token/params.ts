@@ -102,13 +102,18 @@ export function validateApproveSpec(spec: TokenApproveSpec, target: TokenTarget)
   assertAmountInput(spec.amount, "Token.approve amount", target);
 }
 
+/** Refuses the Pot's retired name as a balance's owner, naming the one it has: `"pot"`. */
+export function refuseRetiredOwner(owner: unknown): void {
+  if (owner === "self") {
+    throw new Error('Token.balanceOf: the Pot is "pot", not "self": write owner: "pot"');
+  }
+}
+
 export function validateBalanceSpec(spec: TokenBalanceSpec, target: TokenTarget): void {
   if (isEvmTarget(target)) {
     requireEvmField(spec.token, "token");
     requireEvmField(spec.owner, "owner");
-    if ((spec.owner as unknown) === "self") {
-      throw new Error('Token.balanceOf: the Pot is "pot", not "self": write owner: "pot"');
-    }
+    refuseRetiredOwner(spec.owner);
     return;
   }
   requireSvmRefs(spec, "Token.balanceOf");

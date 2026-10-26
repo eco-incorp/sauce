@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { toFunctionSelector } from "viem";
 
 import { Token } from "../src/token/api.js";
+import { evmBalanceExpression } from "../src/token/evm.js";
 import {
   MINT_DECIMALS_OFFSET,
   SPL_AMOUNT_OFFSET,
@@ -77,6 +78,8 @@ describe("Token: EVM source emission", () => {
     expect(() => Token.balanceOf(old).expression("v1")).toThrow(pot);
     expect(() => Token.balanceOf(old).toCall()).toThrow(pot);
     expect(() => Token.balanceOf(old).toSauceScript("evm")).toThrow(pot);
+    // The EVM arm's exported builder too, which skips the spec validation the TokenCall paths run.
+    expect(() => evmBalanceExpression(old)).toThrow(pot);
   });
 
   it("amount: 'balance' binds a runtime balanceOf read for transfer/approve", () => {

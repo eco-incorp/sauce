@@ -22,6 +22,9 @@ export const POT = "pot";
 /** What named the Pot before `"pot"`: refused, naming `"pot"`. */
 export const RETIRED_POT = "self";
 
+/** The issue a recipient of `"self"` raises, wherever a field takes the Pot. */
+export const RETIRED_POT_MESSAGE = `the Pot is "${POT}", not "${RETIRED_POT}": write "${POT}"`;
+
 export type FieldKind =
   | { readonly k: "address" }
   /**

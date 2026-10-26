@@ -345,11 +345,12 @@ not "self": write "pot"`. The JSON Schema's recipient takes `"pot"`, and the `Re
     is `` `0x${string}` | "pot" ``. The SauceScript a document lowers to (what `sauce actions`
     prints and `compileProgram(...).source` returns) names the Pot `pot` and its native balance
     `pot.balance`; the bytecode is the same. A split swap compiled with no `chain` keeps the
-    compiler's `ctx.self()`.
-  - `token.Token.balanceOf({ token, owner: "pot" })` reads the Pot's balance; `owner: "self"` is
-    refused, naming `"pot"`.
+    compiler's `ctx.self()`. `compileSplitSwap`'s `sweep.recipient` takes `"pot"` and refuses
+    `"self"` at `sweep.recipient`.
+  - `token.Token.balanceOf({ token, owner: "pot" })` and `token.evmBalanceExpression` read the
+    Pot's balance; `owner: "self"` is refused, naming `"pot"`.
   - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
-    is `bigint | "pot" | null`, and `formatAddressField` takes `"pot"`.
+    is `bigint | "pot" | null`.
 - `routes`: the compile option `accessors: { selfSugar }` is `accessors: { potSugar }`, for the
   bare `pot` rewrite; a bare `self` is refused either way.
 - Solana derivations: `CompiledSauceProgram.derivedAccounts` and a manifest slot's `derive` name the
