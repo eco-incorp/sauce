@@ -146,8 +146,8 @@ node ../sauce-typescript/examples/cook.mts --owner <address> --recipient <addres
 
 - **Filling an example in as a template.** Write the program the task needs; the example shows the
   idiom.
-- **Simulating or sending on a chain the row marks (preview).** Compile there; simulate and send on
-  a supported chain.
+- **Sending on a chain the row marks (preview).** Compile and simulate there (simulate runs where
+  the release is deployed); send on a supported chain.
 - **Reading an example without its skill.** The skill each row names says why the program is written
   that way.
 

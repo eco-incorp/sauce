@@ -83,8 +83,8 @@ bridge protocol (`sauce-protocols`).
 
 Transactions are built and sent on **Ethereum, Base, Arc and Solana** (`ethereum`, `base`, `arc`,
 `solana`) only. Every other chain the SDK knows is a **preview chain**: a program compiles for it
-and reads work there, but the released engine is not deployed on it, so a simulation stops there,
-and the `sauce` command and the MCP server build and send no transaction on it. The refusal comes
+and reads work there, and a simulation runs wherever the release is deployed on the chain, but
+the `sauce` command and the MCP server build and send no transaction on it. The refusal comes
 before any key or endpoint is read, names the
 supported chains, and links that chain's request; no flag lifts it. Each chain's file in
 `sauce-chains` says which it is, and `sauce-cli` lists which commands are refused. On Arc the

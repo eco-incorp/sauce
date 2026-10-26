@@ -8,8 +8,9 @@
  * For the initial release the command supports transactions on four chains: Ethereum, Base, Arc
  * and Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
  * program for it compiles, and the command's reads work there (`globals`, `price`, `pools`, `pot`'s
- * prediction), but it builds no transaction for it to sign, sends none, and cannot simulate: the
- * released engine is not deployed on a preview chain, so a rehearsal fails there on its own.
+ * prediction), but it builds no transaction for it to sign and sends none. Simulation is not
+ * gated by the label: `simulate` runs wherever the release's engine and Kitchen are deployed on the
+ * chain, and stops, naming the missing contract, where they are not (`requireCookContracts`).
  *
  * {@link requireSupported} is the gate, called from the command functions both front ends call
  * (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s deployment, `sendCommand`,
@@ -264,9 +265,10 @@ export const supportedChainNames = (): string => listed(supportedChains().map((c
 /** One sentence of what a preview chain still does, for a help text or a note. */
 export const previewChainsNote = (): string =>
   `Transactions are built and sent only on ${supportedChainNames()}. ` +
-  "Every other chain is a preview chain: programs compile there, and globals, price, pools and the " +
-  "Pot's prediction read, but the released engine is not deployed there, so simulate fails and no " +
-  `transaction is built or sent. Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
+  "Every other chain is a preview chain: no cook, Pot deployment or send, but programs compile " +
+  "there and globals, price, pools and the Pot's prediction read. Simulate does not depend on the " +
+  "label: it runs wherever the release is deployed on the chain. " +
+  `Ask for a chain: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`;
 
 /** The refusal of `action` for the preview chains among `chains`; `undefined` when there is none. */
 export function previewRefusal(
@@ -287,9 +289,9 @@ export function previewRefusal(
   const message = [
     `${action} is refused: it involves ${named}, ${preview.length === 1 ? "a preview chain" : "preview chains"}. ` +
       `The sauce command and its MCP server build and send transactions ` +
-      `only on ${supportedChainNames()}. On a preview chain a program still compiles, and ` +
-      "globals, price, pools and pot's prediction still read; simulate does not run there, because " +
-      "the released engine is not deployed on it.",
+      `only on ${supportedChainNames()}. On a preview chain they build and send none. A program ` +
+      "still compiles there and globals, price, pools and pot's prediction still read; simulate " +
+      "runs wherever the release is deployed on the chain, and says so where it is not.",
     ...requests.map(
       ({ name, request }) =>
         `To ask for ${name}: add your use case to its request if there is one ` +
