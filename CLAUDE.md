@@ -259,7 +259,7 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version (2.6.0 uses v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
+  package version (2.6.1 uses v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
   An ISA label is not a compatibility check. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
@@ -444,7 +444,7 @@ compile(options: CompileOptions): CompileResult
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
 `true`), `cache` (default `true`), `chain`, `chainProfiles`, `entryKind` and scalar `args` are optional.
-All four manifests pin the compiler exactly to **2.6.0**, matching the lockfile.
+All four manifests pin the compiler exactly to **2.6.1**, matching the lockfile.
 `CompileResult` contains `bytecode: Uint8Array`, `isaRevision: "stack-v3"`,
 `entryEncoding: "abi-v1"`, `entryParams`, `entrySignature`, nested `programs` reports, and optional
 `manifest: AccountManifest`. `manifest` is the SVM account contract, absent on EVM.
