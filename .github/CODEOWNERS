@@ -1,0 +1,9 @@
+# Every change needs a review from one of the four people who maintain this
+# repository. GitHub requests them automatically on each pull request, and the
+# rule only has teeth once "Require review from Code Owners" is enabled on the
+# protected branch — adding this file alone does not enforce anything.
+#
+# Later rules win over earlier ones, so a narrower path added below this line
+# overrides the catch-all rather than adding to it.
+
+*       @fish-sammy @re1ro @Foivos @MSevey
