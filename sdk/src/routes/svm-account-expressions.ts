@@ -165,6 +165,8 @@ interface Described {
    * emitted once at the top of `main`, so a transaction built another way cannot attach another.
    */
   readonly check?: (slot: string) => string;
+  /** Held by its signature whatever roles the program chains on it: the Pot's. */
+  readonly signer?: boolean;
 }
 
 interface Root {
@@ -591,15 +593,36 @@ export function collectAccountExpressions(l: SvmLowering): void {
   const roots: Root[] = [];
   /**
    * A bare name an account stands for (`pot`): its account where the program uses it as one
-   * (`standsAsAccount`), else its key, `key()`. Its balances (`pot.USDC`, `pot.balance`) are the
-   * token syntax's, and a method on it (`pot.toBytesBe(32)`) is its key's.
+   * (`standsAsAccount`), else its key, `key()`. Either way the slot is held by its signature: the
+   * Pot signs only through the Kitchen, so an account a transaction's builder puts in its place
+   * that is not the Pot fails at the engine, as `Solana.self` did. Its balances (`pot.USDC`,
+   * `pot.balance`) are the token syntax's, and a method on it (`pot.toBytesBe(32)`) is its key's.
+   * `pot.owner` is refused: an account's `.owner` is the program that owns it, which is not the
+   * Pot's owner.
    */
   const collectBare = (n: AstNode, known: Known, key: () => string): void => {
+    const parent = parents.get(n);
+    if (
+      parent?.type === "MemberExpression" &&
+      parent.object === n &&
+      parent.computed !== true &&
+      (parent.property as AstNode).type === "Identifier" &&
+      nameOf(parent.property as AstNode) === "owner"
+    ) {
+      throw new Error(
+        `\`${text(parent)}\` on Solana: an account's \`.owner\` is the program that owns it, so ` +
+          `\`${text(parent)}\` would be the program that owns the Pot's account, not the Pot's ` +
+          "owner. The Pot's owner, who signs the cook, is `Solana.owner` (`Solana.owner.address`, " +
+          "its key).",
+      );
+    }
     if (standsAsAccount(l, n)) {
-      roots.push({ node: n, describe: () => ({ derivation: known.derivation, base: known.base }) });
+      roots.push({
+        node: n,
+        describe: () => ({ derivation: known.derivation, base: known.base, signer: true }),
+      });
       return;
     }
-    const parent = parents.get(n);
     if (parent?.type === "MemberExpression" && parent.object === n && parent.computed !== true) {
       const call = parents.get(parent);
       const called = call?.type === "CallExpression" && call.callee === parent;
@@ -695,7 +718,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
       return;
     }
     if (n.type === "Identifier" && l.isPot(n)) {
-      collectBare(n, BARE[POT_NAME]!, () => `${l.pot()}.address`);
+      collectBare(n, BARE[POT_NAME]!, () => `${l.pot({ signer: true })}.address`);
       return;
     }
     const member = solanaMember(n);
@@ -813,8 +836,8 @@ export function collectAccountExpressions(l: SvmLowering): void {
     const spelled = `\`${text(root.node)}\``;
     l.site(top, () => {
       l.requirePlaced(top, spelled, "an account");
-      const { derivation, base, check } = root.describe();
-      const slot = l.account(derivation, base, role);
+      const { derivation, base, check, signer } = root.describe();
+      const slot = l.account(derivation, base, { ...role, signer: role.signer || signer === true });
       if (check !== undefined) l.prologue(slot, check(slot));
       l.splices.push({ start: top.start, end: top.end, replacement: slot });
     });

@@ -518,7 +518,13 @@ describe("the balance shorthand on Solana: namespace holders and lamports", () =
     expect(refusal("function main(): Uint256 {\n  return pot.USDCC;\n}\n")).toBe(
       "`pot.USDCC` on Solana: `USDCC` is not a token solana registers. Did you mean `USDC`? " +
         "`pot.<TOKEN>` reads the Pot's balance of a token and `pot.balance` its lamports; " +
-        "`pot.address`, `pot.owner`, `pot.dataLen`, `pot.signer()` and `pot.writable()` are its account's.",
+        "`pot.address`, `pot.dataLen`, `pot.signer()` and `pot.writable()` are its account's.",
+    );
+    // A token the program declares a name of its own for is said to be hidden, not misspelled.
+    expect(refusal("function main(): Uint256 {\n  const USDC = 5;\n  return pot.USDC;\n}\n")).toBe(
+      "`pot.USDC` on Solana: `USDC` is a token solana registers, and the program declares its " +
+        "own `USDC` where this reads it, which hides the token. `pot.<TOKEN>` reads a token by " +
+        "the symbol the chain gives it: rename the program's `USDC`.",
     );
     expect(refusal("function main(): Uint256 {\n  return pot.balanse;\n}\n")).toMatch(
       /^`pot\.balanse` on Solana: `balanse` is not a token solana registers\. Did you mean `balance`\?/,

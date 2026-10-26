@@ -37,12 +37,12 @@ describe("pot on Solana: the Pot's key, and its account", () => {
   it("bare pot is the Pot's key, the address pot.balance reads", () => {
     const program = compile("function main(): Address {\n  return pot;\n}\n");
     expect(program.source).toBe(
-      "function main(pot: Account): Address {\n  return pot.address;\n}\n",
+      "function main(pot: Account<Signer>): Address {\n  return pot.address;\n}\n",
     );
     expect(program.derivedAccounts).toEqual({ pot: "pot" });
     expect(hex("function main(a: Address): bool {\n  return a == pot && pot != 0;\n}\n")).toBe(
       hex(
-        "function main(a: Address, pot: Account): bool {\n  return a == pot.address && pot.address != 0;\n}\n",
+        "function main(a: Address, pot: Account<Signer>): bool {\n  return a == pot.address && pot.address != 0;\n}\n",
       ),
     );
     // A method on it is its key's; a shorthand record field keeps its name.
@@ -59,18 +59,33 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       "function size(a: Account): Uint256 {\n  return a.dataLen;\n}\n" +
         "function main(data: bytes): Uint256 {\n" +
         "  svm.call(Solana.systemProgram, [pot.signer(), pot.writable(), pot], data);\n" +
-        "  return pot.dataLen + pot.owner + svm.sload(pot, 0, 8).toLe() + size(pot);\n" +
+        "  return pot.dataLen + svm.sload(pot, 0, 8).toLe() + size(pot);\n" +
         "}\n",
     );
     expect(program.source).toContain(
       "  svm.call(systemProgram, [pot, pot, pot], data);\n" +
-        "  return pot.dataLen + pot.owner + svm.sload(pot, 0, 8).toLe() + size(pot);",
+        "  return pot.dataLen + svm.sload(pot, 0, 8).toLe() + size(pot);",
     );
     expect(program.derivedAccounts).toEqual({
       systemProgram: "11111111111111111111111111111111",
       pot: "pot",
     });
     expect(roles(program)).toEqual({ systemProgram: "readonly", pot: "writable_signer" });
+  });
+
+  it("is held by the Pot's signature wherever it is named, and refuses pot.owner", () => {
+    // Only the Kitchen signs for the Pot: an account put in its slot that is not the Pot fails.
+    for (const body of ["return pot;", "return svm.sload(pot, 0, 8).toLe();"]) {
+      const program = compile(`function main(): Uint256 {\n  ${body}\n}\n`);
+      expect(roles(program).pot).toBe("readonly_signer");
+    }
+    expect(
+      refusal('function main(caller: Address) {\n  require(caller == pot.owner, "owner");\n}\n'),
+    ).toBe(
+      "`pot.owner` on Solana: an account's `.owner` is the program that owns it, so `pot.owner` " +
+        "would be the program that owns the Pot's account, not the Pot's owner. The Pot's owner, " +
+        "who signs the cook, is `Solana.owner` (`Solana.owner.address`, its key).",
+    );
   });
 
   it("is an account for a function @sauce/token declares one for", () => {
@@ -156,14 +171,14 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     expect(
       compile(`${elsewhere("pot")}function main(): Address {\n  return pot;\n}\n`).source,
     ).toBe(
-      `${elsewhere("pot")}function main(pot2: Account): Address {\n  return pot2.address;\n}\n`,
+      `${elsewhere("pot")}function main(pot2: Account<Signer>): Address {\n  return pot2.address;\n}\n`,
     );
     expect(
       compile(
         'function main(flag: bool): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot;\n}\n',
       ).source,
     ).toBe(
-      'function main(flag: bool, pot2: Account): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot2.address;\n}\n',
+      'function main(flag: bool, pot2: Account<Signer>): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot2.address;\n}\n',
     );
     expect(refusal(`${elsewhere("self")}function main(): Address {\n  return self;\n}\n`)).toMatch(
       /^`self`: the Pot is `pot`, not `self`/,
@@ -191,7 +206,9 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       refusal(
         "function held(): Uint256 {\n  return pot.USDC;\n}\nfunction main(USDC: Uint256): Uint256 {\n  return held() + USDC;\n}\n",
       ),
-    ).toMatch(/^`pot\.USDC` on Solana: `USDC` is not a token solana registers\./);
+    ).toMatch(
+      /^`pot\.USDC` on Solana: `USDC` is a token solana registers, and the program declares its own `USDC`/,
+    );
   });
 
   it("a name a pattern or a catch clause binds is no read of pot or self", () => {
@@ -243,7 +260,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
         `function main(): Uint256 {\n  const holder${declared} = pot;\n  return holder.balance;\n}\n`,
       );
       expect(program.source).toBe(
-        `function main(pot: Account): Uint256 {\n  const holder${declared} = pot.address;\n  return ctx.balance(holder);\n}\n`,
+        `function main(pot: Account<Signer>): Uint256 {\n  const holder${declared} = pot.address;\n  return ctx.balance(holder);\n}\n`,
       );
       expect(program.derivedAccounts).toEqual({ pot: "pot" });
     }
@@ -253,7 +270,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
         "function main(): Uint256 {\n  const holder: Account = pot;\n  return holder.balance;\n}\n",
       ).source,
     ).toBe(
-      "function main(pot: Account): Uint256 {\n  const holder: Account = pot;\n  return ctx.balance(holder.address);\n}\n",
+      "function main(pot: Account<Signer>): Uint256 {\n  const holder: Account = pot;\n  return ctx.balance(holder.address);\n}\n",
     );
     // A token balance needs a holder known when the transaction is built, which a local is not.
     expect(
@@ -357,7 +374,7 @@ describe("where a site stands", () => {
   it("a shorthand { pot } keeps its key, in main and in a top-level function given the accounts", () => {
     const record = "  const r = { size: 1, pot };\n  return r.pot;\n}\n";
     expect(compile(`function main(): Address {\n${record}`).source).toBe(
-      "function main(pot: Account): Address {\n  const r = { size: 1, pot: pot.address };\n  return r.pot;\n}\n",
+      "function main(pot: Account<Signer>): Address {\n  const r = { size: 1, pot: pot.address };\n  return r.pot;\n}\n",
     );
     expect(
       compile(
@@ -366,7 +383,7 @@ describe("where a site stands", () => {
     ).toBe(
       "function held(__sauce_accounts: Account[]): Address {\n" +
         "  const r = { size: 1, pot: __sauce_accounts[0].address };\n  return r.pot;\n}\n" +
-        "function main(pot: Account): Address {\n  return held([pot]);\n}\n",
+        "function main(pot: Account<Signer>): Address {\n  return held([pot]);\n}\n",
     );
   });
 
