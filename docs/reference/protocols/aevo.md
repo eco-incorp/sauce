@@ -29,7 +29,7 @@ Options and perpetuals exchange built on a custom OP Stack rollup. Off-chain ord
 - Withdrawals processed by the rollup bridge (takes ~7 days for L2 to L1)
 - Approve ERC-20 tokens to depositContract before calling depositERC20
 - The deposit contract is Aevo's OP Stack `L1StandardBridge`, so these are the standard bridge entry points.
-- `depositERC20` and `depositETH` are for an externally owned account only: called from a contract, a Pot included, they revert with "StandardBridge: function can only be called from an EOA", so the template above reverts in a Sauce program. The bridge's `depositERC20To(l1Token, l2Token, to, amount, minGasLimit, extraData)` takes a contract caller; the registry's ABI for Aevo does not declare it, so a program binds an ABI of its own for it
+- `depositERC20` and `depositETH` are for an externally owned account only: called from a contract, a Pot included, they revert with "StandardBridge: function can only be called from an EOA", so a Sauce program cannot deposit with `depositERC20`. The bridge's `depositERC20To(l1Token, l2Token, to, amount, minGasLimit, extraData)` takes a contract caller; the registry's ABI for Aevo does not declare it, so a program binds an ABI of its own for it
 
 ## Its names in a program
 

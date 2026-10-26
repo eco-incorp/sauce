@@ -1733,7 +1733,7 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         ...p.deployed
           .filter((d) => d.abi === e.name && d.absent.length)
           .flatMap((d) => [
-            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them: ${d.absent.map(code).join(", ")}. A call to one reverts there.`,
+            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them: ${d.absent.map(code).join(", ")}. Do not call them there: the call does not run the function, and whether it reverts is up to that code.`,
             "",
           ]),
       );

@@ -32,6 +32,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Augustus V5 and V6 both deployed on all chains
+- Augustus V6 is deployed on every chain the registry lists; Augustus V5's address holds the router everywhere but Base
+- On Base, Augustus V5's address is not the router: it is a small fee-splitting contract that dispatches none of the router's functions. A call carrying no value reverts; a call carrying value, `simpleSwap` included, succeeds without swapping, and the value goes to two accounts the contract fixed when it was deployed (98.5% and 1.5%). Do not send it anything; on Base the router is Augustus V6
 - Route computation happens off-chain via ParaSwap API - callees/exchangeData come from API
 - Approve srcToken to Augustus contract before swapping

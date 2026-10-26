@@ -59,7 +59,7 @@ function main() {
 - `approve(address spender, uint256 amount) returns (bool)`
 - `transfer(address to, uint256 amount) returns (bool)`
 
-Not on Base's cbETH (`0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22`), whose code does not dispatch them: `exchangeRate`. A call to one reverts there.
+Not on Base's cbETH (`0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22`), whose code does not dispatch them: `exchangeRate`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

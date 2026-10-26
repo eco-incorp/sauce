@@ -70,7 +70,7 @@ function main() {
 - `getStETHByWstETH(uint256 _wstETHAmount) view returns (uint256)`
 - `getWstETHByStETH(uint256 _stETHAmount) view returns (uint256)`
 
-Not on Arbitrum One's wstETH (`0x5979D7b546E38E414F7E9822514be443A4800529`), whose code does not dispatch them: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH`. A call to one reverts there.
+Not on Arbitrum One's wstETH (`0x5979D7b546E38E414F7E9822514be443A4800529`), whose code does not dispatch them: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

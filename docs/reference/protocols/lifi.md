@@ -64,11 +64,11 @@ function main() {
 - `startBridgeTokensViaAcrossV4((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData, (bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) acrossData) payable`
 - `extractBridgeData(bytes data) pure returns ((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData)`
 
-Not on Gnosis's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. A call to one reverts there.
+Not on Gnosis's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
-Not on Fantom's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. A call to one reverts there.
+Not on Fantom's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
-Not on Avalanche C-Chain's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. A call to one reverts there.
+Not on Avalanche C-Chain's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`), whose code does not dispatch them: `startBridgeTokensViaAcrossV4`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

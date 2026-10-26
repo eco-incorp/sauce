@@ -108,6 +108,32 @@ describe("generated pages: an ABI's functions a deployment lacks", () => {
     expect(row("Arbitrum One")).toContain("not on this deployment");
     expect(row("Ethereum")).not.toContain("not on this deployment");
   });
+
+  // Absent selectors say nothing about what the code does instead: Base's Augustus V5 address is a
+  // payable fee splitter whose fallback takes a value-bearing call to any selector and succeeds. So
+  // the generated line warns against the call and promises no revert (a protocol's own document may
+  // still state one it has verified, as Lido's does for Arbitrum's bridged wstETH).
+  it.each([
+    "docs/reference/protocols/paraswap.md",
+    "docs/reference/protocols/lido.md",
+    "skills/sauce-protocols/references/registry/paraswap.md",
+    "skills/sauce-protocols/references/registry/lido.md",
+  ])("%s warns against the call without promising a revert", (path) => {
+    const generated = read(path)
+      .split("\n")
+      .filter((line) => line.includes("whose code does not dispatch them"));
+    expect(generated.length).toBeGreaterThan(0);
+    for (const line of generated) {
+      expect(line).toContain("Do not call them there");
+      expect(line).not.toMatch(/reverts there/);
+    }
+  });
+
+  it("documents Base's Augustus V5 fallback in ParaSwap's document", () => {
+    const notes = read("skills/sauce-protocols/references/paraswap.md");
+    expect(notes).toMatch(/On Base, Augustus V5's address is not the router/);
+    expect(notes).toMatch(/succeeds without swapping/);
+  });
 });
 
 describe("Solana venues: exported JSDoc renders as Markdown", () => {

@@ -54,7 +54,7 @@ function main() {
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
 - `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)`
 
-Not on Arbitrum One's lendingPool (`0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`), whose code does not dispatch them: `deposit`, `withdraw`, `borrow`, `repay`. A call to one reverts there.
+Not on Arbitrum One's lendingPool (`0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`), whose code does not dispatch them: `deposit`, `withdraw`, `borrow`, `repay`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
 ## Next
 
