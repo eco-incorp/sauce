@@ -32,6 +32,7 @@ import {
   getAddressCodec,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
+  getProgramDerivedAddress,
   getTransactionDecoder,
   lamports,
   signTransaction,
@@ -1110,6 +1111,15 @@ describeSvm("the token methods on Solana: every account derived by the command",
       expect(wrongPda.stderr).toContain(
         `--account ${pda.name}=${someone}: the account ${pda.name} is derived from the Pot, as ${pda.derive} (`,
       );
+      // Its own address is taken, by its derivation and by its key, and the cook runs.
+      const [vault] = await getProgramDerivedAddress({
+        programAddress: KITCHEN,
+        seeds: [new TextEncoder().encode("vault"), codec.encode(pot)],
+      });
+      for (const given of [pda.derive!, vault]) {
+        const out = await simulate(seeded, ...["--args", KITCHEN, "--account", `${pda.name}=${given}`]);
+        expect(json(out)).toMatchObject({ ok: true, returned: "0" });
+      }
     }, 120_000);
 
     it("refuses the owner for the authority slot of a program that never names pot", async () => {
