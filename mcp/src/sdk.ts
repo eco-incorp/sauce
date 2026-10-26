@@ -142,6 +142,7 @@ export { parsePin, verifyCommand } from "../../sdk/dist/cli/verify.js";
 export {
   CANONICAL_CHAINS,
   requireChain,
+  resolveChain,
   type CanonicalChain,
 } from "../../sdk/dist/chains/canonical.js";
 export { nativeErc20 } from "../../sdk/dist/chains/index.js";

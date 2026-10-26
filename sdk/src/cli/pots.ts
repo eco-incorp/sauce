@@ -47,7 +47,7 @@ import {
   type PublicClient,
 } from "viem";
 
-import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
+import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import {
   sdkCompilerVersion,
   V12_RELEASE_SETS,
@@ -55,7 +55,9 @@ import {
   type V12ReleaseSet,
 } from "../deployments/index.js";
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
+import { svmClusterOf } from "../routes/token-registry.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
+import { CliError } from "./args.js";
 import type { Landed } from "./keep.js";
 import {
   MAINNET_CLUSTER,
@@ -204,6 +206,14 @@ const base = (chain: CanonicalChain, origin: PotRecord["origin"]) => ({
   chainId: chain.id,
   origin,
 });
+
+/**
+ * The chain a Solana Pot is recorded under, whichever SVM chain made or found it: Solana's, with its
+ * cluster beside it (`PotRecord.cluster`). The Kitchen's id, and so a Pot's address, is the same on
+ * every cluster, and devnet Pots were recorded so before `solana-devnet` named devnet: one Pot is one
+ * record, in one directory of the store (`1399811149-devnet`), however its chain is spelled.
+ */
+const svmRecordChain = (): CanonicalChain => requireChain("solana");
 
 /** An EVM Pot's record, its release told from its address; `unknown` reads, from the chain, the
  *  init-code hash and kind of one no known release minted. */
@@ -392,16 +402,53 @@ const CLUSTERS: Readonly<Record<string, string>> = {
 export const clusterOf = (genesisHash: string): string => CLUSTERS[genesisHash] ?? genesisHash;
 
 /**
+ * The Solana cluster an SVM chain is held to: its own, where it names one other than mainnet's
+ * (`solana-devnet`, devnet). `solana` is held to none: it takes an endpoint of any cluster, as it
+ * always has, its Pots recorded under the cluster the endpoint serves.
+ */
+export function clusterNamed(chain: CanonicalChain): string | undefined {
+  const cluster = svmClusterOf(chain);
+
+  return cluster === undefined || cluster === MAINNET_CLUSTER ? undefined : cluster;
+}
+
+/** Refuses an endpoint for `chain` whose genesis hash is not that of the cluster the chain names. */
+export function requireChainCluster(chain: CanonicalChain, genesisHash: string): void {
+  const named = clusterNamed(chain);
+  const served = clusterOf(genesisHash);
+  if (named === undefined || served === named) return;
+  throw new CliError(
+    `${chain.slug} is Solana's ${named} cluster, and the endpoint serves ` +
+      (CLUSTERS[genesisHash] === undefined
+        ? `another cluster, whose genesis hash is ${genesisHash}`
+        : served) +
+      `: give a ${named} endpoint`,
+  );
+}
+
+/**
+ * Whether `record` is a Pot on `chain`, as `sauce pot list --chain` filters: the chain's id, and for
+ * an SVM chain held to a cluster (`solana-devnet`) Solana's records of that cluster. `solana` lists
+ * every cluster's, as it always has.
+ */
+export function recordOn(record: PotRecord, chain: CanonicalChain): boolean {
+  const cluster = clusterNamed(chain);
+
+  return cluster === undefined
+    ? record.chainId === chain.id
+    : record.chainId === svmRecordChain().id && record.cluster === cluster;
+}
+
+/**
  * The Pots a landed Solana transaction created: one record per `create_pot` of the Kitchen in it —
  * an instruction of its own, or one a program invoked (`inner`, as the node reports them) — its
  * accounts (owner, engine program, Pot) read
  * through the message's static accounts and those its lookup tables loaded (`loaded`). None for
  * one that failed. `genesis` is asked for the cluster's genesis hash only when there is one, so a
  * devnet Pot is recorded as devnet's: the Kitchen's id, and so the Pot's address, is the same on
- * every cluster.
+ * every cluster. Whichever SVM chain sent it, a Pot is recorded under Solana's (`svmRecordChain`).
  */
 export async function svmPotsCreated(input: {
-  readonly chain: CanonicalChain;
   /** The transaction, base64, as `getTransaction` returns it. */
   readonly transaction: string;
   readonly loaded?: { readonly writable: readonly string[]; readonly readonly: readonly string[] };
@@ -458,7 +505,6 @@ export async function svmPotsCreated(input: {
 
   return created.map((one) =>
     svmRecord({
-      chain: input.chain,
       cluster,
       ...one,
       origin: "deployed",
@@ -471,9 +517,9 @@ export async function svmPotsCreated(input: {
   );
 }
 
-/** A Solana Pot's record: the release of the engine it was created for, when one is known. */
+/** A Solana Pot's record, under Solana's chain and its cluster: the release of the engine it was
+ *  created for, when one is known. */
 function svmRecord(input: {
-  readonly chain: CanonicalChain;
   readonly cluster: string;
   readonly owner: string;
   readonly salt: Hex;
@@ -485,7 +531,7 @@ function svmRecord(input: {
   const set = svmSetOf(input.engine);
 
   return {
-    ...base(input.chain, input.origin),
+    ...base(svmRecordChain(), input.origin),
     cluster: input.cluster,
     pot: input.pot,
     owner: input.owner,
@@ -702,7 +748,8 @@ export interface SvmAccountReader {
  * `create_pot` hands the account to the engine it names, so a Pot is owned by one a release
  * records. An account there owned by anything else (lamports sent to the address before any Pot,
  * held by the System Program) is no Pot, and is refused: a record is never rewritten, so it would
- * stand for the Pot for good.
+ * stand for the Pot for good. On a chain held to a cluster (`solana-devnet`), the endpoint is held
+ * to it first.
  */
 export async function importSvmPot(
   reader: SvmAccountReader,
@@ -710,6 +757,8 @@ export async function importSvmPot(
   owner: SvmAddress,
   salt: Hex,
 ): Promise<PotRecord> {
+  const held = clusterNamed(chain) === undefined ? undefined : await reader.genesis();
+  if (held !== undefined) requireChainCluster(chain, held);
   const { address: pot } = await derivePotPda(
     v12SvmKitchenProgramId() as SvmAddress,
     owner,
@@ -728,8 +777,7 @@ export async function importSvmPot(
   }
 
   return svmRecord({
-    chain,
-    cluster: clusterOf(await reader.genesis()),
+    cluster: clusterOf(held ?? (await reader.genesis())),
     owner,
     salt,
     pot,

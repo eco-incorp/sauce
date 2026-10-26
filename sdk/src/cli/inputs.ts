@@ -9,7 +9,7 @@
 import type { Address, Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
-import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
 import { nativeSymbol } from "../evm/effects.js";
 import { mainSignature } from "../routes/entry.js";
@@ -45,13 +45,10 @@ export function withoutShebang(text: string): string {
   return text.replace(/^#![^\r\n]*/, (line) => " ".repeat(line.length));
 }
 
-/** The one chain of kind svm, which `--target svm` alone names. */
-const svmChain = (): CanonicalChain => CANONICAL_CHAINS.find((chain) => chain.kind === "svm")!;
-
 /**
  * The chain a program runs on: `given.chain`, else the file's `// @chain`, else — for a `svm`
- * target given or in its `// @target` alone — the one SVM chain, else `fallback`. A target that
- * disagrees with the chain is an error, wherever either came from.
+ * target given or in its `// @target` alone — Solana, else `fallback`. A target that disagrees with
+ * the chain is an error, wherever either came from.
  */
 export function programChain(
   given: { readonly chain?: string; readonly target?: string },
@@ -69,7 +66,7 @@ export function programChain(
       : header.chain !== undefined
         ? parseChain(header.chain, `${file}'s // @chain`)
         : target === "svm"
-          ? svmChain()
+          ? requireChain("solana")
           : fallback;
   if (chain === undefined) {
     throw new UsageError(

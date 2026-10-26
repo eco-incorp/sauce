@@ -44,7 +44,7 @@ import {
 import type { AccountManifest } from "sauce-compiler";
 import { bytesToHex, formatUnits, hexToBytes, parseUnits, type Hex } from "viem";
 
-import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import type { CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
   entryReturnType,
@@ -52,7 +52,7 @@ import {
   type EntryType,
   type EntryValue,
 } from "../routes/entry.js";
-import { svmTokenRows } from "../routes/token-registry.js";
+import { svmClusterOf, svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import {
@@ -132,6 +132,7 @@ import {
   type CommandOutput,
   compileProgram,
   payloadOf,
+  POT_DEPLOYMENT,
   type ProgramInput,
   revertedFirst,
   unapproved,
@@ -141,10 +142,15 @@ import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf, type Reservation } from "./policy.js";
 import { keepLanded, sayKept } from "./keep.js";
 import type { PotRecord } from "./pot-store.js";
-import { svmPotsCreated, type InnerInstructions } from "./pots.js";
+import {
+  clusterNamed,
+  requireChainCluster,
+  svmPotsCreated,
+  type InnerInstructions,
+} from "./pots.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
-import { requireSupported } from "./support.js";
+import { previewRefusal, requireSupported } from "./support.js";
 import { svmCookFixedUnits, svmRanOutOfUnits, svmStopLines, svmStopsJson } from "./svm-stops.js";
 import {
   accountsNow,
@@ -203,16 +209,22 @@ const programReader =
  *  one tool call's: the next reads again. */
 const shownReleased = new WeakMap<object, Set<ProgramName>>();
 
-/** Refuses a cook or a Pot on a cluster without the released programs `needs` names. */
+/**
+ * Refuses a cook or a Pot on a cluster without the released programs `needs` names, or on an
+ * endpoint of another cluster than the one `chain` names ({@link requireCluster}). The refusal
+ * names `chain`, as the user named the cluster.
+ */
 export async function requireReleased(
   rpc: Rpc,
   url: string,
+  chain: CanonicalChain,
   needs: readonly ProgramName[],
 ): Promise<void> {
+  await requireCluster(rpc, url, chain);
   const shown = shownReleased.get(rpc) ?? new Set<ProgramName>();
   const unread = needs.filter((name) => !shown.has(name));
   if (unread.length === 0) return;
-  await requireSolanaRelease(programReader(rpc, url), unread, requireChain("solana").slug);
+  await requireSolanaRelease(programReader(rpc, url), unread, chain.slug);
   for (const name of unread) shown.add(name);
   shownReleased.set(rpc, shown);
 }
@@ -352,23 +364,29 @@ export const svmReader =
 
 /**
  * The execution fee in lamports, from the Kitchen's fee config account: what a cook pays, through
- * the Kitchen or direct to the engine, which reads the same account.
+ * the Kitchen or direct to the engine, which reads the same account. Where the cluster holds none,
+ * `absent` is asked first: a cluster without the fee config may be without the release, which it
+ * then says by name.
  */
-async function kitchenFee(rpc: Rpc, url: string): Promise<bigint> {
+async function kitchenFee(rpc: Rpc, url: string, absent?: () => Promise<void>): Promise<bigint> {
   const { address: config } = await deriveExecutionFeeConfigPda(kitchen());
   const { value } = await ask(url, "the Kitchen's fee config", () =>
     rpc.getAccountInfo(config, { encoding: "base64" }).send(),
   );
+  let fee: bigint | undefined;
   try {
-    if (value === null || value.owner !== kitchen()) throw new Error("absent");
-
-    return decodeExecutionFeeConfig(new Uint8Array(getBase64Encoder().encode(value.data[0])));
+    if (value !== null && value.owner === kitchen()) {
+      fee = decodeExecutionFeeConfig(new Uint8Array(getBase64Encoder().encode(value.data[0])));
+    }
   } catch {
-    throw new CliError(
-      `the released Kitchen (${kitchen()}) has no execution-fee config on this cluster: is it ` +
-        "deployed there? Every cook is refused without one, through the Kitchen or direct.",
-    );
+    // Not a fee config: as good as none, below.
   }
+  if (fee !== undefined) return fee;
+  await absent?.();
+  throw new CliError(
+    `the released Kitchen (${kitchen()}) has no execution-fee config on this cluster: is it ` +
+      "deployed there? Every cook is refused without one, through the Kitchen or direct.",
+  );
 }
 
 async function exists(rpc: Rpc, url: string, account: Address, what: string): Promise<boolean> {
@@ -617,6 +635,7 @@ async function confirmed(
 export async function sendAndConfirm(
   rpc: Rpc,
   url: string,
+  chain: CanonicalChain,
   transaction: Transaction,
   sign?: () => Promise<Transaction>,
   sending?: () => void,
@@ -629,7 +648,7 @@ export async function sendAndConfirm(
   };
   try {
     for (const key of signers) {
-      const reservation = await guardOf(key)?.svm(rpc, transaction);
+      const reservation = await guardOf(key)?.svm(rpc, chain, transaction);
       if (reservation !== undefined) reservations.push(reservation);
     }
   } catch (error) {
@@ -671,7 +690,7 @@ export async function sendAndConfirm(
 const geneses = new Map<string, Promise<string>>();
 
 /** The genesis hash of the cluster `url` serves, which names the cluster a Pot is created on. */
-function genesisOf(rpc: Rpc, url: string): Promise<string> {
+export function genesisOf(rpc: Rpc, url: string): Promise<string> {
   const known = geneses.get(url);
   if (known !== undefined) return known;
   const asked = ask(url, "the cluster's genesis hash", () => rpc.getGenesisHash().send()).then(
@@ -682,6 +701,15 @@ function genesisOf(rpc: Rpc, url: string): Promise<string> {
   geneses.set(url, asked);
 
   return asked;
+}
+
+/**
+ * Refuses `url` for `chain` where it serves another cluster than the one the chain names
+ * (`pots.ts#requireChainCluster`): `solana-devnet` is devnet's alone. Asked once per endpoint, and
+ * never for `solana`, which takes an endpoint of any cluster, as it always has.
+ */
+export async function requireCluster(rpc: Rpc, url: string, chain: CanonicalChain): Promise<void> {
+  if (clusterNamed(chain) !== undefined) requireChainCluster(chain, await genesisOf(rpc, url));
 }
 
 /**
@@ -737,7 +765,6 @@ export async function svmLanded(
     response === null || response === undefined
       ? []
       : await svmPotsCreated({
-          chain: requireChain("solana"),
           transaction: response.transaction[0],
           ...(loaded === undefined ? {} : { loaded }),
           ...(inner === undefined ? {} : { inner }),
@@ -789,6 +816,7 @@ export async function svmLanded(
  */
 export async function sendPlannedSvm(
   url: string,
+  chain: CanonicalChain,
   signer: KeyPairSigner,
   tx: { readonly feePayer: string; readonly transaction: string; readonly what: string },
 ): Promise<SvmSent> {
@@ -810,11 +838,12 @@ export async function sendPlannedSvm(
   await requireReleased(
     rpc,
     url,
+    chain,
     releasedProgramsCalled(await transactionAddresses(rpc, url, decoded)),
   );
   await rehearsed(rpc, url, decoded, tx.what, false);
 
-  return sendAndConfirm(rpc, url, decoded, () => signTransaction([signer.keyPair], decoded));
+  return sendAndConfirm(rpc, url, chain, decoded, () => signTransaction([signer.keyPair], decoded));
 }
 
 /**
@@ -850,6 +879,7 @@ async function rehearsed(
 async function sendInstructions(
   rpc: Rpc,
   url: string,
+  chain: CanonicalChain,
   signer: TransactionSigner,
   instructions: readonly Instruction[],
   what: string,
@@ -860,7 +890,7 @@ async function sendInstructions(
   const prepared = prepareExecuteTransaction({ payer: signer, instructions, latestBlockhash });
   await rehearsed(rpc, url, prepared.transaction, what, true);
 
-  return sendAndConfirm(rpc, url, prepared.transaction, prepared.sign);
+  return sendAndConfirm(rpc, url, chain, prepared.transaction, prepared.sign);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1130,7 +1160,10 @@ const FORM_MEANS: Readonly<Record<string, string>> = {
  * Why a cook cannot be built yet, and how to say each account: one line per account the program
  * takes that nothing derives, then a file `--accounts` takes them all from, to fill in.
  */
-export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): string {
+export function svmAccountsToGiveMessage(
+  missing: readonly SvmAccountToGive[],
+  chain: CanonicalChain,
+): string {
   const width = Math.max(...missing.map((slot) => `${slot.name} (${slot.requires})`.length));
   const lines = missing.map((slot) => {
     const forms = slot.forms.map((form) =>
@@ -1149,7 +1182,7 @@ export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): 
     `${lines.join("\n")}\n` +
     "Give each with --account NAME=<value>, or all at once with --accounts <file>, a JSON object " +
     `of each name to its value: ${file}\n` +
-    "A token is a symbol (sauce globals --chain solana) or a mint's address. Or name the account " +
+    `A token is a symbol (sauce globals --chain ${chain.slug}) or a mint's address. Or name the account ` +
     "where the program uses it, and every cook derives it: USDC.accountOf(pot).writable(), " +
     "USDC.mint, USDC.tokenProgram, Solana.pda(program, [seeds])."
   );
@@ -1248,6 +1281,7 @@ async function refuseSubstitutedRole(
  * so the refusal needs no endpoint.
  */
 export function requireSvmAccounts(
+  chain: CanonicalChain,
   manifest: AccountManifest,
   derived: Readonly<Record<string, string>> | undefined,
   given: Readonly<Record<string, string>>,
@@ -1265,7 +1299,7 @@ export function requireSvmAccounts(
   }
   refusePotOnEngine(manifest, derived, given, via, potMention);
   const missing = svmAccountsToGive(manifest, derived, given, via);
-  if (missing.length > 0) throw new UsageError(svmAccountsToGiveMessage(missing));
+  if (missing.length > 0) throw new UsageError(svmAccountsToGiveMessage(missing, chain));
 }
 
 /**
@@ -1274,6 +1308,7 @@ export function requireSvmAccounts(
  * signs when the slot asks for a signer — with `signer` when there is one.
  */
 function resolution(
+  chain: CanonicalChain,
   manifest: AccountManifest,
   given: Readonly<Record<string, string>>,
   owner: Address,
@@ -1288,7 +1323,7 @@ function resolution(
         "attach yet: build that cook with the SDK's Solana client",
     );
   }
-  requireSvmAccounts(manifest, undefined, given, via);
+  requireSvmAccounts(chain, manifest, undefined, given, via);
   const resolved: AccountResolution = {};
   for (const slot of slots) {
     const value = given[slot.name]!;
@@ -1301,6 +1336,8 @@ function resolution(
 }
 
 export interface SvmTarget extends SaltChoice {
+  /** The SVM chain the Pot is on, as the command was given it: what it says and is held to. */
+  readonly chain: CanonicalChain;
   readonly owner: Address;
 }
 
@@ -1311,7 +1348,10 @@ const potOf = async (target: SvmTarget): Promise<Address> =>
 
 /** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
 export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
-  return exists(createSolanaRpc(rpcUrl), rpcUrl, await potOf(target), "the Pot");
+  const rpc = createSolanaRpc(rpcUrl);
+  await requireCluster(rpc, rpcUrl, target.chain);
+
+  return exists(rpc, rpcUrl, await potOf(target), "the Pot");
 }
 
 /** The Pot's associated token account for one registered mint, and what it holds. */
@@ -1336,10 +1376,11 @@ export interface SvmPotTokenAccount {
 export async function svmPotTokenAccounts(
   target: SvmTarget,
   rpcUrl: string,
-  chain: CanonicalChain,
 ): Promise<readonly SvmPotTokenAccount[]> {
+  const { chain } = target;
   const pot = await potOf(target);
   const rpc = createSolanaRpc(rpcUrl);
+  await requireCluster(rpc, rpcUrl, chain);
 
   return Promise.all(
     svmTokenRows(chain)
@@ -1396,6 +1437,7 @@ async function accountLabels(
 async function missingAccounts(
   rpc: Rpc,
   url: string,
+  chain: CanonicalChain,
   given: Prepared["given"],
   derived: ReadonlySet<string> = new Set(),
 ): Promise<string[]> {
@@ -1412,13 +1454,13 @@ async function missingAccounts(
     // An account the token methods added, which `sauce run` creates before the cook.
     if (derived.has(name) && token?.kind === "account") {
       return [
-        `the account ${name}: ${value} does not exist on solana (${token.label}: nothing has ` +
+        `the account ${name}: ${value} does not exist on ${chain.slug} (${token.label}: nothing has ` +
           "created it yet; `sauce run` creates it before the cook, asking first, or with --yes)",
       ];
     }
 
     return [
-      `${slotLabel(name, derived)}: ${value} does not exist on solana` +
+      `${slotLabel(name, derived)}: ${value} does not exist on ${chain.slug}` +
         (token === undefined
           ? ""
           : token.kind !== "account"
@@ -1487,7 +1529,7 @@ const slotLabel = (name: string, derived: ReadonlySet<string>): string =>
 
 /** The `sauce pot` that creates `target`'s Pot. */
 const createHint = (target: SvmTarget): string =>
-  `sauce pot --deploy --chain solana --keypair <the owner's keypair>${target.flag === undefined ? "" : ` ${target.flag}`}`;
+  `sauce pot --deploy --chain ${target.chain.slug} --keypair <the owner's keypair>${target.flag === undefined ? "" : ` ${target.flag}`}`;
 
 const createPotInstruction = (target: SvmTarget, pot: Address): Instruction =>
   buildCreatePotInstruction({
@@ -1700,7 +1742,7 @@ export function svmAssumedBalances(raws: readonly string[], chain: CanonicalChai
     if (mint === undefined) {
       throw new UsageError(
         `--assume-balance ${raw}: ${token} is not a mint ${chain.slug} registers: give its symbol ` +
-          "(sauce globals --chain solana) or its address",
+          `(sauce globals --chain ${chain.slug}) or its address`,
       );
     }
     if (seen.has(mint)) throw new UsageError(`--assume-balance names ${token} twice: give it once`);
@@ -1742,6 +1784,7 @@ interface Prepared {
 async function lookupTablesOf(
   rpc: Rpc,
   url: string,
+  chain: CanonicalChain,
   tables: readonly Address[],
 ): Promise<AddressesByLookupTableAddress> {
   const read: AddressesByLookupTableAddress = {};
@@ -1751,7 +1794,7 @@ async function lookupTablesOf(
     } catch (error) {
       const message = ((error as Error).message ?? String(error)).split(url).join("<RPC_URL>");
       throw new CliError(
-        `--lookup-table ${table} is not an address lookup table on solana: ${message.split("\n")[0]}`,
+        `--lookup-table ${table} is not an address lookup table on ${chain.slug}: ${message.split("\n")[0]}`,
       );
     }
   }
@@ -1780,8 +1823,17 @@ async function prepare(
   const plain = compileProgram(input, files);
   svmPayload(plain, input.args);
   const manifest = plain.manifest ?? { accounts: [] };
-  requireSvmAccounts(manifest, plain.derivedAccounts, input.accounts, via, plain.potMention);
+  requireSvmAccounts(
+    input.chain,
+    manifest,
+    plain.derivedAccounts,
+    input.accounts,
+    via,
+    plain.potMention,
+  );
   const rpc = createSolanaRpc(input.rpcUrl);
+  // The endpoint serves the cluster the chain names, before anything is read from it.
+  await requireCluster(rpc, input.rpcUrl, input.chain);
   const pot = await potOf(input);
   // The slots the token methods added that no `--account` gave: the command derives each.
   const derived = new Set(
@@ -1844,8 +1896,12 @@ async function prepare(
     (await deriveExecutionFeeConfigPda(kitchen())).address,
     found,
   );
-  const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
-  const fee = await kitchenFee(rpc, input.rpcUrl);
+  const accounts = resolution(input.chain, manifest, given.accounts, input.owner, pot, signer, via);
+  const needs: ProgramName[] = via === "engine" ? ["engine"] : ["engine", "Kitchen"];
+  // A cluster with no fee config is asked for the release first: one without it is refused by name.
+  const fee = await kitchenFee(rpc, input.rpcUrl, () =>
+    requireReleased(rpc, input.rpcUrl, input.chain, needs),
+  );
   if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
     throw new CliError(
       `the execution fee is ${fee} lamports, above --max-execution-fee ${input.maxExecutionFee}: ` +
@@ -1855,7 +1911,7 @@ async function prepare(
   // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
   // or sent. A cook straight to the engine needs the Kitchen only when it is staged, which its
   // plan (or its staged rehearsal) says, and checks.
-  await requireReleased(rpc, input.rpcUrl, via === "engine" ? ["engine"] : ["engine", "Kitchen"]);
+  await requireReleased(rpc, input.rpcUrl, input.chain, needs);
   // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
   const client = await createSauceSvmClient({
     rpcUrl: input.rpcUrl,
@@ -1866,7 +1922,12 @@ async function prepare(
     maxExecutionFee: fee,
     via,
   });
-  const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
+  const lookupTables = await lookupTablesOf(
+    rpc,
+    input.rpcUrl,
+    input.chain,
+    input.lookupTables ?? [],
+  );
 
   const prepared: Prepared = {
     rpc,
@@ -1999,6 +2060,7 @@ export interface SvmCookSize {
  * make it. The blockhash and signature are fixed widths, so a placeholder of each measures the same.
  */
 export async function svmCookSize(
+  chain: CanonicalChain,
   bytecode: Uint8Array,
   manifest: AccountManifest,
   accountsNamed: Readonly<Record<string, string>>,
@@ -2008,9 +2070,8 @@ export async function svmCookSize(
   potMention?: SourcePosition,
 ): Promise<SvmCookSize> {
   const owner = placeholderKey(0);
-  const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
+  const target: SvmTarget = { chain, owner, salt: `0x${"00".repeat(32)}` };
   const pot = await potOf(target);
-  const chain = requireChain("solana");
   // The accounts the SDK added to the program, as each is derived where it can be with no cluster
   // and no arguments (`pot` is the Pot, a program id is itself); one derived from an argument is a
   // distinct account of its own, as it is in a real cook. A program that uses the Pot is refused
@@ -2041,6 +2102,7 @@ export async function svmCookSize(
   // The accounts given, as a cook resolves them; every other slot a distinct account, which signs
   // for itself where the slot asks for a signer.
   const resolved: AccountResolution = resolution(
+    chain,
     named,
     Object.fromEntries(slots.map((slot) => [slot.name, accountsGiven[slot.name] ?? "pot"])),
     owner,
@@ -2250,7 +2312,7 @@ async function simulatePrepared(prepared: Prepared, input: SvmCookInput): Promis
     if (!together.fits) {
       const over = together.size - TRANSACTION_SIZE_LIMIT;
       throw new CliError(
-        `Pot ${prepared.pot} is not created on solana yet, and its create_pot ahead of the cook ` +
+        `Pot ${prepared.pot} is not created on ${input.chain.slug} yet, and its create_pot ahead of the cook ` +
           `makes a ${together.size}-byte transaction, ${over} past Solana's ` +
           `${TRANSACTION_SIZE_LIMIT}: create the Pot first (${createHint(input)}), or shrink the ` +
           `payload by at least ${over} bytes`,
@@ -2285,6 +2347,7 @@ async function simulatePrepared(prepared: Prepared, input: SvmCookInput): Promis
   const missing = await missingAccounts(
     prepared.rpc,
     input.rpcUrl,
+    input.chain,
     prepared.given,
     prepared.derived,
   );
@@ -2294,7 +2357,7 @@ async function simulatePrepared(prepared: Prepared, input: SvmCookInput): Promis
   const json = {
     ok: result.ok,
     ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
-    chain: "solana",
+    chain: input.chain.slug,
     via: prepared.via,
     owner: input.owner,
     ...(direct ? {} : { pot: prepared.pot }),
@@ -2323,7 +2386,7 @@ async function simulatePrepared(prepared: Prepared, input: SvmCookInput): Promis
     ...(created
       ? []
       : [
-          `  1. Kitchen create_pot: Pot ${prepared.pot} is not created on solana yet, so the ` +
+          `  1. Kitchen create_pot: Pot ${prepared.pot} is not created on ${input.chain.slug} yet, so the ` +
             "transaction creates it first, the owner signing and paying its rent",
         ]),
     direct
@@ -2394,7 +2457,9 @@ async function stagedRehearsal(
   const direct = prepared.via === "engine";
   // Staged, a cook straight to the engine runs from the Kitchen's code buffer: the cluster's
   // Kitchen, not the copy's, is the one that stages it.
-  if (direct && !fitsOne) await requireReleased(prepared.rpc, input.rpcUrl, ["engine", "Kitchen"]);
+  if (direct && !fitsOne) {
+    await requireReleased(prepared.rpc, input.rpcUrl, input.chain, ["engine", "Kitchen"]);
+  }
   const signer = unsignedSigner(owner);
   const { bytecode } = prepared;
   const nonce = 0n;
@@ -2461,6 +2526,8 @@ async function stagedRehearsal(
     ],
     engine(),
     kitchen(),
+    // The engine as the chain's cluster runs it: its `CHAIN_ID` is the chain the program reads.
+    svmClusterOf(input.chain) === "devnet" ? "devnet" : "mainnet",
     input.snapshot,
   );
   // The owner signs and pays every transaction of the rehearsal: an account a program owns, or one
@@ -2504,7 +2571,7 @@ async function stagedRehearsal(
     );
     notes.push(
       `${slotLabel(name, prepared.derived)}: ${token.label}, ${token.address}, does not exist on ` +
-        "solana; the copy made it empty, and `sauce run` creates it before the cook (asking " +
+        `${input.chain.slug}; the copy made it empty, and \`sauce run\` creates it before the cook (asking ` +
         "first, or with --yes)",
     );
   }
@@ -2513,7 +2580,7 @@ async function stagedRehearsal(
     const mintAccount = fork.account(assumed.mint);
     if (mintAccount === null) {
       throw new CliError(
-        `--assume-balance ${assumed.raw}: ${assumed.mint} is not a mint on solana`,
+        `--assume-balance ${assumed.raw}: ${assumed.mint} is not a mint on ${input.chain.slug}`,
       );
     }
     const program = assumed.program ?? mintAccount.owner;
@@ -2663,7 +2730,7 @@ async function stagedRehearsal(
   const json = {
     ok: !failed,
     ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
-    chain: "solana",
+    chain: input.chain.slug,
     via: prepared.via,
     owner,
     ...(direct ? {} : { pot: prepared.pot }),
@@ -2686,7 +2753,7 @@ async function stagedRehearsal(
   };
   const how = [
     `Simulated in a local copy (LiteSVM) of the ${fork.loaded} accounts the cook names, read from ` +
-      `solana at slot ${fork.slot}, with the released engine and Kitchen: ` +
+      `${input.chain.slug} at slot ${fork.slot}, with the released engine and Kitchen: ` +
       (fitsOne
         ? "a cluster's simulation takes no balance to assume."
         : "the cook does not fit one transaction, and no cluster can stage a program without sending.") +
@@ -2694,7 +2761,7 @@ async function stagedRehearsal(
     ...(created
       ? []
       : [
-          `  Kitchen create_pot: Pot ${prepared.pot} is not created on solana yet, so the copy creates it first`,
+          `  Kitchen create_pot: Pot ${prepared.pot} is not created on ${input.chain.slug} yet, so the copy creates it first`,
         ]),
     `  the ${staged} program staged into a code buffer in ${staging.length} transactions, as \`sauce run\` stages it`,
     direct
@@ -2703,7 +2770,7 @@ async function stagedRehearsal(
   ];
   if (held < 100_000_000n)
     notes.push(
-      `${owner} holds ${held} lamports on solana; the copy gave it more to pay the staging rent ` +
+      `${owner} holds ${held} lamports on ${input.chain.slug}; the copy gave it more to pay the staging rent ` +
         "and the fees, which `sauce run` takes from it on the cluster (the buffer's rent comes " +
         "back when the run closes it)",
     );
@@ -2755,6 +2822,7 @@ async function planOf(prepared: Prepared, input: SvmCookInput): Promise<SvmPlan>
   const returnType = entryReturnType(prepared.program.entrySignature);
 
   return newSvmPlan({
+    chain: input.chain,
     owner: input.owner,
     salt: input.salt,
     via: prepared.via,
@@ -2784,8 +2852,14 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   const prepared = await prepare(input, files, signer);
   const direct = prepared.via === "engine";
   const plan = await planOf(prepared, input);
-  await requireReleased(prepared.rpc, input.rpcUrl, planPrograms(plan));
-  const ctx: StepContext = { rpc: prepared.rpc, url: input.rpcUrl, signer, fee: prepared.fee };
+  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan));
+  const ctx: StepContext = {
+    rpc: prepared.rpc,
+    url: input.rpcUrl,
+    chain: input.chain,
+    signer,
+    fee: prepared.fee,
+  };
   const step = await nextStep(plan, ctx);
   const built = await signableStep(step, ctx);
   const cursor = encodeCursor(built.plan);
@@ -2793,7 +2867,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   const single = step.name === "cook" && built.transactions.length === 1;
   const createsPot = step.transactions.some((tx) => tx.createsPot === true);
   const json = {
-    chain: "solana",
+    chain: input.chain.slug,
     via: prepared.via,
     feePayer: input.owner,
     ...(direct ? {} : { pot: prepared.pot }),
@@ -2882,14 +2956,14 @@ const sentLine = (what: string, sent: SvmSent): string =>
   (sent.reason === undefined ? "" : `, ${sent.reason}`);
 
 /** A sent transaction's line, then where a person opens it: Solscan, and its trace. */
-const sentLines = (what: string, sent: SvmSent): string[] => [
+const sentLines = (chain: CanonicalChain, what: string, sent: SvmSent): string[] => [
   sentLine(what, sent),
-  ...linkLines(txLinks(requireChain("solana"), sent.signature)),
+  ...linkLines(txLinks(chain, sent.signature)),
 ];
 
-const sentJson = (sent: SvmSent): Record<string, unknown> => ({
+const sentJson = (chain: CanonicalChain, sent: SvmSent): Record<string, unknown> => ({
   signature: sent.signature,
-  ...txLinks(requireChain("solana"), sent.signature),
+  ...txLinks(chain, sent.signature),
   status: sent.ok ? "success" : "failed",
   ...(sent.computeUnits === undefined ? {} : { computeUnits: sent.computeUnits.toString() }),
   ...(sent.reason === undefined ? {} : { reason: sent.reason, logs: sent.logs }),
@@ -2911,6 +2985,7 @@ export async function sendPlanTx(
   await requireReleased(
     ctx.rpc,
     ctx.url,
+    ctx.chain,
     releasedProgramsCalled(instructionAddresses(tx.instructions)),
   );
   const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
@@ -2922,6 +2997,7 @@ export async function sendPlanTx(
   return sendAndConfirm(
     ctx.rpc,
     ctx.url,
+    ctx.chain,
     prepared.transaction,
     prepared.sign,
     sending === undefined
@@ -2953,11 +3029,11 @@ async function closePlanBuffer(
 
     return {
       sent,
-      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed: sauce reclaim --chain solana closes it`,
+      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed: sauce reclaim --chain ${ctx.chain.slug} closes it`,
     };
   } catch (error) {
     return {
-      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed: sauce reclaim --chain solana closes it`,
+      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed: sauce reclaim --chain ${ctx.chain.slug} closes it`,
     };
   }
 }
@@ -2969,14 +3045,14 @@ const TABLE_WARMUP = { tries: 30, delayMs: 500 };
 /** What a run asks before it creates a Pot that does not fit in the cook's own transaction. */
 const potApproval = (input: SvmRunInput, pot: Address) => ({
   action: `create Pot ${pot}`,
-  reason: `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the cook's transaction`,
+  reason: `Your Pot ${pot} on ${input.chain.slug} isn't deployed yet, and its creation does not fit in the cook's transaction`,
   offer: "Deploy it now",
   estimate: "its rent paid by you",
   byHand: `create it yourself with ${createHint(input)}`,
 });
 
 /**
- * Asks for the token accounts the cook names that solana does not have yet, as the Pot's creation
+ * Asks for the token accounts the cook names that the cluster does not have yet, as the Pot's creation
  * is asked for: their rent comes from the owner. A program paying into an account that does not
  * exist fails.
  */
@@ -2989,12 +3065,12 @@ async function approveTokenAccounts(
   if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions, input.approver.why);
   const agreed = await input.approver.approve(
     actions.join("; "),
-    `${made.join("; ")}: not on solana yet, and the cook names ${missing.length === 1 ? "it" : "them"}. ` +
+    `${made.join("; ")}: not on ${input.chain.slug} yet, and the cook names ${missing.length === 1 ? "it" : "them"}. ` +
       "Create now, the owner paying the rent? [y/N] ",
   );
   if (agreed !== true) {
     throw new CliError(
-      `${made.join("; ")} ${missing.length === 1 ? "does" : "do"} not exist on solana, so nothing ` +
+      `${made.join("; ")} ${missing.length === 1 ? "does" : "do"} not exist on ${input.chain.slug}, so nothing ` +
         "was sent: create each (its associated token account, idempotently), or pass " +
         "--yes (-y) to create them before the cook",
     );
@@ -3004,7 +3080,7 @@ async function approveTokenAccounts(
 }
 
 /**
- * The token accounts a cook names that solana does not have yet — the Pot's and the owner's
+ * The token accounts a cook names that the cluster does not have yet — the Pot's and the owner's
  * (`pot:USDC`), and a holder's the token methods derived (`@to:USDC`, a recipient's) — each with
  * the idempotent associated-token-account instruction that creates it, `payer` paying the rent. The
  * one list both `sauce run`'s step before the cook and a step plan an external signer sends create:
@@ -3096,11 +3172,12 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const ctx: StepContext = {
     rpc: prepared.rpc,
     url: input.rpcUrl,
+    chain: input.chain,
     signer: input.signer,
     fee: prepared.fee,
   };
   let plan = await planOf(prepared, input);
-  await requireReleased(prepared.rpc, input.rpcUrl, planPrograms(plan));
+  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan));
   const buffer = await planBuffer(plan);
   let created: SvmSent | undefined;
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
@@ -3114,7 +3191,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       : `\n${(await closePlanBuffer(plan, ctx)).open ?? `The code buffer ${buffer.codeBuffer} was closed again.`}`) +
     (tabled.length === 0 || plan.table?.address === undefined
       ? ""
-      : `\nLookup table ${plan.table.address} stays: sauce reclaim --chain solana closes it.`);
+      : `\nLookup table ${plan.table.address} stays: sauce reclaim --chain ${input.chain.slug} closes it.`);
   // The step after, read from the cluster: a failure to read it is a stop like any other.
   const after = async (): Promise<PlanStep> => {
     try {
@@ -3202,7 +3279,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const before = await accountsNow(prepared.rpc, tracked).catch(() => undefined);
   let cook: SvmSent;
   try {
-    cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, built.transaction, built.sign);
+    cook = await sendAndConfirm(
+      prepared.rpc,
+      input.rpcUrl,
+      input.chain,
+      built.transaction,
+      built.sign,
+    );
   } catch (error) {
     // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
     throw new CliError(
@@ -3210,7 +3293,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         (buffer === undefined
           ? ""
           : `\nThe code buffer ${buffer.codeBuffer} stays open, as the cook may still land: ` +
-            "sauce reclaim --chain solana closes it once it has."),
+            `sauce reclaim --chain ${input.chain.slug} closes it once it has.`),
     );
   }
   const landedAs =
@@ -3237,7 +3320,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
 
   return {
     text: [
-      ...(created === undefined ? [] : sentLines(`created Pot ${prepared.pot} in`, created)),
+      ...(created === undefined
+        ? []
+        : sentLines(input.chain, `created Pot ${prepared.pot} in`, created)),
       ...(createInCook
         ? [
             cook.ok
@@ -3247,7 +3332,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         : []),
       ...(accountsMade === undefined
         ? []
-        : sentLines(`created ${accountsMade.made.join("; ")} in`, accountsMade.sent)),
+        : sentLines(input.chain, `created ${accountsMade.made.join("; ")} in`, accountsMade.sent)),
       ...(staged.length === 0
         ? []
         : [`staged the ${prepared.bytecode.length}-byte program in ${staged.length} transactions`]),
@@ -3259,14 +3344,14 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
               `--lookup-table ${table}, and sauce reclaim closes it once none will`,
           ]),
       ...(prepared.stops === undefined ? [] : svmStopLines(prepared.stops)),
-      ...sentLines(direct ? "cook (direct to the engine)" : "cook", cook),
+      ...sentLines(input.chain, direct ? "cook (direct to the engine)" : "cook", cook),
       ...(cook.ok ? [`execution fee: ${step.fee ?? prepared.fee} lamports`] : []),
       ...(left === undefined ? [] : svmLeftInPotLines(left, "your wallet")),
       ...(moved === undefined ? [] : svmMovedLines(moved)),
       ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
       ...(closed?.sent === undefined || closed.open !== undefined
         ? []
-        : sentLines("closed the code buffer in", closed.sent)),
+        : sentLines(input.chain, "closed the code buffer in", closed.sent)),
     ].join("\n"),
     ...(closed?.open === undefined && stopNotes.length === 0
       ? {}
@@ -3275,19 +3360,24 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         }),
     json: {
       ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
-      chain: "solana",
+      chain: input.chain.slug,
       via: prepared.via,
       owner: input.owner,
       ...(direct ? {} : { pot: prepared.pot }),
       fee: (step.fee ?? prepared.fee).toString(),
       maxExecutionFee: (step.fee ?? prepared.fee).toString(),
-      ...(created === undefined ? {} : { createPot: sentJson(created) }),
+      ...(created === undefined ? {} : { createPot: sentJson(input.chain, created) }),
       ...(createInCook
         ? { createPot: { inCook: true, ...(cook.ok ? {} : { undone: true }) } }
         : {}),
       ...(accountsMade === undefined
         ? {}
-        : { createTokenAccounts: { ...sentJson(accountsMade.sent), accounts: accountsMade.made } }),
+        : {
+            createTokenAccounts: {
+              ...sentJson(input.chain, accountsMade.sent),
+              accounts: accountsMade.made,
+            },
+          }),
       ...(buffer === undefined
         ? {}
         : {
@@ -3307,8 +3397,10 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
             },
           }),
       ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
-      cook: { ...sentJson(cook), ...(moved === undefined ? {} : svmMovedJson(moved)) },
-      ...(closed?.sent === undefined ? {} : { closeCodeBuffer: sentJson(closed.sent) }),
+      cook: { ...sentJson(input.chain, cook), ...(moved === undefined ? {} : svmMovedJson(moved)) },
+      ...(closed?.sent === undefined
+        ? {}
+        : { closeCodeBuffer: sentJson(input.chain, closed.sent) }),
       ...(closed?.open === undefined ? {} : { warning: closed.open }),
     },
     ...(cook.ok ? {} : { exitCode: 1 }),
@@ -3320,6 +3412,8 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
 // ---------------------------------------------------------------------------------------------
 
 export interface SvmVerifyInput {
+  /** The SVM chain the transaction is on, as the command was given it. */
+  readonly chain: CanonicalChain;
   readonly signature: string;
   readonly rpcUrl: string;
   /** What the settle must enforce: both are compiled into an SVM settle, so a recompile pins them. */
@@ -3336,6 +3430,7 @@ export interface SvmVerifyInput {
  */
 export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOutput> {
   const rpc = createSolanaRpc(input.rpcUrl);
+  await requireCluster(rpc, input.rpcUrl, input.chain);
   const response = await ask(input.rpcUrl, "the transaction", () =>
     rpc
       .getTransaction(input.signature as Parameters<Rpc["getTransaction"]>[0], {
@@ -3345,7 +3440,9 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
       })
       .send(),
   );
-  if (response === null) throw new CliError(`no transaction ${input.signature} on solana`);
+  if (response === null) {
+    throw new CliError(`no transaction ${input.signature} on ${input.chain.slug}`);
+  }
   const loaded = response.meta?.loadedAddresses;
   const keys = [
     ...response.transaction.message.accountKeys,
@@ -3357,7 +3454,7 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
     .find((inner) => keys[inner.programIdIndex] === engine());
   const rejected = (code: string, message: string): CommandOutput => ({
     text: `rejected (${code}): ${message}`,
-    json: { signature: input.signature, chain: "solana", valid: false, code, message },
+    json: { signature: input.signature, chain: input.chain.slug, valid: false, code, message },
     exitCode: 1,
   });
   // A transaction that failed settled nothing, whatever its instructions carry.
@@ -3401,7 +3498,7 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
     ].join("\n"),
     json: {
       signature: input.signature,
-      chain: "solana",
+      chain: input.chain.slug,
       valid: true,
       escrowCount: verified.escrowCount,
       minOut: input.minOut.toString(),
@@ -3421,17 +3518,29 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
 
 const ROLE_NAMES = ["readonly", "writable", "readonly signer", "writable signer"] as const;
 
-/** `sauce pot --chain solana`: the Pot PDA an owner and salt give, and its create instruction. */
+/**
+ * `sauce pot --chain solana`: the Pot PDA an owner and salt give, and its create instruction. On a
+ * preview chain only the prediction: the instruction is left out, and `refused` says why.
+ */
 export async function svmPotCommand(target: SvmTarget): Promise<CommandOutput> {
   const pot = await potOf(target);
-  const instruction = createPotInstruction(target, pot);
-  const json = {
-    chain: "solana",
+  const predicted = {
+    chain: target.chain.slug,
     pot,
     owner: target.owner,
     salt: target.salt,
     kitchen: kitchen(),
     engine: engine(),
+  };
+  const refused = previewRefusal(POT_DEPLOYMENT, [target.chain]);
+  if (refused !== undefined) {
+    const json = { ...predicted, refused };
+
+    return { text: JSON.stringify(json, null, 2), json, notes: [refused.message] };
+  }
+  const instruction = createPotInstruction(target, pot);
+  const json = {
+    ...predicted,
     instruction: {
       programAddress: instruction.programAddress,
       accounts: (instruction.accounts ?? []).map((meta) => ({
@@ -3499,10 +3608,13 @@ async function deployment(
 export async function svmPotStatusCommand(
   target: SvmTarget & { readonly rpcUrl: string },
 ): Promise<CommandOutput> {
+  const rpc = createSolanaRpc(target.rpcUrl);
+  // The endpoint serves the cluster the chain names, before anything is read from it.
+  await requireCluster(rpc, target.rpcUrl, target.chain);
   const predicted = await svmPotCommand(target);
   const pot = predicted.json.pot as Address;
-  const found = await deployment(createSolanaRpc(target.rpcUrl), target.rpcUrl, pot);
-  const tokenAccounts = await svmPotTokenAccounts(target, target.rpcUrl, requireChain("solana"));
+  const found = await deployment(rpc, target.rpcUrl, pot);
+  const tokenAccounts = await svmPotTokenAccounts(target, target.rpcUrl);
   const json = { ...predicted.json, deployment: found.json, tokenAccounts };
   const accountNotes = tokenAccounts.map(
     (one) =>
@@ -3515,7 +3627,12 @@ export async function svmPotStatusCommand(
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    notes: [...found.notes, ...accountNotes],
+    notes: [
+      ...found.notes,
+      ...accountNotes,
+      // On a preview chain, why the prediction has no create_pot.
+      ...("refused" in predicted.json ? (predicted.notes ?? []) : []),
+    ],
   };
 }
 
@@ -3523,34 +3640,36 @@ export async function svmPotStatusCommand(
 export async function svmPotDeployCommand(
   target: SvmTarget & { readonly rpcUrl: string; readonly signer: KeyPairSigner },
 ): Promise<CommandOutput> {
-  requireSupported("creating a Pot", [requireChain("solana")]);
+  const { chain } = target;
+  requireSupported("creating a Pot", [chain]);
   const predicted = await svmPotCommand(target);
   const pot = predicted.json.pot as Address;
   const rpc = createSolanaRpc(target.rpcUrl);
-  await requireReleased(rpc, target.rpcUrl, ["engine", "Kitchen"]);
+  await requireReleased(rpc, target.rpcUrl, chain, ["engine", "Kitchen"]);
   if (await exists(rpc, target.rpcUrl, pot, "the Pot")) {
     const json = { ...predicted.json, deployed: true };
 
     return {
       text: JSON.stringify(json, null, 2),
       json,
-      notes: [`Pot ${pot} is already created on solana.`],
+      notes: [`Pot ${pot} is already created on ${chain.slug}.`],
     };
   }
   const sent = await sendInstructions(
     rpc,
     target.rpcUrl,
+    chain,
     target.signer,
     [createPotInstruction(target, pot)],
     "creating the Pot",
   );
   if (sent.ok) await awaitAccount(rpc, target.rpcUrl, pot, "the Pot");
-  const json = { ...predicted.json, deployed: sent.ok, createPot: sentJson(sent) };
+  const json = { ...predicted.json, deployed: sent.ok, createPot: sentJson(chain, sent) };
 
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    notes: sentLines(`created Pot ${pot} in`, sent).map((line) => line.trim()),
+    notes: sentLines(chain, `created Pot ${pot} in`, sent).map((line) => line.trim()),
     ...(sent.ok ? {} : { exitCode: 1 }),
   };
 }

@@ -34,6 +34,12 @@ describe("a transaction's links", () => {
     expect(links.explorer).toMatch(new RegExp(`^https://[^/]+/tx/${HASH}$`));
   });
 
+  it("gives Solana's devnet Solscan's devnet page, and no trace: Phalcon does not list devnet", () => {
+    expect(txLinks(requireChain("solana-devnet"), SIGNATURE)).toEqual({
+      explorer: `https://solscan.io/tx/${SIGNATURE}?cluster=devnet`,
+    });
+  });
+
   it("prints each as a line of its own, the trace said to be for a browser", () => {
     expect(linkLines(txLinks(requireChain("base"), HASH))).toEqual([
       `  explorer: https://basescan.org/tx/${HASH}`,

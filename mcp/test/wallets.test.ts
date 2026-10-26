@@ -23,6 +23,7 @@ import { after, before, describe, it } from "node:test";
 import { bytesToHex, getAddress, recoverTypedDataAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
+import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { decryptKeystoreBytes, encryptKeystore } from "../../sdk/dist/cli/signer.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { signedCookTypedData } from "../../sdk/dist/evm/engine.js";
@@ -115,6 +116,7 @@ describe("a server whose password does not open its wallet, given a Solana plan"
   /** A plan's cursor, its owner `owner`. */
   const cursorFor = (owner: string) =>
     encodeCursor({
+      chain: requireChain("solana"),
       owner: owner as never,
       salt: `0x${"11".repeat(32)}`,
       via: "kitchen",
