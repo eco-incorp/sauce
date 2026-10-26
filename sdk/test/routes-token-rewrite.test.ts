@@ -568,6 +568,10 @@ describe("the balance shorthand on any address, and the native coin", () => {
     ],
     ["return UniswapV3.Pool(who).balance;", "return ctx.balance(who);"],
     ["return Pool.at(who).balance;", "return ctx.balance(who);"],
+    [
+      "const pool = Pool.at(who); return pool.balance;",
+      "const pool = Pool.at(who); return ctx.balance(pool);",
+    ],
     ["return ownerOf(id).balance;", "return ctx.balance(ownerOf(id));"],
     ["return holders[0].balance;", "return ctx.balance(holders[0]);"],
     ["return p.to.balance;", "return ctx.balance(p.to);"],
@@ -1558,6 +1562,27 @@ describe("`.balance` is a field wherever it was one", () => {
       "interface Leg { balance: Uint256 }\n" +
         "function leg(): Leg { return { balance: 1 }; }\nfunction main(): Uint256 { return leg().balance; }",
     );
+  });
+
+  it("is the binding in scope where it is read: a shape in one function, or a loop, is that binding's", () => {
+    // A record in a helper says nothing of main's `Address` parameter of the same name.
+    const helper =
+      "function helper(): Uint256 {\n  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);\n  return pool.WETH;\n}\n";
+    expect(
+      hex(
+        `${helper}function main(pool: Address): Uint256 {\n  return pool.balance + helper();\n}\n`,
+      ),
+    ).toBe(
+      hex(
+        `${helper}function main(pool: Address): Uint256 {\n  return ctx.balance(pool) + helper();\n}\n`,
+      ),
+    );
+    // A loop's record hides the parameter in the loop's body only.
+    const legs = (after: string) =>
+      "interface Leg { balance: Uint256 }\n" +
+      `function main(a: Address, legs: Leg[]): Uint256 { let t = 0; for (const a of legs) { t += a.balance; } return t + ${after}; }`;
+    expect(hex(legs("a.balance"))).toBe(hex(legs("ctx.balance(a)")));
+    untouched(legs("0"));
   });
 
   it("abi.decode's result", () => {

@@ -10,10 +10,13 @@
  * call's result, which may be a struct with a `balance` field, or a name imported from a module) it
  * stays the field it always was (`readsField`).
  *
- * Name-based and whole-program, like the rewrites' shadowing check (`ast-walk.ts`): a name bound to
- * a record anywhere is a record everywhere.
+ * Lexical, as the compiler scopes (`lexical-scope.ts`): a shape belongs to the binding that
+ * declares it, and a name is read as the binding in scope where it stands, so a record bound in one
+ * function says nothing of a parameter of the same name in another, nor a loop's record of the
+ * parameter it hides.
  */
-import { collectPatternNames, walk, type AstNode } from "./ast-walk.js";
+import { collectPatternBinders, walk, type AstNode } from "./ast-walk.js";
+import { bindingOf, walkScoped } from "./lexical-scope.js";
 
 /**
  * What a value is, as its declaration says: an address or number, a record, a list of a kind, or
@@ -36,15 +39,19 @@ const BUILTIN_ROOTS: ReadonlySet<string> = new Set(["ctx", "crypto", "Math", "ab
 
 const nameOf = (node: AstNode): string => (node as unknown as { name: string }).name;
 
-/** The names a program binds to a record, a list or a value of a type it does not show, and its
- *  functions that return a record or a list. */
+/** The shapes of a program's bindings that are not scalars, and of its functions' results. */
 export interface HolderShapes {
-  /** By name: the shape of every value the name is bound to that is not a scalar. */
-  readonly names: ReadonlyMap<string, Shape>;
-  /** By name: the shape a program function's return annotation declares, when not a scalar. */
-  readonly returns: ReadonlyMap<string, Shape>;
-  /** The names the program's imports bind. */
-  readonly imported: ReadonlySet<string>;
+  /** By the identifier that declares it: the shape of each binding that is not a scalar. */
+  readonly bindings: ReadonlyMap<AstNode, Shape>;
+  /** By the identifier that names it: the shape a program function's return annotation declares,
+   *  when not a scalar. */
+  readonly returns: ReadonlyMap<AstNode, Shape>;
+  /** The identifiers an import declares. */
+  readonly imports: ReadonlySet<AstNode>;
+  /** By each identifier the program reads: the identifier that declares the binding it reads. */
+  readonly binders: ReadonlyMap<AstNode, AstNode>;
+  /** Whether a call binds a contract to an address (`Pool.at(market)`): its value is that address. */
+  readonly bindsContract: (call: AstNode) => boolean;
 }
 
 /** The program's own type declarations, by name: `interface Leg { … }`, `type Pair = […]`. */
@@ -149,19 +156,28 @@ function shapeOfValue(node: AstNode | null | undefined, shapes: HolderShapes): S
     }
     case "NewExpression":
       return { kind: "list", element: undefined };
-    case "Identifier":
-      return shapes.names.get(nameOf(node));
+    case "Identifier": {
+      const binder = shapes.binders.get(node);
+      return binder === undefined ? undefined : shapes.bindings.get(binder);
+    }
     case "CallExpression": {
       const callee = node.callee as AstNode;
       if (callee.type === "Identifier") {
-        const name = nameOf(callee);
+        const binder = shapes.binders.get(callee);
+        if (binder === undefined) return undefined;
         // A function imported from a module returns what its module says, which this text does not.
-        return shapes.returns.get(name) ?? (shapes.imported.has(name) ? UNKNOWN : undefined);
+        return shapes.returns.get(binder) ?? (shapes.imports.has(binder) ? UNKNOWN : undefined);
       }
       if (callee.type !== "MemberExpression") return UNKNOWN;
+      // A contract bound to an address is that address.
+      if (shapes.bindsContract(node)) return SCALAR;
       const object = callee.object as AstNode;
       const property = callee.property as AstNode;
-      if (object.type === "Identifier" && BUILTIN_ROOTS.has(nameOf(object))) {
+      if (
+        object.type === "Identifier" &&
+        BUILTIN_ROOTS.has(nameOf(object)) &&
+        !shapes.binders.has(object)
+      ) {
         if (
           nameOf(object) !== "abi" ||
           property.type !== "Identifier" ||
@@ -221,23 +237,42 @@ function shapeOfValue(node: AstNode | null | undefined, shapes: HolderShapes): S
   }
 }
 
-/** Every name the program binds to a record, a list or a value of a type it does not show, and the
- *  functions that return a record or a list. */
-export function holderShapes(program: AstNode): HolderShapes {
+/**
+ * The shape of every binding the program makes to a record, a list or a value of a type it does
+ * not show, and of each of its functions that returns a record or a list, with the binding each
+ * name read is of. `bindsContract` says which calls bind a contract to an address, which only the
+ * caller knows (the registry's contracts, the ABIs a program imports); by default none.
+ */
+export function holderShapes(
+  program: AstNode,
+  bindsContract: (call: AstNode, binders: ReadonlyMap<AstNode, AstNode>) => boolean = () => false,
+): HolderShapes {
   const types = typeDeclarations(program);
-  const names = new Map<string, Shape>();
-  const returns = new Map<string, Shape>();
-  const imported = new Set<string>();
+  const bindings = new Map<AstNode, Shape>();
+  const returns = new Map<AstNode, Shape>();
+  const imports = new Set<AstNode>();
+  const binders = new Map<AstNode, AstNode>();
+  walkScoped(program, (n, scope) => {
+    if (n.type !== "Identifier") return;
+    const binder = bindingOf(scope, nameOf(n), n.start);
+    if (binder !== undefined) binders.set(n, binder);
+  });
   walk(program, (n) => {
     if (n.type !== "ImportDeclaration") return;
     for (const specifier of (n as { specifiers?: AstNode[] }).specifiers ?? []) {
-      collectPatternNames(specifier.local, imported);
+      collectPatternBinders(specifier.local, (local) => imports.add(local));
     }
   });
-  const shapes: HolderShapes = { names, returns, imported };
+  const shapes: HolderShapes = {
+    bindings,
+    returns,
+    imports,
+    binders,
+    bindsContract: (call) => bindsContract(call, binders),
+  };
   const bind = (id: AstNode | undefined, shape: Shape | undefined): void => {
     if (id?.type !== "Identifier" || shape === undefined || shape.kind === "scalar") return;
-    if (!names.has(nameOf(id))) names.set(nameOf(id), shape);
+    if (!bindings.has(id)) bindings.set(id, shape);
   };
   /** `pattern` bound to a value of `shape`: an array pattern's element is the field at its
    *  position; any part of a value whose fields the text does not show is of unknown type. */
@@ -256,12 +291,10 @@ export function holderShapes(program: AstNode): HolderShapes {
     }
     // `const [a, b] = market.positions(x)`: each part of a value of unknown type is one too.
     if (shape?.kind !== "unknown" && shape?.kind !== "record") return;
-    collectPatternNames(pattern, {
-      add: (name: string) => {
-        if (!names.has(name)) names.set(name, UNKNOWN);
-      },
-    });
+    collectPatternBinders(pattern, (binder) => bind(binder, UNKNOWN));
   };
+  // An import's binding has the type its module gives it, which this text does not show.
+  for (const local of imports) bindings.set(local, UNKNOWN);
   walk(program, (n) => {
     if (n.type === "FunctionDeclaration") {
       const id = n.id as AstNode | null;
@@ -270,7 +303,7 @@ export function holderShapes(program: AstNode): HolderShapes {
         types,
       );
       if (id?.type === "Identifier" && result !== undefined && result.kind !== "scalar") {
-        returns.set(nameOf(id), result);
+        returns.set(id, result);
       }
     }
     if (
@@ -283,8 +316,8 @@ export function holderShapes(program: AstNode): HolderShapes {
       }
     }
   });
-  // Declarations after the functions, so a value a function returns is known; twice, so a name
-  // bound from another declared later is too.
+  // Declarations after the functions, so a value a function returns is known; twice, so a binding
+  // made from another declared later is too.
   for (let pass = 0; pass < 2; pass++) {
     walk(program, (n) => {
       if (n.type === "VariableDeclarator") {
@@ -293,17 +326,16 @@ export function holderShapes(program: AstNode): HolderShapes {
       }
       if (n.type === "ForOfStatement") {
         const left = n.left as AstNode;
+        // A loop's own binding, or the binding it assigns each element to.
         const declared =
           left.type === "VariableDeclaration"
             ? ((left as { declarations?: AstNode[] }).declarations?.[0]?.id as AstNode | undefined)
-            : left;
+            : binders.get(left);
         const list = shapeOfValue(n.right as AstNode, shapes);
         if (list?.kind === "list") bind(declared, list.element);
       }
     });
   }
-  // Last, so a name the program binds itself keeps that binding's shape.
-  for (const name of imported) if (!names.has(name)) names.set(name, UNKNOWN);
 
   return shapes;
 }

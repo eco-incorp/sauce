@@ -11,21 +11,36 @@
  * `for … of`/`for … in` binding in the body only, what it iterates read outside; a `catch` clause's
  * parameter in its body. `var` is refused by the compiler, and so is `switch`.
  */
-import { collectPatternNames, isTypeDeclaration, TYPE_KEYS, type AstNode } from "./ast-walk.js";
+import { collectPatternBinders, isTypeDeclaration, TYPE_KEYS, type AstNode } from "./ast-walk.js";
 
-/** A scope, and where each name it declares starts to hide an outer one. */
+/** A scope: each name it declares, where it starts to hide an outer one, and the identifier that
+ *  declares it. */
 export interface Scope {
   readonly names: ReadonlyMap<string, number>;
+  readonly binders: ReadonlyMap<string, AstNode>;
   readonly parent?: Scope;
 }
 
 /** Whether `name`, read at `position`, is a name the program declares there. */
 export function shadowed(scope: Scope | undefined, name: string, position: number): boolean {
+  return bindingOf(scope, name, position) !== undefined;
+}
+
+/**
+ * The identifier that declares the `name` read at `position`, as the compiler scopes it: a
+ * parameter's, a local's, a loop's or a `catch` clause's binding, a function's own name, an
+ * import's local name. `undefined` where the program declares no `name` there.
+ */
+export function bindingOf(
+  scope: Scope | undefined,
+  name: string,
+  position: number,
+): AstNode | undefined {
   for (let s = scope; s !== undefined; s = s.parent) {
     const from = s.names.get(name);
-    if (from !== undefined && from <= position) return true;
+    if (from !== undefined && from <= position) return s.binders.get(name);
   }
-  return false;
+  return undefined;
 }
 
 /** A scope of `bindings`, each a pattern and the position it hides its names from. */
@@ -34,12 +49,17 @@ export function scopeOf(
   parent: Scope | undefined,
 ): Scope {
   const names = new Map<string, number>();
+  const binders = new Map<string, AstNode>();
   for (const [pattern, from] of bindings) {
-    const bound = new Set<string>();
-    collectPatternNames(pattern, bound);
-    for (const name of bound) names.set(name, Math.min(from, names.get(name) ?? from));
+    collectPatternBinders(pattern, (binder) => {
+      const name = String(binder.name);
+      const earlier = names.get(name);
+      if (earlier !== undefined && earlier <= from) return;
+      names.set(name, from);
+      binders.set(name, binder);
+    });
   }
-  return { names, parent };
+  return { names, binders, parent };
 }
 
 export const isFunction = (node: AstNode): boolean =>
