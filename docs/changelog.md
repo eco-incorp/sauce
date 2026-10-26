@@ -92,34 +92,6 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK Unreleased
-
-Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. Same compiler
-and engines as 0.99.16, so each change here comes from the SDK.
-
-### SauceScript
-
-No language change.
-
-### The registry
-
-Six rows of the protocol registry, read against their chains, were wrong. Four of them were among
-the fifteen addresses whose wrong EIP-55 checksum 0.99.16 fixed by changing only their case: three
-of those addresses have no code, and the fourth is another contract.
-
-- **Removed** (EVM): Seamless, wound down in 2026, and with it the `Seamless` namespace on Base.
-  Its `PoolAddressesProvider` row had no code: the pool's own provider is another address.
-- **Fixed** (EVM): Yearn V3's `VaultFactory` on Ethereum is Yearn's v3.0.4 factory,
-  `0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F`. The registry had an address one character off,
-  with no code.
-- **Fixed** (EVM): `Sommelier.CellarRouter` is Sommelier's Cellar Router. The registry had the
-  address of one of its Cellars, ETH-BTC Trend.
-- **Removed** (EVM): `Beefy.BIFI` on Polygon, where the address has no code, and on Base, where it
-  is the bridged mooBIFI vault share, not BIFI.
-- **Breaking** (EVM): On Arbitrum, Lido's wstETH is `Lido.WstETHBridged`, the bridged ERC-20, with
-  its own ABI (`WstETHBridgedABI`). `Lido.WstETH` is on Ethereum only. `Lido.WstETH.wrap(…)` and the
-  stETH-rate reads compiled on Arbitrum and reverted there; they no longer compile there.
-
 ## SDK 0.99.16 — 2026-10-26
 
 Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0.
@@ -541,8 +513,21 @@ upgrade authority, which can replace them after the check.
 
 - **Fixed**: every EVM address in the protocol registry is written EIP-55 checksummed. Fifteen were
   mixed-case with a wrong checksum (Ethena's USDe on Ethereum among them), which viem's
-  `getAddress` refuses, and 52 were all lowercase. Only the letters' case changes, so every address
-  names the same contract.
+  `getAddress` refuses, and 52 were all lowercase. Only the letters' case changes. Three of the
+  fifteen are addresses with no code, and a fourth is the wrong contract; the next entries fix
+  them.
+- **Removed** (EVM): Seamless, wound down in 2026, and with it the `Seamless` namespace on Base.
+  Its `PoolAddressesProvider` row had no code: the pool's own provider is another address.
+- **Fixed** (EVM): Yearn V3's `VaultFactory` on Ethereum is Yearn's v3.0.4 factory,
+  `0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F`. The registry had an address one character off,
+  with no code.
+- **Fixed** (EVM): `Sommelier.CellarRouter` is Sommelier's Cellar Router. The registry had the
+  address of one of its Cellars, ETH-BTC Trend.
+- **Removed** (EVM): `Beefy.BIFI` on Polygon, where the address has no code, and on Base, where it
+  is the bridged mooBIFI vault share, not BIFI.
+- **Breaking** (EVM): On Arbitrum, Lido's wstETH is `Lido.WstETHBridged`, the bridged ERC-20, with
+  its own ABI (`WstETHBridgedABI`). `Lido.WstETH` is on Ethereum only. `Lido.WstETH.wrap(…)` and the
+  stETH-rate reads compiled on Arbitrum and reverted there; they no longer compile there.
 
 ### Protocol references
 
