@@ -86,9 +86,9 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
       }
       if (spec.op === "balanceOf") {
         validateBalanceSpec(spec, "evm");
-        if (spec.owner === "self") {
+        if (spec.owner === "pot") {
           throw new Error(
-            "TokenCall.toCall: Token.balanceOf('self') has no fixed calldata — compile it instead",
+            'TokenCall.toCall: Token.balanceOf({ owner: "pot" }) has no fixed calldata — compile it instead',
           );
         }
         return {

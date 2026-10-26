@@ -106,6 +106,9 @@ export function validateBalanceSpec(spec: TokenBalanceSpec, target: TokenTarget)
   if (isEvmTarget(target)) {
     requireEvmField(spec.token, "token");
     requireEvmField(spec.owner, "owner");
+    if ((spec.owner as unknown) === "self") {
+      throw new Error('Token.balanceOf: the Pot is "pot", not "self": write owner: "pot"');
+    }
     return;
   }
   requireSvmRefs(spec, "Token.balanceOf");

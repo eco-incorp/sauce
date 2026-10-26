@@ -66,9 +66,17 @@ describe("Token: EVM source emission", () => {
     expect(src).not.toContain(".approve(");
   });
 
-  it("balanceOf emits an expression, and Token.balanceOf('self') resolves to ctx.self()", () => {
-    const expr = Token.balanceOf({ token: TOKEN, owner: "self" }).expression("v1");
+  it("balanceOf emits an expression, and Token.balanceOf({ owner: 'pot' }) reads the Pot's", () => {
+    const expr = Token.balanceOf({ token: TOKEN, owner: "pot" }).expression("v1");
     expect(expr).toBe(`IERC20.at(${BigInt(TOKEN).toString()}n).balanceOf(ctx.self())`);
+  });
+
+  it("refuses owner 'self', naming 'pot', on every path", () => {
+    const old = { token: TOKEN, owner: "self" } as unknown as Parameters<typeof Token.balanceOf>[0];
+    const pot = /the Pot is "pot", not "self": write owner: "pot"/;
+    expect(() => Token.balanceOf(old).expression("v1")).toThrow(pot);
+    expect(() => Token.balanceOf(old).toCall()).toThrow(pot);
+    expect(() => Token.balanceOf(old).toSauceScript("evm")).toThrow(pot);
   });
 
   it("amount: 'balance' binds a runtime balanceOf read for transfer/approve", () => {
@@ -77,7 +85,7 @@ describe("Token: EVM source emission", () => {
   });
 
   it("statement() throws for balanceOf; expression() throws for transfer/approve", () => {
-    expect(() => Token.balanceOf({ token: TOKEN, owner: "self" }).statement("evm")).toThrow(
+    expect(() => Token.balanceOf({ token: TOKEN, owner: "pot" }).statement("evm")).toThrow(
       /statement form/,
     );
     expect(() => Token.transfer({ token: TOKEN, to: TO, amount: 1n }).expression("evm")).toThrow(
@@ -193,12 +201,12 @@ describe("Token: EVM toCall() selectors are pinned against viem + drift-checked 
     }
   });
 
-  it("toCall() throws for amount: 'balance' and for balanceOf('self') (no fixed calldata)", () => {
+  it("toCall() throws for amount: 'balance' and for balanceOf('pot') (no fixed calldata)", () => {
     expect(() => Token.transfer({ token: TOKEN, to: TO, amount: "balance" }).toCall()).toThrow(
       /no fixed calldata/,
     );
-    expect(() => Token.balanceOf({ token: TOKEN, owner: "self" }).toCall()).toThrow(
-      /no fixed calldata/,
+    expect(() => Token.balanceOf({ token: TOKEN, owner: "pot" }).toCall()).toThrow(
+      /Token\.balanceOf\(\{ owner: "pot" \}\) has no fixed calldata/,
     );
   });
 

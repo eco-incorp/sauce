@@ -12,7 +12,7 @@ export const ERC20_IMPORT_LINE = `import { IERC20 } from "./artifacts/IERC20.jso
 
 function formatOwner(owner: TokenBalanceSpec["owner"]): string {
   if (owner === undefined) throw new Error("Token.balanceOf: owner is required on an EVM target");
-  if (owner === "self") return "ctx.self()";
+  if (owner === "pot") return "ctx.self()";
   return formatAddressField(toAddressBigint(owner, "owner"));
 }
 

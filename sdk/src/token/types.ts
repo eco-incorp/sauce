@@ -87,8 +87,8 @@ export interface TokenApproveSpec {
 
 export interface TokenBalanceSpec {
   token?: AddressInput;
-  /** EVM: the address whose balance is read, or `"self"`. Required on an EVM target. */
-  owner?: AddressInput | "self";
+  /** EVM: the address whose balance is read, or `"pot"` for the Pot. Required on an EVM target. */
+  owner?: AddressInput | "pot";
   svm?: Pick<SvmTokenRefs, "source">;
 }
 
