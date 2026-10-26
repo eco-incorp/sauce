@@ -8,7 +8,7 @@
 > a program writes for each contract. Zora is a preview chain: programs compile here and the reads
 > work, and simulate runs wherever the release is deployed, but no transaction is built or sent.
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Zora a program
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia only. On Zora a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
 and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and

@@ -45,7 +45,11 @@ preview chain.
 - `Linea`: `linea`, 59144, EVM, preview
 - `Berachain`: `berachain`, 80094, EVM, preview
 - `Blast`: `blast`, 81457, EVM, preview
+- `BaseSepolia`: `base-sepolia`, 84532, EVM, supported, testnet
 - `Scroll`: `scroll`, 534352, EVM, preview
+- `ArcTestnet`: `arc-testnet`, 5042002, EVM, supported, testnet
 - `Zora`: `zora`, 7777777, EVM, preview
+- `Sepolia`: `sepolia`, 11155111, EVM, preview, testnet
 - `Aurora`: `aurora`, 1313161554, EVM, preview
 - `Solana`: `solana`, 1399811149, SVM, supported
+- `SolanaDevnet`: `solana-devnet`, 1399811150, SVM, preview, testnet

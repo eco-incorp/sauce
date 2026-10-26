@@ -4,17 +4,18 @@
 
 **Reference** · [Documentation](../README.md)
 
-> Sauce knows 41 chains. On Ethereum, Base, Arc and Solana, the `sauce` command builds and sends
-> transactions. Every other chain is a preview chain: programs compile there and the reads work, and
-> simulate runs wherever the release is deployed, but no transaction is built or sent. Each chain
-> has a page with its tokens and the protocols a program can call on it.
+> Sauce knows 45 chains. On Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base
+> Sepolia, the `sauce` command builds and sends transactions. Every other chain is a preview chain:
+> programs compile there and the reads work, and simulate runs wherever the release is deployed, but
+> no transaction is built or sent. Each chain has a page with its tokens and the protocols a program
+> can call on it.
 
 Every chain the SDK knows, with a page each: whether Sauce supports transactions on it, ids, native
 coin, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
 [Deployments](deployments.md) lists them once.
 
-Sauce supports transactions on Ethereum, Base, Arc and Solana (`ethereum`, `base`, `arc`, `solana`); every other chain is a preview chain, as the last
+Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia (`ethereum`, `base`, `arc`, `solana`, `arc-testnet`, `base-sepolia`); every other chain is a preview chain, as the last
 section says.
 
 | Chain | Slug | Id | Kind | Support | CCTP | Tokens | Protocols |
@@ -56,14 +57,18 @@ section says.
 | [Linea](chains/linea.md) | `linea` | 59144 | EVM | preview | 11 | 0 | 8 |
 | [Berachain](chains/berachain.md) | `berachain` | 80094 | EVM | preview | — | 1 | 0 |
 | [Blast](chains/blast.md) | `blast` | 81457 | EVM | preview | — | 0 | 5 |
+| [Base Sepolia](chains/base-sepolia.md) | `base-sepolia` | 84532 | EVM | supported (testnet) | — | 1 | 0 |
 | [Scroll](chains/scroll.md) | `scroll` | 534352 | EVM | preview | — | 0 | 8 |
+| [Arc Testnet](chains/arc-testnet.md) | `arc-testnet` | 5042002 | EVM | supported (testnet) | — | 2 | 0 |
 | [Zora](chains/zora.md) | `zora` | 7777777 | EVM | preview | — | 0 | 2 |
+| [Ethereum Sepolia](chains/sepolia.md) | `sepolia` | 11155111 | EVM | preview (testnet) | — | 1 | 0 |
 | [Aurora](chains/aurora.md) | `aurora` | 1313161554 | EVM | preview | — | 0 | 0 |
 | [Solana](chains/solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | — | 1803 | 0 |
+| [Solana Devnet](chains/solana-devnet.md) | `solana-devnet` | 1399811150 | Solana (SVM) | preview (testnet) | — | 2 | 0 |
 
 ## Supported and preview chains
 
-Every chain but Ethereum, Base, Arc and Solana is a preview chain:
+Every chain but Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia is a preview chain:
 a program compiles and the reads work there, and `sauce simulate` runs wherever the release is
 deployed on the chain, but the `sauce` command and the MCP server build and
 send no transaction, and say so with the supported chains and how to request that chain. To

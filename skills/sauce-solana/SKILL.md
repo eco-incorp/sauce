@@ -51,7 +51,7 @@ is `sauce-solana-distributed-swap`'s.
   venues are namespaces of their own, their protocol then their program
   (`Orca.Whirlpool.swap(pool, …)`), each finding its pools by key
   (`Orca.Whirlpool.pool(USDC, WSOL, 4)`, `sauce-swaps`). `sauce globals --chain solana` lists the
-  mints (devnet's too), the venues and the account expressions.
+  mints, the venues and the account expressions.
 
 | The account                                                                           | Write                                                                                                             |
 | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -251,8 +251,8 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   32-byte key the program is given, such as a mint, is an `Address` argument passed as a base58
   public key (or its 0x hex), or as a registered token, `USDC` or `mint:USDC`, meaning its mint; it
   is encoded as one ABI word. It is an `Account` parameter when the
-  program reads or writes that account. A registered symbol (`USDC`) is mainnet's mint; for
-  devnet's, pass the key `sauce globals --chain solana` lists.
+  program reads or writes that account. A registered symbol (`USDC`) is the mint of the chain the
+  program is compiled for: `solana`'s, or devnet's with `--chain solana-devnet`.
 - **`ctx` on Solana**: `ctx.msgSender()` is the first signer among the accounts the engine receives
   (the Pot, when a `pot` slot is attached as the Pot), not proof of who sent the transaction;
   `ctx.balance(acct.address)` is an attached account's lamports; `ctx.msgValue`, `ctx.gasLeft`,
@@ -328,9 +328,10 @@ it is. A Token-2022 account has the same first 165 bytes, then its extensions:
 
 `USDC` on Solana is mainnet's USDC mint, `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, whose
 32-byte key is `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`;
-`balanceOf(USDC, account)` takes it as it is. On devnet USDC is another mint,
-`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`: a program for devnet takes the mint as an `Address`
-argument. The Solana file in `sauce-chains` lists every registered mint, mainnet's and devnet's.
+`balanceOf(USDC, account)` takes it as it is. Devnet is a chain of its own, `solana-devnet` (chain
+id 1399811150): compiled for it, `USDC` is devnet's mint, `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`,
+and `chainId` is 1399811150, what the engine reports there. Its file in `sauce-chains` lists its
+mints. The venues are mainnet's: on `solana-devnet` a venue name is refused.
 
 `--account <name>=pot` attaches **the Pot's own account**, not its USDC. The Pot's USDC is a token
 account of its own, so a program reading it takes that account and checks whose it is:

@@ -123,7 +123,7 @@ export const PORTED_EXAMPLES = [
  * can index the SDK it loaded (an installed package, say) rather than this repository's build.
  */
 export function globalsIndex(sdk, support) {
-  const { routes, CANONICAL_CHAINS, nativeErc20, getChain } = sdk;
+  const { routes, CANONICAL_CHAINS, nativeErc20, getChain, isTestnet } = sdk;
   const { chainSupport } = support;
   const chains = [...CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const listed = chains.map((chain) => ({ chain, globals: routes.sourceGlobals(chain.slug) }));
@@ -165,7 +165,6 @@ export function globalsIndex(sdk, support) {
       return {
         chain: { key: globals.chain.key, slug: chain.slug, id: chain.id, kind: chain.kind },
         tokens: globals.tokens.map(row),
-        ...(chain.kind === "svm" ? { devnet: routes.SVM_TOKEN_REGISTRY.devnet.map(row) } : {}),
         ...(native === undefined
           ? {}
           : {
@@ -215,6 +214,7 @@ export function globalsIndex(sdk, support) {
     .map((chain) => ({
       ...chain,
       support: chainSupport(chain.slug),
+      testnet: isTestnet(chain),
     }));
 
   // The zero-import functions per target, from the first chain of each kind.
@@ -468,6 +468,7 @@ export async function skillsReferences(api, documented) {
       name: chain.name,
       kind: chain.kind,
       support: support.chainSupport(chain.slug),
+      testnet: sdk.isTestnet(chain),
       request: support.chainSupportRequest(chain.slug),
       key: names.chain.key,
       // Whether the package root exports the chain by that name, for TypeScript.
@@ -477,7 +478,6 @@ export async function skillsReferences(api, documented) {
       minBaseFeePerGas: record?.minBaseFeePerGas,
       native: tokens?.native,
       tokens: tokens?.tokens ?? [],
-      devnet: tokens?.devnet ?? [],
       cctp: cctp.CCTP_DOMAIN?.[chain.slug],
       protocols: protocols
         .filter((p) => p.chains.includes(chain.slug))
@@ -517,6 +517,8 @@ export async function skillsReferences(api, documented) {
     },
     support: {
       supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
+      // As every message of the command names them: the mainnets, then the testnets apart.
+      names: support.supportedChainNames(),
       newIssue: support.CHAIN_SUPPORT_NEW_ISSUE_URL,
       issues: support.CHAIN_SUPPORT_ISSUES_URL,
     },
@@ -685,9 +687,22 @@ const CHAIN_NOTES = {
     "- Native value sent to the zero address, to or from a blocklisted address, or to a",
     "  self-destructed account reverts, also when a contract forwards it.",
   ],
+  "arc-testnet": [
+    "Arc Testnet is Arc's model exactly: USDC is the native coin at 18 decimals and the ERC-20",
+    "`0x3600000000000000000000000000000000000000` at 6, one balance, with the same minimum base fee.",
+    "Every note on the [Arc](arc.md) page holds here too. Its USDC and EURC come from Circle's",
+    "faucet.",
+  ],
   base: [
     "Base's own documentation: `eth_call` and `eth_estimateGas` against the `pending` block tag see",
     "Flashblocks state, so a read right after a send uses `pending` to see it.",
+  ],
+  "solana-devnet": [
+    "Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as",
+    "1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's",
+    "engine and Kitchen have the same program ids on every cluster; a cook needs the release's own",
+    "builds there, and `sauce simulate` names the one that is missing. The Solana venues are",
+    "mainnet's programs and pools, so a venue name is refused here.",
   ],
 };
 
@@ -883,10 +898,9 @@ function renderGlobals(data) {
       "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
       "accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the",
       "symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions",
-      "(`balanceOf(USDC, account)`). Devnet's mints, which differ, are in the Solana file in",
-      "`sauce-chains`; a program for devnet takes its mint as an `Address` parameter of `main`",
-      "(`Token(mint)`). That file also names each mint's token program: legacy SPL Token, or",
-      "Token-2022, whose mints move by the checked writes.",
+      "(`balanceOf(USDC, account)`). Devnet is a chain of its own, `solana-devnet`: compiled for it,",
+      "the same symbols are devnet's mints. Each chain's file in `sauce-chains` names each mint's",
+      "token program: legacy SPL Token, or Token-2022, whose mints move by the checked writes.",
     );
   }
   tokens.push(
@@ -971,7 +985,7 @@ function renderGlobals(data) {
   for (const chain of globals.chains) {
     chains.push(
       `- \`${chain.key}\`: \`${chain.slug}\`, ${chain.id}, ${chain.kind.toUpperCase()}, ` +
-        `${chain.support}`,
+        `${chain.support}${chain.testnet ? ", testnet" : ""}`,
     );
   }
   chains.push("");
@@ -1098,13 +1112,13 @@ function chainExample(chain) {
  * request a preview chain; a manual page, a reference, says that last, after its facts
  * (`requestLines`).
  */
-function supportLines(chain, supported, site) {
-  const names = andList(supported.map((c) => c.name));
+function supportLines(chain, support, site) {
+  const names = support.names;
   if (chain.support === "supported") {
     return [
-      `**Supported.** Sauce supports transactions on ${names}. On ${chain.name} a program compiles`,
+      `**Supported${chain.testnet ? " testnet" : ""}.** Sauce supports transactions on ${names}. On ${chain.name} a program compiles`,
       "and simulates, and the `sauce` command and the MCP server build its transactions and send",
-      "them.",
+      `them.${chain.testnet ? ` ${chain.name} is a test network: its coin and tokens have no value.` : ""}`,
       "",
     ];
   }
@@ -1132,13 +1146,9 @@ function requestLines(chain) {
   ];
 }
 
-/** `["a", "b", "c"]` as "a, b and c". */
-const andList = (words) =>
-  words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
-
-function renderChain(chain, supported, site) {
+function renderChain(chain, support, site) {
   const path = site.chain(chain.slug);
-  const lines = [HEADER, "", `# ${chain.name}`, "", ...supportLines(chain, supported, site)];
+  const lines = [HEADER, "", `# ${chain.name}`, "", ...supportLines(chain, support, site)];
   lines.push(
     "| Fact | Value |",
     "| --- | --- |",
@@ -1146,6 +1156,7 @@ function renderChain(chain, supported, site) {
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
     `| Chain id | ${chain.id} |`,
     `| Kind | ${kindName(chain.kind)} |`,
+    ...(chain.testnet ? ["| Network | testnet: its coin and tokens have no value |"] : []),
     `| Name in a program | \`${chain.key}\` |`,
   );
   // The manual also serves TypeScript: the chain's export carries the same names.
@@ -1204,14 +1215,6 @@ function renderChain(chain, supported, site) {
         `And ${stocks} tokenized stocks, each a Token-2022 mint named by its symbol in the same way:`,
         `they are in ${stocksLink}, with their mints.`,
         "",
-      );
-    }
-    if (chain.devnet.length > 0) {
-      lines.push(
-        "On devnet these mints differ: a program for devnet takes its mint as an `Address` parameter",
-        "of `main`, given to `--args` as the mint's base58 address:",
-        "",
-        ...mints(chain.devnet),
       );
     }
   } else {
@@ -1485,7 +1488,7 @@ function renderDeploymentsPage(data) {
 
 function renderChainIndex(data, site) {
   const path = site.chainIndex;
-  const supported = `${andList(data.support.supported.map((c) => c.name))} (${data.support.supported.map((c) => code(c.slug)).join(", ")})`;
+  const supported = `${data.support.names} (${data.support.supported.map((c) => code(c.slug)).join(", ")})`;
   const preview = [
     "a program compiles and the reads work there, and `sauce simulate` runs wherever the release is",
     "deployed on the chain, but the `sauce` command and the MCP server build and",
@@ -1500,7 +1503,7 @@ function renderChainIndex(data, site) {
     "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...data.chains.map(
       (chain) =>
-        `| [${chain.name}](${href(path, site.chain(chain.slug))}) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
+        `| [${chain.name}](${href(path, site.chain(chain.slug))}) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support}${chain.testnet ? " (testnet)" : ""} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
     ),
     "",
   ];
@@ -1524,7 +1527,7 @@ function renderChainIndex(data, site) {
       ...table,
       "## Supported and preview chains",
       "",
-      `Every chain but ${andList(data.support.supported.map((c) => c.name))} is a preview chain:`,
+      `Every chain but ${data.support.names} is a preview chain:`,
       ...preview,
       ...(site.chainIndexNotes ?? []),
     );
@@ -1839,7 +1842,7 @@ export function renderSkillsReferences(data) {
     [site.deployments]: renderDeploymentsJson(data),
   };
   for (const chain of data.chains) {
-    files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
+    files[site.chain(chain.slug)] = renderChain(chain, data.support, site);
     if (chain.tokens.some((t) => t.stock))
       files[site.chainStocks(chain.slug)] = renderChainStocks(chain, site);
   }
@@ -1974,12 +1977,6 @@ function renderTokens(data, globalsSkill) {
         `The native coin is ${entry.native.coin} (${entry.native.coinDecimals} decimals), and \`${entry.native.erc20}\``,
         `is its ERC-20 face (${entry.native.erc20Decimals} decimals): one balance, read at two scales.`,
         `[${chain.name}](${href(path, DOCS_SITE.chain(chain.slug))}) has what that changes.`,
-        "",
-      );
-    }
-    if (entry.devnet?.length) {
-      lines.push(
-        `Devnet's mints differ: [${chain.name}](${href(path, DOCS_SITE.chain(chain.slug))}) lists them.`,
         "",
       );
     }
@@ -2307,7 +2304,7 @@ export function renderDocsReference(data, skillFiles) {
   };
   files[SOLIDITY_EXAMPLES_GUIDE] = renderPortedGuide(skillFiles.ported);
   for (const chain of data.chains) {
-    files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
+    files[site.chain(chain.slug)] = renderChain(chain, data.support, site);
     if (chain.tokens.some((t) => t.stock))
       files[site.chainStocks(chain.slug)] = renderChainStocks(chain, site);
   }
@@ -2517,7 +2514,7 @@ function docsNext(data) {
 /** The intro of each page of the manual's reference, by its path relative to `docs/reference/`. */
 function docsIntros(data) {
   const site = DOCS_SITE;
-  const supported = andList(data.support.supported.map((c) => c.name));
+  const supported = data.support.names;
   const intros = {
     [site.chainIndex]:
       `Sauce knows ${data.chains.length} chains. On ${supported}, the \`sauce\` command builds and ` +

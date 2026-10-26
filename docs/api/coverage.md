@@ -19,8 +19,8 @@ chain?" are three questions, and each answer can be yes while the others are no.
 | Contract descriptors             | Each protocol's contracts, every one bound to the ABI the registry's evidence has | `contracts.listDescriptors()`, `contracts.listContracts(slug)`    |
 | Compiled-source protocol globals | A namespace per catalog protocol, and the family aliases                          | TypeScript completion after importing `@eco-incorp/sauce`         |
 | Token symbols                    | Each EVM chain's tokens, tokenized stocks included                                | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`        |
-| Solana mints                     | Mainnet-beta's mints, tokenized stocks included, and devnet's                     | `routes.SVM_TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`    |
-| Canonical chain identities       | Every chain a route can name: the EVM chains and Solana                           | `CANONICAL_CHAINS`, `requireChain(ref)`                           |
+| Solana mints                     | Mainnet-beta's mints, tokenized stocks included, and devnet's (`solana-devnet`)   | `routes.SVM_TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`    |
+| Canonical chain identities       | Every chain a route can name: the EVM chains, their testnets, and Solana's two    | `CANONICAL_CHAINS`, `requireChain(ref)`                           |
 | EVM chain metadata               | Native currency and explorer, for most EVM chains                                 | `chains`, `getChain(id)`, `getAllChainIds()`                      |
 
 [Protocols](../reference/protocols.md) lists the catalog by category, each protocol's page its

@@ -98,6 +98,25 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. Same compiler
 and engines as 0.99.16.
 
+### Testnets: Arc Testnet and Base Sepolia
+
+- **Added** (EVM): two testnets, where the release is deployed at its own addresses: **Arc Testnet**
+  (`arc-testnet`, chain id 5042002), with Arc's model (USDC the native coin, behind the ERC-20
+  `USDC`, and the 20 gwei minimum base fee), and **Base Sepolia** (`base-sepolia`, 84532). The
+  `sauce` command and the MCP server build and send transactions on both. Each has Circle's
+  stablecoins by symbol (`USDC` on both, `EURC` on Arc Testnet), and no protocol: a program there
+  names tokens and the Sauce stack. Built-in public endpoints are included.
+- **Added** (EVM): **Ethereum Sepolia** (`sepolia`, 11155111), with Circle's `USDC`, as a preview
+  chain: the release is not deployed there yet.
+- **Added** (Solana): **Solana Devnet** (`solana-devnet`, 1399811150), a chain of its own, as a
+  preview chain until the release's engine and Kitchen are on devnet. A program compiled for it
+  reads `chainId` as 1399811150, which the devnet engine reports, and its symbols are devnet's
+  mints (`USDC`, `WSOL`). The Solana venues are mainnet's, so a venue name is refused on it. A
+  program compiled for `solana` keeps mainnet's chain id and mints, also when it is sent to a
+  devnet endpoint.
+- The chain pages and the agent skills mark each testnet, and every message naming the supported
+  chains names the testnets after the mainnets.
+
 ### The registry
 
 - **Fixed** (EVM): three of the fifteen mixed-case addresses 0.99.16 rewrote with a valid checksum

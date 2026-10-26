@@ -9,7 +9,7 @@
 > the reads work, and simulate runs wherever the release is deployed, but no transaction is built or
 > sent.
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Unichain a program
+**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia only. On Unichain a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
 and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
