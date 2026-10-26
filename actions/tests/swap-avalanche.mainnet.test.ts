@@ -48,12 +48,12 @@ const CODELESS = "0x00000000000000000000000000000000DeaDBeef";
 
 const ONE_AVAX = 10n ** 18n;
 const USDC_100 = 100_000_000n;
-const SELF = "self";
+const POT = "pot";
 
 type Typed = { readonly type: "address" | "uint256" | "bool"; readonly value: Arg };
 const addr = (value: string): Typed => ({ type: "address", value });
 const uint = (value: bigint): Typed => ({ type: "uint256", value });
-const self: Typed = { type: "address", value: SELF };
+const pot: Typed = { type: "address", value: POT };
 const values = (args: readonly Typed[]): Arg[] => args.map((a) => a.value);
 
 /** `traderJoeLB`'s arguments: X is WAVAX, Y is USDC, unless a test names others. */
@@ -70,7 +70,7 @@ const lb = (
   addr(tokenX),
   addr(tokenY),
   uint(minOut),
-  self,
+  pot,
 ];
 const lbAction = (tokenIn: Hex, tokenOut: Hex, amount: bigint): TraderJoeLBSwapAction => ({
   type: "traderJoeLBSwap",
@@ -81,7 +81,7 @@ const lbAction = (tokenIn: Hex, tokenOut: Hex, amount: bigint): TraderJoeLBSwapA
   tokenX: WAVAX,
   tokenY: USDC,
   amountOutMin: "1",
-  recipient: "self",
+  recipient: "pot",
 });
 
 describe("@sauce/router on Avalanche state", { skip: skipReason(), timeout: 600_000 }, () => {

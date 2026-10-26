@@ -289,7 +289,7 @@ An agent with no skill files reads the same files from the Sauce MCP server (`sa
 
 - **Asking which example to begin with.** Write the program the task needs.
 - **Leaving outputs in the Pot without asking.** A call that credits its caller, or names
-  `ctx.self()`, leaves its output in the Pot; ask where results end first.
+  `pot`, leaves its output in the Pot; ask where results end first.
 - **Sending before the user has seen the program, its arguments and the simulation.** Never.
 - **Fetching the explorer or trace link.** Give both to the user; report what the command printed.
 - **Working around a preview-chain refusal.** Offer the chain-support request instead.

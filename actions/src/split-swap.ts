@@ -24,10 +24,12 @@
  * constants here, so the emitted main is O(N + n·N) instructions.
  */
 import {
+  COMPILER_POT_NAMES,
   formatBigint,
   fn,
   indent,
   newEmitter,
+  POT_NAMES,
   type Emitter,
   type Expr,
   type Stmt,
@@ -42,6 +44,7 @@ import { compiled, type CompiledProgram } from "./compose.js";
 import { resolveNames, usesNames } from "./names.js";
 import { parseActions } from "./program.js";
 import { ProgramError, type ProgramIssue } from "./semantics.js";
+import { RETIRED_POT, RETIRED_POT_MESSAGE } from "./spec.js";
 import { lowerAction, routerImport, type ActionResult, type RouterFunction } from "./to-sauce.js";
 import { quoteCall, type QuoteOptions } from "./to-quote.js";
 import type { Action, ApproveAction, Recipient, SwapAction, Token } from "./types.js";
@@ -110,6 +113,9 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   });
   let sweep = swap.sweep;
   const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
+  if ((sweep?.recipient as string | undefined) === RETIRED_POT) {
+    throw new ProgramError([{ path: "sweep.recipient", message: RETIRED_POT_MESSAGE }], chain);
+  }
   const sweepAction: Action[] =
     sweep === undefined ? [] : [{ type: "transfer", amount: "0", ...sweep }];
   if (usesNames([...candidates, ...approvals, ...sweepAction])) {
@@ -153,7 +159,9 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   if (bucket === 0n) throw new Error(`amount (${amount}) must be at least buckets (${n})`);
 
   const N = candidates.length;
-  const emit = newEmitter();
+  // With no chain the program compiles raw (`compose.ts#compiled`), where the Pot is the
+  // compiler's `ctx.self()`; for a chain, the SDK's program compile reads `pot`.
+  const emit = newEmitter(chain === undefined ? COMPILER_POT_NAMES : POT_NAMES);
   const bindings = new Set<BindingName>();
   const router = new Set<RouterFunction>();
   const use = (result: ActionResult): ActionResult => {

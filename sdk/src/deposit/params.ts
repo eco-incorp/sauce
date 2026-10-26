@@ -64,7 +64,7 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
 
 /**
  * The whole normalization/defaulting/guard decision: lowers a chain-agnostic {@link DepositSpec}
- * into a fully normalized {@link NormalizedDeposit} — plain bigints (+ the `"self"` sentinel for a
+ * into a fully normalized {@link NormalizedDeposit} — plain bigints (+ the `"pot"` sentinel for a
  * defaulted `beneficiary`), with its resolved {@link DepositTemplate} attached.
  *
  * `spec.amount` may be `"balance" | "max"` — see {@link DepositSourceSpec} — in which case it
@@ -150,7 +150,7 @@ export function toDeposit(
         ? null
         : spec.beneficiary !== undefined
           ? toAddressBigint(spec.beneficiary, "beneficiary")
-          : "self",
+          : "pot",
     approvalPolicy,
     extra,
   };

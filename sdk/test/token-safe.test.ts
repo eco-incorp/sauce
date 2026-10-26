@@ -157,8 +157,12 @@ describe("every emitted write carries the SafeERC20 check", () => {
     const statements = safeApproveStatements("a_", "1n", { literal: 2n }, { literal: 3n });
     const text = statements.join("\n");
 
-    // `allowance(owner, spender)` returns a uint256, so THIS one is safe to decode normally.
-    expect(text).toContain("const a_self = ctx.self();");
+    // `allowance(owner, spender)` returns a uint256, so THIS one is safe to decode normally. The
+    // owner is the compiler's `ctx.self()` unless the caller names the Pot its own way.
+    expect(text).toContain("const a_pot = ctx.self();");
+    expect(safeApproveStatements("a_", "1n", { literal: 2n }, { literal: 3n }, "pot")[0]).toBe(
+      "const a_pot = pot;",
+    );
     expect(text).toContain("evm.static(1n,");
     // Decoded as a word, like the typed `allowance` read `@sauce/token` makes.
     expect(text).toContain('const [a_cur] = abi.decode(a_qr, ["Uint256"]);');

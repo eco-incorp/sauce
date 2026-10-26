@@ -97,7 +97,7 @@ const CODELESS = "0x00000000000000000000000000000000DeaDBeef";
 const ONE_ETH = 10n ** 18n;
 const USDC_100 = 100_000_000n;
 const MAX_UINT112 = (1n << 112n) - 1n;
-const SELF = "self";
+const POT = "pot";
 
 const pair = parseAbi(["function getReserves() view returns (uint112, uint112, uint32)"]);
 const poolManager = parseAbi(["function extsload(bytes32 slot) view returns (bytes32)"]);
@@ -113,9 +113,9 @@ type Typed = { readonly type: "address" | "uint256" | "bool"; readonly value: Ar
 const addr = (value: string): Typed => ({ type: "address", value });
 const uint = (value: bigint): Typed => ({ type: "uint256", value });
 const bool = (value: boolean): Typed => ({ type: "bool", value });
-const self: Typed = { type: "address", value: SELF };
+const pot: Typed = { type: "address", value: POT };
 
-const v2 = (tokenIn: string, tokenOut: string, amount: bigint, minOut = 0n, recipient = SELF) => {
+const v2 = (tokenIn: string, tokenOut: string, amount: bigint, minOut = 0n, recipient = POT) => {
   const pool = tokenIn === USDT || tokenOut === USDT ? UNIV2_WETH_USDT : UNIV2_USDC_WETH;
   return [
     addr(pool),
@@ -124,7 +124,7 @@ const v2 = (tokenIn: string, tokenOut: string, amount: bigint, minOut = 0n, reci
     uint(amount),
     uint(0n),
     uint(minOut),
-    recipient === SELF ? self : addr(recipient),
+    recipient === POT ? pot : addr(recipient),
   ];
 };
 const curve3pool = (
@@ -132,7 +132,7 @@ const curve3pool = (
   tokenOut: string,
   amount: bigint,
   minOut = 0n,
-  recipient = SELF,
+  recipient = POT,
 ) => {
   const index: Record<string, bigint> = { [USDC]: 1n, [USDT]: 2n };
   return [
@@ -144,7 +144,7 @@ const curve3pool = (
     uint(index[tokenOut]!),
     bool(false),
     uint(minOut),
-    recipient === SELF ? self : addr(recipient),
+    recipient === POT ? pot : addr(recipient),
   ];
 };
 const balancer = (amount: bigint, minOut = 0n, tokenIn = WETH) => [
@@ -154,7 +154,7 @@ const balancer = (amount: bigint, minOut = 0n, tokenIn = WETH) => [
   uint(amount),
   uint(BigInt(BALANCER_USDC_WETH_ID)),
   uint(minOut),
-  self,
+  pot,
 ];
 const dodoV2 = (tokenIn: string, tokenOut: string, amount: bigint, minOut = 0n) => {
   const dsp = tokenIn === USDT || tokenOut === USDT;
@@ -166,7 +166,7 @@ const dodoV2 = (tokenIn: string, tokenOut: string, amount: bigint, minOut = 0n) 
     addr(dsp ? USDT : WETH),
     addr(USDC),
     uint(minOut),
-    self,
+    pot,
   ];
 };
 const v3 = (
@@ -176,7 +176,7 @@ const v3 = (
   amount: bigint,
   minOut = 0n,
   limit = 0n,
-) => [addr(pool), addr(tokenIn), addr(tokenOut), uint(amount), uint(limit), uint(minOut), self];
+) => [addr(pool), addr(tokenIn), addr(tokenOut), uint(amount), uint(limit), uint(minOut), pot];
 const v4 = (
   tokenIn: string,
   tokenOut: string,
@@ -192,7 +192,7 @@ const v4 = (
   addr(NATIVE),
   uint(limit),
   uint(minOut),
-  self,
+  pot,
 ];
 const maverick = (pool: string, tokenIn: string, tokenOut: string, amount: bigint, minOut = 0n) => [
   addr(pool),
@@ -200,7 +200,7 @@ const maverick = (pool: string, tokenIn: string, tokenOut: string, amount: bigin
   addr(tokenOut),
   uint(amount),
   uint(minOut),
-  self,
+  pot,
 ];
 const values = (args: readonly Typed[]): Arg[] => args.map((a) => a.value);
 
@@ -336,7 +336,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           tokenIn: WETH,
           tokenOut: USDC,
           amountOutMin: "1",
-          recipient: "self",
+          recipient: "pot",
         },
       );
       assert.equal(out, 2_683_509_365n);
@@ -482,7 +482,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           j: 2,
           indexType: "int128",
           amountOutMin: "1",
-          recipient: "self",
+          recipient: "pot",
         },
       );
       assert.equal(out, 100_007_483n);
@@ -531,7 +531,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           uint(2n),
           bool(true),
           uint(0n),
-          self,
+          pot,
         ],
         [USDC, USDC_100],
         WETH,
@@ -590,7 +590,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           tokenIn: WETH,
           tokenOut: USDC,
           amountOutMin: "1",
-          recipient: "self",
+          recipient: "pot",
         },
       );
       assert.equal(await allowance(env, WETH, env.pot, BALANCER_V2_VAULT), 0n);
@@ -656,7 +656,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           baseToken: WETH,
           quoteToken: USDC,
           amountOutMin: "1",
-          recipient: "self",
+          recipient: "pot",
         },
       );
     });
@@ -1122,7 +1122,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
     const calls: Array<[string, Typed[]]> = [
       [
         "uniswapV2",
-        [addr(UNIV2_USDC_WETH), addr(liar), addr(USDC), uint(ONE_ETH), uint(0n), uint(0n), self],
+        [addr(UNIV2_USDC_WETH), addr(liar), addr(USDC), uint(ONE_ETH), uint(0n), uint(0n), pot],
       ],
       [
         "curve",
@@ -1135,7 +1135,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           uint(2n),
           bool(false),
           uint(0n),
-          self,
+          pot,
         ],
       ],
       ["balancerV2", balancer(ONE_ETH, 0n, liar)],
@@ -1149,7 +1149,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
           addr(liar),
           addr(USDC),
           uint(0n),
-          self,
+          pot,
         ],
       ],
     ];

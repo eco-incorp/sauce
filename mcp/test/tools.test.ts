@@ -1002,7 +1002,7 @@ describe("sauce_actions", () => {
         factory: "UniswapV3.Factory",
         fee: 500,
         amountOutMin: "1",
-        recipient: "self",
+        recipient: "pot",
       },
     ],
   };

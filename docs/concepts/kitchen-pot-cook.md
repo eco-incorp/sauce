@@ -63,7 +63,7 @@ The `sauce` command builds it, and signs and sends it or hands it to another wal
 
 Running as the Pot is what makes a program useful:
 
-- `ctx.self()` is the Pot, and so is `pot`: `pot.USDC` is what the Pot holds.
+- `pot` is the Pot (the compiler's `ctx.self()`): `pot.USDC` is what the Pot holds.
 - Every call the program makes comes from the Pot. A protocol sees the Pot as its caller, an
   approval is the Pot's, and a swap's output lands in the Pot unless the program names another
   recipient.
@@ -146,8 +146,8 @@ command line, and `sauce_signed_cook` and `sauce_sign` in the MCP server.
 ## Where a program's results end
 
 What a cook produces lands where the program sends it, and a call that credits its caller credits
-the Pot. A swap with no other recipient, a lending market's receipt tokens supplied for
-`ctx.self()` (Aave's aTokens, with `onBehalfOf` the Pot), a vault's shares minted to the Pot: all
+the Pot. A swap with no other recipient, a lending market's receipt tokens supplied for `pot`
+(Aave's aTokens, with `onBehalfOf` the Pot), a vault's shares minted to the Pot: all
 stay in the Pot. They are yours, but they are not in your wallet, a wallet app does not show them,
 and only another cook moves them out. Decide, before writing the program, whether each result
 should end in your wallet or stay in the Pot. To deliver it, the program sends it to the wallet, or

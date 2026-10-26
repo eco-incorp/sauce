@@ -329,7 +329,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           tokenIn: USDC,
           tokenOut: USDT,
           amountOutMin: "99000000",
-          recipient: "self",
+          recipient: "pot",
         },
       ]);
       assert.equal(await balance(USDC, env.pot), 0n);
@@ -408,7 +408,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           ],
           assets: [USDC, WETH],
           amountOutMin: "1",
-          recipient: "self",
+          recipient: "pot",
           deadline: DEADLINE,
         },
         { type: "transfer", token: USDC, recipient: RECEIVER },
@@ -605,7 +605,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           baseToken: WETH,
           quoteToken: USDC,
           amountOutMin: "1",
-          recipient: "self",
+          recipient: "pot",
         },
       ]);
       assert.ok((await balance(USDC, env.pot)) > afterV1);
@@ -778,7 +778,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           tokenIn: USDC,
           tokenOut: USDT,
           amountOutMin: "99000000",
-          recipient: "self",
+          recipient: "pot",
         },
       ]);
       const viaAction = await balance(USDT, env.pot);
@@ -811,7 +811,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
             0n,
             0n,
             minOut,
-            "self",
+            "pot",
           ]),
         ]);
       await cookSource(swap(9_900_000n));
@@ -856,7 +856,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           env,
           CHAIN,
           routerProgram([
-            call("uniswapV3", [UNIV3_USDC_USDT_100, USDC, WETH, 1_000_000n, 0n, 0n, "self"]),
+            call("uniswapV3", [UNIV3_USDC_USDT_100, USDC, WETH, 1_000_000n, 0n, 0n, "pot"]),
           ]),
         ),
       );
@@ -1005,7 +1005,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       await run([
         { type: "lidoStake", amount: `${ONE_ETH}`, stETH: STETH, saveOutputAs: "steth" },
         { type: "approve", token: STETH, spender: LIDO_WITHDRAWAL_QUEUE, amountRef: "steth" },
-        { type: "lidoUnstake", withdrawalQueue: LIDO_WITHDRAWAL_QUEUE, owner: "self" },
+        { type: "lidoUnstake", withdrawalQueue: LIDO_WITHDRAWAL_QUEUE, owner: "pot" },
       ]);
       assert.equal(await balance(LIDO_WITHDRAWAL_QUEUE, env.pot), 1n);
       assert.ok((await balance(STETH, env.pot)) < 3n);
@@ -1062,7 +1062,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       await fund(USDC, USDC_100);
       await run([
         { type: "approve", amount: `${USDC_100}`, token: USDC, spender: AAVE_V3_POOL },
-        { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: USDC, onBehalfOf: "self" },
+        { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: USDC, onBehalfOf: "pot" },
       ]);
       assert.equal(await balance(USDC, env.pot), 0n);
       // An aToken balance is a scaled amount read back through the liquidity index, rounded each
@@ -1075,7 +1075,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           amount: "40000000",
           pool: AAVE_V3_POOL,
           token: USDC,
-          recipient: "self",
+          recipient: "pot",
         },
         { type: "transfer", token: USDC, recipient: RECEIVER },
       ]);
@@ -1085,13 +1085,13 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
     it("aaveV3Borrow borrows USDC against WETH collateral, and aaveV3Repay repays it", async () => {
       await run([
         ...wrapAndApprove(ONE_ETH, AAVE_V3_POOL),
-        { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: WETH, onBehalfOf: "self" },
+        { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: WETH, onBehalfOf: "pot" },
         {
           type: "aaveV3Borrow",
           amount: "1000000",
           pool: AAVE_V3_POOL,
           token: USDC,
-          onBehalfOf: "self",
+          onBehalfOf: "pot",
         },
       ]);
       assert.equal(await balance(USDC, env.pot), 1_000_000n);
@@ -1106,7 +1106,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           amount: "1000000",
           pool: AAVE_V3_POOL,
           token: USDC,
-          onBehalfOf: "self",
+          onBehalfOf: "pot",
         },
       ]);
       const [, remaining] = await aave();

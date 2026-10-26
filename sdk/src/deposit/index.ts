@@ -20,7 +20,7 @@
  * wrapping/unwrapping. The registry does not cover every operation in the protocol catalog.
  *
  * The default approval policy is `exact`; `none` skips the approval and `max` grants the maximum
- * allowance. Approvals persist after the cook. The default beneficiary is `ctx.self()` when the
+ * allowance. Approvals persist after the cook. The default beneficiary is the Pot when the
  * template supports a beneficiary. Runtime `balance` reads native ETH for native-funded templates,
  * WETH at `target` for unwrapping, or the supplied `token` otherwise.
  * For Aave/Spark withdrawals, use fixed amounts or `amount: "max"`: the runtime balance is the

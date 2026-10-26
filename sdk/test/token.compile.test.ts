@@ -51,7 +51,7 @@ describe("Token: compiles on an EVM target", () => {
     const src = tokenSource(
       [
         { op: "transfer", token: TOKEN_ADDR, to: TO, amount: 5n },
-        { op: "balanceOf", token: TOKEN_ADDR, owner: "self" },
+        { op: "balanceOf", token: TOKEN_ADDR, owner: "pot" },
       ],
       "evm",
     );

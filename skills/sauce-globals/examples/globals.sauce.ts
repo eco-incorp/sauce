@@ -30,10 +30,8 @@ function main(
   otherAmount: Uint256,
   usdcAmount: Uint256,
 ) {
-  const me = ctx.self();
-
   // Registered symbols, and the Pot's own balance.
-  require(me.USDT >= usdtAmount, "not enough USDT in the Pot");
+  require(pot.USDT >= usdtAmount, "not enough USDT in the Pot");
   USDT.transfer(payee, usdtAmount);
 
   // Any ERC-20, bound once: move `payer`'s tokens, which it approved to this Pot, to `payee`.
@@ -43,5 +41,5 @@ function main(
   // A protocol call. The approve is exact, so no allowance is left standing afterwards.
   USDC.approve(AaveV3.Pool, usdcAmount);
   AaveV3.Pool.supply(USDC, usdcAmount, payee, 0);
-  require(allowance(USDC, me, AaveV3.Pool) == 0, "an allowance was left standing");
+  require(allowance(USDC, pot, AaveV3.Pool) == 0, "an allowance was left standing");
 }

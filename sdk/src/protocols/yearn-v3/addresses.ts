@@ -5,7 +5,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 1,
     chainName: "Ethereum",
     addresses: {
-      vaultFactory: "0x770D0d1fB036483eD4ABB6D53C1C89FB277d812F",
+      vaultFactory: "0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F",
     },
   },
 ];

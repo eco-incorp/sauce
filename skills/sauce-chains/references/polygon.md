@@ -32,9 +32,9 @@ chain does not have it.
 ```sauce chain=polygon
 function main() {
   // `USDC` is Polygon's USDC: `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359`.
-  const held = USDC.balanceOf(ctx.self());
+  const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDC).balanceOf(ctx.self()) == held);
+  require(Token(USDC).balanceOf(pot) == held);
   // `AaveV2.LendingPool` is Polygon's lendingPool: `0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf`.
   require(AaveV2.LendingPool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
@@ -66,7 +66,6 @@ address.
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | gateway | `0x6f015F16De9fC8791b234eF68D486d2bF203FBA8` | `Axelar.Gateway` |
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `Axelar.ITS` |
 | [Balancer V2](../../sauce-protocols/references/registry/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
-| [Beefy Finance](../../sauce-protocols/references/registry/beefy.md) | BIFI | `0xFbdd194376De19A88f4a68671C339563C427310D` | `Beefy.BIFI` |
 | [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Celer Network](../../sauce-protocols/references/registry/celer.md) | bridge | `0x88DCDC47D2f83a99CF0000FDF667A468bB958a78` | `Celer.Bridge` |
 | [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x849c5ED5a80F5B408Dd4969b78c2C8fdf0565Bfe` | `ChainlinkCcip.Router` |

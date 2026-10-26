@@ -44,7 +44,7 @@ key, chaining amounts, and running it. Every action and field is in
       "factory": "UniswapV3.Factory",
       "fee": 500,
       "amountOutMin": "1",
-      "recipient": "self"
+      "recipient": "pot"
     }
   ]
 }
@@ -58,7 +58,7 @@ Arbitrum, each time to that chain's USDC, WETH and factory.
 
 - **Amounts are base-10 strings**: `"1000000"` is 1 USDC. JSON numbers lose precision past 2^53, so
   a number is refused; fee tiers, indices, tick spacings and Unix times are plain integers.
-- **`"recipient": "self"`** keeps an action's output in the Pot; an address pays that account. Ask
+- **`"recipient": "pot"`** keeps an action's output in the Pot; an address pays that account. Ask
   the user which they want (`sauce-overview`).
 - **`amountOutMin`** is fixed when the document is written: set it from a quote for the amount you
   will pass.

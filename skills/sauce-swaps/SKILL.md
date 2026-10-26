@@ -28,7 +28,7 @@ Solana, `sauce-solana-distributed-swap`).
   run-time value, so a program chooses the pool, direction and amount while it runs.
 - **Every swap is exact input.** `amountIn` is what the Pot pays; `minOut` is the least the swap
   may deliver, below which the whole program reverts; `recipient` receives the output, and
-  `ctx.self()` keeps it in the Pot for a later step. Each function returns what the recipient
+  `pot` keeps it in the Pot for a later step. Each function returns what the recipient
   received.
 - **Paid first, or called back.** Some venues are paid before they are called; the rest call their
   caller back mid-swap, which the **Pot's Router** answers.
@@ -41,7 +41,7 @@ Solana, `sauce-solana-distributed-swap`).
 import { uniswapV3 } from "@sauce/router";
 
 // Sells `amount` of the Pot's WETH for USDC, paid to `recipient`: the user's wallet, or
-// `ctx.self()` to keep the USDC in the Pot.
+// `pot` to keep the USDC in the Pot.
 function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   uniswapV3(pool, WETH, USDC, amount, sqrtPriceLimitX96, minOut, recipient);
@@ -107,7 +107,7 @@ refunded.
 
 **Called back.** Uniswap V3 and its forks, Uniswap V4, Maverick V2 and PancakeSwap Infinity pools
 re-enter their caller mid-swap to be paid, which a program cannot answer. Those functions call the
-**Pot's Router**, `ctx.self()`: the Pot's fallback delegatecalls the Router it is configured with
+**Pot's Router**, `pot`: the Pot's fallback delegatecalls the Router it is configured with
 (`router()` on the Pot), so the Router runs as the Pot, holds the Pot's balances and answers:
 
 | Callback                                          | Pools                                                                            |
@@ -131,7 +131,7 @@ the library checks a V3 pool's tokens. Take these facts from the pool, as you ta
 
 **The Router's own entry points**, which a program can also call with the Router ABI the package
 serves (`import { ISauceRouter } from "./artifacts/ISauceRouter.json"`, then
-`ISauceRouter.at(ctx.self())`), take a positive unsigned exact input and return
+`ISauceRouter.at(pot)`), take a positive unsigned exact input and return
 `(amountInUsed, amountOut)`. PancakeSwap Infinity's:
 
 | Entry point                                                                               | Price bound         |
@@ -169,7 +169,7 @@ pool's callback, and pays the pool after it, out of what the Pot then holds. A c
 the Pot short fails the payment, and the whole transaction reverts. `program(() => { … })` compiles
 the callback from a closure that reads the program's own values, and its `code` with its `args`
 appended is the callback's bytes; the program declares `flash` in an ABI beside it, since
-`@sauce/router` has no function for it, and calls it on `ctx.self()`.
+`@sauce/router` has no function for it, and calls it on `pot`.
 [examples/uniswap-v3-pair-flash.sauce.ts](examples/uniswap-v3-pair-flash.sauce.ts) ports Uniswap's
 `PairFlash` this way, with [examples/SauceRouterFlash.json](examples/SauceRouterFlash.json): the
 output of a swap in one pool, sold back in another before the first is paid, the profit to a payer.

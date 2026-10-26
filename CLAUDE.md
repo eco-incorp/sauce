@@ -1136,7 +1136,10 @@ bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeE
 `evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
 `view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
 amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
-return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` compiles standalone
+return value or a balance delta) or its own amount, per `spec.ts`. The Pot is `"pot"` in a document
+(`"self"` is refused, naming it), and the lowering names it `pot`/`pot.balance`, which the chain's
+program compile reads; a split swap with no `chain` compiles raw, so its emitter names it
+`ctx.self()` (`emit.ts#PotNames`). `compose.ts` compiles standalone
 programs with ABI-v1 runtime arguments. `to-quote.ts`
 builds the `eth_call`
 quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.

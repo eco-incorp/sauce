@@ -2,7 +2,7 @@ import { curve, uniswapV2 } from "@sauce/router";
 import { balanceOf } from "@sauce/token";
 
 // Ethereum: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for USDT in
-// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `ctx.self()`, so a later
+// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `pot`, so a later
 // cook spends it (pass the wallet instead to deliver it). The tokens, the factory and the pool are
 // the registry's names; the amounts are only known when this runs.
 //
@@ -12,8 +12,8 @@ import { balanceOf } from "@sauce/token";
 //                     whole transaction reverts
 function main(minOut: Uint256) {
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
-  const sold = balanceOf(WETH, ctx.self());
-  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());
+  const sold = balanceOf(WETH, pot);
+  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, pot);
   // USDC is the 3pool's coin 1 and USDT its coin 2.
-  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self());
+  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, pot);
 }

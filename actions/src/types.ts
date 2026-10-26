@@ -8,7 +8,7 @@
  * - `amount` is what an action spends. Omit it (and `amountRef`) to spend the previous action's
  *   output; set `amountRef` to spend the output an earlier action saved with `saveOutputAs`.
  * - `amountOutMin` is the least output a venue may return before it reverts.
- * - `recipient` receives an action's output when nothing chains it; `"self"` is the executing Pot.
+ * - `recipient` receives an action's output when nothing chains it; `"pot"` is the executing Pot.
  * - A token is a registry symbol (`"USDC"`, or a tokenized stock's, its issuer's ticker:
  *   `"SPCXc"`) or an address, and a protocol contract a namespace
  *   reference (`"UniswapV3.Factory"`) or an address. A document that names everything, and has no
@@ -43,8 +43,8 @@ export type Contract = Address | ContractName;
 /** A contract that is also a token (WETH, wstETH, rETH): a symbol, a namespace reference or an address. */
 export type TokenContract = Token | ContractName;
 
-/** An address, or `"self"` for the executing Pot. */
-export type Recipient = Address | "self";
+/** An address, or `"pot"` for the executing Pot. */
+export type Recipient = Address | "pot";
 
 /** A recipient on another chain: an address, or a 32-byte account for a non-EVM chain (Solana). */
 export type RemoteRecipient = `0x${string}`;

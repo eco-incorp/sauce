@@ -28,7 +28,7 @@ function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf:
 ```
 
 - `asset`: ERC-20 token to supply (e.g. DAI, WETH, wstETH)
-- `onBehalfOf`: Address receiving the spTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
+- `onBehalfOf`: Address receiving the spTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `pot` to keep it in the Pot
 - Requires ERC-20 approval to the Pool
 
 ### withdraw
