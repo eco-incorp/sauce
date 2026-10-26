@@ -927,7 +927,14 @@ describeSvm("the token methods on Solana: every account derived by the command",
 
     // Seeded by the owner, the slot is the owner's to fill: the command refuses another account
     // in it before anything is built.
-    const refused = await simulate(file, "--args", KITCHEN, "0", "--account", `foundPda=${potUsdc}`);
+    const refused = await simulate(
+      file,
+      "--args",
+      KITCHEN,
+      "0",
+      "--account",
+      `foundPda=${potUsdc}`,
+    );
     expect(refused.code).toBe(2);
     expect(refused.stderr).toContain(
       `--account foundPda=${potUsdc}: the account foundPda is derived from the owner, as ` +
@@ -1117,7 +1124,10 @@ describeSvm("the token methods on Solana: every account derived by the command",
         seeds: [new TextEncoder().encode("vault"), codec.encode(pot)],
       });
       for (const given of [pda.derive!, vault]) {
-        const out = await simulate(seeded, ...["--args", KITCHEN, "--account", `${pda.name}=${given}`]);
+        const out = await simulate(
+          seeded,
+          ...["--args", KITCHEN, "--account", `${pda.name}=${given}`],
+        );
         expect(json(out)).toMatchObject({ ok: true, returned: "0" });
       }
     }, 120_000);
@@ -1215,7 +1225,14 @@ describeSvm("the token methods on Solana: every account derived by the command",
       ["owner", programs.owner, "owner", "owner", "the owner", []],
       ["owner:USDC", programs.ownerToken, "ownerUSDC", "owner:USDC", "the owner", []],
       ["authority", programs.pays, "pot", "authority", "the Pot", ["--args", to, "1"]],
-      ["authority:USDC", programs.pays, "potUSDC", "authority:USDC", "the Pot", ["--args", to, "1"]],
+      [
+        "authority:USDC",
+        programs.pays,
+        "potUSDC",
+        "authority:USDC",
+        "the Pot",
+        ["--args", to, "1"],
+      ],
       [
         "a pda the owner seeds",
         programs.ownerSeeded,

@@ -92,8 +92,7 @@ describe("a name the program or the compile gives meaning to is not unknown", ()
   ])("an ambient module's %s hides no error the compile raises elsewhere", (_name, lib, body) => {
     const options = {
       ambient: ["./lib.ts"],
-      resolve: (path: string) =>
-        path === "./lib.ts" ? new TextEncoder().encode(lib) : undefined,
+      resolve: (path: string) => (path === "./lib.ts" ? new TextEncoder().encode(lib) : undefined),
     };
     for (const compile of [
       () => compileOn("base", `function main(): Uint256 { ${body} }`, options),

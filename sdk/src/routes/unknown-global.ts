@@ -191,8 +191,7 @@ export function unknownGlobalError(
   ]);
   const spans = failedSpans(source, cause);
   const failedAt = (node: AstNode): boolean =>
-    spans.length === 0 ||
-    spans.some(([start, end]) => node.start < end && start < node.end);
+    spans.length === 0 || spans.some(([start, end]) => node.start < end && start < node.end);
   let unknown: AstNode | undefined;
   walk(program, (node) => {
     if (unknown !== undefined || node.type !== "MemberExpression") return;

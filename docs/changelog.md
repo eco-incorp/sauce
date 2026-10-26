@@ -216,6 +216,7 @@ upgrade authority, which can replace them after the check.
   whose `defines` or `contracts` give one. A `self` given any of these ways, or by an `ambient`
   module, is the caller's and not refused. `ctx.self()`, `ctx.balance(x)` and `ctx.selfBalance()`
   are unchanged.
+
 - **Now refused (both): a `pot` only an `ambient` module exports.** Read free, it would have stood
   in for the Pot with no word in the program. The refusal names its line and column: write
   `ctx.self()` for the Pot, or import the module's `pot` by name.

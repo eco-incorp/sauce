@@ -408,8 +408,20 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     const to = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
     const pays = "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
     const cases = [
-      ["function main(): Address {\n  return Solana.owner.address;\n}\n", "owner", "owner", "the owner", []],
-      ["function main(): Uint256 {\n  return Solana.owner.USDC;\n}\n", "ownerUSDC", "owner:USDC", "the owner", []],
+      [
+        "function main(): Address {\n  return Solana.owner.address;\n}\n",
+        "owner",
+        "owner",
+        "the owner",
+        [],
+      ],
+      [
+        "function main(): Uint256 {\n  return Solana.owner.USDC;\n}\n",
+        "ownerUSDC",
+        "owner:USDC",
+        "the owner",
+        [],
+      ],
       [pays, "pot", "authority", "the Pot", [to, "1"]],
       [pays, "potUSDC", "authority:USDC", "the Pot", [to, "1"]],
     ] as const;
