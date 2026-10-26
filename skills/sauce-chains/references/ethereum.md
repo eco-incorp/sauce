@@ -26,9 +26,9 @@ chain does not have it.
 ```sauce chain=ethereum
 function main() {
   // `USDC` is Ethereum's USDC: `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`.
-  const held = USDC.balanceOf(ctx.self());
+  const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDC).balanceOf(ctx.self()) == held);
+  require(Token(USDC).balanceOf(pot) == held);
   // `AaveV2.LendingPool` is Ethereum's lendingPool: `0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9`.
   require(AaveV2.LendingPool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.

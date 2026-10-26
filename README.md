@@ -139,7 +139,7 @@ const program = routes.compileSauceProgram(
   "base",
   `function main(amount: Uint256) {
     USDC.approve(AaveV3.Pool, amount);
-    AaveV3.Pool.supply(USDC, amount, ctx.self(), 0);
+    AaveV3.Pool.supply(USDC, amount, pot, 0);
   }`,
 );
 

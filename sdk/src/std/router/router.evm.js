@@ -9,7 +9,7 @@
 // `pool` is the contract the swap calls: the pair, the pool, the Balancer V2 Vault, the Uniswap V4
 // PoolManager. `minOut` is the least the recipient may receive, and below it the whole program
 // reverts; `0n` sets no floor, except for `woofi`, which requires one. `recipient` receives the
-// output, and `ctx.self()` keeps it in the Pot. Every swap is EXACT INPUT: `amountIn` is what the
+// output, and `pot` keeps it in the Pot. Every swap is EXACT INPUT: `amountIn` is what the
 // Pot pays, and nothing here can express an exact-output swap.
 //
 // HOW EACH VENUE IS REACHED.

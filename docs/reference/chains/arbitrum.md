@@ -37,9 +37,9 @@ chain does not have it.
 ```ts
 function main() {
   // `USDC` is Arbitrum One's USDC: `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`.
-  const held = USDC.balanceOf(ctx.self());
+  const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDC).balanceOf(ctx.self()) == held);
+  require(Token(USDC).balanceOf(pot) == held);
   // `AaveV3.Pool` is Arbitrum One's pool: `0x794a61358D6845594F94dc1DB02A252b5b4814aD`.
   require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.

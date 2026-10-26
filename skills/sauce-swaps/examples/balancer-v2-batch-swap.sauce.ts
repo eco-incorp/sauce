@@ -78,7 +78,7 @@ function main(
     },
   ];
   const funds = {
-    sender: ctx.self(),
+    sender: pot,
     fromInternalBalance: false,
     recipient,
     toInternalBalance: false,

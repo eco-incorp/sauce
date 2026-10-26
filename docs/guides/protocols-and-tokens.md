@@ -245,7 +245,7 @@ A program that spends tokens its Pot does not hold yet can pull them from the ac
 with three more `@sauce/token` functions (EVM). Each pull is a `safeTransferFrom`, however it is
 authorised:
 
-- `transferFrom(token, owner, ctx.self(), amount)`, on an allowance `owner` gave the Pot: the
+- `transferFrom(token, owner, pot, amount)`, on an allowance `owner` gave the Pot: the
   SafeERC20 write above.
 - `permit(token, owner, spender, value, deadline, v, r, s)` sets that allowance from `owner`'s
   EIP-2612 signature (a signed approval that a token with `permit` accepts in place of an `approve`
@@ -254,7 +254,7 @@ authorised:
   fallback accepts any call (WETH9's does) is refused rather than taken for one that granted the
   allowance.
 - `permitTransferFrom(token, owner, amount, nonce, deadline, signature, permit2)` spends `owner`'s
-  Permit2 signature for `amount` of `token` to the program. The program (`ctx.self()`) is the
+  Permit2 signature for `amount` of `token` to the program. The Pot (`pot`) is the
   spender the signature must name, and `permit2` is the Permit2 deployment, `Permit2.Permit2` in a
   program. Permit2 spends the nonce, refuses a passed deadline, and moves the tokens with
   Solmate's `SafeTransferLib.safeTransferFrom`: a token that returns nothing works, and one that

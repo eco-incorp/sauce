@@ -25,7 +25,7 @@ Legacy version of Aave lending protocol.
 ## Pitfalls for a program
 
 - The supply call is `deposit`, not `supply`; approve the LendingPool first.
-- `onBehalfOf` receives the aTokens. The caller is the Pot, so `ctx.self()` keeps them in the
+- `onBehalfOf` receives the aTokens. The caller is the Pot, so `pot` keeps them in the
   Pot, not in the user's wallet: choose which, and pass the wallet as a `main` parameter to
   deliver them.
 - aTokens are rebasing: measure balances as deltas.
@@ -34,7 +34,7 @@ Legacy version of Aave lending protocol.
 
 ## In a Sauce program
 
-Deposit the Pot's USDC for `onBehalfOf`, the user's wallet or the Pot (`ctx.self()`):
+Deposit the Pot's USDC for `onBehalfOf`, the user's wallet or the Pot (`pot`):
 
 ```ts
 function main(onBehalfOf: Address, amount: Uint256) {

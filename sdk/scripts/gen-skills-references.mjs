@@ -981,7 +981,7 @@ function renderGlobals(data) {
     "# Stock tokens",
     "",
     "A tokenized stock is a token like any other: a program compiled for its chain names it by its",
-    "symbol with no import (`SPCXc.balanceOf(ctx.self())` on Base), and amounts are in its smallest",
+    "symbol with no import (`SPCXc.balanceOf(pot)` on Base), and amounts are in its smallest",
     "units (its decimals). The symbol is the issuer's own ticker for the token, with a `.` written",
     "`_` (`BRK.Bx` is `BRK_Bx`). Their addresses are in the chain's stocks file in `sauce-chains`.",
     "",
@@ -1062,9 +1062,9 @@ function chainExample(chain) {
   if (token) {
     body.push(
       `  // \`${token.symbol}\` is ${chain.name}'s ${token.symbol}: \`${token.address}\`.`,
-      `  const held = ${token.symbol}.balanceOf(ctx.self());`,
+      `  const held = ${token.symbol}.balanceOf(pot);`,
       `  // \`Token(address)\` is any other ERC-20, and works for a symbol's address too.`,
-      `  require(Token(${token.symbol}).balanceOf(ctx.self()) == held);`,
+      `  require(Token(${token.symbol}).balanceOf(pot) == held);`,
     );
   }
   if (contract) {
@@ -1907,7 +1907,7 @@ function renderTokens(data, globalsSkill) {
     "# Tokens",
     "",
     "A program compiled for a chain names that chain's registered tokens by symbol, with no import",
-    "(`USDC.balanceOf(ctx.self())`), and any other ERC-20 as `Token(<address>)`. In TypeScript the",
+    "(`USDC.balanceOf(pot)`), and any other ERC-20 as `Token(<address>)`. In TypeScript the",
     "same token is a property of the chain's export, `Base.USDC`, with its `address`, `decimals` and",
     "`symbol`. Amounts are integers in the token's smallest units: nothing scales them by decimals.",
     "",

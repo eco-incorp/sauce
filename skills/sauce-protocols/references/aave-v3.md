@@ -13,7 +13,7 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 
 - `supply` pulls the asset with `transferFrom`: approve the Pool for exactly the amount first.
 - `onBehalfOf` receives the aTokens, and with them the position. Every call comes from the Pot,
-  so `ctx.self()` there keeps the position in the Pot, not in the user's wallet; choose which, and
+  so `pot` there keeps the position in the Pot, not in the user's wallet; choose which, and
   pass the wallet as a `main` parameter to give it to the user. A position in the wallet is the
   wallet's: `withdraw` burns the caller's aTokens, so a later cook withdraws it only once they are
   back in the Pot, and borrows against it only with the wallet's credit delegation.
@@ -28,7 +28,7 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 
 ## In a Sauce program
 
-Supply the Pot's USDC for `onBehalfOf` (the user's wallet, or `ctx.self()` to keep the position in
+Supply the Pot's USDC for `onBehalfOf` (the user's wallet, or `pot` to keep the position in
 the Pot) and check the position now has collateral:
 
 ```sauce chain=base,arbitrum
@@ -68,7 +68,7 @@ function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf:
 - `poolAddress`: Pool contract for the target chain
 - `asset`: ERC-20 token address to supply
 - `amount`: Amount in token's native decimals. Use `type(uint256).max` for entire balance
-- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
+- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `pot` to keep it in the Pot
 - Requires ERC-20 approval to the Pool before calling
 
 ### withdraw

@@ -37,9 +37,9 @@ chain does not have it.
 ```ts
 function main() {
   // `USDC` is Base's USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
-  const held = USDC.balanceOf(ctx.self());
+  const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(USDC).balanceOf(ctx.self()) == held);
+  require(Token(USDC).balanceOf(pot) == held);
   // `AaveV3.Pool` is Base's pool: `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5`.
   require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.

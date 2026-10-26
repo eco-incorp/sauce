@@ -69,7 +69,7 @@ import { curve, uniswapV2 } from "@sauce/router";
 import { balanceOf } from "@sauce/token";
 
 // Ethereum: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for USDT in
-// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `ctx.self()`, so a later
+// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `pot`, so a later
 // cook spends it (pass the wallet instead to deliver it). The tokens, the factory and the pool are
 // the registry's names; the amounts are only known when this runs.
 //
@@ -79,10 +79,10 @@ import { balanceOf } from "@sauce/token";
 //                     whole transaction reverts
 function main(minOut: Uint256) {
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
-  const sold = balanceOf(WETH, ctx.self());
-  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());
+  const sold = balanceOf(WETH, pot);
+  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, pot);
   // USDC is the 3pool's coin 1 and USDT its coin 2.
-  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self());
+  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, pot);
 }
 ```
 
@@ -93,12 +93,12 @@ Line by line:
   `@sauce/token` holds the token functions.
 - `UniswapV2.Factory.getPair(WETH, USDC)` asks Uniswap's factory for the pair, while the program
   runs.
-- `ctx.self()` is your **Pot**, the account the program runs in. `balanceOf(WETH, ctx.self())` is
-  the WETH it holds now: the program sells all of it.
-- `uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self())` sells it. `3000` is the pair's fee in
-  parts per million (0.3%), `0` sets no floor on this first swap, and `ctx.self()` keeps the USDC in
-  the Pot. It returns the USDC received.
-- `curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self())` swaps exactly
+- `pot` is your **Pot**, the account the program runs in. `balanceOf(WETH, pot)` is the WETH it
+  holds now: the program sells all of it.
+- `uniswapV2(pair, WETH, USDC, sold, 3000, 0, pot)` sells it. `3000` is the pair's fee in parts per
+  million (0.3%), `0` sets no floor on this first swap, and `pot` keeps the USDC in the Pot. It
+  returns the USDC received.
+- `curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, pot)` swaps exactly
   that USDC for USDT. `1` and `2` are the two coins' places in the pool, `false` says this pool
   takes those places as `int128` rather than `uint256` (older Curve pools do), and `minOut` is
   your floor.

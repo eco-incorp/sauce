@@ -54,9 +54,9 @@ chain does not have it.
 ```sauce chain=arc
 function main() {
   // `EURC` is Arc's EURC: `0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1`.
-  const held = EURC.balanceOf(ctx.self());
+  const held = EURC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
-  require(Token(EURC).balanceOf(ctx.self()) == held);
+  require(Token(EURC).balanceOf(pot) == held);
   // `AaveV4.CoreHub` is Arc's coreHub: `0x17288dfc86205301064577b98B02b81017e6F79C`.
   require(AaveV4.CoreHub != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.

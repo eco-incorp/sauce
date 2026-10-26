@@ -305,7 +305,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    | `Net balance changes`  | each address's net change; then the approvals                                                                                                                                              |
    | `The cook reverts: …`  | the reason; the command exits 1                                                                                                                                                            |
 
-   A program that supplies the Pot's USDC to Aave V3 for `ctx.self()` keeps the aTokens there:
+   A program that supplies the Pot's USDC to Aave V3 for `pot` keeps the aTokens there:
 
    ```text
    The cook succeeds from <owner>: gas used 268566 for the cook, after the Pot's deploy (1. below), returns 0x
