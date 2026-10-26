@@ -10,19 +10,19 @@
  * export const UniswapV3 = { Factory: ABI_0.at(0x33128a8f…), QuoterV2: ABI_1.at(0x3d4e44eb…), … };
  * export const PancakeswapV3 = { Factory: ABI_2.at(0x0bfbcf9f…), … };
  * export const Lido = { Lido: 0, … };   // no deployment on Base
- * export const USDT = 0;                // a token some chain has, and Base does not
  * ```
  *
  * DECLARED ON EVERY CHAIN, VALUED ON THIS ONE. Every protocol namespace (a protocol's PascalCase key
  * and each family alias) is an object literal holding every contract the namespace has on ANY chain:
  * bound at its address where this chain has it (`ABI.at(address)`, which compiles to the same bytes
  * as the binding written by hand), its address where the registry has an address and no ABI, and
- * zero where this chain has none. Every token symbol some chain registers and this one does not is
- * zero too; the chain's own tokens are defines (`ambient.ts`), as they always were. So a name no
- * chain has is the compiler's error on every chain, and a name this chain lacks is a zero the
- * compiler decides while compiling: `if (UniswapV3.Factory)`, `if (!USDT)`, `X != 0`, `X == 0`,
- * `?:`, `&&`, `||`. The branch a test rules out is not compiled, so a call on a contract the chain
- * lacks compiles there as long as a test of it rules the call out.
+ * zero where this chain has none. The chain's own tokens are defines (`ambient.ts`), as they always
+ * were; a token some chain registers and this one does not is zero too, but declared by no module:
+ * the check writes each test of one `0` where it stands (`absent-names.ts`), which keeps ~1,800
+ * exports off every compile. So a name no chain has is the compiler's error on every chain, and a
+ * name this chain lacks is a zero the compiler decides while compiling: `if (UniswapV3.Factory)`,
+ * `if (!USDT)`, `X != 0`, `X == 0`, `?:`, `&&`, `||`. The branch a test rules out is not compiled,
+ * so a call on a contract the chain lacks compiles there as long as a test of it rules the call out.
  *
  * A ZERO IS NEVER A CONTRACT AT RUN TIME. The compiler takes a zero anywhere a value goes, so a use
  * of a name the chain lacks outside a branch its test rules out would compile to a call to, or a
@@ -131,8 +131,9 @@ export interface NamespaceEntry {
 export interface ChainNamesOptions {
   /** Token symbol overrides, merged over the chain's registry (`resolveTokenMap`). */
   readonly tokens?: ReadonlyMap<string, bigint>;
-  /** Names the caller defines: a define replaces a module's `const` of its name, so none is
-   *  declared here, and none is taken for absent. */
+  /** Names the caller binds (a define, a contract binding, an ambient module's export): each is
+   *  the caller's, so no namespace of its name is declared here, and no token of it taken for
+   *  absent. */
   readonly defined?: ReadonlySet<string>;
   /** Binds a contract whose ABI is widened (its selectors do not match the deployment). */
   readonly allowWidenedSelectors?: boolean;
@@ -149,7 +150,8 @@ export interface ChainNames {
   readonly text: string;
   /** Every namespace, by key. */
   readonly namespaces: ReadonlyMap<string, NamespaceEntry>;
-  /** The token symbols declared zero: some chain registers them, this chain does not. */
+  /** The token symbols zero here: some chain registers them, this chain does not, and the caller
+   *  binds none of them. No module declares them; the check writes a test of one `0`. */
   readonly absentTokens: ReadonlySet<string>;
   /** The chain's own tokens, by symbol: its defines. */
   readonly tokens: ReadonlyMap<string, bigint>;
@@ -183,7 +185,7 @@ const MODULE_TEXT = new Map<string, string>();
  * can write (the compiler refuses an absolute import); an ABI also by a relative import joined to
  * its importer's directory and prefixed with `.` (`./@eco-incorp/sauce/chain/abi/…`), the way a
  * module imports it. `own` is the modules one compile made for its own options (`chainNames`),
- * which no other compile is served and nothing keeps once it returns.
+ * which no other compile is served.
  */
 export function chainModuleText(
   path: string,
@@ -293,7 +295,7 @@ function namespaceLiteral(
   return `{ ${fields.join(", ")} }`;
 }
 
-/** Every token symbol some chain registers: what a chain without one declares zero. */
+/** Every token symbol some chain registers: a chain without one has it as zero. */
 let registrySymbols: ReadonlySet<string> | undefined;
 export function everySymbol(): ReadonlySet<string> {
   registrySymbols ??= new Set(
@@ -311,6 +313,20 @@ const HEADER =
 const plain = new Map<number, ChainNames>();
 const plainNamespaces = new Map<number, ReadonlyMap<string, NamespaceEntry>>();
 
+/** A names module: its path under {@link CHAIN_MODULE_ROOT}, its text and the namespaces it holds. */
+interface NamesModule {
+  readonly path: string;
+  readonly text: string;
+  readonly namespaces: ReadonlyMap<string, NamespaceEntry>;
+}
+/** Each chain's plain module, served to every compile. */
+const plainModules = new Map<string, NamesModule>();
+/** The modules compiles' own options made, by what their text depends on: the same options give
+ *  the same text and path, so the compiler's module cache keeps it. A process compiling with many
+ *  keeps the last {@link KEPT_MODULES}; each is served to its own compiles alone. */
+const ownModules = new Map<string, NamesModule>();
+const KEPT_MODULES = 32;
+
 /** `chain`'s namespaces, with no option of a compile's own. */
 export function chainNamespaces(chain: CanonicalChain): ReadonlyMap<string, NamespaceEntry> {
   let namespaces = plainNamespaces.get(chain.id);
@@ -324,50 +340,78 @@ export function chainNamespaces(chain: CanonicalChain): ReadonlyMap<string, Name
 
 /** The names a program compiled for `chain` reads: the module of `@sauce/chain`. */
 export function chainNames(chain: CanonicalChain, options: ChainNamesOptions = {}): ChainNames {
+  const defined = options.defined ?? new Set<string>();
+  const declared = options.namespaces !== false;
+  const widened = options.allowWidenedSelectors === true;
+  // A namespace the caller binds is the caller's: the module leaves it out. Nothing else the
+  // caller gives changes the module's text; a token symbol changes only what the check reads.
+  const own = declared ? [...defined].filter((name) => NAMESPACE_KEYS.has(name)).sort() : [];
   const isPlain =
+    declared &&
+    !widened &&
+    own.length === 0 &&
     options.tokens === undefined &&
-    (options.defined === undefined || options.defined.size === 0) &&
-    options.allowWidenedSelectors !== true &&
-    options.namespaces !== false;
+    ![...defined].some((name) => everySymbol().has(name));
   if (isPlain) {
     const kept = plain.get(chain.id);
     if (kept !== undefined) return kept;
   }
-  const namespaces =
-    options.namespaces === false
-      ? new Map<string, NamespaceEntry>()
-      : options.allowWidenedSelectors === true
-        ? namespacesOn(chain, true)
-        : chainNamespaces(chain);
+  const module = namesModule(chain, declared, widened, own);
   const tokens = options.tokens ?? resolveTokenMap(chain);
-  const defined = options.defined ?? new Set<string>();
   const absentTokens = new Set(
     [...everySymbol()].filter((symbol) => !tokens.has(symbol) && !defined.has(symbol)),
   );
+  const names: ChainNames = { chain, ...module, absentTokens, tokens };
+  if (isPlain) plain.set(chain.id, names);
 
+  return names;
+}
+
+/**
+ * The module declaring `chain`'s namespaces, all of them (`declared`) but those named in `own`, or
+ * none. A token is no export: its value is a define where the chain has it, and a test of one it
+ * lacks is written `0` where it stands (`absent-names.ts`). The plain module is served to every
+ * compile; one made for a compile's own options under a path of its own, beside the plain one so
+ * its ABIs are `./abi/…` too, to that compile alone (`RsCompileInput.modules`).
+ */
+function namesModule(
+  chain: CanonicalChain,
+  declared: boolean,
+  widened: boolean,
+  own: readonly string[],
+): NamesModule {
+  const isPlain = declared && !widened && own.length === 0;
+  const key = `${chain.id}:${declared}:${widened}:${own.join(",")}`;
+  const kept = (isPlain ? plainModules : ownModules).get(key);
+  if (kept !== undefined) return kept;
+  const namespaces = !declared
+    ? new Map<string, NamespaceEntry>()
+    : widened
+      ? namespacesOn(chain, true)
+      : chainNamespaces(chain);
   const imports = new Map<string, string>();
   const lines: string[] = [];
   for (const namespace of namespaces.values()) {
-    if (defined.has(namespace.key)) continue;
+    if (own.includes(namespace.key)) continue;
     lines.push(`export const ${namespace.key} = ${namespaceLiteral(namespace, imports, "./")};`);
   }
-  for (const symbol of absentTokens) lines.push(`export const ${symbol} = 0;`);
   const text = [
     `${HEADER} ${chain.slug}.`,
     ...[...imports].map(([path, binding]) => `import ${binding} from "${path}";`),
     ...lines,
     "",
   ].join("\n");
-  // A compile with options of its own is served under a path of its own, so a module the compiler
-  // keeps for the chain is never read for it; beside the plain one, so its ABIs are `./abi/…` too.
-  // Only the plain module is kept: one made for a compile's options is that compile's to serve
-  // (`RsCompileInput.modules`), so a process compiling with many keeps none of them.
   const path = isPlain ? `${chain.slug}.js` : `${chain.slug}-${hash(text)}.js`;
-  if (isPlain) MODULE_TEXT.set(path, text);
-  const names: ChainNames = { chain, path, text, namespaces, absentTokens, tokens };
-  if (isPlain) plain.set(chain.id, names);
+  const module = { path, text, namespaces };
+  if (isPlain) {
+    MODULE_TEXT.set(path, text);
+    plainModules.set(key, module);
+  } else {
+    if (ownModules.size >= KEPT_MODULES) ownModules.delete(ownModules.keys().next().value!);
+    ownModules.set(key, module);
+  }
 
-  return names;
+  return module;
 }
 
 /** The module `chainKeyModule(chain)` serves: `<ChainKey>`, the chain's namespaces one level down. */

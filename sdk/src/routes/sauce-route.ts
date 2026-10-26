@@ -607,8 +607,9 @@ function compileForChain(
   // What a test rules out the compiler never compiles, and no pass below may read: a token write,
   // a balance, a venue call or a binding there would add an account, a check or a binding of its
   // own. Blanked in place, so every position the passes and the compiler report is the program's.
-  // A contract binding under `&&`/`||` as a value is made the bool the language gives, `!!(…)`.
-  source = withoutDead(source, named.dead, named.bindingSides);
+  // A contract binding under `&&`/`||` as a value is made the bool the language gives, `!!(…)`, and
+  // a test of a token the chain lacks is its zero, `0`.
+  source = withoutDead(source, named.dead, named.bindingSides, named.zeros);
 
   // A method called on a registry call's result (`UniswapV3.Factory.getPool(...).liquidity()`, or on
   // a `const` holding one) becomes the spelling that names the contract the result is
@@ -750,13 +751,16 @@ function compileForChain(
       // The names module made for this compile's options is served to this compile alone.
       modules: new Map([[names.path, names.text]]),
       // A module the caller serves is checked as the entry is, and compiled as the entry is: its
-      // ruled-out code blanked, a contract under `&&`/`||` as a value made the bool.
+      // ruled-out code blanked, a contract under `&&`/`||` as a value made the bool, a test of a
+      // token the chain lacks its zero.
       checkModule: (path, text) => {
         const module = checkNames(text, names, { ...checks, file: path });
         for (const on of module.chainKeys) keys.set(on.id, on);
-        return module.dead.length === 0 && module.bindingSides.length === 0
+        return module.dead.length === 0 &&
+          module.bindingSides.length === 0 &&
+          module.zeros.length === 0
           ? undefined
-          : withoutDead(text, module.dead, module.bindingSides);
+          : withoutDead(text, module.dead, module.bindingSides, module.zeros);
       },
       ...(args === undefined ? {} : { args }),
     });

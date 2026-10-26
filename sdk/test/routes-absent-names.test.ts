@@ -584,21 +584,41 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
     );
   });
 
-  it("a names module a compile's own options make is served to that compile alone, and kept by none", () => {
-    // Each define set that shadows a registry name makes a module of its own. A process compiling
-    // with many (the MCP server, a page) must not keep one per set.
+  it("a names module a compile's own options make is served to that compile alone, and the same options make the same one", () => {
+    // A define of a namespace leaves it out of the module, which is then one of the compile's own:
+    // served to that compile alone, and the same text under the same path for the same options,
+    // so the compiler reads it once. A define of anything else keeps the module every compile is
+    // served.
     const base = requireChain("base");
+    const paths = new Set<string>();
     for (let i = 1; i <= 5; i++) {
       const value = BigInt(`0x${String(i).repeat(40)}`);
-      const names = chainNames(base, { defined: new Set(["USDT"]) });
+      const names = chainNames(base, { defined: new Set(["UniswapV3"]) });
       expect(names.path).toMatch(/^base-[0-9a-f]{8}\.js$/);
-      const source = "function main(): Address { return USDT; }";
-      expect(hex("base", source, { defines: { USDT: value } })).toBe(
+      expect(names.text).not.toMatch(/export const UniswapV3 =/);
+      paths.add(names.path);
+      const source = "function main(): Address { return UniswapV3; }";
+      expect(hex("base", source, { defines: { UniswapV3: value } })).toBe(
         hex("base", `function main(): Address { return ${`0x${String(i).repeat(40)}`}; }`),
       );
       expect(chainModuleText(`${CHAIN_MODULE_ROOT}/${names.path}`)).toBeUndefined();
     }
+    expect(paths.size).toBe(1);
     expect(chainModuleText(`${CHAIN_MODULE_ROOT}/base.js`)).toBeDefined();
+    expect(chainNames(base, { defined: new Set(["USDT", "amount"]) }).path).toBe("base.js");
+    expect(chainNames(base, { defined: new Set(["amount"]) })).toBe(chainNames(base));
+  });
+
+  it("no module declares a token: a test of one the chain lacks is its zero, written where it stands", () => {
+    // Base registers no USDT. The module holds the namespaces alone, and the check writes the
+    // tested read `0`, so a read no check saw is the compiler's undeclared name, never a zero.
+    expect(chainNames(requireChain("base")).text).not.toMatch(/export const USDT\b/);
+    const source = "function main(): Uint256 {\n  if (!USDT) { return 1; }\n  return 2;\n}";
+    const { dead, bindingSides, zeros } = checkNames(source, chainNames(requireChain("base")));
+    expect(withoutDead(source, dead, bindingSides, zeros)).toBe(
+      `function main(): Uint256 {\n  if (!0   ) { return 1; }\n${" ".repeat("  return 2;".length)}\n}`,
+    );
+    expect(hex("base", source)).toBe(hex("base", "function main(): Uint256 { return 1; }"));
   });
 
   it("the compile serves them to its own installation alone, whatever the check reads", () => {
@@ -612,12 +632,15 @@ function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPoo
       packages: { [INSTALLED_CHAIN_MODULE]: `${CHAIN_MODULE_ROOT}/${names.path}` },
     };
     expect(() =>
-      compileWithRs({ ...installed, source: "function main(): bool { return USDT == 0; }" }),
+      compileWithRs({
+        ...installed,
+        source: "function main(): bool { return UniswapV3.Factory == 0; }",
+      }),
     ).not.toThrow();
     expect(() =>
       compileWithRs({
         ...installed,
-        source: `import { USDT as missing } from "@sauce/chain";\nfunction main(): Address { return missing; }`,
+        source: `import { UniswapV3 as missing } from "@sauce/chain";\nfunction main(): Address { return missing.Factory; }`,
       }),
     ).toThrow();
     // A path into them, relative to any module, finds nothing and is refused.

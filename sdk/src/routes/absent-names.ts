@@ -1,10 +1,11 @@
 /**
  * Where a program may use a name its chain lacks.
  *
- * Every name of the registry is declared on every chain (`chain-module.ts`), and a name the chain
- * lacks is zero there. The compiler decides a test of a zero while it compiles — `if (X)`, `!X`,
- * `X != 0`, `X == 0`, `?:`, `&&`, `||` — and does not compile the branch it rules out, so one program
- * can use a venue only on the chains that have it:
+ * Every name of the registry is a name on every chain (`chain-module.ts`), and a name the chain
+ * lacks is zero there: a contract in its namespace's module, a token where the check writes a test
+ * of it `0` (`zeros`), so no module declares ~1,800 tokens. The compiler decides a test of a zero
+ * while it compiles — `if (X)`, `!X`, `X != 0`, `X == 0`, `?:`, `&&`, `||` — and does not compile
+ * the branch it rules out, so one program can use a venue only on the chains that have it:
  *
  *   if (UniswapV3.Factory) { pool = UniswapV3.Factory.getPool(USDC, WETH, 500); }
  *
@@ -25,12 +26,14 @@
  * any other value is live, and a name the chain lacks in it is refused. So a helper only a ruled-out
  * branch calls is checked as if it ran: it names the venue under its own test, or is refused.
  *
- * The same read refuses what no chain can have: a contract a namespace does not have, an interface
- * used as a deployment, a family alias's contract more than one member has, a protocol used as a
- * contract, and `available(X)`, which is removed. A name the program declares is its own where the
- * compiler reads it so, and nowhere else (`lexical-scope.ts`): a block's `const` hides a registry
- * name only in that block and from its declaration on, so a use of the name after the block is the
- * registry's.
+ * The same read refuses what no chain can have: a contract a namespace does not have, a method its
+ * ABI does not have, an interface used as a deployment, a family alias's contract more than one
+ * member has, a protocol used as a contract, and `available(X)`, which is removed. It refuses them
+ * in code a test rules out too, read as on a chain that takes the branch, where only a name this
+ * chain lacks is let be. A name the program declares is its own where the compiler reads it so, and
+ * nowhere else (`lexical-scope.ts`): a block's `const` hides a registry name only in that block and
+ * from its declaration on, so a use of the name after the block is the registry's. A name the
+ * caller binds (`defined`) is the caller's everywhere.
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import type { AccessorTarget } from "./protocol-rewrite.js";
@@ -87,6 +90,9 @@ export interface NameCheck {
   /** Each side of a `&&`/`||` whose whole is a value that is, or may be, a contract binding, in
    *  source order: `withoutDead` makes it `!!(…)`, so the whole is the bool the language says. */
   readonly bindingSides: readonly { readonly start: number; readonly end: number }[];
+  /** Each read of a token symbol the chain lacks, every one a test (any other use is refused), in
+   *  source order: `withoutDead` writes it `0`, its value here, so no module declares it. */
+  readonly zeros: readonly { readonly start: number; readonly end: number }[];
 }
 
 /**
@@ -107,14 +113,16 @@ export interface DeadCode {
  * as it did; the SDK's rewrites, which run after the check, then see only code that compiles. Each
  * of `bindingSides` becomes `!!(…)`: 2.6.0 gives a contract binding under `&&`/`||` back as the
  * whole, where the language gives true or false, and `!!` is that bool (a constant folds to the
- * same bytes). These are the only characters that move.
+ * same bytes). Each of `zeros`, a token the chain lacks, becomes `0`, padded with spaces. These are
+ * the only characters that move.
  */
 export function withoutDead(
   source: string,
   dead: readonly DeadCode[],
   bindingSides: readonly { readonly start: number; readonly end: number }[] = [],
+  zeros: readonly { readonly start: number; readonly end: number }[] = [],
 ): string {
-  if (dead.length === 0 && bindingSides.length === 0) return source;
+  if (dead.length === 0 && bindingSides.length === 0 && zeros.length === 0) return source;
   const blank = (text: string): string => text.replace(/[^\n]/g, " ");
   const edits = [
     ...dead.map(({ start, end, kind }) => {
@@ -136,6 +144,7 @@ export function withoutDead(
       { start, end: start, text: "!!(" },
       { start: end, end, text: ")" },
     ]),
+    ...zeros.map(({ start, end }) => ({ start, end, text: `0${" ".repeat(end - start - 1)}` })),
   ].sort((a, b) => a.start - b.start || a.end - b.end);
   const out: string[] = [];
   let cursor = 0;
@@ -270,6 +279,7 @@ export function checkNames(
   const chainKeys = new Map<number, CanonicalChain>();
   const dead: DeadCode[] = [];
   const bindingSides: { start: number; end: number }[] = [];
+  const zeros = new Map<number, { start: number; end: number }>();
   /** Whether the visit is in code a test of names rules out (`ruledOut`): there nothing is reported
    *  and a name this chain lacks is let be, and what no chain can have is refused as anywhere. */
   let validating = false;
@@ -811,6 +821,11 @@ export function checkNames(
             "of main.",
         );
       }
+      // A test of a token the chain lacks reads its zero, written where it stands: the names
+      // module declares no token, so a read of one no check saw is the compiler's to refuse.
+      if (reference.present === false && asTest && !validating) {
+        zeros.set(reference.node.start, { start: reference.node.start, end: reference.node.end });
+      }
       return;
     }
     const { entry } = reference;
@@ -1307,5 +1322,6 @@ export function checkNames(
     chainKeys: [...chainKeys.values()],
     dead: dead.sort((a, b) => a.start - b.start),
     bindingSides: bindingSides.sort((a, b) => a.start - b.start),
+    zeros: [...zeros.values()].sort((a, b) => a.start - b.start),
   };
 }
