@@ -28,7 +28,7 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | cbETH | `0xBe9895146f7AF43049ca1c1AE358B0541Ea49704` | `Cbeth.CbETH` |
-| [Base](../../../sauce-chains/references/base.md) | cbETH | `0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22` | `Cbeth.CbETH` |
+| [Base](../../../sauce-chains/references/base.md) | cbETH | `0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22` | `Cbeth.CbETH`; not on this deployment: `exchangeRate` |
 
 ## ABI
 
@@ -41,3 +41,5 @@ function main() {
 - `balanceOf(address account) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
 - `transfer(address to, uint256 amount) returns (bool)`
+
+Not on Base's cbETH (`0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22`), whose code does not dispatch them: `exchangeRate`. A call to one reverts there.

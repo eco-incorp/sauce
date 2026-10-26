@@ -30,6 +30,7 @@ Liquid staking protocol for Ethereum. Stake ETH and receive stETH, a rebasing li
 - Always use wstETH for DeFi integrations (Aave, Uniswap, etc.) since rebasing tokens cause issues
 - submit() requires ETH sent as msg.value. The referral parameter can be zero address
 - Approve stETH to wstETH contract before calling wrap()
+- On Arbitrum, wstETH is the bridged token: an ERC-20 (`balanceOf`, `transfer`, `approve`) with no `wrap`, `unwrap`, `getStETHByWstETH` or `getWstETHByStETH`, so each of those reverts there. Wrap, unwrap and read the stETH rate on Ethereum
 
 ## Its names in a program
 
@@ -48,7 +49,7 @@ function main() {
 | --- | --- | --- | --- |
 | [Ethereum](../chains/ethereum.md) | stETH | `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84` | `Lido.StETH` |
 | [Ethereum](../chains/ethereum.md) | wstETH | `0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0` | `Lido.WstETH` |
-| [Arbitrum One](../chains/arbitrum.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETH` |
+| [Arbitrum One](../chains/arbitrum.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETH`; not on this deployment: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH` |
 
 ## ABI
 
@@ -68,6 +69,8 @@ function main() {
 - `unwrap(uint256 _wstETHAmount) returns (uint256)`
 - `getStETHByWstETH(uint256 _wstETHAmount) view returns (uint256)`
 - `getWstETHByStETH(uint256 _stETHAmount) view returns (uint256)`
+
+Not on Arbitrum One's wstETH (`0x5979D7b546E38E414F7E9822514be443A4800529`), whose code does not dispatch them: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH`. A call to one reverts there.
 
 ## Next
 

@@ -29,7 +29,7 @@ function main() {
 | --- | --- | --- | --- |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | stETH | `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84` | `Lido.StETH` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | wstETH | `0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0` | `Lido.WstETH` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETH` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETH`; not on this deployment: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH` |
 
 ## ABI
 
@@ -49,3 +49,5 @@ function main() {
 - `unwrap(uint256 _wstETHAmount) returns (uint256)`
 - `getStETHByWstETH(uint256 _wstETHAmount) view returns (uint256)`
 - `getWstETHByStETH(uint256 _stETHAmount) view returns (uint256)`
+
+Not on Arbitrum One's wstETH (`0x5979D7b546E38E414F7E9822514be443A4800529`), whose code does not dispatch them: `wrap`, `unwrap`, `getStETHByWstETH`, `getWstETHByStETH`. A call to one reverts there.

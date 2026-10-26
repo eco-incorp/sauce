@@ -67,6 +67,7 @@ import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { toFunctionSelector } from "viem";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
@@ -74,6 +75,9 @@ export const SKILLS_DIR = join(SDK, "..", "skills");
 /** The manual's generated reference. */
 export const DOCS_REFERENCE_DIR = join(SDK, "..", "docs", "reference");
 const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
+/** What each deployment's code dispatches, captured from the chain: a selector the evidence records
+ *  as `null` is one the deployed code does not dispatch, so a call to it reverts there. */
+const EVIDENCE = join(SDK, "test", "fixtures", "registry-abi", "evidence.json");
 /** The SauceScript reference: hand-written in its skill, and copied into the manual as it is. */
 const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
 
@@ -333,6 +337,13 @@ export async function skillsReferences(api, documented) {
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
+  // Per deployment and ABI export, the selectors its code dispatches (and `null` for those it lacks).
+  const dispatched = new Map(
+    JSON.parse(readFileSync(EVIDENCE, "utf8")).instances.map((i) => [
+      `${i.protocol}|${i.abi}|${i.chainId}|${i.address.toLowerCase()}`,
+      i.selectors ?? {},
+    ]),
+  );
   const globals = globalsIndex(sdk, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
@@ -382,12 +393,30 @@ export async function skillsReferences(api, documented) {
       for (const [role, address] of Object.entries(deployment.addresses ?? {})) {
         if (typeof address !== "string") continue;
         const named = contracts.find((c) => c.address.toLowerCase() === address.toLowerCase());
+        const abi = exportFor(role, deployment.chainId);
+        // The ABI's functions this deployment's code does not dispatch: a bridged token without the
+        // L1 token's functions, say. The page says so beside the deployment.
+        const selectors = dispatched.get(
+          `${info.slug}|${abi}|${deployment.chainId}|${address.toLowerCase()}`,
+        );
+        const absent =
+          abi === undefined || selectors === undefined
+            ? []
+            : [
+                ...new Set(
+                  exports
+                    .find((e) => e.name === abi)
+                    .functions.filter((f) => selectors[toFunctionSelector(f)] === null)
+                    .map((f) => f.name),
+                ),
+              ];
         deployed.push({
           chain: chain.slug,
           role,
           address,
           namespace: named === undefined ? undefined : `${namespace.name}.${named.name}`,
-          abi: exportFor(role, deployment.chainId),
+          abi,
+          absent,
         });
       }
     }
@@ -790,8 +819,8 @@ const DOCS_SITE = {
   chainIndexNotes: [
     "On a preview chain the `sauce` command and the MCP server still compile and read: `sauce",
     "compile`, `sauce globals`, `sauce price`, `sauce pools` and `sauce pot`'s prediction. `sauce",
-    "simulate` does not run there: the released engine is not deployed on a preview chain, so the",
-    "simulation stops (exit 1). What they refuse there, before any endpoint is reached or any",
+    "simulate` does not depend on the label: it runs wherever the release is deployed on the",
+    "chain, and says so where it is not. What they refuse there, before any endpoint is reached or any",
     "key is read, is building or sending a transaction;",
     "[the command's](../guides/cli.md#supported-and-preview-chains) and",
     "[the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. Every",
@@ -813,13 +842,15 @@ const DOCS_SITE = {
 const href = (from, to) => posix.relative(posix.dirname(from), to);
 const chainLink = (site, from, chain) => `[${chain.name}](${href(from, site.chain(chain.slug))})`;
 
-/** How a program names a deployment: its namespace contract, or its ABI bound to the address. */
+/** How a program names a deployment: its namespace contract, or its ABI bound to the address, and
+ *  which of that ABI's functions the deployment's code lacks (a call to one reverts there). */
 const spelling = (d) =>
-  d.namespace !== undefined
+  (d.namespace !== undefined
     ? code(d.namespace)
     : d.abi !== undefined
       ? `${code(`${d.abi}.at(${d.address})`)}`
-      : "no registry ABI";
+      : "no registry ABI") +
+  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "");
 
 function renderGlobals(data) {
   const { globals } = data;
@@ -928,8 +959,8 @@ function renderGlobals(data) {
     "# Chain globals",
     "",
     "A chain name qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). Each line says whether the initial",
-    "release supports the chain: a program compiles for every chain, and it simulates and its",
-    "transactions are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
+    "release supports the chain: a program compiles for every chain, and its transactions are",
+    "built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
     "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
     "preview chain.",
     "",
@@ -1078,7 +1109,7 @@ function supportLines(chain, supported, site) {
   return [
     `**Preview chain.** Sauce supports transactions on ${names} only. On ${chain.name} a program`,
     "compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),",
-    "but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`",
+    "and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`",
     "command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and",
     "`sauce pot --deploy` are refused,",
     `naming the supported chains and how to request this one${site === DOCS_SITE ? " (the last section)" : ""}.`,
@@ -1108,7 +1139,7 @@ function renderChain(chain, supported, site) {
   lines.push(
     "| Fact | Value |",
     "| --- | --- |",
-    `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and read; no simulation, and no transaction is built or sent"} |`,
+    `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and read; no transaction is built or sent"} |`,
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
     `| Chain id | ${chain.id} |`,
     `| Kind | ${kindName(chain.kind)} |`,
@@ -1453,8 +1484,8 @@ function renderChainIndex(data, site) {
   const path = site.chainIndex;
   const supported = `${andList(data.support.supported.map((c) => c.name))} (${data.support.supported.map((c) => code(c.slug)).join(", ")})`;
   const preview = [
-    "a program compiles and the reads work there, but it does not simulate (the released engine is not",
-    "deployed there), and the `sauce` command and the MCP server build and",
+    "a program compiles and the reads work there, and `sauce simulate` runs wherever the release is",
+    "deployed on the chain, but the `sauce` command and the MCP server build and",
     "send no transaction, and say so with the supported chains and how to request that chain. To",
     `request one, look among the [existing requests](${data.support.issues}) and add your use case to`,
     `the chain's, or [open one](${data.support.newIssue}) with the chain-support issue form; each`,
@@ -1698,6 +1729,13 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         "",
         ...e.functions.map((f) => `- \`${f.text}\`${f.returned}`),
         "",
+        // Where a deployment of a role this ABI speaks for lacks some of its functions.
+        ...p.deployed
+          .filter((d) => d.abi === e.name && d.absent.length)
+          .flatMap((d) => [
+            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them: ${d.absent.map(code).join(", ")}. A call to one reverts there.`,
+            "",
+          ]),
       );
     }
   }
@@ -2481,7 +2519,7 @@ function docsIntros(data) {
     [site.chainIndex]:
       `Sauce knows ${data.chains.length} chains. On ${supported}, the \`sauce\` command builds and ` +
       "sends transactions. Every other chain is a preview chain: programs compile there and the " +
-      "reads work, but nothing is simulated or sent. Each chain has a page with its tokens and the protocols a " +
+      "reads work, and simulate runs wherever the release is deployed, but no transaction is built or sent. Each chain has a page with its tokens and the protocols a " +
       "program can call on it.",
     [site.protocolIndex]:
       "Every protocol a program can call by name, grouped by what it does: exchanges, lending " +
@@ -2526,8 +2564,8 @@ function docsIntros(data) {
       "there with the name a program writes for each contract. " +
       (chain.support === "supported"
         ? `The \`sauce\` command builds and sends transactions on ${chain.name}.`
-        : `${chain.name} is a preview chain: programs compile here and the reads work, but the ` +
-          "released engine is not deployed here, so nothing is simulated or sent.");
+        : `${chain.name} is a preview chain: programs compile here and the reads work, and ` +
+          "simulate runs wherever the release is deployed, but no transaction is built or sent.");
     intros[site.chainStocks(chain.slug)] =
       "A tokenized stock is a token that follows the price of a company's shares. These are the " +
       `ones on ${chain.name}, each with the symbol a program writes for it.`;

@@ -6,19 +6,19 @@
 
 > Everything a program can name on Avalanche C-Chain: its tokens, and every protocol deployed there
 > with the name a program writes for each contract. Avalanche C-Chain is a preview chain: programs
-> compile here and the reads work, but the released engine is not deployed here, so nothing is
-> simulated or sent.
+> compile here and the reads work, and simulate runs wherever the release is deployed, but no
+> transaction is built or sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Avalanche C-Chain a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
-but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
+and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and read; no simulation, and no transaction is built or sent |
+| Support | preview: compile and read; no transaction is built or sent |
 | Slug (`--chain`) | `avalanche`; also `avax` |
 | Chain id | 43114 |
 | Kind | EVM |
@@ -83,7 +83,7 @@ address.
 | [KyberSwap](../protocols/kyberswap.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
 | [KyberSwap Aggregator](../protocols/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [LayerZero](../protocols/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |
-| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
 | [1inch](../protocols/oneinch.md) | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` | `Oneinch.AggregationRouterV6` |
 | [OpenOcean](../protocols/openocean.md) | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` | `Openocean.ExchangeV2` |
 | [ParaSwap](../protocols/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
