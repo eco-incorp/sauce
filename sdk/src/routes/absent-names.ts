@@ -44,6 +44,7 @@ import type { AccessorTarget } from "./protocol-rewrite.js";
 import { CANONICAL_CHAINS, requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { collectDeclaredNames, isTypeDeclaration, type AstNode } from "./ast-walk.js";
+import { BUILTIN_GLOBALS } from "./builtins.generated.js";
 import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "./accessor-index.js";
 import {
   CHAIN_MODULE,
@@ -139,25 +140,14 @@ export function unknownNameError(
 }
 
 /**
- * The names the language gives meaning to with no declaration: its namespaces, its functions and
- * conversions, `Array` of `new Array(n)`, the tag of `` hex`…` ``, the Pot and `Token(addr)`.
+ * The names the language gives meaning to with no declaration: each builtin's root, generated from
+ * the SauceScript reference's `builtins.json` (`BUILTIN_GLOBALS`); `undefined`, which the reference
+ * gives a missing static member (`{ a: 1, b: undefined }`) and no builtin is; and the SDK's Pot and
+ * `Token(addr)`.
  */
 export const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
-  "ctx",
-  "crypto",
-  "Math",
-  "abi",
-  "evm",
-  "svm",
-  "Int256",
-  "Uint256",
-  "Array",
-  "require",
-  "revert",
-  "log",
-  "eval",
-  "program",
-  "hex",
+  ...BUILTIN_GLOBALS,
+  "undefined",
   POT_NAME,
   TOKEN_FACTORY_NAME,
 ]);

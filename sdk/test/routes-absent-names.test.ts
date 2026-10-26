@@ -1153,7 +1153,13 @@ describe("code a test rules out holds no name nothing gives meaning to: a typo c
     );
   });
 
-  it("the language's names are every root of the SauceScript reference", () => {
+  it("`undefined`, the value of a missing static member, is the language's: the reviewer's program compiles on Base, Optimism and Solana", () => {
+    const source = program("const cfg = { a: 1, b: undefined }; return cfg.a;");
+    expect(() => hex("base", source)).not.toThrow();
+    for (const chain of ["optimism", "solana"]) expect(hex(chain, source)).toBe(hex(chain, EMPTY));
+  });
+
+  it("the language's names are every root of the SauceScript reference, its `undefined`, and the SDK's `pot` and `Token`", () => {
     const { intrinsics } = JSON.parse(
       readFileSync(
         resolve(process.cwd(), "../skills/sauce-script/references/builtins.json"),
@@ -1165,7 +1171,7 @@ describe("code a test rules out holds no name nothing gives meaning to: a typo c
       .filter(({ name }) => name !== "throw" && name !== "unary minus")
       .map(({ name }) => /^[A-Za-z_$][\w$]*/.exec(name.replace(/^new /, ""))![0]);
     expect(roots.length).toBeGreaterThan(50);
-    for (const root of roots) expect(LANGUAGE_NAMES).toContain(root);
+    expect(new Set(LANGUAGE_NAMES)).toEqual(new Set([...roots, "undefined", "pot", "Token"]));
   });
 });
 
@@ -1198,6 +1204,7 @@ describe("the probe of the caller's ambient modules asks only about names the co
       ),
     ).toEqual(new Set(["USDT"]));
   });
+
 });
 
 describe("a registry contract's members are its ABI's methods and the balances read of it", () => {
