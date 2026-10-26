@@ -39,12 +39,12 @@ describe("decode", () => {
     const array = returning("Uint256[]", "[1, 2]");
     assert.deepEqual(array.decode(concat([word(1), word(2)])), [1n, 2n]);
 
-    const self = "0x00000000000000000000000000000000000000AA";
+    const pot = "0x00000000000000000000000000000000000000AA";
     const record = returning(
       "{ amount: Uint256; to: Address; ok: bool }",
-      "{ amount: 7, to: ctx.self(), ok: true }",
+      "{ amount: 7, to: pot, ok: true }",
     );
-    assert.deepEqual(record.decode(concat([word(7), padHex(self, { size: 32 }), word(true)])), {
+    assert.deepEqual(record.decode(concat([word(7), padHex(pot, { size: 32 }), word(true)])), {
       amount: 7n,
       to: "0x00000000000000000000000000000000000000AA",
       ok: true,

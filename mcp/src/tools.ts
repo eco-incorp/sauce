@@ -1951,7 +1951,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .union([z.string().min(2).max(LIMITS.source), z.looseObject({})])
           .describe(
             'The actions document: { "version": 1, "actions": [...] }, as an object or its JSON ' +
-              'text. Amounts are base-unit integers as decimal strings; `recipient: "self"` is ' +
+              'text. Amounts are base-unit integers as decimal strings; `recipient: "pot"` is ' +
               "the Pot. Leave chainId out to compile it for `chain`.",
           ),
         chain: chainRef

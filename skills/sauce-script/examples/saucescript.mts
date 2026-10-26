@@ -151,7 +151,7 @@ check(
 compiled("function main(\n  a: Uint256,\n  b: Uint256,\n) { require(a > b); }"); // a trailing comma
 // A script: its statements are the entry, beside its imports and helpers.
 compiled(
-  'import { balanceOf as held } from "@sauce/token";\nfunction twice(x: Uint256): Uint256 { return x * 2; }\nrequire(twice(held(USDC, ctx.self())) >= 0);',
+  'import { balanceOf as held } from "@sauce/token";\nfunction twice(x: Uint256): Uint256 { return x * 2; }\nrequire(twice(held(USDC, pot)) >= 0);',
 );
 compiled("require(chainId == 8453);");
 // ...and its top-level consts are its own locals, which a helper cannot read.

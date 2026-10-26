@@ -96,12 +96,12 @@ interface SauceBinding {
 declare const ctx: {
   /** The account that called: the Pot's owner, on a cook. */
   msgSender(): bigint;
-  /** The program's own address: the Pot. */
+  /** The program's own address: the Pot on an EVM chain, which a program writes `pot`. */
   self(): bigint;
   chainId(): bigint;
   blockNumber(): bigint;
   timestamp(): bigint;
-  /** The Pot's native balance. */
+  /** The program's own native balance: the Pot's on an EVM chain, which a program writes `pot.balance`. */
   selfBalance(): bigint;
   msgData(): SauceBytes;
   balance(address: SauceInt): bigint;

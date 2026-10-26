@@ -313,7 +313,8 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
     attached as the Pot. Not proof of who sent the transaction.
   - Example: `require(ctx.msgSender() == OWNER);`
 - `ctx.self()` → number, **Both**
-  - On EVM: the executing contract: the Pot, which holds the program's balances and allowances
+  - On EVM: the executing contract: the Pot, which holds the program's balances and allowances; a
+    program compiled for a chain names it `pot`
   - On SVM: the engine's program id, which owns every Pot account: `pot.owner == ctx.self()`
     holds for a Pot, and for any other account assigned to the engine, so it does not prove an
     account is the Pot; re-deriving the Pot's address does

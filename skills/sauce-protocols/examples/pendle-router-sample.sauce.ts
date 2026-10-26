@@ -130,7 +130,7 @@ function buyAndSellPt(market: Address, token: Address, amount: Uint256, minBack:
   const [, pt] = PendleRouterSample.at(market).readTokens();
   approve(token, Pendle.Router, amount);
   const [netPtOut] = Pendle.Router.swapExactTokenForPt(
-    ctx.self(),
+    pot,
     market,
     0,
     defaultApprox(),
@@ -139,7 +139,7 @@ function buyAndSellPt(market: Address, token: Address, amount: Uint256, minBack:
   );
   approve(pt, Pendle.Router, netPtOut);
   const [netTokenOut] = router.swapExactPtForToken(
-    ctx.self(),
+    pot,
     market,
     netPtOut,
     createTokenOutputStruct(token, minBack),
@@ -152,10 +152,10 @@ function buyAndSellYt(market: Address, token: Address, amount: Uint256, minBack:
   require(Pendle.Router);
   const router = PendleRouterSample.at(Pendle.Router);
   const [, , yt] = PendleRouterSample.at(market).readTokens();
-  const ytBefore = Token(yt).balanceOf(ctx.self());
+  const ytBefore = Token(yt).balanceOf(pot);
   approve(token, Pendle.Router, amount);
   Pendle.Router.swapExactTokenForYt(
-    ctx.self(),
+    pot,
     market,
     0,
     defaultApprox(),
@@ -163,10 +163,10 @@ function buyAndSellYt(market: Address, token: Address, amount: Uint256, minBack:
     emptyLimit(),
   );
   // The router reports a hair less YT than it delivers; selling what arrived leaves none behind.
-  const netYtOut = Token(yt).balanceOf(ctx.self()) - ytBefore;
+  const netYtOut = Token(yt).balanceOf(pot) - ytBefore;
   approve(yt, Pendle.Router, netYtOut);
   const [netTokenOut] = router.swapExactYtForToken(
-    ctx.self(),
+    pot,
     market,
     netYtOut,
     createTokenOutputStruct(token, minBack),
@@ -179,7 +179,7 @@ function zapInAndZapOut(market: Address, token: Address, amount: Uint256, minBac
   require(Pendle.Router);
   approve(token, Pendle.Router, amount);
   const [netLpOut] = Pendle.Router.addLiquiditySingleToken(
-    ctx.self(),
+    pot,
     market,
     0,
     defaultApprox(),
@@ -188,7 +188,7 @@ function zapInAndZapOut(market: Address, token: Address, amount: Uint256, minBac
   );
   approve(market, Pendle.Router, netLpOut);
   const [netTokenOut] = Pendle.Router.removeLiquiditySingleToken(
-    ctx.self(),
+    pot,
     market,
     netLpOut,
     createTokenOutputStruct(token, minBack),
@@ -202,10 +202,10 @@ function mintRedeemSy(market: Address, token: Address, amount: Uint256, minBack:
   const router = PendleRouterSample.at(Pendle.Router);
   const [sy] = PendleRouterSample.at(market).readTokens();
   approve(token, Pendle.Router, amount);
-  const netSyOut = router.mintSyFromToken(ctx.self(), sy, 0, createTokenInputStruct(token, amount));
+  const netSyOut = router.mintSyFromToken(pot, sy, 0, createTokenInputStruct(token, amount));
   approve(sy, Pendle.Router, netSyOut);
   const netTokenOut = router.redeemSyToToken(
-    ctx.self(),
+    pot,
     sy,
     netSyOut,
     createTokenOutputStruct(token, minBack),
@@ -223,17 +223,12 @@ function mintRedeemPtAndYt(
   const router = PendleRouterSample.at(Pendle.Router);
   const [, pt, yt] = PendleRouterSample.at(market).readTokens();
   approve(token, Pendle.Router, amount);
-  const [netPyOut] = router.mintPyFromToken(
-    ctx.self(),
-    yt,
-    0,
-    createTokenInputStruct(token, amount),
-  );
+  const [netPyOut] = router.mintPyFromToken(pot, yt, 0, createTokenInputStruct(token, amount));
   // Redeeming burns an equal amount of PT and YT.
   approve(pt, Pendle.Router, netPyOut);
   approve(yt, Pendle.Router, netPyOut);
   const [netTokenOut] = router.redeemPyToToken(
-    ctx.self(),
+    pot,
     yt,
     netPyOut,
     createTokenOutputStruct(token, minBack),
@@ -251,7 +246,7 @@ function zeroPriceImpactZap(
   require(Pendle.Router);
   approve(token, Pendle.Router, amount);
   const [netLpOut, netYtOut] = PendleRouterSample.at(Pendle.Router).addLiquiditySingleTokenKeepYt(
-    ctx.self(),
+    pot,
     market,
     minLpOut,
     0,

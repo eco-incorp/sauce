@@ -43,11 +43,11 @@ not ship with.
 | --- | --- | ---: | ---: |
 | [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 130 (84) |
 | [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 77 (30) |
-| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 169 (121) |
+| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 165 (117) |
 | [Aave V3: credit delegation](#aave-v3-credit-delegation) | [aave/code-examples-protocol, `MyV2CreditDelegation.sol`](https://github.com/aave/code-examples-protocol/blob/c343d266d04f210e1de9a7f008fdbc8ad63e5c22/V2/Credit%20Delegation/MyV2CreditDelegation.sol) | 83 (33) | 81 (42) |
 | [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 203 (141) |
-| [Morpho Blue: the snippets](#morpho-blue-the-snippets) | [morpho-org/morpho-blue-snippets, `MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol) | 380 (219) | 256 (197) |
-| [Pendle: the router samples](#pendle-the-router-samples) | [pendle-finance/pendle-examples-public, `RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol) | 265 (204) | 287 (226) |
+| [Morpho Blue: the snippets](#morpho-blue-the-snippets) | [morpho-org/morpho-blue-snippets, `MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol) | 380 (219) | 250 (191) |
+| [Pendle: the router samples](#pendle-the-router-samples) | [pendle-finance/pendle-examples-public, `RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol) | 265 (204) | 282 (221) |
 | [Uniswap V4: the swap guide](#uniswap-v4-the-swap-guide) | [Uniswap/docs, `swapping.mdx`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/protocols/v4/guides/swapping/swapping.mdx) | 79 (61) | 80 (42) |
 | [Balancer V2: batch swaps](#balancer-v2-batch-swaps) | [balancer/docs, `batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md) | 30 (30) | 103 (56) |
 | [Balancer V2: a flash swap](#balancer-v2-a-flash-swap) | [balancer/docs, `flash-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/flash-swaps.md) | 30 (30) | 65 (30) |
@@ -176,7 +176,7 @@ function main(
   recipient: Address,
 ): Uint256 {
   require(Maker.Dai);
-  const spendable = balanceOf(Maker.Dai, ctx.self());
+  const spendable = balanceOf(Maker.Dai, pot);
   require(spendable >= (exactOutput ? limit : amount), "the DAI to spend is not in the Pot");
   if (multihop) {
     return exactOutput
@@ -275,7 +275,7 @@ function main(
 
 ## Uniswap V3: the liquidity examples
 
-Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 169 lines, 121 of them code.
+Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 165 lines, 117 of them code.
 
 ```ts
 // Uniswap's liquidity examples, ported: the `LiquidityExamples` contract of Uniswap's V3 guides
@@ -344,7 +344,7 @@ function mintNewPosition(amount0ToMint: Uint256, amount1ToMint: Uint256): Moved 
     amount1Desired: amount1ToMint,
     amount0Min: 0,
     amount1Min: 0,
-    recipient: ctx.self(),
+    recipient: pot,
     deadline: ctx.timestamp(),
   });
   // What the position did not take stays in the Pot; the allowance for it does not stand.
@@ -417,11 +417,7 @@ function increaseLiquidityCurrentRange(
 
 function retrieveNFT(tokenId: Uint256, owner: Address): Moved {
   require(UniswapV3.NonfungiblePositionManager);
-  UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).safeTransferFrom(
-    ctx.self(),
-    owner,
-    tokenId,
-  );
+  UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).safeTransferFrom(pot, owner, tokenId);
   return { tokenId, liquidity: 0, amount0: 0, amount1: 0 };
 }
 
@@ -493,7 +489,7 @@ const VARIABLE = 2;
 function depositCollateral(asset: Address, amount: Uint256): Uint256 {
   require(AaveV3.Pool);
   approve(asset, AaveV3.Pool, amount);
-  AaveV3.Pool.supply(asset, amount, ctx.self(), 0);
+  AaveV3.Pool.supply(asset, amount, pot, 0);
   return amount;
 }
 
@@ -507,7 +503,7 @@ function approveBorrower(borrower: Address, amount: Uint256, asset: Address): Ui
 function repayBorrower(amount: Uint256, asset: Address): Uint256 {
   require(AaveV3.Pool);
   approve(asset, AaveV3.Pool, amount);
-  const repaid = AaveV3.Pool.repay(asset, amount, VARIABLE, ctx.self());
+  const repaid = AaveV3.Pool.repay(asset, amount, VARIABLE, pot);
   // A repayment above the debt pays the debt: the allowance for the rest does not stand.
   if (repaid < amount) {
     approve(asset, AaveV3.Pool, 0);
@@ -518,7 +514,7 @@ function repayBorrower(amount: Uint256, asset: Address): Uint256 {
 function withdrawCollateral(asset: Address, to: Address): Uint256 {
   require(AaveV3.Pool);
   const aToken = AaveV3Delegation.at(AaveV3.Pool).getReserveAToken(asset);
-  const assetBalance = Token(aToken).balanceOf(ctx.self());
+  const assetBalance = Token(aToken).balanceOf(pot);
   return AaveV3.Pool.withdraw(asset, assetBalance, to);
 }
 
@@ -619,17 +615,17 @@ function withdraw(comet: Address, asset: Address, amount: Uint256): Uint256 {
 
 function repayFullBorrow(comet: Address): Uint256 {
   const baseAsset = Comet.at(comet).baseToken();
-  const before = Token(baseAsset).balanceOf(ctx.self());
+  const before = Token(baseAsset).balanceOf(pot);
   // Supplying the maximum repays exactly the borrow: the allowance for the rest goes back to zero.
   approve(baseAsset, comet, MAX_UINT);
   Comet.at(comet).supply(baseAsset, MAX_UINT);
   approve(baseAsset, comet, 0);
-  return before - Token(baseAsset).balanceOf(ctx.self());
+  return before - Token(baseAsset).balanceOf(pot);
 }
 
 function claimCometRewards(comet: Address, rewards: Address): Uint256 {
-  const owed = Comet.at(rewards).getRewardOwed(comet, ctx.self());
-  Comet.at(rewards).claim(comet, ctx.self(), true);
+  const owed = Comet.at(rewards).getRewardOwed(comet, pot);
+  Comet.at(rewards).claim(comet, pot, true);
   return owed.owed;
 }
 
@@ -737,11 +733,11 @@ function main(
     borrowApr: getBorrowApr(comet),
     rewardAprForSupplyBase: getRewardApr(comet, rewardFeed, false),
     rewardAprForBorrowBase: getRewardApr(comet, rewardFeed, true),
-    borrowable: getBorrowableAmount(comet, ctx.self()),
+    borrowable: getBorrowableAmount(comet, pot),
     borrowCollateralFactor,
     liquidateCollateralFactor,
     price: Comet.at(comet).getPrice(feed),
-    rewardsOwed: Comet.at(rewards).getRewardOwed(comet, ctx.self()).owed,
+    rewardsOwed: Comet.at(rewards).getRewardOwed(comet, pot).owed,
     tvl: getTvl(comet),
   };
 }
@@ -749,7 +745,7 @@ function main(
 
 ## Morpho Blue: the snippets
 
-Ported from morpho-org/morpho-blue-snippets, [`src/morpho-blue/MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol): 380 lines of Solidity, 219 of them code. In Sauce, `morpho-blue-snippets.sauce.ts`: 256 lines, 197 of them code.
+Ported from morpho-org/morpho-blue-snippets, [`src/morpho-blue/MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol): 380 lines of Solidity, 219 of them code. In Sauce, `morpho-blue-snippets.sauce.ts`: 250 lines, 191 of them code.
 
 ```ts
 // Morpho's snippets, ported: `MorphoBlueSnippets` is Morpho's catalogue of how to use one Morpho
@@ -838,7 +834,7 @@ function supply(id: Uint256, amount: Uint256): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
   approve(params.loanToken, MorphoBlue.Morpho, amount);
-  const [assets, shares] = MorphoBlue.Morpho.supply(params, amount, 0, ctx.self(), hex``);
+  const [assets, shares] = MorphoBlue.Morpho.supply(params, amount, 0, pot, hex``);
   return { assets: assets, shares: shares };
 }
 
@@ -846,14 +842,14 @@ function supplyCollateral(id: Uint256, amount: Uint256): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
   approve(params.collateralToken, MorphoBlue.Morpho, amount);
-  MorphoBlue.Morpho.supplyCollateral(params, amount, ctx.self(), hex``);
+  MorphoBlue.Morpho.supplyCollateral(params, amount, pot, hex``);
   return { assets: amount, shares: 0 };
 }
 
 function withdrawCollateral(id: Uint256, amount: Uint256, receiver: Address): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
-  MorphoBlue.Morpho.withdrawCollateral(params, amount, ctx.self(), receiver);
+  MorphoBlue.Morpho.withdrawCollateral(params, amount, pot, receiver);
   return { assets: amount, shares: 0 };
 }
 
@@ -864,7 +860,7 @@ function withdraw(id: Uint256, step: Uint256, amount: Uint256, receiver: Address
   const morpho = MorphoReads.at(MorphoBlue.Morpho);
   const params = morpho.idToMarketParams(id);
   morpho.accrueInterest(params);
-  const supplyShares = morpho.position(id, ctx.self()).supplyShares;
+  const supplyShares = morpho.position(id, pot).supplyShares;
   let assets = amount;
   let shares = 0;
   if (step == 5) {
@@ -887,20 +883,14 @@ function withdraw(id: Uint256, step: Uint256, amount: Uint256, receiver: Address
       shares = supplyShares;
     }
   }
-  const [withdrawn, burned] = MorphoBlue.Morpho.withdraw(
-    params,
-    assets,
-    shares,
-    ctx.self(),
-    receiver,
-  );
+  const [withdrawn, burned] = MorphoBlue.Morpho.withdraw(params, assets, shares, pot, receiver);
   return { assets: withdrawn, shares: burned };
 }
 
 function borrow(id: Uint256, amount: Uint256, receiver: Address): Moved {
   require(MorphoBlue.Morpho);
   const params = MorphoReads.at(MorphoBlue.Morpho).idToMarketParams(id);
-  const [assets, shares] = MorphoBlue.Morpho.borrow(params, amount, 0, ctx.self(), receiver);
+  const [assets, shares] = MorphoBlue.Morpho.borrow(params, amount, 0, pot, receiver);
   return { assets: assets, shares: shares };
 }
 
@@ -912,7 +902,7 @@ function repay(id: Uint256, step: Uint256, amount: Uint256): Moved {
   const params = morpho.idToMarketParams(id);
   morpho.accrueInterest(params);
   const market = morpho.market(id);
-  const borrowShares = morpho.position(id, ctx.self()).borrowShares;
+  const borrowShares = morpho.position(id, pot).borrowShares;
   let assets = amount;
   let shares = 0;
   if (step == 10) {
@@ -934,7 +924,7 @@ function repay(id: Uint256, step: Uint256, amount: Uint256): Moved {
     params,
     shares > 0 ? 0 : assets,
     shares,
-    ctx.self(),
+    pot,
     hex``,
   );
   return { assets: repaid, shares: burned };
@@ -968,7 +958,7 @@ function main(step: Uint256, id: Uint256, amount: Uint256, receiver: Address): S
   const params = morpho.idToMarketParams(id);
   morpho.accrueInterest(params);
   const market = morpho.market(id);
-  const position = morpho.position(id, ctx.self());
+  const position = morpho.position(id, pot);
   let borrowApy = 0;
   let supplyApy = 0;
   if (params.irm != 0) {
@@ -1012,7 +1002,7 @@ function main(step: Uint256, id: Uint256, amount: Uint256, receiver: Address): S
 
 ## Pendle: the router samples
 
-Ported from pendle-finance/pendle-examples-public, [`test/RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol): 265 lines of Solidity, 204 of them code. In Sauce, `pendle-router-sample.sauce.ts`: 287 lines, 226 of them code.
+Ported from pendle-finance/pendle-examples-public, [`test/RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol): 265 lines of Solidity, 204 of them code. In Sauce, `pendle-router-sample.sauce.ts`: 282 lines, 221 of them code.
 
 ```ts
 // Pendle's router samples, ported: `RouterSample` is Pendle's tour of its router, as tests that
@@ -1147,7 +1137,7 @@ function buyAndSellPt(market: Address, token: Address, amount: Uint256, minBack:
   const [, pt] = PendleRouterSample.at(market).readTokens();
   approve(token, Pendle.Router, amount);
   const [netPtOut] = Pendle.Router.swapExactTokenForPt(
-    ctx.self(),
+    pot,
     market,
     0,
     defaultApprox(),
@@ -1156,7 +1146,7 @@ function buyAndSellPt(market: Address, token: Address, amount: Uint256, minBack:
   );
   approve(pt, Pendle.Router, netPtOut);
   const [netTokenOut] = router.swapExactPtForToken(
-    ctx.self(),
+    pot,
     market,
     netPtOut,
     createTokenOutputStruct(token, minBack),
@@ -1169,10 +1159,10 @@ function buyAndSellYt(market: Address, token: Address, amount: Uint256, minBack:
   require(Pendle.Router);
   const router = PendleRouterSample.at(Pendle.Router);
   const [, , yt] = PendleRouterSample.at(market).readTokens();
-  const ytBefore = Token(yt).balanceOf(ctx.self());
+  const ytBefore = Token(yt).balanceOf(pot);
   approve(token, Pendle.Router, amount);
   Pendle.Router.swapExactTokenForYt(
-    ctx.self(),
+    pot,
     market,
     0,
     defaultApprox(),
@@ -1180,10 +1170,10 @@ function buyAndSellYt(market: Address, token: Address, amount: Uint256, minBack:
     emptyLimit(),
   );
   // The router reports a hair less YT than it delivers; selling what arrived leaves none behind.
-  const netYtOut = Token(yt).balanceOf(ctx.self()) - ytBefore;
+  const netYtOut = Token(yt).balanceOf(pot) - ytBefore;
   approve(yt, Pendle.Router, netYtOut);
   const [netTokenOut] = router.swapExactYtForToken(
-    ctx.self(),
+    pot,
     market,
     netYtOut,
     createTokenOutputStruct(token, minBack),
@@ -1196,7 +1186,7 @@ function zapInAndZapOut(market: Address, token: Address, amount: Uint256, minBac
   require(Pendle.Router);
   approve(token, Pendle.Router, amount);
   const [netLpOut] = Pendle.Router.addLiquiditySingleToken(
-    ctx.self(),
+    pot,
     market,
     0,
     defaultApprox(),
@@ -1205,7 +1195,7 @@ function zapInAndZapOut(market: Address, token: Address, amount: Uint256, minBac
   );
   approve(market, Pendle.Router, netLpOut);
   const [netTokenOut] = Pendle.Router.removeLiquiditySingleToken(
-    ctx.self(),
+    pot,
     market,
     netLpOut,
     createTokenOutputStruct(token, minBack),
@@ -1219,10 +1209,10 @@ function mintRedeemSy(market: Address, token: Address, amount: Uint256, minBack:
   const router = PendleRouterSample.at(Pendle.Router);
   const [sy] = PendleRouterSample.at(market).readTokens();
   approve(token, Pendle.Router, amount);
-  const netSyOut = router.mintSyFromToken(ctx.self(), sy, 0, createTokenInputStruct(token, amount));
+  const netSyOut = router.mintSyFromToken(pot, sy, 0, createTokenInputStruct(token, amount));
   approve(sy, Pendle.Router, netSyOut);
   const netTokenOut = router.redeemSyToToken(
-    ctx.self(),
+    pot,
     sy,
     netSyOut,
     createTokenOutputStruct(token, minBack),
@@ -1240,17 +1230,12 @@ function mintRedeemPtAndYt(
   const router = PendleRouterSample.at(Pendle.Router);
   const [, pt, yt] = PendleRouterSample.at(market).readTokens();
   approve(token, Pendle.Router, amount);
-  const [netPyOut] = router.mintPyFromToken(
-    ctx.self(),
-    yt,
-    0,
-    createTokenInputStruct(token, amount),
-  );
+  const [netPyOut] = router.mintPyFromToken(pot, yt, 0, createTokenInputStruct(token, amount));
   // Redeeming burns an equal amount of PT and YT.
   approve(pt, Pendle.Router, netPyOut);
   approve(yt, Pendle.Router, netPyOut);
   const [netTokenOut] = router.redeemPyToToken(
-    ctx.self(),
+    pot,
     yt,
     netPyOut,
     createTokenOutputStruct(token, minBack),
@@ -1268,7 +1253,7 @@ function zeroPriceImpactZap(
   require(Pendle.Router);
   approve(token, Pendle.Router, amount);
   const [netLpOut, netYtOut] = PendleRouterSample.at(Pendle.Router).addLiquiditySingleTokenKeepYt(
-    ctx.self(),
+    pot,
     market,
     minLpOut,
     0,
@@ -1378,9 +1363,9 @@ function swapExactInputSingle(key: PoolKey, amountIn: Uint256, minAmountOut: Uin
     abi.encode(key.currency0, amountIn),
     abi.encode(key.currency1, minAmountOut),
   ];
-  const before = Token(key.currency1).balanceOf(ctx.self());
+  const before = Token(key.currency1).balanceOf(pot);
   UniswapV4.UniversalRouter.execute(V4_SWAP, [abi.encode(actions, params)], ctx.timestamp() + 20);
-  const amountOut = Token(key.currency1).balanceOf(ctx.self()) - before;
+  const amountOut = Token(key.currency1).balanceOf(pot) - before;
   require(amountOut >= minAmountOut, "Insufficient output amount");
   return amountOut;
 }
@@ -1476,7 +1461,7 @@ function main(
     },
   ];
   const funds = {
-    sender: ctx.self(),
+    sender: pot,
     fromInternalBalance: false,
     recipient,
     toInternalBalance: false,
@@ -1555,7 +1540,7 @@ function main(
     { poolId: buyPool, assetInIndex: 1, assetOutIndex: 0, amount: 0, userData: hex`` },
   ];
   const funds = {
-    sender: ctx.self(),
+    sender: pot,
     fromInternalBalance: false,
     recipient,
     toInternalBalance: false,

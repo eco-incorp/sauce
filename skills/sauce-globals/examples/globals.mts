@@ -21,7 +21,7 @@ for (const slug of ["ethereum", "optimism"]) {
 // Writes lower to @sauce/token in every spelling; reads stay typed IERC20 calls.
 const writes = routes.compileSauceProgram(
   "ethereum",
-  "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, ctx.self(), amount); require(pot.USDC > 0); }",
+  "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, pot, amount); require(pot.USDC > 0); }",
 ).source;
 check(/__sauce_transfer\(USDT,/.test(writes), "USDT.transfer is SafeERC20");
 check(/__sauce_approve\(USDT,/.test(writes), "USDT.approve is forceApprove");
@@ -66,13 +66,13 @@ check(
 // IERC20 is imported, never ambient, and under its own name it collides with the binding a token
 // read brings in; an alias does not.
 check(
-  rejects("base", "function main(t: Address) { require(IERC20.at(t).balanceOf(ctx.self()) > 0); }"),
+  rejects("base", "function main(t: Address) { require(IERC20.at(t).balanceOf(pot) > 0); }"),
   "IERC20 needs an import",
 );
 check(
   !rejects(
     "base",
-    'import { IERC20 as Erc20 } from "./artifacts/IERC20.json";\nfunction main(t: Address) { require(Erc20.at(t).balanceOf(ctx.self()) > pot.USDC); }',
+    'import { IERC20 as Erc20 } from "./artifacts/IERC20.json";\nfunction main(t: Address) { require(Erc20.at(t).balanceOf(pot) > pot.USDC); }',
   ),
   "IERC20 imported under another name, beside a token read",
 );

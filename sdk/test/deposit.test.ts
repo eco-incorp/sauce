@@ -251,9 +251,9 @@ describe("toDeposit guards", () => {
     );
   });
 
-  it("defaults beneficiary to 'self' and referralCode to 0n", () => {
+  it("defaults beneficiary to the Pot, 'pot', and referralCode to 0n", () => {
     const normalized = toDeposit(aaveSpec());
-    expect(normalized.beneficiary).toBe("self");
+    expect(normalized.beneficiary).toBe("pot");
     expect(normalized.extra.referralCode).toBe(0n);
   });
 });

@@ -130,8 +130,39 @@ through the breaking change.
   `owner` as the Pot's owner's account; `Solana`, like every chain, has no account member, so an
   editor shows a retired spelling as an error.
 
-### Also breaking
+### The registry
 
+- **Fixed** (EVM): three of the fifteen mixed-case addresses 0.99.16 rewrote with a valid checksum
+  have no code, and a fourth is the wrong contract; the next entries fix them.
+- **Removed** (EVM): Seamless, wound down in 2026, and with it the `Seamless` namespace on Base.
+  Its `PoolAddressesProvider` row had no code: the pool's own provider is another address.
+- **Fixed** (EVM): Yearn V3's `VaultFactory` on Ethereum is Yearn's v3.0.4 factory,
+  `0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F`. The registry had an address one character off,
+  with no code.
+- **Fixed** (EVM): `Sommelier.CellarRouter` is Sommelier's Cellar Router. The registry had the
+  address of one of its Cellars, ETH-BTC Trend.
+- **Removed** (EVM): `Beefy.BIFI` on Polygon, where the address has no code, and on Base, where it
+  is the bridged mooBIFI vault share, not BIFI.
+- **Breaking** (EVM): On Arbitrum, Lido's wstETH is `Lido.WstETHBridged`, the bridged ERC-20, with
+  its own ABI (`WstETHBridgedABI`). `Lido.WstETH` is on Ethereum only. `Lido.WstETH.wrap(…)` and the
+  stETH-rate reads compiled on Arbitrum and reverted there; they no longer compile there.
+
+**Also breaking:**
+
+- The Pot is `"pot"` outside programs too, with no alias, as it is `pot` inside them:
+  - Actions documents (`@eco-incorp/sauce/actions`, `sauce actions` and every command that takes a
+    document, the MCP server's `sauce_actions`): a `recipient`, `onBehalfOf` or `owner` of `"pot"`
+    is the executing Pot. `"self"` is refused at its path:
+    `actions[1].recipient: the Pot is "pot", not "self": write "pot"`. The JSON Schema's recipient
+    takes `"pot"`, and the `Recipient` type is `` `0x${string}` | "pot" ``. The SauceScript a
+    document lowers to (what `sauce actions` prints and `compileProgram(...).source` returns) names
+    the Pot `pot` and its native balance `pot.balance`; the bytecode is the same. A split swap
+    compiled with no `chain` keeps the compiler's `ctx.self()`. `compileSplitSwap`'s
+    `sweep.recipient` takes `"pot"` and refuses `"self"` at `sweep.recipient`.
+  - `token.Token.balanceOf({ token, owner: "pot" })` and `token.evmBalanceExpression` read the
+    Pot's balance; `owner: "self"` is refused, naming `"pot"`.
+  - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
+    is `bigint | "pot" | null`.
 - `sauce globals --chain solana`, `sauce_globals` and `routes.sourceGlobals("solana").accounts`
   list `Account(key)`, `Account.pda(program, [seeds])`, the five programs as `Account.<program>`,
   `pot` and `owner`, where they listed the `Solana.*` spellings.

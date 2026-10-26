@@ -62,7 +62,7 @@ const V3_BY_KEY = {
   factory: "UniswapV3.Factory",
   fee: 500,
   amountOutMin: "0",
-  recipient: "self",
+  recipient: "pot",
 };
 
 const NAMED = doc(
@@ -75,7 +75,7 @@ const NAMED = doc(
     tokenOut: "USDC",
     factory: "UniswapV2.Factory",
     amountOutMin: "0",
-    recipient: "self",
+    recipient: "pot",
   },
   { type: "approve", token: "USDC", spender: "Permit2.Permit2" },
   {
@@ -86,7 +86,7 @@ const NAMED = doc(
     fee: 500,
     tickSpacing: 10,
     amountOutMin: "0",
-    recipient: "self",
+    recipient: "pot",
   },
 );
 
@@ -200,7 +200,7 @@ describe("names — one document, compiled for each chain", () => {
       const named = doc(
         { type: "balanceOf", token: "USDC" },
         { ...V3_BY_KEY, amount: undefined, factory: undefined, fee: undefined, pool },
-        { type: "transfer", token: "WETH", recipient: "self" },
+        { type: "transfer", token: "WETH", recipient: "pot" },
       );
       const addressed = doc(
         { type: "balanceOf", token: addressOf(chain, "USDC") },
@@ -213,7 +213,7 @@ describe("names — one document, compiled for each chain", () => {
           tokenIn: addressOf(chain, "USDC"),
           tokenOut: addressOf(chain, "WETH"),
         },
-        { type: "transfer", token: addressOf(chain, "WETH"), recipient: "self" },
+        { type: "transfer", token: addressOf(chain, "WETH"), recipient: "pot" },
       );
       assert.deepEqual(
         compileProgram(JSON.parse(JSON.stringify(named)), { chain }).bytecode,
@@ -405,7 +405,7 @@ describe("names — tokenized stocks", () => {
     tokenIn: "USDC",
     tokenOut: "SPCXc",
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
   };
 
   it("takes a stock's symbol as its issuer writes it, in the schema too", () => {
@@ -489,7 +489,7 @@ describe("names — native", () => {
         doc(action, { type: "wrapETH", amountRef: "eth", weth: "WETH" }),
         { chain: "ethereum" },
       );
-      assert.match(source, /ctx\.selfBalance\(\)/, action.type);
+      assert.match(source, /= pot\.balance;/, action.type);
       assert.doesNotMatch(source, /IErc20\.at\(0\)/, action.type);
     }
   });
@@ -540,7 +540,7 @@ describe("names — quotes", () => {
       tokenIn: "USDC",
       tokenOut: "WETH",
       amountOutMin: "0",
-      recipient: "self" as const,
+      recipient: "pot" as const,
     };
     const addressed = {
       ...named,

@@ -16,10 +16,11 @@ import {
   quoteAction,
   serializeProgram,
 } from "../src/index.js";
-import { ACTION_TYPES } from "../src/spec.js";
+import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionProgram, ActionType } from "../src/types.js";
+import { compileSauceProgram } from "../../sdk/dist/routes/index.js";
 import { REPO_ROOT } from "./anvil.js";
-import { A, B, R, SAMPLES, sampleProgram } from "./samples.js";
+import { A, B, R, SAMPLES, T, sampleProgram } from "./samples.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
@@ -99,7 +100,7 @@ describe("action programs — chaining is part of the document", () => {
         tokenIn: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
         tokenOut: USDC,
         amountOutMin: "1",
-        recipient: "self",
+        recipient: "pot",
         saveOutputAs: "usdc",
       },
       {
@@ -119,7 +120,7 @@ describe("action programs — chaining is part of the document", () => {
     // an ERC-20 call checked like SafeERC20.
     assert.match(source, /hex`095ea7b3[0-9a-f]*68b3465833fb72a70ecdf485e0e4c7bd8665fc45`;/);
     assert.match(source, /\.concat\(t_out0\.toBytesBe\(32\)\)/);
-    assert.match(source, /= uniswapV3\([^;]*, t_out1, 0, 1, ctx\.self\(\)\);/);
+    assert.match(source, /= uniswapV3\([^;]*, t_out1, 0, 1, pot\);/);
     assert.match(source, /let v_usdc = amt\d+;/);
     assert.match(source, /hex`a9059cbb[0-9a-f]*3000000000000000000000000000000000000001`;/);
     assert.match(source, /\.concat\(v_usdc\.toBytesBe\(32\)\)/);
@@ -513,6 +514,88 @@ describe("action programs — balancerV2BatchSwap's assets are distinct", () => 
         error.issues.some(
           (issue) => /amountOutMin$/.test(issue.path) && /2\^255/.test(issue.message),
         ),
+    );
+  });
+});
+
+describe('action programs — the Pot is "pot", and "self" is refused', () => {
+  /** Every (action type, field) that takes an address or the Pot. */
+  const potFields = ACTION_TYPES.flatMap((type) =>
+    Object.entries(ACTION_SPECS[type].fields)
+      .filter(([, def]) => def.kind.k === "recipient")
+      .map(([field]) => [type, field] as const),
+  );
+
+  /** The sample of `type` with `field` set to `value`. */
+  function withPot(type: ActionType, field: string, value: string): ActionProgram {
+    const program = sampleProgram(type);
+    (program.actions[0] as unknown as Record<string, unknown>)[field] = value;
+
+    return program;
+  }
+
+  it("finds every field that takes the Pot", () => {
+    assert.ok(potFields.length >= 8, potFields.map(([t, f]) => `${t}.${f}`).join(", "));
+  });
+
+  for (const [type, field] of potFields) {
+    it(`${type}.${field}: "pot" parses and compiles`, () => {
+      const program = withPot(type, field, "pot");
+      assert.deepEqual(parseProgram(program), program);
+      assert.ok(compileProgram(program).bytecode.length > 0);
+    });
+
+    it(`${type}.${field}: "self" is refused at the field, naming "pot"`, () => {
+      const program = withPot(type, field, "self");
+      const path = new RegExp(`^actions\\[0\\]\\.${field}: .*"pot".*`);
+      assert.ok(
+        issues(program).some((line) => path.test(line) && /self/.test(line)),
+        issues(program).join("\n"),
+      );
+      assert.throws(() => compileProgram(program), ProgramError);
+    });
+  }
+
+  it('the schema takes "pot" and rejects "self"', () => {
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(programSchema());
+    for (const [type, field] of potFields) {
+      assert.ok(validate(withPot(type, field, "pot")), `${type}.${field}: pot`);
+      assert.equal(validate(withPot(type, field, "self")), false, `${type}.${field}: self`);
+    }
+  });
+
+  it('a recipient on another chain takes neither "pot" nor "self"', () => {
+    for (const word of ["pot", "self"]) {
+      assert.ok(rejects(withAction({ ...SAMPLES.cctpBridge, recipient: word })), word);
+    }
+  });
+
+  it("lowers the Pot as `pot` and its coin as `pot.balance`, never `ctx.self()`", () => {
+    const swap = withPot("uniswapV3Swap", "recipient", "pot");
+    assert.match(compileProgram(swap).source, /uniswapV3\([^;]*, 0, 1, pot\);/);
+
+    const chained = parseProgram({
+      version: 1,
+      chainId: 1,
+      actions: [{ type: "nativeBalance" }, { type: "wrapETH", weth: T }],
+    });
+    const { source } = compileProgram(chained);
+    assert.match(source, /const nat\d+ = pot\.balance;/);
+    for (const type of ACTION_TYPES) {
+      const { source: text } = compileProgram(sampleProgram(type));
+      assert.doesNotMatch(text, /ctx\.self/, type);
+    }
+  });
+
+  it("compiles `pot` to the bytes `ctx.self()` was", () => {
+    const swap = withPot("uniswapV3Swap", "recipient", "pot");
+    const { source, contracts, bytecode } = compileProgram(swap, { chain: "ethereum" });
+    const old = source.replace(/\bpot\b/g, "ctx.self()");
+    assert.notEqual(old, source);
+    assert.deepEqual(
+      compileSauceProgram("ethereum", old, { contracts }).bytecode,
+      bytecode,
+      "the same program",
     );
   });
 });

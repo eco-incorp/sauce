@@ -40,7 +40,7 @@ const ROUND_TRIP = doc(
     factory: "UniswapV3.Factory",
     fee: 500,
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
     saveOutputAs: "weth",
   },
   {
@@ -50,7 +50,7 @@ const ROUND_TRIP = doc(
     tokenOut: "USDC",
     factory: "UniswapV2.Factory",
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
   },
 );
 
@@ -333,7 +333,7 @@ describe("a chain-agnostic action document, executed", () => {
             tokenIn: "WETH",
             tokenOut: "USDC",
             amountOutMin: "1",
-            recipient: "self",
+            recipient: "pot",
           };
           const [named, addressed] = await runEach(
             env(),
@@ -392,7 +392,7 @@ describe("a chain-agnostic action document, executed", () => {
         tokenIn: WAVAX,
         tokenOut: USDC,
         amountOutMin: "1",
-        recipient: "self",
+        recipient: "pot",
       };
       const [named, addressed] = await runEach(
         env(),
