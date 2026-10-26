@@ -242,6 +242,49 @@ upgrade authority, which can replace them after the check.
 - **Now refused (Solana): `pot.owner`.** An account's `.owner` is the program that owns it, so
   `pot.owner` read the program owning the Pot's account, not the Pot's owner. The refusal names
   `Solana.owner`, the owner who signs the cook.
+- **Breaking (both): every registry name is declared on every chain, and `available(X)` is
+  removed.** Each protocol namespace, family aliases included, and each token symbol some chain
+  registers is a name of every program. A contract the chain has is bound at its address, one with
+  no ABI is its address, and a contract or token the chain lacks is zero. Where you wrote
+  `available(X)`, test the name itself. `if (X)`, `!X`, `X != 0`, `X == 0`, `?:`, `&&` and `||` are
+  decided as the program compiles, and the branch a test rules out is not compiled, even when it
+  calls the absent contract, reads `pot.<TOKEN>` of the absent token, or holds EVM-only code on
+  Solana. Such a program compiles to the bytes `available(X)` produced, and on Solana asks for the
+  accounts it did: a ruled-out token write, balance, venue call or binding adds none. A call to
+  `available(...)` is refused with "`available(X)` is removed: test the name itself, `if (X)`.",
+  and TypeScript no longer declares it. A decision held in a variable is live code: in
+  `const has = USDT != 0; if (has) { … }` the branch is checked as if it runs. A program's own
+  declaration of a name wins in the block it is declared in, from the declaration on; a type-only
+  import (`import type { USDT }`) declares none. The names are no module a program imports:
+  `import … from "@sauce/chain"`, and any path or package mapping that reaches them, is refused.
+  `&&` and `||` give true or false, never one of their sides, and now do on a contract too:
+  compiler 2.6.0 hands a contract binding under them back as the whole, so the SDK makes each such
+  side the bool (`!!`) where the whole is a value: a registry contract, an alias of one
+  (`const a = UniswapV3.Factory; return a || 0;` returns `true`, as it did before this release),
+  an alias of an alias, a record field holding one, and an `<Abi>.at(x)` the program writes. Its
+  bytes are those of the program written with `!!`, and a scalar side is left as written. Fixed:
+  a program's own `IERC20.at(x) || y` as a value returned the operand's address on every earlier
+  release, against the language reference; it is the bool now.
+- **Changed (both): a use of a name the chain lacks is refused at the use, naming the chain.**
+  Outside a branch a test of it rules out, such a name would be address zero. The SDK refuses it
+  before compiling and gives the file, line and column: "`PancakeswapV3.Factory` is not deployed
+  on optimism. A contract the chain lacks is zero there, and only a test of it may use it:
+  `if (PancakeswapV3.Factory) { … }` compiles the branch only where the chain has it. It is
+  deployed on …". A token reads "`USDT` is not a token on arbitrum. Did you mean `USDC` or
+  `USDT0`? …", for the Pot's balance of it (`pot.USDT`) too. For a name another chain has, this
+  replaces "Contract 'X' (slug) is not deployed on 'chain'", "`X` is not a token or protocol on
+  chain" and the compiler's "is not a declared variable". `require(X != 0)` on a chain without `X`
+  is refused as well, since it fails whatever the program does. A name no chain has is an error on
+  every chain, tested or not, and so in a branch a test rules out: a misspelt protocol, token or
+  contract, a name nothing declares, a protocol used as a contract, a method the contract does not
+  have, or a balance read of an address by a name no chain registers as a token, is refused on the
+  chain without the venue too, in the words the chain with it uses ("`Uniswapv3` is not a token or
+  protocol on optimism. Did you mean `UniswapV3`?"), so a program that compiles there compiles
+  where the branch runs. A method a registry
+  contract lacks is refused naming the contract and its methods: "`UniswapV3.Factory.getPol(…)`:
+  `getPol` is not in uniswap-v3.Factory's vendored ABI (known methods: getPool, createPool). Did
+  you mean `getPool`?". A name the caller binds (a define, a `contracts` entry, an export of an
+  `ambient` module) is the caller's on every chain, whatever the registry has it as.
 - **Added (EVM): atomic `try`/`catch`.** A multi-statement block commits its calls, writes and
   assignments on success, or rolls them all back before handling failure. Work before the block
   remains. A sole external-call block has the narrower `.catch()` boundary: successful-return

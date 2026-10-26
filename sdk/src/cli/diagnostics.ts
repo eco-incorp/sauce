@@ -28,7 +28,7 @@ export function describeCompileError(
     return syntaxError(message, loc.line, Number(loc.column ?? 0), file, text);
   }
 
-  return withHints(relocate(message, file, text), text, chain);
+  return withHints(relocate(message, file, text), file, text, chain);
 }
 
 /**
@@ -215,12 +215,39 @@ const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]
 const TOKEN_USE =
   /(?<![\w$.])([A-Z][A-Z0-9]*)\s*\.\s*(?:transfer|transferFrom|approve|balanceOf)\s*\(/g;
 
+/** The locations in `file` a (relocated) diagnostic points at. */
+function sitesIn(message: string, file: string): Array<{ line: number; column: number }> {
+  return message.split("\n").flatMap((line) => {
+    const arrow = /^\s*-->\s*(.+):(\d+):(\d+)$/.exec(line);
+
+    return arrow === null || arrow[1] !== file
+      ? []
+      : [{ line: Number(arrow[2]), column: Number(arrow[3]) }];
+  });
+}
+
+/** Whether `text` tests `symbol` — `if (SYM)`, `!SYM`, `SYM ?`, `SYM &&`, `SYM != 0` — which a
+ *  symbol the chain lacks may be used under. */
+function guarded(text: string, symbol: string): boolean {
+  return new RegExp(
+    `(?:\\bif\\s*\\(\\s*${symbol}\\s*\\)|!\\s*${symbol}\\b(?!\\s*\\.)|(?:&&|\\|\\|)\\s*${symbol}\\b(?!\\s*\\.)` +
+      `|(?<![\\w$.])${symbol}\\s*(?:\\?|&&|\\|\\||[!=]==?\\s*0n?\\b))`,
+  ).test(text);
+}
+
 /**
  * Token syntax on a symbol the chain does not register reaches the compiler as a method call on an
  * undeclared name, and fails as one. Name the actual cause: which symbols the chain has, and how to
- * spell a token it does not.
+ * spell a token it does not. A symbol the chain lacks is valid under a test of it, so only the use
+ * the diagnostic points at is named; a diagnostic placing nothing in the file names every use but
+ * those of a tested symbol.
  */
-function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
+function unregisteredTokens(
+  message: string,
+  file: string,
+  text: string,
+  chain: CanonicalChain,
+): string[] {
   if (chain.kind !== "evm") return [];
   const rows = TOKEN_REGISTRY[chain.id] ?? [];
   const known = new Set(rows.map((row) => row.symbol));
@@ -229,7 +256,21 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
   const stocks = rows.length - listed.length;
   const declared = (name: string): boolean =>
     new RegExp(`\\b(?:const|let|var|function|import)\\b[^;\\n]*\\b${name}\\b`).test(text);
-  const unknown = [...new Set([...text.matchAll(TOKEN_USE)].map((match) => match[1]!))].filter(
+  const sites = sitesIn(message, file);
+  // A use fails where the diagnostic's line and column fall within its text.
+  const failing = (index: number, length: number): boolean => {
+    const before = text.slice(0, index);
+    const line = before.split("\n").length;
+    const column = index - before.lastIndexOf("\n");
+
+    return sites.some(
+      (site) => site.line === line && site.column >= column && site.column < column + length,
+    );
+  };
+  const uses = [...text.matchAll(TOKEN_USE)].filter((match) =>
+    sites.length > 0 ? failing(match.index, match[0].length) : !guarded(text, match[1]!),
+  );
+  const unknown = [...new Set(uses.map((match) => match[1]!))].filter(
     (symbol) => !known.has(symbol) && !declared(symbol),
   );
 
@@ -251,11 +292,14 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
 
 /**
  * On Solana a token is a value (`balanceOf(TSLAx, account)`), so a symbol the cluster does not
- * register fails as an undeclared name. Name the cause: a stock's symbol written in another case,
- * or a token only an EVM chain registers.
+ * register is refused by name: as an undeclared name, or, where another chain registers it, as a
+ * token the cluster lacks. Name the cause: a stock's symbol written in another case, or a token
+ * only an EVM chain registers.
  */
 function unregisteredMints(message: string, chain: CanonicalChain): string[] {
-  const name = /`([A-Za-z_$][\w$]*)` is not a declared variable/.exec(message)?.[1];
+  const name = /`([A-Za-z_$][\w$]*)` is not (?:a declared variable|a token on [\w-]+\.)/.exec(
+    message,
+  )?.[1];
   if (chain.kind !== "svm" || name === undefined) return [];
   const cased = svmTokenRows(chain).find((row) => row.symbol.toUpperCase() === name.toUpperCase());
   if (cased !== undefined) {
@@ -273,14 +317,14 @@ function unregisteredMints(message: string, chain: CanonicalChain): string[] {
       ];
 }
 
-function withHints(message: string, text: string, chain: CanonicalChain): string {
+function withHints(message: string, file: string, text: string, chain: CanonicalChain): string {
   const hints = [
     ...HINTS.flatMap(([pattern, hint]) => {
       const match = pattern.exec(message);
 
       return match === null ? [] : [hint(match)];
     }),
-    ...unregisteredTokens(text, chain),
+    ...unregisteredTokens(message, file, text, chain),
     ...unregisteredMints(message, chain),
   ];
 

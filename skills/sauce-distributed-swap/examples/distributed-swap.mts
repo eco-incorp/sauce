@@ -203,16 +203,16 @@ check(
     code.includes("uniswapV4(manager, USDC, SPCXc, "),
   "the program pays USDC and buys SPCXc, both by name",
 );
-// On a chain without Slipstream's factory, naming it is the compile error the skill quotes; less its
-// Slipstream loop, and with that chain's own SpaceX token, the program compiles for Ethereum, which
-// has Uniswap V3 and V4 and SPCXon.
+// On a chain without Slipstream's factory, calling it is the compile error the skill quotes (with
+// that chain's own SpaceX token, so the venue is the name refused); less its Slipstream loop, the
+// program compiles for Ethereum, which has Uniswap V3 and V4 and SPCXon.
 let refused = "";
 try {
-  routes.compileSauceProgram("ethereum", source);
+  routes.compileSauceProgram("ethereum", source.replaceAll("SPCXc", "SPCXon"));
 } catch (error) {
   refused = String(error);
 }
-const quoted = "Contract 'CLFactoryGaugesV3' (aerodrome-slipstream) is not deployed on 'ethereum'";
+const quoted = "`AerodromeSlipstream.CLFactoryGaugesV3` is not deployed on ethereum.";
 check(refused.includes(quoted), `Ethereum refuses the Slipstream venue: ${refused}`);
 check(prose.includes(quoted), "the skill quotes that error");
 const loop = /\n {2}for \(const spacing of [^\n]*\n[^\n]*\n[^\n]*\n {2}\}/.exec(source);

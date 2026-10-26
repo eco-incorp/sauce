@@ -26,8 +26,8 @@
 //
 // INPUTS IN THE OPEN. A reader must see where every value a program reads comes from. A name the
 // program uses without declaring it must be the registry's (a token, a namespace or a Solana venue's, a chain, a chain
-// define, an ambient module's function), the language's (a builtin, or the SDK's `available`,
-// `Token` and `pot`), an import, or a local or parameter — nothing else. An input is a `main`
+// define, an ambient module's function), the language's (a builtin, or the SDK's `Token` and
+// `pot`), an import, or a local or parameter — nothing else. An input is a `main`
 // parameter, given with `--args`; a compile-time define is the SDK's own mechanism, never a user's
 // input. An exception is the owning checker's, per example and name, with its reason.
 //
@@ -143,8 +143,8 @@ export function executedExamplesProblems({
 export function registryNames(sdk, protocols, builtins) {
   const addresses = new Map();
   const selectors = new Map();
-  // The SDK's own source-level names: `available(...)`, the `Token(...)` wrapper, and bare `pot`.
-  const globals = new Set(["available", "Token", "pot"]);
+  // The SDK's own source-level names: the `Token(...)` wrapper and bare `pot`.
+  const globals = new Set(["Token", "pot"]);
   const add = (map, key, name) => map.set(key, (map.get(key) ?? new Set()).add(name));
   for (const chain of sdk.CANONICAL_CHAINS) {
     const sourceGlobals = sdk.routes.sourceGlobals(chain.slug);
