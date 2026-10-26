@@ -22,7 +22,7 @@ A sequence of protocol actions that compiles to one Sauce program executing on o
 | contract | A protocol contract: a namespace reference, or an address. |
 | token or contract | A contract that is also a token (WETH, wstETH): a registry symbol, a namespace reference, or an address. |
 | address | An address: 0x + 40 hex digits. A mixed-case address must carry a valid EIP-55 checksum. |
-| address or `"self"` | An address, or "self" for the executing Pot. |
+| address or `"pot"` | An address, or "pot" for the executing Pot. |
 | address or 32-byte account | An address, or a 32-byte account on a non-EVM destination (0x + 64 hex digits). |
 | hex bytes | 0x-prefixed hex bytes, an even number of digits. |
 | 32 bytes | 32 bytes: 0x + 64 hex digits. |
@@ -92,7 +92,7 @@ It names its pool one of 2 ways: `pool`, or `factory`.
 | `tokenOut` | token | yes | the token bought; the direction is the pair's sort order |
 | `feePpm` | integer 0–999999 | no | the pair's LP fee in parts per million; absent or 0 is 3000 (0.30%), PancakeSwap V2 is 2500 |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -114,7 +114,7 @@ It names its pool one of 3 ways: `pool`, or `factory` + `fee`, or `factory` + `t
 | `tokenOut` | token | yes | the token bought |
 | `sqrtPriceLimitX96` | base-10 integer string, uint160 | no | a price at which the swap stops, leaving the rest of the input in the Pot; absent or 0 for none |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -134,7 +134,7 @@ Swaps through one Uniswap V4 pool, named by its key, through the Pot's Router, w
 | `hooks` | contract | no | the pool key's hooks contract; absent for a pool with none |
 | `sqrtPriceLimitX96` | base-10 integer string, uint160 | no | a price at which the swap stops, leaving the rest of the input in the Pot; absent or 0 for none |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -153,7 +153,7 @@ Swaps through a Curve pool's 4-argument `exchange`, approving exactly the input;
 | `j` | integer 0–7 | yes | the pool index of the coin bought |
 | `indexType` | `"int128"` or `"uint256"` | yes | the pool's index type: int128 for StableSwap and NG pools, uint256 for CryptoSwap |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot; the pool pays the Pot, which forwards it with a transfer |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot; the pool pays the Pot, which forwards it with a transfer |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -170,7 +170,7 @@ Swaps through one Balancer V2 pool, approving the Vault for exactly the input. C
 | `tokenIn` | token | yes | the token sold, approved to the Vault for exactly the amount |
 | `tokenOut` | token | yes | the token bought |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -188,7 +188,7 @@ Swaps through one DODO V2 pool (DVM, DPP or DSP), paid by a push. Calls @sauce/r
 | `baseToken` | token | yes | the pool's base token; tokenIn and tokenOut must be base and quote |
 | `quoteToken` | token | yes | the pool's quote token |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -211,7 +211,7 @@ Give `tokenX` and `tokenY` together or not at all.
 | `tokenX` | token | no | the pair's token X; tokenIn and tokenOut must be X and Y. Leave tokenX and tokenY out to read them from the pair |
 | `tokenY` | token | no | the pair's token Y |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -227,7 +227,7 @@ Swaps through WOOFi's WooPPV2, paid by a push. Calls @sauce/router woofi: an ERC
 | `tokenIn` | token | yes | the token sold, pushed to the pool |
 | `tokenOut` | token | yes | the token bought |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted, as the pool's own minToAmount; required and positive, because the pool prices from an oracle |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -243,7 +243,7 @@ Swaps through one Maverick V2 pool, through the Pot's Router, which pays what th
 | `tokenIn` | token | yes | the token sold |
 | `tokenOut` | token | yes | the token bought |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -260,7 +260,7 @@ Swaps along a Curve RouterNG route of up to five hops. Calls RouterNG.exchange(a
 | `swapParams` | array of [integer 0–255, integer 0–255, integer 0–255, integer 0–255, integer 0–255] (at least 1, at most 5) | yes | per hop: [i, j, swap_type, pool_type, n_coins]; padded to 5 rows |
 | `pools` | array of contract (at most 5) | yes | a zap pool where a hop needs one; padded to 5 |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -275,7 +275,7 @@ Swaps along Balancer V2 pools in one batch; the output is a balance delta. Calls
 | `steps` | array of objects (below) (at least 1) | yes | the batch's steps; the last step's output asset is the output |
 | `assets` | array of token or `"native"` (at least 2) | yes | each asset the steps index, once only (including symbol/address aliases); "native" and the zero address are the same native currency |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least net payout of the last step's output asset; at most 2^255 inclusive, so its negative Vault limit fits int256 |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `deadline` | integer ≥ 0 | yes | Unix seconds after which the venue reverts |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -378,7 +378,7 @@ Swaps an exact input along a Fraxswap path; the output is a balance delta. Calls
 | `router` | contract | yes | the Fraxswap router |
 | `path` | array of token (at least 2) | yes | the token path; the last token is the output |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `deadline` | integer ≥ 0 | yes | Unix seconds after which the venue reverts |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
@@ -394,7 +394,7 @@ Swaps an exact ERC-20 input through a Fluid DEX T1 pool. Calls FluidDexT1.swapIn
 | `pool` | contract | yes | the pool |
 | `swap0to1` | true or false | yes | true sells token0 |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
-| `recipient` | address or `"self"` | yes | receives the output when no later action spends it; `"self"` keeps it in the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -534,7 +534,7 @@ Requests a Lido withdrawal of stETH; the ETH is claimed later with the withdrawa
 | `type` | `"lidoUnstake"` | yes | the action |
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `withdrawalQueue` | contract | yes | Lido's withdrawal queue; it pulls the stETH, so approve it first |
-| `owner` | address or `"self"` | yes | receives the withdrawal NFT; `"self"` is the Pot |
+| `owner` | address or `"pot"` | yes | receives the withdrawal NFT; `"pot"` is the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -586,7 +586,7 @@ Supplies a token to Aave V3. Calls Pool.supply.
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `pool` | contract | yes | the Aave V3 Pool; it pulls the token, so approve it first |
 | `token` | token | yes | the asset supplied |
-| `onBehalfOf` | address or `"self"` | yes | credited with the position; `"self"` is the Pot |
+| `onBehalfOf` | address or `"pot"` | yes | credited with the position; `"pot"` is the Pot |
 | `referralCode` | integer 0–65535 | no | Aave's referral code; default 0 |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
@@ -601,7 +601,7 @@ Withdraws a token from Aave V3; the output is the amount withdrawn. Calls Pool.w
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `pool` | contract | yes | the Aave V3 Pool |
 | `token` | token | yes | the asset withdrawn |
-| `recipient` | address or `"self"` | yes | receives the asset; `"self"` is the Pot |
+| `recipient` | address or `"pot"` | yes | receives the asset; `"pot"` is the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -615,7 +615,7 @@ Borrows a token from Aave V3 at the variable rate, the only rate it offers. Call
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `pool` | contract | yes | the Aave V3 Pool |
 | `token` | token | yes | the asset borrowed |
-| `onBehalfOf` | address or `"self"` | yes | whose collateral backs the debt; `"self"` is the Pot |
+| `onBehalfOf` | address or `"pot"` | yes | whose collateral backs the debt; `"pot"` is the Pot |
 | `referralCode` | integer 0–65535 | no | Aave's referral code; default 0 |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
@@ -630,7 +630,7 @@ Repays an Aave V3 variable-rate debt. Calls Pool.repay.
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `pool` | contract | yes | the Aave V3 Pool; it pulls the token, so approve it first |
 | `token` | token | yes | the asset repaid |
-| `onBehalfOf` | address or `"self"` | yes | whose debt is repaid; `"self"` is the Pot |
+| `onBehalfOf` | address or `"pot"` | yes | whose debt is repaid; `"pot"` is the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -669,7 +669,7 @@ Transfers an ERC-20 token. Calls ERC-20 transfer, checked like SafeERC20.
 | `type` | `"transfer"` | yes | the action |
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `token` | token | yes | the token |
-| `recipient` | address or `"self"` | yes | the receiver; `"self"` is the Pot |
+| `recipient` | address or `"pot"` | yes | the receiver; `"pot"` is the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -713,7 +713,7 @@ Reads the Pot's balance of a token; the output is that balance. Calls IERC20.bal
 
 ### nativeBalance
 
-Reads the Pot's native balance; the output is that balance. Calls ctx.selfBalance().
+Reads the Pot's native balance; the output is that balance. Calls pot.balance.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |

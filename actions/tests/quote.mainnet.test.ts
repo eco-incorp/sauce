@@ -160,7 +160,7 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
           tokenOut: WETH,
           amount: "1000000",
           amountOutMin: "0",
-          recipient: "self",
+          recipient: "pot",
         },
         { router: env.router },
       ),

@@ -24,10 +24,12 @@
  * constants here, so the emitted main is O(N + n·N) instructions.
  */
 import {
+  COMPILER_POT_NAMES,
   formatBigint,
   fn,
   indent,
   newEmitter,
+  POT_NAMES,
   type Emitter,
   type Expr,
   type Stmt,
@@ -153,7 +155,9 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   if (bucket === 0n) throw new Error(`amount (${amount}) must be at least buckets (${n})`);
 
   const N = candidates.length;
-  const emit = newEmitter();
+  // With no chain the program compiles raw (`compose.ts#compiled`), where the Pot is the
+  // compiler's `ctx.self()`; for a chain, the SDK's program compile reads `pot`.
+  const emit = newEmitter(chain === undefined ? COMPILER_POT_NAMES : POT_NAMES);
   const bindings = new Set<BindingName>();
   const router = new Set<RouterFunction>();
   const use = (result: ActionResult): ActionResult => {

@@ -15,6 +15,7 @@
 import {
   ACTION_SPECS,
   ACTION_TYPES,
+  POT,
   type ActionSpec,
   type FieldDef,
   type FieldKind,
@@ -81,8 +82,8 @@ const DEFS = {
     ],
   },
   recipient: {
-    description: 'An address, or "self" for the executing Pot.',
-    oneOf: [{ $ref: "#/$defs/address" }, { const: "self" }],
+    description: `An address, or "${POT}" for the executing Pot.`,
+    oneOf: [{ $ref: "#/$defs/address" }, { const: POT }],
   },
   remoteRecipient: {
     description: "An address, or a 32-byte account on a non-EVM destination (0x + 64 hex digits).",

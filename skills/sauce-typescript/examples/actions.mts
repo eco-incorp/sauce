@@ -84,7 +84,7 @@ const swapAction: UniswapV4SwapAction = {
   tickSpacing: 1,
   amount: "1000000",
   amountOutMin: "990000",
-  recipient: "self",
+  recipient: "pot",
 };
 const swapping = compileProgram(parseProgram({ version: 1, actions: [swapAction] }), {
   chain: "ethereum",

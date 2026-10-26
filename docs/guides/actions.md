@@ -34,7 +34,7 @@ document compiles for every chain where those names exist:
       "factory": "UniswapV3.Factory",
       "fee": 500,
       "amountOutMin": "3000000000",
-      "recipient": "self",
+      "recipient": "pot",
       "saveOutputAs": "usdc"
     },
     { "type": "approve", "token": "USDC", "spender": "AaveV3.Pool" },
@@ -71,7 +71,7 @@ Uniswap V3's factory keys at 0.05%, and keeps the WETH in the Pot.
       "factory": "UniswapV3.Factory",
       "fee": 500,
       "amountOutMin": "1",
-      "recipient": "self"
+      "recipient": "pot"
     }
   ]
 }
@@ -89,11 +89,11 @@ function main(a_amount: Uint256): void {
   let t_out0 = a_amount;
   const pool0 = UniswapV3.Factory.getPool(USDC, WETH, 500);
   require(pool0 != 0, "actions[1]: no pool under that key");
-  uniswapV3(pool0, USDC, WETH, t_out0, 0, 1, ctx.self());
+  uniswapV3(pool0, USDC, WETH, t_out0, 0, 1, pot);
 }
 
 // main(a_amount: Uint256): pass the arguments in this order
-// bytecode, 388 bytes: 0xa502…
+// bytecode, 444 bytes: 0xa502…
 ```
 
 The `argument` action became `main`'s parameter `a_amount`. Simulate the document as you would a
@@ -155,7 +155,7 @@ A document is `{ "version": 1, "actions": [ … ] }`, with an optional `"chainId
 | Tokens (`tokenIn`, `token`, `assets`, `path`, …)              | A registry symbol, `"USDC"`, or an address; `"native"` where the venue trades the native coin. |
 | Protocol contracts (`pool`, `vault`, `factory`, `spender`, …) | A namespace reference, `"UniswapV3.Factory"`, or an address.                                   |
 | Addresses                                                     | `0x` + 40 hex digits. Mixed case must be a valid EIP-55 checksum.                              |
-| Recipients on this chain (`recipient`, `onBehalfOf`, `owner`) | An address, or `"self"` for the executing Pot.                                                 |
+| Recipients on this chain (`recipient`, `onBehalfOf`, `owner`) | An address, or `"pot"` for the executing Pot.                                                  |
 | Recipients on another chain (a bridge's `recipient`)          | An address, or a 32-byte account (`0x` + 64 hex digits) for a non-EVM chain.                   |
 | Byte strings (`path`, `message`)                              | `0x` + an even number of hex digits.                                                           |
 | 32-byte values (`poolId`)                                     | `0x` + 64 hex digits.                                                                          |
@@ -238,7 +238,7 @@ A swap may leave out `pool` and name its pool by the key its factory finds it un
   "factory": "UniswapV3.Factory",
   "fee": 500,
   "amountOutMin": "1",
-  "recipient": "self"
+  "recipient": "pot"
 }
 ```
 
@@ -272,7 +272,7 @@ An action's output is one of:
 - **its amount** — the amount the action spent, unchanged: transfers, approvals, supplies, borrows, repayments, bridges, WETH wrapping.
 - **the value read** — for a source action.
 
-When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "self"` to keep an unspent output in the Pot.
+When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "pot"` to keep an unspent output in the Pot.
 
 ### Source actions
 
@@ -359,7 +359,7 @@ function main(): void {
     t_out0, // amountIn: the previous action's output
     0, // sqrtPriceLimitX96: none
     3000000000, // minOut
-    ctx.self(), // recipient: the Pot, because a later action spends the output
+    pot, // recipient: the Pot, because a later action spends the output
   );
   let v_usdc = amt2;
   USDC.approve(AaveV3.Pool, v_usdc);

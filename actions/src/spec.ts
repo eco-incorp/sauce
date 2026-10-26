@@ -16,6 +16,12 @@
  */
 import type { ActionType } from "./types.js";
 
+/** The `recipient` value that names the executing Pot. */
+export const POT = "pot";
+
+/** What named the Pot before `"pot"`: refused, naming `"pot"`. */
+export const RETIRED_POT = "self";
+
 export type FieldKind =
   | { readonly k: "address" }
   /**
@@ -27,7 +33,7 @@ export type FieldKind =
   | { readonly k: "contract" }
   /** A contract that is also a token (WETH, wstETH): a symbol, a namespace reference or an address. */
   | { readonly k: "tokenContract" }
-  /** An address, or `"self"` for the executing Pot. */
+  /** An address, or `"pot"` for the executing Pot. */
   | { readonly k: "recipient" }
   /** An address, or a 32-byte account on a non-EVM destination. */
   | { readonly k: "remoteRecipient" }
@@ -122,7 +128,7 @@ const opt = (kind: FieldKind, doc: string): FieldDef => ({ kind, doc, optional: 
 
 const RECIPIENT = f(
   recipient,
-  'receives the output when no later action spends it; `"self"` keeps it in the Pot',
+  'receives the output when no later action spends it; `"pot"` keeps it in the Pot',
 );
 const MIN_OUT = f(uint256, "the least output accepted; the venue reverts below it");
 const DEADLINE = f(seconds, "Unix seconds after which the venue reverts");
@@ -588,7 +594,7 @@ const SPECS: readonly ActionSpec[] = [
         contract,
         "Lido's withdrawal queue; it pulls the stETH, so approve it first",
       ),
-      owner: f(recipient, 'receives the withdrawal NFT; `"self"` is the Pot'),
+      owner: f(recipient, 'receives the withdrawal NFT; `"pot"` is the Pot'),
     },
     { output: "passThrough" },
   ),
@@ -623,7 +629,7 @@ const SPECS: readonly ActionSpec[] = [
   lending("aaveV3Supply", "Supplies a token to Aave V3.", "Pool.supply", {
     pool: f(contract, "the Aave V3 Pool; it pulls the token, so approve it first"),
     token: f(token, "the asset supplied"),
-    onBehalfOf: f(recipient, 'credited with the position; `"self"` is the Pot'),
+    onBehalfOf: f(recipient, 'credited with the position; `"pot"` is the Pot'),
     referralCode: opt(uintN(16), "Aave's referral code; default 0"),
   }),
   lending(
@@ -633,7 +639,7 @@ const SPECS: readonly ActionSpec[] = [
     {
       pool: f(contract, "the Aave V3 Pool"),
       token: f(token, "the asset withdrawn"),
-      recipient: f(recipient, 'receives the asset; `"self"` is the Pot'),
+      recipient: f(recipient, 'receives the asset; `"pot"` is the Pot'),
     },
     { output: "realized" },
   ),
@@ -644,14 +650,14 @@ const SPECS: readonly ActionSpec[] = [
     {
       pool: f(contract, "the Aave V3 Pool"),
       token: f(token, "the asset borrowed"),
-      onBehalfOf: f(recipient, 'whose collateral backs the debt; `"self"` is the Pot'),
+      onBehalfOf: f(recipient, 'whose collateral backs the debt; `"pot"` is the Pot'),
       referralCode: opt(uintN(16), "Aave's referral code; default 0"),
     },
   ),
   lending("aaveV3Repay", "Repays an Aave V3 variable-rate debt.", "Pool.repay", {
     pool: f(contract, "the Aave V3 Pool; it pulls the token, so approve it first"),
     token: f(token, "the asset repaid"),
-    onBehalfOf: f(recipient, 'whose debt is repaid; `"self"` is the Pot'),
+    onBehalfOf: f(recipient, 'whose debt is repaid; `"pot"` is the Pot'),
   }),
   lending("compoundV3Supply", "Supplies a token to a Compound V3 (Comet) market.", "Comet.supply", {
     comet: f(contract, "the Comet market; it pulls the token, so approve it first"),
@@ -670,7 +676,7 @@ const SPECS: readonly ActionSpec[] = [
   // -- tokens ---------------------------------------------------------------------------------
   tokens("transfer", "Transfers an ERC-20 token.", "ERC-20 transfer, checked like SafeERC20", {
     token: f(token, "the token"),
-    recipient: f(recipient, 'the receiver; `"self"` is the Pot'),
+    recipient: f(recipient, 'the receiver; `"pot"` is the Pot'),
   }),
   tokens(
     "approve",
@@ -701,7 +707,7 @@ const SPECS: readonly ActionSpec[] = [
   source(
     "nativeBalance",
     "Reads the Pot's native balance; the output is that balance.",
-    "ctx.selfBalance()",
+    "pot.balance",
     {},
     { spends: false },
   ),

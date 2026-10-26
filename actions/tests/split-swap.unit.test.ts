@@ -29,7 +29,7 @@ const uniV3 = (fee: 100 | 500): UniswapV3SwapAction => ({
   tokenIn: USDC,
   tokenOut: USDT,
   amountOutMin: "1",
-  recipient: "self",
+  recipient: "pot",
 });
 const CANDIDATES: SwapAction[] = [
   uniV3(100),
@@ -43,7 +43,7 @@ const CANDIDATES: SwapAction[] = [
     j: 2,
     indexType: "int128",
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
   },
   {
     type: "uniswapV2Swap",
@@ -51,7 +51,7 @@ const CANDIDATES: SwapAction[] = [
     tokenIn: USDC,
     tokenOut: USDT,
     amountOutMin: "1",
-    recipient: "self",
+    recipient: "pot",
   },
 ];
 
@@ -226,7 +226,7 @@ describe("split swap — input checks", () => {
       tokenIn: USDC,
       tokenOut: USDT,
       amountOutMin: "1",
-      recipient: "self",
+      recipient: "pot",
     };
     const balancerV3: SwapAction = {
       type: "balancerV3Swap",

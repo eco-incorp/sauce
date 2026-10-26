@@ -78,7 +78,7 @@ const CODELESS = "0x00000000000000000000000000000000DeaDBeef";
 const WETH_IN = 10n ** 17n;
 const USDC_IN = 1_000_000_000n;
 const USDC_1 = 1_000_000n;
-const SELF = "self";
+const POT = "pot";
 
 const clManager = parseAbi([
   "function getSlot0(bytes32 id) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
@@ -93,7 +93,7 @@ const wooPP = parseAbi([
 type Typed = { readonly type: "address" | "uint256" | "bool"; readonly value: Arg };
 const addr = (value: string): Typed => ({ type: "address", value });
 const uint = (value: bigint): Typed => ({ type: "uint256", value });
-const self: Typed = { type: "address", value: SELF };
+const pot: Typed = { type: "address", value: POT };
 const values = (args: readonly Typed[]): Arg[] => args.map((a) => a.value);
 
 const v2 = (tokenIn: string, tokenOut: string, amount: bigint) => [
@@ -103,7 +103,7 @@ const v2 = (tokenIn: string, tokenOut: string, amount: bigint) => [
   uint(amount),
   uint(0n),
   uint(0n),
-  self,
+  pot,
 ];
 const curve4pool = (amount: bigint, tokenIn = USDC) => [
   addr(CURVE_4POOL),
@@ -114,7 +114,7 @@ const curve4pool = (amount: bigint, tokenIn = USDC) => [
   uint(3n),
   { type: "bool", value: false } as Typed,
   uint(0n),
-  self,
+  pot,
 ];
 const woofi = (tokenIn: string, tokenOut: string, amount: bigint, minOut: bigint) => [
   addr(WOO_PP),
@@ -122,7 +122,7 @@ const woofi = (tokenIn: string, tokenOut: string, amount: bigint, minOut: bigint
   addr(tokenOut),
   uint(amount),
   uint(minOut),
-  self,
+  pot,
 ];
 type InfinityKey = { readonly manager: string; readonly fee: bigint; readonly parameters: bigint };
 const infinityCL = (
@@ -142,7 +142,7 @@ const infinityCL = (
   addr(NATIVE),
   uint(limit),
   uint(minOut),
-  self,
+  pot,
 ];
 /** An Infinity pool's id: the hash of its key, the currencies sorted. */
 const infinityPoolId = (key: InfinityKey, currency0: string, currency1: string) =>
@@ -182,7 +182,7 @@ const infinityBin = (
   uint(key.parameters),
   addr(NATIVE),
   uint(minOut),
-  self,
+  pot,
 ];
 const woofiAction = (amount: bigint, minOut: bigint): WoofiSwapAction => ({
   type: "woofiSwap",
@@ -191,7 +191,7 @@ const woofiAction = (amount: bigint, minOut: bigint): WoofiSwapAction => ({
   tokenIn: WETH,
   tokenOut: USDC,
   amountOutMin: `${minOut}`,
-  recipient: "self",
+  recipient: "pot",
 });
 
 describe("@sauce/router on Base state", { skip: skipReason(), timeout: 1_800_000 }, () => {

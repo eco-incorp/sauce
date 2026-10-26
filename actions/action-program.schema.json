@@ -61,8 +61,8 @@
       ]
     },
     "recipient": {
-      "description": "An address, or \"self\" for the executing Pot.",
-      "oneOf": [{ "$ref": "#/$defs/address" }, { "const": "self" }]
+      "description": "An address, or \"pot\" for the executing Pot.",
+      "oneOf": [{ "$ref": "#/$defs/address" }, { "const": "pot" }]
     },
     "remoteRecipient": {
       "description": "An address, or a 32-byte account on a non-EVM destination (0x + 64 hex digits).",
@@ -171,7 +171,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -237,7 +237,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -328,7 +328,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -397,7 +397,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot; the pool pays the Pot, which forwards it with a transfer"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot; the pool pays the Pot, which forwards it with a transfer"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -438,7 +438,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -489,7 +489,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -544,7 +544,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -595,7 +595,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -632,7 +632,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -698,7 +698,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -764,7 +764,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "deadline": {
           "type": "integer",
@@ -1061,7 +1061,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "deadline": {
           "type": "integer",
@@ -1103,7 +1103,7 @@
         },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -1475,7 +1475,7 @@
         },
         "owner": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the withdrawal NFT; `\"self\"` is the Pot"
+          "description": "receives the withdrawal NFT; `\"pot\"` is the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -1597,7 +1597,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the asset supplied" },
         "onBehalfOf": {
           "$ref": "#/$defs/recipient",
-          "description": "credited with the position; `\"self\"` is the Pot"
+          "description": "credited with the position; `\"pot\"` is the Pot"
         },
         "referralCode": {
           "type": "integer",
@@ -1633,7 +1633,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the asset withdrawn" },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the asset; `\"self\"` is the Pot"
+          "description": "receives the asset; `\"pot\"` is the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -1663,7 +1663,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the asset borrowed" },
         "onBehalfOf": {
           "$ref": "#/$defs/recipient",
-          "description": "whose collateral backs the debt; `\"self\"` is the Pot"
+          "description": "whose collateral backs the debt; `\"pot\"` is the Pot"
         },
         "referralCode": {
           "type": "integer",
@@ -1702,7 +1702,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the asset repaid" },
         "onBehalfOf": {
           "$ref": "#/$defs/recipient",
-          "description": "whose debt is repaid; `\"self\"` is the Pot"
+          "description": "whose debt is repaid; `\"pot\"` is the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -1786,7 +1786,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the token" },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "the receiver; `\"self\"` is the Pot"
+          "description": "the receiver; `\"pot\"` is the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -1877,7 +1877,7 @@
     },
     "action_nativeBalance": {
       "title": "nativeBalance",
-      "description": "Reads the Pot's native balance; the output is that balance. Calls ctx.selfBalance().",
+      "description": "Reads the Pot's native balance; the output is that balance. Calls pot.balance.",
       "type": "object",
       "additionalProperties": false,
       "required": ["type"],
