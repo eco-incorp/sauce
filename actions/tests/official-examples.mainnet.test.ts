@@ -10,7 +10,9 @@
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   createWalletClient,
   encodeAbiParameters,
@@ -399,6 +401,41 @@ describe(
           },
           held,
         );
+      });
+
+      it("runs the callback as the Pot: pot inside program(() => …) is the Pot main captured", async () => {
+        // The example reads `pot` inside the callback, where it is `ctx.self()` evaluated as the
+        // Router's flash runs it. The same program, holding that value to the one main captured
+        // before the flash, runs and pays the same profit: the callback runs as the Pot.
+        const [payer] = PEOPLE;
+        const dir = mkdtempSync(join(tmpdir(), "pair-flash-"));
+        copyFileSync(
+          join(dirname(FILE), "SauceRouterFlash.json"),
+          join(dir, "SauceRouterFlash.json"),
+        );
+        const source = readFileSync(FILE, "utf8");
+        const capture = "  const repay = program(() => {\n";
+        assert.ok(source.includes(capture), "the example's callback is where it was");
+        const probe = join(dir, "pair-flash-self.sauce.ts");
+        writeFileSync(
+          probe,
+          source.replace(
+            capture,
+            "  const potOutside = ctx.self();\n" +
+              capture +
+              '    require(pot == potOutside && ctx.self() == potOutside, "the callback is not the Pot");\n',
+          ),
+        );
+        try {
+          await dumpWeth(1000n * ONE_WETH);
+          const borrowed = await quoteIn(WETH, USDC, ONE_WETH, 500);
+          const back = await quoteIn(USDC, WETH, borrowed, 3000);
+          const returned = await cook(probe, [WETH, USDC, "500", String(ONE_WETH), "3000", payer]);
+          assert.equal(BigInt(returned as string), back - ONE_WETH);
+          assert.equal(await balanceOf(env, WETH, payer), back - ONE_WETH);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
       });
 
       it("reverts, moving nothing, when selling back does not repay the borrow pool", async () => {
