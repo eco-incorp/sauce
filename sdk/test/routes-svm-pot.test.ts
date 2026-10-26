@@ -385,6 +385,89 @@ describe("where a site stands", () => {
     );
   });
 
+  it("a helper's last argument keeps its parentheses matched around the accounts passed after it", () => {
+    const program = compile(
+      "function held(extra: Uint256): Uint256 {\n  return pot.USDC + extra;\n}\n" +
+        "function main(extra: Uint256): Uint256 {\n  return held((extra)) + held(((extra)));\n}\n",
+    );
+    expect(program.source).toContain(
+      "function main(extra: Uint256, potUSDC: Account, pot: Account<Signer>): Uint256 {\n" +
+        "  return held((extra), [potUSDC, pot]) + held(((extra)), [potUSDC, pot]);\n}\n",
+    );
+  });
+
+  it("a helper with parameters, called twice, is given its accounts after its own arguments each time", () => {
+    const program = compile(
+      "function held(scale: Uint256, extra: Uint256): Uint256 {\n  return pot.USDC * scale + extra;\n}\n" +
+        "function main(extra: Uint256): Uint256 {\n  return held(2, extra) + held(3, 1);\n}\n",
+    );
+    expect(program.source).toContain(
+      "function held(scale: Uint256, extra: Uint256, __sauce_accounts: Account[]): Uint256 {\n" +
+        "  return __sauce_svm_balance(USDC, __sauce_accounts[0], __sauce_accounts[1].address) * scale + extra;\n}\n" +
+        "function main(extra: Uint256, potUSDC: Account, pot: Account<Signer>): Uint256 {\n" +
+        "  return held(2, extra, [potUSDC, pot]) + held(3, 1, [potUSDC, pot]);\n}\n",
+    );
+  });
+
+  it("an account a helper writes is held to main's parameter, which must be declared Writable", () => {
+    const pay =
+      "function pay(dest: Account, amount: Uint256): void {\n  USDC.transfer(dest, amount);\n}\n";
+    // The same refusal as the transfer written in main, naming main's parameter.
+    expect(
+      refusal(`${pay}function main(dest: Account, amount: Uint256) {\n  pay(dest, amount);\n}\n`),
+    ).toBe(
+      "`USDC.transfer(…)` on Solana, in `pay`: its `dest` is a token account the call writes, and " +
+        "a function other than main declares no roles: declare main's `dest` as " +
+        "`dest: Account<Writable>`.",
+    );
+    // Through a helper calling the one that writes, held at main's call of the outer one.
+    expect(
+      refusal(
+        `${pay}function outer(to: Account, amount: Uint256): void {\n  pay(to, amount);\n}\n` +
+          "function main(dest: Account, amount: Uint256) {\n  outer(dest, amount);\n}\n",
+      ),
+    ).toContain("in `pay`: its `dest` is a token account the call writes");
+    // Anything but a parameter of main is refused: no account expression carries the role.
+    expect(
+      refusal(
+        `${pay}function main(amount: Uint256) {\n  pay(Solana.pda(Solana.systemProgram, ["a"]), amount);\n}\n`,
+      ),
+    ).toContain("pass it a parameter of main declared `Account<Writable>`");
+    const writable = compile(
+      `${pay}function outer(to: Account, amount: Uint256): void {\n  pay(to, amount);\n}\n` +
+        "function main(dest: Account<Writable>, amount: Uint256) {\n  outer(dest, amount);\n}\n",
+    );
+    expect(roles(writable).dest).toBe("writable");
+  });
+
+  it("a helper main never reaches adds no accounts: one that would is refused", () => {
+    const key = `0x${"ab".repeat(32)}`;
+    expect(
+      refusal(
+        `function pay(amount: Uint256): void {\n  USDC.transfer(${key}, amount);\n}\n` +
+          "function main(): Uint256 {\n  return 1;\n}\n",
+      ),
+    ).toBe(
+      "`pay` uses accounts the lowering adds to main (tokenProgram, pot, potUSDC, accountUSDC), " +
+        "and main never calls it: they would be attached to every cook for code that never runs. " +
+        "Call `pay` from main, or remove it.",
+    );
+    expect(
+      refusal(
+        "function held(): Uint256 {\n  return pot.USDC;\n}\nfunction unused(): Uint256 {\n  return held();\n}\n" +
+          "function main(): Uint256 {\n  return 1;\n}\n",
+      ),
+    ).toMatch(
+      /^`held` uses accounts the lowering adds to main \(potUSDC, pot\), and main never calls it/,
+    );
+    // A helper that uses only its own account parameter adds nothing, reached or not.
+    const size = compile(
+      "function size(a: Account): Uint256 {\n  return a.balance;\n}\nfunction main(): Uint256 {\n  return 1;\n}\n",
+    );
+    expect(size.derivedAccounts).toEqual({});
+    expect(size.source).toContain("function main(): Uint256 {");
+  });
+
   it("a venue's swap in a helper: its seventeen accounts in one list, its stop's run count unknown", () => {
     const source =
       "function buy(amount: Uint256, limit: Uint256): Uint256 {\n" +
@@ -433,5 +516,48 @@ describe("where a site stands", () => {
         "function main(): Uint256 {\n  const p = program((): Uint256 => pot.USDC);\n  return 1;\n}\n",
       ),
     ).toMatch(/^`pot\.USDC` on Solana stands in a function inside another/);
+  });
+});
+
+describe("one scoping rule: a name is the binding in scope where it is read", () => {
+  it("a loop's record that hides an Account parameter is read for its own field", () => {
+    const source =
+      "interface Leg { balance: Uint256; address: Address }\n" +
+      "function main(a: Account, legs: Leg[]): Uint256 { let total = 0; for (const a of legs) { total += a.balance; } return total; }";
+    expect(compile(source).source).toBe(source);
+    // Outside the loop, `a` is the parameter, and its `.balance` its lamports.
+    expect(compile(source.replace("return total;", "return total + a.balance;")).source).toContain(
+      "{ total += a.balance; } return total + ctx.balance(a.address);",
+    );
+  });
+
+  it("a record bound in one function says nothing of a parameter of the same name in another", () => {
+    const program = compile(
+      "function helper(): Uint256 {\n  const pool = { balance: 1 };\n  return pool.balance;\n}\n" +
+        "function main(pool: Address): Uint256 {\n  return pool.balance + helper();\n}\n",
+    );
+    expect(program.source).toContain("return pool.balance;");
+    expect(program.source).toContain("return ctx.balance(pool) + helper();");
+    expect(program.derivedAccounts).toEqual({ poolAccount: "@pool" });
+  });
+
+  it("a loop's binding that hides an Address parameter is no key the cook can attach", () => {
+    expect(
+      refusal(
+        "function main(to: Address, list: Address[]) {\n  for (const to of list) {\n    USDC.transfer(to, 1);\n  }\n}\n",
+      ),
+    ).toMatch(
+      /^`USDC\.transfer\(…\)` on Solana: the recipient must be known when the transaction is built/,
+    );
+  });
+
+  it("two locals of one name in sibling blocks each hold what they are bound to", () => {
+    const program = compile(
+      "function main(c: bool): Uint256 {\n" +
+        "  if (c) {\n    const h = pot;\n    return h.balance;\n  }\n" +
+        "  const h = { balance: 2 };\n  return h.balance;\n}\n",
+    );
+    expect(program.source).toContain("const h = pot.address;\n    return ctx.balance(h);");
+    expect(program.source).toContain("const h = { balance: 2 };\n  return h.balance;");
   });
 });

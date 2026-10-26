@@ -201,24 +201,20 @@ function solanaMemberOf(l: SvmLowering, node: AstNode): string | undefined {
   return nameOf(property);
 }
 
-/** The locals each lowering's program binds once, by name: their declarators. */
-const LOCALS = new WeakMap<SvmLowering, ReadonlyMap<string, AstNode>>();
+/**
+ * The local `node` reads, where the binding in scope there is one a declarator makes with a value
+ * (`lexical-scope.ts`): its declarator.
+ */
+function localOf(l: SvmLowering, node: AstNode): AstNode | undefined {
+  const binder = l.binderOf(node);
+  const declarator = binder === undefined ? undefined : l.parents.get(binder);
 
-/** The local `name` the program binds once, with a value: its declarator. */
-function localNamed(l: SvmLowering, name: string): AstNode | undefined {
-  let locals = LOCALS.get(l);
-  if (locals === undefined) {
-    const found = new Map<string, AstNode>();
-    walk(l.program, (n) => {
-      if (n.type !== "VariableDeclarator" || (n.id as AstNode).type !== "Identifier") return;
-      const id = nameOf(n.id as AstNode);
-      if (n.init !== null && l.declarations.get(id) === 1) found.set(id, n);
-    });
-    locals = found;
-    LOCALS.set(l, locals);
-  }
-
-  return locals.get(name);
+  return declarator?.type === "VariableDeclarator" &&
+    declarator.id === binder &&
+    declarator.init !== null &&
+    declarator.init !== undefined
+    ? declarator
+    : undefined;
 }
 
 /**
@@ -246,7 +242,7 @@ function standsAsAccount(l: SvmLowering, n: AstNode): boolean {
  * what its declared type says, else what its value is lowered to: `const holder = pot` holds the
  * Pot's key. Its `.balance` is its lamports, by its key.
  */
-export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<string>()): boolean {
+export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<AstNode>()): boolean {
   let at = node;
   for (let site = methodCall(at); site !== undefined && ROLES.has(site.method);) {
     at = site.object;
@@ -254,13 +250,12 @@ export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<str
   }
   if (l.isPot(at)) return seen.size === 0 || standsAsAccount(l, at);
   if (at.type === "Identifier") {
-    const name = nameOf(at);
-    if (l.paramAt(name, at)?.kind === "account") return true;
-    const local = localNamed(l, name);
-    if (local === undefined || seen.has(name)) return false;
+    if (l.param(at)?.kind === "account") return true;
+    const local = localOf(l, at);
+    if (local === undefined || seen.has(local)) return false;
     const declared = annotatedType(local.id as AstNode);
     if (declared !== undefined) return declared === "Account";
-    seen.add(name);
+    seen.add(local);
     return isAccountValue(l, local.init as AstNode, seen);
   }
   const member = solanaMemberOf(l, at);
@@ -288,21 +283,20 @@ export function isAccountValue(l: SvmLowering, node: AstNode, seen = new Set<str
 }
 
 /**
- * Whether `node` is a local bound once, by `const`, to the Pot's key: a bare `pot` where a value
- * is wanted (`const holder: Address = pot`), or another such local. Its `.balance` is the lamports
- * at that key, the Pot's, which the cook attaches.
+ * Whether `node` is a local bound, by `const`, to the Pot's key: a bare `pot` where a value is
+ * wanted (`const holder: Address = pot`), or another such local. Its `.balance` is the lamports at
+ * that key, the Pot's, which the cook attaches.
  */
-export function isPotKey(l: SvmLowering, node: AstNode, seen = new Set<string>()): boolean {
+export function isPotKey(l: SvmLowering, node: AstNode, seen = new Set<AstNode>()): boolean {
   if (node.type !== "Identifier") return false;
-  const name = nameOf(node);
-  const local = localNamed(l, name);
-  if (local === undefined || seen.has(name) || l.paramAt(name, node) !== undefined) return false;
+  const local = localOf(l, node);
+  if (local === undefined || seen.has(local)) return false;
   const declaration = l.parents.get(local) as { kind?: string } | undefined;
   if (declaration?.kind !== "const" || annotatedType(local.id as AstNode) === "Account") {
     return false;
   }
   const init = local.init as AstNode;
-  seen.add(name);
+  seen.add(local);
 
   return l.isPot(init) ? !standsAsAccount(l, init) : isPotKey(l, init, seen);
 }
@@ -348,7 +342,7 @@ function wantsAccount(l: SvmLowering, node: AstNode): boolean {
   const own = l.functionNamed(name);
   if (own !== undefined) {
     const param = ((own as { params?: AstNode[] }).params ?? [])[index];
-    return param !== undefined && l.paramAt(nameOf(param), own.body as AstNode)?.kind === "account";
+    return param !== undefined && l.declaredParam(param)?.kind === "account";
   }
   const imported = l.importOf(name);
   const accounts =
@@ -403,7 +397,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
     node: AstNode,
     spelled: string,
   ): { readonly derivation: string; readonly value: string } => {
-    if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address")
+    if (node.type === "Identifier" && l.param(node)?.kind === "address")
       return { derivation: `@${nameOf(node)}`, value: nameOf(node) };
     const key = keyLiteral(node, l.source);
     if (key !== undefined) return { derivation: base58(key), value: key };
@@ -469,7 +463,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
     if (l.isPot(node) || isCtxSelf(node, l.declared)) return authority();
     if (node.type === "Identifier") {
       const name = nameOf(node);
-      if (l.param(name)?.kind === "address") {
+      if (l.param(node)?.kind === "address") {
         return { derivation: `@${name}`, bytes: `${name}.toBytesBe(32)` };
       }
       if (l.isSymbol(name, node)) return mint(name);
@@ -485,7 +479,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
         );
       }
       const of = site.object;
-      if (of.type === "Identifier" && l.param(nameOf(of))?.type === "Uint256") {
+      if (of.type === "Identifier" && l.param(of)?.type === "Uint256") {
         return {
           derivation: `u${width * 8}:@${nameOf(of)}`,
           bytes: `${nameOf(of)}.toBytesLe(${width})`,
@@ -641,7 +635,7 @@ export function collectAccountExpressions(l: SvmLowering): void {
             if (args.length !== 1)
               throw new Error(`${spelled} takes 1 argument (key), got ${args.length}.`);
             const key = args[0]!;
-            if (key.type === "Identifier" && l.param(nameOf(key))?.kind === "address") {
+            if (key.type === "Identifier" && l.param(key)?.kind === "address") {
               return {
                 derivation: `@${nameOf(key)}`,
                 base: `${nameOf(key)}Account`,
