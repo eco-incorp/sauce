@@ -15,6 +15,7 @@ import {
   chainNames,
   INSTALLED_CHAIN_MODULE,
 } from "../src/routes/chain-module.js";
+import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
 import { compileWithRs, makeResolve } from "../src/routes/rs-compile.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
@@ -1082,7 +1083,6 @@ describe("a name the caller binds, by an ambient module or a contract, is the ca
   it.each([
     ["base", `export const USDT = ${A};`, "return USDT;", `return ${A};`],
     ["ronin", "export const USDT = 5;", "return USDT;", "return 5;"],
-    ["ronin", "export const pot = { WETH: 1 };", "return pot.WETH;", "return 1;"],
     ["base", "export const Lido = 1;", "return Lido;", "return 1;"],
     [
       "base",
@@ -1099,6 +1099,22 @@ describe("a name the caller binds, by an ambient module or a contract, is the ca
     ["base", `export const Optimism = ${B};`, "return Optimism;", `return ${B};`],
   ])("on %s, ambient `%s`: `%s`", (chain, module, body, literal) => {
     expect(build(chain, body, served(module))).toBe(build(chain, literal));
+  });
+
+  it("a `pot` the caller's module exports is its value where the program imports it, and refused read free", () => {
+    // Ronin has no WETH, so a read of the Pot's would be refused there: the import makes `pot` the
+    // module's, whatever the registry has. With no import it would stand in for the Pot unseen.
+    const options = served("export const pot = { WETH: 1 };");
+    expect(
+      hex(
+        "ronin",
+        'import { pot } from "./caller.js";\nfunction main() {\nreturn pot.WETH;\n}',
+        options,
+      ),
+    ).toBe(build("ronin", "return 1;"));
+    expect(refusal("ronin", "function main() {\nreturn pot.WETH;\n}", options)).toBe(
+      ambientPotRefusal(2, 8).message,
+    );
   });
 
   it("a contract the caller binds under a protocol's name is its own", () => {
