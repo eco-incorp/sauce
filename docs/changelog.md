@@ -275,9 +275,12 @@ upgrade authority, which can replace them after the check.
   replaces "Contract 'X' (slug) is not deployed on 'chain'", "`X` is not a token or protocol on
   chain" and the compiler's "is not a declared variable". `require(X != 0)` on a chain without `X`
   is refused as well, since it fails whatever the program does. A name no chain has is an error on
-  every chain, tested or not, and so in a branch a test rules out: a misspelt contract, a protocol
-  used as a contract or a method the contract does not have is refused on the chain without the
-  venue too, so a program that compiles there compiles where the branch runs. A method a registry
+  every chain, tested or not, and so in a branch a test rules out: a misspelt protocol, token or
+  contract, a name nothing declares, a protocol used as a contract, a method the contract does not
+  have, or a balance read of an address by a name no chain registers as a token, is refused on the
+  chain without the venue too, in the words the chain with it uses ("`Uniswapv3` is not a token or
+  protocol on optimism. Did you mean `UniswapV3`?"), so a program that compiles there compiles
+  where the branch runs. A method a registry
   contract lacks is refused naming the contract and its methods: "`UniswapV3.Factory.getPol(…)`:
   `getPol` is not in uniswap-v3.Factory's vendored ABI (known methods: getPool, createPool). Did
   you mean `getPool`?". A name the caller binds (a define, a `contracts` entry, an export of an

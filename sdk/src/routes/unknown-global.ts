@@ -91,6 +91,47 @@ export function nearMatches(name: string, candidates: Iterable<string>): string[
     .slice(0, 3);
 }
 
+/** ` Did you mean `A` or `B`?` for the `candidates` nearest `name`, or nothing. */
+export function meant(name: string, candidates: Iterable<string>): string {
+  const near = nearMatches(name, candidates);
+  return near.length === 0 ? "" : ` Did you mean ${near.map((n) => `\`${n}\``).join(" or ")}?`;
+}
+
+/**
+ * The refusal of a root `name` nothing gives meaning to on `chain`, used as a token or a protocol
+ * (`name.y`, `name.y(…)`), with the nearest of `candidates`: as the compile reports one it refused,
+ * and as the names check reports one in code a test rules out.
+ */
+export function notTokenOrProtocol(
+  name: string,
+  chain: CanonicalChain,
+  candidates: Iterable<string>,
+): string {
+  return (
+    `compileSauceRoute: \`${name}\` is not a token or protocol on ${chain.slug}.` +
+    `${meant(name, candidates)} A token the registry does not carry is \`Token(address)\`, or a ` +
+    "`tokens` entry in the compile options; a contract binding needs its ABI imported, or passed " +
+    "as `contracts`."
+  );
+}
+
+/**
+ * The refusal of `<holder>.name` on a holder that is an address, `name` no token of `chain`, with
+ * the nearest of `candidates`: as the compile reports one it refused, and as the names check
+ * reports one in code a test rules out.
+ */
+export function notAToken(
+  name: string,
+  chain: CanonicalChain,
+  candidates: Iterable<string>,
+): string {
+  return (
+    `compileSauceRoute: \`${name}\` is not a token on ${chain.slug}.${meant(name, candidates)} ` +
+    `\`<holder>.<TOKEN>\` reads the holder's balance of a token the chain registers, and ` +
+    `\`<holder>.${BALANCE_MEMBER}\` its native coin; a value that is not a record has no other member.`
+  );
+}
+
 /** The compiler's own account of a failure: the last line of its chain of causes. */
 function headline(error: unknown): string | undefined {
   const message = String((error as Error | undefined)?.message ?? error).replace(
@@ -207,19 +248,12 @@ export function unknownGlobalError(
   const name = (unknown as unknown as { name: string }).name;
   // `self.X` reaches here only where the protocol rewrite, which refuses `self`, did not run.
   if (name === RETIRED_POT_NAME) return selfRefusal(RETIRED_POT_NAME, POT_NAME);
-  const matches = nearMatches(name, [...known.tokens, ...protocolsOn(chain)]);
-  const suggestion =
-    matches.length === 0
-      ? ""
-      : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
   const compiler = headline(cause);
   return locatedError(
     source,
     "main.js",
     unknown,
-    `compileSauceRoute: \`${name}\` is not a token or protocol on ${chain.slug}.${suggestion} ` +
-      "A token the registry does not carry is `Token(address)`, or a `tokens` entry in the " +
-      "compile options; a contract binding needs its ABI imported, or passed as `contracts`." +
+    notTokenOrProtocol(name, chain, [...known.tokens, ...protocolsOn(chain)]) +
       (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
     cause,
   );
@@ -306,15 +340,5 @@ export function unknownBalanceError(
       { cause },
     );
   }
-  const matches = nearMatches(name, [...names.tokens, BALANCE_MEMBER]);
-  const suggestion =
-    matches.length === 0
-      ? ""
-      : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
-  return new Error(
-    `compileSauceRoute: \`${name}\` is not a token on ${chain.slug}.${suggestion} ` +
-      `\`<holder>.<TOKEN>\` reads the holder's balance of a token the chain registers, and ` +
-      `\`<holder>.${BALANCE_MEMBER}\` its native coin; a value that is not a record has no other member.`,
-    { cause },
-  );
+  return new Error(notAToken(name, chain, [...names.tokens, BALANCE_MEMBER]), { cause });
 }

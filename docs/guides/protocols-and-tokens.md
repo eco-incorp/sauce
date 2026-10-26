@@ -163,7 +163,13 @@ compile everywhere: a token the chain lacks is refused in any branch that is kep
   side is a test: `const both = X && Y` compiles where `X` is absent. A helper function is checked
   as if it ran: it tests the name itself, or is refused on a chain that lacks the name.
 - A name the registry does not know on any chain is an error, as are an ambiguous family name and
-  an interface, so a typo cannot quietly drop a branch.
+  an interface, so a typo cannot quietly drop a branch. That holds in a branch a test rules out
+  too: a name nothing gives meaning to there (not the program's, the caller's, any chain's or the
+  language's), a contract or method the registry does not have, and a balance read of an address by
+  a name no chain registers as a token are refused, with the nearest names, as they are where the
+  branch is compiled. A field of a value whose type the program's text does not show (a contract
+  call's result, an imported value) is checked only where the branch is compiled: the text cannot
+  tell such a field from a misspelt token.
 - The old `available` call is removed, and calling it is refused at the call: test the name
   itself, `if (X)`. A program that declares its own function named `available` keeps it.
 

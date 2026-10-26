@@ -6,9 +6,11 @@
  * refused before the compiler runs, at the use, naming the chain (`routes/absent-names.ts`), so a
  * zero never reaches the chain as an address.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { requireChain } from "../src/chains/canonical.js";
 import { getDescriptor } from "../src/descriptors/query.js";
-import { checkNames, withoutDead } from "../src/routes/absent-names.js";
+import { checkNames, LANGUAGE_NAMES, withoutDead } from "../src/routes/absent-names.js";
 import {
   CHAIN_MODULE_ROOT,
   chainModuleText,
@@ -984,7 +986,7 @@ describe("code a test rules out is still checked as on any chain: only a name th
         "PancakeswapV3.Factory.getPol(USDC, WETH, 500)",
         /`getPol` is not in pancakeswap-v3\.Factory's vendored ABI \(known methods: .*getPool.*\)/,
       ],
-      ["pot.USDCC", /`USDCC` is not a token any chain registers\. Did you mean `USDC`\?/],
+      ["pot.USDCC", /`USDCC` is not a token on optimism\. Did you mean `USDC`\?/],
       ["self.USDC", /the Pot is `pot`, not `self`: write `pot\.USDC`/],
     ] as const) {
       const source = `function main(): Uint256 {\n${shape.replace("${X}", what)}\n}`;
@@ -1020,6 +1022,150 @@ describe("code a test rules out is still checked as on any chain: only a name th
       ),
     );
     expect(() => hex("solana", crossChain)).not.toThrow();
+  });
+});
+
+describe("code a test rules out holds no name nothing gives meaning to: a typo cannot quietly drop a branch", () => {
+  // The reviewer's program. PancakeSwap V3 is on Base, which compiles the branch, and not on
+  // Optimism, which rules it out: a name nothing gives meaning to is refused on both, in the words
+  // the compile uses where the branch is compiled.
+  const program = (statement: string) =>
+    `function main(user: Address): Uint256 { if (PancakeswapV3.Factory) { ${statement} } return 0; }`;
+  const EMPTY = program("");
+  const CHAINS = ["base", "optimism"] as const;
+
+  it.each([
+    [
+      "return Uniswapv3.Factory.getPool(USDC, WETH, 500);",
+      "Uniswapv3",
+      (chain: string) =>
+        `\`Uniswapv3\` is not a token or protocol on ${chain}. Did you mean \`UniswapV3\`? A token the registry does not carry is \`Token(address)\``,
+    ],
+    [
+      "USDCC.transfer(0x1234, 1);",
+      "USDCC",
+      (chain: string) =>
+        `\`USDCC\` is not a token or protocol on ${chain}. Did you mean \`USDC\`? A token the registry does not carry is \`Token(address)\``,
+    ],
+    [
+      "return user.USDCC;",
+      ".USDCC",
+      (chain: string) =>
+        `\`USDCC\` is not a token on ${chain}. Did you mean \`USDC\`? \`<holder>.<TOKEN>\` reads the holder's balance of a token the chain registers`,
+    ],
+  ])("`%s` is refused on Base and on Optimism, with the same words", (statement, at, words) => {
+    const source = program(statement);
+    const column = source.indexOf(at) + (at.startsWith(".") ? 2 : 1);
+    for (const chain of CHAINS) expect(refusal(chain, source)).toContain(words(chain));
+    // Where the branch is ruled out, at the name.
+    expect(refusal("optimism", source)).toContain(`--> main.js:1:${column}`);
+  });
+
+  it.each([
+    ["return USDCC;", "`USDCC` is not a declared variable. Did you mean `USDC`?"],
+    ["return Uniswapv3(1);", "`Uniswapv3` is called but never declared. Did you mean `UniswapV3`?"],
+    ["return zzzzzz.value;", "`zzzzzz` is not a token or protocol on optimism. A token"],
+  ])("in a ruled-out branch `%s` is refused as the compile refuses it", (statement, words) => {
+    const source = program(statement);
+    expect(refusal("base", source)).toMatch(/zzzzzz|USDCC|Uniswapv3/);
+    const message = refusal("optimism", source);
+    expect(message).toContain(words);
+    expect(message).toContain(`--> main.js:1:${source.indexOf("return ", 60) + 8}`);
+  });
+
+  it("a name the program, the language, the SDK's ambient module or a chain's registry gives meaning to is let be", () => {
+    const helper = "function helper(a: Address): Uint256 { return 1; }\n";
+    for (const statement of [
+      "const r = { tick: 1 }; return r.tick + helper(user);",
+      "return Math.mulDiv(2, 3, 1) + ctx.chainId() + Uint256(4) + abi.encode(user).length;",
+      "transfer(USDC, user, 1); return pot.USDC + user.balance;",
+      "return PancakeswapV3.Factory.getPool(USDC, WETH, 500);",
+    ]) {
+      const source = helper + program(statement);
+      expect(() => hex("base", source)).not.toThrow();
+      expect(hex("optimism", source)).toBe(hex("optimism", helper + EMPTY));
+    }
+    // Names another chain has: Base's PancakeSwap V3, and Solana's WSOL, which Optimism lacks.
+    expect(
+      hex(
+        "optimism",
+        program(
+          "return Base.PancakeswapV3.Factory.getPool(USDC, WETH, 500) + WSOL.balanceOf(user) + user.WSOL + pot.WSOL;",
+        ),
+      ),
+    ).toBe(hex("optimism", EMPTY));
+  });
+
+  it("a name the caller binds, by a define, a contract or an ambient module's export, is the caller's there", () => {
+    const abi = [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "owner", type: "address" }],
+        outputs: [{ name: "", type: "uint256" }],
+      },
+    ] as const;
+    const module = "export const limits = 3;\nexport function fee(): Uint256 { return 5; }";
+    const cases: [string, Parameters<typeof compileSauceProgram>[2]][] = [
+      ["return Uniswapv3;", { defines: { Uniswapv3: 7n } }],
+      ["return Uniswapv3.at(user).balanceOf(user);", { contracts: { Uniswapv3: { abi } } }],
+      [
+        "return limits + fee();",
+        {
+          ambient: ["./caller.js"],
+          resolve: (path: string) =>
+            path.replace(/^\.\//, "") === "caller.js"
+              ? new TextEncoder().encode(module)
+              : undefined,
+        },
+      ],
+    ];
+    for (const [statement, options] of cases) {
+      expect(() => hex("base", program(statement), options)).not.toThrow();
+      expect(hex("optimism", program(statement), options)).toBe(hex("optimism", EMPTY, options));
+    }
+  });
+
+  it("a module the caller serves is held to the same, at the name in that module", () => {
+    const library = (statement: string) =>
+      `export function pick(user: Address): Uint256 { if (PancakeswapV3.Factory) { ${statement} } return 0; }`;
+    const entry =
+      'import { pick } from "./lib.js";\nfunction main(user: Address): Uint256 { return pick(user); }';
+    const serving = (text: string) => ({
+      resolve: (path: string) =>
+        path.replace(/^\.\//, "") === "lib.js" ? new TextEncoder().encode(text) : undefined,
+    });
+    for (const [statement, at, words] of [
+      [
+        "return Uniswapv3.Factory;",
+        "Uniswapv3",
+        "`Uniswapv3` is not a token or protocol on optimism. Did you mean `UniswapV3`?",
+      ],
+      ["return user.USDCC;", "USDCC", "`USDCC` is not a token on optimism. Did you mean `USDC`?"],
+    ] as const) {
+      const message = refusal("optimism", entry, serving(library(statement)));
+      expect(message).toContain(words);
+      expect(message).toContain(`--> ./lib.js:1:${library(statement).indexOf(at) + 1}`);
+    }
+    expect(hex("optimism", entry, serving(library("return user.USDC;")))).toBe(
+      hex("optimism", entry, serving(library(""))),
+    );
+  });
+
+  it("the language's names are every root of the SauceScript reference", () => {
+    const { intrinsics } = JSON.parse(
+      readFileSync(
+        resolve(process.cwd(), "../skills/sauce-script/references/builtins.json"),
+        "utf8",
+      ),
+    ) as { intrinsics: readonly { name: string; group: string }[] };
+    const roots = intrinsics
+      .filter(({ group }) => !["method", "account", "binding"].includes(group))
+      .filter(({ name }) => name !== "throw" && name !== "unary minus")
+      .map(({ name }) => /^[A-Za-z_$][\w$]*/.exec(name.replace(/^new /, ""))![0]);
+    expect(roots.length).toBeGreaterThan(50);
+    for (const root of roots) expect(LANGUAGE_NAMES).toContain(root);
   });
 });
 

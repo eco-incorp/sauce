@@ -235,7 +235,8 @@ lacks is **zero** there.
   `const both = X && Y` compiles where `X` is absent. A helper function is checked as if it ran: it
   tests the name itself, or is refused on a chain that lacks the name.
 - A name no chain has (`Uniswapp`, or a contract its namespace does not have) is refused where it
-  is written, with the names it is nearest, so a typo cannot quietly drop a branch.
+  is written, with the names it is nearest, so a typo cannot quietly drop a branch: in a branch a
+  test rules out as well, where the chain lacks the venue.
 - There is no `available` call: test the name itself. Calling it is refused.
 
 ```sauce chain=base,linea

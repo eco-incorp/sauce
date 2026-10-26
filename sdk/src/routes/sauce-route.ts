@@ -22,7 +22,13 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { ambientNamesOf, compileWithRs, firstAnswers, type RsCompileResult } from "./rs-compile.js";
+import {
+  ambientNamesOf,
+  compileWithRs,
+  firstAnswers,
+  type RsCompileResult,
+  type RsProbeInput,
+} from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
 import { ambientPotRefusal, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { walk, type AstNode } from "./ast-walk.js";
@@ -42,7 +48,13 @@ import {
   rewriteProtocolAccessors,
   type ProtocolRewriteOptions,
 } from "./protocol-rewrite.js";
-import { bindableNames, checkNames, withoutDead } from "./absent-names.js";
+import {
+  bindableNames,
+  checkNames,
+  unknownNameError,
+  withoutDead,
+  type UnknownName,
+} from "./absent-names.js";
 import {
   INSTALLED_CHAIN_MODULE,
   CHAIN_MODULE_ROOT,
@@ -568,6 +580,15 @@ function compileForChain(
   const resolve = inputs.resolve === undefined ? undefined : firstAnswers(inputs.resolve);
   const resolvePackage =
     inputs.resolvePackage === undefined ? undefined : firstAnswers(inputs.resolvePackage);
+  const probeInput: RsProbeInput = {
+    target,
+    resolve,
+    resolvePackage,
+    defines,
+    ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
+    contracts: inputs.contracts,
+    ambient,
+  };
   const probe = ambient.every((specifier) => resolveSdkPackage(specifier) !== undefined)
     ? undefined
     : probeQuestions(sauce);
@@ -576,15 +597,7 @@ function compileForChain(
   if (probe !== undefined) {
     try {
       callerNames = ambientNamesOf(
-        {
-          target,
-          resolve,
-          resolvePackage,
-          defines,
-          ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
-          contracts: inputs.contracts,
-          ambient,
-        },
+        probeInput,
         [...probe.names, ...bindableNames(tokenMap)],
         probe.imports,
         probe.declared,
@@ -623,6 +636,44 @@ function compileForChain(
     }
   };
 
+  // Each name code a test rules out reads that the check does not know, in a module of the program
+  // (`file`, its text): the caller's where another chain's values or an ambient module gives it
+  // (the compiler is asked, here only), else refused at the first, as the compile refuses it on a
+  // chain that compiles the branch. So a typo there cannot quietly drop the branch.
+  const refuseUnknown = (
+    found: readonly { readonly file: string; readonly text: string; readonly name: UnknownName }[],
+  ): void => {
+    const asked = new Set(
+      found
+        .map(({ name }) => name.name)
+        .filter(
+          (name) =>
+            scope.chainDefines === undefined ||
+            !CANONICAL_CHAINS.some((on) => Object.hasOwn(scope.chainDefines!(on), name)),
+        ),
+    );
+    if (asked.size === 0) return;
+    const questions = probe ?? probeQuestions(sauce);
+    const owned = ambientNamesOf(probeInput, asked, questions.imports, questions.declared);
+    // The SDK's own packages export, for the other target, what a program compiled there calls.
+    const sdk = ambient.filter((specifier) => resolveSdkPackage(specifier) !== undefined);
+    const rest = [...asked].filter((name) => !owned.has(name));
+    if (sdk.length > 0 && rest.length > 0) {
+      try {
+        const other = target === "svm" ? "v12" : "svm";
+        for (const name of ambientNamesOf({ target: other, ambient: sdk }, rest, [], [])) {
+          owned.add(name);
+        }
+      } catch {
+        // A package with no arm for that target exports nothing there.
+      }
+    }
+    const first = found.find(({ name }) => asked.has(name.name) && !owned.has(name.name));
+    if (first !== undefined) {
+      throw unknownNameError(first.text, first.file, chain, tokenMap, first.name);
+    }
+  };
+
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. The compiler tells the two apart; nothing here has to.
   let source = sauce;
@@ -647,6 +698,9 @@ function compileForChain(
     ...(accessorOpts.onContract === undefined ? {} : { onContract: accessorOpts.onContract }),
   };
   const named = readingBound(() => checkNames(source, names, checks));
+  readingBound(() =>
+    refuseUnknown(named.unknown.map((name) => ({ file: "main.js", text: source, name }))),
+  );
   // What a test rules out the compiler never compiles, and no pass below may read: a token write,
   // a balance, a venue call or a binding there would add an account, a check or a binding of its
   // own. Blanked in place, so every position the passes and the compiler report is the program's.
@@ -776,6 +830,10 @@ function compileForChain(
   // reaches them (`chain-module.ts#INSTALLED_CHAIN_MODULE`, `rs-compile.ts`). A module the caller
   // serves is read by the same check as the entry, since the names reach every module.
   const keys = new Map(named.chainKeys.map((on) => [on.id, on]));
+  // The names each module's ruled-out code reads that its check does not know, by module and place:
+  // asked about once the compile ends (`refuseUnknown`), since the compiler is not to be asked again
+  // from inside a `resolve` it calls.
+  const moduleUnknown = new Map<string, { file: string; text: string; name: UnknownName }>();
   const compileOnce = (): RsCompileResult =>
     compileWithRs({
       source,
@@ -807,6 +865,9 @@ function compileForChain(
       checkModule: (path, text) => {
         const module = checkNames(text, names, { ...checks, file: path });
         for (const on of module.chainKeys) keys.set(on.id, on);
+        for (const name of module.unknown) {
+          moduleUnknown.set(`${path}:${name.start}`, { file: path, text, name });
+        }
         return module.dead.length === 0 &&
           module.bindingSides.length === 0 &&
           module.zeros.length === 0
@@ -831,6 +892,7 @@ function compileForChain(
     else if (first === undefined) throw failure;
     else rs = first;
   } catch (error) {
+    readingBound(() => refuseUnknown([...moduleUnknown.values()]));
     // A token or protocol name no chain has, reported as one rather than as the call the compiler
     // could not lower; a holder read by a name the program does not declare, as the read. Asked
     // only of a program the compiler refused.
@@ -850,6 +912,7 @@ function compileForChain(
       error
     );
   }
+  readingBound(() => refuseUnknown([...moduleUnknown.values()]));
   // The compile succeeded where the probe was refused: no answer the probe gave stands behind it.
   if (probeRefusal !== undefined) throw probeRefusal.error;
   const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;

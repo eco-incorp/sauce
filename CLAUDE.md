@@ -561,6 +561,14 @@ such a name makes false, a registry name no chain has, a method a registry contr
 out is read too, as on a chain that takes the branch: only a name this chain lacks is let be there,
 and a misspelt contract, a protocol used as a contract or a method the ABI lacks is refused on every
 chain, so a program that passes on the chain without the venue does not break on the one with it.
+There it also refuses a balance read of an address the text declares (`user: Address`, the Pot) by
+a name no chain registers as a token, and reports (`unknown`) each name nothing it knows gives
+meaning to — not the program's in scope, the caller's, this chain's define, any chain's registry
+name or the language's (`LANGUAGE_NAMES`, held to `builtins.json`'s roots); `compileForChain`
+drops those another chain's defines give, asks the compiler (`ambientNamesOf`, and the SDK's own
+packages for the other target) about the rest, and refuses the first left, in the live arm's words
+(`unknownNameError`). A module's are asked once its compile ends, never from inside a `resolve`.
+A field of a value whose type the text does not show stays the compiler's, where the branch runs.
 It also reports the code a test rules out (`dead`: an `if` arm, a `?:` arm, the right side of a
 decided `&&`/`||`, the rest of a block after a decided `if` that always exits, its functions,
 exports, types and module declarations kept and checked as if they ran), and each side of a

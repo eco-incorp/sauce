@@ -30,17 +30,20 @@
  * ABI does not have, an interface used as a deployment, a family alias's contract more than one
  * member has, a protocol used as a contract, and `available(X)`, which is removed. It refuses them
  * in code a test rules out too, read as on a chain that takes the branch, where only a name this
- * chain lacks is let be. A name the program declares is its own where the compiler reads it so, and
- * nowhere else (`lexical-scope.ts`): a block's `const` hides a registry name only in that block and
- * from its declaration on, so a use of the name after the block is the registry's. A name the
- * caller binds (`defined`) is the caller's everywhere.
+ * chain lacks is let be; and there it reports each name nothing it knows gives meaning to (`unknown`)
+ * and refuses a balance read of an address the text declares by a name no chain registers as a
+ * token, which the compiler and the balance shorthand would refuse where the branch is compiled. A
+ * name the program declares is its own where the compiler reads it so, and nowhere else
+ * (`lexical-scope.ts`): a block's `const` hides a registry name only in that block and from its
+ * declaration on, so a use of the name after the block is the registry's. A name the caller binds
+ * (`defined`) is the caller's everywhere.
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import type { AccessorTarget } from "./protocol-rewrite.js";
 
 import { CANONICAL_CHAINS, requireChain } from "../chains/canonical.js";
 import { nativeCoinSymbol } from "../chains/index.js";
-import { isTypeDeclaration, type AstNode } from "./ast-walk.js";
+import { collectDeclaredNames, isTypeDeclaration, type AstNode } from "./ast-walk.js";
 import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "./accessor-index.js";
 import {
   CHAIN_MODULE,
@@ -55,6 +58,7 @@ import {
 } from "./chain-module.js";
 import { pascalOfSlug } from "./builder.js";
 import {
+  bindingOf,
   blockScope,
   catchScope,
   childrenOf,
@@ -73,7 +77,8 @@ import { resolveTokenMap } from "./token-registry.js";
 import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 import { ACCOUNT_MEMBERS } from "./svm-account-expressions.js";
 import { SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
-import { locatedError, nearMatches } from "./unknown-global.js";
+import { TOKEN_FACTORY_NAME } from "./token-rewrite.js";
+import { locatedError, meant, notAToken, notTokenOrProtocol } from "./unknown-global.js";
 
 export interface NameCheckOptions {
   /** The chains a program may name (`Base.UniswapV3.Factory`). Default: every canonical chain. */
@@ -93,7 +98,93 @@ export interface NameCheck {
   /** Each read of a token symbol the chain lacks, every one a test (any other use is refused), in
    *  source order: `withoutDead` writes it `0`, its value here, so no module declares it. */
   readonly zeros: readonly { readonly start: number; readonly end: number }[];
+  /** Each name code a test rules out reads that nothing the check knows gives meaning to, in source
+   *  order: what the caller binds that the check cannot see — another chain's define, an ambient
+   *  module's export — or else refused (`unknownNameError`), as the compile refuses it where the
+   *  branch is compiled. */
+  readonly unknown: readonly UnknownName[];
 }
+
+/** A name read in code a test rules out that nothing the check knows gives meaning to. */
+export interface UnknownName {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+  /** As the program reads it: the root of a member (`X.y`), called (`X(…)`), or a value. */
+  readonly form: "member" | "call" | "value";
+}
+
+/**
+ * The refusal of `unknown`, a name of `source` (the module `file`) compiled for `chain`, whose
+ * tokens are `tokens`, at the name: worded as the compile words it where the branch is compiled, a
+ * member's root as a token or protocol nothing names, with the nearest names of any chain.
+ */
+export function unknownNameError(
+  source: string,
+  file: string,
+  chain: CanonicalChain,
+  tokens: ReadonlyMap<string, bigint>,
+  unknown: UnknownName,
+): Error {
+  const { name, form } = unknown;
+  const registry = [...tokens.keys(), ...everySymbol(), ...NAMESPACE_KEYS];
+  const message =
+    form === "member"
+      ? notTokenOrProtocol(name, chain, registry)
+      : `compileSauceRoute: \`${name}\` ${form === "call" ? "is called but never declared" : "is not a declared variable"}.` +
+        meant(name, [...registry, ...collectDeclaredNames(parseSauce(source)), ...LANGUAGE_NAMES]);
+  const node: AstNode = { type: "Identifier", start: unknown.start, end: unknown.end };
+
+  return locatedError(source, file, node, message);
+}
+
+/**
+ * The names the language gives meaning to with no declaration: its namespaces, its functions and
+ * conversions, `Array` of `new Array(n)`, the tag of `` hex`…` ``, the Pot and `Token(addr)`.
+ */
+export const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
+  "ctx",
+  "crypto",
+  "Math",
+  "abi",
+  "evm",
+  "svm",
+  "Int256",
+  "Uint256",
+  "Array",
+  "require",
+  "revert",
+  "log",
+  "eval",
+  "program",
+  "hex",
+  POT_NAME,
+  TOKEN_FACTORY_NAME,
+]);
+
+/** The protocols a Solana venue is written under (`Orca` of `Orca.Whirlpool`): the Solana lowering's. */
+const SVM_VENUE_ROOTS: ReadonlySet<string> = new Set(
+  Object.keys(SVM_VENUE_NAMESPACES).map((namespace) => namespace.split(".")[0]!),
+);
+
+/** The language's types whose value has no field (`skills/sauce-script`'s reference): a number, a
+ *  bool, bytes, an account. A type named otherwise may be a record. */
+const SCALAR_TYPES: ReadonlySet<string> = new Set([
+  "Address",
+  "Uint256",
+  "Int256",
+  "bool",
+  "bytes",
+  "Account",
+  "TSNumberKeyword",
+  "TSBigIntKeyword",
+  "TSBooleanKeyword",
+  "TSStringKeyword",
+]);
+
+/** What a member of a value of a scalar type may be beside a balance: `.length` of bytes, and an
+ *  account's fields and roles. */
+const VALUE_MEMBERS: ReadonlySet<string> = new Set(["length", ...ACCOUNT_MEMBERS]);
 
 /**
  * Code a test of names rules out: an `if` arm (`statement`), a `?:` arm or the right side of a
@@ -226,12 +317,6 @@ function nativeSymbols(): ReadonlySet<string> {
   return natives;
 }
 
-/** ` Did you mean `A` or `B`?` for the `candidates` nearest `name`, or nothing. */
-function meant(name: string, candidates: Iterable<string>): string {
-  const near = nearMatches(name, candidates);
-  return near.length === 0 ? "" : ` Did you mean ${near.map((n) => `\`${n}\``).join(" or ")}?`;
-}
-
 /** A registry name a node reads, resolved on the chain it names. */
 type Reference =
   | {
@@ -280,6 +365,7 @@ export function checkNames(
   const dead: DeadCode[] = [];
   const bindingSides: { start: number; end: number }[] = [];
   const zeros = new Map<number, { start: number; end: number }>();
+  const unknown = new Map<number, UnknownName>();
   /** Whether the visit is in code a test of names rules out (`ruledOut`): there nothing is reported
    *  and a name this chain lacks is let be, and what no chain can have is refused as anywhere. */
   let validating = false;
@@ -336,6 +422,31 @@ export function checkNames(
       method.type === "Identifier" &&
       nameOf(method) === "self"
     );
+  };
+
+  /**
+   * Whether `node` is an address by the program's text, which has a balance and no field: the Pot,
+   * a number written out, or a name declared with a scalar type (`user: Address`). A name declared
+   * with no type, or another, may be a record, whose fields the compile reads or refuses.
+   */
+  const isAddress = (node: AstNode, at: Scope | undefined): boolean => {
+    const target = unwrap(node);
+    if (isThePot(target, at)) return true;
+    if (target.type === "Literal") {
+      return ["bigint", "number"].includes(typeof prop<unknown>(target, "value"));
+    }
+    if (target.type !== "Identifier") return false;
+    const binder = bindingOf(at, nameOf(target), target.start);
+    const annotation =
+      binder === undefined ? undefined : prop<AstNode | undefined>(binder, "typeAnnotation");
+    const type =
+      annotation === undefined
+        ? undefined
+        : prop<AstNode | undefined>(annotation, "typeAnnotation");
+    if (type === undefined) return false;
+    if (type.type !== "TSTypeReference") return SCALAR_TYPES.has(type.type);
+    const named = prop<AstNode>(type, "typeName");
+    return named.type === "Identifier" && SCALAR_TYPES.has(nameOf(named));
   };
 
   /** The member `<namespace>.<member>` of `on`'s namespace, as `node` reads it with `role`. */
@@ -874,7 +985,9 @@ export function checkNames(
   /**
    * Code a test rules out: reported for the compile to blank, and checked as on any chain, so a
    * program that passes here does not break on a chain where the branch is taken. Only a name this
-   * chain lacks is let be there: a name no chain can have is refused as anywhere else.
+   * chain lacks is let be there: a name no chain can have is refused as anywhere else, and a name
+   * nothing the check knows gives meaning to is reported (`unknown`), for the compile to find among
+   * what the caller binds or refuse.
    */
   const ruledOut = (
     node: AstNode,
@@ -1219,6 +1332,28 @@ export function checkNames(
           if (validating && isRetiredPot(node, at)) {
             fail(node, selfRefusal(RETIRED_POT_NAME, POT_NAME).message);
           }
+          // In code a test rules out, which the compile here never reads, a name is what the
+          // program, the caller, a chain's registry or the language makes it, or reported.
+          const name = nameOf(node);
+          if (
+            validating &&
+            !shadowed(at, name, node.start) &&
+            !defined.has(name) &&
+            !Object.hasOwn(options.scalars ?? {}, name) &&
+            !names.tokens.has(name) &&
+            !everySymbol().has(name) &&
+            !NAMESPACE_KEYS.has(name) &&
+            !CHAIN_KEY_SET.has(name) &&
+            !SVM_VENUE_ROOTS.has(name) &&
+            !LANGUAGE_NAMES.has(name)
+          ) {
+            unknown.set(node.start, {
+              name,
+              start: node.start,
+              end: node.end,
+              form: role === "callee" ? "call" : role === "value" ? "value" : "member",
+            });
+          }
           return;
         }
         const property = prop<AstNode>(node, "property");
@@ -1248,19 +1383,20 @@ export function checkNames(
           !names.tokens.has(read) &&
           !defined.has(read) &&
           !everySymbol().has(read) &&
-          !ACCOUNT_MEMBERS.has(read) &&
+          !VALUE_MEMBERS.has(read) &&
           !nativeSymbols().has(read) &&
           role !== "callee" &&
-          isThePot(object, at)
+          isAddress(object, at)
         ) {
-          // Code a test rules out holds no read of the Pot that is no member it has on any chain:
-          // a token, `balance`, a native coin's symbol or, on Solana, an account's field or role.
-          fail(
+          // Code a test rules out holds no read of an address that is no member it has on any
+          // chain: a token, `balance`, a native coin's symbol, `.length` of bytes or, on Solana, an
+          // account's field or role. The balance shorthand reads a token and the compile refuses
+          // the rest where the branch is compiled, as this does.
+          throw locatedError(
+            source,
+            options.file ?? "main.js",
             property,
-            `\`${read}\` is not a token any chain registers.` +
-              meant(read, [...everySymbol(), ...names.tokens.keys()]) +
-              ` \`<holder>.<TOKEN>\` reads the holder's balance of a token, and ` +
-              `\`<holder>.${BALANCE_MEMBER}\` its native coin.`,
+            notAToken(read, chain, [...names.tokens.keys(), ...everySymbol(), BALANCE_MEMBER]),
           );
         }
         // `(A && B).getPool(…)` on contracts: `&&` and `||` give a bool, which has no method. Said
@@ -1341,5 +1477,6 @@ export function checkNames(
     dead: dead.sort((a, b) => a.start - b.start),
     bindingSides: bindingSides.sort((a, b) => a.start - b.start),
     zeros: [...zeros.values()].sort((a, b) => a.start - b.start),
+    unknown: [...unknown.values()].sort((a, b) => a.start - b.start),
   };
 }
