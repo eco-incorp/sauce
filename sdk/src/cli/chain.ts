@@ -14,6 +14,7 @@ import {
   custom,
   decodeAbiParameters,
   decodeErrorResult,
+  encodeFunctionData,
   getAddress,
   hexToBytes,
   http,
@@ -38,7 +39,7 @@ import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
-import { v12KitchenAbi, v12Pot } from "../evm/engine.js";
+import { v12Kitchen, v12KitchenAbi, v12Pot } from "../evm/engine.js";
 import { kitchenExecutionFee } from "../evm/execution-fee.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
@@ -47,7 +48,8 @@ import { CliError } from "./args.js";
 import { guardOf } from "./policy.js";
 import { keepLanded, sayKept } from "./keep.js";
 import type { PotKind, PotRecord } from "./pot-store.js";
-import { answered, evmPotsDeployed, isReleasePotCode, releasePotKind } from "./pots.js";
+import { probeDeployment, type ProbedPot } from "./pot-probe.js";
+import { answered, evmPotsDeployed, releasePotKind } from "./pots.js";
 
 /** A transaction to send or simulate. */
 export interface TxRequest {
@@ -470,10 +472,11 @@ export async function requireKitchenPredicts(
 
 /**
  * Refuses code at `pot` that is not a Pot of this SDK's release, or that the deployed Kitchen does
- * not put there. Its code must be the release's Pot runtime but for its immutables
- * (`pots.ts#isReleasePotCode`); read off it, its owner, salt and Kitchen must give its address as
- * the release Kitchen's CREATE2 under the release's Pot init-code hash (`pots.ts#releasePotKind`);
- * and the Kitchen's own prediction for that owner, salt and kind must be this address.
+ * not put there. Read off it, its owner, salt and Kitchen must give its address as the release
+ * Kitchen's CREATE2 under the release's Pot init-code hash (`pots.ts#releasePotKind`); the
+ * Kitchen's own prediction for that owner, salt and kind must be this address; and its code must
+ * be, byte for byte, what the Kitchen deploys there for them — found by deploying it again in an
+ * `eth_call` that sees the address empty (`pot-probe.ts`), so every immutable is checked too.
  */
 export async function requireReleasePot(
   client: PublicClient,
@@ -485,14 +488,13 @@ export async function requireReleasePot(
       `${pot} on ${chain.slug} has code, but not the code of a Pot this SDK's release deploys ` +
         `(${why}): this SDK does not match the deployed Pot. ${UPGRADE}`,
     );
-  const code = await request("the Pot's code", () => client.getCode({ address: pot }));
-  if (code === undefined || code === "0x" || !isReleasePotCode(code)) {
-    throw refuse("its runtime is not the release Pot's, byte for byte but for its immutables");
-  }
-  const read = async <T>(functionName: "owner" | "userSalt" | "kitchen"): Promise<T> => {
+  const read = async <T>(
+    functionName: "owner" | "userSalt" | "kitchen",
+  ): Promise<T | undefined> => {
     try {
       return (await client.readContract({ address: pot, abi: v12Pot.abi, functionName })) as T;
     } catch (error) {
+      if (answered(error)) return undefined;
       throw new CliError(`reading the Pot's ${functionName}() failed: ${reasonOf(error)}`);
     }
   };
@@ -501,6 +503,9 @@ export async function requireReleasePot(
     read<Hex>("userSalt"),
     read<Address>("kitchen"),
   ]);
+  if (owner === undefined || salt === undefined || kitchen === undefined) {
+    throw refuse("it does not answer a Pot's owner(), userSalt() and kitchen()");
+  }
   const kind = releasePotKind({ kitchen, owner, salt, pot });
   if (kind === undefined) {
     throw refuse(
@@ -510,6 +515,32 @@ export async function requireReleasePot(
   }
   const live = await kitchenPredicts(client, chain, owner, salt, kind, pot);
   if (live !== getAddress(pot)) throw mispredicted(chain, owner, salt, live, getAddress(pot));
+  const data =
+    kind === "shared"
+      ? encodeFunctionData({ abi: v12KitchenAbi, functionName: "deploySharedPot", args: [salt] })
+      : kind === "private"
+        ? v12Kitchen.encodeDeployPot(owner, salt)
+        : encodeFunctionData({
+            abi: v12KitchenAbi,
+            functionName: "deployPot",
+            args: [owner, salt, true],
+          });
+  let probed: ProbedPot;
+  try {
+    probed = await probeDeployment(client, {
+      kitchen: getAddress(v12KitchenAddress()),
+      from: owner,
+      data,
+      cleared: pot,
+    });
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError(`deploying the Pot again, in a simulation, failed: ${revertReason(error)}`);
+  }
+  const code = await request("the Pot's code", () => client.getCode({ address: pot }));
+  if (probed.pot !== getAddress(pot) || code?.toLowerCase() !== probed.code.toLowerCase()) {
+    throw refuse("its runtime is not the code the Kitchen deploys there for its owner and salt");
+  }
 }
 
 /**

@@ -265,33 +265,71 @@ describeEvm("the Pot is checked against the deployed Kitchen", () => {
     120_000,
   );
 
-  it.each(["simulate", "tx", "run", "sign"])(
-    "refuses %s on code at the Pot's address that is no Pot of this release",
-    async (each) => {
-      const fresh = await owner(`not-a-pot-${each}`);
-      // It answers every getter as the real Pot at this address would, so only its code tells.
+  /** Reads the three getters a Pot answers its owner, salt and Kitchen with. */
+  const getters = (pot: Address) =>
+    Promise.all(
+      (["owner", "userSalt", "kitchen"] as const).map((functionName) =>
+        local.publicClient.readContract({ address: pot, abi: v12PotAbi, functionName }),
+      ),
+    );
+
+  /** Code at `who`'s Pot address that answers every getter as the real Pot would. */
+  const impostors: Record<string, (who: Owner) => Promise<Hex>> = {
+    // A contract of its own, answering the three getters and taking any cook without running.
+    "a contract posing as the Pot": async (who) => {
       const code = posingAsPot([
-        ["function owner()", pad(fresh.address)],
-        ["function userSalt()", fresh.salt],
+        ["function owner()", pad(who.address)],
+        ["function userSalt()", who.salt],
         ["function kitchen()", pad(kitchen)],
       ]);
-      await local.testClient.setCode({ address: fresh.pot, bytecode: code });
-      const reads = await Promise.all(
-        (["owner", "userSalt", "kitchen"] as const).map((functionName) =>
-          local.publicClient.readContract({ address: fresh.pot, abi: v12PotAbi, functionName }),
-        ),
-      );
-      expect(reads).toEqual([fresh.address, fresh.salt, kitchen]);
-      const balance = await local.publicClient.getBalance({ address: fresh.address });
-      const refused = await command(each, fresh);
-      const said = refused.stdout + refused.stderr;
-      expect(refused.code).toBe(1);
-      expect(said).toContain(`${fresh.pot} on ethereum has code, but not the code of a Pot`);
-      expect(said).toMatch(UPGRADE);
-      await nothingSent(fresh, balance, code);
+      await local.testClient.setCode({ address: who.pot, bytecode: code });
+
+      return code;
     },
-    120_000,
-  );
+    // The real Pot, with one of the copies of its owner the constructor wrote changed: the
+    // getters still answer as the Pot does, and no constructor writes copies that disagree.
+    "the release's Pot with one immutable copy changed": async (who) => {
+      await local.send(
+        local.deployer,
+        kitchen,
+        encodeFunctionData({
+          abi: v12KitchenAbi,
+          functionName: "deployPot",
+          args: [who.address, who.salt],
+        }),
+      );
+      const real = (await local.publicClient.getCode({ address: who.pot }))!.toLowerCase();
+      const copy = who.address.slice(2).toLowerCase();
+      const other = ELSEWHERE.slice(2).toLowerCase();
+      for (let at = real.indexOf(copy); at !== -1; at = real.indexOf(copy, at + 1)) {
+        const changed = `${real.slice(0, at)}${other}${real.slice(at + copy.length)}` as Hex;
+        await local.testClient.setCode({ address: who.pot, bytecode: changed });
+        const [answered] = await getters(who.pot);
+        if (getAddress(answered) === who.address) return changed;
+      }
+      throw new Error("every copy of the owner is the one owner() reads");
+    },
+  };
+
+  describe.each(Object.keys(impostors))("%s", (impostor) => {
+    it.each(["simulate", "tx", "run", "sign"])(
+      "refuses %s",
+      async (each) => {
+        const fresh = await owner(`${impostor}-${each}`);
+        const code = await impostors[impostor]!(fresh);
+        // Only its code tells it from the Pot: it answers every getter as the Pot would.
+        expect(await getters(fresh.pot)).toEqual([fresh.address, fresh.salt, kitchen]);
+        const balance = await local.publicClient.getBalance({ address: fresh.address });
+        const refused = await command(each, fresh);
+        const said = refused.stdout + refused.stderr;
+        expect(refused.code).toBe(1);
+        expect(said).toContain(`${fresh.pot} on ethereum has code, but not the code of a Pot`);
+        expect(said).toMatch(UPGRADE);
+        await nothingSent(fresh, balance, code);
+      },
+      120_000,
+    );
+  });
 
   it("refuses at the send itself: a deployment the Kitchen puts elsewhere, a cook on no Pot", async () => {
     const fresh = await owner("at-the-send");

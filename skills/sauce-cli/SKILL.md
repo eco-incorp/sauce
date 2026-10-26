@@ -622,6 +622,13 @@ put at a terminal (a password, a yes or no) is not here: pass the flags that ans
   `--value <wei>`, or an endpoint.
 - **The endpoint is another chain's** (exit 1). `the RPC endpoint serves chain …`: use the chain's
   own endpoint, or a `--config` file with each chain's under its id.
+- **The package is not the deployed Kitchen's** (exit 1, EVM). `the Kitchen … puts the Pot of
+owner … and salt … at …, but this SDK has it at …`: the chain's Kitchen puts the Pot at another
+  address than this copy of the package does, so a cook it built would reach no Pot.
+  `… has code, but not the code of a Pot this SDK's release deploys…`: the Pot's address holds
+  something other than the package's Pot. Nothing was simulated, built or sent: the user upgrades
+  the package (`sauce update`), then runs the command again. Offline nothing is checked, and the
+  notes say `The Pot's address is NOT checked against the deployed Kitchen`.
 - **No signer** (exit 2). `missing a signer…`: the command sends and was given no key. Pass
   `--wallet <name>` (a Solana wallet on Solana), `--keystore <path>` or, on Solana,
   `--keypair <path>`, with a password source; or build the transaction with `sauce tx` for another

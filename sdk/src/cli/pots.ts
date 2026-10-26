@@ -47,7 +47,6 @@ import {
   type PublicClient,
 } from "viem";
 
-import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import {
   sdkCompilerVersion,
@@ -203,56 +202,6 @@ export function releasePotKind(input: {
     getAddress(input.owner),
     input.salt,
   ).find((one) => one.pot === pot)?.kind;
-}
-
-/** The release's Pot runtime as its creation code carries it, and which of its bytes are
- *  immutables: each Pot's own owner, salt, Kitchen and the values derived from them. */
-interface PotRuntime {
-  readonly code: Uint8Array;
-  readonly immutable: Uint8Array;
-}
-
-let potRuntime: PotRuntime | undefined;
-
-/**
- * The Pot runtime in `V12Pot.json`'s creation code: its tail, from the runtime's own free-memory
- * prologue (`PUSH1 0x80 PUSH1 0x40 MSTORE`; the constructor's, with immutables to store, starts
- * otherwise). solc leaves each immutable there as a `PUSH32` of zeros the constructor fills in, so
- * those 32 bytes are the ones a deployed Pot's code may differ in.
- */
-function releasePotRuntime(): PotRuntime {
-  if (potRuntime !== undefined) return potRuntime;
-  const creation = hexToBytes(potArtifact.bytecode as Hex);
-  const PROLOGUE = [0x60, 0x80, 0x60, 0x40, 0x52];
-  const start = creation.findIndex((_, at) =>
-    PROLOGUE.every((byte, offset) => creation[at + offset] === byte),
-  );
-  if (start <= 0) throw new Error("internal: V12Pot.json carries no runtime after its constructor");
-  const code = creation.subarray(start);
-  const immutable = new Uint8Array(code.length);
-  for (let at = 0; at < code.length;) {
-    const op = code[at]!;
-    // PUSH1 … PUSH32 carry 1 … 32 bytes of immediate data.
-    const pushed = op >= 0x60 && op <= 0x7f ? op - 0x5f : 0;
-    if (op === 0x7f && code.subarray(at + 1, at + 33).every((byte) => byte === 0)) {
-      immutable.fill(1, at + 1, at + 33);
-    }
-    at += 1 + pushed;
-  }
-
-  return (potRuntime = { code, immutable });
-}
-
-/**
- * Whether `code` is the release's Pot runtime: byte for byte the runtime its creation code
- * carries, but for the immutables each Pot is constructed with.
- */
-export function isReleasePotCode(code: Hex): boolean {
-  const runtime = releasePotRuntime();
-  const deployed = hexToBytes(code);
-  if (deployed.length !== runtime.code.length) return false;
-
-  return deployed.every((byte, at) => byte === runtime.code[at] || runtime.immutable[at] === 1);
 }
 
 /** The EVM part of a release set, as a record names it. */
