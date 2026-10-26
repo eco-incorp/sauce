@@ -218,12 +218,12 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     `X != 0` or `X ? a : b`. The branch a test rules out is still not compiled, and the program's
     bytes do not change. The call is refused, saying so. A use of the name outside such a branch,
     and `require(X != 0)` on a chain without it, are refused at the use, naming the chain.
-12. **Write `"pot"` for the Pot outside programs too.** In an actions document, a `recipient`,
-    `onBehalfOf` or `owner` of `"self"` is refused: write `"pot"`. In TypeScript, write
-    `Token.balanceOf({ token, owner: "pot" })` for the Pot's balance, and read a defaulted deposit
-    beneficiary from `toDeposit` as `"pot"`. `ctx.self()` and `ctx.selfBalance()`, the compiler's
-    own names, still compile; in a program the SDK compiles for an EVM chain, write `pot` and
-    `pot.balance` for them.
+12. **Write `"pot"` for the Pot outside programs too** (the release after 0.99.16). In an actions
+    document, a `recipient`, `onBehalfOf` or `owner` of `"self"` is refused: write `"pot"`. In
+    TypeScript, write `Token.balanceOf({ token, owner: "pot" })` for the Pot's balance, and read a
+    defaulted deposit beneficiary from `toDeposit` as `"pot"`. `ctx.self()` and
+    `ctx.selfBalance()`, the compiler's own names, still compile; in a program the SDK compiles
+    for an EVM chain, write `pot` and `pot.balance` for them.
 
 The [language reference](../reference/saucescript.md) documents the new language forms, and the
 [compiler API](../api/compiler.md) covers closure entries, scalar argument binding,
