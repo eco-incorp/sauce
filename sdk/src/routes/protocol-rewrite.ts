@@ -692,6 +692,12 @@ function bareReads(
   return reads;
 }
 
+/** The reads of `name` in `source` where the program does not declare it (`lexical-scope.ts`). */
+export function freeReadsOf(source: string, name: string): AstNode[] {
+  const program = parseSauce(source);
+  return bareReads(program, name, collectReadExclusions(program), new Set());
+}
+
 /**
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
  * `opts.potSugar === false`, every bare `pot` read where the program declares no `pot`

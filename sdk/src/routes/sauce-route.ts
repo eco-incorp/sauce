@@ -24,7 +24,7 @@ import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { ambientNamesOf, compileWithRs, firstAnswers, type RsCompileResult } from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
-import { POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { ambientPotRefusal, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import {
@@ -37,7 +37,11 @@ import {
 import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
-import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
+import {
+  freeReadsOf,
+  rewriteProtocolAccessors,
+  type ProtocolRewriteOptions,
+} from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
 import { freeHolderError, unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
@@ -519,7 +523,9 @@ function compileForChain(
   // module is found exactly where the compile finds it. It asks only where it can matter: the SDK's
   // own packages (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export
   // neither name, and a name the program does not read (`probeQuestions`) is none the rewrites
-  // touch. A `pot` or `self` that is one of them is the caller's value, never the Pot.
+  // touch. A `self` that is one of them is the caller's value; a `pot` only an ambient module
+  // exports is refused where the program reads it free (`ambientPotRefusal`), so no module's export
+  // stands in for the Pot with no word in the program.
   //
   // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
   // with the same options as the compile, so its refusal is one the compile raises too: the probe's
@@ -561,6 +567,19 @@ function compileForChain(
     ...Object.keys(inputs.contracts ?? {}),
     ...callerNames,
   ]);
+  // A define or a contract binding of `pot` is the caller's, given by that name; an import of it is
+  // the program's own, which no free read is.
+  if (
+    callerNames.has(POT_NAME) &&
+    !Object.hasOwn(inputs.defines ?? {}, POT_NAME) &&
+    !Object.hasOwn(inputs.contracts ?? {}, POT_NAME)
+  ) {
+    const [read] = freeReadsOf(sauce, POT_NAME);
+    if (read !== undefined) {
+      const lines = sauce.slice(0, read.start).split("\n");
+      throw ambientPotRefusal(lines.length, lines[lines.length - 1]!.length + 1);
+    }
+  }
   // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
   // rewrite makes then rests on no answer, and the probe's own refusal, which the compile would
   // raise too, is reported in its place.

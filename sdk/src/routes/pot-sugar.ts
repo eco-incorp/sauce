@@ -10,9 +10,11 @@
  *
  * `.<SYMBOL>` always means a registered token: a chain whose native coin is also a registered
  * token (Arc's USDC) reads the token, and the coin is `.balance`. A program that declares its own
- * `pot`, or a compile that gives it one (a define, a contract binding, an ambient module's export),
- * owns the name. The old spellings — bare `self`, `self.<TOKEN>`, `Solana.self` and
- * `<holder>.<native symbol>` — are refused by name, each naming what to write instead.
+ * `pot` (an import included), or a compile that gives it one (a define, a contract binding), owns
+ * the name. A `pot` only an ambient module exports is refused where the program reads it
+ * (`ambientPotRefusal`): it would replace the Pot with no word in the program. The old spellings —
+ * bare `self`, `self.<TOKEN>`, `Solana.self` and `<holder>.<native symbol>` — are refused by name,
+ * each naming what to write instead.
  */
 
 /** The Pot, as a program spells it. */
@@ -29,6 +31,20 @@ export function selfRefusal(site: string, instead: string): Error {
   return new Error(
     `\`${site}\`: the Pot is \`pot\`, not \`self\`: write \`${instead}\` (\`pot\` is the Pot's ` +
       "address, `pot.<TOKEN>` its balance of a token, `pot.balance` its native coin).",
+  );
+}
+
+/**
+ * The refusal of a `pot` the program reads with no declaration of its own where only an ambient
+ * module exports one: the module's value would stand in for the Pot. `line` and `column`, 1-based,
+ * are where the program reads it.
+ */
+export function ambientPotRefusal(line: number, column: number): Error {
+  return new Error(
+    `\`pot\` at line ${line}, column ${column}: an ambient module exports \`pot\`, and the ` +
+      "program reads it with no import, so it would read that module's value and not the Pot. " +
+      'Write `ctx.self()` for the Pot, or import it by name (`import { pot } from "<module>"`) ' +
+      "for the module's value.",
   );
 }
 
