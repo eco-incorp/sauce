@@ -250,7 +250,9 @@ Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may move 0 of your USDC (ba
 ```
 
 `y` sends the approval, then the cook. After that, each run needs only your signature, which the
-run makes for you.
+run makes for you. A wallet whose policy limits the token refuses that approval: approving Permit2
+makes every Permit2 allowance of the token you gave before spendable again, which no policy can
+measure. From such a wallet, fund with `--fund-mode permit`, `allowance` or `transfer`.
 
 ### Choose how the run pulls tokens
 
@@ -284,6 +286,13 @@ Signatures are made locally, by the signer you gave, and no key is printed. A Pe
 names the Pot as its spender; cooking on a private Pot requires the owner's authorization
 (including for a signed cook on new EVM Pots). A revert inside Permit2 is reported by name: `SignatureExpired(…)` for a passed deadline,
 `InvalidNonce()` for a nonce already spent.
+
+`--fund` signs and sends only for your own Pot: one the chain shows is yours (its owner you, its
+address the one a known release's Kitchen gives your owner and salt), or the one the run deploys
+first. Any other `--pot`, or one whose owner the endpoint cannot read, is refused before anything
+is signed or sent, by `sauce run`, and by `sauce simulate` given your key. With `--owner` and no
+key, `sauce simulate` signs nothing and credits the Pot it is given. A wallet with a policy holds the
+funding to its `chains` and its `to` (the Pot) first ([Wallets](cli-wallets.md)).
 
 ### Simulate a funded run
 

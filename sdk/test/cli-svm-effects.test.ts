@@ -270,7 +270,8 @@ describe("what a Solana cook moved", () => {
         JSON.stringify(value, (_, each: unknown) => (typeof each === "bigint" ? `${each}` : each)),
       );
 
-    expect(plain(readTokenAccount(account(data, TOKEN_2022)))).toEqual({
+    // 5 lamports of wrapped SOL synced into its amount, and 7 more sent in that are not yet.
+    expect(plain(readTokenAccount(account(data, TOKEN_2022, 2_039_280n + 12n)))).toEqual({
       program: TOKEN_2022,
       mint: WSOL,
       owner: OWNER,
@@ -279,6 +280,7 @@ describe("what a Solana cook moved", () => {
       delegatedAmount: "3",
       closeAuthority: MINTED,
       isNative: true,
+      wrapped: "12",
     });
     expect(plain(readTokenAccount(account(tokenAccount(USDC, OWNER, 1n))))).toEqual({
       program: TOKEN_PROGRAM,

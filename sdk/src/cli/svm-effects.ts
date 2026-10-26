@@ -103,6 +103,12 @@ export interface TokenAccountState {
   readonly closeAuthority?: Address;
   /** Wrapped SOL: its amount is lamports it holds above its rent. */
   readonly isNative: boolean;
+  /**
+   * Wrapped SOL: the lamports it holds above the rent it keeps, whether its amount shows them yet or
+   * not. Lamports sent in with no `SyncNative` are not in the amount until anyone (no signature
+   * needed) syncs it.
+   */
+  readonly wrapped?: bigint;
 }
 
 /**
@@ -293,6 +299,8 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
     view.getUint32(at, true) === 1 ? decoder.decode(data.subarray(at + 4, at + 36)) : undefined;
   const delegate = key(DELEGATE_AT);
   const closeAuthority = key(CLOSE_AUTHORITY_AT);
+  const isNative = view.getUint32(IS_NATIVE_AT, true) === 1;
+  const reserve = isNative ? view.getBigUint64(IS_NATIVE_AT + 4, true) : 0n;
 
   return {
     program: account.owner,
@@ -302,7 +310,8 @@ export function tokenAccount(account: SimulatedAccount | null): TokenAccountStat
     ...(delegate === undefined ? {} : { delegate }),
     delegatedAmount: view.getBigUint64(DELEGATED_AMOUNT_AT, true),
     ...(closeAuthority === undefined ? {} : { closeAuthority }),
-    isNative: view.getUint32(IS_NATIVE_AT, true) === 1,
+    isNative,
+    ...(isNative ? { wrapped: account.lamports > reserve ? account.lamports - reserve : 0n } : {}),
   };
 }
 
@@ -344,6 +353,89 @@ export function lamportKeys(account: SimulatedAccount | null): readonly Address[
   }
 
   return undefined;
+}
+
+/**
+ * The token accounts an instruction of `program` with `data` on `keys` (its accounts in order) sets
+ * a delegate's allowance on: the first account of SPL Token's or Token-2022's `Approve` (4) or
+ * `ApproveChecked` (13), and of each one in a `Batch` (255), whose instructions take its accounts
+ * in turn (each an account count and a data length, a byte each, then its data). `null` for a
+ * token program's instruction that cannot be read (no data, a batch cut short, an approval with no
+ * first account), since what it does cannot be told; empty for any other instruction.
+ */
+export function approvesOn(
+  program: string | undefined,
+  data: Uint8Array | undefined,
+  keys: readonly (string | undefined)[],
+): readonly string[] | null {
+  if (program === undefined || !TOKEN_PROGRAMS.has(program)) return [];
+  if (data === undefined || data.length === 0) return null;
+  const batched = data[0] === 255;
+  const instructions: Array<{ data: Uint8Array; keys: readonly (string | undefined)[] }> = [];
+  for (let at = 1, account = 0; batched && at < data.length;) {
+    const count = data[at]!;
+    const length = data[at + 1];
+    if (length === undefined || at + 2 + length > data.length || account + count > keys.length) {
+      return null;
+    }
+    instructions.push({
+      data: data.subarray(at + 2, at + 2 + length),
+      keys: keys.slice(account, account + count),
+    });
+    at += 2 + length;
+    account += count;
+  }
+  if (!batched) instructions.push({ data, keys });
+  const approved: string[] = [];
+  for (const each of instructions) {
+    // A batch holds no batch: one in it, or an instruction with no data, is nothing it runs.
+    if (each.data.length === 0 || (batched && each.data[0] === 255)) return null;
+    if (each.data[0] !== 4 && each.data[0] !== 13) continue;
+    const source = each.keys[0];
+    if (source === undefined) return null;
+    approved.push(source);
+  }
+
+  return approved;
+}
+
+/**
+ * The token accounts an instruction of `program`, as a node parses it, sets a delegate's allowance
+ * on: `info.source` of an `approve` or `approveChecked`, and of each one in a `batch`'s
+ * `info.instructions`. `parsed` is a JsonParsed instruction's `{ type, info }`, which a node
+ * reports for SPL Token and Token-2022 in place of the instruction's accounts and data (Agave's
+ * `parse_token.rs`). `null` where it cannot be read (no type, an approval with no source, a batch
+ * with no list of instructions or a batch in one), since what it does cannot be told; empty for any
+ * other instruction, and for any other program's.
+ */
+export function parsedApprovesOn(
+  program: string | undefined,
+  parsed: unknown,
+): readonly string[] | null {
+  if (program === undefined || !TOKEN_PROGRAMS.has(program)) return [];
+  const read = (instruction: unknown, inBatch: boolean): readonly string[] | null => {
+    if (typeof instruction !== "object" || instruction === null) return null;
+    const { type, info } = instruction as { type?: unknown; info?: unknown };
+    if (typeof type !== "string") return null;
+    if (type === "batch") {
+      const listed = (info as { instructions?: unknown } | null | undefined)?.instructions;
+      if (inBatch || !Array.isArray(listed)) return null;
+      const approved: string[] = [];
+      for (const each of listed as readonly unknown[]) {
+        const approves = read(each, true);
+        if (approves === null) return null;
+        approved.push(...approves);
+      }
+
+      return approved;
+    }
+    if (type !== "approve" && type !== "approveChecked") return [];
+    const source = (info as { source?: unknown } | null | undefined)?.source;
+
+    return typeof source === "string" && source !== "" ? [source] : null;
+  };
+
+  return read(parsed, false);
 }
 
 /**
@@ -438,6 +530,23 @@ export async function movedBy(
 ): Promise<SvmMoved> {
   const tokens: Array<Omit<TokenChange, "decimals" | "symbol">> = [];
   const lamports: LamportChange[] = [];
+  // A mint the transaction writes, whose decimals it changes (made again with others): a balance of
+  // it is worth another amount after, though its raw amount stays the same.
+  const where = new Map(tracked.map((account, index) => [account, index]));
+  const decimalsIn = (state: SimulatedAccount | null | undefined): number | undefined =>
+    state !== null && state !== undefined && state.data.length > MINT_DECIMALS_AT
+      ? state.data[MINT_DECIMALS_AT]
+      : undefined;
+  const remade = (mint: Address): boolean => {
+    const at = where.get(mint);
+
+    return (
+      at !== undefined &&
+      before[at] != null &&
+      after[at] != null &&
+      decimalsIn(before[at]) !== decimalsIn(after[at])
+    );
+  };
   tracked.forEach((account, index) => {
     const lamportsBefore = before[index]?.lamports ?? 0n;
     const lamportsAfter = after[index]?.lamports ?? 0n;
@@ -458,7 +567,7 @@ export async function movedBy(
     if (seen === undefined) return;
     const amountBefore = was?.amount ?? 0n;
     const amountAfter = is?.amount ?? 0n;
-    if (amountBefore !== amountAfter) {
+    if (amountBefore !== amountAfter || (amountBefore > 0n && remade(seen.mint))) {
       tokens.push({
         account,
         mint: seen.mint,

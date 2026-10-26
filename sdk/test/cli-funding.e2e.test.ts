@@ -34,6 +34,8 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { runCommand, type Approver, type CookInput } from "../src/cli/commands.js";
 import { parseFund, permit2On, planFunding } from "../src/cli/funding.js";
+import { fundingFor } from "../src/cli/inputs.js";
+import { simulateCommand } from "../src/cli/simulate.js";
 import { nodeIo, type CliIo } from "../src/cli/run.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
@@ -1014,6 +1016,124 @@ describeEvm(
       expect(await balance(usdc, RECIPIENT)).toBe(before + 1_000_000n);
       expect(await balance(usdc, signer)).toBe(9_000_000n);
     }, 120_000);
+
+    describe("a --pot whose owner() is the signer, where no release's Kitchen minted a Pot", () => {
+      // Answers every call with the owner's address: owner() is the signer, and the salt and the
+      // Kitchen it names put no Pot here.
+      const spoof = getAddress("0x5900000000000000000000000000000000000001");
+      const refusal = `Pot ${spoof} is not ${OWNER.address}'s own Pot of a release this sauce records`;
+      const AUTO: Approver = { auto: true, canAsk: false, approve: async () => true };
+      const MODES = ["permit2", "permit", "allowance", "transfer"] as const;
+      /** The token each mode funds (`permit` needs EIP-2612), once the suite has planted them. */
+      let tokens: Record<(typeof MODES)[number], Address>;
+      beforeAll(async () => {
+        tokens = { permit2: usdc, permit: pusdt, allowance: pusdt, transfer: usdt };
+        await local.testClient.setCode({
+          address: spoof,
+          bytecode: `0x73${OWNER.address.slice(2)}60005260206000f3`,
+        });
+      });
+
+      /** The owner's key, recording each signature asked of it (a typed message, a transaction). */
+      const recording = (): { account: typeof OWNER; calls: string[] } => {
+        const calls: string[] = [];
+        const account = new Proxy(OWNER, {
+          get(target, property, receiver) {
+            const value = Reflect.get(target, property, receiver) as unknown;
+            if (typeof property !== "string" || !property.startsWith("sign")) return value;
+
+            return (...args: unknown[]) => {
+              calls.push(property);
+
+              return (value as (...given: unknown[]) => unknown).apply(target, args);
+            };
+          },
+        });
+
+        return { account, calls };
+      };
+
+      /** The cook of the program on the spoof, funded by `mode` from `account`. */
+      const cookOn = (
+        mode: (typeof MODES)[number],
+        account: typeof OWNER,
+        send: boolean,
+      ): CookInput & { rpcUrl: string } => {
+        const token = tokens[mode];
+
+        return {
+          file: program,
+          text: PAYS,
+          chain: local.chain,
+          defines: {},
+          target: { pot: spoof },
+          args: { from: "--args", values: [token, RECIPIENT, "1"] },
+          rpcUrl: local.rpcUrl,
+          fund: fundingFor({
+            chain: local.chain,
+            rpcUrl: local.rpcUrl,
+            fund: [`${token}:1n`],
+            mode,
+            sweep: false,
+            send,
+            account,
+            approver: AUTO,
+          }),
+        };
+      };
+
+      it.each(MODES)(
+        "sauce run --fund-mode %s refuses it before the signer signs anything",
+        async (mode) => {
+          const token = tokens[mode];
+          const { account, calls } = recording();
+          const held = await balance(token, OWNER.address);
+          const nonce = await local.publicClient.getTransactionCount({ address: OWNER.address });
+          await expect(
+            runCommand({ ...cookOn(mode, account, true), account, approver: AUTO }, nodeIo()),
+          ).rejects.toThrow(refusal);
+          expect(calls).toEqual([]);
+          expect(
+            String(await local.publicClient.getTransactionCount({ address: OWNER.address })),
+          ).toBe(String(nonce));
+          expect(String(await balance(token, OWNER.address))).toBe(String(held));
+          expect(String(await allowance(token, spoof))).toBe("0");
+        },
+        60_000,
+      );
+
+      it.each(MODES)(
+        "sauce simulate --fund-mode %s refuses it before the signer signs anything",
+        async (mode) => {
+          const { account, calls } = recording();
+          await expect(
+            simulateCommand({ ...cookOn(mode, account, false), assume: [] }, nodeIo()),
+          ).rejects.toThrow(refusal);
+          expect(calls).toEqual([]);
+        },
+        60_000,
+      );
+
+      it.each(["run", "simulate"])(
+        "sauce %s --pot <it> --fund exits 1, saying so, and sends nothing",
+        async (command) => {
+          const nonce = await local.publicClient.getTransactionCount({ address: OWNER.address });
+          const refused = record(
+            await sauce(
+              ...[command, program, "--pot", spoof, "--rpc-url", local.rpcUrl],
+              ...["--private-key", OWNER_KEY, "--fund", "USDC:1"],
+              ...["--args", usdc, RECIPIENT, "1"],
+            ),
+          );
+          expect(refused.code).toBe(1);
+          expect(refused.stderr).toContain(refusal);
+          expect(
+            String(await local.publicClient.getTransactionCount({ address: OWNER.address })),
+          ).toBe(String(nonce));
+        },
+        60_000,
+      );
+    });
 
     it("never prints a key or a keystore's password", () => {
       const secrets = [OWNER_KEY, OTHER_KEY, KEYSTORE_KEY].flatMap((key) => [key, key.slice(2)]);

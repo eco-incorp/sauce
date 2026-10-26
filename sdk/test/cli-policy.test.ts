@@ -16,12 +16,21 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CallExecutionError,
+  ContractFunctionZeroDataError,
   encodeAbiParameters,
+  encodeErrorResult,
   encodeFunctionData,
   getAddress,
+  getContractError,
+  InternalRpcError,
+  keccak256,
   maxUint256,
   pad,
   parseUnits,
+  RpcRequestError,
+  toBytes,
+  toFunctionSelector,
   type Address,
   type Hex,
   type PublicClient,
@@ -34,6 +43,7 @@ import { v12Kitchen, v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
 import {
   guardOf,
   guardWallet,
+  measureEvm,
   noPolicyNote,
   ownPotDeployed,
   parsePolicy,
@@ -41,6 +51,7 @@ import {
   readPolicy,
   SendGuard,
 } from "../src/cli/policy.js";
+import { authenticatePot } from "../src/cli/pots.js";
 import { PreviewChainError } from "../src/cli/support.js";
 import { WalletStore, type WalletInfo } from "../src/cli/wallets.js";
 
@@ -49,10 +60,36 @@ const USDC = getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913");
 const PERMIT2 = getAddress("0x000000000022D473030F116dDEE9F6B43aC78BA3");
 const OTHER_TOKEN = getAddress("0x1111111111111111111111111111111111111112");
 const RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
-const POT = getAddress("0x7777777777777777777777777777777777777777");
+const WALLET = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
+/** The wallet's own Pot, at its default salt, which the client below answers for as a Pot does. */
+const POT = getAddress(v12PredictPot(WALLET) as Address);
+/** Another owner's Pot, as genuine as the wallet's: RECIPIENT's. */
+const OTHERS_POT = getAddress(v12PredictPot(RECIPIENT) as Address);
+const POT_OWNERS: Record<Address, Address> = { [POT]: WALLET, [OTHERS_POT]: RECIPIENT };
 const NATIVE = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+
+/**
+ * What viem's readContract throws when the endpoint answers an `eth_call` with JSON-RPC error
+ * `code`: an internal error (-32603), which viem reports as a revert though no contract answered,
+ * or an execution revert (3) with the revert's `data`. Built as readContract builds it.
+ */
+const readError = (functionName: string, code: number, data?: Hex) => {
+  const request = new RpcRequestError({
+    body: { method: "eth_call" },
+    error: { code, message: code === 3 ? "execution reverted" : "internal error", data },
+    url: "http://127.0.0.1:8545",
+  });
+
+  return getContractError(
+    new CallExecutionError(
+      code === InternalRpcError.code ? new InternalRpcError(request) : request,
+      {},
+    ),
+    { abi: v12PotAbi, functionName, args: [] },
+  );
+};
 
 const word = (amount: bigint): Hex => encodeAbiParameters([{ type: "uint256" }], [amount]);
 const topic = (address: Address): Hex => pad(address, { size: 32 });
@@ -69,25 +106,161 @@ const approval = (token: Address, owner: Address, spender: Address, amount: bigi
 
 type Log = ReturnType<typeof transfer>;
 
-/** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. */
-function client(logs: Log[] | null, decimals = 18): PublicClient {
+/** The selectors of `allowance` on an ERC-20 and on Permit2, which a measurement reads after. */
+const ALLOWANCE_READS = [
+  toFunctionSelector("function allowance(address owner, address spender)"),
+  toFunctionSelector("function allowance(address user, address token, address spender)"),
+];
+const isAllowanceRead = (call: { data?: Hex }) =>
+  ALLOWANCE_READS.some((read) => call.data?.toLowerCase().startsWith(read));
+const PERMIT2_GRANTS = [
+  keccak256(toBytes("Approval(address,address,address,uint160,uint48)")),
+  keccak256(toBytes("Permit(address,address,address,uint160,uint48,uint48)")),
+];
+const PERMIT2_LOCKDOWN = keccak256(toBytes("Lockdown(address,address,address)"));
+
+/**
+ * The allowance `read` asks for, as a chain that reports every change of it holds it after `logs`:
+ * the last one they report of that permission, or 0 where they report none.
+ */
+function reported(logs: readonly Log[], read: { to?: Address; data?: Hex }): bigint {
+  const data = (read.data ?? "0x").toLowerCase();
+  const arg = (at: number): Hex => topic(getAddress(`0x${data.slice(34 + at * 64, 74 + at * 64)}`));
+  const same = (a: Hex | undefined, b: Hex) => a?.toLowerCase() === b.toLowerCase();
+  let amount = 0n;
+  for (const log of logs) {
+    if (data.startsWith(ALLOWANCE_READS[0]!)) {
+      if (
+        getAddress(log.address) === getAddress(read.to!) &&
+        same(log.topics[0], APPROVAL) &&
+        same(log.topics[1], arg(0)) &&
+        same(log.topics[2], arg(1))
+      ) {
+        amount = BigInt(log.data.slice(0, 66));
+      }
+      continue;
+    }
+    if (getAddress(log.address) !== PERMIT2) continue;
+    if (
+      PERMIT2_GRANTS.some((grant) => same(log.topics[0], grant)) &&
+      same(log.topics[1], arg(0)) &&
+      same(log.topics[2], arg(1)) &&
+      same(log.topics[3], arg(2))
+    ) {
+      amount = BigInt(log.data.slice(0, 66));
+    }
+    if (
+      same(log.topics[0], PERMIT2_LOCKDOWN) &&
+      same(log.topics[1], arg(0)) &&
+      same(topic(getAddress(`0x${log.data.slice(26, 66)}`)), arg(1)) &&
+      same(topic(getAddress(`0x${log.data.slice(90, 130)}`)), arg(2))
+    ) {
+      amount = 0n;
+    }
+  }
+
+  return amount;
+}
+
+/** The chain's head in every client below, and the time of each of its blocks. */
+const HEAD = 100n;
+const timeOf = (block: bigint): bigint => 1_700_000_000n + 12n * block;
+
+/** One call of a request to `eth_simulateV1`, as viem is given it. */
+interface SimulatedCall {
+  readonly account?: Address;
+  readonly to?: Address;
+  readonly data?: Hex;
+  readonly value?: bigint;
+  readonly gas?: bigint;
+  readonly nonce?: number;
+  readonly maxFeePerGas?: bigint;
+  readonly maxPriorityFeePerGas?: bigint;
+  readonly gasPrice?: bigint;
+}
+interface SimulateRequest {
+  readonly blockNumber?: bigint;
+  readonly blocks: ReadonlyArray<{
+    readonly blockOverrides?: { readonly time?: bigint };
+    readonly calls: readonly SimulatedCall[];
+  }>;
+}
+
+/**
+ * What a node answers `request` with, simulated on top of the block `base`: the block it made,
+ * fixed by `base` and the request's time override, and each call's outcome from `outcome`.
+ */
+const simulated = (
+  request: SimulateRequest,
+  base: bigint,
+  outcome: (
+    call: SimulatedCall,
+    index: number,
+  ) => { status: string; logs: readonly Log[]; data: Hex; gasUsed?: bigint },
+) => ({
+  number: base + 1n,
+  parentHash: keccak256(toBytes(`block ${base}`)),
+  timestamp: request.blocks[0]!.blockOverrides?.time ?? timeOf(base + 1n),
+  baseFeePerGas: 7n,
+  gasLimit: 30_000_000n,
+  calls: request.blocks[0]!.calls.map((call, index) => ({
+    gasUsed: 50_000n,
+    ...outcome(call, index),
+  })),
+});
+
+/** A client whose rehearsal of every call answers `logs`; `null` for an endpoint without one. Its
+ *  tokens have `decimals`, or, where `null`, a decimals() that reads nothing. A contract with no
+ *  such function answers with no data, as viem reports it; a read of a contract in `unreadable`
+ *  fails at the endpoint instead, before any contract answers. An `allowance` read in a rehearsal
+ *  answers what `logs` last report of it, or `remaining` (the allowance the transaction leaves)
+ *  where it is given, or fails where that is `null`. Where `replayFails`, a rehearsal that reads an
+ *  allowance fails each of the transaction's own calls in it (its reads still answer, now of the
+ *  state before them). */
+function client(
+  logs: Log[] | null,
+  decimals: number | null = 18,
+  unreadable: readonly Address[] = [],
+  remaining?: bigint | null,
+  replayFails = false,
+): PublicClient {
   return {
     getChainId: async () => BASE.id,
-    simulateBlocks: async ({ blocks }: { blocks: Array<{ calls: unknown[] }> }) => {
+    getBlock: async () => ({ number: HEAD, timestamp: timeOf(HEAD) }),
+    simulateBlocks: async (request: SimulateRequest) => {
       if (logs === null) throw new Error("the method eth_simulateV1 does not exist");
+      const reading = request.blocks[0]!.calls.some(isAllowanceRead);
 
-      return [{ calls: blocks[0]!.calls.map(() => ({ status: "success", logs, data: "0x" })) }];
+      return [
+        simulated(request, request.blockNumber ?? HEAD, (call) =>
+          isAllowanceRead(call)
+            ? remaining === null
+              ? { status: "failure", logs: [], data: "0x" }
+              : { status: "success", logs: [], data: word(remaining ?? reported(logs, call)) }
+            : replayFails && reading
+              ? { status: "failure", logs: [], data: "0x" }
+              : { status: "success", logs, data: "0x" },
+        ),
+      ];
     },
-    readContract: async ({ functionName }: { functionName: string }) => {
-      if (functionName === "decimals") return decimals;
-      throw new Error("no symbol");
+    readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
+      // The endpoint fails the read with an internal error, which viem wraps as a revert.
+      if (unreadable.includes(getAddress(address))) {
+        throw readError(functionName, InternalRpcError.code);
+      }
+      if (functionName === "decimals" && decimals !== null) return decimals;
+      // A Pot answers for itself: its owner, its salt (the default) and its Kitchen.
+      const owner = POT_OWNERS[getAddress(address)];
+      if (owner !== undefined && functionName === "owner") return owner;
+      if (owner !== undefined && functionName === "userSalt") return pad("0x00", { size: 32 });
+      if (owner !== undefined && functionName === "kitchen") return getAddress(v12KitchenAddress());
+      throw new ContractFunctionZeroDataError({ functionName });
     },
   } as unknown as PublicClient;
 }
 
 let dir: string;
 let wallet: WalletInfo;
-const WALLET = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sauce-policy-"));
@@ -297,6 +470,149 @@ describe("the guard", () => {
     );
   });
 
+  it("tells the wallet's own Pot from another contract only by the contract's own answer, never by an endpoint's failure", async () => {
+    // A client whose reads of the Pot answer with `fail`; or as the wallet's genuine Pot does.
+    const reading = (fail?: (functionName: string) => Error) =>
+      ({
+        readContract: async ({
+          address,
+          functionName,
+        }: {
+          address: Address;
+          functionName: string;
+        }) => {
+          if (fail !== undefined) throw fail(functionName);
+          if (getAddress(address) !== POT)
+            throw new ContractFunctionZeroDataError({ functionName });
+          if (functionName === "owner") return WALLET;
+          if (functionName === "userSalt") return pad("0x00", { size: 32 });
+          return getAddress(v12KitchenAddress());
+        },
+      }) as unknown as PublicClient;
+    const errorData = encodeErrorResult({
+      abi: [{ type: "error", name: "Error", inputs: [{ name: "message", type: "string" }] }],
+      errorName: "Error",
+      args: ["no such function"],
+    });
+
+    expect({
+      genuine: await authenticatePot(reading(), WALLET, POT),
+      internalError: await authenticatePot(
+        reading((name) => readError(name, InternalRpcError.code)),
+        WALLET,
+        POT,
+      ),
+      transportFailure: await authenticatePot(
+        reading(() => new Error("fetch failed")),
+        WALLET,
+        POT,
+      ),
+      reverted: await authenticatePot(
+        reading((name) => readError(name, 3, errorData)),
+        WALLET,
+        POT,
+      ),
+      noData: await authenticatePot(reading(), WALLET, RECIPIENT),
+    }).toEqual({
+      genuine: "own",
+      internalError: "unreadable",
+      transportFailure: "unreadable",
+      reverted: "not",
+      noData: "not",
+    });
+  });
+
+  it("refuses a cook on a Pot it cannot tell is the wallet's own, where a native or token limit needs it", async () => {
+    // The wallet's own Pot, whose owner(), userSalt() and kitchen() the endpoint fails to read: a
+    // cook on it spends the Pot's coin and USDC to another key.
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const verdict = (guard: SendGuard, logs: Log[]) =>
+      guard.evm(client(logs, 18, [POT]), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+    const native = await verdict(guarded({ native: { perTransaction: "0.01" } }), [
+      transfer(NATIVE, POT, RECIPIENT, parseUnits("0.02", 18)),
+    ]);
+    const usdc = await verdict(guarded({ tokens: { USDC: { perTransaction: "1.5" } } }), [
+      transfer(NATIVE, POT, RECIPIENT, 0n),
+      transfer(USDC, POT, RECIPIENT, parseUnits("2", 6)),
+    ]);
+    // Where no native or token limit is set, nothing it cannot measure is limited.
+    const open = await verdict(guarded({ chains: ["base"] }), [
+      transfer(USDC, POT, RECIPIENT, parseUnits("2", 6)),
+    ]);
+
+    expect({ native, usdc, open }).toEqual({
+      native: expect.stringContaining(
+        `native is limited, and could not tell whether ${POT}, which the transaction cooks on, is the wallet's own Pot`,
+      ) as unknown,
+      usdc: expect.stringContaining(
+        `tokens.USDC is limited, and could not tell whether ${POT}, which the transaction cooks on, is the wallet's own Pot`,
+      ) as unknown,
+      open: "let through",
+    });
+  });
+
+  it("counts what the wallet pays a contract that is not its own Pot, whatever its calldata says", async () => {
+    const guard = guarded({
+      native: { perTransaction: "0.01" },
+      tokens: { USDC: { perTransaction: "1.5" } },
+    });
+    const value = parseUnits("0.02", 18);
+    const cookShaped = (to: Address, signed: boolean, paid: bigint) => ({
+      to,
+      data: signed
+        ? encodeFunctionData({
+            abi: v12PotAbi,
+            functionName: "cookSigned",
+            args: [RECIPIENT, "0x", 0n, 0n, 0n, WALLET, "0x"],
+          })
+        : encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: paid,
+    });
+    // A contract that is no Pot, sent a cook's calldata, and another owner's genuine Pot sent a
+    // signed cook: the native coin and the USDC the wallet pays either leave the wallet. (The node
+    // traces native transfers: a zero-value one beside the USDC says so.)
+    const verdicts = [];
+    for (const [to, signed] of [
+      [RECIPIENT, false],
+      [OTHERS_POT, true],
+    ] as const) {
+      for (const [moved, paid] of [
+        [client([transfer(NATIVE, WALLET, to, value)]), value],
+        [
+          client([
+            transfer(NATIVE, WALLET, to, 0n),
+            transfer(USDC, WALLET, to, parseUnits("2", 6)),
+          ]),
+          0n,
+        ],
+      ] as const) {
+        verdicts.push(
+          await guard.evm(moved, cookShaped(to, signed, paid)).then(
+            () => "let through",
+            (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+          ),
+        );
+      }
+    }
+    expect(verdicts).toEqual([
+      "native.perTransaction",
+      "tokens.USDC.perTransaction",
+      "native.perTransaction",
+      "tokens.USDC.perTransaction",
+    ]);
+    // The wallet's own Pot is its own: what it pays in stays the wallet's.
+    await expect(
+      guard.evm(client([transfer(NATIVE, WALLET, POT, value)]), cookShaped(POT, false, value)),
+    ).resolves.toBeDefined();
+  });
+
   describe("on Arc, whose native USDC is also its ERC-20", () => {
     const ARC_USDC = getAddress("0x3600000000000000000000000000000000000000");
     // Arc logs every native movement itself, from EIP-7708's system address, in 18 decimals.
@@ -376,9 +692,100 @@ describe("the guard", () => {
         /tokens.USDC.perDay is 5 USDC; 4 USDC went in the last 24 hours, and this transaction sends 2 USDC/,
       );
     });
+
+    it("holds native USDC sent and a USDC allowance left together, as one token", async () => {
+      // 6 USDC sent as value and 6 more left allowed on the ERC-20: one balance, so 12 against 10.
+      const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+      const sent = parseUnits("6", 18);
+      const moved = onArc([
+        transfer(NATIVE, WALLET, RECIPIENT, sent),
+        transfer(CHAIN, WALLET, RECIPIENT, sent),
+        approval(ARC_USDC, WALLET, SPENDER, parseUnits("6", 6)),
+      ]);
+      const call = { to: RECIPIENT, data: "0x" as Hex, value: sent };
+      const capped = await guarded({ tokens: { USDC: { perTransaction: "10" } } })
+        .evm(moved, call)
+        .then(
+          () => "let through",
+          (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+        );
+      // With room for both, the day's total records both.
+      rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+      (await guarded({ tokens: { USDC: { perDay: "20" } } }).evm(moved, call)).sent("0xaa");
+      const spend = ledger().find((line) => line.state === "reserved")?.spend as Record<
+        string,
+        { amount: string; decimals: number }
+      >;
+
+      expect({ capped, spend: spend["tokens.USDC"] }).toEqual({
+        capped: expect.stringContaining(
+          "tokens.USDC.perTransaction is 10 USDC, and this transaction sends 12 USDC",
+        ) as unknown,
+        spend: { amount: String(parseUnits("12", 18)), decimals: 18 },
+      });
+    });
+
+    it("holds a USDC allowance left another key to the native limit too, alone, with USDC sent, and in the day's total", async () => {
+      // Native USDC and the ERC-20 are one balance: an allowance of the ERC-20 lets its spender take
+      // native USDC, so a policy that limits only native holds it.
+      const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+      const allows = (usdc: string) => approval(ARC_USDC, WALLET, SPENDER, parseUnits(usdc, 6));
+      const verdict = (guard: SendGuard, moved: PublicClient, call = pay) =>
+        guard.evm(moved, call).then(
+          () => "let through",
+          (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+        );
+      const capped = guarded({ native: { perTransaction: "1.5" } });
+      const one = parseUnits("1", 18);
+      const alone = await verdict(capped, onArc([allows("2")]));
+      const withValue = await verdict(
+        capped,
+        onArc([
+          transfer(NATIVE, WALLET, RECIPIENT, one),
+          transfer(CHAIN, WALLET, RECIPIENT, one),
+          allows("1"),
+        ]),
+        { to: RECIPIENT, data: "0x", value: one },
+      );
+      const within = await verdict(capped, onArc([allows("1")]));
+      // An allowance of it whose amount after the transaction cannot be read is not measured.
+      const unread = await verdict(capped, {
+        ...client([allows("1")], 18, [], null),
+        getChainId: async () => requireChain("arc").id,
+      } as PublicClient);
+      // An approval of Permit2 makes standing Permit2 allowances of it spendable, which nothing in
+      // the transaction measures.
+      const throughPermit2 = await verdict(
+        capped,
+        onArc([approval(ARC_USDC, WALLET, PERMIT2, maxUint256)]),
+      );
+      rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+      const daily = guarded({ native: { perDay: "5" } });
+      (await daily.evm(onArc([allows("3")]), pay)).sent("0xaa");
+      const day = await verdict(daily, onArc([allows("3")]));
+
+      expect({ alone, withValue, within, unread, throughPermit2, day }).toEqual({
+        alone: expect.stringContaining(
+          "native.perTransaction is 1.5 USDC, and this transaction sends 2 USDC (2 USDC of it as allowances it approves)",
+        ) as unknown,
+        withValue: expect.stringContaining(
+          "native.perTransaction is 1.5 USDC, and this transaction sends 2 USDC (1 USDC of it as allowances it approves)",
+        ) as unknown,
+        within: "let through",
+        unread: expect.stringContaining(
+          `native is limited, and the allowance this transaction leaves ${SPENDER} of USDC, Arc's native coin, could not be read`,
+        ) as unknown,
+        throughPermit2: expect.stringContaining(
+          `this transaction approves Permit2 (${PERMIT2}) for USDC`,
+        ) as unknown,
+        day: expect.stringContaining(
+          "native.perDay is 5 USDC; 3 USDC went in the last 24 hours, and this transaction sends 3 USDC",
+        ) as unknown,
+      });
+    });
   });
 
-  it("refuses an approval above the limit, but not one to Permit2", async () => {
+  it("refuses an approval above the limit", async () => {
     const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
     const unlimited = client([approval(USDC, WALLET, RECIPIENT, maxUint256)]);
     const refusal = await refused(guard.evm(unlimited, pay));
@@ -388,11 +795,477 @@ describe("the guard", () => {
       ),
     );
     await expect(
-      guard.evm(client([approval(USDC, WALLET, PERMIT2, maxUint256)]), pay),
-    ).resolves.toBeDefined();
-    await expect(
       guard.evm(client([approval(USDC, WALLET, RECIPIENT, parseUnits("10", 6))]), pay),
     ).resolves.toBeDefined();
+  });
+
+  it("refuses an approval of Permit2 for a limited token, which makes a standing Permit2 allowance of it spendable", async () => {
+    // The wallet's approval of Permit2 for USDC stood at 0, beside a Permit2 allowance of USDC it
+    // gave a spender before: approving Permit2 again lets that spender take it, and nothing in the
+    // transaction reports that allowance, so no amount of it can be weighed.
+    const restore = client([approval(USDC, WALLET, PERMIT2, maxUint256)]);
+    const verdict = (guard: SendGuard, moved: PublicClient) =>
+      guard.evm(moved, pay).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+
+    expect({
+      limited: await verdict(guarded({ tokens: { USDC: { perTransaction: "10" } } }), restore),
+      revoked: await verdict(
+        guarded({ tokens: { USDC: { perTransaction: "10" } } }),
+        client([approval(USDC, WALLET, PERMIT2, 0n)]),
+      ),
+      elsewhere: await verdict(
+        guarded({ tokens: { [OTHER_TOKEN]: { perTransaction: "1" } } }),
+        restore,
+      ),
+    }).toEqual({
+      limited: expect.stringContaining(
+        `this transaction approves Permit2 (${PERMIT2}) for USDC`,
+      ) as unknown,
+      revoked: "let through",
+      elsewhere: "let through",
+    });
+  });
+
+  it("holds a standing allowance granted through Permit2 to the token's limit", async () => {
+    // Permit2's AllowanceTransfer: the wallet's approve (or a permit it signed) lets a spender take
+    // up to the amount of the token through Permit2, with no later signature, wherever the wallet
+    // approved Permit2 for the token, as run --fund permit2 leaves it. Its events are Permit2's own,
+    // whose topics its deployed code carries.
+    const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
+    const PERMIT2_PERMIT = keccak256(
+      toBytes("Permit(address,address,address,uint160,uint48,uint48)"),
+    );
+    const runtime = (
+      JSON.parse(readFileSync(new URL("./fixtures/cli/Permit2.json", import.meta.url), "utf8")) as {
+        runtime: string;
+      }
+    ).runtime.toLowerCase();
+    expect([PERMIT2_APPROVAL, PERMIT2_PERMIT].map((one) => runtime.includes(one.slice(2)))).toEqual(
+      [true, true],
+    );
+    const grant = (event: Hex, spender: Address, amount: bigint) => ({
+      address: PERMIT2,
+      topics: [event, topic(WALLET), topic(USDC), topic(spender)] as Hex[],
+      data:
+        event === PERMIT2_APPROVAL
+          ? encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }], [amount, 2 ** 40])
+          : encodeAbiParameters(
+              [{ type: "uint160" }, { type: "uint48" }, { type: "uint48" }],
+              [amount, 2 ** 40, 0],
+            ),
+    });
+    const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const verdict = (logs: Log[]) =>
+      guard.evm(client(logs), { to: PERMIT2, data: "0x", value: 0n }).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+    const over = 2n ** 160n - 1n;
+
+    expect({
+      approved: await verdict([grant(PERMIT2_APPROVAL, RECIPIENT, over)]),
+      permitted: await verdict([grant(PERMIT2_PERMIT, RECIPIENT, over)]),
+      within: await verdict([grant(PERMIT2_APPROVAL, RECIPIENT, parseUnits("10", 6))]),
+    }).toEqual({
+      approved: expect.stringContaining(`this transaction approves ${RECIPIENT} for `) as unknown,
+      permitted: expect.stringContaining(`this transaction approves ${RECIPIENT} for `) as unknown,
+      within: "let through",
+    });
+  });
+
+  it("holds each allowance as its own permission, whoever grants it and through which contract", async () => {
+    // An allowance on the token and one through Permit2 are two permissions; so are the wallet's and
+    // its Pot's. A change to one leaves the others as they are, and they share one cap.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
+    const viaPermit2 = (owner: Address, amount: bigint) => ({
+      address: PERMIT2,
+      topics: [PERMIT2_APPROVAL, topic(owner), topic(USDC), topic(SPENDER)] as Hex[],
+      data: encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }], [amount, 2 ** 40]),
+    });
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const verdict = (logs: Log[]) =>
+      guard.evm(client(logs), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    const twenty = parseUnits("20", 6);
+    const six = parseUnits("6", 6);
+
+    expect({
+      erc20ThenPermit2Zero: await verdict([
+        approval(USDC, POT, SPENDER, twenty),
+        viaPermit2(POT, 0n),
+      ]),
+      permit2ZeroThenErc20: await verdict([
+        viaPermit2(POT, 0n),
+        approval(USDC, POT, SPENDER, twenty),
+      ]),
+      walletAndPot: await verdict([
+        approval(USDC, WALLET, SPENDER, six),
+        approval(USDC, POT, SPENDER, six),
+      ]),
+      erc20AndPermit2: await verdict([approval(USDC, POT, SPENDER, six), viaPermit2(POT, six)]),
+    }).toEqual({
+      erc20ThenPermit2Zero: "tokens.USDC",
+      permit2ZeroThenErc20: "tokens.USDC",
+      walletAndPot: "tokens.USDC.perTransaction",
+      erc20AndPermit2: "tokens.USDC.perTransaction",
+    });
+  });
+
+  it("reads each allowance in a simulation of its own, so no other contract's read can change what it reads", async () => {
+    // The Pot allows a spender 20 USDC, and a contract it also allows that, read for its own
+    // allowance first, lowers the Pot's USDC allowance (it is a spender of USDC): read in the
+    // simulation USDC's read is in, it would hide the 20.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const MEDDLER = getAddress("0x9999999999999999999999999999999999999999");
+    const twenty = parseUnits("20", 6);
+    const logs = [approval(MEDDLER, POT, SPENDER, 1n), approval(USDC, POT, SPENDER, twenty)];
+    // A node that answers as a consistent one does (the block it made, each call's gas), so every
+    // read stands, and that lowers USDC's allowance after the meddler is read in the same request.
+    const meddled = {
+      ...client(logs),
+      simulateBlocks: async (request: SimulateRequest) => {
+        let lowered = false;
+
+        return [
+          simulated(request, request.blockNumber ?? HEAD, (call) => {
+            if (!isAllowanceRead(call)) return { status: "success", logs, data: "0x" };
+            if (getAddress(call.to!) === MEDDLER) {
+              lowered = true;
+
+              return { status: "success", logs: [], data: word(1n) };
+            }
+
+            return { status: "success", logs: [], data: word(lowered ? 0n : twenty) };
+          }),
+        ];
+      },
+    } as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const verdict = await guarded({ tokens: { USDC: { perTransaction: "10" } } })
+      .evm(meddled, cook)
+      .then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+
+    // Refused for the 20 read, not for an allowance that could not be read.
+    expect(verdict).toMatch(
+      new RegExp(
+        `this transaction approves ${SPENDER} for 20 USDC, more than the 10 USDC tokens\\.USDC leaves room for`,
+      ),
+    );
+  });
+
+  it("counts the allowance a transaction leaves, as the chain holds it after, not the last it reported", async () => {
+    // A spender pulls what it was allowed with no Approval of what is left (Permit2 never reports
+    // one, nor do many tokens), or Permit2's lockdown zeroes it: the allowance after the transaction,
+    // read in the same rehearsal, is what the spender keeps.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
+    const LOCKDOWN = keccak256(toBytes("Lockdown(address,address,address)"));
+    const viaPermit2 = (amount: bigint) => ({
+      address: PERMIT2,
+      topics: [PERMIT2_APPROVAL, topic(POT), topic(USDC), topic(SPENDER)] as Hex[],
+      data: encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }], [amount, 2 ** 40]),
+    });
+    const lockdown = {
+      address: PERMIT2,
+      topics: [LOCKDOWN, topic(POT)] as Hex[],
+      data: encodeAbiParameters([{ type: "address" }, { type: "address" }], [USDC, SPENDER]),
+    };
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const guard = guarded({ tokens: { USDC: { perTransaction: "7" } } });
+    const verdict = (logs: Log[], remaining?: bigint | null, replayFails = false) =>
+      guard.evm(client(logs, 18, [], remaining, replayFails), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    const usdc = (whole: string) => parseUnits(whole, 6);
+    const spent = (amount: bigint) => transfer(USDC, POT, SPENDER, amount);
+
+    expect({
+      // 6 allowed and all of it pulled: 6 moved, nothing left (not 6 + 6 = 12 against 7).
+      pulledWhole: await verdict([approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("6"))], 0n),
+      // 6 allowed and 2 pulled: 2 moved and 4 left, 6 in all (not 6 + 2 = 8).
+      pulledPart: await verdict(
+        [approval(USDC, POT, SPENDER, usdc("6")), spent(usdc("2"))],
+        usdc("4"),
+      ),
+      throughPermit2: await verdict([viaPermit2(usdc("6")), spent(usdc("6"))], 0n),
+      // 20 allowed through Permit2, then locked down: nothing left to take.
+      lockedDown: await verdict([viaPermit2(usdc("20")), lockdown], 0n),
+      revoked: await verdict(
+        [approval(USDC, POT, SPENDER, usdc("20")), approval(USDC, POT, SPENDER, 0n)],
+        0n,
+      ),
+      // Where the allowance after cannot be read, it is not measured: a limit on the token refuses
+      // it (2 allowed and pulled whole, which would count 2 if it were read).
+      unread: await verdict([approval(USDC, POT, SPENDER, usdc("2")), spent(usdc("2"))], null),
+      // Where the transaction fails in the rehearsal its read follows, the read is of the state
+      // before it: 0 there says nothing of the 20 it allows, which is not measured.
+      replayFailed: await verdict([approval(USDC, POT, SPENDER, usdc("20"))], 0n, true),
+    }).toEqual({
+      pulledWhole: "let through",
+      pulledPart: "let through",
+      throughPermit2: "let through",
+      lockedDown: "let through",
+      revoked: "let through",
+      unread: "tokens.USDC",
+      replayFailed: "tokens.USDC",
+    });
+  });
+
+  it("reads every allowance on the block the transaction was simulated on, so no two reads come from different states", async () => {
+    // The cook allows A and B 20 USDC each and has one of them take its 20 back into the Pot: A on
+    // an even block, B on an odd one. Either way it logs the same transfer, Pot to Pot, and leaves
+    // 20 allowed. The chain's head moves on between requests, so a read on a block of its own would
+    // see A's taken on one and B's on the next: 0 and 0.
+    const A = getAddress("0x5555555555555555555555555555555555555555");
+    const B = getAddress("0x7777777777777777777777777777777777777777");
+    const twenty = parseUnits("20", 6);
+    const logs = [
+      approval(USDC, POT, A, twenty),
+      approval(USDC, POT, B, twenty),
+      transfer(USDC, POT, POT, twenty),
+    ];
+    const requests: SimulateRequest[] = [];
+    let head = 99n;
+    const moving = {
+      ...client(logs),
+      getBlock: async () => ({ number: head, timestamp: timeOf(head) }),
+      simulateBlocks: async (request: SimulateRequest) => {
+        requests.push(request);
+        // A request that names no block runs on the head, and the chain moves on.
+        const base = request.blockNumber ?? head++;
+        const taker = base % 2n === 0n ? A : B;
+
+        return [
+          simulated(request, base, (call) => {
+            if (!isAllowanceRead(call)) return { status: "success", logs, data: "0x" };
+            const spender = getAddress(`0x${call.data!.slice(98, 138)}`);
+
+            return { status: "success", logs: [], data: word(spender === taker ? 0n : twenty) };
+          }),
+        ];
+      },
+    } as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const verdict = await guarded({ tokens: { USDC: { perTransaction: "10" } } })
+      .evm(moving, cook)
+      .then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    // Each request's block and the time of the block it simulates: one for all of them.
+    const contexts = requests.map(
+      (request) => `${request.blockNumber}@${request.blocks[0]!.blockOverrides?.time}`,
+    );
+
+    expect({ verdict, requests: requests.length, contexts: [...new Set(contexts)] }).toEqual({
+      verdict: "tokens.USDC",
+      requests: 3,
+      contexts: [expect.stringMatching(/^99@\d+$/) as unknown],
+    });
+  });
+
+  it("refuses an allowance whose replay does not run as the transaction's own simulation did", async () => {
+    // The cook allows a spender 20 USDC; each replay reads 0 left. That stands only where the
+    // replay ran on the same block as the transaction's simulation, and each of its calls returned
+    // the same and used the same gas: otherwise the 0 is of another execution.
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const logs = [approval(USDC, POT, SPENDER, parseUnits("20", 6))];
+    const drifting = (drift: "none" | "block" | "returns" | "gas" | "unservable") =>
+      ({
+        ...client(logs),
+        simulateBlocks: async (request: SimulateRequest) => {
+          const replay = request.blocks[0]!.calls.some(isAllowanceRead);
+          if (replay && drift === "unservable") throw new Error("header not found");
+          const base = (request.blockNumber ?? HEAD) + (replay && drift === "block" ? 1n : 0n);
+
+          return [
+            simulated(request, base, (call) =>
+              isAllowanceRead(call)
+                ? { status: "success", logs: [], data: word(0n) }
+                : {
+                    status: "success",
+                    logs,
+                    data: replay && drift === "returns" ? "0x02" : "0x01",
+                    gasUsed: replay && drift === "gas" ? 60_000n : 50_000n,
+                  },
+            ),
+          ];
+        },
+      }) as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const guard = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const verdict = (drift: Parameters<typeof drifting>[0]) =>
+      guard.evm(drifting(drift), cook).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+
+    expect({
+      none: await verdict("none"),
+      block: await verdict("block"),
+      returns: await verdict("returns"),
+      gas: await verdict("gas"),
+      unservable: await verdict("unservable"),
+    }).toEqual({
+      none: "let through",
+      block: "tokens.USDC",
+      returns: "tokens.USDC",
+      gas: "tokens.USDC",
+      unservable: "tokens.USDC",
+    });
+  });
+
+  it("simulates a transaction with the gas and fees it is signed with, in its own simulation and every replay", async () => {
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const logs = [approval(USDC, POT, SPENDER, parseUnits("2", 6))];
+    const requests: SimulateRequest[] = [];
+    const recording = {
+      ...client(logs),
+      simulateBlocks: async (request: SimulateRequest) => {
+        requests.push(request);
+
+        return [
+          simulated(request, request.blockNumber ?? HEAD, (call) =>
+            isAllowanceRead(call)
+              ? { status: "success", logs: [], data: word(parseUnits("2", 6)) }
+              : { status: "success", logs, data: "0x" },
+          ),
+        ];
+      },
+    } as unknown as PublicClient;
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+      gas: 240_000n,
+      maxFeePerGas: 3_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+    };
+    await guarded({ tokens: { USDC: { perTransaction: "10" } } }).evm(recording, cook);
+    // The cook's call in each request, and the replay's read after it, which is no transaction.
+    const sent = requests.map((request) =>
+      request.blocks[0]!.calls.map(
+        (call) => `${call.gas}/${call.maxFeePerGas}/${call.maxPriorityFeePerGas}/${call.gasPrice}`,
+      ),
+    );
+
+    expect(sent).toEqual([
+      ["240000/3000000000/1000000000/undefined"],
+      ["240000/3000000000/1000000000/undefined", "undefined/undefined/undefined/undefined"],
+    ]);
+  });
+
+  it("replays a plan up to the call that leaves an allowance, each call as the plan sends it", async () => {
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const logs = [approval(USDC, POT, SPENDER, parseUnits("20", 6))];
+    const requests: SimulateRequest[] = [];
+    const recording = {
+      ...client(logs),
+      simulateBlocks: async (request: SimulateRequest) => {
+        requests.push(request);
+
+        return [
+          simulated(request, request.blockNumber ?? HEAD, (call) =>
+            isAllowanceRead(call)
+              ? { status: "success", logs: [], data: word(0n) }
+              : { status: "success", logs, data: "0x" },
+          ),
+        ];
+      },
+    } as unknown as PublicClient;
+    // A payment, then a cook whose Pot leaves the allowance.
+    const plan = [
+      { to: USDC, data: "0xa9059cbb" as Hex, value: 0n },
+      {
+        to: POT,
+        data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+        value: 1n,
+      },
+    ];
+    await measureEvm(recording, BASE, WALLET, plan);
+    const sent = (calls: readonly SimulatedCall[]) =>
+      calls.map((call) => `${call.account}>${call.to}:${call.data}:${call.value}`);
+
+    expect(requests.slice(1).map((request) => sent(request.blocks[0]!.calls))).toEqual([
+      [...sent(plan.map((call) => ({ account: WALLET, ...call }))), expect.any(String) as unknown],
+    ]);
+  });
+
+  it("holds an approval and a transfer of a token together, and reserves the approval in the day's total", async () => {
+    const SPENDER = getAddress("0x5555555555555555555555555555555555555555");
+    const six = parseUnits("6", 6);
+    const verdict = (guard: SendGuard, logs: Log[]) =>
+      guard.evm(client(logs), pay).then(
+        (reservation) => {
+          reservation.sent("0xaa");
+
+          return "let through";
+        },
+        (error: unknown) => (error instanceof PolicyRefusal ? error.limit : String(error)),
+      );
+    // 6 USDC sent and 6 more approved: each within 10, together past it.
+    const together = await verdict(guarded({ tokens: { USDC: { perTransaction: "10" } } }), [
+      transfer(USDC, WALLET, RECIPIENT, six),
+      approval(USDC, WALLET, SPENDER, six),
+    ]);
+    // A day's 10: an approval of 6, reserved, leaves room for 4, so a second approval of 6 is
+    // refused.
+    rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+    const perDay = guarded({ tokens: { USDC: { perDay: "10" } } });
+    const first = await verdict(perDay, [approval(USDC, WALLET, SPENDER, six)]);
+    const reserved = ledger().find((line) => line.state === "reserved")?.spend;
+    const second = await verdict(perDay, [approval(USDC, WALLET, RECIPIENT, six)]);
+    // An approval spent in the same transaction counts once, as what it moved: the allowance the
+    // token reports last is what the spender keeps. And one to the wallet's own Pot gives no other
+    // key anything.
+    rmSync(join(dir, "agent.ledger.jsonl"), { force: true });
+    const capped = guarded({ tokens: { USDC: { perTransaction: "10" } } });
+    const spentAtOnce = await verdict(capped, [
+      approval(USDC, WALLET, SPENDER, six),
+      transfer(USDC, WALLET, RECIPIENT, six),
+      approval(USDC, WALLET, SPENDER, 0n),
+    ]);
+    const toOwnPot = await verdict(capped, [approval(USDC, WALLET, POT, maxUint256)]);
+
+    expect({ together, first, reserved, second, spentAtOnce, toOwnPot }).toEqual({
+      together: "tokens.USDC.perTransaction",
+      first: "let through",
+      reserved: { "tokens.USDC": { amount: String(six), decimals: 6 } },
+      second: "tokens.USDC",
+      spentAtOnce: "let through",
+      toOwnPot: "let through",
+    });
   });
 
   it("holds a token named by address, its decimals read from it", async () => {
@@ -401,6 +1274,36 @@ describe("the guard", () => {
     expect((await refused(guard.evm(over, pay))).limit).toBe(
       `tokens.${OTHER_TOKEN.toLowerCase()}.perTransaction`,
     );
+  });
+
+  it("refuses an approval of a token whose decimals cannot be read, where that token is limited", async () => {
+    // A token outside the registry, named by address, whose decimals() reads nothing: a limit
+    // cannot weigh what its approval gives, so it refuses it rather than let it through.
+    const approves = (spender: Address) =>
+      client([approval(OTHER_TOKEN, WALLET, spender, maxUint256)], null);
+    const byAddress = guarded({ tokens: { [OTHER_TOKEN]: { perTransaction: "1" } } });
+    const verdict = (guard: SendGuard, spender: Address) =>
+      guard.evm(approves(spender), pay).then(
+        () => "let through",
+        (error: unknown) => (error instanceof PolicyRefusal ? error.message : String(error)),
+      );
+    const limited = await verdict(byAddress, RECIPIENT);
+    // An approval of Permit2 for a limited token is refused as well, for its own reason; another
+    // token's limit has nothing to say.
+    const toPermit2 = await verdict(byAddress, PERMIT2);
+    const elsewhere = await verdict(
+      guarded({ tokens: { USDC: { perTransaction: "1" } } }),
+      RECIPIENT,
+    );
+    expect({ limited, toPermit2, elsewhere }).toEqual({
+      limited: expect.stringContaining(
+        `the decimals of ${OTHER_TOKEN} could not be read, so it cannot be held to the limit`,
+      ) as unknown,
+      toPermit2: expect.stringContaining(
+        `this transaction approves Permit2 (${PERMIT2})`,
+      ) as unknown,
+      elsewhere: "let through",
+    });
   });
 
   it("refuses a token limit an endpoint without eth_simulateV1 cannot measure", async () => {

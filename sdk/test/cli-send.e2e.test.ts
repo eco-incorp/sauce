@@ -42,6 +42,8 @@ import {
   bytesToHex,
   encodeAbiParameters,
   hexToBigInt,
+  numberToHex,
+  parseTransaction,
   serializeTransaction,
   type Address,
   type Hex,
@@ -279,7 +281,37 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(await nonce()).toBe(before);
 
     const signed = await sign(cook, before, 1_000_000n);
-    const run = await sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json");
+    // Every request the command makes, as the endpoint receives it.
+    const requests: Array<{ method: string; params: unknown[] }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (typeof init?.body === "string") {
+        requests.push(...[JSON.parse(init.body) as { method: string; params: unknown[] }].flat());
+      }
+
+      return original(input, init);
+    }) as typeof fetch;
+    let run: Awaited<ReturnType<typeof sauce>>;
+    try {
+      run = await sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json");
+    } finally {
+      globalThis.fetch = original;
+    }
+    // The simulation before it is sent runs the call with the gas and the fees it was signed with.
+    const sentAt = requests.findIndex((request) => request.method === "eth_sendRawTransaction");
+    const simulated = requests
+      .slice(0, sentAt)
+      .filter((request) => request.method === "eth_call")
+      .map((request) => request.params[0] as Record<string, string | undefined>)
+      .filter((call) => call.to?.toLowerCase() === cook.to.toLowerCase())
+      .map((call) => `${call.gas}/${call.maxFeePerGas}/${call.maxPriorityFeePerGas}`);
+    const asSigned = parseTransaction(signed);
+    expect({ sentAt: sentAt > 0, simulated }).toEqual({
+      sentAt: true,
+      simulated: [
+        `${numberToHex(asSigned.gas!)}/${numberToHex(asSigned.maxFeePerGas!)}/${numberToHex(asSigned.maxPriorityFeePerGas!)}`,
+      ],
+    });
 
     const out = jsonOf(run) as {
       ok: boolean;

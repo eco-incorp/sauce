@@ -49,7 +49,14 @@ import { v12PotAbi } from "../evm/engine.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { connect, landed, reasonOf, simulate, type Sent } from "./chain.js";
+import {
+  broadcastRefusal,
+  connect,
+  landed,
+  simulate,
+  type Sent,
+  type SignedCall,
+} from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { guardOf, type Reservation } from "./policy.js";
@@ -337,6 +344,10 @@ interface SignedEvm {
   readonly gas?: bigint;
   /** The most it pays per gas: an EIP-1559 `maxFeePerGas`, or a legacy `gasPrice`. */
   readonly feeCap?: bigint;
+  /** What it is signed to pay per gas, as a program reads it: its fee fields as they are. */
+  readonly fees:
+    | { readonly maxFeePerGas?: bigint; readonly maxPriorityFeePerGas?: bigint }
+    | { readonly gasPrice: bigint };
 }
 
 async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
@@ -371,6 +382,15 @@ async function signedEvm(raw: string, where: string): Promise<SignedEvm> {
     ...((parsed.maxFeePerGas ?? parsed.gasPrice) === undefined
       ? {}
       : { feeCap: parsed.maxFeePerGas ?? parsed.gasPrice }),
+    fees:
+      parsed.gasPrice !== undefined
+        ? { gasPrice: parsed.gasPrice }
+        : {
+            ...(parsed.maxFeePerGas === undefined ? {} : { maxFeePerGas: parsed.maxFeePerGas }),
+            ...(parsed.maxPriorityFeePerGas === undefined
+              ? {}
+              : { maxPriorityFeePerGas: parsed.maxPriorityFeePerGas }),
+          },
   };
 }
 
@@ -389,7 +409,13 @@ async function broadcastEvm(client: PublicClient, tx: SignedEvm): Promise<void> 
   try {
     await client.sendRawTransaction({ serializedTransaction: tx.raw });
   } catch (error) {
-    const reason = reasonOf(error);
+    const reason = broadcastRefusal(error, {
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+      ...tx.fees,
+    });
     const known = await client.getTransaction({ hash: tx.hash }).then(
       () => true,
       () => false,
@@ -478,7 +504,14 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         json: {},
       };
     };
-    const request = { to: tx.to, data: tx.data, value: tx.value };
+    // The call as it was signed: with its gas and what it pays per gas, which a program can read.
+    const request: SignedCall = {
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      ...(tx.gas === undefined ? {} : { gas: tx.gas }),
+      ...tx.fees,
+    };
     // One the chain has already (sent before, by this or by the signer) is read back, not resent.
     const known = await client.getTransaction({ hash: tx.hash }).then(
       () => true,
@@ -534,7 +567,9 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         break;
       }
     }
-    const result = await landed(client, tx.hash, tx.from, request, (status) =>
+    // Its receipt, and, reverted, the call replayed at the block before it.
+    const plain = { to: tx.to, data: tx.data, value: tx.value };
+    const result = await landed(client, tx.hash, tx.from, plain, (status) =>
       status === "success" ? reservation?.sent(tx.hash) : reservation?.released("reverted"),
     );
     sent.push(await evmEntry(client, input.chain, tx, what, result));
