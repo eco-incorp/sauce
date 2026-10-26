@@ -790,14 +790,15 @@ export function checkNames(
     let ruledOut = false;
     for (const statement of list) {
       if (unreachable) {
-        // A function declared in a dead tail is still declared: it may be called from before. So
-        // is a type, and a module's import or export.
-        if (statement.type === "FunctionDeclaration") visit(statement, "value", "value", at);
-        else if (
+        // A function declared in a dead tail is still declared: it may be called from before. An
+        // export is the module's too, and another module may use it. Each is checked as if it ran.
+        // A type and an import are kept as they are.
+        if (statement.type === "FunctionDeclaration" || statement.type.startsWith("Export")) {
+          visit(statement, "value", "value", at);
+        } else if (
           ruledOut &&
           !isTypeDeclaration(statement.type) &&
-          statement.type !== "ImportDeclaration" &&
-          !statement.type.startsWith("Export")
+          statement.type !== "ImportDeclaration"
         ) {
           dead.push({ start: statement.start, end: statement.end, kind: "tail" });
         }
@@ -1045,7 +1046,7 @@ export function checkNames(
           ) {
             use({ kind: "token", node: property, symbol: read, present: false }, "value", "value");
           }
-          visit(prop(node, "object"), mode, `.${read}`, at);
+          visit(prop(node, "object"), "value", `.${read}`, at);
           if (prop<boolean>(node, "computed")) visit(prop(node, "property"), "value", "value", at);
         }
         return;

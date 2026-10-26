@@ -192,8 +192,21 @@ describe("a use of a name the chain lacks outside a branch its test rules out is
       "the other arm of its test",
       "if (PancakeswapV3.Factory) { return 1; }\nreturn PancakeswapV3.Factory.getPool(USDC, WETH, 500);",
     ],
+    [
+      "a method of a choice between contracts",
+      "require((ctx.timestamp() == 0 ? PancakeswapV3.Factory : UniswapV3.Factory).getPool(USDC, WETH, 500) != 0);\nreturn 1;",
+    ],
   ])("%s", (_what, body) => {
     const message = refusal("optimism", `function main() {\n${body}\n}`);
+    expect(message).toMatch(/`PancakeswapV3\.Factory` is not deployed on optimism/);
+    expect(message).toMatch(/--> main\.js:\d+:\d+/);
+  });
+
+  it("an export after a guard that rules the chain out is still checked", () => {
+    const message = refusal(
+      "optimism",
+      'USDC.transfer(venue(), 1);\nif (!PancakeswapV3.Factory) { throw "no venue"; }\nexport function venue(): Address { return PancakeswapV3.Factory; }',
+    );
     expect(message).toMatch(/`PancakeswapV3\.Factory` is not deployed on optimism/);
     expect(message).toMatch(/--> main\.js:\d+:\d+/);
   });
