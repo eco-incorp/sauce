@@ -471,7 +471,7 @@ export function collectVenueMethods(l: SvmLowering): void {
       // main's parameter as it was given: never declared again nor assigned to.
       const name = nameOf(node);
       const given =
-        l.param(name)?.type === "Uint256" &&
+        l.param(node)?.type === "Uint256" &&
         (l.declarations.get(name) ?? 0) === 1 &&
         !assigned.has(name);
       return given ? `@${name}` : "";
@@ -561,7 +561,7 @@ export function collectVenueMethods(l: SvmLowering): void {
           `${capitalized(program.toLowerCase())}${key}${refinement === undefined ? "" : `x${refinement}`}`,
       };
     }
-    if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address") {
+    if (node.type === "Identifier" && l.param(node)?.kind === "address") {
       return { name: `@${nameOf(node)}`, stem: nameOf(node) };
     }
     const key = keyLiteral(node, l.source);

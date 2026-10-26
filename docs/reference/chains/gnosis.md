@@ -6,18 +6,19 @@
 
 > Everything a program can name on Gnosis: its tokens, and every protocol deployed there with the
 > name a program writes for each contract. Gnosis is a preview chain: programs compile here and the
-> reads work, but the released engine is not deployed here, so nothing is simulated or sent.
+> reads work, and simulate runs wherever the release is deployed, but no transaction is built or
+> sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Gnosis a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
-but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
+and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and read; no simulation, and no transaction is built or sent |
+| Support | preview: compile and read; no transaction is built or sent |
 | Slug (`--chain`) | `gnosis`; also `xdai`, `gnosis-chain` |
 | Chain id | 100 |
 | Kind | EVM |
@@ -56,7 +57,7 @@ address.
 | [Aave V3](../protocols/aave-v3.md) | pool | `0xb50201558B00496A145fE76f7424749556E326D8` | `AaveV3.Pool` |
 | [Balancer V2](../protocols/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
 | [Curve Finance](../protocols/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
-| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
 
 ## Requesting support
 

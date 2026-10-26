@@ -198,21 +198,40 @@ instructions call. It does not limit whom a program pays: a cook on an allowed P
 address, so a payee is held by the program itself (a recipient it fixes, a `require` on it).
 Deploying the wallet's own Pot counts as a transaction to that Pot, so a `to` naming the Pot lets a
 run deploy it first. `native` and each token count what leaves the wallet or the Pot a transaction
-cooks on, measured by simulating it; `perDay` is the last 24 hours on every chain. On Arc, whose
+cooks on, measured by simulating it on the chain's head with the gas and fees the wallet then signs
+it with, exactly; `perDay` is the last 24 hours on every chain. On Arc, whose
 native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
-and the `USDC` limit both. A send that breaks a limit is refused, naming it, and nothing is signed
-or sent. An ERC-20 approval above what a token's limit leaves room for is refused too. On Solana a
-delegate set or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of the wallet or
-the Pot counts as sent, per transaction and per day, and what the wallet spends as a delegate from
-an account it does not own counts as sent; a token account handed to another owner is a send of
-all it holds; and one whose close authority goes to another key, or a Token-2022 mint whose
-permanent delegate the wallet hands to another key, is refused where that token is limited. On
-Solana `native` counts every account the wallet controls (its token accounts, wrapped SOL among
-them, and nonce and stake accounts it is the authority of), net, so wrapping SOL into its own
-account, or paying the rent of its own token account, counts only the fee. A transaction is held to
-the policy of every wallet that signs it, whichever pays the fee. The measure errs toward counting,
-so a refusal may name more than actually leaves. A Token-2022 mint's permanent delegate the wallet
-never held needs no approval, and no policy limits it.
+and the `USDC` limit both, native USDC sent and a USDC allowance left count together, and a USDC
+allowance counts against `native` too. A send that breaks a limit is refused, naming it, and
+nothing is signed or sent. An allowance a transaction leaves another key counts as sent, per
+transaction and per day, with what the transaction moves of the token: an ERC-20's or one granted
+through Permit2, as the chain holds it after the transaction (each read in a simulation of its own
+on the same block, which counts only where the transaction runs there as it did, with the same
+logs, return data and gas; one that cannot be read so is refused where its token is limited), and
+on Solana a delegate set
+or raised (SPL Token `Approve` or `ApproveChecked`) on a token account of the wallet or the Pot.
+Each allowance is its own permission (on the token or through Permit2, the wallet's or its Pot's),
+and they add up. A spender that is the wallet or its Pot is none, and an approval of a token whose
+decimals cannot be read is refused where it is limited. An approval of Permit2 for a limited token
+is refused: it makes spendable again every Permit2 allowance of it the wallet gave before, which
+nothing measures, so under such a limit fund with `--fund-mode permit`, `allowance` or `transfer`.
+The rule: an allowance of a limited token to anyone but the wallet or its Pot counts only where it
+is measured exactly, and is refused where it is not. What the wallet spends as a delegate from an
+account it does not own counts as sent. A cook's calldata sent to anything but the wallet's own Pot
+is a payment like any other, and a cook on a Pot whose owner cannot be read is refused where a
+native or token limit applies. `--fund` signs and sends only for the wallet's own Pot, after the
+policy's `chains` and `to`. On Solana a token account handed to another owner is a send of all it
+holds, and one whose close authority goes to another key, or a Token-2022 mint whose permanent
+delegate the wallet hands to another key, is refused where that token is limited. On Solana
+`native` counts every account the wallet controls (its token accounts, wrapped SOL among them,
+synced or not, nonce accounts it is the authority of and stake accounts it is the withdrawer of),
+net, so wrapping SOL into its own account, or paying the rent of its own token account, counts only
+the fee. A transaction is held to the policy of every wallet unlocked to sign it, whichever pays
+the fee. The measure errs toward counting, so a refusal may name more than actually leaves. A
+Token-2022 mint's permanent delegate the wallet never held needs no approval, and no policy limits
+it. A simulation shows what a transaction does on the state it ran on; what it does in the block it
+lands in, which may differ (a program that reads the time or the base fee), no simulation bounds,
+so a hard bound is the program's own `require` on what it sends.
 With no policy, sends work, and each says no limits are set.
 
 ## The run, step by step
@@ -570,9 +589,9 @@ line numbers in its errors.
 
 On a preview chain (`sauce-overview`) `globals`, `compile`, `actions`, `inspect`, `verify`, `price`
 and `pools` work, and `sauce pot` predicts the Pot (and reads it) but leaves its deployment out.
-`sauce simulate` does not run there: the released engine is not deployed on a preview chain, so it
-stops with exit 1 (`the released engine … is not deployed on <chain>`); simulate on a supported
-chain. Everything that leaves a transaction ready to sign, unsigned JSON included, or
+`sauce simulate` does not depend on the label: it runs wherever the release is deployed on the
+chain, and where it is not it stops with exit 1 (`the released engine … is not deployed on
+<chain>`). Everything that leaves a transaction ready to sign, unsigned JSON included, or
 sends one is refused before anything is read or signed: `tx`, `run`, `sign`, `pot --deploy` and
 `pot --format cast`. No flag overrides it. The refusal exits 1 and names the supported chains and
 the chain's request:

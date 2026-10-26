@@ -37,12 +37,12 @@ describe("pot on Solana: the Pot's key, and its account", () => {
   it("bare pot is the Pot's key, the address pot.balance reads", () => {
     const program = compile("function main(): Address {\n  return pot;\n}\n");
     expect(program.source).toBe(
-      "function main(pot: Account): Address {\n  return pot.address;\n}\n",
+      "function main(pot: Account<Signer>): Address {\n  return pot.address;\n}\n",
     );
     expect(program.derivedAccounts).toEqual({ pot: "pot" });
     expect(hex("function main(a: Address): bool {\n  return a == pot && pot != 0;\n}\n")).toBe(
       hex(
-        "function main(a: Address, pot: Account): bool {\n  return a == pot.address && pot.address != 0;\n}\n",
+        "function main(a: Address, pot: Account<Signer>): bool {\n  return a == pot.address && pot.address != 0;\n}\n",
       ),
     );
     // A method on it is its key's; a shorthand record field keeps its name.
@@ -59,18 +59,33 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       "function size(a: Account): Uint256 {\n  return a.dataLen;\n}\n" +
         "function main(data: bytes): Uint256 {\n" +
         "  svm.call(Solana.systemProgram, [pot.signer(), pot.writable(), pot], data);\n" +
-        "  return pot.dataLen + pot.owner + svm.sload(pot, 0, 8).toLe() + size(pot);\n" +
+        "  return pot.dataLen + svm.sload(pot, 0, 8).toLe() + size(pot);\n" +
         "}\n",
     );
     expect(program.source).toContain(
       "  svm.call(systemProgram, [pot, pot, pot], data);\n" +
-        "  return pot.dataLen + pot.owner + svm.sload(pot, 0, 8).toLe() + size(pot);",
+        "  return pot.dataLen + svm.sload(pot, 0, 8).toLe() + size(pot);",
     );
     expect(program.derivedAccounts).toEqual({
       systemProgram: "11111111111111111111111111111111",
       pot: "pot",
     });
     expect(roles(program)).toEqual({ systemProgram: "readonly", pot: "writable_signer" });
+  });
+
+  it("is the slot Solana.self was, Account<Signer>, wherever it is named, and refuses pot.owner", () => {
+    // A cook signs for it; only the Kitchen signs for the Pot (direct-engine.e2e measures the hold).
+    for (const body of ["return pot;", "return svm.sload(pot, 0, 8).toLe();"]) {
+      const program = compile(`function main(): Uint256 {\n  ${body}\n}\n`);
+      expect(roles(program).pot).toBe("readonly_signer");
+    }
+    expect(
+      refusal('function main(caller: Address) {\n  require(caller == pot.owner, "owner");\n}\n'),
+    ).toBe(
+      "`pot.owner` on Solana: an account's `.owner` is the program that owns it, so `pot.owner` " +
+        "would be the program that owns the Pot's account, not the Pot's owner. The Pot's owner, " +
+        "who signs the cook, is `Solana.owner` (`Solana.owner.address`, its key).",
+    );
   });
 
   it("is an account for a function @sauce/token declares one for", () => {
@@ -156,14 +171,14 @@ describe("pot on Solana: the Pot's key, and its account", () => {
     expect(
       compile(`${elsewhere("pot")}function main(): Address {\n  return pot;\n}\n`).source,
     ).toBe(
-      `${elsewhere("pot")}function main(pot2: Account): Address {\n  return pot2.address;\n}\n`,
+      `${elsewhere("pot")}function main(pot2: Account<Signer>): Address {\n  return pot2.address;\n}\n`,
     );
     expect(
       compile(
         'function main(flag: bool): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot;\n}\n',
       ).source,
     ).toBe(
-      'function main(flag: bool, pot2: Account): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot2.address;\n}\n',
+      'function main(flag: bool, pot2: Account<Signer>): Address {\n  if (flag) {\n    const pot = 5;\n    require(pot > 0, "low");\n  }\n  return pot2.address;\n}\n',
     );
     expect(refusal(`${elsewhere("self")}function main(): Address {\n  return self;\n}\n`)).toMatch(
       /^`self`: the Pot is `pot`, not `self`/,
@@ -191,7 +206,9 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       refusal(
         "function held(): Uint256 {\n  return pot.USDC;\n}\nfunction main(USDC: Uint256): Uint256 {\n  return held() + USDC;\n}\n",
       ),
-    ).toMatch(/^`pot\.USDC` on Solana: `USDC` is not a token solana registers\./);
+    ).toMatch(
+      /^`pot\.USDC` on Solana: `USDC` is a token solana registers, and the program declares its own `USDC`/,
+    );
   });
 
   it("a name a pattern or a catch clause binds is no read of pot or self", () => {
@@ -243,7 +260,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
         `function main(): Uint256 {\n  const holder${declared} = pot;\n  return holder.balance;\n}\n`,
       );
       expect(program.source).toBe(
-        `function main(pot: Account): Uint256 {\n  const holder${declared} = pot.address;\n  return ctx.balance(holder);\n}\n`,
+        `function main(pot: Account<Signer>): Uint256 {\n  const holder${declared} = pot.address;\n  return ctx.balance(holder);\n}\n`,
       );
       expect(program.derivedAccounts).toEqual({ pot: "pot" });
     }
@@ -253,7 +270,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
         "function main(): Uint256 {\n  const holder: Account = pot;\n  return holder.balance;\n}\n",
       ).source,
     ).toBe(
-      "function main(pot: Account): Uint256 {\n  const holder: Account = pot;\n  return ctx.balance(holder.address);\n}\n",
+      "function main(pot: Account<Signer>): Uint256 {\n  const holder: Account = pot;\n  return ctx.balance(holder.address);\n}\n",
     );
     // A token balance needs a holder known when the transaction is built, which a local is not.
     expect(
@@ -357,7 +374,7 @@ describe("where a site stands", () => {
   it("a shorthand { pot } keeps its key, in main and in a top-level function given the accounts", () => {
     const record = "  const r = { size: 1, pot };\n  return r.pot;\n}\n";
     expect(compile(`function main(): Address {\n${record}`).source).toBe(
-      "function main(pot: Account): Address {\n  const r = { size: 1, pot: pot.address };\n  return r.pot;\n}\n",
+      "function main(pot: Account<Signer>): Address {\n  const r = { size: 1, pot: pot.address };\n  return r.pot;\n}\n",
     );
     expect(
       compile(
@@ -366,7 +383,7 @@ describe("where a site stands", () => {
     ).toBe(
       "function held(__sauce_accounts: Account[]): Address {\n" +
         "  const r = { size: 1, pot: __sauce_accounts[0].address };\n  return r.pot;\n}\n" +
-        "function main(pot: Account): Address {\n  return held([pot]);\n}\n",
+        "function main(pot: Account<Signer>): Address {\n  return held([pot]);\n}\n",
     );
   });
 
@@ -383,6 +400,89 @@ describe("where a site stands", () => {
         "function main(amount: Uint256, tokenProgram: Account, pot: Account<Signer>, potUSDC: Account<Writable>, accountUSDC: Account<Writable>) {\n" +
         "  pay(amount, [tokenProgram, pot, potUSDC, accountUSDC]);\n}\n",
     );
+  });
+
+  it("a helper's last argument keeps its parentheses matched around the accounts passed after it", () => {
+    const program = compile(
+      "function held(extra: Uint256): Uint256 {\n  return pot.USDC + extra;\n}\n" +
+        "function main(extra: Uint256): Uint256 {\n  return held((extra)) + held(((extra)));\n}\n",
+    );
+    expect(program.source).toContain(
+      "function main(extra: Uint256, potUSDC: Account, pot: Account<Signer>): Uint256 {\n" +
+        "  return held((extra), [potUSDC, pot]) + held(((extra)), [potUSDC, pot]);\n}\n",
+    );
+  });
+
+  it("a helper with parameters, called twice, is given its accounts after its own arguments each time", () => {
+    const program = compile(
+      "function held(scale: Uint256, extra: Uint256): Uint256 {\n  return pot.USDC * scale + extra;\n}\n" +
+        "function main(extra: Uint256): Uint256 {\n  return held(2, extra) + held(3, 1);\n}\n",
+    );
+    expect(program.source).toContain(
+      "function held(scale: Uint256, extra: Uint256, __sauce_accounts: Account[]): Uint256 {\n" +
+        "  return __sauce_svm_balance(USDC, __sauce_accounts[0], __sauce_accounts[1].address) * scale + extra;\n}\n" +
+        "function main(extra: Uint256, potUSDC: Account, pot: Account<Signer>): Uint256 {\n" +
+        "  return held(2, extra, [potUSDC, pot]) + held(3, 1, [potUSDC, pot]);\n}\n",
+    );
+  });
+
+  it("an account a helper writes is held to main's parameter, which must be declared Writable", () => {
+    const pay =
+      "function pay(dest: Account, amount: Uint256): void {\n  USDC.transfer(dest, amount);\n}\n";
+    // The same refusal as the transfer written in main, naming main's parameter.
+    expect(
+      refusal(`${pay}function main(dest: Account, amount: Uint256) {\n  pay(dest, amount);\n}\n`),
+    ).toBe(
+      "`USDC.transfer(…)` on Solana, in `pay`: its `dest` is a token account the call writes, and " +
+        "a function other than main declares no roles: declare main's `dest` as " +
+        "`dest: Account<Writable>`.",
+    );
+    // Through a helper calling the one that writes, held at main's call of the outer one.
+    expect(
+      refusal(
+        `${pay}function outer(to: Account, amount: Uint256): void {\n  pay(to, amount);\n}\n` +
+          "function main(dest: Account, amount: Uint256) {\n  outer(dest, amount);\n}\n",
+      ),
+    ).toContain("in `pay`: its `dest` is a token account the call writes");
+    // Anything but a parameter of main is refused: no account expression carries the role.
+    expect(
+      refusal(
+        `${pay}function main(amount: Uint256) {\n  pay(Solana.pda(Solana.systemProgram, ["a"]), amount);\n}\n`,
+      ),
+    ).toContain("pass it a parameter of main declared `Account<Writable>`");
+    const writable = compile(
+      `${pay}function outer(to: Account, amount: Uint256): void {\n  pay(to, amount);\n}\n` +
+        "function main(dest: Account<Writable>, amount: Uint256) {\n  outer(dest, amount);\n}\n",
+    );
+    expect(roles(writable).dest).toBe("writable");
+  });
+
+  it("a helper main never reaches adds no accounts: one that would is refused", () => {
+    const key = `0x${"ab".repeat(32)}`;
+    expect(
+      refusal(
+        `function pay(amount: Uint256): void {\n  USDC.transfer(${key}, amount);\n}\n` +
+          "function main(): Uint256 {\n  return 1;\n}\n",
+      ),
+    ).toBe(
+      "`pay` uses accounts the lowering adds to main (tokenProgram, pot, potUSDC, accountUSDC), " +
+        "and main never calls it: they would be attached to every cook for code that never runs. " +
+        "Call `pay` from main, or remove it.",
+    );
+    expect(
+      refusal(
+        "function held(): Uint256 {\n  return pot.USDC;\n}\nfunction unused(): Uint256 {\n  return held();\n}\n" +
+          "function main(): Uint256 {\n  return 1;\n}\n",
+      ),
+    ).toMatch(
+      /^`held` uses accounts the lowering adds to main \(potUSDC, pot\), and main never calls it/,
+    );
+    // A helper that uses only its own account parameter adds nothing, reached or not.
+    const size = compile(
+      "function size(a: Account): Uint256 {\n  return a.balance;\n}\nfunction main(): Uint256 {\n  return 1;\n}\n",
+    );
+    expect(size.derivedAccounts).toEqual({});
+    expect(size.source).toContain("function main(): Uint256 {");
   });
 
   it("a venue's swap in a helper: its seventeen accounts in one list, its stop's run count unknown", () => {
@@ -433,5 +533,48 @@ describe("where a site stands", () => {
         "function main(): Uint256 {\n  const p = program((): Uint256 => pot.USDC);\n  return 1;\n}\n",
       ),
     ).toMatch(/^`pot\.USDC` on Solana stands in a function inside another/);
+  });
+});
+
+describe("one scoping rule: a name is the binding in scope where it is read", () => {
+  it("a loop's record that hides an Account parameter is read for its own field", () => {
+    const source =
+      "interface Leg { balance: Uint256; address: Address }\n" +
+      "function main(a: Account, legs: Leg[]): Uint256 { let total = 0; for (const a of legs) { total += a.balance; } return total; }";
+    expect(compile(source).source).toBe(source);
+    // Outside the loop, `a` is the parameter, and its `.balance` its lamports.
+    expect(compile(source.replace("return total;", "return total + a.balance;")).source).toContain(
+      "{ total += a.balance; } return total + ctx.balance(a.address);",
+    );
+  });
+
+  it("a record bound in one function says nothing of a parameter of the same name in another", () => {
+    const program = compile(
+      "function helper(): Uint256 {\n  const pool = { balance: 1 };\n  return pool.balance;\n}\n" +
+        "function main(pool: Address): Uint256 {\n  return pool.balance + helper();\n}\n",
+    );
+    expect(program.source).toContain("return pool.balance;");
+    expect(program.source).toContain("return ctx.balance(pool) + helper();");
+    expect(program.derivedAccounts).toEqual({ poolAccount: "@pool" });
+  });
+
+  it("a loop's binding that hides an Address parameter is no key the cook can attach", () => {
+    expect(
+      refusal(
+        "function main(to: Address, list: Address[]) {\n  for (const to of list) {\n    USDC.transfer(to, 1);\n  }\n}\n",
+      ),
+    ).toMatch(
+      /^`USDC\.transfer\(…\)` on Solana: the recipient must be known when the transaction is built/,
+    );
+  });
+
+  it("two locals of one name in sibling blocks each hold what they are bound to", () => {
+    const program = compile(
+      "function main(c: bool): Uint256 {\n" +
+        "  if (c) {\n    const h = pot;\n    return h.balance;\n  }\n" +
+        "  const h = { balance: 2 };\n  return h.balance;\n}\n",
+    );
+    expect(program.source).toContain("const h = pot.address;\n    return ctx.balance(h);");
+    expect(program.source).toContain("const h = { balance: 2 };\n  return h.balance;");
   });
 });

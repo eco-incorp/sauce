@@ -6,18 +6,19 @@
 
 > Everything a program can name on Klaytn: its tokens, and every protocol deployed there with the
 > name a program writes for each contract. Klaytn is a preview chain: programs compile here and the
-> reads work, but the released engine is not deployed here, so nothing is simulated or sent.
+> reads work, and simulate runs wherever the release is deployed, but no transaction is built or
+> sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Klaytn a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
-but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
+and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and read; no simulation, and no transaction is built or sent |
+| Support | preview: compile and read; no transaction is built or sent |
 | Slug (`--chain`) | `klaytn`; also `kaia` |
 | Chain id | 8217 |
 | Kind | EVM |

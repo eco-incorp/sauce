@@ -491,10 +491,20 @@ function collectTokenMethods(l: SvmLowering): void {
       const parent = l.parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
       if (!isAuthority(object) || (l.isPot(object) && ACCOUNT_MEMBERS.has(name))) return;
+      // A token the chain registers that the program declares a name of its own for, here.
+      if (l.tokens.has(name)) {
+        throw new Error(
+          `${spelled} on Solana: \`${name}\` is a token solana registers, and the program ` +
+            `declares its own \`${name}\` where this reads it, which hides the token. ` +
+            `\`${holderText}.<TOKEN>\` reads a token by the symbol the chain gives it: rename ` +
+            `the program's \`${name}\`.`,
+        );
+      }
+      const members = [...ACCOUNT_MEMBERS].filter((member) => member !== "owner");
       const near = nearMatches(name, [
         ...l.tokens.keys(),
         BALANCE_MEMBER,
-        ...(l.isPot(object) ? ACCOUNT_MEMBERS : []),
+        ...(l.isPot(object) ? members : []),
       ]);
       throw new Error(
         `${spelled} on Solana: \`${name}\` is not a token solana registers.` +
@@ -504,8 +514,8 @@ function collectTokenMethods(l: SvmLowering): void {
           ` \`${holderText}.<TOKEN>\` reads the Pot's balance of a token and ` +
           `\`${holderText}.${BALANCE_MEMBER}\` its lamports` +
           (l.isPot(object)
-            ? `; \`${POT_NAME}.address\`, \`${POT_NAME}.owner\`, \`${POT_NAME}.dataLen\`, ` +
-              `\`${POT_NAME}.signer()\` and \`${POT_NAME}.writable()\` are its account's.`
+            ? `; \`${POT_NAME}.address\`, \`${POT_NAME}.dataLen\`, \`${POT_NAME}.signer()\` and ` +
+              `\`${POT_NAME}.writable()\` are its account's.`
             : "."),
       );
     }

@@ -23,7 +23,7 @@ The manual has four parts, and every page says at its top which part it belongs 
 - **Reference** lists the facts: every chain, protocol, token, function and option.
 
 Sauce sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**. Every other chain it knows is a
-preview chain, where programs compile but nothing is simulated or sent.
+preview chain, where programs compile and simulate wherever the release is deployed, but nothing is sent.
 
 ## Tutorials
 

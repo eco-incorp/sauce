@@ -6,18 +6,19 @@
 
 > Everything a program can name on Fantom: its tokens, and every protocol deployed there with the
 > name a program writes for each contract. Fantom is a preview chain: programs compile here and the
-> reads work, but the released engine is not deployed here, so nothing is simulated or sent.
+> reads work, and simulate runs wherever the release is deployed, but no transaction is built or
+> sent.
 
 **Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana only. On Fantom a program
 compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
-but `sauce simulate` stops there, the released engine not being deployed on it, and the `sauce`
+and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
 command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
 `sauce pot --deploy` are refused,
 naming the supported chains and how to request this one (the last section).
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and read; no simulation, and no transaction is built or sent |
+| Support | preview: compile and read; no transaction is built or sent |
 | Slug (`--chain`) | `fantom`; also `ftm`, `opera`, `fantom-opera` |
 | Chain id | 250 |
 | Kind | EVM |
@@ -56,7 +57,7 @@ address.
 | [Aave V3](../protocols/aave-v3.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
 | [Curve Finance](../protocols/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
 | [KyberSwap Aggregator](../protocols/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
-| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
 | [OpenOcean](../protocols/openocean.md) | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` | `Openocean.ExchangeV2` |
 | [SpookySwap](../protocols/spookyswap.md) | v2Router | `0xF491e7B69E4244ad4002BC14e878a34207E38c29` | `Spookyswap.V2Router` |
 | [SushiSwap V2](../protocols/sushiswap-v2.md) | factory | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` | `SushiswapV2.Factory` |

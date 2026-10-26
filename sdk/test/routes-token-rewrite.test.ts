@@ -19,6 +19,7 @@ import {
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { ambientNamesOf } from "../src/routes/rs-compile.js";
 import { chainAmbient } from "../src/routes/ambient.js";
+import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -568,6 +569,10 @@ describe("the balance shorthand on any address, and the native coin", () => {
     ],
     ["return UniswapV3.Pool(who).balance;", "return ctx.balance(who);"],
     ["return Pool.at(who).balance;", "return ctx.balance(who);"],
+    [
+      "const pool = Pool.at(who); return pool.balance;",
+      "const pool = Pool.at(who); return ctx.balance(pool);",
+    ],
     ["return ownerOf(id).balance;", "return ctx.balance(ownerOf(id));"],
     ["return holders[0].balance;", "return ctx.balance(holders[0]);"],
     ["return p.to.balance;", "return ctx.balance(p.to);"],
@@ -776,6 +781,10 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
       NATIVE("UniswapV4.PoolManager.ETH", "ETH", "base", "UniswapV4.PoolManager.balance"),
     ],
     ["const self = who; return self.ETH;", NATIVE("self.ETH", "ETH", "base", "self.balance")],
+    [
+      "return (who == 0 ? who : pot).ETH;",
+      NATIVE("(who == 0 ? who : pot).ETH", "ETH", "base", "(who == 0 ? who : pot).balance"),
+    ],
   ])("on base, `%s` is refused", (body, message) => {
     expect(refusal("base", body)).toBe(message);
   });
@@ -804,6 +813,25 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
         accessors: false,
       }),
     ).toThrow(SELF("self", "pot"));
+  });
+
+  // A label is no read of a name: one named `pot` or `self` is a label like any other, which the
+  // compiler refuses as SauceScript has none, on every chain.
+  it.each(["pot", "self"])("a label named `%s` is refused as any label is", (name) => {
+    const source = (label: string) =>
+      `function main(): Uint256 {\n  ${label}: for (let i = 0; i < 2; i++) {\n    continue ${label};\n  }\n  return 1;\n}\n`;
+    for (const chain of ["base", "solana"]) {
+      let message = "";
+      try {
+        compileSauceProgram(chain, source(name));
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain("this statement is not supported in SauceScript");
+      expect(() => compileSauceProgram(chain, source("outer"))).toThrow(
+        "this statement is not supported in SauceScript",
+      );
+    }
   });
 });
 
@@ -837,18 +865,45 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     },
   );
 
-  it.each(["pot", "self"])("an ambient module's export `%s` is what it reads", (name) => {
+  it("an ambient module's export `self` is what it reads", () => {
     const options = {
       ambient: ["./holder.ts"],
-      ...served({ "./holder.ts": `export const ${name} = ${HOLDER};` }),
+      ...served({ "./holder.ts": `export const self = ${HOLDER};` }),
     };
-    expect(hex(main(`return ${name};`), options)).toBe(hex(main(`return ${HOLDER};`)));
-    expect(hex(main(`return ${name}.USDC;`), options)).toBe(
+    expect(hex(main("return self;"), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(hex(main("return self.USDC;"), options)).toBe(
       hex(main(`return USDC.balanceOf(${HOLDER});`)),
     );
-    expect(hex(main(`return ${name}.balance;`), options)).toBe(
+    expect(hex(main("return self.balance;"), options)).toBe(
       hex(main(`return ctx.balance(${HOLDER});`)),
     );
+  });
+
+  it("a `pot` only an ambient module exports is refused where the program reads it", () => {
+    const options = {
+      ambient: ["./holder.ts"],
+      ...served({ "./holder.ts": `export const pot = ${HOLDER};` }),
+    };
+    for (const body of ["return pot;", "return pot.USDC;", "return pot.balance;"]) {
+      expect(() => hex(main(`const a = 1;\n  ${body}`), options)).toThrow(
+        "`pot` at line 2, column 10: an ambient module exports `pot`, and the program reads it " +
+          "with no import, so it would read that module's value and not the Pot. Write " +
+          '`ctx.self()` for the Pot, or import it by name (`import { pot } from "<module>"`) for ' +
+          "the module's value.",
+      );
+    }
+    // Imported by name, a define, or declared by the program: its own, as written.
+    expect(hex(`import { pot } from "./holder.ts";\n${main("return pot;")}`, options)).toBe(
+      hex(main(`return ${HOLDER};`)),
+    );
+    expect(hex(main("return pot;"), { ...options, defines: { pot: BigInt(HOLDER) } })).toBe(
+      hex(main(`return ${HOLDER};`)),
+    );
+    expect(hex(main(`const pot = ${HOLDER};\n  return pot;`), options)).toBe(
+      hex(main(`const pot = ${HOLDER};\n  return pot;`)),
+    );
+    // `ctx.self()` is the Pot, whatever a module exports.
+    expect(hex(main("return ctx.self();"), options)).toBe(hex(main("return pot;")));
   });
 
   it("an ambient package's target arm is the module read", () => {
@@ -857,11 +912,11 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
       resolvePackage: (specifier: string) =>
         specifier === "@caller/holder" ? "./holder/index.js" : undefined,
       ...served({
-        "./holder/index.evm.js": `export const pot = ${HOLDER};`,
+        "./holder/index.evm.js": `export const self = ${HOLDER};`,
         "./holder/index.js": "export const other = 1;",
       }),
     };
-    expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(hex(main("return self;"), options)).toBe(hex(main(`return ${HOLDER};`)));
   });
 
   it.each([
@@ -880,7 +935,7 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
       ...own,
       ...served({ [path]: `export const pot = ${HOLDER};\nexport const self = ${HOLDER};` }),
     };
-    expect(hex(main("return pot;"), options)).toBe(hex(main(`return ${HOLDER};`)));
+    expect(() => hex(main("return pot;"), options)).toThrow("an ambient module exports `pot`");
     expect(hex(main("return self.USDC;"), options)).toBe(
       hex(main(`return USDC.balanceOf(${HOLDER});`)),
     );
@@ -938,7 +993,7 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
     );
   });
 
-  it("on Solana, a bare ambient module only `resolve` serves binds `pot`", () => {
+  it("on Solana, a bare ambient module only `resolve` serves binds `self`, and its `pot` is refused", () => {
     const key = BigInt(`0x${"06".repeat(32)}`);
     const solana = (source: string, options: Parameters<typeof compileSauceProgram>[2] = {}) => {
       const compiled = compileSauceProgram("solana", source, options);
@@ -947,12 +1002,16 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
         manifest: compiled.manifest,
       };
     };
-    expect(
-      solana("function main(): Address { return pot; }", {
-        ambient: ["holder"],
-        ...served({ holder: `export const pot = ${key};` }),
-      }),
-    ).toEqual(solana(`function main(): Address { return ${key}; }`));
+    const options = {
+      ambient: ["holder"],
+      ...served({ holder: `export const self = ${key};\nexport const pot = ${key};` }),
+    };
+    expect(solana("function main(): Address { return self; }", options)).toEqual(
+      solana(`function main(): Address { return ${key}; }`),
+    );
+    expect(() => solana("function main(): Address { return pot; }", options)).toThrow(
+      "an ambient module exports `pot`",
+    );
   });
 });
 
@@ -961,26 +1020,31 @@ describe("a `pot` or `self` the caller binds is the caller's, not the Pot's", ()
 describe.each([
   ["base", "evm", "0x6666666666666666666666666666666666666666"],
   ["solana", "svm", `0x${"06".repeat(32)}`],
-])("on %s, the compiler says which `pot` the caller binds", (chain, arm, holder) => {
+])("on %s, the compiler says which `pot` an ambient module exports", (chain, arm, holder) => {
   type Options = Parameters<typeof compileSauceProgram>[2];
-  const build = (source: string, options: Options = {}) => {
-    const compiled = compileSauceProgram(chain, source, options);
-    return {
-      bytecode: Buffer.from(compiled.bytecode).toString("hex"),
-      manifest: compiled.manifest,
-      derivedAccounts: compiled.derivedAccounts,
-    };
+  /** The compile's outcome: its bytecode, manifest and accounts, or the message it is refused with. */
+  const build = (
+    source: string,
+    options: Options = {},
+  ): { bytecode: string; manifest: unknown; derivedAccounts: unknown } | { refused: string } => {
+    try {
+      const compiled = compileSauceProgram(chain, source, options);
+      return {
+        bytecode: Buffer.from(compiled.bytecode).toString("hex"),
+        manifest: compiled.manifest,
+        derivedAccounts: compiled.derivedAccounts,
+      };
+    } catch (error) {
+      return { refused: (error as Error).message };
+    }
   };
   const served = (modules: Readonly<Record<string, string>>) => ({
     resolve: (path: string) =>
       modules[path] === undefined ? undefined : new TextEncoder().encode(modules[path]),
   });
   const refusal = (source: string, options: Options): string => {
-    try {
-      build(source, options);
-    } catch (error) {
-      return (error as Error).message;
-    }
+    const outcome = build(source, options);
+    if ("refused" in outcome) return outcome.refused;
     throw new Error("the compile was not refused");
   };
   const PROGRAM = "function main(): Address { return pot; }";
@@ -988,10 +1052,17 @@ describe.each([
   const OTHER = "export const other = 7;";
   const callers = () => build(`function main(): Address { return ${holder}; }`);
   const pots = () => build(PROGRAM);
+  /** The refusal of `source`'s free `pot`, which an ambient module exports: at its `return pot`. */
+  const exported = (source = PROGRAM) => {
+    const lines = source.slice(0, source.indexOf("return p") + "return ".length).split("\n");
+    return {
+      refused: ambientPotRefusal(lines.length, lines[lines.length - 1]!.length + 1).message,
+    };
+  };
 
-  // Each module exports the caller's `pot` where the compiler reads it, and the other module, which
-  // the compiler does not read, exports something else; then the other way round. The first is the
-  // caller's `pot`, the second the Pot.
+  // Each module exports a `pot` where the compiler reads it, and the other module, which the
+  // compiler does not read, exports something else; then the other way round. The first is
+  // refused, a module's export standing in for the Pot, the second the Pot.
   // Every row has five columns: jest takes a test function with more parameters than its row has
   // columns for one that calls `done`.
   it.each<
@@ -1067,13 +1138,13 @@ describe.each([
       ...(resolvePackage === undefined ? {} : { resolvePackage }),
       ...served({ [read]: atRead, ...(unread === undefined ? {} : { [unread]: atUnread }) }),
     });
-    expect(build(PROGRAM, options(POT, OTHER))).toEqual(callers());
+    expect(build(PROGRAM, options(POT, OTHER))).toEqual(exported());
     expect(build(PROGRAM, options(OTHER, POT))).toEqual(pots());
   });
 
   it.each([
-    ["stops exporting `pot`", POT, OTHER, callers, pots],
-    ["starts exporting `pot`", OTHER, POT, pots, callers],
+    ["stops exporting `pot`", POT, OTHER, exported, pots],
+    ["starts exporting `pot`", OTHER, POT, pots, exported],
   ])(
     "one `resolve` whose module %s is asked again on the next compile",
     (_, first, then, before, after) => {
@@ -1098,7 +1169,7 @@ describe.each([
       if (text === undefined) return undefined;
       return scratch.subarray(0, new TextEncoder().encodeInto(text, scratch).written);
     };
-    expect(build(PROGRAM, { ambient: ["./holder.js", "./other.js"], resolve })).toEqual(callers());
+    expect(build(PROGRAM, { ambient: ["./holder.js", "./other.js"], resolve })).toEqual(exported());
   });
 
   // A resolver that answers one way the first time it is asked and another way after. Within one
@@ -1179,13 +1250,12 @@ describe.each([
       ambient: ["./holder.js"],
       ...served({ "./holder.js": `${POT}\nexport const self = ${holder};` }),
     };
-    for (const name of ["pot", "self"] as const) {
-      expect(build(`function main(): Address { return ${spelled[name]}; }`, both)).toEqual(
-        callers(),
-      );
-    }
+    expect(build(`function main(): Address { return ${spelled.pot}; }`, both)).toEqual(
+      exported(`function main(): Address { return ${spelled.pot}; }`),
+    );
+    expect(build(`function main(): Address { return ${spelled.self}; }`, both)).toEqual(callers());
     expect(build(`function main(): Address { return ${spelled.pot}; }`)).toEqual(pots());
-    expect(() => build(`function main(): Address { return ${spelled.self}; }`)).toThrow(
+    expect(refusal(`function main(): Address { return ${spelled.self}; }`, {})).toContain(
       "the Pot is `pot`, not `self`",
     );
   });
@@ -1225,22 +1295,15 @@ describe.each([
       "./holder.js",
     ],
   ])("a caller's module that %s is the caller's own", (_, modules, specifier) => {
-    expect(build(PROGRAM, { ambient: [specifier], ...served(modules) })).toEqual(callers());
+    expect(build(PROGRAM, { ambient: [specifier], ...served(modules) })).toEqual(exported());
   });
 
   // The probe's own helper function, which the compiler would refuse beside a define, an import or a
   // contract binding of its name, is named apart from every name the compile binds. Each is asked
   // with a caller ambient module that does not export `pot` (the Pot, as with no ambient module to
-  // probe) and one that does (the caller's). On Solana a program may declare no `__sauce_` name
-  // the lowering might bring in, so an import of one is refused there however the probe answers.
+  // probe) and one that does (refused). On Solana a program may declare no `__sauce_` name the
+  // lowering might bring in, so an import of one is refused there however the probe answers.
   const HELPER = "__sauce_probe";
-  const outcome = (source: string, options: Options) => {
-    try {
-      return build(source, options);
-    } catch (error) {
-      return { refused: (error as Error).message };
-    }
-  };
   it.each<[string, string, Options]>([
     ["a define", "", { defines: { [HELPER]: 5n } }],
     ["a value import", `import { other as ${HELPER} } from "./lib.js";\n`, {}],
@@ -1263,21 +1326,19 @@ describe.each([
       arm === "svm" && prefix !== ""
         ? { refused: expect.stringContaining(`\`${HELPER}\` is reserved`) }
         : pots();
-    expect(outcome(program, { ...options(OTHER), ambient: [] })).toEqual(free);
-    expect(outcome(program, options(OTHER))).toEqual(free);
-    expect(build(program, options(POT))).toEqual(
-      build(`${prefix}${PROGRAM.replace("return pot", `return ${holder}`)}`, options(POT)),
-    );
+    expect(build(program, { ...options(OTHER), ambient: [] })).toEqual(free);
+    expect(build(program, options(OTHER))).toEqual(free);
+    expect(build(program, options(POT))).toEqual(exported(program));
   });
 
   it("a caller ambient export named like the probe's helper is hidden by it, as by any local", () => {
-    for (const [exported, expected] of [
+    for (const [text, expected] of [
       [`export const ${HELPER} = 3;`, pots],
       [`export function ${HELPER}(): Uint256 { return 3; }`, pots],
-      [`export const ${HELPER} = 3;\n${POT}`, callers],
+      [`export const ${HELPER} = 3;\n${POT}`, exported],
     ] as const) {
       expect(
-        build(PROGRAM, { ambient: ["./holder.js"], ...served({ "./holder.js": exported }) }),
+        build(PROGRAM, { ambient: ["./holder.js"], ...served({ "./holder.js": text }) }),
       ).toEqual(expected());
     }
   });
@@ -1307,9 +1368,11 @@ describe.each([
   it.each([
     ["only the dependency's", `${BASE}\n${POT}`, BASE],
     ["the dependency's, the program's own mapping refused", `${BASE}\n${POT}`, undefined],
-  ])("a `pot` %s package exports is the caller's", (_, fromDependency, fromEntry) => {
+  ])("a `pot` %s package exports is found, and refused", (_, fromDependency, fromEntry) => {
     const options = byImporter(fromDependency, fromEntry);
-    expect(build(DEPENDENT, options)).toEqual(build(theirs, options));
+    expect(build(DEPENDENT, options)).toEqual(exported(DEPENDENT));
+    // The same module read for a name the program imports is its own, as written.
+    expect(build(theirs, options)).not.toHaveProperty("refused");
   });
 
   it("a `pot` only the program's own mapping exports, which the compile never loads, is the Pot", () => {
@@ -1331,9 +1394,7 @@ describe.each([
       ...served({ "./holder.js": `${text}\n${elsewhere}` }),
     });
     expect(build(program, holding(OTHER))).toEqual(build(program));
-    expect(build(program, holding(POT))).toEqual(
-      build(program.replace("return pot", `return ${holder}`), holding(POT)),
-    );
+    expect(build(program, holding(POT))).toEqual(exported(program));
   });
 
   it("the SDK's own ambient modules export neither of the Pot's names", () => {
@@ -1344,6 +1405,22 @@ describe.each([
     expect(
       ambientNamesOf({ target: arm === "svm" ? "svm" : "v12", ambient }, ["pot", "self"], [], []),
     ).toEqual(new Set());
+  });
+
+  it("the probe asks again after each name it finds, so it finds every name asked", () => {
+    const input = {
+      target: arm === "svm" ? ("svm" as const) : ("v12" as const),
+      ambient: ["./holder.js"],
+      resolve: (path: string) =>
+        path === "./holder.js"
+          ? new TextEncoder().encode(`${POT}\nexport const self = ${holder};\n${OTHER}`)
+          : undefined,
+    };
+    // The compiler refuses one name exported twice at a time: two answers need two refusals.
+    expect(ambientNamesOf(input, ["pot", "self", "absent"], [], [])).toEqual(
+      new Set(["pot", "self"]),
+    );
+    expect(ambientNamesOf(input, ["self", "absent"], [], [])).toEqual(new Set(["self"]));
   });
 
   it("a probe refused for the program's own fault reports that fault, not a refusal of `self`", () => {
@@ -1450,12 +1527,78 @@ describe.each([
         pot: "0x1111111111111111111111111111111111111111",
         engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       } as const;
-      const route = (options: Given) =>
-        Array.from(compileSauceRoute("base", PROGRAM, execution, options).compiled.bytecode[0]!);
+      const route = (options: Given) => {
+        try {
+          return Array.from(
+            compileSauceRoute("base", PROGRAM, execution, options).compiled.bytecode[0]!,
+          );
+        } catch (error) {
+          return (error as Error).message;
+        }
+      };
       const { given, mutated } = mutating(make, mutate);
       const built = route(given);
       expect(mutated()).toBe(true);
       expect(built).toEqual(route(asGiven(make)));
+    },
+  );
+
+  // The same for the options the rewrites read after the probe has run the caller's `resolve`: a
+  // swap's `stops` (Solana) and an `accessors` record (EVM). `tokens` is resolved before any
+  // callback runs, so no mutation reaches it today; its row holds the outcome should that move.
+  const SWAP =
+    "function main(amountIn: Uint256, limit: Uint256): Uint256 {\n" +
+    '  require(pot.balance >= 0, "no Pot");\n' +
+    "  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 400), USDC, WSOL, amountIn, limit, 0);\n}\n";
+  const TOKEN = "function main(): Uint256 { return FOO.balanceOf(pot); }";
+  const later: Array<[string, string, () => Given, (given: Given) => void]> =
+    arm === "svm"
+      ? [
+          [
+            "adds a stop to its `stops`",
+            SWAP,
+            () => ({ ambient: ["./other.js"], stops: [] }),
+            (given) => {
+              (given.stops as string[]).push(compileSauceProgram(chain, SWAP).stoppable![0]!);
+            },
+          ],
+        ]
+      : [
+          [
+            "turns off the `pot` sugar in its `accessors` record",
+            PROGRAM,
+            () => ({ ambient: ["./other.js"], accessors: {} }),
+            (given) => {
+              if (typeof given.accessors === "object") given.accessors.potSugar = false;
+            },
+          ],
+          [
+            "gives a symbol of its `tokens` another address",
+            TOKEN,
+            () => ({
+              ambient: ["./other.js"],
+              tokens: { FOO: "0x5555555555555555555555555555555555555555" },
+            }),
+            (given) => {
+              (given.tokens as Record<string, string>).FOO =
+                "0x7777777777777777777777777777777777777777";
+            },
+          ],
+        ];
+
+  it.each(later)(
+    "compileSauceProgram, whose resolver %s, reads it as it was given",
+    (_, source, make, mutate) => {
+      const asMade = build(source, asGiven(make));
+      expect(asMade).not.toHaveProperty("refused");
+      const { given, mutated } = mutating(make, mutate);
+      const built = build(source, given);
+      expect(mutated()).toBe(true);
+      expect(built).toEqual(asMade);
+      // What the mutation would have compiled, had the compile read it: another program.
+      const changed = make();
+      mutate(changed);
+      expect(build(source, { ...changed, ...served(MUTABLE_MODULES) })).not.toEqual(asMade);
     },
   );
 
@@ -1556,11 +1699,95 @@ describe("`.balance` is a field wherever it was one", () => {
     );
   });
 
+  it("is the binding in scope where it is read: a shape in one function, or a loop, is that binding's", () => {
+    // A record in a helper says nothing of main's `Address` parameter of the same name.
+    const helper =
+      "function helper(): Uint256 {\n  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);\n  return pool.WETH;\n}\n";
+    expect(
+      hex(
+        `${helper}function main(pool: Address): Uint256 {\n  return pool.balance + helper();\n}\n`,
+      ),
+    ).toBe(
+      hex(
+        `${helper}function main(pool: Address): Uint256 {\n  return ctx.balance(pool) + helper();\n}\n`,
+      ),
+    );
+    // A loop's record hides the parameter in the loop's body only.
+    const legs = (after: string) =>
+      "interface Leg { balance: Uint256 }\n" +
+      `function main(a: Address, legs: Leg[]): Uint256 { let t = 0; for (const a of legs) { t += a.balance; } return t + ${after}; }`;
+    expect(hex(legs("a.balance"))).toBe(hex(legs("ctx.balance(a)")));
+    untouched(legs("0"));
+  });
+
   it("abi.decode's result", () => {
     untouched('function main(d: bytes): Uint256 { return abi.decode(d, ["Uint256"]).balance; }');
     untouched(
       'function main(d: bytes): Uint256 { const r = abi.decode(d, ["Uint256"]); return r.balance; }',
     );
+  });
+
+  describe("a holder only an ambient module declares", () => {
+    const HOLDER = "0x6666666666666666666666666666666666666666";
+    const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const ambient = (module: string) => ({
+      ambient: ["./lib.js"],
+      resolve: (path: string) =>
+        path === "./lib.js" ? new TextEncoder().encode(module) : undefined,
+    });
+    const build = (module: string, source: string) =>
+      Buffer.from(compileSauceProgram("base", source, ambient(module)).bytecode).toString("hex");
+    const refused = (module: string, source: string) => {
+      try {
+        compileSauceProgram("base", source, ambient(module));
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`compiled: ${source}`);
+    };
+    const RECORD = "export const limits = { balance: 5, cap: 7 };";
+
+    it("an address: its .balance is its native coin", () => {
+      const module = `export const limits = ${HOLDER};`;
+      expect(build(module, "function main(): Uint256 { return limits.balance; }")).toBe(
+        build(module, `function main(): Uint256 { return ctx.balance(${HOLDER}); }`),
+      );
+    });
+
+    it("anything else is refused naming the read, and an import by name reads its field", () => {
+      const why = (read: string) =>
+        `compileSauceRoute: \`${read}\` read a balance of \`limits\`, taking it for an address, and the ` +
+        "compiler refused `limits` there: ";
+      const field =
+        " The program does not declare `limits`, so its text does not say what it is (an ambient " +
+        'module\'s export, a define): for a field of a record, import it by name (`import { limits } from "<module>"`), ' +
+        "and its `.balance` is that field.";
+      expect(refused(RECORD, "function main(): Uint256 { return limits.balance; }")).toMatch(
+        new RegExp(
+          `^${escape(why("limits.balance"))}a module-scope lookup table .*${escape(field)}$`,
+        ),
+      );
+      expect(
+        refused(
+          "export function limits(): Uint256 { return 1; }",
+          "function main(): Uint256 { return limits.balance + 1; }",
+        ),
+      ).toBe(`${why("limits.balance")}\`limits\` is not a declared variable.${field}`);
+      // A token's balance is read of an address only: no field takes the name.
+      expect(refused(RECORD, "function main(): Uint256 { return limits.USDC; }")).toMatch(
+        new RegExp(
+          `^${escape(why("limits.USDC"))}a module-scope lookup table [^]*has no run-time form[^]*\\.$`,
+        ),
+      );
+      // Imported by name, its type is the module's, and `.balance` the record's field.
+      const imported = 'import { limits } from "./lib.js";\n';
+      expect(build(RECORD, `${imported}function main(): Uint256 { return limits.balance; }`)).toBe(
+        build(
+          "export const limits = { amount: 5, cap: 7 };",
+          `${imported}function main(): Uint256 { return limits.amount; }`,
+        ),
+      );
+    });
   });
 
   it("a record's field selected by its position", () => {
@@ -1631,6 +1858,53 @@ describe("`.balance` is a field wherever it was one", () => {
     const decoded = (read: string) =>
       `function main(d: bytes): Uint256 { const [a] = abi.decode(d, ["Address"]); return ${read}; }`;
     expect(hex(decoded("a.balance"))).toBe(hex(decoded("ctx.balance(a)")));
+  });
+
+  // Through the compile, not the token pass alone: each program that keeps `.balance` a field
+  // compiles as the same program with the field named otherwise does, bytes or refusal alike.
+  it.each([
+    [
+      "a list's record",
+      "interface Leg { balance: Uint256 }\n" +
+        "function main(legs: Leg[]): Uint256 { let t = 0; for (const leg of legs) { t += leg.balance; } return legs[0].balance + t; }",
+    ],
+    [
+      "a record the program's own function returns",
+      "interface Leg { balance: Uint256 }\n" +
+        "function leg(): Leg { return { balance: 1 }; }\nfunction main(): Uint256 { return leg().balance; }",
+    ],
+    [
+      "abi.decode's result",
+      'function main(d: bytes): Uint256 { return abi.decode(d, ["Uint256"]).balance; }',
+    ],
+    [
+      "a local bound to abi.decode's result",
+      'function main(d: bytes): Uint256 { const r = abi.decode(d, ["Uint256"]); return r.balance; }',
+    ],
+    [
+      "an element of abi.decode's result",
+      'function main(d: bytes): Uint256 { return abi.decode(d, ["{Uint256, Uint256}"])[0].balance; }',
+    ],
+    [
+      "a local destructured from abi.decode's result",
+      'function main(d: bytes): Uint256 { const [w, n] = abi.decode(d, ["{Uint256, Uint256}", "Uint256"]); return w.balance + n; }',
+    ],
+    [
+      "a record destructured past a skipped element",
+      "function main(row: { to: Address; wallet: { balance: Uint256 } }): Uint256 {\n" +
+        "  const [, wallet] = row;\n  return wallet.balance;\n}",
+    ],
+  ])("%s compiles as a field named otherwise does", (_what, source) => {
+    const outcome = (text: string): string => {
+      try {
+        return hex(text);
+      } catch (error) {
+        return `refused: ${(error as Error).message}`;
+      }
+    };
+    // `deposit` is as long as `balance`, so a refusal's byte offsets are the same.
+    const renamed = outcome(source.replace(/\bbalance\b/g, "deposit"));
+    expect(outcome(source)).toBe(renamed.replace(/\bdeposit\b/g, "balance"));
   });
 
   it("an element of a contract call's result: a struct's field", () => {

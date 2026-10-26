@@ -1,9 +1,9 @@
 export const depositETH = `
 import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
 
-function main(bridgeAddress: Address): Uint256 {
+function main(bridgeAddress: Address, recipient: Address): Uint256 {
   const bridge = IL1StandardBridge.at(bridgeAddress);
-  bridge.depositETH(200000, hex\`\`);
+  bridge.depositETHTo(recipient, 200000, hex\`\`);
   return 1;
 }
 `;
@@ -11,9 +11,9 @@ function main(bridgeAddress: Address): Uint256 {
 export const depositERC20 = `
 import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
 
-function main(bridgeAddress: Address, l1Token: Address, l2Token: Address, amount: Uint256): Uint256 {
+function main(bridgeAddress: Address, l1Token: Address, l2Token: Address, recipient: Address, amount: Uint256): Uint256 {
   const bridge = IL1StandardBridge.at(bridgeAddress);
-  bridge.depositERC20(l1Token, l2Token, amount, 200000, hex\`\`);
+  bridge.depositERC20To(l1Token, l2Token, recipient, amount, 200000, hex\`\`);
   return 1;
 }
 `;

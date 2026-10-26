@@ -312,6 +312,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           input.accounts ?? {},
           input.via,
           program.derivedAccounts,
+          program.potMention,
         )
       : undefined;
   // On Solana, the accounts main takes that no cook derives, each given by name: what suits each, as
@@ -533,8 +534,12 @@ export interface CookInput extends ProgramInput {
     client: PublicClient,
     pot: Address,
     owner: Address,
-    /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
-    plan?: boolean,
+    options?: {
+      /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
+      readonly plan?: boolean;
+      /** The salt the run deploys the Pot at first, or the rehearsal does, when it has no code. */
+      readonly deploySalt?: Hex;
+    },
   ) => Promise<Funding>;
 }
 
@@ -1063,6 +1068,8 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
     );
   }
+  // The Pot this run deploys first, which funding takes as the signer's own by its address.
+  const deploySalt = !state.deployed && "owner" in target ? target.salt : undefined;
   const setup = [
     ...(!state.deployed && "owner" in target
       ? [
@@ -1090,7 +1097,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       ...setup.map((step) => step.action),
       ...(input.fund === undefined
         ? []
-        : ((await input.fund(client, cook.pot, signer, true)).needs ?? [])),
+        : ((await input.fund(client, cook.pot, signer, { plan: true, deploySalt })).needs ?? [])),
     ];
     if (needs.length > 0) throw unapproved(needs, input.approver.why);
   }
@@ -1100,7 +1107,10 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const deployed = sentFirst.find(([step]) => step.planned.deploysPot === cook.pot)?.[1];
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
-  const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
+  const funding =
+    input.fund === undefined
+      ? undefined
+      : await input.fund(client, cook.pot, signer, { deploySalt });
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);

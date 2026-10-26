@@ -112,9 +112,10 @@ MCP server build and send its cooks and Pot deployments, where before they only 
 simulated there. Arc's native coin is USDC, which is also its 6-decimal ERC-20 `USDC`: one balance.
 
 On a preview chain the `sauce` command's help, its refusals, the MCP server's instructions and tool
-descriptions, the skills and this manual no longer say a program simulates there: `sauce simulate`
-stops there with exit 1 (`the released engine … is not deployed on <chain>`). Compile,
-`globals`, `price`, `pools` and `pot`'s prediction work there.
+descriptions, the skills and this manual state the policy: the command and the MCP server build and
+send no transaction there. Compile, `globals`, `price`, `pools` and `pot`'s prediction work there,
+and `sauce simulate` runs wherever the release is deployed on the chain, preview or not; where it
+is not, it stops with exit 1 (`the released engine … is not deployed on <chain>`).
 
 Wallet policies on Solana measure the actual Pot named by each cook, including non-canonical
 Pot addresses, accounts loaded through lookup tables and cooks a program the transaction calls
@@ -130,21 +131,52 @@ it in the same transaction included, and so is one closed and made again at its 
 another token. A close authority given to another key, or a Token-2022 mint's permanent delegate
 handed from the wallet to another key, is refused where that token is limited. `native` counts
 every account the wallet controls, net: its token accounts (wrapped SOL among them, but not what an
-outside delegate may take from it) and the durable nonce and stake accounts it is the authority of,
-and all a wallet holds when the transaction gives it to another program or makes it a nonce
-account another key commands. A balance is counted in its mint's decimals as they were before the
-transaction, and what arrives as they are after it. A mint whose decimals cannot be read refuses
-only the limits that name it. A transaction is held to the policy of every wallet it needs a
-signature from, whichever pays its fee, and a planned one sent from a wallet must be paid by it.
-Every simulation is unsigned, a swap's stops in `sauce run` included, and the wallet signs only a
-transaction its policy has let go. `sauce_wallet_send` checks a whole plan against the policy
-before sending any, counting the rent of the wallet's own token account and of a Pot a cook
-creates as the wallet's, as the send's own measurement does. The measurement errs toward counting:
-wrapped SOL that both an outside delegate and an outside close authority may take counts twice.
-`sauce simulate` and `sauce run` on Solana count a token account's change for its owner before the
-transaction, and name the new owner of one handed over (`ownerAfter` in `tokenChanges`). The SDK
-adds `prepareExecuteTransaction`, which compiles a transaction now and signs it when asked. See
-[wallets](guides/cli-wallets.md).
+outside delegate may take from it), the durable nonce accounts it is the authority of and the stake
+accounts it is the withdrawer of, and all a wallet holds when the transaction gives it to another
+program or makes it a nonce account another key commands. A balance is counted in its mint's
+decimals as they were before the transaction, and what arrives as they are after it. A mint whose
+decimals cannot be read refuses only the limits that name it. A transaction is held to the policy
+of every wallet unlocked to sign it, whichever pays its fee, and a planned one sent from a wallet
+must be paid by it. Every simulation of a transaction a wallet signs is unsigned, a swap's stops
+in `sauce run` included, and the wallet signs only a transaction its policy has let go.
+`sauce_wallet_send` checks a Solana plan's setup (its rent and fees) against the policy before
+sending any of it, counting the rent of the wallet's own token account and of a Pot a cook creates
+as the wallet's, as the send's own measurement does. `sauce simulate` and `sauce run` on Solana count a token account's change for its
+owner before the transaction, and name the new owner of one handed over (`ownerAfter` in
+`tokenChanges`). The SDK adds `prepareExecuteTransaction`, which compiles a transaction now and
+signs it when asked. See [wallets](guides/cli-wallets.md).
+
+Wallet policies close further ways past their limits, on both kinds of chain. On an EVM chain an
+allowance another key keeps (an ERC-20's, or a standing allowance granted through Permit2, whose
+events were not read before) now counts as sent with the transaction's transfers of the token, per
+transaction and in the day's total, where an approval was only checked alone and never reserved.
+It counts as the chain holds it once the transaction has run, each read in a simulation of its own
+that runs the transaction's calls again on the block the transaction was simulated on, so one spent
+or locked down in the transaction counts what is left, and one that cannot be read so (another
+block, or a call that returns other data or uses other gas) is refused where its token is limited;
+each allowance is its own permission, on the token or through Permit2 and the wallet's or its Pot's,
+and they add up. A wallet's EVM transaction is measured whole, with the gas and fees it is then
+signed with, and signed exactly as measured; `sauce send` simulates a transaction signed elsewhere
+with the gas and fees it was signed with.
+An approval of Permit2 for a limited token is refused: it makes the wallet's earlier Permit2
+allowances of the token spendable again, which the transaction does not report. An approval of a
+token whose decimals cannot be read is refused where it is limited, and the wallet's own Pot is no
+longer a spender that counts. A cook's calldata makes a contract the wallet's Pot only where the
+chain shows it is: sent to any other address, or to another owner's Pot, what the wallet pays
+counts, and where the endpoint cannot read the Pot's owner (a failed request, or an error of the
+endpoint's own rather than the contract's revert) a native or token limit refuses the cook. On
+Arc, native USDC sent and a USDC allowance left are held to the `USDC` limit together, and a USDC
+allowance counts against `native` too. `run --fund`, and `simulate --fund` given the owner's key,
+sign and send only for the wallet's own Pot, after its policy's
+`chains` and `to`: a contract that names the wallet as its owner is no longer enough. On Solana,
+wrapped SOL is measured by its lamports, synced into its amount or not, and what the wallet spends
+of it as a delegate counts against `native` too; an allowance raised and spent back to where it
+began counts what it spent and what is left, whether the wallet's own instruction or a call a
+program makes (a Pot's cook, reported parsed as a node reports it, or in a token `Batch`) raised
+it, and a token program's call reported so that an approval in it cannot be read refuses where a
+native or token limit applies; a balance whose mint is made again with other decimals counts at the
+same raw amount; and a transaction that burns a balance of such a mint is measured rather than
+refused for an error. See [wallets](guides/cli-wallets.md).
 
 Online EVM `simulate`, `tx` and `run` refuse missing release contracts and incompatible new-Pot
 deployments instead of reporting success on an address with no code. Offline unsigned builders
@@ -182,15 +214,34 @@ upgrade authority, which can replace them after the check.
   `abi.decode` returns, and a struct a contract call returns (`market.userCollateral(a, b).balance`);
   for the native coin of such a value write `ctx.balance(x)`. `.ETH` on a record is an ordinary
   field now. A program that declares or imports its own `pot` owns the name, and so does a compile
-  whose `defines`, `contracts` or `ambient` modules give one; a `self` given any of these ways is
-  not refused. `ctx.self()`, `ctx.balance(x)` and `ctx.selfBalance()` are unchanged.
+  whose `defines` or `contracts` give one. A `self` given any of these ways, or by an `ambient`
+  module, is the caller's and not refused. `ctx.self()`, `ctx.balance(x)` and `ctx.selfBalance()`
+  are unchanged.
+
+- **Now refused (both): a `pot` only an `ambient` module exports.** Read free, it would have stood
+  in for the Pot with no word in the program. The refusal names its line and column: write
+  `ctx.self()` for the Pot, or import the module's `pot` by name.
+- **Now refused (both): a label named `pot` or `self`**, as SauceScript refuses every label. It was
+  rewritten as a read of the Pot, a parse error on EVM and a contract-binding refusal on Solana.
 
 - **Added (Solana):** `pot` works as on an EVM chain. Bare `pot` is the Pot's key, and its account
   wherever an `Account` is taken. A script with no `main` and a helper function can use `pot.USDC`,
   `pot.balance` and the token methods: a script is given the `main` its accounts are added to, and
   a helper takes the accounts it uses as parameters, at every call. A helper used as a value (a
-  `.catch` handler) is refused, saying why. Compiled for Solana, a program that names `pot` derives
-  the Pot's accounts (`pot`, `pot:USDC`), so cooked `--via engine`, which has no Pot, it is refused.
+  `.catch` handler) is refused, saying why, and so is a helper `main` never reaches that would add
+  accounts. **One mention of `pot` makes the program the Pot's:** compiled for Solana, a program
+  that names `pot` anywhere derives its accounts from the Pot (`pot`, `pot:USDC`), so cooked
+  `--via engine`, which has no Pot, it is refused, naming the line and column of that mention; one
+  that never names it derives them from `authority` (`authority:USDC`) and runs either way.
+- **Changed (Solana): a bare `pot` is `Account<Signer>` wherever it is named**, the slot
+  `Solana.self` was (the same bytes): a cook signs for it, and only a Kitchen cook makes the Pot
+  sign, so a use that signs as the Pot (a token write, `pot.signer()` in `svm.call`) fails with
+  another account in its place. The engine checks a signature where the program uses one, not at
+  the entry, so a read of `pot` takes the account the transaction attaches: the cook commands hold
+  that slot to the Pot (below).
+- **Now refused (Solana): `pot.owner`.** An account's `.owner` is the program that owns it, so
+  `pot.owner` read the program owning the Pot's account, not the Pot's owner. The refusal names
+  `Solana.owner`, the owner who signs the cook.
 - **Breaking (both): every registry name is declared on every chain, and `available(X)` is
   removed.** Each protocol namespace, family aliases included, and each token symbol some chain
   registers is a name of every program. A contract the chain has is bound at its address, one with
@@ -378,8 +429,18 @@ upgrade authority, which can replace them after the check.
   `authority:<TOKEN>` (in a `pda:` seed too): the account that signs the engine call, the Pot
   through the Kitchen and the owner with `--via engine`. `self` is refused, naming `pot` through the
   Kitchen and `authority` with `--via engine`. With `--via engine`, `pot`, `pot:<TOKEN>` and a
-  program whose derived accounts name the Pot are refused, since that cook has no Pot. The MCP
-  server's `accounts` take the same values.
+  program whose derived accounts name the Pot are refused, since that cook has no Pot. A bare
+  `authority` seed in a `pda:` value is now that key's 32 bytes, not the UTF-8 bytes of the word:
+  write `"authority"` for the word. Through the Kitchen, an account given for a slot derived from
+  the Pot (`pot`, `pot:<TOKEN>`, `authority`, `authority:<TOKEN>`, a `pda:` seeded by the Pot) must
+  be the account its derivation gives, or the command exits 2: `--account pot=owner` was accepted
+  before and changed what `pot` read. The MCP server's `accounts` take the same values.
+- **Now refused** (Solana): an account given for a slot derived from the owner or the authority
+  that is not the account its derivation gives (`owner`, `owner:<TOKEN>`, `authority` cooked
+  `--via engine`, a `pda:` the owner seeds). `--account owner=<another key>` with
+  `return Solana.owner.address;` returned that key. One check now covers every slot derived from a
+  role of the cook, on `simulate`, `run` and `tx`, `--account` and `--accounts` alike, and the MCP
+  server's `accounts`; the role's own account, by role or by key, is taken.
 - **Added** (EVM): signed cooks. A Pot's owner signs a cook as EIP-712 typed data, and any account
   sends it with the Pot's `cookSigned`, paying the gas; the Pot pays the Kitchen's fee, up to the
   signed ceiling. `sauce sign` signs one (with a wallet, or as typed data for any wallet, checking

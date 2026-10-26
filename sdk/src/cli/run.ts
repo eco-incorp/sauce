@@ -440,7 +440,7 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it",
+    help: "An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused",
     only: "svm",
   },
   accounts: {
@@ -1311,7 +1311,7 @@ const SUPPORTED_ONLY = (what: string): string[] => [
     `${what} only on a supported chain: ${supportedChainNames()}. On ` +
       "any other (a preview chain) it is refused before anything is read or signed, with the " +
       "supported chains and the GitHub issue to ask for that chain with; compile and the reads " +
-      "work there, but simulate does not: the released engine is not deployed there.",
+      "work there, and simulate runs wherever the release is deployed on the chain.",
   ),
 ];
 
@@ -1813,8 +1813,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "to eth_call with state overrides, which gives the result and the gas but no logs. The",
       "output names the route it took.",
       "",
-      "It runs only where the released engine is deployed: on a preview chain (any chain but",
-      `${supportedChainNames()}) it stops with exit 1, the engine not deployed there.`,
+      "It runs where the release's engine and Kitchen are deployed on the chain, preview chain",
+      "or not; where they are not, it stops with exit 1, naming the contract that is missing.",
       "",
       "A Pot that is not deployed yet is deployed in the simulation first, from --owner (and",
       "--salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.",
@@ -1835,8 +1835,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "argument as a base58 public key. `pot:USDC` (or pot:<mint>) is the Pot's own token account",
       "for that mint, its associated token account under the mint's token program; owner:USDC the",
       "owner's; mint:USDC the mint and program:USDC its token program (SPL Token or Token-2022),",
-      "the accounts a checked write takes. An account the cluster does not have is named in a",
-      "note. Where main declares a return type, what it",
+      "the accounts a checked write takes. A slot derived from the Pot, the owner or the",
+      "authority takes only the account its derivation gives: another is refused before anything",
+      "is built. An account the cluster does not have is named in a note. Where main declares a",
+      "return type, what it",
       "returned is read as that type. A Pot the Kitchen has not created is created first, in the",
       "same transaction. --via engine simulates the engine's own paid cook instead: no Kitchen and",
       "no Pot (so no pot or pot:<token> account, and no program that uses pot), --owner signing as",

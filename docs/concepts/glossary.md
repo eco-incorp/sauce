@@ -117,7 +117,7 @@ should.
 | **Router**               | A helper for swaps      | A contract on chain that answers when a pool calls back in the middle of a swap, on behalf of your Pot. You rarely see it.                                                                        |
 | **Settle program**       | An audited payout       | Sauce's own program that pays everything a Pot holds of each listed token to one recipient, above a floor. `sauce verify` checks that a payload runs exactly it.                                  |
 | **Supported chain**      | Where Sauce sends       | A chain the `sauce` command builds and sends transactions on: Ethereum, Base, Arc and Solana.                                                                                                     |
-| **Preview chain**        | Look, but don't send    | Every other chain Sauce knows. Programs compile there, but nothing simulates and the command sends nothing.                                                                                       |
+| **Preview chain**        | Look, but don't send    | Every other chain Sauce knows. Programs compile there and simulate where the release is deployed, but the command builds and sends nothing.                                                       |
 
 ## Swaps
 

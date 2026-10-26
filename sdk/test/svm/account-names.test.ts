@@ -14,7 +14,7 @@ import {
   resolveSvmAccountName,
   SvmAccountNameError,
   svmNamesPot,
-  svmPotDerived,
+  svmCookRoles,
   svmPublicKey,
   type SvmAccountNameContext,
 } from "../../src/svm/account-names.js";
@@ -128,24 +128,24 @@ describe("svm account names", () => {
     }
   });
 
-  it("knows which derivations are the Pot's through the Kitchen: pot, and authority too", () => {
+  it("knows which cook roles a derivation is made of: pot, owner and authority, however deep", () => {
     const program = key(9);
-    for (const name of [
-      "pot",
-      "pot:USDC",
-      "authority",
-      "authority:USDC",
-      `pda:${program}:pot`,
-      `pda:${program}:"a",authority`,
-    ]) {
-      expect(svmPotDerived(name, "kitchen")).toBe(true);
+    const roles = (name: string) => [...svmCookRoles(name)].sort();
+    for (const [name, expected] of [
+      ["pot", ["pot"]],
+      ["pot:USDC", ["pot"]],
+      ["owner", ["owner"]],
+      ["owner:USDC", ["owner"]],
+      ["authority", ["authority"]],
+      ["authority:USDC", ["authority"]],
+      [`pda:${program}:pot`, ["pot"]],
+      [`pda:${program}:"a",authority`, ["authority"]],
+      [`pda:${program}:owner,pot`, ["owner", "pot"]],
+    ] as const) {
+      expect(roles(name)).toEqual(expected);
     }
-    // Cooked directly, `authority` is the owner: only `pot` is the Pot's (refused there).
-    expect(svmPotDerived("authority", "engine")).toBe(false);
-    expect(svmPotDerived("authority:USDC", "engine")).toBe(false);
-    expect(svmPotDerived("pot", "engine")).toBe(true);
-    for (const name of ["owner", "owner:USDC", "@to:USDC", `pda:${program}:"pot"`, "mint:USDC"]) {
-      expect(svmPotDerived(name, "kitchen")).toBe(false);
+    for (const name of ["@to:USDC", `pda:${program}:"pot"`, "mint:USDC", "program:USDC", program]) {
+      expect(roles(name)).toEqual([]);
     }
   });
 

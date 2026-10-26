@@ -5,9 +5,9 @@
 **Reference** · [Documentation](../README.md)
 
 > Sauce knows 41 chains. On Ethereum, Base, Arc and Solana, the `sauce` command builds and sends
-> transactions. Every other chain is a preview chain: programs compile there and the reads work, but
-> nothing is simulated or sent. Each chain has a page with its tokens and the protocols a program
-> can call on it.
+> transactions. Every other chain is a preview chain: programs compile there and the reads work, and
+> simulate runs wherever the release is deployed, but no transaction is built or sent. Each chain
+> has a page with its tokens and the protocols a program can call on it.
 
 Every chain the SDK knows, with a page each: whether Sauce supports transactions on it, ids, native
 coin, its tokens and every protocol recorded there with its addresses. The Sauce
@@ -64,8 +64,8 @@ section says.
 ## Supported and preview chains
 
 Every chain but Ethereum, Base, Arc and Solana is a preview chain:
-a program compiles and the reads work there, but it does not simulate (the released engine is not
-deployed there), and the `sauce` command and the MCP server build and
+a program compiles and the reads work there, and `sauce simulate` runs wherever the release is
+deployed on the chain, but the `sauce` command and the MCP server build and
 send no transaction, and say so with the supported chains and how to request that chain. To
 request one, look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add your use case to
 the chain's, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each
@@ -73,8 +73,8 @@ preview chain's page links its own.
 
 On a preview chain the `sauce` command and the MCP server still compile and read: `sauce
 compile`, `sauce globals`, `sauce price`, `sauce pools` and `sauce pot`'s prediction. `sauce
-simulate` does not run there: the released engine is not deployed on a preview chain, so the
-simulation stops (exit 1). What they refuse there, before any endpoint is reached or any
+simulate` does not depend on the label: it runs wherever the release is deployed on the
+chain, and says so where it is not. What they refuse there, before any endpoint is reached or any
 key is read, is building or sending a transaction;
 [the command's](../guides/cli.md#supported-and-preview-chains) and
 [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. Every

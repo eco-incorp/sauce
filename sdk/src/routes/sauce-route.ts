@@ -24,7 +24,7 @@ import { nativeCoinSymbol } from "../chains/index.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { ambientNamesOf, compileWithRs, firstAnswers, type RsCompileResult } from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
-import { POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { ambientPotRefusal, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import {
@@ -37,7 +37,11 @@ import {
 import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
-import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
+import {
+  freeReadsOf,
+  rewriteProtocolAccessors,
+  type ProtocolRewriteOptions,
+} from "./protocol-rewrite.js";
 import { bindableNames, checkNames, withoutDead } from "./absent-names.js";
 import {
   INSTALLED_CHAIN_MODULE,
@@ -46,7 +50,7 @@ import {
   chainKeyModulePath,
   chainNames,
 } from "./chain-module.js";
-import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
+import { freeHolderError, unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
@@ -349,6 +353,13 @@ export interface CompiledSauceProgram {
    * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
    */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
+   * On Solana, where the program first names the Pot (`pot`, where nothing else binds it), 1-based.
+   * A program that names it anywhere acts as the Pot throughout: every account it acts with, its
+   * token writes' and `ctx.self()`'s included, derives from the Pot (`pot`, `pot:<token>`), which a
+   * cook with no Pot (the engine called directly) cannot attach. Absent where it never names it.
+   */
+  readonly potMention?: SourcePosition;
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
   /** Source after the SDK's rewrites: what the compiler was given. */
@@ -361,6 +372,19 @@ export interface DerivedValue {
   readonly type: "Uint256";
   /** How it is worked out: `stop:<pool>:<token>:<limit>`. */
   readonly derive: string;
+}
+
+/** A place in a program's text, 1-based. */
+export interface SourcePosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+/** Where `offset` falls in `text`, 1-based. */
+function positionOf(text: string, offset: number): SourcePosition {
+  const lines = text.slice(0, offset).split("\n");
+
+  return { line: lines.length, column: lines[lines.length - 1]!.length + 1 };
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
@@ -449,6 +473,7 @@ export function compileSauceProgram(
     ...(derivedValues.length === 0 ? {} : { derivedValues }),
     ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
     ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
+    ...(program.potMention === undefined ? {} : { potMention: program.potMention }),
     entrySignature: program.entrySignature,
     source: program.source,
   };
@@ -478,6 +503,7 @@ function compileForChain(
   readonly derivedValues?: Readonly<Record<string, string>>;
   readonly stoppable?: readonly string[];
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  readonly potMention?: SourcePosition;
   readonly entryParams: RsCompileResult["entryParams"];
   readonly entrySignature: EntrySignature;
 } {
@@ -525,8 +551,12 @@ function compileForChain(
   // every registry name (`bindableNames`). The compiler says which: `ambientNamesOf` asks it, with
   // this compile's own options and the program's own imports, so a module is found exactly where
   // the compile finds it. It asks only where it can matter: the SDK's own packages
-  // (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export none of them. A
-  // name among them is the caller's value, never the Pot and never the registry's.
+  // (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export none of them,
+  // and of the Pot's two names it asks only those the program reads (`probeQuestions`), the rest
+  // being none the rewrites touch. A name among them is the caller's value, never the Pot and never
+  // the registry's; a `pot` only an ambient module exports is refused where the program reads it
+  // free (`ambientPotRefusal`), so no module's export stands in for the Pot with no word in the
+  // program.
   //
   // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
   // with the same options as the compile, so its refusal is one the compile raises too: the probe's
@@ -568,6 +598,19 @@ function compileForChain(
     ...Object.keys(inputs.contracts ?? {}),
     ...callerNames,
   ]);
+  // A define or a contract binding of `pot` is the caller's, given by that name; an import of it is
+  // the program's own, which no free read is.
+  if (
+    callerNames.has(POT_NAME) &&
+    !Object.hasOwn(inputs.defines ?? {}, POT_NAME) &&
+    !Object.hasOwn(inputs.contracts ?? {}, POT_NAME)
+  ) {
+    const [read] = freeReadsOf(sauce, POT_NAME);
+    if (read !== undefined) {
+      const { line, column } = positionOf(sauce, read.start);
+      throw ambientPotRefusal(line, column);
+    }
+  }
   // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
   // rewrite makes then rests on no answer, and the probe's own refusal, which the compile would
   // raise too, is reported in its place.
@@ -654,6 +697,10 @@ function compileForChain(
   let derivedValues: Readonly<Record<string, string>> | undefined;
   let stoppable: readonly string[] | undefined;
   let stoppableRuns: Readonly<Record<string, number | null>> | undefined;
+  // Where the program first names the Pot, which makes its accounts the Pot's (svm).
+  let potMention: SourcePosition | undefined;
+  // The holders the token pass read by a name the program does not declare (EVM).
+  let freeHolders: ReadonlyMap<string, string> | undefined;
   if (chain.kind === "svm") {
     const lowered = readingBound(() =>
       rewriteSvmTokenSyntax(
@@ -677,6 +724,10 @@ function compileForChain(
       derivedValues = lowered.values;
       stoppable = lowered.stoppable;
       stoppableRuns = lowered.stoppableRuns;
+      if (lowered.namesPot === true) {
+        const [read] = freeReadsOf(sauce, POT_NAME);
+        if (read !== undefined) potMention = positionOf(sauce, read.start);
+      }
     }
     if (args !== undefined && Object.keys(derivedValues ?? {}).length > 0) {
       throw new RangeError(
@@ -685,16 +736,16 @@ function compileForChain(
       );
     }
   } else {
-    absorb(
-      readingBound(() =>
-        rewriteTokenMembers(
-          source,
-          tokenMap,
-          native === undefined ? undefined : { symbol: native, chain: chain.slug },
-          bound,
-        ),
+    const members = readingBound(() =>
+      rewriteTokenMembers(
+        source,
+        tokenMap,
+        native === undefined ? undefined : { symbol: native, chain: chain.slug },
+        bound,
       ),
     );
+    freeHolders = members.freeHolders;
+    absorb(members);
     absorb(rewriteTokenFactory(source));
     if (tokenRewrote) source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
@@ -781,8 +832,10 @@ function compileForChain(
     else rs = first;
   } catch (error) {
     // A token or protocol name no chain has, reported as one rather than as the call the compiler
-    // could not lower. Asked only of a program the compiler refused.
+    // could not lower; a holder read by a name the program does not declare, as the read. Asked
+    // only of a program the compiler refused.
     throw (
+      freeHolderError(source, freeHolders, error) ??
       unknownBalanceError(source, chain, { tokens: tokenMap.keys() }, error) ??
       unknownGlobalError(
         source,
@@ -817,6 +870,7 @@ function compileForChain(
     ...(derivedValues === undefined ? {} : { derivedValues }),
     ...(stoppable === undefined ? {} : { stoppable }),
     ...(stoppableRuns === undefined ? {} : { stoppableRuns }),
+    ...(potMention === undefined ? {} : { potMention }),
   };
 }
 

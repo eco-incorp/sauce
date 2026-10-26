@@ -297,6 +297,19 @@ check(
   derived.potWSOL === "authority:WSOL" && derived.toWSOL === "@to:WSOL",
   "what is bought lands in the Pot's WSOL account, and goes on to to's",
 );
+// A program that names `pot` anywhere acts as the Pot throughout: the same swap's accounts derive
+// from `pot`, not `authority`.
+const naming = routes.compileSauceProgram(
+  "solana",
+  readFileSync(new URL("./solana-swap.sauce.ts", import.meta.url), "utf8").replace(
+    "  return got;",
+    '  require(to != pot, "to is the Pot");\n  return got;',
+  ),
+).derivedAccounts;
+check(
+  naming?.potWSOL === "pot:WSOL" && naming?.potUSDC === "pot:USDC",
+  "a swap in a program that names pot derives the Pot's accounts from pot",
+);
 check(
   solana.includes("`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`"),
   "the skill shows a slot derivation",

@@ -52,6 +52,7 @@ export type {
   SauceProgramOptions,
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
+  SourcePosition,
 } from "./sauce-route.js";
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";

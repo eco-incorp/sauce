@@ -67,10 +67,12 @@ token and `pot.balance` the coin. The holder is:
 
 A record or a list is not a holder: on one, a property named like a token is refused, since the
 name is reserved for the shorthand (`usdc:` is a fine field name). Nor is an interface with no
-address (`UniswapV3.Pool.WETH`). `.balance` on a record or a list reads its field, and so it does
-on a contract call's result unless the registry records that result as an address
-(`UniswapV4.StateView.poolManager().balance` is the PoolManager's coin): write `ctx.balance(x)` for
-the coin there. `Token(address)` has no short form: its balance is
+address (`UniswapV3.Pool.WETH`). `.balance` is the coin only where the program's text shows an
+address. It reads the field on a record or a list, on a contract call's result (unless the
+registry records that result as an address: `UniswapV4.StateView.poolManager().balance` is the
+PoolManager's coin), on `abi.decode`'s result, on a name imported from a module, and on a local
+bound to or destructured from one of those: write `ctx.balance(x)` for the coin there, or bind the
+value to a local declared `Address` first. `Token(address)` has no short form: its balance is
 `Token(address).balanceOf(holder)`.
 
 | Method                            | Behaviour                                                 |

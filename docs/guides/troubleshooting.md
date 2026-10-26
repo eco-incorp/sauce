@@ -67,23 +67,24 @@ sauce tx: building the cook transaction is refused: it involves optimism (Optimi
 ```
 
 **Cause.** The command builds and sends transactions only on Ethereum, Base, Arc and Solana. Every
-other chain is a preview chain.
+other chain is a preview chain, where it builds and sends none.
 
-**Fix.** Compile and read there freely, and simulate and send on a supported chain. To ask for the chain,
+**Fix.** Compile, read and simulate there freely (simulate runs wherever the release is deployed), and send on a supported chain. To ask for the chain,
 follow the two links the message prints: the first finds an existing request, the second opens a
 new one. No flag lifts the refusal ([Supported and preview chains](cli.md#supported-and-preview-chains)).
 
 ### `the released engine … is not deployed on <chain>`
 
 ```text
-sauce simulate: the released engine 0x0F50… is not deployed on arbitrum: this SDK's cook cannot run there
+sauce simulate: the released engine 0x0F50… is not deployed on gnosis: this SDK's cook cannot run there
 ```
 
-**Cause.** `sauce simulate` runs the cook on the released engine, which is deployed only on the
-supported chains. On a preview chain there is nothing for the cook to run on.
+**Cause.** `sauce simulate` runs the cook on the release's engine and Kitchen, and they are not
+deployed on that chain, so there is nothing for the cook to run on. This is not the preview label:
+a preview chain simulates wherever the release is deployed on it.
 
-**Fix.** Simulate on Ethereum, Base, Arc or Solana. On a preview chain, `compile`, `globals`,
-`price`, `pools` and `pot` still work.
+**Fix.** Simulate on a chain where the release is deployed. `compile`, `globals`, `price`, `pools`
+and `pot` still work on this one.
 
 ## The command cannot reach the chain
 

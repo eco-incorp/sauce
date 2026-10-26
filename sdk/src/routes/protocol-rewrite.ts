@@ -586,8 +586,8 @@ function throughDefault(candidate: DefaultCandidate): Splice {
  *  (`pot`, or the refused `self`): a name a declarator, a function/arrow parameter or a `catch`
  *  clause binds, however its pattern destructures (`const [pot] = t`, `catch (pot)`), a
  *  non-computed member property, a non-computed object-literal key, an assignment target, an
- *  update-expression operand, or a name in an import or export specifier (`import { pot as
- *  holder }` names a module's export, and binds `holder`). */
+ *  update-expression operand, a label (`pot: for (…)`, `continue pot`), or a name in an import or
+ *  export specifier (`import { pot as holder }` names a module's export, and binds `holder`). */
 function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
   const exclude = (node: AstNode): void => {
@@ -622,6 +622,14 @@ function collectReadExclusions(program: AstNode): ReadonlySet<AstNode> {
       if (argument?.type === "Identifier") excluded.add(argument);
     }
     if (
+      n.type === "LabeledStatement" ||
+      n.type === "BreakStatement" ||
+      n.type === "ContinueStatement"
+    ) {
+      const label = (n as { label?: AstNode | null }).label;
+      if (label?.type === "Identifier") excluded.add(label);
+    }
+    if (
       n.type === "ImportSpecifier" ||
       n.type === "ImportDefaultSpecifier" ||
       n.type === "ImportNamespaceSpecifier" ||
@@ -654,6 +662,12 @@ function bareReads(
     }
   });
   return reads;
+}
+
+/** The reads of `name` in `source` where the program does not declare it (`lexical-scope.ts`). */
+export function freeReadsOf(source: string, name: string): AstNode[] {
+  const program = parseSauce(source);
+  return bareReads(program, name, collectReadExclusions(program), new Set());
 }
 
 /**

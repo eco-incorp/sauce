@@ -8,6 +8,7 @@
  * often carries a key.
  */
 import {
+  BaseError,
   createPublicClient,
   createWalletClient,
   custom,
@@ -17,6 +18,7 @@ import {
   http,
   numberToHex,
   parseAbi,
+  RpcRequestError,
   TransactionReceiptNotFoundError,
   type Abi,
   type Address,
@@ -26,6 +28,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
+import { getTransactionError } from "viem/utils";
 
 import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" };
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
@@ -48,6 +51,18 @@ export interface TxRequest {
   readonly to: Address;
   readonly data: Hex;
   readonly value: bigint;
+}
+
+/**
+ * A transaction as it is signed: its call, the gas it may use and what it pays per gas. A program
+ * reads both (its gas left, the price it pays), so a simulation that measures what the transaction
+ * does runs with them, where they are set.
+ */
+export interface SignedCall extends TxRequest {
+  readonly gas?: bigint;
+  readonly maxFeePerGas?: bigint;
+  readonly maxPriorityFeePerGas?: bigint;
+  readonly gasPrice?: bigint;
 }
 
 /**
@@ -88,6 +103,28 @@ export function endpointFor(
 /** viem's one-line reason for a failed request, never its details, which repeat the URL. */
 export const reasonOf = (error: unknown): string =>
   (error as { shortMessage?: string }).shortMessage ?? "the request failed";
+
+/**
+ * Why the endpoint refused to broadcast a signed transaction: viem's reading of the node's error,
+ * as `sendTransaction` gives it (a nonce too low, funds short of the cost, a fee below the base
+ * fee), else the node's own words, where it answered with an error of its own (a replacement
+ * underpriced, which viem has no name for), else {@link reasonOf}. The node's message is its own,
+ * never the URL.
+ */
+export function broadcastRefusal(
+  error: unknown,
+  envelope: SignedCall & { readonly nonce?: number },
+): string {
+  if (!(error instanceof BaseError)) return reasonOf(error);
+  const decoded = getTransactionError(error, { ...envelope, account: null, chain: undefined });
+  // A node error viem knows: its explanation.
+  if (decoded.cause !== error) return reasonOf(decoded);
+  const answered = error.walk((cause) => cause instanceof RpcRequestError);
+
+  return answered instanceof RpcRequestError && answered.details !== ""
+    ? answered.details
+    : reasonOf(error);
+}
 
 async function request<T>(what: string, read: () => Promise<T>): Promise<T> {
   try {
@@ -565,18 +602,38 @@ export function revertReason(error: unknown): string {
   }
 }
 
-/** A dry run of `tx` from `from`: what it returns and the gas it needs, or why it reverts. */
+/**
+ * A dry run of `tx` from `from`: what it returns and the gas it needs, or why it reverts. The gas it
+ * needs is estimated from the call alone. Where `tx` carries the gas and fees it was signed with, the
+ * call runs with them, as the signed transaction will (a program can read both); a signed gas limit
+ * below the estimate is left out of the call, which would only run out of gas, so the caller can
+ * refuse it naming both.
+ */
 export async function simulate(
   client: PublicClient,
   from: Address,
-  tx: TxRequest,
+  tx: SignedCall,
 ): Promise<
   | { readonly ok: true; readonly returns: Hex; readonly gas: bigint }
   | { readonly ok: false; readonly reason: string }
 > {
+  const plain = { account: from, to: tx.to, data: tx.data, value: tx.value };
   try {
-    const { data } = await client.call({ account: from, ...tx });
-    const gas = await client.estimateGas({ account: from, ...tx });
+    const gas = await client.estimateGas(plain);
+    const fees =
+      tx.gasPrice !== undefined
+        ? { gasPrice: tx.gasPrice }
+        : {
+            ...(tx.maxFeePerGas === undefined ? {} : { maxFeePerGas: tx.maxFeePerGas }),
+            ...(tx.maxPriorityFeePerGas === undefined
+              ? {}
+              : { maxPriorityFeePerGas: tx.maxPriorityFeePerGas }),
+          };
+    const { data } = await client.call({
+      ...plain,
+      ...(tx.gas !== undefined && tx.gas >= gas ? { gas: tx.gas } : {}),
+      ...fees,
+    } as Parameters<PublicClient["call"]>[0]);
 
     return { ok: true, returns: data ?? "0x", gas };
   } catch (error) {
@@ -605,9 +662,11 @@ export interface Sent {
 
 /**
  * Signs `tx` as `account`, sends it through `url`, and waits for its receipt. It is simulated
- * first, so a transaction that would revert is refused with its reason and never sent. From a
- * wallet (`--wallet`), it is held to the wallet's policy too (`policy.ts`), and what it spends is
- * reserved in the wallet's ledger before it is sent.
+ * first, so a transaction that would revert is refused with its reason and never sent. Then it is
+ * made whole as it will be signed (its gas, fees, nonce and chain), and from a wallet (`--wallet`)
+ * that whole transaction is held to the wallet's policy (`policy.ts`), measured with the gas and fees
+ * it carries, and what it spends is reserved in the wallet's ledger. What is signed is exactly what
+ * was measured: nothing of it is filled in or changed after.
  */
 export async function sendAndWait(
   client: PublicClient,
@@ -617,14 +676,29 @@ export async function sendAndWait(
 ): Promise<Sent> {
   const rehearsal = await simulate(client, account.address, tx);
   if (!rehearsal.ok) throw new CliError(`not sent — it would revert: ${rehearsal.reason}`);
-  const reservation = await guardOf(account.address)?.evm(client, tx);
   const wallet = createWalletClient({ account, transport: http(url) });
+  let envelope: TxRequest & Parameters<PrivateKeyAccount["signTransaction"]>[0];
+  try {
+    envelope = (await wallet.prepareTransactionRequest({
+      account,
+      chain: null,
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      gas: (rehearsal.gas * 12n) / 10n,
+    })) as typeof envelope;
+  } catch (error) {
+    throw new CliError(`preparing the transaction failed: ${reasonOf(error)}`);
+  }
+  const reservation = await guardOf(account.address)?.evm(client, envelope);
   let hash: Hex;
   try {
-    hash = await wallet.sendTransaction({ chain: null, ...tx, gas: (rehearsal.gas * 12n) / 10n });
+    hash = await wallet.sendRawTransaction({
+      serializedTransaction: await account.signTransaction(envelope),
+    });
   } catch (error) {
     reservation?.released("sending failed");
-    throw new CliError(`sending failed: ${reasonOf(error)}`);
+    throw new CliError(`sending failed: ${broadcastRefusal(error, envelope)}`);
   }
   return landed(client, hash, account.address, tx, (status) =>
     status === "success" ? reservation?.sent(hash) : reservation?.released(`${hash} reverted`),

@@ -30,7 +30,7 @@ import {
   walk,
   type AstNode,
 } from "./ast-walk.js";
-import { shadowed, walkScoped, type Scope } from "./lexical-scope.js";
+import { bindingOf, shadowed, walkScoped, type Scope } from "./lexical-scope.js";
 import { parseSauce } from "./parse.js";
 import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
 import {
@@ -63,6 +63,11 @@ export interface SvmLoweringResult {
   readonly stoppable?: readonly string[];
   /** How many times each of those inside a loop runs, by its derivation (`SvmLowering.runsOf`). */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  /**
+   * Whether the program names the Pot (`pot`, where nothing else binds it): then every account it
+   * acts with derives from the Pot (`pot`, `pot:<token>`), not `authority`.
+   */
+  readonly namesPot?: boolean;
 }
 
 /** A mint as a call names it. */
@@ -97,16 +102,27 @@ export type Holder =
       /** The key in the program's text, for the check. */
       readonly value: string;
     }
-  | { readonly kind: "account"; readonly param: string; readonly writable: boolean };
+  | {
+      readonly kind: "account";
+      readonly param: string;
+      readonly writable: boolean;
+      /** The top-level function whose parameter it is, and its position, where it is not main's:
+       *  the account each call passes there is held to what the function does with it. */
+      readonly helper?: { readonly fn: AstNode; readonly name: string; readonly index: number };
+    };
 
 /** A parameter of `main`, or of a top-level function, as a call reads it. */
 interface Param {
   readonly kind: "address" | "account" | "other";
+  /** Whether main's account is declared `Writable`; never a top-level function's, which declares no
+   *  role. */
   readonly writable: boolean;
   /** The annotation's type name (`Uint256`, `Address`, `Account`), where it is one name, of main's. */
   readonly type?: string;
   /** The top-level function whose parameter it is, where it is not main's. */
   readonly of?: string;
+  /** Its position among the function's parameters. */
+  readonly index: number;
 }
 
 /** Where a site stands: in `main`, in a top-level function, inside a function in another, or in
@@ -208,13 +224,14 @@ export function annotatedType(node: AstNode): string | undefined {
 /**
  * A function's `Address` and `Account` parameters, by name. Main's carry their roles (whether an
  * account is writable) and their type; a top-level function's account may declare no role (the
- * compiler takes roles only on main's), so the account a caller passes it is held to main's, and
- * its `Address` is a value only the program has as it runs.
+ * compiler takes roles only on main's), so the account a caller passes it is held to what the
+ * function does with it (`holdWrittenParams`), and its `Address` is a value only the program has as
+ * it runs.
  */
 function paramsOf(fn: AstNode, helper?: string): ReadonlyMap<string, Param> {
   const params = new Map<string, Param>();
-  for (const param of (fn as { params?: AstNode[] }).params ?? []) {
-    if (param.type !== "Identifier") continue;
+  ((fn as { params?: AstNode[] }).params ?? []).forEach((param, index) => {
+    if (param.type !== "Identifier") return;
     const annotation = (param as { typeAnnotation?: { typeAnnotation?: AstNode } }).typeAnnotation
       ?.typeAnnotation;
     const type = annotatedType(param);
@@ -233,10 +250,11 @@ function paramsOf(fn: AstNode, helper?: string): ReadonlyMap<string, Param> {
             kind: type === "Address" ? "address" : type === "Account" ? "account" : "other",
             writable: roles.includes("Writable"),
             ...(type === undefined ? {} : { type }),
+            index,
           }
-        : { kind: type === "Account" ? "account" : "other", writable: true, of: helper },
+        : { kind: type === "Account" ? "account" : "other", writable: false, of: helper, index },
     );
-  }
+  });
 
   return params;
 }
@@ -648,6 +666,12 @@ export class SvmLowering {
   readonly splices: Splice[] = [];
   /** Each function's parameters, main's and every top-level function's. */
   private readonly paramsByFunction = new Map<AstNode, ReadonlyMap<string, Param>>();
+  /** By the identifier that declares it: each parameter of main and of a top-level function, and
+   *  the function it is one of. */
+  private readonly paramBinders = new Map<
+    AstNode,
+    { readonly fn: AstNode; readonly param: Param }
+  >();
   /** The top-level functions but `main`, by name. */
   private readonly topLevel: ReadonlyMap<string, AstNode>;
   private readonly functions: AstNode[] = [];
@@ -666,8 +690,9 @@ export class SvmLowering {
   private readonly reserved = new Set<string>();
   private readonly index: RowIndex;
   private literalTokens = 0;
-  /** Where the site being lowered stands. */
-  private at: Place = { kind: "main" };
+  /** By top-level function: each of its `Account` parameters a site writes as a token account, by
+   *  position, and how the first such site is spelled (`holdWrittenParams`). */
+  private readonly written = new Map<AstNode, Map<number, string>>();
   /** The top-level function each splice a site made in one stands in. */
   private readonly spliceIn = new Map<Splice, AstNode>();
   /** The scope each node is read in (`walkScoped`). */
@@ -702,6 +727,12 @@ export class SvmLowering {
     this.topLevel = topLevel;
     if (this.main !== undefined) this.paramsByFunction.set(this.main, paramsOf(this.main));
     for (const [name, fn] of topLevel) this.paramsByFunction.set(fn, paramsOf(fn, name));
+    for (const [fn, params] of this.paramsByFunction) {
+      for (const id of (fn.params as AstNode[] | undefined) ?? []) {
+        const param = id.type === "Identifier" ? params.get(nameOf(id)) : undefined;
+        if (param !== undefined) this.paramBinders.set(id, { fn, param });
+      }
+    }
     walkScoped(this.program, (n, scope) => this.scopes.set(n, scope));
     for (const param of (this.main?.params as AstNode[] | undefined) ?? []) {
       collectPatternNames(param, this.mainParams);
@@ -908,24 +939,32 @@ export class SvmLowering {
   }
 
   /**
-   * The parameter `name` of the function the site being lowered stands in: main's `Address`, an
-   * `Account` (with whether it is writable), or other. A top-level function's `Address` is a value
-   * only the program has as it runs, so it is other.
+   * The parameter `node` reads, where the binding in scope there is one of the function it stands
+   * in (`lexical-scope.ts`): main's `Address`, an `Account` (with whether it is writable), or other.
+   * A top-level function's `Address` is a value only the program has as it runs, so it is other.
+   * Undefined for any other read: a local, a loop's binding, a parameter of a function around the
+   * one it stands in, a name the program does not declare.
    */
-  param(name: string): Param | undefined {
-    return this.paramIn(this.at, name);
+  param(node: AstNode): Param | undefined {
+    const binder = this.binderOf(node);
+    const own = binder === undefined ? undefined : this.paramBinders.get(binder);
+    if (own === undefined) return undefined;
+    const place = this.placeOf(node);
+    const fn = place.kind === "main" ? this.main : place.kind === "helper" ? place.fn : undefined;
+
+    return own.fn === fn ? own.param : undefined;
   }
 
-  /** The parameter `name` of the function `node` stands in, as `param` reads it. */
-  paramAt(name: string, node: AstNode): Param | undefined {
-    return this.paramIn(this.placeOf(node), name);
+  /** A parameter `id` declares, of main or of a top-level function. */
+  declaredParam(id: AstNode): Param | undefined {
+    return this.paramBinders.get(id)?.param;
   }
 
-  private paramIn(place: Place, name: string): Param | undefined {
-    if (place.kind === "main") return this.main && this.paramsByFunction.get(this.main)?.get(name);
-    if (place.kind === "helper") return this.paramsByFunction.get(place.fn)?.get(name);
-
-    return undefined;
+  /** The identifier that declares the binding `node` reads, where the program declares one. */
+  binderOf(node: AstNode): AstNode | undefined {
+    return node.type === "Identifier"
+      ? bindingOf(this.scopes.get(node), nameOf(node), node.start)
+      : undefined;
   }
 
   /** Whether `node` reads the Pot: `pot`, where the program does not bind it. */
@@ -962,15 +1001,25 @@ export class SvmLowering {
     if (this.isPot(node)) return { kind: "authority" };
     if (node.type === "Identifier") {
       const name = nameOf(node);
-      const param = this.param(name);
+      const param = this.param(node);
       if (param?.kind === "address") {
         return { kind: "key", name: `@${name}`, stem: name, value: name };
       }
       if (param?.kind === "account") {
-        return { kind: "account", param: name, writable: param.writable };
+        const fn = this.placeOf(node);
+        return {
+          kind: "account",
+          param: name,
+          writable: param.writable,
+          ...(fn.kind === "helper"
+            ? { helper: { fn: fn.fn, name: fn.name, index: param.index } }
+            : {}),
+        };
       }
+      // A key the compile binds to a name the program does not declare there: main's `Address`
+      // argument, bound into the program.
       const key = this.keys.get(name);
-      if (key !== undefined && param === undefined && !this.declared.has(name)) {
+      if (key !== undefined && this.binderOf(node) === undefined) {
         return { kind: "key", name: base58(keyHex(key)), stem: name, value: name };
       }
       // A registered mint's own key: its associated token accounts derive off it as off any key.
@@ -994,7 +1043,7 @@ export class SvmLowering {
     const text = this.source.slice(node.start, node.end);
     const account =
       role === "recipient" || role === "sender" ? "dest: Account<Writable>" : "account: Account";
-    const of = node.type === "Identifier" ? this.param(nameOf(node))?.of : undefined;
+    const of = this.param(node)?.of;
     throw new Error(
       `${spelled} on Solana: the ${role} must be known when the transaction is built, to attach ` +
         "its token account — `pot`, a parameter of main declared `Address`, a token's mint, or a " +
@@ -1017,7 +1066,7 @@ export class SvmLowering {
     if (node.type === "Identifier") {
       const name = nameOf(node);
       if (this.isSymbol(name, node)) return { ...this.symbolToken(name), value, spelled };
-      if (this.param(name)?.kind === "address") {
+      if (this.param(node)?.kind === "address") {
         return { value, name: `@${name}`, stem: capitalized(name), param: name, spelled };
       }
     }
@@ -1094,7 +1143,12 @@ export class SvmLowering {
     spelled: string,
   ): { readonly account: string; readonly holder?: string } {
     if (holder.kind === "account") {
-      if (writable && !holder.writable) {
+      if (writable && holder.helper !== undefined) {
+        // A top-level function declares no roles: each call's account is held to the write.
+        const written = this.written.get(holder.helper.fn) ?? new Map<number, string>();
+        if (!written.has(holder.helper.index)) written.set(holder.helper.index, spelled);
+        this.written.set(holder.helper.fn, written);
+      } else if (writable && !holder.writable) {
         throw new Error(
           `${spelled} on Solana: \`${holder.param}\` is a token account the call writes, so ` +
             `declare it \`${holder.param}: Account<Writable>\``,
@@ -1168,14 +1222,14 @@ export class SvmLowering {
     const taken = [...this.declared].find((name) => name.startsWith("__sauce_"));
     if (taken !== undefined) this.reserve(taken);
     for (const site of [...this.sites].sort((a, b) => a.node.start - b.node.start)) {
-      this.at = this.placeOf(site.node);
+      const place = this.placeOf(site.node);
       const first = this.splices.length;
       site.lower();
-      if (this.at.kind === "helper") {
-        for (const splice of this.splices.slice(first)) this.spliceIn.set(splice, this.at.fn);
+      if (place.kind === "helper") {
+        for (const splice of this.splices.slice(first)) this.spliceIn.set(splice, place.fn);
       }
     }
-    this.at = { kind: "main" };
+    this.holdWrittenParams();
     const splices = this.threadHelpers(dropContained(this.splices));
     if (this.opening.size > 0) {
       // An insertion, applied after a site's splice that starts where the body does.
@@ -1218,6 +1272,7 @@ export class SvmLowering {
       ...(this.stoppableRuns.size === 0
         ? {}
         : { stoppableRuns: Object.fromEntries(this.stoppableRuns) }),
+      ...(this.authorityDerivation === "pot" ? { namesPot: true } : {}),
     };
   }
 
@@ -1243,7 +1298,9 @@ export class SvmLowering {
    * pass the compiler's limit on what a function keeps in use: a venue's swap takes seventeen); the
    * values (a swap's stop) under main's names after it. A function that uses one and is not only
    * ever called by name, or is called from a function inside another, is refused: nothing could
-   * pass it the accounts. Returns `splices`, with the functions' rewritten, and the additions.
+   * pass it the accounts. So is one main never reaches: its accounts would be attached to every
+   * cook for code that never runs. Returns `splices`, with the functions' rewritten, and the
+   * additions.
    */
   private threadHelpers(splices: readonly Splice[]): Splice[] {
     const accounts = this.slots.names();
@@ -1256,6 +1313,17 @@ export class SvmLowering {
       const used = uses.get(fn) ?? new Set<string>();
       for (const word of identifiers(splice.replacement)) if (names.has(word)) used.add(word);
       uses.set(fn, used);
+    }
+    const reached = this.reachedFunctions();
+    for (const [fn, used] of uses) {
+      if (used.size === 0 || reached.has(fn)) continue;
+      const name = nameOf(fn.id as AstNode);
+      const named = [...accounts, ...values].filter((one) => used.has(one));
+      throw new Error(
+        `\`${name}\` uses accounts the lowering adds to main (${named.join(", ")}), and main ` +
+          "never calls it: they would be attached to every cook for code that never runs. Call " +
+          `\`${name}\` from main, or remove it.`,
+      );
     }
     // Each call of a function that uses one, checked; and, to a fixed point, what each passes on.
     const calls = new Map<string, AstNode[]>();
@@ -1334,15 +1402,96 @@ export class SvmLowering {
         ].join(", ");
         const given = (call as { arguments?: AstNode[] }).arguments ?? [];
         const last = given[given.length - 1];
-        rewritten.push(
+        // After the last argument's own parentheses (`argumentRange`): `f((x))` is `f((x), …)`.
+        const after =
           last === undefined
-            ? { start: call.end - 1, end: call.end - 1, replacement: args }
-            : { start: last.end, end: last.end, replacement: `, ${args}` },
-        );
+            ? call.end - 1
+            : argumentRange((this.blanked ??= blankLiterals(this.source)), call, last).end;
+        rewritten.push({
+          start: after,
+          end: after,
+          replacement: last === undefined ? args : `, ${args}`,
+        });
       }
     }
 
     return rewritten;
+  }
+
+  /**
+   * The top-level functions main reaches: those it names, and those each of them names, through
+   * the binding each name is read as. A name read outside every function (a module constant's
+   * value) reaches its function too, whose call is refused where it stands (`callsOf`).
+   */
+  private reachedFunctions(): ReadonlySet<AstNode> {
+    const reached = new Set<AstNode>();
+    const byBinder = new Map<AstNode, AstNode>();
+    for (const fn of this.topLevel.values()) byBinder.set(fn.id as AstNode, fn);
+    const pending: AstNode[] = [];
+    const reach = (read: AstNode): void => {
+      const binder = this.binderOf(read);
+      const fn = binder === undefined ? undefined : byBinder.get(binder);
+      if (fn === undefined || reached.has(fn)) return;
+      reached.add(fn);
+      pending.push(fn);
+    };
+    for (const read of this.reads) if (this.placeOf(read).kind === "outside") reach(read);
+    if (this.main !== undefined) pending.push(this.main);
+    for (let fn = pending.pop(); fn !== undefined; fn = pending.pop()) {
+      for (const read of this.reads) {
+        if (fn.start <= read.start && read.end <= fn.end) reach(read);
+      }
+    }
+
+    return reached;
+  }
+
+  /**
+   * Holds each account a top-level function writes as a token account, which it takes as a
+   * parameter, to what each call passes there: a parameter of main declared `Account<Writable>`,
+   * which carries the role the write needs (a function other than main declares no roles), or a
+   * calling function's own parameter, held in turn at each of its calls. Anything else is refused.
+   */
+  private holdWrittenParams(): void {
+    // Each parameter held, and where the write that holds it stands: in which function, by which
+    // of its parameters.
+    const pending = [...this.written].flatMap(([fn, params]) =>
+      [...params].map(([index, spelled]) => {
+        const site = `${spelled} on Solana, in \`${nameOf(fn.id as AstNode)}\`: its \`${nameOf((fn.params as AstNode[])[index]!)}\``;
+        return { fn, index, site };
+      }),
+    );
+    const held = new Set<string>();
+    for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+      const { fn, index, site } = next;
+      const key = `${fn.start}:${index}`;
+      if (held.has(key)) continue;
+      held.add(key);
+      for (const read of this.reads) {
+        const call = this.parents.get(read);
+        if (call?.type !== "CallExpression" || call.callee !== read) continue;
+        if (this.binderOf(read) !== fn.id) continue;
+        const place = this.placeOf(call);
+        // A call nothing can pass accounts from is refused where the accounts are passed.
+        if (place.kind !== "main" && place.kind !== "helper") continue;
+        const given = ((call.arguments as AstNode[] | undefined) ?? [])[index];
+        if (given === undefined) continue;
+        const param = this.param(given);
+        if (param?.kind === "account" && place.kind === "helper") {
+          pending.push({ fn: place.fn, index: param.index, site });
+          continue;
+        }
+        if (param?.kind === "account" && param.writable) continue;
+        const text = this.source.slice(given.start, given.end);
+        throw new Error(
+          `${site} is a token account the call writes, and a function other than main declares ` +
+            "no roles: " +
+            (param?.kind === "account"
+              ? `declare main's \`${text}\` as \`${text}: Account<Writable>\`.`
+              : `pass it a parameter of main declared \`Account<Writable>\`, which \`${text}\` is not.`),
+        );
+      }
+    }
   }
 
   /**
