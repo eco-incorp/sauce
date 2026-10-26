@@ -18,7 +18,7 @@ import {
   INSTALLED_CHAIN_MODULE,
 } from "../src/routes/chain-module.js";
 import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
-import { compileWithRs, makeResolve } from "../src/routes/rs-compile.js";
+import { ambientNamesOf, compileWithRs, makeResolve } from "../src/routes/rs-compile.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 /** Compiles `body` (a `main` body) for `chain`, returning the bytecode as hex. */
@@ -1166,6 +1166,37 @@ describe("code a test rules out holds no name nothing gives meaning to: a typo c
       .map(({ name }) => /^[A-Za-z_$][\w$]*/.exec(name.replace(/^new /, ""))![0]);
     expect(roots.length).toBeGreaterThan(50);
     for (const root of roots) expect(LANGUAGE_NAMES).toContain(root);
+  });
+});
+
+describe("the probe of the caller's ambient modules asks only about names the compile reads", () => {
+  const A = "0x1111111111111111111111111111111111111111";
+
+  it("finds a registry name only a module the compiler loads mentions", () => {
+    const files: Record<string, string> = {
+      "caller.js": `export const USDT = ${A};`,
+      "lib.js": "export function pick(): Uint256 { return USDT; }",
+    };
+    const options = {
+      ambient: ["./caller.js"],
+      resolve: (path: string) => {
+        const text = files[path.replace(/^\.\//, "")];
+        return text === undefined ? undefined : new TextEncoder().encode(text);
+      },
+    };
+    // Base has no USDT: the entry never names it, and the module that reads it is the caller's.
+    const entry = 'import { pick } from "./lib.js";\nfunction main(): Uint256 { return pick(); }';
+    expect(hex("base", entry, options)).toBe(
+      hex("base", `function main(): Uint256 { return ${A}; }`),
+    );
+    expect(
+      ambientNamesOf(
+        { target: "v12", ambient: options.ambient, resolve: options.resolve },
+        ["USDT", "Lido", "UniswapV3"],
+        ['import { pick } from "./lib.js";'],
+        ["pick", "main", "Uint256"],
+      ),
+    ).toEqual(new Set(["USDT"]));
   });
 });
 

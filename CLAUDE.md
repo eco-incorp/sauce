@@ -976,7 +976,9 @@ SDK never works out itself: `rs-compile.ts#ambientNamesOf` asks the compiler, co
 program's own imports, as written, before a `main` that reads nothing and an uncalled closure (so
 the compiler loads the modules the compile does and lowers nothing; the closure's function is
 named apart from every define, contract and name the program writes), with the compile's own
-options and one more ambient module exporting the `pot` and `self` the parse reads, and reads each
+options and one more ambient module exporting the names asked about that the program or a module
+the compiler loads mentions (recorded as the probe's `resolve` serves them; the compiler loads the
+probe's module last), and reads each
 name the compiler refuses as exported twice; any other refusal is no answer: the names stay free,
 the compile reports its own refusal, and the probe's is thrown where the compile succeeds or a
 rewrite reading the answer refuses; both read the caller's options as `sauce-route.ts#readCompileInputs`

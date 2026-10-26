@@ -562,7 +562,8 @@ function compileForChain(
   // each name its ambient modules export that a pass reads as the SDK's: the Pot's two names and
   // every registry name (`bindableNames`). The compiler says which: `ambientNamesOf` asks it, with
   // this compile's own options and the program's own imports, so a module is found exactly where
-  // the compile finds it. It asks only where it can matter: the SDK's own packages
+  // the compile finds it, and of those names it asks only the ones the program or a module the
+  // compiler loads mentions. It asks only where it can matter: the SDK's own packages
   // (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export none of them,
   // and of the Pot's two names it asks only those the program reads (`probeQuestions`), the rest
   // being none the rewrites touch. A name among them is the caller's value, never the Pot and never

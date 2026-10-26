@@ -367,17 +367,27 @@ function probeHelper(taken: ReadonlySet<string>): string {
 /** The compiler's refusal of a name two ambient modules export, which names it. */
 const EXPORTED_TWICE = /`([A-Za-z_$][\w$]*)` is exported by more than one ambient module/;
 
+/** Every name a module's text may read: a superset of its identifiers, its comments' and strings'
+ *  words included, which only ever asks the probe about a name more. */
+const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
+
 /**
  * The names among `names` that one of `input.ambient`'s modules exports, as the compiler finds them:
  * the compiler is asked, never the SDK. A probe compiles `imports`, the program's own import
  * declarations as written, then a `main` that reads nothing (`probeProgram`), at the program's path
- * with `input`'s options and one more ambient module, which exports every name asked about. The
+ * with `input`'s options and one more ambient module, which exports the names asked about. The
  * compiler loads an entry's imports before the ambient modules and loads a module once, so with the
  * same imports it loads the same modules, each where the compile does (a `resolvePackage` that
  * answers by importer included). It refuses a name two ambient modules export, naming it, so each
  * name it refuses is one a caller's module exports; it is set aside and the rest asked again. A
  * compile the probe's names do not trouble ends the probe. `declared` is every name the program
  * writes, which the probe's own function is named apart from, with the defines and contracts.
+ *
+ * Only a name the compile reads can matter, so only those are asked: a name the program writes, or
+ * one a module the compiler loads mentions, recorded as the probe's `resolve` serves it. The
+ * compiler loads the probe's module last, after the entry's imports and each ambient module before
+ * it, so its exports are written once every other module is read; a module loaded after it, which
+ * mentions a name it did not export, is asked about again.
  *
  * Any other refusal is no answer and is thrown as the compiler raised it.
  *
@@ -393,9 +403,11 @@ export function ambientNamesOf(
   const found = new Set<string>();
   const asked = new Set(names);
   if (asked.size === 0 || input.ambient === undefined || input.ambient.length === 0) return found;
+  // Every name the compile reads: the program's, then each module's as the compiler loads it.
+  const mentioned = new Set(declared);
   const helper = probeHelper(
     new Set([
-      ...declared,
+      ...mentioned,
       ...Object.keys(input.defines ?? {}),
       ...Object.keys(input.baseDefines ?? {}),
       ...Object.keys(input.contracts ?? {}),
@@ -404,21 +416,41 @@ export function ambientNamesOf(
   const program = makeResolve([...imports, probeProgram(helper)].join("\n"), input.resolve);
   const options = sharedOptions(input);
   const ambient = [...input.ambient, PROBE_MODULE];
-  while (asked.size > 0) {
-    const exports = new TextEncoder().encode(
-      [...asked].map((name) => `export const ${name} = 0;`).join("\n"),
-    );
+  const decoder = new TextDecoder();
+  for (;;) {
+    // Written by the compile's `resolve`, which narrowing does not follow.
+    let exported = undefined as ReadonlySet<string> | undefined;
     try {
       compile({
         ...options,
         ambient,
-        resolve: (path) => (path === PROBE_MODULE ? exports : program(path)),
+        resolve: (path) => {
+          if (path === PROBE_MODULE) {
+            exported = new Set([...asked].filter((name) => mentioned.has(name)));
+            return new TextEncoder().encode(
+              [...exported].map((name) => `export const ${name} = 0;`).join("\n"),
+            );
+          }
+          const bytes = program(path);
+          if (bytes !== undefined && bytes !== null && !path.endsWith(".json")) {
+            for (const [name] of decoder.decode(bytes).matchAll(IDENTIFIER)) mentioned.add(name);
+          }
+          return bytes;
+        },
       });
-      break;
     } catch (error) {
       const name = exportedTwice(error);
-      if (name === undefined || !asked.delete(name)) throw error;
+      if (name === undefined || exported?.has(name) !== true) throw error;
+      asked.delete(name);
       found.add(name);
+      continue;
+    }
+    const served: ReadonlySet<string> | undefined = exported;
+    if (
+      served === undefined ||
+      [...asked].every((name) => served.has(name) || !mentioned.has(name))
+    ) {
+      break;
     }
   }
 
