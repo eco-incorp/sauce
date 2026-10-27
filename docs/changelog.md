@@ -119,6 +119,16 @@ nothing moves.
   `sauce pot` do, and so does `sauce_signed_cook` with `cancel`. It printed an `invalidateNonces`
   for a Pot that cannot exist: no Kitchen call deploys a private Pot of the zero address, and a
   Shared Pot, which has no owner, runs no signed cook and refuses every cancellation.
+- **Fixed: the note on a plan whose cook would revert no longer says to fund the Pot's address
+  before it is deployed.** `sauce tx` and `sauce_tx` said "Fund the Pot first (its address takes
+  tokens before it is deployed)". A Kitchen upgrade that changes the Pot's code moves the Pot's
+  address, and what was sent to the old one stays where no Pot is ever deployed. The note now says
+  to deploy the Pot first, with `sauce pot --deploy` or `sauce run --fund`, which deploys before it
+  funds. With an endpoint, `--fund` plans the transfer after the Pot's deployment; offline, the plan
+  has no deployment step. `sauce sign`'s warning that a Pot with no code cannot pay the Kitchen's
+  fee now says to send `deployPot` before funding it. The README, the quick start (which now
+  deploys the Pot with `sauce pot --deploy` before sending it USDC), the guides and the `sauce-cli`
+  skill no longer say to send tokens to a Pot's address before it exists.
 
 ### Skills
 
