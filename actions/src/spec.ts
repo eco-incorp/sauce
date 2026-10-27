@@ -428,7 +428,10 @@ const SPECS: readonly ActionSpec[] = [
       quote: f(token, "the pool's quote token"),
       poolIdx: f(uintN(53), "the pool type index (420 is the standard pool)"),
       isBuy: f(bool, "true pays base and receives quote"),
-      inBaseQty: f(bool, "true when the amount is denominated in the base token"),
+      inBaseQty: f(
+        bool,
+        "true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends",
+      ),
       tip: f(uintN(16), "0 accepts the pool's default fee"),
       limitPrice: f(uint128, "the worst acceptable price, as a Q64.64 square-root price"),
       amountOutMin: f(uint128, "the least output accepted; the dex reverts below it"),
