@@ -12,7 +12,11 @@ import { resolve } from "path";
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { deriverse } from "../../../src/svm/venues/deriverse/index.js";
-import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
 import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
@@ -52,5 +56,36 @@ describe("deriverse Token-2022 self-drop", () => {
     expect(cfg.venue).toBe("deriverse");
     expect(cfg.assetMint).toBe(ASSET_MINT);
     expect(cfg.crncyMint).toBe(CRNCY_MINT);
+  });
+
+  it("legacy control: both mints served as 82-byte Tokenkeg-owned mints pass the owner gate", async () => {
+    // The gate (fetchPoolConfig's mint loop) runs before the TokenState reads and the return, so a
+    // config built here means both mints were classified by their legacy owner and passed.
+    const base = fixtureLoader(loadFixtures(FIXTURES));
+    const mintsServed: Address[] = [];
+    const owned: OwnedAccountLoader = async (addr: Address) => {
+      if (addr === ASSET_MINT || addr === CRNCY_MINT) {
+        mintsServed.push(addr);
+        return { data: makeLegacyMint(), owner: TOKEN_PROGRAM_ID };
+      }
+      return base(addr);
+    };
+    const cfg = await deriverse.fetchPoolConfig(owned, REAL_POOL);
+    expect(mintsServed).toEqual([ASSET_MINT, CRNCY_MINT]);
+    expect(cfg).toEqual(await deriverse.fetchPoolConfig(base, REAL_POOL));
+    expect(cfg.assetMint).toBe(ASSET_MINT);
+    expect(cfg.crncyMint).toBe(CRNCY_MINT);
+  });
+
+  it("refuses the instrument when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [ASSET_MINT, CRNCY_MINT]) {
+      const base = fixtureLoader(loadFixtures(FIXTURES));
+      const owned: OwnedAccountLoader = async (addr: Address) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : base(addr);
+      await expect(deriverse.fetchPoolConfig(owned, REAL_POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

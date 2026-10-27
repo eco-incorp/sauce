@@ -44,4 +44,23 @@ describe("manifest: Token-2022 mint self-drop", () => {
     const cfg = await fetchManifestConfig(fixtureLoader(loadFixtures(FIXTURES)), MARKET);
     expect(cfg.venue).toBe("manifest");
   });
+
+  it("rejects a market whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const fixtures = loadFixtures(FIXTURES);
+    const mints = fixtures
+      .filter((f) => f.owner === TOKEN_PROGRAM_ID && fixtureData(f).length === SPL_MINT_SIZE)
+      .map((f) => f.address);
+    expect(mints.length).toBe(2);
+    const base = fixtureLoader(fixtures);
+    for (const mint of mints) {
+      const load: OwnedAccountLoader = async (addr) => {
+        const account = await base(addr);
+        return addr === mint && account !== null ? { data: account.data, owner: foreign } : account;
+      };
+      await expect(fetchManifestConfig(load, MARKET)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

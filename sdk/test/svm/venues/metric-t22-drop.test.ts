@@ -68,4 +68,22 @@ describe("metric Token-2022 self-drop", () => {
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_A, MINT_B]) {
+      const load = fixtureLoader(
+        loadFixtures(FIXTURES).map((f) =>
+          f.address === mint
+            ? { ...f, owner: foreign, base64Data: Buffer.from(makeLegacyMint()).toString("base64") }
+            : f,
+        ),
+      );
+      await expect(
+        metric.fetchPoolConfig(load, POOL, 0, async () => realOracleQuoteBytes()),
+      ).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

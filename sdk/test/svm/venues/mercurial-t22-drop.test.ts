@@ -131,4 +131,22 @@ describe("mercurial Token-2022 self-drop", () => {
     expect(cfg.mintB).toBe(mintB);
     expect(cfg.authority).toBe(authority);
   });
+
+  it("refuses a pool whose 82-byte vault mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [mintA, mintB]) {
+      const shaped = loaderOf([
+        [POOL, buildPool(nonce)],
+        [VAULT_A, buildVault(mintA, authority)],
+        [VAULT_B, buildVault(mintB, authority)],
+        [mintA, makeLegacyMint()],
+        [mintB, makeLegacyMint()],
+      ]);
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchMercurialPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

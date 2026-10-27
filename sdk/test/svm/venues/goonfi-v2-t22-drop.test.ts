@@ -74,4 +74,15 @@ describe("goonfi-v2 Token-2022 self-drop", () => {
     }
     expect(message).not.toMatch(/Token-2022/);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const load = loaderWith({
+      [MINT_A]: legacy(),
+      [MINT_B]: { data: makeLegacyMint(), owner: foreign },
+    });
+    await expect(goonfiV2.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token-program: mint ${MINT_B} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

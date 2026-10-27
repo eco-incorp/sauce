@@ -70,4 +70,16 @@ describe("one-intro-swap Token-2022 self-drop", () => {
     expect(cfg.mint0).toBe(MINT0);
     expect(cfg.mint1).toBe(MINT1);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT0, MINT1]) {
+      const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchOneIntroSwapPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

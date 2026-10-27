@@ -74,4 +74,17 @@ describe("voltr Token-2022 self-drop", () => {
       fetchVoltrConfig(await loader(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/dropping pool/);
   });
+
+  test("an 82-byte mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const lpMint = await derivedLpMint();
+    for (const mint of [ASSET_MINT, lpMint]) {
+      const shaped = await loader(makeLegacyMint());
+      const owned: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchVoltrConfig(owned, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

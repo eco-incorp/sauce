@@ -70,4 +70,16 @@ describe("kipseli Token-2022 self-drop", () => {
     }
     expect(message).not.toMatch(/Token-2022/);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [BASE_MINT, QUOTE_MINT]) {
+      const shaped = loaderWith({ [BASE_MINT]: makeLegacyMint(), [QUOTE_MINT]: makeLegacyMint() });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(kipseli.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

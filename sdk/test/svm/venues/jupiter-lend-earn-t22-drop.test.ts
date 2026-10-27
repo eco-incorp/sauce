@@ -85,4 +85,20 @@ describe("jupiter-lend-earn Token-2022 self-drop", () => {
     const cfg = await jupiterLendEarn.fetchPoolConfig(load, POOL);
     expect(cfg.venue).toBe("jupiter-lend-earn");
   });
+
+  it("REJECTS a market whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT, FTOKEN_MINT]) {
+      const mintAccount = (m: Address): Owned =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy();
+      const load = loaderFrom({
+        [POOL]: program(buildLending()),
+        [MINT]: mintAccount(MINT),
+        [FTOKEN_MINT]: mintAccount(FTOKEN_MINT),
+      });
+      await expect(jupiterLendEarn.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

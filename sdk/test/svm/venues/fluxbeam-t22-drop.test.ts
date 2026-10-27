@@ -147,4 +147,27 @@ describe("fluxbeam Token-2022 handling", () => {
       ),
     ).rejects.toThrow(/TransferHook/);
   });
+
+  it("ROUTES an extensionless Token-2022 MINT_B by its owner (82 bytes, legacy-shaped); side A stays Tokenkeg", async () => {
+    const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+    const owned: OwnedAccountLoader = async (a) =>
+      a === MINT_B ? { data: makeLegacyMint(), owner: TOKEN_2022 } : shaped(a);
+    const cfg = await fetchFluxBeamPoolConfig(owned, POOL);
+    expect(cfg.tokenProgramA).toBe(TOKENKEG);
+    expect(cfg.tokenProgramB).toBe(TOKEN_2022);
+    expect(cfg.feeA).toEqual({ bps: 0n, max: 0n });
+    expect(cfg.feeB).toEqual({ bps: 0n, max: 0n });
+  });
+
+  it("SELF-DROPS a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = "11111111111111111111111111111111" as Address;
+    for (const mint of [MINT_A, MINT_B]) {
+      const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+      const owned: OwnedAccountLoader = async (a) =>
+        a === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(a);
+      await expect(fetchFluxBeamPoolConfig(owned, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

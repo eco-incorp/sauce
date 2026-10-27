@@ -105,4 +105,19 @@ describe("zerofi Token-2022 self-drop", () => {
       zerofi.fetchPoolConfig(loader(makeLegacyMint(), makeT22Mint(NON_TRANSFERABLE_TLV)), POOL, 0),
     ).rejects.toThrow(/dropping pool/);
   });
+
+  test("an 82-byte mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      zerofi.fetchPoolConfig(loader(makeLegacyMint(), makeLegacyMint(), foreign), POOL, 0),
+    ).rejects.toThrow(
+      `token-program: mint ${MINT_A} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+    const shaped = loader(makeLegacyMint(), makeLegacyMint());
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT_B ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+    await expect(zerofi.fetchPoolConfig(load, POOL, 0)).rejects.toThrow(
+      `token-program: mint ${MINT_B} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

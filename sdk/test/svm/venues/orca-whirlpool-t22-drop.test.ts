@@ -80,4 +80,14 @@ describe("orca-whirlpool Token-2022 self-drop", () => {
     const load = overrideMint(base, mint, makeLegacyMint(), TOKEN_PROGRAM_ID);
     await expect(orcaWhirlpool.fetchPoolConfig(load, POOL)).resolves.toBeDefined();
   });
+
+  it("refuses the pool when a mint is an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const base = fixtureLoader(loadFixtures(FIXTURES));
+    const mint = await mintA(base);
+    const load = overrideMint(base, mint, makeLegacyMint(), foreign);
+    await expect(orcaWhirlpool.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

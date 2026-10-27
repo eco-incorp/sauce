@@ -86,4 +86,14 @@ describe("boop-fun Token-2022 self-drop", () => {
       ),
     ).rejects.toThrow(/Token-2022/);
   });
+
+  it("refuses a pool whose base mint is an 82-byte mint owned by neither token program", async () => {
+    const pool = await deriveBondingCurve();
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      boopFun.fetchPoolConfig(loaderWith(pool, makeLegacyMint(), foreign), address(pool)),
+    ).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

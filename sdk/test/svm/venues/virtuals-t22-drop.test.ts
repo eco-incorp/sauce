@@ -63,4 +63,11 @@ describe("virtuals Token-2022 self-drop", () => {
       virtuals.fetchPoolConfig(loader(makeLegacyMint(), TOKEN_2022_PROGRAM_ID), POOL),
     ).rejects.toThrow(/Token-2022/);
   });
+
+  test("an 82-byte base mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(virtuals.fetchPoolConfig(loader(makeLegacyMint(), foreign), POOL)).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

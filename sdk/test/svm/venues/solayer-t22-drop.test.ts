@@ -6,14 +6,14 @@
  * Synthesizes a minimal 443-byte EndoAVS account (discriminator + mint/vault
  * slots + empty name) and answers a Token-2022 mint for the mint accounts.
  */
-import { address } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import {
   fetchSolayerPoolConfig,
   ENDO_AVS_DISCRIMINATOR,
   SOLAYER_PROGRAM_ID,
 } from "../../../src/svm/venues/solayer/index.js";
 import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
-import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../../../src/svm/token-program.js";
 import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
 const ENDO_AVS_ACCOUNT_SIZE = 443;
@@ -44,5 +44,23 @@ describe("solayer: Token-2022 mint self-drop", () => {
     await expect(fetchSolayerPoolConfig(poolWithMints(makeLegacyMint), POOL)).rejects.toThrow(
       /Token-2022/,
     );
+  });
+
+  it("rejects a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const base = poolWithMints(makeLegacyMint);
+    const receiptMint = getAddressDecoder().decode(new Uint8Array(32).fill(7));
+    const lstMint = getAddressDecoder().decode(new Uint8Array(32).fill(9));
+    for (const mint of [receiptMint, lstMint]) {
+      const load: OwnedAccountLoader = async (addr) => {
+        const account = await base(addr);
+        return addr === POOL || account === null
+          ? account
+          : { data: account.data, owner: addr === mint ? foreign : TOKEN_PROGRAM_ID };
+      };
+      await expect(fetchSolayerPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

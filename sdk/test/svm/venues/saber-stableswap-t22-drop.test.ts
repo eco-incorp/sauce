@@ -6,7 +6,7 @@
  * still decodes fine.
  */
 import { resolve } from "path";
-import { address } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { saberStableswap } from "../../../src/svm/venues/saber-stableswap/index.js";
 import type { SaberPoolConfig } from "../../../src/svm/venues/saber-stableswap/index.js";
@@ -64,5 +64,22 @@ describe("saber-stableswap Token-2022 self-drop", () => {
     await expect(saberStableswap.fetchPoolConfig(load, POOL)).rejects.toThrow(
       new RegExp(`dropping pool ${POOL}`),
     );
+  });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const pool = await baseLoader(POOL);
+    expect(pool).not.toBeNull();
+    // SwapInfo: token A mint @203, token B mint @235.
+    const mints = [203, 235].map((off) =>
+      getAddressDecoder().decode(pool!.data.subarray(off, off + 32)),
+    );
+    expect(mints[0]).toBe(mintA);
+    for (const mint of mints) {
+      const load = withMint(mint, makeLegacyMint(), foreign);
+      await expect(saberStableswap.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

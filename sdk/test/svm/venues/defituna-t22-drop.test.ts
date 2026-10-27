@@ -3,7 +3,7 @@
  * mint (or one carrying a blocking extension) must REJECT at fetchPoolConfig.
  * The swap accounts are classic-SPL (Tokenkeg) only.
  */
-import { getAddressDecoder } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import {
   defituna,
   DEFITUNA_PROGRAM_ID,
@@ -66,5 +66,15 @@ describe("defituna Token-2022 self-drop", () => {
     await defituna.fetchPoolConfig(loaderWith(null), POOL).catch((e: unknown) => {
       expect(String(e)).not.toMatch(/Token-2022|un-routable/);
     });
+  });
+
+  it("refuses a pool whose mint is an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const unreadable = loaderWith(null);
+    const owned: OwnedAccountLoader = async (a) =>
+      a === T22_MINT ? { data: makeLegacyMint(), owner: foreign } : unreadable(a);
+    await expect(defituna.fetchPoolConfig(owned, POOL)).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

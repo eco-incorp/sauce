@@ -45,4 +45,12 @@ describe("solfi-v2 Token-2022 self-drop", () => {
     const load = withMint(MINT_A, makeLegacyMint(), TOKEN_PROGRAM_ID);
     await expect(solfiV2.fetchPoolConfig(load, POOL, 0)).rejects.not.toThrow(/Token-2022/);
   });
+
+  it("refuses the pool when mintA is an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const load = withMint(MINT_A, makeLegacyMint(), foreign);
+    await expect(solfiV2.fetchPoolConfig(load, POOL, 0)).rejects.toThrow(
+      `token-program: mint ${MINT_A} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

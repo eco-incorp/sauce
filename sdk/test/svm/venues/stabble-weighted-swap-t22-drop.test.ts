@@ -12,6 +12,7 @@
  * can tell them apart.
  */
 import { resolve } from "path";
+import { address } from "@solana/kit";
 import { stabbleWeightedSwap } from "../../../src/svm/index.js";
 import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
 import type { StabbleWeightedSwapPoolConfig } from "../../../src/svm/venues/stabble-weighted-swap/index.js";
@@ -68,5 +69,17 @@ describe("stabble-weighted-swap Token-2022 self-drop", () => {
         ? { data: makeT22Mint(NON_TRANSFERABLE_TLV), owner: TOKEN_2022_PROGRAM_ID }
         : base(addr);
     await expect(stabbleWeightedSwap.fetchPoolConfig(load, POOL)).rejects.toThrow(/dropping pool/);
+  });
+
+  test("an 82-byte mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const { base, mintA, mintB } = await poolMints();
+    for (const mint of [mintA, mintB]) {
+      const load: OwnedAccountLoader = async (addr) =>
+        String(addr) === mint ? { data: makeLegacyMint(), owner: foreign } : base(addr);
+      await expect(stabbleWeightedSwap.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

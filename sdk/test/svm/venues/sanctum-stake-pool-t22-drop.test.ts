@@ -6,7 +6,7 @@
  * through the pool-mint slot (account_type == 1 StakePool + the fixed-offset
  * prefix pubkeys) and answers a Token-2022 mint for the pool mint account.
  */
-import { address } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import {
   SANCTUM_STAKE_POOL_PROGRAM_ID,
   sanctumStakePool,
@@ -46,5 +46,18 @@ describe("sanctum-stake-pool: Token-2022 mint self-drop", () => {
         ? { data: new Uint8Array(buf), owner: SANCTUM_STAKE_POOL_PROGRAM_ID }
         : { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID };
     await expect(sanctumStakePool.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("rejects a pool whose 82-byte LST mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const buf = stakePoolBytes();
+    const poolMint = getAddressDecoder().decode(new Uint8Array(32).fill(7));
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === POOL
+        ? { data: new Uint8Array(buf), owner: SANCTUM_STAKE_POOL_PROGRAM_ID }
+        : { data: makeLegacyMint(), owner: foreign };
+    await expect(sanctumStakePool.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token-program: mint ${poolMint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

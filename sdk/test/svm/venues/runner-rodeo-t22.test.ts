@@ -131,4 +131,13 @@ describe("runner-rodeo Token-2022 handling", () => {
       /transfer fee/i,
     );
   });
+
+  it("refuses an 82-byte base mint owned by neither token program", async () => {
+    const foreign = addr("11111111111111111111111111111111");
+    await expect(
+      runnerRodeo.fetchPoolConfig(loaderFor(makeLegacyMint(), foreign), POOL),
+    ).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

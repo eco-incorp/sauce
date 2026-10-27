@@ -85,4 +85,18 @@ describe("lemmingsfi Token-2022 self-drop", () => {
     expect(cfg.mintA).toBe(mintA);
     expect(cfg.mintB).toBe(mintB);
   });
+
+  it("refuses a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [mintA, mintB]) {
+      const load = loaderOf([
+        [POOL, buildPool(mintA, mintB), LEMMINGSFI_PROGRAM_ID],
+        [mintA, makeLegacyMint(), mint === mintA ? foreign : TOKEN_PROGRAM_ID],
+        [mintB, makeLegacyMint(), mint === mintB ? foreign : TOKEN_PROGRAM_ID],
+      ]);
+      await expect(fetchLemmingsFiPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

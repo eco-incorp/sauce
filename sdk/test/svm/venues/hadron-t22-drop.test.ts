@@ -104,4 +104,21 @@ describe("hadron Token-2022 self-drop", () => {
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
   });
+
+  it("REJECTS a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_A, MINT_B]) {
+      const load = loaderFrom(
+        {
+          [POOL]: buildPair(),
+          [MINT_A]: makeLegacyMint(),
+          [MINT_B]: makeLegacyMint(),
+        },
+        { [mint]: foreign },
+      );
+      await expect(fetchHadronConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

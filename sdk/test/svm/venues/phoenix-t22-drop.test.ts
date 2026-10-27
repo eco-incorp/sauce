@@ -54,4 +54,17 @@ describe("phoenix: Token-2022 mint self-drop", () => {
     const { load } = marketLoader(makeLegacyMint());
     await expect(fetchPhoenixConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
+
+  it("rejects a market whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const { load: shaped, baseMint } = marketLoader(makeLegacyMint());
+    // Both mint slots answer an 82-byte mint owned by the System Program; the base mint is read first.
+    const load: OwnedAccountLoader = async (addr) => {
+      const account = await shaped(addr);
+      return addr === POOL || account === null ? account : { data: account.data, owner: foreign };
+    };
+    await expect(fetchPhoenixConfig(load, POOL)).rejects.toThrow(
+      `token-program: mint ${baseMint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

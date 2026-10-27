@@ -5,6 +5,7 @@
  * The mint is classified by its OWNER: an extensionless Token-2022 mint is 82
  * bytes, byte for byte a legacy one.
  */
+import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import {
   hylo,
@@ -50,5 +51,15 @@ describe("hylo Token-2022 self-drop", () => {
     await expect(hylo.fetchPoolConfig(load, USDC_PAIR_ACCOUNT)).rejects.not.toThrow(
       /Token-2022|un-routable/,
     );
+  });
+
+  it("refuses when a mint is 82 bytes but owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [USDC_MINT, HYUSD_MINT]) {
+      const load = loaderOf([[mint, makeLegacyMint(), foreign]]);
+      await expect(hylo.fetchPoolConfig(load, USDC_PAIR_ACCOUNT)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

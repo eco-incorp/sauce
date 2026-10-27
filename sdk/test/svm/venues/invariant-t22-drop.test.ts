@@ -98,4 +98,18 @@ describe("invariant Token-2022 self-drop", () => {
       /Token-2022|un-routable/,
     );
   });
+
+  it("refuses a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [tokenX, tokenY]) {
+      const load = loaderOf([
+        [POOL, buildPool(tokenX, tokenY)],
+        [tokenX, makeLegacyMint(), mint === tokenX ? foreign : TOKEN_PROGRAM_ID],
+        [tokenY, makeLegacyMint(), mint === tokenY ? foreign : TOKEN_PROGRAM_ID],
+      ]);
+      await expect(fetchInvariantPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

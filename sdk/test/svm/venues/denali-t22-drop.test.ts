@@ -74,4 +74,15 @@ describe("denali Token-2022 self-drop", () => {
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const load = loaderWith({
+      [MINT_A]: legacy(),
+      [MINT_B]: { data: makeLegacyMint(), owner: foreign },
+    });
+    await expect(denali.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token-program: mint ${MINT_B} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

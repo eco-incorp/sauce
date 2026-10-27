@@ -54,4 +54,18 @@ describe("stabble-stable-swap Token-2022 self-drop", () => {
     const load = withMint(mintA, makeLegacyMint(), TOKEN_2022_PROGRAM_ID);
     await expect(stabbleStableSwap.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const cfg = (await stabbleStableSwap.fetchPoolConfig(
+      baseLoader,
+      POOL,
+    )) as StabbleStableSwapPoolConfig;
+    for (const mint of [cfg.tokens[0].mint, cfg.tokens[1].mint]) {
+      const load = withMint(mint, makeLegacyMint(), foreign);
+      await expect(stabbleStableSwap.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

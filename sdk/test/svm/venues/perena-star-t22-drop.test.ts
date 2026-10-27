@@ -80,4 +80,19 @@ describe("perena-star Token-2022 self-drop", () => {
       ),
     ).rejects.toThrow(`perena-star bank ${BANK} not found`);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const foreignMint: Account = { data: makeLegacyMint(), owner: foreign };
+    await expect(
+      perenaStar.fetchPoolConfig(loaderWith(foreignMint, legacy(makeLegacyMint())), POOL),
+    ).rejects.toThrow(
+      `token-program: mint ${BANK_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+    await expect(
+      perenaStar.fetchPoolConfig(loaderWith(legacy(makeLegacyMint()), foreignMint), POOL),
+    ).rejects.toThrow(
+      `token-program: mint ${JUNIOR_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

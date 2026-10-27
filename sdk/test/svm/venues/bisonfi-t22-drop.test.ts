@@ -64,4 +64,19 @@ describe("bisonfi Token-2022 self-drop", () => {
     expect(cfg.mintA).toBe(WSOL);
     expect(cfg.mintB).toBe(USDC);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [WSOL, USDC]) {
+      const base = fixtureLoader(loadFixtures(FIXTURES));
+      expect((await base(mint))?.data.length).toBe(82);
+      const owned: OwnedAccountLoader = async (addr: Address) => {
+        const account = await base(addr);
+        return addr === mint && account !== null ? { data: account.data, owner: foreign } : account;
+      };
+      await expect(bisonfi.fetchPoolConfig(owned, POOL, 0)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

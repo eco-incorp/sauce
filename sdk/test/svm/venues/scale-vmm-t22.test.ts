@@ -6,7 +6,12 @@
  * TODO(t22-fee-netting) note in scale-common.ts). scale-vmm exposes no
  * referenceQuote, so this covers the fetch/decode + threading path.
  */
-import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { scaleVmm } from "../../../src/svm/venues/scale-vmm/index.js";
 import {
@@ -140,5 +145,36 @@ describe("scale-vmm Token-2022 handling", () => {
   it("still rejects a TransferFeeConfig mint_a (see TODO(t22-fee-netting))", async () => {
     const load = await makeLoader(makeT22Mint(tlvEntry(1, new Uint8Array(108))), makeLegacyMint());
     await expect(scaleVmm.fetchPoolConfig(load, PAIR)).rejects.toThrow(/TransferFeeConfig/);
+  });
+
+  it("threads Token-2022 for an extensionless (82-byte) mint_b by its owner; side A unchanged", async () => {
+    const shaped = await makeLoader(makeLegacyMint(), makeLegacyMint());
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT_B ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM } : shaped(addr);
+    const cfg = await scaleVmm.fetchPoolConfig(load, PAIR);
+    expect(cfg.tokenProgramA).toBe(TOKEN_PROGRAM);
+    expect(cfg.tokenProgramB).toBe(TOKEN_2022_PROGRAM);
+    // The adapter derives no mint_b-side ATA; the only ATAs are mint_a's, still under Tokenkeg.
+    const [platformFeeTaA] = await getProgramDerivedAddress({
+      programAddress: address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+      seeds: [aenc.encode(FEE_WALLET), aenc.encode(TOKEN_PROGRAM), aenc.encode(MINT_A)],
+    });
+    expect(cfg.platformFeeTaA).toBe(platformFeeTaA);
+    expect(cfg.beneficiaryAtas).toEqual([]);
+  });
+
+  it("refuses an 82-byte mint owned by neither token program (the scale venues' own owner check)", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      scaleVmm.fetchPoolConfig(await makeLoader(makeLegacyMint(), makeLegacyMint(), foreign), PAIR),
+    ).rejects.toThrow(
+      `scale venue: mint ${MINT_A} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+    const shaped = await makeLoader(makeLegacyMint(), makeLegacyMint());
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT_B ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+    await expect(scaleVmm.fetchPoolConfig(load, PAIR)).rejects.toThrow(
+      `scale venue: mint ${MINT_B} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

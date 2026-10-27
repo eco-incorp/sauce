@@ -80,4 +80,16 @@ describe("vault-liquid-unstake Token-2022 self-drop", () => {
       ),
     ).rejects.toThrow(/dropping pool/);
   });
+
+  test("an 82-byte LST mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      vaultLiquidUnstake.fetchPoolConfig(
+        loader({ data: makeLegacyMint(), owner: foreign }),
+        address(LST_INFO),
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${LST_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

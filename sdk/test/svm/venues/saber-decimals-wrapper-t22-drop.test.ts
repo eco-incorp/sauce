@@ -84,4 +84,19 @@ describe("saber-decimals-wrapper Token-2022 self-drop", () => {
       saberDecimalsWrapper.fetchPoolConfig(loader({ [UNDERLYING]: t22(makeLegacyMint()) }), POOL),
     ).rejects.toThrow(/Token-2022/);
   });
+
+  it("refuses the wrapper when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [UNDERLYING, WRAPPER]) {
+      const mintAccount = (m: Address): Mint =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy();
+      const load = loader({
+        [UNDERLYING]: mintAccount(UNDERLYING),
+        [WRAPPER]: mintAccount(WRAPPER),
+      });
+      await expect(saberDecimalsWrapper.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

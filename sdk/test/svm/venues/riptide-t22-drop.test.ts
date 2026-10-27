@@ -8,13 +8,19 @@
  * drop.
  */
 import { address, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   fetchPoolConfig,
   OFF_MINT_A,
   OFF_MINT_B,
   POOL_ACCOUNT_SIZE,
 } from "../../../src/svm/venues/riptide/index.js";
-import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import { ownedByShape } from "../fixtures.js";
 import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
@@ -67,5 +73,52 @@ describe("riptide Token-2022 self-drop", () => {
     const load: OwnedAccountLoader = async (addr) =>
       addr === MINT_A ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
     await expect(fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("legacy control: both mints served as 82-byte Tokenkeg-owned mints pass the owner gate", async () => {
+    // The gate (fetchPoolConfig's mint loop) runs before the vault derivation and the return, so a
+    // config built here means both mints were classified by their legacy owner and passed.
+    const shaped = loader({});
+    const mintsServed: Address[] = [];
+    const load: OwnedAccountLoader = async (addr) => {
+      if (addr === MINT_A || addr === MINT_B) {
+        mintsServed.push(addr);
+        return { data: makeLegacyMint(), owner: TOKEN_PROGRAM_ID };
+      }
+      return shaped(addr);
+    };
+    const cfg = await fetchPoolConfig(load, POOL);
+    expect(mintsServed).toEqual([MINT_A, MINT_B]);
+    const [vaultA] = await findAssociatedTokenPda({
+      owner: POOL,
+      mint: MINT_A,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    });
+    const [vaultB] = await findAssociatedTokenPda({
+      owner: POOL,
+      mint: MINT_B,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    });
+    expect(cfg).toEqual({
+      venue: "riptide",
+      pool: POOL,
+      direction: 0,
+      mintA: MINT_A,
+      mintB: MINT_B,
+      vaultA,
+      vaultB,
+    });
+  });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_A, MINT_B]) {
+      const shaped = loader({ [MINT_A]: makeLegacyMint(), [MINT_B]: makeLegacyMint() });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

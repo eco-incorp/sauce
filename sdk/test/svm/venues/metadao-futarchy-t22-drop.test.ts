@@ -93,4 +93,18 @@ describe("metadao-futarchy Token-2022 self-drop", () => {
     expect(cfg.baseMint).toBe(baseMint);
     expect(cfg.quoteMint).toBe(quoteMint);
   });
+
+  it("refuses a dao whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [baseMint, quoteMint]) {
+      const load = loaderOf([
+        [DAO, buildDao(baseMint, quoteMint), FUTARCHY_PROGRAM],
+        [baseMint, makeLegacyMint(), mint === baseMint ? foreign : TOKEN_PROGRAM_ID],
+        [quoteMint, makeLegacyMint(), mint === quoteMint ? foreign : TOKEN_PROGRAM_ID],
+      ]);
+      await expect(fetchMetaDaoFutarchySpotConfig(load, DAO)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

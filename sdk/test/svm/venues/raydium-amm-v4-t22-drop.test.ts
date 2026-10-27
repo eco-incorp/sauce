@@ -55,4 +55,21 @@ describe("raydium-amm-v4 Token-2022 self-drop", () => {
     expect(cfg.coinMint).toBe(COIN_MINT);
     expect(cfg.pcMint).toBe(USDC_MINT);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [COIN_MINT, USDC_MINT]) {
+      const load = fixtureLoader([
+        ...loadFixtures(FIXTURES),
+        {
+          address: mint,
+          owner: foreign,
+          base64Data: Buffer.from(makeLegacyMint()).toString("base64"),
+        },
+      ]);
+      await expect(raydiumAmmV4.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

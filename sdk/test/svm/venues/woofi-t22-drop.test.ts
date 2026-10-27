@@ -63,6 +63,22 @@ describe("woofi: Token-2022 mint self-drop", () => {
     }
   });
 
+  it("rejects an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const mints = legacyMints();
+    expect(mints.length).toBeGreaterThan(0);
+    const base = fixtureLoader(loadFixtures(REAL_FIXTURES));
+    for (const mint of mints) {
+      const load: OwnedAccountLoader = async (addr) => {
+        const account = await base(addr);
+        return addr === mint && account !== null ? { data: account.data, owner: foreign } : account;
+      };
+      await expect(fetchWoofiConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
+
   it("positive control: the real legacy-mint fixture bundle still resolves", async () => {
     expect(legacyMints().length).toBeGreaterThan(0);
     const load = fixtureLoader(loadFixtures(REAL_FIXTURES));

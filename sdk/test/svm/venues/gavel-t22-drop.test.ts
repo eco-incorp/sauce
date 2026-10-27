@@ -93,4 +93,20 @@ describe("gavel Token-2022 self-drop", () => {
     const cfg = await fetchGavelConfig(load, POOL);
     expect(cfg.venue).toBe("gavel");
   });
+
+  it("REJECTS a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [BASE_MINT, QUOTE_MINT]) {
+      const shaped = loaderFrom({
+        [POOL]: buildPool(),
+        [BASE_MINT]: makeLegacyMint(),
+        [QUOTE_MINT]: makeLegacyMint(),
+      });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchGavelConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

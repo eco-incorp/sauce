@@ -7,7 +7,7 @@
  * still resolves.
  */
 import { resolve } from "path";
-import { address } from "@solana/kit";
+import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import {
   fetchQuantumConfig,
@@ -53,5 +53,31 @@ describe("quantum: Token-2022 mint self-drop", () => {
     const load = fixtureLoader(fixtures);
     const cfg = await fetchQuantumConfig(load, pool);
     expect(cfg.venue).toBe("quantum");
+  });
+
+  it("rejects a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const fixtures = loadFixtures(FIX);
+    const poolFix = fixtures.find((f) => fixtureData(f).length === QUANTUM_POOL_SIZE);
+    expect(poolFix).toBeDefined();
+    const pool = address(poolFix!.address);
+    const poolBytes = fixtureData(poolFix!);
+    const codec = getAddressCodec();
+    // mint0 @0 and mint1 @32 of the pool account.
+    const mints = [
+      codec.decode(poolBytes.subarray(0, 32)),
+      codec.decode(poolBytes.subarray(32, 64)),
+    ];
+    const base = fixtureLoader(fixtures);
+    for (const mint of mints) {
+      expect((await base(mint))?.data.length).toBe(82);
+      const load: OwnedAccountLoader = async (addr) => {
+        const account = await base(addr);
+        return addr === mint && account !== null ? { data: account.data, owner: foreign } : account;
+      };
+      await expect(fetchQuantumConfig(load, pool)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

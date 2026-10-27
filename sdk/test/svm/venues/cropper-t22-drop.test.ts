@@ -3,7 +3,7 @@
  * Token-2022 mint (or one carrying a blocking extension) must REJECT at
  * fetchPoolConfig. The swap ix is classic-SPL (Tokenkeg) only.
  */
-import { getAddressDecoder } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import {
   cropper,
   CROPPER_POOL_ACCOUNT_SIZE,
@@ -83,5 +83,14 @@ describe("cropper Token-2022 self-drop", () => {
     await cropper.fetchPoolConfig(loaderWith(null), POOL).catch((e: unknown) => {
       expect(String(e)).not.toMatch(/Token-2022|un-routable/);
     });
+  });
+
+  it("refuses a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      cropper.fetchPoolConfig(loaderWith(makeLegacyMint(), foreign), POOL),
+    ).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

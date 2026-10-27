@@ -5,7 +5,12 @@
  * A NonTransferable mint self-drops; a TransferFeeConfig mint is still rejected
  * (see the TODO(t22-fee-netting) note in scale-common.ts).
  */
-import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { scaleAmm, type ScaleAmmPoolConfig } from "../../../src/svm/venues/scale-amm/index.js";
 import {
@@ -158,5 +163,41 @@ describe("scale-amm Token-2022 handling", () => {
   it("still rejects a TransferFeeConfig mint_a (see TODO(t22-fee-netting))", async () => {
     const load = await makeLoader(makeT22Mint(tlvEntry(1, new Uint8Array(108))), makeLegacyMint());
     await expect(scaleAmm.fetchPoolConfig(load, POOL)).rejects.toThrow(/TransferFeeConfig/);
+  });
+
+  it("resolves an 82-byte mint_b owned by Token-2022 (extensionless Token-2022) to Token-2022; side A unchanged", async () => {
+    const configPda = await pda([CONFIG_SEED], SCALE_AMM_PROGRAM_ID);
+    const load = loaderOf([
+      [POOL, pool()],
+      [configPda, config()],
+      [MINT_A, makeLegacyMint()],
+      [MINT_B, makeLegacyMint(), TOKEN_2022_PROGRAM],
+    ]);
+    const cfg = await scaleAmm.fetchPoolConfig(load, POOL);
+    expect(cfg.tokenProgramA).toBe(TOKEN_PROGRAM);
+    expect(cfg.tokenProgramB).toBe(TOKEN_2022_PROGRAM);
+    // The adapter derives no mint_b-side ATA; the only ATAs are mint_a's, still under Tokenkeg.
+    const [platformFeeTaA] = await getProgramDerivedAddress({
+      programAddress: address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+      seeds: [aenc.encode(FEE_WALLET), aenc.encode(TOKEN_PROGRAM), aenc.encode(MINT_A)],
+    });
+    expect(cfg.platformFeeTaA).toBe(platformFeeTaA);
+    expect(cfg.beneficiaryAtas).toEqual([]);
+  });
+
+  it("refuses an 82-byte mint owned by neither token program (the scale venues' own owner check)", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const configPda = await pda([CONFIG_SEED], SCALE_AMM_PROGRAM_ID);
+    for (const mint of [MINT_A, MINT_B]) {
+      const load = loaderOf([
+        [POOL, pool()],
+        [configPda, config()],
+        [MINT_A, makeLegacyMint(), mint === MINT_A ? foreign : TOKEN_PROGRAM],
+        [MINT_B, makeLegacyMint(), mint === MINT_B ? foreign : TOKEN_PROGRAM],
+      ]);
+      await expect(scaleAmm.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `scale venue: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

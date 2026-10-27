@@ -69,4 +69,13 @@ describe("crema Token-2022 self-drop", () => {
       expect(String(e)).not.toMatch(/Token-2022|un-routable/);
     });
   });
+
+  it("refuses a pool whose mint is an 82-byte mint owned by neither token program", async () => {
+    const unreadable = loaderWith(null);
+    const owned: OwnedAccountLoader = async (a) =>
+      a === T22_MINT ? { data: makeLegacyMint(), owner: SYSTEM_PROGRAM } : unreadable(a);
+    await expect(crema.fetchPoolConfig(owned, POOL)).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${SYSTEM_PROGRAM}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

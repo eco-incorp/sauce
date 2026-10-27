@@ -88,4 +88,21 @@ describe("helium-treasury Token-2022 self-drop", () => {
     });
     await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/circuit breaker/i);
   });
+
+  it("REJECTS a treasury whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [TREASURY_MINT, SUPPLY_MINT]) {
+      const shaped = loaderFrom({
+        [POOL]: buildMgmt(),
+        [TREASURY]: buildTreasuryTokenAccount(),
+        [SUPPLY_MINT]: makeLegacyMint(),
+        [TREASURY_MINT]: makeLegacyMint(),
+      });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

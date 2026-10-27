@@ -97,4 +97,20 @@ describe("omnipair Token-2022 self-drop", () => {
     const cfg = await fetchOmnipairPoolConfig(load, POOL);
     expect(cfg.venue).toBe("omnipair");
   });
+
+  it("REJECTS a pair whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [TOKEN0, TOKEN1]) {
+      const mintAccount = (m: Address): Account =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy(makeLegacyMint());
+      const load = loaderFrom({
+        [POOL]: pair(),
+        [TOKEN0]: mintAccount(TOKEN0),
+        [TOKEN1]: mintAccount(TOKEN1),
+      });
+      await expect(fetchOmnipairPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

@@ -57,4 +57,19 @@ describe("meteora-damm-v1-stable Token-2022 self-drop", () => {
     expect(cfg.venue).toBe("meteora-damm-v1-stable");
     expect(cfg.tokenAMint).toBe(TOKEN_A_MINT);
   });
+
+  it("refuses the pool when tokenAMint is an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const load = fixtureLoader([
+      ...fixtures,
+      {
+        address: TOKEN_A_MINT,
+        owner: foreign,
+        base64Data: Buffer.from(makeLegacyMint()).toString("base64"),
+      },
+    ]);
+    await expect(meteoraDammV1Stable.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token-program: mint ${TOKEN_A_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

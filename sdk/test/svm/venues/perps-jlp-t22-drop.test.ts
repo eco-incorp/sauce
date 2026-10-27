@@ -103,4 +103,24 @@ describe("perps-jlp Token-2022 self-drop", () => {
     });
     await expect(fetchPerpsJlpConfig(load, custodyIn, MINT_OUT)).rejects.toThrow(/Doves/);
   });
+
+  it("REJECTS a pair whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const custodyIn = await custodyPda(JLP_POOL_ADDRESS, MINT_IN);
+    const custodyOut = await custodyPda(JLP_POOL_ADDRESS, MINT_OUT);
+    for (const mint of [MINT_IN, MINT_OUT]) {
+      const shaped = loaderFrom({
+        [custodyIn]: buildCustody(MINT_IN),
+        [custodyOut]: buildCustody(MINT_OUT),
+        [JLP_POOL_ADDRESS]: buildPool(custodyIn, custodyOut),
+        [MINT_IN]: makeLegacyMint(),
+        [MINT_OUT]: makeLegacyMint(),
+      });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchPerpsJlpConfig(load, custodyIn, MINT_OUT)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

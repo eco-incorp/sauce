@@ -131,4 +131,36 @@ describe("juplend-amm.fetchPoolConfig Token-2022 handling", () => {
     expect(cfg.tokenProgram0).toBe(TOKENKEG);
     expect(cfg.tokenProgram1).toBe(TOKENKEG);
   });
+
+  it("routes an extensionless (82-byte) Token-2022-owned token1 as Token-2022, by its owner; token0 stays Tokenkeg", async () => {
+    // The opposite side: token1 (USDT) is served as legacy-shaped 82-byte bytes owned by Token-2022.
+    const load = fixtureLoader(loadFixtures(FIXTURES));
+    const wrapped: OwnedAccountLoader = async (addr) =>
+      addr === MINT_USDT ? { data: makeLegacyMint(), owner: TOKEN_2022 } : load(addr);
+    const cfg = await juplendAmm.fetchPoolConfig(wrapped, POOL, true);
+    expect(cfg.tokenProgram0).toBe(TOKENKEG);
+    expect(cfg.tokenProgram1).toBe(TOKEN_2022);
+
+    // Both token-program slots of the swap_in CPI (accounts 21 and 22).
+    const swap = juplendAmm.buildSwap(
+      cfg,
+      { owner: "UserOwner", inAta: "UserInAta", outAta: "UserOutAta" },
+      1_000_000n,
+    );
+    expect(swap.accounts).toHaveLength(24);
+    expect(swap.accounts[21]).toEqual({ ref: "tp0", address: TOKENKEG });
+    expect(swap.accounts[22]).toEqual({ ref: "tp1", address: TOKEN_2022 });
+  });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_USDC, MINT_USDT]) {
+      const load = fixtureLoader(loadFixtures(FIXTURES));
+      const wrapped: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : load(addr);
+      await expect(juplendAmm.fetchPoolConfig(wrapped, POOL, true)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

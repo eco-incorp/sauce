@@ -151,4 +151,18 @@ describe("pumpfun-bonding-curve Token-2022 handling", () => {
       ),
     ).rejects.toThrow(/TransferFeeConfig/);
   });
+
+  it("refuses an 82-byte base mint owned by neither token program", async () => {
+    const pool = await bondingCurvePda(MINT);
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      pumpfunBondingCurve.fetchPoolConfig(
+        loaderWith(pool, { data: makeLegacyMint(), owner: foreign }, true),
+        pool,
+        MINT,
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });

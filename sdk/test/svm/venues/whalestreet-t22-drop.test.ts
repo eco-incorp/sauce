@@ -10,6 +10,7 @@ import { address, getAddressEncoder } from "@solana/kit";
 import {
   fetchWhalestreetPoolConfig,
   TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
   WHALESTREET_OFF_MINT_A,
   WHALESTREET_OFF_MINT_B,
   WHALESTREET_OFF_VAULT_A,
@@ -71,5 +72,48 @@ describe("whalestreet Token-2022 self-drop", () => {
     await expect(
       fetchWhalestreetPoolConfig(loader(String(MINT_B), makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/dropping pool/);
+  });
+
+  test("legacy control: both mints served as 82-byte Tokenkeg-owned mints pass the owner gate", async () => {
+    // The gate (fetchWhalestreetPoolConfig's mint loop) runs right before the return, so a config
+    // built here means both mints were classified by their legacy owner and passed.
+    const pool = poolBytes();
+    const mintsServed: string[] = [];
+    const load: OwnedAccountLoader = async (addr) => {
+      if (String(addr) === String(POOL)) return { data: pool, owner: WHALESTREET_PROGRAM_ID };
+      if (String(addr) === String(MINT_A) || String(addr) === String(MINT_B)) {
+        mintsServed.push(String(addr));
+        return { data: makeLegacyMint(), owner: TOKEN_PROGRAM_ID };
+      }
+      return null;
+    };
+    const cfg = await fetchWhalestreetPoolConfig(load, POOL);
+    expect(mintsServed).toEqual([MINT_A, MINT_B]);
+    expect(cfg).toEqual({
+      venue: "whalestreet",
+      pool: POOL,
+      direction: 0,
+      mintA: MINT_A,
+      mintB: MINT_B,
+      vaultA: VAULT_A,
+      vaultB: VAULT_B,
+    });
+  });
+
+  test("an 82-byte mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_A, MINT_B]) {
+      const pool = poolBytes();
+      const load: OwnedAccountLoader = async (addr) => {
+        if (String(addr) === String(POOL)) return { data: pool, owner: WHALESTREET_PROGRAM_ID };
+        if (String(addr) === String(MINT_A) || String(addr) === String(MINT_B)) {
+          return { data: makeLegacyMint(), owner: addr === mint ? foreign : TOKEN_PROGRAM_ID };
+        }
+        return null;
+      };
+      await expect(fetchWhalestreetPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

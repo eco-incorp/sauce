@@ -49,4 +49,20 @@ describe("obric-v2 Token-2022 self-drop", () => {
     expect(cfg.mintX).toBe(MINT_X);
     expect(cfg.mintY).toBe(MINT_Y);
   });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_X, MINT_Y]) {
+      const load = fixtureLoader(
+        loadFixtures(FIXTURES).map((f) =>
+          f.address === mint
+            ? { ...f, owner: foreign, base64Data: Buffer.from(makeLegacyMint()).toString("base64") }
+            : f,
+        ),
+      );
+      await expect(obricV2.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

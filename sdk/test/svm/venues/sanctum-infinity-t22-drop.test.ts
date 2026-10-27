@@ -66,4 +66,22 @@ describe("sanctum-infinity Token-2022 self-drop", () => {
       ),
     ).rejects.not.toThrow(/Token-2022/);
   });
+
+  it("refuses the pair when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [IN, OUT]) {
+      // A refused resolve forgets its key, so mint it again for each case.
+      const key = sanctumInfinityPoolKey(IN, OUT);
+      const mintAccount = (m: Address) =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy(makeLegacyMint());
+      await expect(
+        sanctumInfinity.fetchPoolConfig(
+          loader({ [IN]: mintAccount(IN), [OUT]: mintAccount(OUT) }),
+          key,
+        ),
+      ).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
+  });
 });

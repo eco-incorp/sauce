@@ -93,4 +93,11 @@ describe("trends Token-2022 handling", () => {
       fetchTrendsPoolConfig(loaderFor(makeT22Mint(tlvEntry(1, new Uint8Array(108)))), POOL),
     ).rejects.toThrow(/TransferFeeConfig/);
   });
+
+  it("refuses an 82-byte base mint owned by neither token program", async () => {
+    const foreign = addr("11111111111111111111111111111111");
+    await expect(fetchTrendsPoolConfig(loaderFor(makeLegacyMint(), foreign), POOL)).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
 });
