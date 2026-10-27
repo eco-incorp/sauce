@@ -294,7 +294,7 @@ export function svmVenueWithheld(
   return cluster === undefined ? undefined : WITHHELD[venue]?.[cluster];
 }
 
-/** `venue`'s program on Solana's mainnet: the SDK's mainnet-only venue adapters' program. */
+/** `venue`'s program on Solana's mainnet, which the mainnet-only `Solana.<Venue>` adapters quote. */
 export function svmMainnetProgram(venue: SvmNamespaceVenue): Address {
   return SVM_VENUE_TABLE[venue]["mainnet-beta"]!.program;
 }
