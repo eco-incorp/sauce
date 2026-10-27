@@ -209,15 +209,20 @@ describeEvm("sauce sign, submitted by another account", () => {
     expect(signed.pot).toBe(fresh);
     expect(signed.deployPot).toMatchObject({ chainId: base.chain.id, value: "0x0" });
     expect(run.stderr).toContain(`Pot ${fresh} has no code yet: send deployPot first`);
-    // An unfunded Pot is warned of: neither its balance nor the value covers the fee.
-    expect(run.stderr).toContain("do not cover the Kitchen's fee");
+    // An unfunded Pot is warned of: neither its balance nor the value covers the fee. With no code
+    // yet, it is told to deploy the Pot before funding it, never to fund its address first.
+    expect(run.stderr).toContain(
+      "do not cover the Kitchen's fee: send deployPot, then fund the Pot before the cook is " +
+        "submitted (not its address before it is deployed: a Kitchen upgrade that changes the " +
+        "Pot's code moves it), or it reverts with FeeNotPaid.",
+    );
 
-    // Funded at its address before it exists; then another account deploys it and submits.
+    // Another account deploys it; the Pot is funded once it exists, and the cook is submitted.
+    await base.send(base.deployer, signed.deployPot!.to, signed.deployPot!.data);
+    expect(await potOwner(base, fresh)).toBe(OWNER.address);
     await base.mint(usdc, fresh, 2_000_000n);
     await base.testClient.setBalance({ address: fresh, value: FEE });
     const before = await base.balanceOf(usdc, RECIPIENT);
-    await base.send(base.deployer, signed.deployPot!.to, signed.deployPot!.data);
-    expect(await potOwner(base, fresh)).toBe(OWNER.address);
     await base.send(base.deployer, signed.cook!.to, signed.cook!.data, BigInt(signed.cook!.value));
     expect(await base.balanceOf(usdc, RECIPIENT)).toBe(before + 2_000_000n);
     expect(await base.publicClient.getBalance({ address: fresh })).toBe(0n);

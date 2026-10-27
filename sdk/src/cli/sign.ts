@@ -347,8 +347,12 @@ export async function signCommand(
     ...(read !== undefined && read.balance + value < read.fee
       ? [
           `warning: the Pot's balance and the cook's value (${read.balance + value} wei) do not ` +
-            "cover the Kitchen's fee: fund the Pot before the cook is submitted, or it reverts " +
-            "with FeeNotPaid.",
+            "cover the Kitchen's fee: " +
+            (deployPot === undefined
+              ? "fund the Pot before the cook is submitted"
+              : "send deployPot, then fund the Pot before the cook is submitted (not its address " +
+                "before it is deployed: a Kitchen upgrade that changes the Pot's code moves it)") +
+            ", or it reverts with FeeNotPaid.",
         ]
       : []),
     ...(read !== undefined && maxExecutionFee < read.fee
