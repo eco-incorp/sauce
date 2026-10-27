@@ -1,6 +1,7 @@
 name: Set up the workspace
 description: >
-  Foundry, pnpm, Node, the install, and the v12 engine artifacts — everything a CI job needs before
+  Foundry, pnpm, Node, the install, the v12 engine artifacts, and the third-party code the suites
+  run, fetched from the chains — everything a CI job needs before
   it builds or tests. A composite action so every job of ci.yml sets up identically; checkout comes
   first, in the job, because a local action is read from the checked-out tree.
 
@@ -61,6 +62,31 @@ runs:
         for a in IERC20 ISauceRouter IUniswapV3Pool Router V12QuoteRouter V12Kitchen V12KitchenProxy V12Pot V12RuntimeBytecode V12EngineGate V12Deployments; do
           test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json"; exit 1; }
         done
+
+    # ---- third-party code the suites run, fetched from the chains ---------------
+    # The repository commits no third-party binary whose licence does not allow it. The Solana
+    # programs (`sdk/test/fixtures/fetched-programs.json`) and the contract code of the captured
+    # chain states are PINNED instead, by sha256 / keccak256 in the fixtures, and read here from the
+    # chains through the SDK's public endpoints (`sdk/src/cli/public-rpcs.ts`), retried and with a
+    # fallback endpoint. A read that does not hash to its pin is refused: the program was upgraded
+    # since the dump, and a suite run on other bytes proves nothing about the pinned ones. The cache
+    # is content-addressed and re-hashed on every run, so a restored stale cache cannot pass for a pin;
+    # a warm cache means no request at all.
+    - name: Restore the fetched third-party code
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules/.cache/sauce-program-fixtures
+          node_modules/.cache/sauce-contract-code
+        key: chain-fixtures-${{ hashFiles('sdk/test/fixtures/fetched-programs.json', 'sdk/test/fixtures/svm-*-programs/manifest.json', 'actions/tests/state/*.genesis.json.gz', 'sdk/test/fixtures/cli/Permit2*.json') }}
+        restore-keys: chain-fixtures-
+
+    - name: Fetch the third-party Solana programs and contract code
+      shell: bash
+      run: |
+        set -euo pipefail
+        pnpm --filter './sdk' fetch-program-fixtures
+        pnpm --filter './sdk' fetch-contract-code
 
     # No runtime DERIVATION step any more, and its absence is the point.
     #
