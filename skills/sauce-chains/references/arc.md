@@ -25,11 +25,12 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
 `0x3600000000000000000000000000000000000000` has 6. Sending native value and calling
 `USDC.transfer` move the same money.
 
-- A Pot that spends its whole `USDC` balance and also pays a native fee (a bridge's or a
-  messenger's fee, the Kitchen's execution fee) runs out: the fee comes from the same balance.
+- A Pot that spends its whole `USDC` balance and also pays a native fee from the program
+  (a bridge's or a messenger's fee) runs out: that fee comes from the same balance.
   Leave room for it.
-- The Kitchen's fee is the cook's value, sent from the owner's wallet with the cook: native
-  USDC at 18 decimals, paid on to the Kitchen before the program runs.
+- An ordinary cook's Kitchen fee is attached value from the owner's wallet: native USDC
+  at 18 decimals, paid on to the Kitchen before the program runs. An owner-signed cook may
+  instead pay it from funds already in the Pot.
 - `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei
   reads as 0. Compare a native amount with a token amount only after converting one to the
   other's scale.
