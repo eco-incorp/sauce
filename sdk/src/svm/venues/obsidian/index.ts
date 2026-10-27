@@ -84,7 +84,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
 const SLUG = "obsidian";
 export const OBSIDIAN_PROGRAM_ID = address("HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z");
@@ -159,10 +160,11 @@ async function fetchDecimals(load: AccountLoader, mint: Address): Promise<number
  * directions share one pool account.
  */
 async function fetchPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   direction: 0 | 1 = 0,
 ): Promise<ObsidianPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {

@@ -97,7 +97,8 @@
  */
 import { getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const POOL_SIZE_V1 = 417;
 const POOL_SIZE_V2 = 514;
@@ -151,7 +152,7 @@ function forkConfig(slug: string, base: PoolConfig): BonkswapForkPoolConfig {
 export interface BonkswapForkAdapter {
   slug: string;
   programId: Address;
-  fetchPoolConfig(load: AccountLoader, pool: Address): Promise<BonkswapForkPoolConfig>;
+  fetchPoolConfig(load: OwnedAccountLoader, pool: Address): Promise<BonkswapForkPoolConfig>;
 }
 
 /**
@@ -162,7 +163,8 @@ export function makeBonkswapForkAdapter(slug: string, programId: Address): Bonks
   return {
     slug,
     programId,
-    async fetchPoolConfig(load, pool) {
+    async fetchPoolConfig(owned, pool) {
+      const load = accountDataLoader(owned);
       const data = await load(pool);
       if (data === null) throw new Error(`${slug} pool ${pool} not found`);
       if (data.length !== POOL_SIZE_V1 && data.length !== POOL_SIZE_V2) {

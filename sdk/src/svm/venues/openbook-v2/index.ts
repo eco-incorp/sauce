@@ -173,7 +173,8 @@
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "openbook-v2";
 export const OPENBOOK_V2_PROGRAM_ID = address("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb");
@@ -296,9 +297,10 @@ function walkFixedTree(data: Uint8Array): { nodeOffset: number; key: bigint; pri
 }
 
 export async function fetchOpenBookV2Config(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<OpenBookV2PoolConfig> {
+  const load = accountDataLoader(owned);
   const market = await load(pool);
   if (market === null) throw new Error(`${SLUG} market ${pool} does not exist`);
   if (market.length !== MARKET_ACCOUNT_SIZE) {

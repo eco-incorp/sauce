@@ -72,7 +72,8 @@ import {
 } from "../raydium-clmm/index.js";
 import { MAX_TICK, MIN_TICK } from "../raydium-clmm/tick-math.js";
 import { raydiumSqrtPriceAtTick } from "../raydium-clmm/tick-math.js";
-import type { AccountLoader } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader } from "../types.js";
 import type {
   RaydiumClmmBoundary,
   RaydiumClmmPoolConfig,
@@ -249,9 +250,10 @@ async function resolveWindow(
  * Read-only against the loader.
  */
 export async function fetchByrealPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<ByrealPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -290,23 +292,24 @@ export async function fetchByrealPoolConfig(
     data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32),
   ) as Address;
   // The on-chain swap ix here is legacy-SPL only, so a Token-2022 mint (or one
-  // carrying an un-routable extension) SELF-DROPS this pool. The thrown error is
-  // the graceful-drop signal — the SvmRoute orchestrator catches a
-  // fetchPoolConfig throw and drops the venue. An unreadable mint falls back to
-  // the legacy assumption (a classic 82-byte mint classifies legacy → no throw →
-  // the config is built byte-identically to before).
+  // carrying an un-routable extension) SELF-DROPS this pool. The mint's token
+  // program is its OWNER (an extensionless Token-2022 mint is byte-identical to
+  // a legacy one). The thrown error is the graceful-drop signal — the SvmRoute
+  // orchestrator catches a fetchPoolConfig throw and drops the venue. An
+  // unreadable mint falls back to the legacy assumption (a Tokenkeg-owned mint
+  // classifies legacy → no throw → the config is built byte-identically to before).
   const mintList = [tokenMint0, tokenMint1];
-  const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mintList.map((mint) => owned(mint)));
   for (let mi = 0; mi < mintList.length; mi++) {
     const mint = mintList[mi]!;
-    const mintData = mintDatas[mi];
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi];
+    if (mintAccount === null) continue;
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

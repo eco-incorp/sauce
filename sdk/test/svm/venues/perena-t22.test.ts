@@ -14,6 +14,7 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { perena } from "../../../src/svm/venues/perena/index.js";
 import type { PerenaPoolConfig } from "../../../src/svm/venues/perena/index.js";
+import { ownedByShape } from "../fixtures.js";
 
 const POOL = address("2w4A1eGyjRutakyFdmVyBiLPf98qKxNTC2LpuwhaCruZ");
 const A_MINT = address("So11111111111111111111111111111111111111112");
@@ -92,8 +93,8 @@ function makeStablePool(a2022: boolean, b2022: boolean): Uint8Array {
   return buf;
 }
 
-const loaderFor = (bytes: Uint8Array) => async (addr: Address) =>
-  addr === POOL ? new Uint8Array(bytes) : null;
+const loaderFor = (bytes: Uint8Array) =>
+  ownedByShape(async (addr: Address) => (addr === POOL ? new Uint8Array(bytes) : null));
 
 describe("perena Token-2022 handling", () => {
   it("routes a Token-2022-side pool (fetchPoolConfig resolves, is2022 flag recorded)", async () => {

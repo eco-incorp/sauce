@@ -22,7 +22,8 @@ import {
   __alphaqCpQuoteForTest as cpQuote,
   __alphaqQuoteForTest as alphaqQuote,
 } from "../../../src/svm/venues/alphaq/index.js";
-import type { AccountLoader } from "../../../src/svm/venues/types.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
+import { ownedByShape } from "../fixtures.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 type Fixture = {
@@ -36,13 +37,13 @@ const load = (name: string): Fixture =>
 const syrup = load("syrupu-usdc");
 const jlpStale = load("jlp-usdc-stale");
 
-function loaderFor(fx: Fixture, statsOverride?: Uint8Array): AccountLoader {
+function loaderFor(fx: Fixture, statsOverride?: Uint8Array): OwnedAccountLoader {
   const bytes: Record<string, Uint8Array> = {
     [fx.market.address]: Uint8Array.from(Buffer.from(fx.market.dataBase64, "base64")),
     [fx.stats.address]:
       statsOverride ?? Uint8Array.from(Buffer.from(fx.stats.dataBase64, "base64")),
   };
-  return async (a: Address) => bytes[a as unknown as string] ?? null;
+  return ownedByShape(async (a: Address) => bytes[a as unknown as string] ?? null);
 }
 /** The crank timestamp baked into a fixture's stats bytes (u64 LE @48). */
 function fixtureTs(fx: Fixture): bigint {

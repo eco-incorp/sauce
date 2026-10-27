@@ -137,28 +137,26 @@ export async function ata(owner: Address, mint: Address, tokenProgram: Address):
 export { pda };
 
 /**
- * Which token program serves this mint, from its account data alone — the SAME
- * detection + gate the SDK's pumpswap adapter uses (a classic layout is exactly 82
- * bytes; an extensionless token-2022 mint is indistinguishable from it, but neither Scale
- * program is known to interact with such a mint in practice, so this stays conservative
- * like pumpswap's own copy). A TransferFeeConfig extension makes real wire amounts
- * diverge from the quote (a portion of every transfer is withheld by the mint itself), so
- * such mints are rejected rather than mis-quoted.
+ * Which token program serves this mint — the SAME detection + gate the SDK's pumpswap adapter
+ * uses. The OWNER decides the program: an extensionless Token-2022 mint is 82 bytes, exactly a
+ * classic mint's layout, so only the owner tells them apart. Without an owner, an 82-byte mint is
+ * taken as legacy. A Token-2022 mint's extensions are then checked either way: a TransferFeeConfig
+ * extension makes real wire amounts diverge from the quote (a portion of every transfer is
+ * withheld by the mint itself), so such mints are rejected rather than mis-quoted.
  */
 export function detectTokenProgram(mint: Address, data: Uint8Array, owner?: Address): Address {
-  // The owner is AUTHORITATIVE where the caller has it, exactly as in `classifyMintProgram`. This
-  // is the fourth shape-based path in the repo and the only one behind a shared helper, so it needs
-  // the parameter threaded rather than a call site edited when the adapters migrate.
   if (owner !== undefined) {
     if (owner === TOKEN_PROGRAM) return TOKEN_PROGRAM;
-    if (owner === TOKEN_2022_PROGRAM) return TOKEN_2022_PROGRAM;
-    throw new Error(
-      `scale venue: mint ${mint} is owned by ${owner}, neither the legacy nor Token-2022 program`,
-    );
+    if (owner !== TOKEN_2022_PROGRAM) {
+      throw new Error(
+        `scale venue: mint ${mint} is owned by ${owner}, neither the legacy nor Token-2022 program`,
+      );
+    }
+    // A Token-2022 mint with no extensions: nothing past the base layout to check.
+    if (data.length === 82) return TOKEN_2022_PROGRAM;
+  } else if (data.length === 82) {
+    return TOKEN_PROGRAM;
   }
-  // An extensionless Token-2022 mint is also exactly 82 bytes, so without an owner this answers
-  // legacy for it — the same known hole `token-program.ts` documents.
-  if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
     throw new Error(
       `scale venue: mint ${mint} data is ${data.length} bytes, not a token mint layout`,

@@ -59,7 +59,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
@@ -296,28 +297,29 @@ async function resolveWindow(
  * both directions' bin windows. Read-only against the loader.
  */
 export async function fetchMeteoraDlmmConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pair: Address,
 ): Promise<MeteoraDlmmPoolConfig> {
-  return fetchMeteoraDlmmConfigInternal(load, pair, getAddressEncoded(pair));
+  return fetchMeteoraDlmmConfigInternal(owned, pair, getAddressEncoded(pair));
 }
 
 /** Fetch from a 32-byte pair key, reusing its bytes for every bin-array and bitmap PDA seed. */
 export async function fetchMeteoraDlmmConfigBytes(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pair: Uint8Array,
 ): Promise<MeteoraDlmmPoolConfig> {
   if (pair.length !== 32) throw new Error(`${SLUG}: pair key must be 32 bytes, got ${pair.length}`);
   // Callers may reuse or mutate their buffer while the loader is awaiting RPC.
   const pairBytes = new Uint8Array(pair);
-  return fetchMeteoraDlmmConfigInternal(load, getAddressCodec().decode(pairBytes), pairBytes);
+  return fetchMeteoraDlmmConfigInternal(owned, getAddressCodec().decode(pairBytes), pairBytes);
 }
 
 async function fetchMeteoraDlmmConfigInternal(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pair: Address,
   pairBytes: Uint8Array,
 ): Promise<MeteoraDlmmPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pair);
   if (data === null) throw new Error(`${SLUG}: pair account ${pair} not found`);
   if (data.length !== LB_PAIR_ACCOUNT_SIZE) {
@@ -357,19 +359,21 @@ async function fetchMeteoraDlmmConfigInternal(
   const tokenXMint = codec.decode(data.subarray(OFF_TOKEN_X_MINT, OFF_TOKEN_X_MINT + 32));
   const tokenYMint = codec.decode(data.subarray(OFF_TOKEN_Y_MINT, OFF_TOKEN_Y_MINT + 32));
   // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
-  // one carrying an un-routable extension) via the shared data-shape resolver
-  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
-  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
-  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
-  // Tokenkeg, parses no extensions, and the config is built unchanged. An
-  // unreadable mint falls back to the legacy assumption (keeps fixtures green).
+  // one carrying an un-routable extension) by its OWNER (an extensionless
+  // Token-2022 mint is byte-identical to a legacy one) and SELF-DROP the pool.
+  // The thrown error is the graceful-drop signal — the SvmRoute orchestrator
+  // catches a fetchPoolConfig throw and drops the venue. The LEGACY path stays
+  // byte-identical: a Tokenkeg-owned mint parses no extensions, and the config
+  // is built unchanged. An unreadable mint falls back to the legacy assumption
+  // (keeps fixtures green).
   const mints = [tokenXMint, tokenYMint];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue;
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

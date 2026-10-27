@@ -5,10 +5,17 @@
  * builds a minimal synthetic CurveAccount (only the fields read before the mint
  * safety gate need be valid) and a Token-2022 mint account for its mint. A
  * legacy mint passes the gate (control: it reaches the later curve_type gate).
+ * A mint is classified by its OWNER: an extensionless Token-2022 mint is 82
+ * bytes, byte for byte a legacy one, so only the owner can tell them apart.
  */
 import { address, getAddressCodec } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { moonit } from "../../../src/svm/venues/moonit/index.js";
+import type { Address } from "@solana/kit";
+import { MOONIT_PROGRAM_ID, moonit } from "../../../src/svm/venues/moonit/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("GnM6fY3hDnt6fUBrRK89xZQ5cdayvHnz6TWrnYan9Es6");
@@ -24,27 +31,55 @@ function makeCurve(curveType: number): Uint8Array {
   return buf;
 }
 
-function loaderWith(mintData: Uint8Array | null, curveType = 0): AccountLoader {
+function loaderWith(
+  mint: { data: Uint8Array; owner: Address } | null,
+  curveType = 0,
+): OwnedAccountLoader {
   const curve = makeCurve(curveType);
   return async (addr) => {
-    if (addr === POOL) return new Uint8Array(curve);
-    if (addr === MINT) return mintData === null ? null : new Uint8Array(mintData);
+    if (addr === POOL) return { data: new Uint8Array(curve), owner: MOONIT_PROGRAM_ID };
+    if (addr === MINT)
+      return mint === null ? null : { data: new Uint8Array(mint.data), owner: mint.owner };
     return null;
   };
 }
 
 describe("moonit Token-2022 self-drop", () => {
   it("drops the pool when the token mint is Token-2022", async () => {
-    await expect(moonit.fetchPoolConfig(loaderWith(makeT22Mint()), POOL)).rejects.toThrow(
-      /is Token-2022/,
-    );
+    await expect(
+      moonit.fetchPoolConfig(
+        loaderWith({ data: makeT22Mint(), owner: TOKEN_2022_PROGRAM_ID }),
+        POOL,
+      ),
+    ).rejects.toThrow(/is Token-2022/);
+  });
+
+  it("drops the pool when the token mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    await expect(
+      moonit.fetchPoolConfig(
+        loaderWith({ data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID }),
+        POOL,
+      ),
+    ).rejects.toThrow(/is Token-2022/);
   });
 
   it("passes the Token-2022 gate for a legacy mint (reaches the curve_type gate)", async () => {
     // curve_type 1 (ConstantProductV1) is unimplemented — reaching that gate
     // proves the legacy mint got PAST the Token-2022 safety block unchanged.
-    await expect(moonit.fetchPoolConfig(loaderWith(makeLegacyMint(), 1), POOL)).rejects.toThrow(
-      /not LinearV1/,
+    await expect(
+      moonit.fetchPoolConfig(
+        loaderWith({ data: makeLegacyMint(), owner: TOKEN_PROGRAM_ID }, 1),
+        POOL,
+      ),
+    ).rejects.toThrow(/not LinearV1/);
+  });
+
+  it("refuses the pool when the token mint is an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      moonit.fetchPoolConfig(loaderWith({ data: makeLegacyMint(), owner: foreign }), POOL),
+    ).rejects.toThrow(
+      `token-program: mint ${MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
     );
   });
 });

@@ -10,8 +10,10 @@
 import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { fetchVoltrConfig, VOLTR_PROGRAM_ID } from "../../../src/svm/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
 import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { ownedByShape } from "../fixtures.js";
 
 const POOL = address("Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je");
 const ASSET_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
@@ -37,14 +39,14 @@ function vaultBytes(lpMint: Address): Uint8Array {
   return out;
 }
 
-async function loader(assetMintData: Uint8Array): Promise<AccountLoader> {
+async function loader(assetMintData: Uint8Array): Promise<OwnedAccountLoader> {
   const lpMint = await derivedLpMint();
   const map = new Map<string, Uint8Array>([
     [String(POOL), vaultBytes(lpMint)],
     [String(ASSET_MINT), assetMintData],
     [String(lpMint), makeLegacyMint()],
   ]);
-  return async (addr) => map.get(String(addr)) ?? null;
+  return ownedByShape(async (addr) => map.get(String(addr)) ?? null);
 }
 
 describe("voltr Token-2022 self-drop", () => {
@@ -60,9 +62,29 @@ describe("voltr Token-2022 self-drop", () => {
     );
   });
 
+  test("an extensionless (82-byte) Token-2022 asset mint self-drops", async () => {
+    const shaped = await loader(makeLegacyMint());
+    const owned: OwnedAccountLoader = async (addr) =>
+      addr === ASSET_MINT ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
+    await expect(fetchVoltrConfig(owned, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
   test("a NonTransferable asset mint self-drops as un-routable", async () => {
     await expect(
       fetchVoltrConfig(await loader(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/dropping pool/);
+  });
+
+  test("an 82-byte mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const lpMint = await derivedLpMint();
+    for (const mint of [ASSET_MINT, lpMint]) {
+      const shaped = await loader(makeLegacyMint());
+      const owned: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchVoltrConfig(owned, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

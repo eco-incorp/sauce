@@ -24,8 +24,8 @@ import {
   BIDS_NODES_BASE,
   PHOENIX_MAX_ORDERS,
 } from "../../../src/svm/venues/phoenix/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { fixtureLoader, loadFixtures } from "../fixtures.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { fixtureLoader, loadFixtures, ownedByShape } from "../fixtures.js";
 import { makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 /** A bounded walk must finish in milliseconds; a per-call guard needs hours. */
@@ -77,10 +77,10 @@ function manifestMarket(blocks: number, extraBytes = 0): Uint8Array {
   return buf;
 }
 
-const manifestLoader =
-  (market: Uint8Array): AccountLoader =>
-  async (addr) =>
-    addr === MANIFEST_MARKET ? new Uint8Array(market) : makeLegacyMint();
+const manifestLoader = (market: Uint8Array): OwnedAccountLoader =>
+  ownedByShape(async (addr) =>
+    addr === MANIFEST_MARKET ? new Uint8Array(market) : makeLegacyMint(),
+  );
 
 const levels = (orders: readonly ManifestOrder[]): [number, bigint][] =>
   orders.map(({ dataIndex, sequenceNumber }) => [dataIndex, sequenceNumber]);
@@ -219,10 +219,8 @@ function phoenixMarket(
 
 // An unreadable mint falls back to the legacy assumption, so the walk is the
 // only thing under test here.
-const phoenixLoader =
-  (market: Uint8Array): AccountLoader =>
-  async (addr) =>
-    addr === PHOENIX_MARKET ? new Uint8Array(market) : null;
+const phoenixLoader = (market: Uint8Array): OwnedAccountLoader =>
+  ownedByShape(async (addr) => (addr === PHOENIX_MARKET ? new Uint8Array(market) : null));
 
 describe("phoenix: cyclic tree registers exhaust the walk budget", () => {
   it("fails fast on a single-node market whose left register points at itself", async () => {

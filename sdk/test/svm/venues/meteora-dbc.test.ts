@@ -29,7 +29,7 @@ import { address } from "@solana/kit";
 import { compileSvm, wrapQuoteMain } from "../rs-compile.js";
 import { meteoraDbc } from "../../../src/svm/venues/meteora-dbc/index.js";
 import type { MeteoraDbcPoolConfig } from "../../../src/svm/venues/meteora-dbc/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
 import { fixtureBytesMap, fixtureLoader, loadFixtures } from "../fixtures.js";
 import {
   makeT22Mint,
@@ -157,17 +157,18 @@ describe("meteora-dbc: Token-2022 routability", () => {
   // (the pool, the vaults) is served unchanged from the fixture.
   async function t22BaseLoader(
     mintBytes: Uint8Array,
-  ): Promise<{ load: AccountLoader; baseMint: string }> {
+  ): Promise<{ load: OwnedAccountLoader; baseMint: string }> {
     const cfg = await fetch(STATIC_POOL);
     const configAddr = cfg.config as string;
     const baseMint = cfg.baseMint as string;
-    const load2: AccountLoader = async (addr) => {
+    const load2: OwnedAccountLoader = async (addr) => {
       if (addr === configAddr) {
+        const account = await load(addr);
         const d = new Uint8Array(state[configAddr]);
         d[OFF_TOKEN_TYPE] = 1; // base -> Token-2022
-        return d;
+        return { data: d, owner: account!.owner };
       }
-      if (addr === baseMint) return new Uint8Array(mintBytes);
+      if (addr === baseMint) return { data: new Uint8Array(mintBytes), owner: TOKEN_2022 };
       return load(addr);
     };
     return { load: load2, baseMint };

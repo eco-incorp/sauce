@@ -137,7 +137,7 @@ import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -146,6 +146,7 @@ import type {
 } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { accountDataLoader } from "../../loader.js";
 
 const SLUG = "hylo";
 export const HYLO_PROGRAM_ID = address("HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn");
@@ -269,7 +270,8 @@ function asHyloConfig(cfg: PoolConfig): HyloPoolConfig {
  * `pool` MUST be {@link USDC_PAIR_ACCOUNT} — this family has no other pool
  * (see module header — a SINGLETON, not a scanned universe).
  */
-async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<HyloPoolConfig> {
+async function fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<HyloPoolConfig> {
+  const load = accountDataLoader(owned);
   if (pool !== USDC_PAIR_ACCOUNT) {
     throw new Error(`${SLUG} only serves the singleton pair ${USDC_PAIR_ACCOUNT}, got ${pool}`);
   }
@@ -278,15 +280,18 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Hylo
   // mint_/redeem_stablecoin_usdc CPI is legacy-SPL only, so SELF-DROP a
   // Token-2022 mint (or one carrying an un-routable extension) by throwing — the
   // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
-  // Legacy path stays byte-identical: a classic 82-byte mint classifies legacy,
+  // Legacy path stays byte-identical: a Tokenkeg-owned mint classifies legacy,
   // parses no blocking extension, and the Promise.all below runs exactly as before.
+  // The mint's token program is its OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one).
   const _mints = [USDC_MINT, HYUSD_MINT];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue; // unreadable mint → legacy assumption (keeps existing tests green)
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) continue; // unreadable mint → legacy assumption (keeps existing tests green)
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

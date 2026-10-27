@@ -1,10 +1,10 @@
 /**
  * Batched account loading for prepare/quote flows.
  *
- * The venue adapters consume the one-address AccountLoader (fixture tests
+ * The venue adapters consume the one-address OwnedAccountLoader (fixture tests
  * feed it directly), but a naive RPC binding costs one round-trip per
  * account — an SvmRoute prepare over k pools touches 3-8 accounts each.
- * `coalescingAccountLoader` keeps the adapter surface unchanged while
+ * `coalescingOwnedAccountLoader` keeps the adapter surface unchanged while
  * batching transport: every load() issued in the same microtask turn joins
  * ONE getMultipleAccounts sweep (deduped, chunked at the RPC's 100-account
  * cap), so a parallelized prepare resolves in O(dependency-depth) sweeps —
@@ -61,7 +61,7 @@ interface PendingLoad {
 }
 
 /**
- * Wraps a batch transport as a single-account AccountLoader that coalesces
+ * Wraps a batch transport as a single-account OwnedAccountLoader that coalesces
  * same-turn loads into deduped, chunked sweeps.
  */
 export function coalescingOwnedAccountLoader(
@@ -71,13 +71,13 @@ export function coalescingOwnedAccountLoader(
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   if (!Number.isInteger(chunkSize) || chunkSize < 1) {
     throw new Error(
-      `coalescingAccountLoader chunkSize must be a positive integer, got ${chunkSize}`,
+      `coalescingOwnedAccountLoader chunkSize must be a positive integer, got ${chunkSize}`,
     );
   }
   const maxConcurrentChunks = options.maxConcurrentChunks ?? DEFAULT_MAX_CONCURRENT_CHUNKS;
   if (!Number.isInteger(maxConcurrentChunks) || maxConcurrentChunks < 1) {
     throw new Error(
-      `coalescingAccountLoader maxConcurrentChunks must be a positive integer, got ${maxConcurrentChunks}`,
+      `coalescingOwnedAccountLoader maxConcurrentChunks must be a positive integer, got ${maxConcurrentChunks}`,
     );
   }
   let pending: Map<Address, PendingLoad[]> | null = null;
@@ -160,19 +160,11 @@ export function coalescingOwnedAccountLoader(
 }
 
 /**
- * The data-only loader the venue adapters take, as a projection of the owner-aware one.
- *
- * Keeping both means an adapter can be moved to owner-based mint classification on its own, instead
- * of all 64 changing in one sweep.
+ * The data-only view of an owner-aware loader, for the readers that take an `AccountLoader`.
  */
-export function coalescingAccountLoader(
-  loadMany: BatchAccountLoader,
-  options: CoalescingLoaderOptions = {},
-): AccountLoader {
-  const owned = coalescingOwnedAccountLoader(loadMany, options);
-
+export function accountDataLoader(load: OwnedAccountLoader): AccountLoader {
   return async (address: Address): Promise<Uint8Array | null> =>
-    (await owned(address))?.data ?? null;
+    (await load(address))?.data ?? null;
 }
 
 /** The slice of a @solana/kit RPC this loader needs (Rpc<GetMultipleAccountsApi>). */

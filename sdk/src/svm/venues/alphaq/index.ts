@@ -165,7 +165,8 @@
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { base64Bytes } from "../../../bytes.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "alphaq";
 export const ALPHAQ_PROGRAM_ID = address("ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA");
@@ -307,6 +308,17 @@ const ALPHAQ_STATS_ACCOUNTS: Readonly<Record<string, Address>> = Object.freeze({
 /** Runtime-primed overlay for markets discovered AFTER the table above was captured. */
 const runtimeStatsBySymbol = new Map<string, Address>();
 
+/** A stats account's size: the `dataSize` the prime asks for, and the only size it accepts. */
+const STATS_ACCOUNT_SIZE = 336;
+/** Base64 of exactly {@link STATS_ACCOUNT_SIZE} bytes (a multiple of 3, so no `=` padding). */
+const STATS_ACCOUNT_BASE64 = /^[A-Za-z0-9+/]{448}$/;
+/** The 16-byte symbol prefix as base64: 24 characters decode to 18 bytes, the first 16 read. */
+const SYMBOL_PREFIX_BASE64_CHARS = 24;
+/** A market symbol, `BASE-QUOTE` in upper-case ASCII letters and digits. */
+const MARKET_SYMBOL = /^[A-Z0-9]+-[A-Z0-9]+$/;
+/** At most this many runtime entries; the static table holds every market known at capture. */
+const MAX_RUNTIME_STATS_ACCOUNTS = 1024;
+
 /** Minimal getProgramAccounts transport for the stats-account join (data included, unlike the
  *  pubkey-only {@link GetProgramAccountsRpc} discovery.ts uses for candidate scans). */
 export interface AlphaqStatsRpc {
@@ -321,10 +333,17 @@ let primePromise: Promise<void> | null = null;
 /**
  * One-time (idempotent, memoized) live join for markets not yet in
  * {@link ALPHAQ_STATS_ACCOUNTS}. Safe to call repeatedly/concurrently — every
- * call after the first returns the SAME in-flight/completed promise. A
- * failure here never throws past the caller that awaits it losing anything
- * beyond "no new markets discovered this run" — the static table still
- * serves every market known at integration time.
+ * call after the first returns the SAME in-flight/completed promise. A failed
+ * prime is not memoized: the next call tries again. A failure here never
+ * costs the caller anything beyond "no new markets discovered this run" — the
+ * static table still serves every market known at integration time.
+ *
+ * The RPC is the caller's, so its answer is held to a stats account's shape:
+ * base64 of exactly {@link STATS_ACCOUNT_SIZE} bytes, of which only the
+ * 16-byte symbol prefix is decoded; a symbol of the {@link MARKET_SYMBOL}
+ * form; never a symbol the static table names (which stays authoritative);
+ * and at most {@link MAX_RUNTIME_STATS_ACCOUNTS} entries. Anything else is
+ * skipped.
  *
  * NOT auto-wired into `the consuming app SVM discovery module`'s gPA sweep (deliberately —
  * it would add one extra getProgramAccounts call to EVERY discovery sweep for
@@ -335,17 +354,46 @@ let primePromise: Promise<void> | null = null;
  */
 export function primeAlphaqStatsAccounts(rpc: AlphaqStatsRpc): Promise<void> {
   if (primePromise) return primePromise;
-  primePromise = (async () => {
+  const prime = (async () => {
     const accounts = await rpc
-      .getProgramAccounts(ALPHAQ_PROGRAM_ID, { encoding: "base64", filters: [{ dataSize: 336n }] })
+      .getProgramAccounts(ALPHAQ_PROGRAM_ID, {
+        encoding: "base64",
+        filters: [{ dataSize: BigInt(STATS_ACCOUNT_SIZE) }],
+      })
       .send();
     for (const acc of accounts) {
-      const data = base64Bytes(acc.account.data[0]);
-      const symbol = decodeSymbol(data);
-      if (symbol.length > 0) runtimeStatsBySymbol.set(symbol, acc.pubkey);
+      const [text, encoding] = acc.account.data;
+      if (encoding !== "base64" || !STATS_ACCOUNT_BASE64.test(text)) continue;
+      const symbol = strictSymbol(base64Bytes(text.slice(0, SYMBOL_PREFIX_BASE64_CHARS)));
+      if (symbol === null || Object.hasOwn(ALPHAQ_STATS_ACCOUNTS, symbol)) continue;
+      if (
+        !runtimeStatsBySymbol.has(symbol) &&
+        runtimeStatsBySymbol.size >= MAX_RUNTIME_STATS_ACCOUNTS
+      ) {
+        continue;
+      }
+      runtimeStatsBySymbol.set(symbol, acc.pubkey);
     }
   })();
-  return primePromise;
+  primePromise = prime;
+  prime.catch(() => {
+    if (primePromise === prime) primePromise = null;
+  });
+  return prime;
+}
+
+/**
+ * The symbol of a stats account's prefix, or null unless it is a {@link MARKET_SYMBOL}: read up to
+ * the first NUL within 16 bytes, refusing any byte outside printable ASCII (unlike
+ * {@link decodeSymbol}, which masks the high bit).
+ */
+function strictSymbol(prefix: Uint8Array): string | null {
+  let symbol = "";
+  for (let i = 0; i < 16 && prefix[i] !== 0; i++) {
+    if (prefix[i] < 0x20 || prefix[i] > 0x7e) return null;
+    symbol += String.fromCharCode(prefix[i]);
+  }
+  return MARKET_SYMBOL.test(symbol) ? symbol : null;
 }
 
 /** Test-only: seed the runtime overlay without a real RPC (LiteSVM/jest fixtures). */
@@ -358,6 +406,11 @@ export function __setAlphaqStatsAccountsForTest(entries: Readonly<Record<string,
 export function __resetAlphaqStatsAccountsForTest(): void {
   runtimeStatsBySymbol.clear();
   primePromise = null;
+}
+
+/** Test-only: a read-only view of the runtime overlay. */
+export function __alphaqRuntimeStatsForTest(): ReadonlyMap<string, Address> {
+  return runtimeStatsBySymbol;
 }
 
 function resolveAlphaqStatsAccount(symbol: string): Address | undefined {
@@ -443,10 +496,11 @@ export interface AlphaqPoolConfig extends PoolConfig {
  * dropped, never crashed on.
  */
 export async function fetchAlphaqPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   now?: bigint,
 ): Promise<AlphaqPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`alphaq market ${pool} not found`);
   if (data.length !== MARKET_SIZE) {

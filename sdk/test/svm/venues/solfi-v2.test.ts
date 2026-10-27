@@ -33,9 +33,10 @@ import {
   OFF_VAULT_B,
   OFF_ORACLE,
   OFF_REGISTRY,
+  SOLFI_V2_PROGRAM_ID,
 } from "../../../src/svm/venues/solfi-v2/index.js";
 import type { SolfiV2PoolConfig } from "../../../src/svm/venues/solfi-v2/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
 
 const POOL = address("65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc");
@@ -56,11 +57,11 @@ const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 // ladder.ts's "residualRisk" doc).
 const SYNTHETIC_REGISTRY = new Uint8Array(1_048_576);
 
-function loaderFor(dir: "dir0" | "dir1"): AccountLoader {
+function loaderFor(dir: "dir0" | "dir1"): OwnedAccountLoader {
   const fixtures = loadFixtures(resolve(process.cwd(), `test/svm/fixtures/solfi-v2-${dir}`));
   const base = fixtureLoader(fixtures);
   return async (addr) => {
-    if (addr === REGISTRY) return SYNTHETIC_REGISTRY;
+    if (addr === REGISTRY) return { data: SYNTHETIC_REGISTRY, owner: SOLFI_V2_PROGRAM_ID };
     return base(addr);
   };
 }
@@ -81,7 +82,7 @@ describe("solfi-v2 fetchPoolConfig", () => {
   });
 
   it("throws when the pool account does not exist", async () => {
-    const empty: AccountLoader = async () => null;
+    const empty: OwnedAccountLoader = async () => null;
     await expect(solfiV2.fetchPoolConfig(empty, POOL, 0)).rejects.toThrow(
       `solfi-v2 pool ${POOL} account not found`,
     );
@@ -90,12 +91,14 @@ describe("solfi-v2 fetchPoolConfig", () => {
   it("gates on the pool account size", async () => {
     const fixtures = loadFixtures(resolve(process.cwd(), "test/svm/fixtures/solfi-v2-dir0"));
     const base = fixtureLoader(fixtures);
-    const truncating: AccountLoader = async (addr) => {
+    const truncating: OwnedAccountLoader = async (addr) => {
       if (addr === POOL) {
-        const data = await base(addr);
-        return data === null ? null : data.subarray(0, 100);
+        const account = await base(addr);
+        return account === null ? null : { ...account, data: account.data.subarray(0, 100) };
       }
-      return addr === REGISTRY ? SYNTHETIC_REGISTRY : base(addr);
+      return addr === REGISTRY
+        ? { data: SYNTHETIC_REGISTRY, owner: SOLFI_V2_PROGRAM_ID }
+        : base(addr);
     };
     await expect(solfiV2.fetchPoolConfig(truncating, POOL, 0)).rejects.toThrow(
       `solfi-v2 pool ${POOL} account is 100 bytes, expected 1728`,
@@ -109,9 +112,11 @@ describe("solfi-v2 fetchPoolConfig", () => {
     // Relabel the REAL, well-formed pool bytes under an address POOL_K has no
     // entry for — the pool data itself is fine; only its address (hence K) is
     // unverified. Never falls back to a registry-mate's K (see below).
-    const relabeled: AccountLoader = async (addr) => {
+    const relabeled: OwnedAccountLoader = async (addr) => {
       if (addr === UNVERIFIED) return base(POOL);
-      return addr === REGISTRY ? SYNTHETIC_REGISTRY : base(addr);
+      return addr === REGISTRY
+        ? { data: SYNTHETIC_REGISTRY, owner: SOLFI_V2_PROGRAM_ID }
+        : base(addr);
     };
     await expect(solfiV2.fetchPoolConfig(relabeled, UNVERIFIED, 0)).rejects.toThrow(
       `solfi-v2 pool ${UNVERIFIED} has no independently-verified additive-impact constant K`,
@@ -148,13 +153,14 @@ describe("per-pool K resolution — the FATAL registry-keyed bug (fixed)", () =>
     return data;
   }
 
-  function loaderFor(pool: Address, poolBytes: Uint8Array): AccountLoader {
+  function loaderFor(pool: Address, poolBytes: Uint8Array): OwnedAccountLoader {
     const base = fixtureLoader(
       loadFixtures(resolve(process.cwd(), "test/svm/fixtures/solfi-v2-dir0")),
     );
     return async (addr) => {
-      if (addr === pool) return poolBytes;
-      if (addr === QOFVFHDZ_REGISTRY) return SYNTHETIC_REGISTRY;
+      if (addr === pool) return { data: poolBytes, owner: SOLFI_V2_PROGRAM_ID };
+      if (addr === QOFVFHDZ_REGISTRY)
+        return { data: SYNTHETIC_REGISTRY, owner: SOLFI_V2_PROGRAM_ID };
       return base(addr);
     };
   }

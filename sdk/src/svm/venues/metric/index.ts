@@ -81,7 +81,14 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type {
+  OwnedAccountLoader,
+  PoolConfig,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -247,7 +254,7 @@ export const metric = {
    * this adapter stays free of any RPC/simulate dependency itself.
    */
   async fetchPoolConfig(
-    load: AccountLoader,
+    owned: OwnedAccountLoader,
     pool: Address,
     direction: 0 | 1 = 0,
     fetchOracleQuote?: (
@@ -256,6 +263,7 @@ export const metric = {
       priceAccount: Address,
     ) => Promise<Uint8Array>,
   ): Promise<MetricPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
     if (data.length < POOL_MIN_LENGTH) {
@@ -280,10 +288,12 @@ export const metric = {
     }
     const priceAccount = pubkeyAt(oracleConfigData, PRICE_ACCOUNT_OFFSET_IN_ORACLE_CONFIG);
 
-    const [mintAData, mintBData] = await Promise.all([load(mintA), load(mintB)]);
-    if (mintAData === null || mintBData === null) {
+    const [mintAAccount, mintBAccount] = await Promise.all([owned(mintA), owned(mintB)]);
+    if (mintAAccount === null || mintBAccount === null) {
       throw new Error(`${SLUG} pool ${pool} mint account(s) not found`);
     }
+    const mintAData = mintAAccount.data;
+    const mintBData = mintBAccount.data;
     if (
       mintAData.length < MINT_DECIMALS_OFFSET + 1 ||
       mintBData.length < MINT_DECIMALS_OFFSET + 1
@@ -297,14 +307,16 @@ export const metric = {
     // a Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS the
     // pool via a thrown, clearly-described error — the SvmRoute orchestrator
     // catches a fetchPoolConfig throw and drops the venue. The legacy path stays
-    // byte-identical: a classic 82-byte mint classifies as legacy → no throw. We
-    // reuse the mint bytes already loaded above for the decimals decode.
-    for (const [mint, mintData] of [
-      [mintA, mintAData],
-      [mintB, mintBData],
+    // byte-identical: a Tokenkeg-owned mint → no throw. The mint's token program
+    // is its OWNER (an extensionless Token-2022 mint is byte-identical to a
+    // legacy one). We reuse the mint accounts already loaded above for the
+    // decimals decode.
+    for (const [mint, mintAccount] of [
+      [mintA, mintAAccount],
+      [mintB, mintBAccount],
     ] as const) {
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintData = mintAccount.data;
+      if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );

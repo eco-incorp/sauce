@@ -150,7 +150,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -202,9 +203,10 @@ function decodeAddress(data: Uint8Array, offset: number): Address {
  * token_program is hardcoded to Tokenkeg — see the module header).
  */
 export async function fetchGavelConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<GavelPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool ${pool} account not found`);
   if (data.length !== GAVEL_POOL_SIZE) {
@@ -230,17 +232,19 @@ export async function fetchGavelConfig(
   // The Swap ix's token_program is hardcoded to spl_token::id() in every
   // loader (validation/loaders.rs) — Tokenkeg-only, so a Token-2022 mint (or
   // one carrying an un-routable extension) cannot actually be swapped here.
-  // Detect via the shared data-shape resolver and SELF-DROP such a pool (the
+  // Detect via the mint's OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one) and SELF-DROP such a pool (the
   // thrown error is the graceful-drop signal the SvmRoute orchestrator catches).
-  // The LEGACY path is byte-identical: a classic 82-byte mint classifies as
+  // The LEGACY path is byte-identical: a Tokenkeg-owned mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged.
   const mintList = [baseMint, quoteMint];
-  const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mintList.map((mint) => owned(mint)));
   for (let mi = 0; mi < mintList.length; mi++) {
     const mint = mintList[mi]!;
-    const mintData = mintDatas[mi];
-    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const account = mintAccounts[mi];
+    if (account === null) continue; // an unreadable mint falls back to the legacy assumption
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

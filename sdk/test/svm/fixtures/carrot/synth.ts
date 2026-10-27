@@ -15,9 +15,16 @@
  * tag at @40, which puts the price message at @73 — the same offsets woofi's
  * OFF_PYTH_* constants name for the identical account type.
  */
-import { getAddressCodec } from "@solana/kit";
+import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../../src/svm/venues/types.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../../../../src/svm/token-program.js";
+import { CARROT_PROGRAM_ID } from "../../../../src/svm/venues/carrot/index.js";
+
+/** pyth-solana-receiver, the owner of every `PriceUpdateV2` account. */
+const PYTH_RECEIVER_PROGRAM_ID = address("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
+/** The owner of an account a test adds to `accounts` itself. */
+const SYSTEM_PROGRAM_ID = address("11111111111111111111111111111111");
 
 const codec = getAddressCodec();
 
@@ -71,7 +78,9 @@ export interface CarrotSynthAsset {
 export interface CarrotSynthVault {
   pool: Address;
   sharesMint: Address;
-  load: AccountLoader;
+  /** Each account with its real owner: the vault Carrot's, the shares mint Token-2022's (CRT is a
+   *  Token-2022 mint), each ATA Tokenkeg's, each oracle the Pyth receiver's. */
+  load: OwnedAccountLoader;
   /** Every account by base58 address, so a test can patch one and rebuild the loader. */
   accounts: Map<string, Uint8Array>;
 }
@@ -103,6 +112,7 @@ export function makeCarrotVault(assets: readonly CarrotSynthAsset[]): CarrotSynt
   writeU32LE(vault, 107, assets.length);
 
   const accounts = new Map<string, Uint8Array>();
+  const owners = new Map<string, Address>();
 
   assets.forEach((asset, i) => {
     const mint = pubkey(`carrot-mint-${asset.assetId}`);
@@ -119,17 +129,22 @@ export function makeCarrotVault(assets: readonly CarrotSynthAsset[]): CarrotSynt
     const ataData = new Uint8Array(165); // SPL token account; amount u64 @64
     writeU64LE(ataData, 64, asset.ataAmount ?? 1_000_000_000n);
     accounts.set(ata, ataData);
+    owners.set(ata, TOKEN_PROGRAM_ID);
     accounts.set(oracle, makeCarrotOracle(asset));
+    owners.set(oracle, PYTH_RECEIVER_PROGRAM_ID);
   });
 
   accounts.set(pool, vault);
+  owners.set(pool, CARROT_PROGRAM_ID);
   const mintData = new Uint8Array(82); // SPL mint; supply u64 @36
   writeU64LE(mintData, 36, 1_000_000_000n);
   accounts.set(sharesMint, mintData);
+  owners.set(sharesMint, TOKEN_2022_PROGRAM_ID);
 
-  const load: AccountLoader = async (addr) => {
+  const load: OwnedAccountLoader = async (addr) => {
     const data = accounts.get(addr);
-    return data === undefined ? null : new Uint8Array(data);
+    if (data === undefined) return null;
+    return { data: new Uint8Array(data), owner: owners.get(addr) ?? SYSTEM_PROGRAM_ID };
   };
 
   return { pool, sharesMint, load, accounts };

@@ -345,11 +345,11 @@ swap instruction construction, and a TypeScript reference quote:
 
 ```ts
 import { venue } from "@eco-incorp/sauce/svm";
-import type { AccountLoader, SwapUser } from "@eco-incorp/sauce/svm";
+import type { OwnedAccountLoader, SwapUser } from "@eco-incorp/sauce/svm";
 import type { Address } from "@solana/kit";
 
 export async function buildRaydiumSwap(
-  load: AccountLoader,
+  load: OwnedAccountLoader,
   pool: Address,
   user: SwapUser,
   amount: bigint,
@@ -362,7 +362,9 @@ export async function buildRaydiumSwap(
 
 `Solana.RaydiumCpSwap` exposes the same accessor after `import { Solana } from "@eco-incorp/sauce"`.
 `poolConfig` uses the account loader you supply; it does not create an RPC client or discover
-pools. `quoteSource` returns SauceScript source, and `.swap` returns instruction data plus account
+pools. The loader returns each account's owner as well as its data (`coalescingOwnedAccountLoader`
+above is one), because a mint's owner is what tells an extensionless Token-2022 mint from a legacy
+one. `quoteSource` returns SauceScript source, and `.swap` returns instruction data plus account
 references, not a transaction.
 
 Venue swap builders use a venue-level minimum output of one, so the program must enforce your

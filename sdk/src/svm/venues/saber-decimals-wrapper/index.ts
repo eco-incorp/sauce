@@ -85,7 +85,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -123,9 +124,10 @@ function wrapperConfig(cfg: PoolConfig): SaberDecimalsWrapperPoolConfig {
 }
 
 async function fetchPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<SaberDecimalsWrapperPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} wrapper ${pool} account not found`);
   if (data.length !== WRAPPED_TOKEN_SIZE) {
@@ -151,20 +153,22 @@ async function fetchPoolConfig(
   // The deposit/withdraw CPI is legacy-SPL (Tokenkeg) only for now, so
   // SELF-DROP a wrapper whose underlying or wrapper mint is Token-2022 (or
   // carries an un-routable extension) — the thrown error is the graceful-drop
-  // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An unreadable
-  // mint falls back to the legacy assumption, keeping the legacy path unchanged.
+  // signal (SvmRoute drops the venue on a fetchPoolConfig throw). A mint's
+  // token program is its OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one). An unreadable mint falls back to the
+  // legacy assumption, keeping the legacy path unchanged.
   const mints = [underlyingMint, wrapperMint];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue;
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping wrapper ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping wrapper ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

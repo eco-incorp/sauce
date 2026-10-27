@@ -101,7 +101,8 @@
 import { address, getAddressCodec, getUtf8Encoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
@@ -381,11 +382,12 @@ function decodePool(pool: Address, data: Uint8Array): DecodedPool {
  * both call sites unchanged.
  */
 export async function fetchPerpsJlpConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   custodyIn: Address,
   mintOut: Address,
   now: bigint = BigInt(Math.floor(Date.now() / 1000)),
 ): Promise<PerpsJlpPoolConfig> {
+  const load = accountDataLoader(owned);
   const [custodyInData, transferAuthority, perpetuals, eventAuthority] = await Promise.all([
     load(custodyIn),
     transferAuthorityPda(),
@@ -425,17 +427,19 @@ export async function fetchPerpsJlpConfig(
 
   // Tokenkeg-only (a Token-2022 transfer-fee/extension mint would desync wire
   // amounts — same restriction obric-v2/quantum apply to their own venues), so
-  // detect a Token-2022 or un-routable mint via the shared data-shape resolver
-  // and SELF-DROP the pair (the thrown error is the graceful-drop signal the
-  // SvmRoute orchestrator catches). The LEGACY path is byte-identical: a classic
-  // 82-byte mint classifies Tokenkeg with no extensions.
-  const [mintInData, mintOutData] = await Promise.all([load(dIn.mint), load(mintOut)]);
-  for (const [mint, mintData] of [
-    [dIn.mint, mintInData],
-    [mintOut, mintOutData],
+  // detect a Token-2022 or un-routable mint by the mint's OWNER (an
+  // extensionless Token-2022 mint is byte-identical to a legacy one) and
+  // SELF-DROP the pair (the thrown error is the graceful-drop signal the
+  // SvmRoute orchestrator catches). The LEGACY path is byte-identical: a
+  // Tokenkeg-owned mint classifies Tokenkeg with no extensions.
+  const [mintInAccount, mintOutAccount] = await Promise.all([owned(dIn.mint), owned(mintOut)]);
+  for (const [mint, account] of [
+    [dIn.mint, mintInAccount],
+    [mintOut, mintOutAccount],
   ] as const) {
-    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    if (account === null) continue; // an unreadable mint falls back to the legacy assumption
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is Token-2022 (swap2 is legacy-SPL only here)`,
       );

@@ -73,6 +73,7 @@ import {
   ownLimit,
   pool,
   restoreVenues,
+  SNAPSHOT,
   windowBound,
   windowStop,
   SYSTEM,
@@ -303,7 +304,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   // A Phoenix limit just past its book's first price level, fee included: the order takes that level
   // and leaves the next.
   const phoenixMax = async (p: Pool): Promise<bigint> => {
-    const loader = async (at: Address) => (BYTES.has(at) ? new Uint8Array(BYTES.get(at)!) : null);
+    const loader = async (at: Address) =>
+      BYTES.has(at)
+        ? { data: new Uint8Array(BYTES.get(at)!), owner: SNAPSHOT.get(at)!.owner as Address }
+        : null;
     const market = await fetchPhoenixConfig(loader, p.pool);
     const data = BYTES.get(p.pool)!;
     const first = market.windows.quoteIn.orders[0]!;

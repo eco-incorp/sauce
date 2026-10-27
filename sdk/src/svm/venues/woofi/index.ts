@@ -123,7 +123,15 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { assertOracleExponent } from "../oracle-exponent.js";
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type {
+  AccountLoader,
+  OwnedAccountLoader,
+  PoolConfig,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -255,15 +263,17 @@ function woofiConfig(cfg: PoolConfig): WoofiPoolConfig {
 
 // The swap CPI moves tokens through the classic Tokenkeg program, so a
 // Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP.
-// Detect the real token program per mint via the shared data-shape resolver;
-// the thrown error IS the graceful drop (SvmRoute catches a fetchPoolConfig
-// throw and drops the venue). LEGACY path byte-identical: a classic 82-byte
-// mint classifies Tokenkeg, parses no extensions, config built unchanged. An
-// unreadable mint falls back to the legacy assumption (keeps existing tests green).
-async function gateMint(load: AccountLoader, mint: Address, pool: Address): Promise<void> {
-  const data = await load(mint);
-  if (data === null) return;
-  if (classifyMintProgram(mint, data) === TOKEN_2022_PROGRAM_ID) {
+// The mint's token program is its OWNER (an extensionless Token-2022 mint is
+// byte-identical to a legacy one); the thrown error IS the graceful drop
+// (SvmRoute catches a fetchPoolConfig throw and drops the venue). LEGACY path
+// byte-identical: a Tokenkeg-owned mint parses no extensions, config built
+// unchanged. An unreadable mint falls back to the legacy assumption (keeps
+// existing tests green).
+async function gateMint(load: OwnedAccountLoader, mint: Address, pool: Address): Promise<void> {
+  const account = await load(mint);
+  if (account === null) return;
+  const { data } = account;
+  if (classifyMintProgram(mint, data, account.owner) === TOKEN_2022_PROGRAM_ID) {
     throw new Error(
       `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
     );
@@ -316,9 +326,10 @@ async function decodeAmmPool(
  * follow-up, not a permission gate).
  */
 export async function fetchWoofiConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<WoofiPoolConfig> {
+  const load = accountDataLoader(owned);
   const bundle = await decodeAmmPool(load, pool);
   const aIsQuote = bundle.tokenMintA === bundle.quoteTokenMint;
   const bIsQuote = bundle.tokenMintB === bundle.quoteTokenMint;
@@ -346,8 +357,8 @@ export async function fetchWoofiConfig(
     : { wooracle: bundle.wooracleB, woopool: bundle.woopoolB, tokenVault: bundle.tokenVaultB };
 
   await Promise.all([
-    gateMint(load, base.tokenMint, pool),
-    gateMint(load, bundle.quoteTokenMint, pool),
+    gateMint(owned, base.tokenMint, pool),
+    gateMint(owned, bundle.quoteTokenMint, pool),
   ]);
 
   const [oracleData, poolData] = await Promise.all([load(base.wooracle), load(base.woopool)]);

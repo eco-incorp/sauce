@@ -75,7 +75,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
@@ -367,9 +368,10 @@ async function resolveWindow(
  * freeze both directions' boundary windows. Read-only against the loader.
  */
 export async function fetchRaydiumClmmConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<RaydiumClmmPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -405,21 +407,22 @@ export async function fetchRaydiumClmmConfig(
   const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32));
   const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32));
   // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
-  // one carrying an un-routable extension) via the shared data-shape resolver
-  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
-  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
-  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
-  // Tokenkeg, parses no extensions, and the config is built unchanged. An
-  // unreadable mint falls back to the legacy assumption (keeps fixtures green).
+  // one carrying an un-routable extension) by its OWNER (an extensionless
+  // Token-2022 mint is byte-identical to a legacy one) and SELF-DROP the pool.
+  // The thrown error is the graceful-drop signal — the SvmRoute orchestrator
+  // catches a fetchPoolConfig throw and drops the venue. The LEGACY path stays
+  // byte-identical: a Tokenkeg-owned mint parses no extensions, and the config
+  // is built unchanged. An unreadable mint falls back to the legacy assumption
+  // (keeps fixtures green).
   for (const mint of [tokenMint0, tokenMint1]) {
-    const mintData = await load(mint);
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = await owned(mint);
+    if (mintAccount === null) continue;
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

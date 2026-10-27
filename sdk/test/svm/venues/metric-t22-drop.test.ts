@@ -10,7 +10,8 @@ import { address } from "@solana/kit";
 import { metric } from "../../../src/svm/venues/metric/index.js";
 import { loadFixtures, fixtureLoader } from "../fixtures.js";
 import type { AccountFixture } from "../fixtures.js";
-import { makeT22Mint } from "../fixtures/token-2022/synth.js";
+import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/index.js";
 
 const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/metric");
 const POOL = address("G5B2Ws2DKattHTm75AoANWCpbQ48R9n8ZJur42RLYRYF");
@@ -29,10 +30,12 @@ function realOracleQuoteBytes(): Uint8Array {
   return out;
 }
 
-/** The real fixtures with `target`'s account data replaced by a Token-2022 mint. */
-function withT22(target: string): AccountFixture[] {
+/** The real fixtures with `target` replaced by a Token-2022-owned mint (`data`, default an extension mint). */
+function withT22(target: string, data: Uint8Array = makeT22Mint()): AccountFixture[] {
   return loadFixtures(FIXTURES).map((f) =>
-    f.address === target ? { ...f, base64Data: Buffer.from(makeT22Mint()).toString("base64") } : f,
+    f.address === target
+      ? { ...f, owner: TOKEN_2022_PROGRAM_ID, base64Data: Buffer.from(data).toString("base64") }
+      : f,
   );
 }
 
@@ -51,11 +54,36 @@ describe("metric Token-2022 self-drop", () => {
     ).rejects.toThrow(/is Token-2022/);
   });
 
+  it("drops the pool when a mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const load = fixtureLoader(withT22(MINT_A, makeLegacyMint()));
+    await expect(
+      metric.fetchPoolConfig(load, POOL, 0, async () => realOracleQuoteBytes()),
+    ).rejects.toThrow(/is Token-2022/);
+  });
+
   it("still resolves for the unmodified (legacy) fixtures — byte-identical legacy path", async () => {
     const load = fixtureLoader(loadFixtures(FIXTURES));
     const cfg = await metric.fetchPoolConfig(load, POOL, 0, async () => realOracleQuoteBytes());
     expect(cfg.venue).toBe("metric");
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
+  });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT_A, MINT_B]) {
+      const load = fixtureLoader(
+        loadFixtures(FIXTURES).map((f) =>
+          f.address === mint
+            ? { ...f, owner: foreign, base64Data: Buffer.from(makeLegacyMint()).toString("base64") }
+            : f,
+        ),
+      );
+      await expect(
+        metric.fetchPoolConfig(load, POOL, 0, async () => realOracleQuoteBytes()),
+      ).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });
