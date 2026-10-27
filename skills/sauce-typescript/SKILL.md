@@ -251,11 +251,12 @@ address in `deployments` is recorded, not proof of live code.
     mainnet's USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
     `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
     `tokenProgram: "token-2022"`.
-  - A program compiled with the token methods, or writing an account where it uses it, carries
-    `derivedAccounts`: each slot the SDK added to `main`, by name, with its derivation as an
-    `--account` value (`pot:USDC` where the program names `pot`, else `authority:USDC`, `@to:USDC`,
-    `pda:@program:"state",@owner`);
-    `routes.sourceGlobals("solana").accounts` lists the expressions.
+  - A program compiled with the token methods, or writing an account where it uses it
+    (`Account.pda(program, [seeds])`, `Account(key)`, `pot.owner`), carries `derivedAccounts`: each
+    slot the SDK added to `main`, by name, with its derivation as an `--account` value (`pot:USDC`
+    where the program names `pot`, else `authority:USDC`, `@to:USDC`,
+    `pda:@program:"state",@owner`); `routes.sourceGlobals("solana").accounts` lists the
+    expressions. The host's `Solana` export is the chain, and holds no account.
     `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` resolves one to
     the address the cook's `AccountResolution` takes, as `sauce run` does; a venue namespace's
     `slot:@pool:USDC.<part>` also needs `load`, an owned-account loader, through which it reads the
@@ -271,7 +272,7 @@ address in `deployments` is recorded, not proof of live code.
     them. With nothing binding, the plain program is the one to cook. `SVM_SWAP_COSTS` is the cost
     table.
   - Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build pool configs,
-    quote source and swap CPIs over an account loader you supply; a venue swap they build uses a
+    quote source and swap CPIs over an owned-account loader you supply; a venue swap they build uses a
     minimum output of one, so enforce the real minimum with a balance delta in the program.
   - For a local validator or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and
     `svmKitchenIdlPath()` from `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the

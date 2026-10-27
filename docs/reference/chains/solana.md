@@ -90,15 +90,15 @@ the account it names. Each is read-only unless `.writable()` or `.signer()` give
 
 | Expression | The account | Derived as |
 | --- | --- | --- |
+| `Account(key)` | the account at a key | `<key>` |
+| `Account.pda(program, [seeds])` | the address program derives for the seeds | `pda:<program>:<seeds>` |
+| `Account.systemProgram` | the System Program | `11111111111111111111111111111111` |
+| `Account.tokenProgram` | SPL Token | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` |
+| `Account.token2022Program` | Token-2022 | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` |
+| `Account.associatedTokenProgram` | the Associated Token Account program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` |
+| `Account.memoProgram` | the Memo program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
 | `pot` | the Pot, which the program acts with through the Kitchen | `pot` |
-| `Solana.pda(program, [seeds])` | the address program derives for the seeds | `pda:<program>:<seeds>` |
-| `Solana.account(key)` | the account at a key | `<key>` |
-| `Solana.owner` | the Pot's owner, who signs the cook | `owner` |
-| `Solana.systemProgram` | the System Program | `11111111111111111111111111111111` |
-| `Solana.tokenProgram` | SPL Token | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` |
-| `Solana.token2022Program` | Token-2022 | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` |
-| `Solana.associatedTokenProgram` | the Associated Token Account program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` |
-| `Solana.memoProgram` | the Memo program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| `pot.owner` | the Pot's owner, who signs the cook | `owner` |
 | `<Sym>.accountOf(holder)` | the holder's associated account for the token | `<holder>:<Sym>` |
 | `<Sym>.mint` | the token's mint | `mint:<Sym>` |
 | `<Sym>.tokenProgram` | the token program that owns the mint | `program:<Sym>` |

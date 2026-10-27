@@ -84,17 +84,19 @@ import {
 } from "./svm-lowering.js";
 import { collectVenueMethods, isVenueProtocol, unrollPoolKeyLoops } from "./svm-venue-methods.js";
 import {
-  ACCOUNT_EXPRESSION_ROOT,
+  ACCOUNT_EXPRESSION_WORDS,
   ACCOUNT_MEMBERS,
   collectAccountExpressions,
   isAccountValue,
   isPotKey,
+  RETIRED_ACCOUNT_ROOT,
 } from "./svm-account-expressions.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { holderShapes, notAnAddress, readsField, reservedNameError } from "./balance-holder.js";
 import {
   BALANCE_MEMBER,
   nativeSymbolRefusal,
+  OWNER_MEMBER,
   POT_NAME,
   RETIRED_POT_NAME,
   selfRefusal,
@@ -149,9 +151,9 @@ export function rewriteSvmTokenSyntax(
   /** The names the caller binds: a `pot` or `self` among them is its own (`SvmLowering`'s `bound`). */
   bound?: ReadonlySet<string>,
 ): SvmTokenRewriteResult {
-  // Before parsing: a program that names neither `Token`, a symbol, a venue, the Pot nor a balance
-  // has nothing to lower. The scan stops at the first it meets; a mention in a comment only costs
-  // the parse.
+  // Before parsing: a program that names neither `Token`, a symbol, a venue, an account, the Pot
+  // nor a balance has nothing to lower. The scan stops at the first it meets; a mention in a
+  // comment only costs the parse.
   if (
     !source.includes(TOKEN_FACTORY_NAME) &&
     !namesAny(
@@ -159,7 +161,7 @@ export function rewriteSvmTokenSyntax(
       (name) =>
         tokens.has(name) ||
         isVenueProtocol(name) ||
-        name === ACCOUNT_EXPRESSION_ROOT ||
+        ACCOUNT_EXPRESSION_WORDS.has(name) ||
         name === native ||
         name === POT_NAME ||
         name === RETIRED_POT_NAME ||
@@ -226,8 +228,8 @@ function refuseRetiredPot(l: SvmLowering): void {
       n.type === "MemberExpression" &&
       n.computed !== true &&
       (n.object as AstNode).type === "Identifier" &&
-      nameOf(n.object as AstNode) === ACCOUNT_EXPRESSION_ROOT &&
-      !l.owns(n.object as AstNode, ACCOUNT_EXPRESSION_ROOT) &&
+      nameOf(n.object as AstNode) === RETIRED_ACCOUNT_ROOT &&
+      !l.owns(n.object as AstNode, RETIRED_ACCOUNT_ROOT) &&
       (n.property as AstNode).type === "Identifier" &&
       nameOf(n.property as AstNode) === RETIRED_POT_NAME
     ) {
@@ -431,21 +433,11 @@ function collectTokenMethods(l: SvmLowering): void {
     l.site(n, () => lowerMethod(site, l.symbolToken(symbol), symbol));
   });
 
-  /** `Solana.<name>`, a member read, where the program binds no `Solana` of its own. */
-  const solanaMember = (node: AstNode): string | undefined =>
-    node.type === "MemberExpression" &&
-    (node as { computed?: boolean }).computed !== true &&
-    (node.object as AstNode).type === "Identifier" &&
-    nameOf(node.object as AstNode) === ACCOUNT_EXPRESSION_ROOT &&
-    !l.owns(node.object as AstNode, ACCOUNT_EXPRESSION_ROOT) &&
-    (node.property as AstNode).type === "Identifier"
-      ? nameOf(node.property as AstNode)
-      : undefined;
   /** The account the program acts with, as the program names it: `pot`, or `ctx.self()`. */
   const isAuthority = (node: AstNode): boolean => l.isPot(node) || isCtxSelf(node, l.declared);
-  /** A balance's holder: what the token methods take, or `Solana.owner`. */
+  /** A balance's holder: what the token methods take, or `pot.owner`. */
   const balanceHolder = (node: AstNode, spelled: string): Holder => {
-    if (solanaMember(node) === "owner") {
+    if (l.isOwner(node)) {
       const owner = `${l.account("owner", "owner", { signer: true })}.address`;
       return { kind: "key", name: "owner", stem: "owner", value: owner };
     }
@@ -466,11 +458,11 @@ function collectTokenMethods(l: SvmLowering): void {
   const shapes = holderShapes(program);
   /**
    * Whether `node` is a holder of Solana's own, whose `.balance` is its lamports whatever its text's
-   * type: the Pot, `ctx.self()`, `Solana.owner`, or an account (an `Account` parameter, an account
+   * type: the Pot, `ctx.self()`, `pot.owner`, or an account (an `Account` parameter, an account
    * expression, a local bound to one).
    */
   const solanaHolder = (node: AstNode): boolean =>
-    isAuthority(node) || solanaMember(node) === "owner" || isAccountValue(l, node);
+    isAuthority(node) || l.isOwner(node) || isAccountValue(l, node);
 
   // `<holder>.<Sym>`, `<holder>.balance` and the refused `<holder>.SOL`, in value position.
   walk(program, (n) => {
@@ -500,11 +492,10 @@ function collectTokenMethods(l: SvmLowering): void {
             `the program's \`${name}\`.`,
         );
       }
-      const members = [...ACCOUNT_MEMBERS].filter((member) => member !== "owner");
       const near = nearMatches(name, [
         ...l.tokens.keys(),
         BALANCE_MEMBER,
-        ...(l.isPot(object) ? members : []),
+        ...(l.isPot(object) ? ACCOUNT_MEMBERS : []),
       ]);
       throw new Error(
         `${spelled} on Solana: \`${name}\` is not a token solana registers.` +
@@ -515,7 +506,8 @@ function collectTokenMethods(l: SvmLowering): void {
           `\`${holderText}.${BALANCE_MEMBER}\` its lamports` +
           (l.isPot(object)
             ? `; \`${POT_NAME}.address\`, \`${POT_NAME}.dataLen\`, \`${POT_NAME}.signer()\` and ` +
-              `\`${POT_NAME}.writable()\` are its account's.`
+              `\`${POT_NAME}.writable()\` are its account's, and \`${POT_NAME}.${OWNER_MEMBER}\` ` +
+              "its owner's."
             : "."),
       );
     }
@@ -533,7 +525,7 @@ function collectTokenMethods(l: SvmLowering): void {
       throw nativeSymbolRefusal(text, name, "solana", `${holderText}.${BALANCE_MEMBER}`);
     }
     if (name === BALANCE_MEMBER) {
-      if (l.isPot(object) || isCtxSelf(object, l.declared) || solanaMember(object) === "owner") {
+      if (l.isPot(object) || isCtxSelf(object, l.declared) || l.isOwner(object)) {
         l.site(n, () => {
           l.requirePlaced(n, spelled, "a balance of the native coin");
           l.splices.push({

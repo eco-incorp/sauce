@@ -1151,7 +1151,7 @@ export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): 
     `of each name to its value: ${file}\n` +
     "A token is a symbol (sauce globals --chain solana) or a mint's address. Or name the account " +
     "where the program uses it, and every cook derives it: USDC.accountOf(pot).writable(), " +
-    "USDC.mint, USDC.tokenProgram, Solana.pda(program, [seeds])."
+    "USDC.mint, USDC.tokenProgram, Account.pda(program, [seeds])."
   );
 }
 
@@ -1191,7 +1191,7 @@ function refusePotOnEngine(
         : `. It names \`pot\` at line ${mention.line}, column ${mention.column}, and a program ` +
           "that names the Pot anywhere acts as the Pot throughout, its token writes and " +
           "`ctx.self()` included. To cook it directly, write the signer's own account " +
-          "(`Solana.owner`, or `ctx.self()` as a token holder) where it names `pot`"),
+          "(`pot.owner`, or `ctx.self()` as a token holder) where it names `pot`"),
   );
 }
 
@@ -1199,7 +1199,7 @@ function refusePotOnEngine(
  * Refuses any account given in place of one the program derives from a role of the cook
  * (`svmCookRoles`: `pot`, `owner`, `authority`, their token accounts, an address one of them seeds)
  * that is not the one its derivation gives. The program takes such a slot as that role — `pot` is
- * its key, `pot.balance` and `pot.<TOKEN>` read it, `pot.signer()` signs as it, `Solana.owner` is
+ * its key, `pot.balance` and `pot.<TOKEN>` read it, `pot.signer()` signs as it, `pot.owner` is
  * the owner's, and the checks the lowering writes compare against that same slot — so another
  * account there would stand in for the Pot or its owner. The role's own account is taken however
  * it is given (`pot`, `authority`, `owner`, its address). `authority` is the Pot through the

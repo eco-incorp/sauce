@@ -210,7 +210,7 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     holds there, write `ctx.balance(x)`. In `--account` values and Solana derivations, `self` is
     `authority` (the Pot through the Kitchen, the owner with `--via engine`). A program that names
     `pot` is refused with `--via engine`, which has no Pot: for a direct cook write the signer's
-    account (`Solana.owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
+    account (`pot.owner`, or `ctx.self()` as a token holder) where you wrote `pot`, or cook
     through the Kitchen. An account you give for a slot derived from the Pot, the owner or the
     authority must be the account its derivation gives, or the command exits 2.
 11. **Test a name instead of calling `available(X)`.** A name the chain lacks is zero there.
@@ -249,6 +249,39 @@ refuses three forms that 2.6.0 compiled wrongly (EVM):
   built, or write the list in the call itself, where it is still reordered.
 
 The [changelog](../changelog.md#sdk-unreleased) quotes each error.
+
+## Solana's accounts are `Account` and `pot.owner`
+
+A program for Solana writes the accounts it uses where it uses them as `Account`'s, and the Pot's
+owner as `pot.owner`. `Solana` names the chain and holds no account. Each old spelling is refused,
+naming the new one, and the new one compiles to the same accounts, the same checks and the same
+bytes:
+
+| Write                                                                                                    | for                                                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Account(key)`                                                                                           | `Solana.account(key)`                                                                                   |
+| `Account.pda(program, [seeds])`                                                                          | `Solana.pda(program, [seeds])`                                                                          |
+| `Account.systemProgram`, `.tokenProgram`, `.token2022Program`, `.associatedTokenProgram`, `.memoProgram` | `Solana.systemProgram`, `.tokenProgram`, `.token2022Program`, `.associatedTokenProgram`, `.memoProgram` |
+| `pot.owner` (`pot.owner.address`, `pot.owner.signer()`, `pot.owner.USDC`)                                | `Solana.owner`                                                                                          |
+
+- **`pot.owner` names no Pot.** A program that reads the Pot's owner and not `pot` derives its
+  accounts from `authority`, as one that read `Solana.owner` did, and still cooks with
+  `--via engine`.
+- **An account's `.owner` is still the program that owns it.** For the program that owns the
+  Pot's account, write `Account(pot.address).owner`.
+- **A program's own `pot` keeps `pot.owner`.** A parameter, local or import named `pot` is the
+  program's own wherever it is in scope, its `.owner` with it, and so is a `pot` the compile's
+  `defines` or `contracts` give. `owner` is an ordinary name.
+- **`Account` is still a type.** `Account<Writable>` declares an account `main` takes; only as a
+  value does `Account` name one.
+- **What a cook takes is unchanged.** The `--account` values (`owner`, `owner:USDC`,
+  `pda:<program>:<seeds>`) and the derivations `sauce compile --json` reports are the same, and so
+  are `USDC.accountOf(holder)`, `USDC.mint`, `USDC.tokenProgram`, `.writable()`, `.signer()` and
+  `pot`.
+- **On an EVM chain** `Account(…)` is refused: accounts are Solana's. `pot.owner` is the Pot's
+  owner there too, read from the Pot's `owner()`.
+- **In an editor**, the SauceScript types declare `Account` and `pot.owner`, and `Solana` is a chain
+  with no account member, so a retired spelling shows as an error before it compiles.
 
 ## Check settlement pins
 

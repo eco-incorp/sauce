@@ -1,0 +1,582 @@
+{
+  "an account of each kind in one call": {
+    "derivedAccounts": {
+      "programAccount": "@program",
+      "statePda": "pda:@program:\"state\",@user",
+      "potUSDC": "authority:USDC",
+      "pot": "authority",
+      "systemProgram": "11111111111111111111111111111111"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "programAccount",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "statePda",
+        "requires": "writable"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "potUSDC",
+        "requires": "writable"
+      },
+      {
+        "kind": "slot",
+        "index": 3,
+        "name": "pot",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 4,
+        "name": "systemProgram",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["program", "user", "amount"],
+    "source": "import { ownerOf as __sauce_ownerOf } from \"@sauce/token\";\nfunction main(program: Address, user: Address, amount: Uint256, programAccount: Account, statePda: Account<Writable>, potUSDC: Account<Writable>, pot: Account<Signer>, systemProgram: Account) {\n  require(programAccount.address == program, \"wrong account\");\n  const [__sauce_pda1, __sauce_bump1] = crypto.findPDA(program, [\"state\", user.toBytesBe(32)]);\n  require(statePda.address == __sauce_pda1, \"wrong program-derived address\");\n  require(__sauce_ownerOf(USDC, potUSDC) == pot.address, \"wrong holder account\");\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\n  svm.call(programAccount, [\n    statePda,\n    potUSDC,\n    systemProgram,\n  ], amount.toBytesLe(8));\n}\n"
+  },
+  "two keys written out, numbered in order": {
+    "derivedAccounts": {
+      "account1": "CVDFLCAjXhVWiPXH9nTCTpCgVzmDVoiPzNJYuccr1dqB",
+      "account2": "DdqGmK5uamYN5vmuZrzpQhKeehLdwtPLVJdhu5P2iJKC"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "account1",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "account2",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(account1: Account, account2: Account): Uint256 {\n  require(account1.address == 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, \"wrong account\");\n  require(account2.address == 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, \"wrong account\");\n  return account1.dataLen + account2.dataLen;\n}\n"
+  },
+  "the owner's token account and a mint": {
+    "derivedAccounts": {
+      "ownerPYUSD": "owner:PYUSD",
+      "owner": "owner",
+      "mintPYUSD": "mint:PYUSD"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "ownerPYUSD",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "owner",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "mintPYUSD",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": [],
+    "source": "import { ownerOf as __sauce_ownerOf } from \"@sauce/token\";\nfunction main(ownerPYUSD: Account, owner: Account<Signer>, mintPYUSD: Account): Uint256 {\n  require(__sauce_ownerOf(PYUSD, ownerPYUSD) == owner.address, \"wrong holder account\");\n  require(mintPYUSD.address == PYUSD, \"wrong mint\");\n  return ownerPYUSD.dataLen + mintPYUSD.dataLen;\n}\n"
+  },
+  "every kind of seed, and a program account as the program": {
+    "derivedAccounts": {
+      "pot": "pot",
+      "owner": "owner",
+      "vaultPda": "pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:\"vault-state\",@user,pot,owner,pot,mint:USDC,mint:USDC,TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA,u64:@index,u16:7,CVDFLCAjXhVWiPXH9nTCTpCgVzmDVoiPzNJYuccr1dqB,0x0102"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "pot",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "owner",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "vaultPda",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["user", "index"],
+    "source": "function main(user: Address, index: Uint256, pot: Account<Signer>, owner: Account<Signer>, vaultPda: Account): Uint256 {\n  const __sauce_potKey = pot.address;\n  const __sauce_ownerKey = owner.address;\n  const [__sauce_pda1, __sauce_bump1] = crypto.findPDA(0x8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859, [\"vault-state\", user.toBytesBe(32), __sauce_potKey.toBytesBe(32), __sauce_ownerKey.toBytesBe(32), __sauce_potKey.toBytesBe(32), hex`c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`, hex`c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`, hex`06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9`, index.toBytesLe(8), hex`0700`, hex`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, hex`0102`]);\n  require(vaultPda.address == __sauce_pda1, \"wrong program-derived address\");\n  const vault = vaultPda;\n  return vault.dataLen;\n}\n"
+  },
+  "an address named for its constant, else its first string seed, else its place": {
+    "derivedAccounts": {
+      "destPda": "pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:@to,TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA,mint:USDC",
+      "feeVaultPda": "pda:@program:@to,\"fee-vault\"",
+      "pda3": "pda:@program:@to"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "destPda",
+        "requires": "writable"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "feeVaultPda",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "pda3",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["to", "program"],
+    "source": "function main(to: Address, program: Address, destPda: Account<Writable>, feeVaultPda: Account, pda3: Account): Uint256 {\n  const [__sauce_pda1, __sauce_bump1] = crypto.findPDA(0x8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859, [to.toBytesBe(32), hex`06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9`, hex`c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`]);\n  require(destPda.address == __sauce_pda1, \"wrong program-derived address\");\n  const [__sauce_pda2, __sauce_bump2] = crypto.findPDA(program, [to.toBytesBe(32), \"fee-vault\"]);\n  require(feeVaultPda.address == __sauce_pda2, \"wrong program-derived address\");\n  const [__sauce_pda3, __sauce_bump3] = crypto.findPDA(program, [to.toBytesBe(32)]);\n  require(pda3.address == __sauce_pda3, \"wrong program-derived address\");\n  const dest = destPda;\n  return dest.dataLen + feeVaultPda.dataLen + pda3.dataLen;\n}\n"
+  },
+  "the Pot's owner, with roles chained on it": {
+    "derivedAccounts": {
+      "owner": "owner"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "writable_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(owner: Account<Writable, Signer>): Uint256 {\n  const signer = owner;\n  return owner.dataLen + signer.dataLen;\n}\n"
+  },
+  "a Token-2022 mint's program, and the owner's and the Pot's accounts": {
+    "derivedAccounts": {
+      "token2022Program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "ownerPYUSD": "owner:PYUSD",
+      "owner": "owner",
+      "potPYUSD": "pot:PYUSD",
+      "pot": "pot"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "token2022Program",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "ownerPYUSD",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "owner",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 3,
+        "name": "potPYUSD",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 4,
+        "name": "pot",
+        "requires": "readonly_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "import { ownerOf as __sauce_ownerOf } from \"@sauce/token\";\nfunction main(token2022Program: Account, ownerPYUSD: Account, owner: Account<Signer>, potPYUSD: Account, pot: Account<Signer>): Uint256 {\n  require(token2022Program.address == 0x06ddf6e1ee758fde18425dbce46ccddab61afc4d83b90d27febdf928d8a18bfc, \"wrong program\");\n  require(__sauce_ownerOf(PYUSD, ownerPYUSD) == owner.address, \"wrong holder account\");\n  require(__sauce_ownerOf(PYUSD, potPYUSD) == pot.address, \"wrong holder account\");\n  return token2022Program.dataLen + ownerPYUSD.dataLen +\n    potPYUSD.dataLen;\n}\n"
+  },
+  "each program account, by name": {
+    "derivedAccounts": {
+      "systemProgram": "11111111111111111111111111111111",
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "token2022Program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "associatedTokenProgram": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+      "memoProgram": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "systemProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "tokenProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "token2022Program",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 3,
+        "name": "associatedTokenProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 4,
+        "name": "memoProgram",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(systemProgram: Account, tokenProgram: Account, token2022Program: Account, associatedTokenProgram: Account, memoProgram: Account): Uint256 {\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\n  require(tokenProgram.address == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9, \"wrong program\");\n  require(token2022Program.address == 0x06ddf6e1ee758fde18425dbce46ccddab61afc4d83b90d27febdf928d8a18bfc, \"wrong program\");\n  require(associatedTokenProgram.address == 0x8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859, \"wrong program\");\n  require(memoProgram.address == 0x054a535a992921064d24e87160da387c7c35b5ddbc92bb81e41fa8404105448d, \"wrong program\");\n  return systemProgram.dataLen + tokenProgram.dataLen +\n    token2022Program.dataLen + associatedTokenProgram.dataLen +\n    memoProgram.dataLen;\n}\n"
+  },
+  "the wrap program: the owner's SOL into the Pot's WSOL account": {
+    "derivedAccounts": {
+      "potWSOL": "pot:WSOL",
+      "pot": "pot",
+      "systemProgram": "11111111111111111111111111111111",
+      "owner": "owner",
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "potWSOL",
+        "requires": "writable"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "pot",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "systemProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 3,
+        "name": "owner",
+        "requires": "writable_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 4,
+        "name": "tokenProgram",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["lamports"],
+    "source": "import { ownerOf as __sauce_ownerOf, balanceOf as __sauce_balanceOf } from \"@sauce/token\";\nfunction main(lamports: Uint256, potWSOL: Account<Writable>, pot: Account<Signer>, systemProgram: Account, owner: Account<Writable, Signer>, tokenProgram: Account): Uint256 {\n  require(__sauce_ownerOf(WSOL, potWSOL) == pot.address, \"wrong holder account\");\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\n  require(tokenProgram.address == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9, \"wrong program\");\n  const potWsol = potWSOL;\n  let transfer = hex`02000000`;\n  svm.call(\n    systemProgram,\n    [owner, potWsol],\n    transfer.concat(lamports.toBytesLe(8)),\n  );\n  svm.call(tokenProgram, [potWsol], hex`11`);\n  return __sauce_svm_balance(WSOL, potWSOL, pot.address);\n}\n\nfunction __sauce_svm_balance(token: Address, account: Account, holder: Address): Uint256 {\n  const amount = __sauce_balanceOf(token, account);\n  require(svm.sload(account, 32, 32).toBe() == holder, \"wrong holder account\");\n  return amount;\n}\n"
+  },
+  "balances held by the owner, lamports and a token": {
+    "derivedAccounts": {
+      "owner": "owner",
+      "ownerUSDC": "owner:USDC",
+      "potUSDC": "pot:USDC",
+      "pot": "pot"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "ownerUSDC",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "potUSDC",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 3,
+        "name": "pot",
+        "requires": "readonly_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "import { balanceOf as __sauce_balanceOf } from \"@sauce/token\";\nfunction main(owner: Account<Signer>, ownerUSDC: Account, potUSDC: Account, pot: Account<Signer>): Uint256 {\n  return __sauce_svm_balance(USDC, ownerUSDC, owner.address) + __sauce_svm_balance(USDC, potUSDC, pot.address) + ctx.balance(owner.address);\n}\n\nfunction __sauce_svm_balance(token: Address, account: Account, holder: Address): Uint256 {\n  const amount = __sauce_balanceOf(token, account);\n  require(svm.sload(account, 32, 32).toBe() == holder, \"wrong holder account\");\n  return amount;\n}\n"
+  },
+  "accounts a helper takes from main, and the owner's lamports in a helper": {
+    "derivedAccounts": {
+      "owner": "owner",
+      "systemProgram": "11111111111111111111111111111111",
+      "pot": "pot"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "systemProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "pot",
+        "requires": "readonly_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "function both(__sauce_accounts: Account[]): Uint256 {\n  return ctx.balance(__sauce_accounts[0].address) + __sauce_accounts[1].dataLen;\n}\nfunction lamports(extra: Uint256, __sauce_accounts: Account[]): Uint256 {\n  return ctx.balance(__sauce_accounts[0].address) + extra;\n}\nfunction main(owner: Account<Signer>, systemProgram: Account, pot: Account<Signer>): Uint256 {\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\n  return both([owner, systemProgram]) + lamports(1, [owner]) + ctx.balance(pot.address);\n}\n"
+  },
+  "an account's lamports, by its key": {
+    "derivedAccounts": {
+      "pda1": "pda:11111111111111111111111111111111:@to",
+      "systemProgram": "11111111111111111111111111111111",
+      "toAccount": "@to"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "pda1",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "systemProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "toAccount",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["to"],
+    "source": "function main(to: Address, pda1: Account, systemProgram: Account, toAccount: Account): Uint256 {\n  const [__sauce_pda1, __sauce_bump1] = crypto.findPDA(0x0000000000000000000000000000000000000000000000000000000000000000, [to.toBytesBe(32)]);\n  require(pda1.address == __sauce_pda1, \"wrong program-derived address\");\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\n  require(toAccount.address == to, \"wrong account\");\n  return ctx.balance(pda1.address) + ctx.balance(systemProgram.address) +\n    ctx.balance(toAccount.address);\n}\n"
+  },
+  "a script, which runs as a main of its own": {
+    "derivedAccounts": {
+      "systemProgram": "11111111111111111111111111111111",
+      "owner": "owner",
+      "pot": "pot"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "systemProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "owner",
+        "requires": "writable_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "pot",
+        "requires": "writable_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "\nfunction main(systemProgram: Account, owner: Account<Writable, Signer>, pot: Account<Writable, Signer>): void {\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\nsvm.call(systemProgram, [owner, pot], hex`02000000`.concat(hex`0100000000000000`));\n}\n"
+  },
+  "a local declared Account, and accounts passed to a helper that takes one": {
+    "derivedAccounts": {
+      "owner": "owner",
+      "memoProgram": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+      "keyAccount": "@key",
+      "pda1": "pda:11111111111111111111111111111111:owner,DdqGmK5uamYN5vmuZrzpQhKeehLdwtPLVJdhu5P2iJKC"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "readonly_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "memoProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "keyAccount",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 3,
+        "name": "pda1",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["key"],
+    "source": "function size(account: Account): Uint256 {\n  return account.dataLen;\n}\nfunction main(key: Address, owner: Account<Signer>, memoProgram: Account, keyAccount: Account, pda1: Account): Uint256 {\n  require(memoProgram.address == 0x054a535a992921064d24e87160da387c7c35b5ddbc92bb81e41fa8404105448d, \"wrong program\");\n  require(keyAccount.address == key, \"wrong account\");\n  const __sauce_ownerKey = owner.address;\n  const [__sauce_pda1, __sauce_bump1] = crypto.findPDA(0x0000000000000000000000000000000000000000000000000000000000000000, [__sauce_ownerKey.toBytesBe(32), hex`bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`]);\n  require(pda1.address == __sauce_pda1, \"wrong program-derived address\");\n  const signer: Account = owner;\n  return size(signer) + size(memoProgram) + size(keyAccount) +\n    size(pda1);\n}\n"
+  },
+  "the owner's account fields": {
+    "derivedAccounts": {
+      "owner": "owner"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(owner: Account): Uint256 {\n  return owner.owner + owner.address + owner.dataLen;\n}\n"
+  },
+  "a record that holds the owner's account": {
+    "derivedAccounts": {
+      "owner": "owner"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(owner: Account): Uint256 {\n  const r = { holder: owner };\n  return r.holder.dataLen;\n}\n"
+  },
+  "accounts passed to @sauce/token's functions": {
+    "derivedAccounts": {
+      "ownerUSDC": "owner:USDC",
+      "owner": "owner"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "ownerUSDC",
+        "requires": "writable"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "owner",
+        "requires": "readonly_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "import { ownerOf as __sauce_ownerOf } from \"@sauce/token\";\nfunction main(ownerUSDC: Account<Writable>, owner: Account<Signer>): Uint256 {\n  require(__sauce_ownerOf(USDC, ownerUSDC) == owner.address, \"wrong holder account\");\n  return ownerOf(USDC, ownerUSDC) +\n    balanceOf(USDC, ownerUSDC);\n}\n"
+  },
+  "roles chained in either order": {
+    "derivedAccounts": {
+      "owner": "owner",
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "writable_signer"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "tokenProgram",
+        "requires": "writable"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(owner: Account<Writable, Signer>, tokenProgram: Account<Writable>): Uint256 {\n  require(tokenProgram.address == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9, \"wrong program\");\n  return owner.dataLen + tokenProgram.dataLen;\n}\n"
+  },
+  "the owner's key and an account's program, compared": {
+    "derivedAccounts": {
+      "owner": "owner",
+      "toAccount": "@to",
+      "systemProgram": "11111111111111111111111111111111"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "owner",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "toAccount",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 2,
+        "name": "systemProgram",
+        "requires": "readonly"
+      }
+    ],
+    "entryParams": ["to"],
+    "source": "function main(to: Address, owner: Account, toAccount: Account, systemProgram: Account) {\n  require(toAccount.address == to, \"wrong account\");\n  require(systemProgram.address == 0x0000000000000000000000000000000000000000000000000000000000000000, \"wrong program\");\n  require(owner.address != to, \"to is the owner\");\n  require(toAccount.owner == systemProgram.address, \"not a wallet\");\n}\n"
+  },
+  "the Memo program, in a call the owner signs": {
+    "derivedAccounts": {
+      "memoProgram": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+      "owner": "owner"
+    },
+    "accounts": [
+      {
+        "kind": "slot",
+        "index": 0,
+        "name": "memoProgram",
+        "requires": "readonly"
+      },
+      {
+        "kind": "slot",
+        "index": 1,
+        "name": "owner",
+        "requires": "readonly_signer"
+      }
+    ],
+    "entryParams": [],
+    "source": "function main(memoProgram: Account, owner: Account<Signer>) {\n  require(memoProgram.address == 0x054a535a992921064d24e87160da387c7c35b5ddbc92bb81e41fa8404105448d, \"wrong program\");\n  svm.call(memoProgram, [owner], \"hi\");\n}\n"
+  }
+}
