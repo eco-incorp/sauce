@@ -106,16 +106,22 @@ nothing moves.
   Ethereum to Optimism asked for a token at Ethereum's USDC address on Optimism rather than
   Optimism's USDC, so no relayer filled it and it was refunded after `fillDeadline`. The default is
   now the registry's token of the same symbol on `destChainId`, and a new optional `outputToken`
-  gives the token's address there. The zero address, Across's old "equivalent token", is not an
-  option: the SpokePool refuses it with `InvalidOutputToken`.
+  gives another token's address there (Arbitrum's `USDT0` for Ethereum's `USDT`). The zero address,
+  Across's old "equivalent token", is not an option: the SpokePool refuses it with
+  `InvalidOutputToken`.
 
 **Also breaking:**
 
-- An `acrossBridge` with no `outputToken` is refused at its `outputToken` when the registry does
-  not list its token on the program's chain, that token's symbol on `destChainId`, or
-  `destChainId` as one of its chains: give `outputToken`. One whose output the registry lists with
-  other decimals than its input is refused too, since the deposit asks for `amount - relayerFee`
-  of the output in the input's units.
+- An `acrossBridge` is refused at its `outputToken` unless the registry lists its token on the
+  program's chain and its output on `destChainId`, with the same decimals: the deposit asks for
+  `amount - relayerFee` of the output in the input's units, which a token of other decimals would
+  fill for dust (USDC to BNB Chain's 18-decimal USDC, which the registry does not list). With no
+  `outputToken`, the output is the registry's token of the input's symbol on `destChainId`; a
+  given `outputToken` is held to the same rule.
+- An `acrossBridge` is also refused at its `outputToken` when `destChainId` is the program's own
+  chain or a chain of the other kind (a mainnet deposit to a testnet, or the reverse), and when
+  `outputToken` is the zero address: Across does not bridge between those, and its SpokePool
+  refuses a zero output token with `InvalidOutputToken`.
 
 ## SDK 0.99.17 — 2026-10-27
 

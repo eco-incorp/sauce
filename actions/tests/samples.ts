@@ -194,12 +194,14 @@ export const SAMPLES: Samples = {
     amountOutMin: "1",
     recipient: R,
   },
+  // Registry tokens of the same decimals, Ethereum's USDC for Optimism's: an `outputToken` the
+  // registry cannot hold to the input's decimals is refused.
   acrossBridge: {
     type: "acrossBridge",
     amount: "1000",
     spokePool: T,
-    token: A,
-    outputToken: B,
+    token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    outputToken: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
     destChainId: 10,
     recipient: R,
     relayerFee: "10",

@@ -1147,7 +1147,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the token deposited, on this chain" },
         "outputToken": {
           "$ref": "#/$defs/address",
-          "description": "the token received on the destination, with the deposited token's decimals; default: the registry's token of the same symbol on `destChainId`"
+          "description": "the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId`"
         },
         "destChainId": {
           "type": "integer",

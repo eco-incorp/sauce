@@ -427,16 +427,37 @@ function symbolAt(address: string, names: ChainNames): string | undefined {
  * The token Across delivers for `action`, which deposits `input` on `names.chain`, or why the
  * registry cannot say: `outputToken` as given, else the registry's token of `input`'s symbol on
  * `destChainId`. The deposit asks for `amount - relayerFee` of it, counted in `input`'s units, so
- * wherever the registry lists both tokens their decimals must agree.
+ * the registry must list both tokens, with the same decimals: a given `outputToken` it cannot
+ * check is refused rather than deposited for an amount in the wrong units.
  */
 function acrossOutput(
   action: AcrossBridgeAction,
   input: string,
   names: ChainNames,
 ): { readonly address: Address } | { readonly problem: string } {
+  if (action.destChainId === names.chain.id) {
+    return {
+      problem: `chain ${action.destChainId} is the program's own chain: Across bridges to another one`,
+    };
+  }
+  if (action.outputToken?.toLowerCase() === ZERO_ADDRESS) {
+    return {
+      problem:
+        "the zero address is no token: the SpokePool refuses it (`InvalidOutputToken`), so give " +
+        "`outputToken`, the token's address on the destination",
+    };
+  }
   const destination = (CANONICAL_CHAINS as readonly CanonicalChain[]).find(
     (chain) => chain.kind === "evm" && chain.id === action.destChainId,
   );
+  if (
+    destination !== undefined &&
+    (getChain(destination.id)?.testnet === true) !== (getChain(names.chain.id)?.testnet === true)
+  ) {
+    return {
+      problem: `${onChain(destination)} and ${onChain(names.chain)} are not both mainnets or both testnets: Across does not bridge between them`,
+    };
+  }
   const there = destination === undefined ? undefined : chainNames(destination);
   const symbol = symbolAt(input, names);
   const output =
@@ -459,11 +480,26 @@ function acrossOutput(
   const received = there === undefined ? undefined : symbolAt(output, there);
   const sent = symbol === undefined ? undefined : names.decimals.get(symbol);
   const got = received === undefined ? undefined : there?.decimals.get(received);
-  if (sent !== undefined && got !== undefined && sent !== got) {
+  const units =
+    "the deposit asks for `amount - relayerFee` of the output, counted in the input's units";
+  if (sent === undefined || got === undefined) {
+    // Only a given `outputToken` reaches here: a default is the registry's token of `symbol`.
+    const unlisted =
+      sent === undefined
+        ? `${input} is not a registry token on ${onChain(names.chain)}`
+        : there === undefined
+          ? `chain ${action.destChainId} is not one of the SDK's EVM chains`
+          : `${output} is not a registry token on ${onChain(there.chain)}`;
+    const known = sent === undefined ? "" : ` (${symbol} has ${sent})`;
     return {
       problem:
-        `${symbol} has ${sent} decimals and ${received} on ${onChain(there!.chain)} has ${got}: ` +
-        "the deposit asks for `amount - relayerFee` of the output, counted in the input's units",
+        `${unlisted}, so the registry cannot hold the output's decimals to the input's${known}: ` +
+        `an \`outputToken\` is taken only where the registry lists both tokens with the same decimals, since ${units}`,
+    };
+  }
+  if (sent !== got) {
+    return {
+      problem: `${symbol} has ${sent} decimals and ${received} on ${onChain(there!.chain)} has ${got}: ${units}`,
     };
   }
 
@@ -475,7 +511,7 @@ function acrossOutput(
  * the SpokePool takes as given. It refuses the zero address (`InvalidOutputToken`), and the
  * deposited token's own address is the destination's token only where the two chains share it.
  * `resolved` is `actions` with every name an address (`resolveNames`); a deposit whose output the
- * registry cannot name is refused at its `outputToken`.
+ * registry cannot name, or cannot hold to the input's decimals, is refused at its `outputToken`.
  */
 export function acrossOutputTokens(
   actions: readonly Action[],

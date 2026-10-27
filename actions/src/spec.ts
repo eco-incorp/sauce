@@ -505,7 +505,7 @@ const SPECS: readonly ActionSpec[] = [
       token: f(token, "the token deposited, on this chain"),
       outputToken: opt(
         address,
-        "the token received on the destination, with the deposited token's decimals; default: the registry's token of the same symbol on `destChainId`",
+        "the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId`",
       ),
       destChainId: f(int(1, Number.MAX_SAFE_INTEGER), "the destination chain id"),
       recipient: f(address, "receives on the destination"),

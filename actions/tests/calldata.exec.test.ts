@@ -256,16 +256,16 @@ const EXPECT: Record<
       data: call("function swapIn(bool,uint256,uint256,address)", "swapIn", [true, AMOUNT, MIN, R]),
     },
   ],
-  // The Pot deposits (and is refunded), asks for the sample's `outputToken` on the destination,
-  // and the relayer keeps 10 of the 1000.
+  // The Pot deposits Ethereum's USDC (and is refunded), asks for the sample's `outputToken`,
+  // Optimism's USDC, on the destination, and the relayer keeps 10 of the 1000.
   acrossBridge: (pot) => [
     {
       to: T,
       data: call(DEPOSIT_V3, "depositV3", [
         pot,
         R,
-        A,
-        B,
+        USDC_ETHEREUM,
+        USDC_OPTIMISM,
         AMOUNT,
         AMOUNT - 10n,
         10n,

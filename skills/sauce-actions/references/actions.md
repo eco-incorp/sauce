@@ -408,7 +408,7 @@ Deposits into an Across SpokePool for the destination chain's token, less the re
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `spokePool` | contract | yes | the origin SpokePool; it pulls the token, so approve it first |
 | `token` | token | yes | the token deposited, on this chain |
-| `outputToken` | address | no | the token received on the destination, with the deposited token's decimals; default: the registry's token of the same symbol on `destChainId` |
+| `outputToken` | address | no | the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId` |
 | `destChainId` | integer ≥ 1 | yes | the destination chain id |
 | `recipient` | address | yes | receives on the destination |
 | `relayerFee` | base-10 integer string, uint256 | yes | kept by the relayer: the destination receives `amount - relayerFee` |
