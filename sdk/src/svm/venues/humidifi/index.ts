@@ -120,18 +120,36 @@ export const HUMIDIFI_PROGRAM_ID: Address<"9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCi
 /** The 8-byte XOR key: the program's on-chain obfuscation constant. */
 export const HUMIDIFI_XOR_KEY: readonly number[] = [58, 255, 47, 255, 226, 186, 235, 195];
 
-/** The 8-byte keystream for the 8-byte chunk at 0-based index `pos`. */
-export function humidifiKeystream(_pos: number): Uint8Array {
-  throw new Error("clean-room rewrite pending");
+/**
+ * The 8-byte keystream for the 8-byte chunk at 0-based index `pos`: the key XORed with the chunk's
+ * position mask, `pos * 0x0001_0001_0001_0001` written little-endian (pos's low byte at even
+ * offsets, its high byte at odd ones).
+ */
+export function humidifiKeystream(pos: number): Uint8Array {
+  const low = pos & 0xff;
+  const high = (pos >>> 8) & 0xff;
+  const stream = new Uint8Array(8);
+  for (let j = 0; j < 8; j++) stream[j] = HUMIDIFI_XOR_KEY[j]! ^ (j % 2 === 0 ? low : high);
+  return stream;
 }
 
 /** The keystream of chunk 1 (bytes 8-15, amountIn) as a little-endian u64: XORing a runtime LE
  *  amount with it is byte for byte XORing that chunk with its keystream (`patchXorMaskIn`). */
 export const HUMIDIFI_AMOUNT_XOR_MASK: bigint = 0xc3eabae3ff2eff3bn;
 
-/** Deobfuscate a captured 25-byte HumidiFi swap instruction (test/verification use). */
-export function humidifiDeobfuscate(_data: Uint8Array): Uint8Array {
-  throw new Error("clean-room rewrite pending");
+/**
+ * Deobfuscate a captured 25-byte HumidiFi swap instruction (test/verification use). Each byte is
+ * XORed with its chunk's keystream; a final partial chunk takes the leading keystream bytes. XOR
+ * undoes itself, so the same call also obfuscates. The input is left unchanged.
+ */
+export function humidifiDeobfuscate(data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(data.length);
+  for (let start = 0; start < data.length; start += 8) {
+    const stream = humidifiKeystream(start / 8);
+    const end = Math.min(start + 8, data.length);
+    for (let i = start; i < end; i++) out[i] = data[i]! ^ stream[i - start]!;
+  }
+  return out;
 }
 
 // ── static pool registry (see file header item 5 for why gPA can't discover these) ──
