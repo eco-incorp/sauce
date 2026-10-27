@@ -371,7 +371,7 @@ sends it and waits for the receipt: prints the hash, status and gas used, and th
 reason when it reverts (exit 1). The signer is the owner. The value defaults to the
 Kitchen's execution fee, read from the chain.
 
-You never deploy the Pot as a step of your own: a run deploys it when it first needs it.
+You need not deploy the Pot as a step of your own: a run deploys it when it first needs it.
 What the run sends before its cook, each in a transaction of its own, it asks you to
 approve at the terminal first; -y (--yes, or --auto-approve) approves every one without
 asking, and says `auto-approved: <action>` for each. They are:

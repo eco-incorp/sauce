@@ -4,10 +4,15 @@
  * accounts, accounts handed to another key, and lamports. Executing a cook and reading its accounts
  * back is `cli-solana.e2e.test.ts`.
  */
-import { address, getAddressEncoder, type Address } from "@solana/kit";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+
+import { address, createSolanaRpc, getAddressEncoder, type Address } from "@solana/kit";
 
 import { requireChain } from "../src/chains/canonical.js";
 import {
+  accountsNow,
+  BEFORE_READ_MS,
   movedBy,
   svmLeftInPot,
   svmLeftInPotJson,
@@ -311,5 +316,36 @@ describe("what a Solana cook moved", () => {
     expect(svmMovedLines(moved)).toEqual([
       "It changed no token balance and no account's lamports.",
     ]);
+  });
+});
+
+// The accounts a send reads before it signs are read after its blockhash is fetched: a read the
+// endpoint takes the slow testnet budget (120 s) over would let the blockhash, which lives about a
+// minute, run out before the send. The send gives that read `BEFORE_READ_MS` and goes on without it.
+describe("the accounts read before a send", () => {
+  let silent: Server;
+  let url: string;
+
+  beforeAll(async () => {
+    // An endpoint that takes the request and never answers.
+    silent = createServer(() => undefined);
+    await new Promise<void>((done) => silent.listen(0, "127.0.0.1", done));
+    url = `http://127.0.0.1:${(silent.address() as AddressInfo).port}`;
+  });
+  afterAll(async () => {
+    silent.closeAllConnections();
+    await new Promise((done) => silent.close(done));
+  });
+
+  it("are given well under a blockhash's life", () => {
+    expect(BEFORE_READ_MS).toBe(8_000);
+  });
+
+  it("stop at the signal they are given, from an endpoint that never answers", async () => {
+    const started = Date.now();
+    await expect(
+      accountsNow(createSolanaRpc(url), [SOURCE], AbortSignal.timeout(200)),
+    ).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 });

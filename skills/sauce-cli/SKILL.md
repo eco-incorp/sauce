@@ -350,9 +350,9 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 
 4. **The Pot.** `sauce pot --chain base --owner <address>` (or `--wallet <name>` for the signer's)
    prints the Pot's address, known before it exists, its deploy transaction, whether the chain has
-   the released engine and Kitchen (and the Kitchen's fee), and whether the Pot is deployed. There is
-   no deploy step to take: a command deploys your Pot when it first needs it (asks, or `--yes`), and
-   `sauce tx` puts its deployment first.
+   the released engine and Kitchen (and the Kitchen's fee), and whether the Pot is deployed. A
+   command deploys your Pot when it first needs it (asks, or `--yes`), and `sauce tx` puts its
+   deployment first; deploy it by hand only to send it tokens yourself (step 5).
    `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys it by hand.
    `--salt <label>` names another Pot of the same owner
    (`--salt-hex <bytes32>` for an exact salt); use the same salt in every later command.
@@ -370,7 +370,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    (`sauce pot import --chain solana --owner <owner> --salt <label>`, the only way on Solana).
    `sauce tx` sends nothing, so it records nothing.
 
-5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
+5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet once
+   it is deployed (`sauce pot --deploy`), or
    pass `--fund USDC:100` (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer
    into the Pot in the same cook; `--sweep` sends the Pot's whole balance of each funded token back
    to the signer (and of the native coin, when native is funded), not only what this run brought,
