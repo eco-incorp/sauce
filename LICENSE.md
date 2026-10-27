@@ -36,10 +36,11 @@ Core Components:        All portions of the Licensed Work that are not SDK
 Authorized Contracts:   The onchain contract addresses (if any) implementing
                         the Licensed Work, on any mainnet or test network,
                         that Eco, Inc. publishes and may update at
-                        docs.eco.com or in the @eco-incorp/sauce package, and
-                        each user account or contract created through the
-                        Kitchen to hold assets and run programs (each, a
-                        "Pot"), including each Solana Pot account.
+                        docs.eco.com or in the deployments reference included
+                        in the @eco-incorp/sauce package (as published by
+                        Eco, Inc.), and each user account or contract created
+                        through the Kitchen to hold assets and run programs
+                        (each, a "Pot"), including each Solana Pot account.
 Additional Use Grant:   Notwithstanding the restrictions in this License, you
                         may do the following, in each case solely to create,
                         compile, test, simulate, and execute programs for use
