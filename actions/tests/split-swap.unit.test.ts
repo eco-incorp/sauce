@@ -209,6 +209,25 @@ describe("split swap — approvals and the sweep", () => {
     );
   });
 
+  it("refuses a sweep recipient an ordinary transfer refuses, instead of padding it to an address", () => {
+    // `"0x1"` and `"1"` would be left-padded to 0x…01, an address no one holds a key to: the swept
+    // output would be burned. `parseActions` rejects each of them for a plain `transfer`.
+    for (const recipient of ["0x1", "1", "0", "0x0", "", "0xdeadbeef"]) {
+      assert.throws(
+        () =>
+          compileSplitSwap(
+            swap(2, 1, {
+              sweep: { token: USDT, recipient } as unknown as SplitSwap["sweep"],
+            }),
+          ),
+        (error: unknown) =>
+          error instanceof ProgramError &&
+          error.issues.some((issue) => issue.path.startsWith("sweep.")),
+        `recipient ${JSON.stringify(recipient)}`,
+      );
+    }
+  });
+
   it("refuses a retired sweep recipient as document validation, whatever the chain", () => {
     // Whether the Pot is "pot" or "self" does not depend on a deployment, so no chain is named in the
     // error, and an unsupported chain is not what the caller is told about first.

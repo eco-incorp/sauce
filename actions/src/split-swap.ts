@@ -122,6 +122,17 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
   const sweepAction: Action[] =
     sweep === undefined ? [] : [{ type: "transfer", amount: "0", ...sweep }];
+  // The sweep is lowered as a transfer, so a malformed recipient (`"0x1"`, `"1"`) must be refused
+  // here as a transfer's would be, not left-padded to an address the swept output is burned at.
+  try {
+    parseActions(sweepAction, "sweep");
+  } catch (error) {
+    if (!(error instanceof ProgramError)) throw error;
+    // The sweep is one object, not a list: name `sweep.recipient`, not `sweep[0].recipient`.
+    throw new ProgramError(
+      error.issues.map((issue) => ({ ...issue, path: issue.path.replace(/^sweep\[0\]/, "sweep") })),
+    );
+  }
   if (usesNames([...candidates, ...approvals, ...sweepAction])) {
     if (chain === undefined) {
       throw new Error(

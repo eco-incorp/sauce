@@ -108,6 +108,10 @@ nothing moves.
   own: it swapped more than its `amount` where the Pot held more, paying the extra output to its own
   sweep recipient, or reverted the transaction. Each cook now spends exactly its `amount`. The
   program is 10 bytes and about 900 gas larger per candidate.
+- **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
+  as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
+  (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
+  `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
 
 ## SDK 0.99.17 — 2026-10-27
 
