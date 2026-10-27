@@ -278,8 +278,11 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
   given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
   an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
-  `solana-testnet`. Solscan links name the cluster, the built-in public endpoint is Solana's own,
-  and the Solana venues are mainnet's, so a venue name is refused on it.
+  `solana-testnet`. Solscan links name the cluster, and the Solana venues are mainnet's, so a venue
+  name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
+  accounts (up to a minute for one request), so the command waits up to 120 s for each of its
+  answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
+  two there.
 - The chain pages and the agent skills mark each testnet, and every message naming the supported
   chains names the testnets after the mainnets.
 

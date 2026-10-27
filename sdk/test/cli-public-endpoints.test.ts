@@ -22,10 +22,13 @@ import { CANONICAL_CHAINS } from "../src/chains/canonical.js";
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const BASE = requireChain("base");
 
-/** What a fake endpoint does with a request: answer a result, answer a status, fail to connect, or
- *  never answer. */
+/** What a fake endpoint does with a request: answer a result (after `delayMs`, where given), answer
+ *  a status, fail to connect, or never answer. */
 type Behaviour =
-  { result: (method: string) => unknown } | { status: number } | "unreachable" | "hangs";
+  | { result: (method: string) => unknown; delayMs?: number }
+  | { status: number }
+  | "unreachable"
+  | "hangs";
 
 /** A JSON-RPC answer to `body`'s call, with `result`. */
 const answered = (body: string, result: unknown): Response => {
@@ -58,8 +61,20 @@ function fakeFetch(endpoints: Record<string, Behaviour>) {
       );
     }
     if ("status" in behaviour) return new Response("refused", { status: behaviour.status });
+    const result = behaviour.result(calls.at(-1)!.method);
+    if (behaviour.delayMs !== undefined) {
+      // A real delay: the forwarder's budget is `AbortSignal.timeout`, on the platform clock, which
+      // fake timers do not drive. (`Promise.withResolvers` is past this project's `lib`.)
+      await new Promise<void>((done, fail) => {
+        const timer = setTimeout(done, behaviour.delayMs);
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          fail(new Error("timed out"));
+        });
+      });
+    }
 
-    return answered(body, behaviour.result(calls.at(-1)!.method));
+    return answered(body, result);
   }) as typeof fetch;
 
   return { send, calls };
@@ -156,6 +171,17 @@ describe("the list", () => {
       if (list.some((rpc) => rpc.simulateV1 === true)) expect(list[0]!.simulateV1).toBe(true);
     }
   });
+
+  it("gives an endpoint a timeout of its own only on a Solana chain, whose clients wait for it", () => {
+    // viem gives up after 10 seconds, so an EVM endpoint waited for longer would be answered to
+    // no one; Solana's clients have no timeout of their own.
+    const own = Object.entries(PUBLIC_RPCS).flatMap(([id, list]) =>
+      list
+        .filter((rpc) => rpc.timeoutMs !== undefined)
+        .map((rpc) => [requireChain(Number(id)).slug, rpc.url, rpc.timeoutMs]),
+    );
+    expect(own).toEqual([["solana-testnet", "https://api.testnet.solana.com", 120_000]]);
+  });
 });
 
 describe("the forwarder", () => {
@@ -205,6 +231,30 @@ describe("the forwarder", () => {
     expect((await call(url, "eth_chainId")).status).toBe(200);
     await call(url, "eth_blockNumber");
     expect(fake.calls.map((each) => each.url)).toEqual([A, B, B]);
+  });
+
+  it("waits for an endpoint as long as its own timeout allows, and every other as long as the default", async () => {
+    // The default is 50 ms here; A answers in 200 ms. With a timeout of its own it is waited for;
+    // without one it is passed by, as before.
+    const solana = requireChain("solana-testnet");
+    const slow = fakeFetch({ [A]: { result: () => 1, delayMs: 200 }, [B]: { result: () => 2 } });
+    const patient = (
+      await forwarder({ [solana.id]: [{ url: A, timeoutMs: 2_000 }, { url: B }] }, slow.send, 50)
+    ).url(solana)!;
+    expect(await call(patient, "getAccountInfo")).toEqual({
+      status: 200,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: 1 }),
+    });
+    expect(slow.calls.map((each) => each.url)).toEqual([A]);
+
+    const hurried = fakeFetch({ [A]: { result: () => 1, delayMs: 200 }, [B]: { result: () => 2 } });
+    const url = (await forwarder({ [solana.id]: [{ url: A }, { url: B }] }, hurried.send, 50)).url(
+      solana,
+    )!;
+    expect((await call(url, "getAccountInfo")).body).toBe(
+      JSON.stringify({ jsonrpc: "2.0", id: 1, result: 2 }),
+    );
+    expect(hurried.calls.map((each) => each.url)).toEqual([A, B]);
   });
 
   it("answers the last refusal when every endpoint refuses, and a 502 when none is reached", async () => {

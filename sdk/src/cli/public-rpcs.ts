@@ -35,6 +35,12 @@ export interface PublicRpc {
    * Solana endpoints only: one that refuses it (publicnode answers 403) is never sent a scan.
    */
   readonly programAccounts?: boolean;
+  /**
+   * How long it may take to answer one request, in ms, where its node is slower than the
+   * forwarder's default allows (`public-endpoints.ts`). Solana endpoints only: Solana's clients wait
+   * as long as a request takes, where viem gives up after 10 seconds.
+   */
+  readonly timeoutMs?: number;
 }
 
 /** The public endpoints of each canonical chain, by chain id, in the order they are tried. */
@@ -254,6 +260,10 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   1399811150: [{ url: "https://api.devnet.solana.com", programAccounts: true }],
   // Solana testnet, under the SDK's own key for it (its engine reports devnet's CHAIN_ID), checked
   // 2026-10-27: Solana's own answers testnet's genesis, a slot, the wrapped-native mint, and a
-  // filtered getProgramAccounts.
-  1399811151: [{ url: "https://api.testnet.solana.com", programAccounts: true }],
+  // filtered getProgramAccounts. It is the one keyless testnet endpoint, and slow to read accounts:
+  // a simulation's getAccountInfo calls took 3.6 to 29.6 s that day and a getMultipleAccounts 56.9
+  // s, where its blockhash and simulateTransaction answered in under 1 s. So it waits 120 s.
+  1399811151: [
+    { url: "https://api.testnet.solana.com", programAccounts: true, timeoutMs: 120_000 },
+  ],
 };

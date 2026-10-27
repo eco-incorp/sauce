@@ -56,14 +56,15 @@ const OVERRIDE = {
 };
 const FORTY_TWO = `0x${"2a".padStart(64, "0")}`;
 
-/** One JSON-RPC call: its result, or a throw naming the HTTP status or the RPC error. */
-async function rpc(url, method, params) {
+/** One JSON-RPC call: its result, or a throw naming the HTTP status or the RPC error. An endpoint
+ *  the list gives a timeout of its own (`timeoutMs`) is given that long. */
+async function rpc(url, method, params, timeoutMs = 15_000) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     redirect: "error",
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`${method}: HTTP ${response.status}`);
@@ -99,14 +100,15 @@ async function checkEvm(chainId, url) {
 }
 
 /** What is wrong with an endpoint of the Solana cluster `cluster`, or `undefined`. */
-async function checkSolana(url, cluster) {
-  const genesis = await rpc(url, "getGenesisHash", []);
+async function checkSolana(url, cluster, timeoutMs) {
+  const ask = (method, params) => rpc(url, method, params, timeoutMs);
+  const genesis = await ask("getGenesisHash", []);
   if (genesis !== cluster.genesis) return { problem: `serves the cluster of genesis ${genesis}` };
-  if (typeof (await rpc(url, "getSlot", [])) !== "number") return { problem: "answered no slot" };
-  const mint = await rpc(url, "getAccountInfo", [cluster.mint, { encoding: "base64" }]);
+  if (typeof (await ask("getSlot", [])) !== "number") return { problem: "answered no slot" };
+  const mint = await ask("getAccountInfo", [cluster.mint, { encoding: "base64" }]);
   if (mint?.value === null || mint?.value === undefined) return { problem: "read no mint" };
   // A filtered scan, as `sauce pools` sends one: Raydium CLMM's 1,544-byte pools holding the mint.
-  const scan = await rpc(url, "getProgramAccounts", [
+  const scan = await ask("getProgramAccounts", [
     "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
     {
       encoding: "base64",
@@ -124,12 +126,14 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
   const chainId = Number(key);
   if (only !== undefined && !only.includes(chainId)) continue;
   const slug = CANONICAL_CHAINS.find((chain) => chain.id === chainId)?.slug ?? `chain ${chainId}`;
-  for (const { url, simulateV1, programAccounts } of list) {
+  for (const { url, simulateV1, programAccounts, timeoutMs } of list) {
     let found;
     try {
       const cluster = SOLANA_CLUSTERS[chainId];
       found =
-        cluster !== undefined ? await checkSolana(url, cluster) : await checkEvm(chainId, url);
+        cluster !== undefined
+          ? await checkSolana(url, cluster, timeoutMs)
+          : await checkEvm(chainId, url);
     } catch (error) {
       found = { problem: error.cause?.code ?? error.message };
     }

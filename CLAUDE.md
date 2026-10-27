@@ -1222,7 +1222,9 @@ each flagged for `eth_simulateV1`, with the date they were checked), and nothing
 from anywhere else or an export that reaches `cli/`, so it never reaches a browser.
 `public-endpoints.ts` hands each chain to the command's clients as one loopback URL (like the MCP
 guard's forwarder) that falls back through the list on a network error, a timeout, 401, 403, 429 or
-5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
+5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. A request
+gets 8 s, under viem's 10 s; an endpoint may set its own `timeoutMs`, on a Solana chain only (its
+clients have no timeout): Solana testnet's single endpoint, slow to read accounts, waits 120 s. The
 executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
 it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
 `sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI.
