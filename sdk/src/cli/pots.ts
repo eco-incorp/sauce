@@ -285,8 +285,9 @@ const base = (chain: CanonicalChain, origin: PotRecord["origin"]) => ({
 /**
  * The chain a Solana Pot is recorded under, whichever SVM chain made or found it: Solana's, with its
  * cluster beside it (`PotRecord.cluster`). The Kitchen's id, and so a Pot's address, is the same on
- * every cluster, and devnet Pots were recorded so before `solana-devnet` named devnet: one Pot is one
- * record, in one directory of the store (`1399811149-devnet`), however its chain is spelled.
+ * every cluster, and devnet and testnet Pots were recorded so before `solana-devnet` and
+ * `solana-testnet` named those clusters: one Pot is one record, in one directory of the store
+ * (`1399811149-devnet`, `1399811149-testnet`), however its chain is spelled.
  */
 const svmRecordChain = (): CanonicalChain => requireChain("solana");
 
@@ -478,8 +479,8 @@ export const clusterOf = (genesisHash: string): string => CLUSTERS[genesisHash] 
 
 /**
  * The Solana cluster an SVM chain is held to: its own, where it names one other than mainnet's
- * (`solana-devnet`, devnet). `solana` is held to none: it takes an endpoint of any cluster, as it
- * always has, its Pots recorded under the cluster the endpoint serves.
+ * (`solana-devnet`, devnet; `solana-testnet`, testnet). `solana` is held to none: it takes an
+ * endpoint of any cluster, as it always has, its Pots recorded under the cluster the endpoint serves.
  */
 export function clusterNamed(chain: CanonicalChain): string | undefined {
   const cluster = svmClusterOf(chain);
@@ -503,8 +504,8 @@ export function requireChainCluster(chain: CanonicalChain, genesisHash: string):
 
 /**
  * Whether `record` is a Pot on `chain`, as `sauce pot list --chain` filters: the chain's id, and for
- * an SVM chain held to a cluster (`solana-devnet`) Solana's records of that cluster. `solana` lists
- * every cluster's, as it always has.
+ * an SVM chain held to a cluster (`solana-devnet`, `solana-testnet`) Solana's records of that
+ * cluster. `solana` lists every cluster's, as it always has.
  */
 export function recordOn(record: PotRecord, chain: CanonicalChain): boolean {
   const cluster = clusterNamed(chain);

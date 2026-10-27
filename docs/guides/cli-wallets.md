@@ -325,9 +325,11 @@ Sign each with the `gas` the plan gives it. The two are simulated together, so t
 estimated as if the creation had landed, with 30% room. A signer's own estimate of the cook, taken
 while the Pot has no code, is far too low.
 
-What must be true for the plan to land goes to stderr: the Pot funded, and sent from its owner. A
-cook that would revert, as a cook on a Pot not funded yet does, comes with no `gas` and a note
-saying why: fund the Pot (its address takes tokens before it is deployed) and build it again. A Pot
+What must be true for the plan to land goes to stderr: the Pot funded after its deployment, and
+sent from its owner. A cook that would revert, as a cook on a Pot not funded yet does, comes with
+no `gas` and a note saying why: deploy the Pot first (`sauce pot --deploy`, or `sauce run --fund`,
+which deploys before it funds) rather than sending tokens to its address, which a Kitchen upgrade
+that changes the Pot's code would move, and build the plan again. A Pot
 named with `--pot` and no code is not planned, because its owner and salt are not known: the note
 names `sauce pot --deploy`. On Solana a cook may need several transactions, and `sauce tx` prints
 the first step of a plan ([Solana](cli-solana.md#a-cook-in-several-transactions)).
@@ -335,8 +337,9 @@ the first step of a plan ([Solana](cli-solana.md#a-cook-in-several-transactions)
 ### Fund the Pot in the same batch
 
 `--fund USDC:100` puts the tokens the program spends into the plan too: a transfer from you into the
-Pot, right before the cook. A wallet that sends a batch then creates the Pot, fills it and runs the
-program in one go, or does nothing.
+Pot, right before the cook. With an endpoint, the plan deploys the Pot first, so the transfer comes
+after the deployment; offline, the plan has no deployment step. A wallet that sends a batch then
+creates the Pot, fills it and runs the program in one go, or does nothing.
 
 ### Send what you signed
 

@@ -150,8 +150,8 @@ Your addresses and numbers will differ. Read it from the bottom:
 - **[2]** your Pot paid the Kitchen its fee;
 - **[1]** your wallet sent the fee to the Pot, as the cook's value;
 - **gas used** is the network's charge for the cook, paid by your wallet in ETH;
-- **after the Pot's deploy**: your Pot does not exist yet, so the simulation creates it first, as
-  the real run will;
+- **after the Pot's deploy**: your Pot does not exist yet, so the simulation creates it first, in
+  the copy only; in step 5 you create it for real, before you put tokens in it;
 - **Left in the Pot**: 4 of the 5 assumed USDC stay in the Pot, not in your wallet.
 
 Now ask for more than the Pot holds. Run the same command with `--assume-balance USDC:0.5`:
@@ -166,13 +166,18 @@ That is your `require` doing its job: the cook would fail whole, and nothing wou
 
 This step spends real money: about 0.001 ETH covers the fees, and the program pays 1 USDC.
 
-Your Pot's address is known before the Pot exists, so you can send it tokens now. Print it:
+From an exchange or another wallet, send 0.001 ETH on Base to your wallet's address
+(`sauce wallet address me`).
+
+Then create your Pot, before you put tokens in it. Its address is known before it exists, but
+tokens sent there early stay at that address if a Kitchen release with new Pot code moves your Pot
+elsewhere. Deploy it:
 
 ```sh
-sauce pot --chain base --wallet me
+sauce pot --chain base --wallet me --deploy
 ```
 
-It prints the address as `"pot"`:
+It asks for your password, sends the deployment and waits for it. It prints the address as `"pot"`:
 
 ```text
 {
@@ -181,16 +186,14 @@ It prints the address as `"pot"`:
 …
 ```
 
-From an exchange or another wallet, send 1 USDC on Base to that address, and 0.001 ETH on Base to
-your wallet's address (`sauce wallet address me`). Then run:
+Send 1 USDC on Base to that address. Then run:
 
 ```sh
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 
-It asks for your password. The first time, it also asks to deploy your Pot, which is one extra
-transaction, and says what it costs in gas: answer `deploy`. Then it simulates the cook again,
-sends it, waits for it, and prints what happened:
+It asks for your password. Then it simulates the cook again, sends it, waits for it, and prints
+what happened:
 
 ```text
 cook 0x5f…: success, gas used 184211, block 21004500

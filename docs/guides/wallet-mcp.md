@@ -179,7 +179,9 @@ that would fail, sends them in order, and stops at the first that does not succe
   while the Pot has no code, is far too low. Where the endpoint does not report the deployment's
   gas apart, the deployment carries none, and the signer estimates it right.
 - **A cook that would revert** after the deployment (a Pot not funded yet) comes with no `gas`, and
-  a note saying why: fund the Pot and call `sauce_tx` again.
+  a note saying why: deploy the Pot first (`sauce_pot`'s deployment), fund it, and call `sauce_tx`
+  again, or pass `fund` so the plan moves the tokens in after the deployment. Do not send tokens to
+  the address before the Pot is deployed.
 - `sauce_pot`'s deployment, by hand, can be sent from any account.
 - On Solana, each transaction is signed by its `feePayer`, the owner the call named, and
   `sauce_tx`'s `transaction` goes to `sauce_send` with its `cursor`, which also reads back what

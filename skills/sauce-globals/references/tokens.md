@@ -24,13 +24,15 @@ and amounts are in its smallest units (its decimals). Their addresses are in the
 - **Sepolia** (`sepolia`, [addresses](../../sauce-chains/references/sepolia.md)): `USDC` (6)
 - **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9); and 1799 tokenized stocks ([stocks](stocks.md))
 - **SolanaDevnet** (`solana-devnet`, [addresses](../../sauce-chains/references/solana-devnet.md)): `USDC` (6), `WSOL` (9)
+- **SolanaTestnet** (`solana-testnet`, [addresses](../../sauce-chains/references/solana-testnet.md)): `WSOL` (9)
 
 On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token
 accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the
 symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions
-(`balanceOf(USDC, account)`). Devnet is a chain of its own, `solana-devnet`: compiled for it,
-the same symbols are devnet's mints. Each chain's file in `sauce-chains` names each mint's
-token program: legacy SPL Token, or Token-2022, whose mints move by the checked writes.
+(`balanceOf(USDC, account)`). Devnet and testnet are chains of their own, `solana-devnet` and
+`solana-testnet`: compiled for one, the same symbols are its mints. Each chain's file in
+`sauce-chains` names each mint's token program: legacy SPL Token, or Token-2022, whose mints
+move by the checked writes.
 
 ## Token functions
 

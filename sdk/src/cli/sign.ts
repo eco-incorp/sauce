@@ -347,8 +347,12 @@ export async function signCommand(
     ...(read !== undefined && read.balance + value < read.fee
       ? [
           `warning: the Pot's balance and the cook's value (${read.balance + value} wei) do not ` +
-            "cover the Kitchen's fee: fund the Pot before the cook is submitted, or it reverts " +
-            "with FeeNotPaid.",
+            "cover the Kitchen's fee: " +
+            (deployPot === undefined
+              ? "fund the Pot before the cook is submitted"
+              : "send deployPot, then fund the Pot before the cook is submitted (not its address " +
+                "before it is deployed: a Kitchen upgrade that changes the Pot's code moves it)") +
+            ", or it reverts with FeeNotPaid.",
         ]
       : []),
     ...(read !== undefined && maxExecutionFee < read.fee
@@ -404,6 +408,9 @@ export async function cancelCommand(
   if (input.nonces.length === 0) throw new UsageError("missing --cancel <nonce>: what to cancel");
   requireSupported("cancelling signed cooks", [chain]);
   const target = input.target;
+  // The zero owner's Pot is a Shared Pot, which runs no signed cook and refuses its own
+  // invalidateNonces from every sender: there is no nonce of it to cancel.
+  if ("owner" in target) requirePotOwner(target.owner);
   const pot =
     "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
   const named = "owner" in target ? getAddress(target.owner) : undefined;

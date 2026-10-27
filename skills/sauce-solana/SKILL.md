@@ -263,7 +263,8 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   public key (or its 0x hex), or as a registered token, `USDC` or `mint:USDC`, meaning its mint; it
   is encoded as one ABI word. It is an `Account` parameter when the
   program reads or writes that account. A registered symbol (`USDC`) is the mint of the chain the
-  program is compiled for: `solana`'s, or devnet's with `--chain solana-devnet`.
+  program is compiled for: `solana`'s, devnet's with `--chain solana-devnet`, or testnet's with
+  `--chain solana-testnet`.
 - **`ctx` on Solana**: `ctx.msgSender()` is the first signer among the accounts the engine receives
   (the Pot, when a `pot` slot is attached as the Pot), not proof of who sent the transaction;
   `ctx.balance(acct.address)` is an attached account's lamports; `ctx.msgValue`, `ctx.gasLeft`,
@@ -341,8 +342,10 @@ it is. A Token-2022 account has the same first 165 bytes, then its extensions:
 32-byte key is `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`;
 `balanceOf(USDC, account)` takes it as it is. Devnet is a chain of its own, `solana-devnet` (chain
 id 1399811150): compiled for it, `USDC` is devnet's mint, `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`,
-and `chainId` is 1399811150, what the engine reports there. Its file in `sauce-chains` lists its
-mints. The venues are mainnet's: on `solana-devnet` a venue name is refused.
+and `chainId` is 1399811150, what the engine reports there. Testnet is one too, `solana-testnet`:
+its engine is devnet's build, so `chainId` there is 1399811150 as well, and its one registered
+mint is `WSOL`. Each chain's file in `sauce-chains` lists its mints. The venues are mainnet's: on
+`solana-devnet` and `solana-testnet` a venue name is refused.
 
 `--account <name>=pot` attaches **the Pot's own account**, not its USDC. The Pot's USDC is a token
 account of its own, so a program reading it takes that account and checks whose it is:
