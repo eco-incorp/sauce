@@ -45,3 +45,27 @@ sdk/.sauce-wasm/
 
 # Agents' git worktrees. The skill links beside them in .claude/skills are tracked.
 /.claude/worktrees/
+
+# The third-party Solana programs the suites run. Only those whose licence allows it are committed
+# (each `!` line); `sdk/scripts/fetch-program-fixtures.mjs` reads the rest from mainnet-beta, held to
+# the pins in each fixture's manifest.json (sdk/test/fixtures/fetched-programs.json lists them). A
+# new dump is ignored until it is un-ignored here or listed there.
+sdk/test/fixtures/svm-venue-programs/*.so.gz
+!sdk/test/fixtures/svm-venue-programs/byreal.so.gz
+!sdk/test/fixtures/svm-venue-programs/phoenix.so.gz
+!sdk/test/fixtures/svm-venue-programs/raydium-clmm.so.gz
+!sdk/test/fixtures/svm-venue-programs/stabble-clmm.so.gz
+sdk/test/fixtures/svm-exact-in-programs/*.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/helium-circuit-breaker.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/helium-treasury.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/infinity-flat-slab.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/infinity-multi-pool.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/infinity-sanctum-pool.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/infinity-spl-pool.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/orca-legacy-token-swap.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/orca-v1.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/raydium-amm-v4.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/raydium-cp-swap.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/saber-stableswap.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/saros.so.gz
+!sdk/test/fixtures/svm-exact-in-programs/token-swap-v1.so.gz

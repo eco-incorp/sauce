@@ -1,0 +1,380 @@
+{
+  "$comment": "The third-party Solana programs the suites run whose licence does not allow committing them (closed source, no licence granted, BUSL, GPL, AGPL, non-commercial, or a permissive source not proven to be the deployed program). Their bytes are never committed. `sdk/scripts/fetch-program-fixtures.mjs` reads each from mainnet-beta, holds it to the pin its fixture's manifest.json records (programId, sha256), caches it under node_modules/.cache/sauce-program-fixtures and writes it where the suites read it. Every other program of those fixtures is committed.",
+  "programs": [
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "aldrin",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "archer",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "bonkswap",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "boop-fun",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "carrot",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "carrot-log",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "chainlink-store",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "denali",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "deriverse",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "dexlab",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "flint",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "fluxbeam",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "gamma",
+      "licence": "review: Apache-2.0, but the deployed program is not proven to be that source"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "gavel",
+      "licence": "BUSL-1.1"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "goonfi-v2",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "guacswap",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "hadron",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "heaven",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "huma",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "hylo",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "hylo-stability-pool",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "infinity-multi-calc",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "infinity-sanctum-calc",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "infinity-spl-calc",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "infinity-wsol-calc",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "jupiter-lend-earn",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "jupiter-lend-liquidity",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "m0-ext",
+      "licence": "BUSL-1.1"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "m0-wm-ext",
+      "licence": "BUSL-1.1"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "mercurial",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "metadao-futarchy",
+      "licence": "BUSL-1.1"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "meteora-damm-v1",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "meteora-damm-v2",
+      "licence": "non-commercial licence"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "meteora-dbc",
+      "licence": "non-commercial licence"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "meteora-dlmm",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "meteora-vault",
+      "licence": "review: MIT, but the deployed program is not proven to be that source"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "moonit",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "mswap",
+      "licence": "BUSL-1.1"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "omnipair",
+      "licence": "BUSL-1.1"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "one-intro-swap",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "penguin",
+      "licence": "review: Apache-2.0, but the deployed program is not proven to be that source"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "perena",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "perps-jlp",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "pump-fee",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "pumpswap",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "raydium-launchlab",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "riptide",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "runner-rodeo",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "saber-decimals-wrapper",
+      "licence": "GPL-family (copyleft)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "sanctum-infinity",
+      "licence": "review: Apache-2.0, but the deployed program is not proven to be that source"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "saros-dlmm",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "scale-amm",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "scale-vmm",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "solayer",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "solfi-v1",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "solfi-v2",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "stabble-stable-swap",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "stabble-vault",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "stabble-weighted-swap",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "stepn",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "taurusfi",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "tesserav",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "trends",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "vault-liquid-unstake",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "virtuals",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "voltr",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-exact-in-programs",
+      "name": "xorca",
+      "licence": "LicenseRef-Orca-License"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "crema",
+      "licence": "closed source (no public program source)"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "cropper",
+      "licence": "unknown (no public program source found)"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "defituna",
+      "licence": "public source, no licence granted"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "invariant",
+      "licence": "review: Apache-2.0, but the deployed program is not proven to be that source"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "manifest",
+      "licence": "GPL-family (copyleft)"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "openbook-v2",
+      "licence": "GPL-family (copyleft)"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "orca-whirlpool",
+      "licence": "non-commercial licence"
+    },
+    {
+      "fixture": "svm-venue-programs",
+      "name": "pancakeswap-clmm",
+      "licence": "unknown (no public program source found)"
+    }
+  ]
+}

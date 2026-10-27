@@ -1188,6 +1188,17 @@ an account rather than adding a second, so `raydium-clmm/` and `orca-whirlpool/`
 are that snapshot's, read at one slot with every other venue's: the swap's split is only real
 when every pool's price is one moment's. The CLI suite runs its cluster at mainnet's rent and
 Kitchen fee, which a rehearsal's local copy must take from the cluster.
+**Only the programs whose licence allows it are committed** (MIT, Apache-2.0: the `!` lines in
+`.gitignore`). The rest of both program fixtures, this one's and `svm-exact-in-programs/`, are
+listed in `test/fixtures/fetched-programs.json`, and `pnpm --filter './sdk' fetch-program-fixtures`
+(`scripts/fetch-program-fixtures.mjs`, run by CI's setup action) writes them where the suites read
+them. It reads each from mainnet-beta through the public endpoints (`getAccountInfo` of the program
+and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
+caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
+longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it, never
+edit the hash. Run it before a dump script's `--check`, which re-hashes every program file. A new
+dump is ignored by git until it is un-ignored in `.gitignore` (licence permitting) or listed in
+`fetched-programs.json`; the fetch refuses a program that is neither.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
