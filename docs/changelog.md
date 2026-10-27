@@ -197,6 +197,8 @@ nothing moves.
   price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
   Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
   `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
+  them.
 
 ### Solana venues in TypeScript
 
@@ -430,11 +432,6 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   each, forgetting the least recently used first, and `fetchPoolConfig` forgets a pair it refuses.
   Before, each key minted stayed in memory for the life of the process. A key that is no longer
   held fails with `unknown discovery key`; minting it again restores it.
-
-### The agent skills and the manual
-
-- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
-  them.
 
 **Also breaking:**
 
