@@ -172,12 +172,16 @@ SDK. Upgrade @eco-incorp/sauce (sauce update)`. It says where the SDK deploys th
   of `--fund`). Before, a transfer into the Pot could land and the cook after it be refused. The
   refusal names the transaction: `nothing was sent — transaction 2 of 2 (cook on Pot 0x…): …`. A cook
   on a Pot an earlier step deploys is taken, and that deployment is checked in its place; so is one
-  the chain already has, while its Pot has no code. `run` checks the rest of its plan again before
-  each transaction it sends first, since an answer at the terminal can take a while.
+  the chain already has, while its Pot has no code, even when only a transfer follows, with no cook.
+  `run` checks the rest of its plan again before each transaction it sends first, since an answer
+  at the terminal can take a while.
 - **Now refused** (EVM): a Kitchen deployment whose calldata carries no owner and salt (no salt, for
   `deploySharedPot`), before anything is sent and naming the transaction (`Kitchen.deployPot's
 calldata carries no owner and salt it can be read from …`), where the decoder's own error escaped or
   the call reached the chain. `sauce send` still reports what the chain already has of the batch.
+- **Now refused** (EVM): `deployPot` with owner zero, with or without `routerFixed`, before any
+  funding is sent. The refusal names `deploySharedPot(salt)` for deploying an ownerless Shared Pot,
+  rather than reporting a release mismatch or letting funding land before the deployment reverts.
 - **Changed** (EVM): on a chain where the released Kitchen has no code, `sign`, `send`, a wallet's
   send and the MCP `sauce_pot` say `the released Kitchen … is not deployed on <chain>: this SDK's
 cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than that the SDK does

@@ -520,6 +520,12 @@ export async function requireKitchenPredicts(
   kind: PotKind = "private",
 ): Promise<void> {
   const kitchen = getAddress(v12KitchenAddress());
+  if (kind !== "shared" && getAddress(owner) === zeroAddress) {
+    throw new CliError(
+      "Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000: a Pot " +
+        "with no owner is a Shared Pot, which Kitchen.deploySharedPot(salt) deploys. Nothing was sent",
+    );
+  }
   const sdk = ownReleasePot(owner, salt, kind);
   const of = { owner: getAddress(owner), salt, kind, pot: sdk } as const;
   const at = { address: kitchen, abi: v12KitchenAbi } as const;
@@ -799,7 +805,7 @@ export async function requirePlanSendable(
   }
   const reaches = steps.some(
     (step, index) =>
-      !step.sent && (deployments[index] !== undefined || COOKS.has(selectorOf(step.tx))),
+      deployments[index] !== undefined || (!step.sent && COOKS.has(selectorOf(step.tx))),
   );
   if (!reaches) return;
   const chainId = await request("the chain id", () => client.getChainId());
