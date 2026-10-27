@@ -44,6 +44,9 @@
     "sauce-protocols/examples/compound-repay.sauce.ts": [
       "actions/tests/examples-lending.mainnet.ts"
     ],
+    "sauce-protocols/examples/gateway-deposit.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
     "sauce-protocols/examples/morpho-borrow.sauce.ts": [
       "actions/tests/examples-lending.mainnet.ts"
     ],
@@ -53,6 +56,9 @@
     ],
     "sauce-protocols/examples/pendle-trade.sauce.ts": [
       "actions/tests/examples-pendle-balancer.mainnet.ts"
+    ],
+    "sauce-protocols/examples/swap-then-gateway.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
     "sauce-protocols/examples/v3-position-manage.sauce.ts": [
       "actions/tests/examples-uniswap-v3.mainnet.ts"
@@ -72,6 +78,9 @@
     ],
     "sauce-swaps/examples/balancer-flash-cycle.sauce.ts": [
       "actions/tests/examples-pendle-balancer.mainnet.ts"
+    ],
+    "sauce-swaps/examples/best-venue-swap.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
     "sauce-swaps/examples/exact-output.sauce.ts": ["actions/tests/examples-uniswap-v3.mainnet.ts"],
     "sauce-swaps/examples/solana-swap.sauce.ts": [

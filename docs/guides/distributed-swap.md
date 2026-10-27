@@ -34,7 +34,8 @@ A correct distributed swap, whatever its tokens, chain or venues:
 
 1. **Covers the venues that hold the pair on the chain**, not every venue that exists. A venue's
    pools are found by namespace: `UniswapV3.Factory.getPool(a, b, fee)` per fee tier,
-   `AerodromeSlipstream.CLFactoryGaugesV3.getPool(a, b, tickSpacing)` per tick spacing, and a
+   `AerodromeSlipstream.CLFactoryGaugesV3.getPool(a, b, tickSpacing)` per tick spacing (Base's
+   factory; Arc's one Slipstream factory is `AerodromeSlipstream.CLFactory`), and a
    hookless Uniswap V4 pool by its key, `{ currency0, currency1, fee, tickSpacing, hooks }`, read
    through `UniswapV4.StateView` by its id. `0` from a factory means no pool. Every lookup costs
    gas whether or not it finds a pool ([The token and its pools](#the-token-and-its-pools)).
@@ -265,7 +266,9 @@ error (`` `AerodromeSlipstream.CLFactoryGaugesV3` is not deployed on ethereum. `
 `AerodromeSlipstream.CLFactoryGaugesV3` is on Base alone, and so is SPCXc, so this program compiles
 for Base. For another chain, write the loops for the venues that chain has and name its own token:
 Ethereum has `UniswapV3.Factory` and `UniswapV4.StateView`, no Slipstream, and SpaceX as `SPCXon`
-or `SPCXx`, so the program less its Slipstream loop, with `SPCXon` for `SPCXc`.
+or `SPCXx`, so the program less its Slipstream loop, with `SPCXon` for `SPCXc`. Arc has
+Uniswap V3 and V4 and one Slipstream factory, `AerodromeSlipstream.CLFactory`, so its Slipstream
+loop calls that factory, with a token Arc has (`sauce globals --chain arc`).
 
 ## The token and its pools
 

@@ -14,7 +14,12 @@ import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
 
 import { shippedSkills, SKILLS_INDEX, WRITE_IT_YOURSELF, type Skill } from "./resources.js";
-import { PACKAGED_SKILLS, resolveChain, supportedChainNames } from "./sdk.js";
+import {
+  PACKAGED_SKILLS,
+  resolveChain,
+  SUPPORTED_CHAIN_SLUGS,
+  supportedChainNames,
+} from "./sdk.js";
 
 export const PROMPT_NAMES = ["sauce_write_program"] as const;
 
@@ -69,7 +74,11 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
         "unsigned Pot deployment and cook for the user to sign.",
       argsSchema: {
         task: z.string().min(1).max(4000).describe("What the program should do, in plain words."),
-        chain: z.string().max(64).optional().describe("The chain it runs on (base, solana, 8453)."),
+        chain: z
+          .string()
+          .max(64)
+          .optional()
+          .describe(`The chain it runs on, by slug or id (${SUPPORTED_CHAIN_SLUGS.join(", ")}).`),
       },
     },
     ({ task, chain }): GetPromptResult => ({
@@ -82,8 +91,14 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
             text: [
               `Write a Sauce program that does this${chain === undefined ? "" : ` on ${chain}`}: ${task}`,
               "",
-              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, solana(chain) ? ["sauce-overview", "sauce-solana", "sauce-cli"] : ["sauce-overview", "sauce-script", "sauce-cli"])}),`,
+              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, solana(chain) ? ["sauce-overview", "sauce-solana", "sauce-cli"] : ["sauce-overview", "sauce-script", "sauce-chains", "sauce-cli"])}),`,
               "and follow them.",
+              ...(chain === undefined
+                ? ["No chain is given: ask the user which, a testnet to prototype or mainnet."]
+                : []),
+              "A testnet (arc-testnet, base-sepolia, sepolia) has USDC, CCTP and Circle Gateway but no",
+              "DEX, lending market or oracle: compile and simulate a swap, a pool or a lending market",
+              "on mainnet (arc, base, ethereum), where sauce_simulate signs and sends nothing.",
               ...WRITE_IT_YOURSELF,
               "Then, with this server's tools:",
               "1. sauce_globals for the chain: use the token symbols and protocol namespaces it lists",
@@ -91,7 +106,9 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   actions document in JSON instead: sauce_actions, and the sauce-actions skill.)",
               "2. sauce_compile until the program compiles; read any error and fix the line it names.",
               "3. sauce_simulate, to simulate the cook from the Pot's owner: check what it moved (or",
-              "   why it reverts) before going on.",
+              "   why it reverts) before going on. assumeBalance gives the Pot a balance for that",
+              "   simulation only: tell the user the result assumed it, and say whether it ran on a",
+              "   testnet or mainnet.",
               "4. sauce_pot for the owner's Pot: its address and what it holds. Its deployment needs",
               "   no step of its own: sauce_tx plans it first when the Pot has no code yet.",
               "5. sauce_tx for the unsigned cook transaction.",
