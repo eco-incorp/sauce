@@ -256,6 +256,12 @@ nothing moves.
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
 
+- **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
+  swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
+  the search itself starts one spacing above where it is resumed, so a tick right next to a found
+  one was skipped (ticks 1, 2 and 3 gave the window 1 and 3). A Y→X swap that crossed the skipped
+  tick lacked its account, and Invariant's program failed it. The X→Y window was right.
+
 ### SauceScript
 
 - **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
