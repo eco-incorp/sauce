@@ -2,10 +2,12 @@
 // chain's Uniswap V3 pool at fee tier `fee`, or its Aerodrome Slipstream pool at tick spacing
 // `tickSpacing`, from `AerodromeSlipstream.CLFactory`. Each pool is priced from its sqrt price with
 // its own fee taken off; a missing or empty pool is skipped, and the cook reverts when neither has
-// liquidity. The comparison is each pool's price now, before the trade moves it: `minOut` bounds
-// what the whole trade receives, and the swap stops at `sqrtPriceLimitX96`. The output goes to
-// `recipient`, and so does the input the pool did not take. Returns the venue chosen (0 Uniswap V3,
-// 1 Slipstream), what was spent and what was received.
+// liquidity. The comparison is each pool's marginal price now, which suits a trade small next to
+// both pools' depth; for a trade that moves the price, compare by simulating each swap inside the
+// cook instead (`sauce-swaps`, choosing the better venue). `minOut` bounds what the whole trade
+// receives, and the swap stops at `sqrtPriceLimitX96`. The output goes to `recipient`, and so does
+// the input the pool did not take. Returns the venue chosen (0 Uniswap V3, 1 Slipstream), what was
+// spent and what was received.
 //
 //   sauce run best-venue-swap.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <tokenIn> <tokenOut> <amountIn> <fee> <tickSpacing> <sqrtPriceLimitX96> <minOut> \

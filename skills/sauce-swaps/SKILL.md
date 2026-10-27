@@ -223,8 +223,16 @@ both. [examples/best-venue-swap.sauce.ts](examples/best-venue-swap.sauce.ts) doe
 V3 pool against a Slipstream pool on Arc and Base. On Arc the one Slipstream factory is
 `AerodromeSlipstream.CLFactory`; `AerodromeSlipstream.CLFactoryGaugesV3` and
 `AerodromeSlipstream.CLFactoryGaugeCaps` are Base's only, and each Base factory keeps its own
-pools. The comparison is the price now, before the trade moves it; to fill one order from every
-pool under one limit, see `sauce-distributed-swap`.
+pools. The comparison is the marginal price now, which suits a trade small next to both pools'
+depth: a larger trade can move the shallow pool past the deep one's price.
+
+**For a trade that moves the price, compare by what each swap would deliver**, measured in the
+cook itself: run each venue's swap inside an atomic `try` whose body throws the amount received
+(as 32 bytes of revert data), which undoes the swap; read the amount back in the `catch` from the
+error's 32 bytes; then swap for real at the venue that delivered most, with the same limit and
+`minOut`. Each measurement is the pool's own answer for the whole amount, fee and depth included,
+and costs a swap's gas. A simulation (`sauce simulate`) shows which venue the cook chose. To fill
+one order from every pool under one limit, see `sauce-distributed-swap`.
 
 ## The guard
 
