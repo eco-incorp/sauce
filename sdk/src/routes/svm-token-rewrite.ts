@@ -189,7 +189,8 @@ export function rewriteSvmTokenSyntax(
 /**
  * Refuses the retired spellings of the Pot, each naming what to write: a bare `self` the program
  * does not declare (`self.USDC` → `pot.USDC`, `self.SOL` → `pot.balance`, `self` → `pot`), and
- * `Solana.self` (`Solana.self.signer()` → `pot.signer()`).
+ * `Solana.self` (`Solana.self.signer()` → `pot.signer()`, `Solana.self.lamports` → `pot.balance`,
+ * `Solana.self.owner` → `Account(pot.address).owner`, a member `pot` has not → `pot`).
  */
 function refuseRetiredPot(l: SvmLowering): void {
   /** The expression `node` heads: its members and calls, as far as they go on it. */
@@ -213,13 +214,32 @@ function refuseRetiredPot(l: SvmLowering): void {
     const native = l.native === undefined ? undefined : `.${l.native}`;
     const instead =
       native !== undefined && rest.startsWith(native) && !/^[\w$]/.test(rest.slice(native.length))
-        ? `.${BALANCE_MEMBER}${rest.slice(native.length)}`
-        : rest;
+        ? `${POT_NAME}.${BALANCE_MEMBER}${rest.slice(native.length)}`
+        : node.type === "MemberExpression"
+          ? solanaSelfInstead(rest)
+          : `${POT_NAME}${rest}`;
     // A shorthand field (`{ self }`) keeps its key, written out.
     const parent = l.parents.get(node);
     const field =
       parent?.type === "Property" && parent.shorthand === true ? `${RETIRED_POT_NAME}: ` : "";
-    return selfRefusal(l.source.slice(node.start, top.end), `${field}${POT_NAME}${instead}`);
+    return selfRefusal(l.source.slice(node.start, top.end), `${field}${instead}`);
+  };
+  /**
+   * What `Solana.self<rest>` is now. `Solana.self` was the Pot's account: its fields and roles are
+   * `pot`'s, and so are its balances (`.<TOKEN>`, `.balance`); its lamports are `pot.balance`; its
+   * `.owner`, the program that owns it, is `Account(pot.address).owner`, `pot.owner` being the Pot's
+   * owner; any other member is not `pot`'s, so only `pot` itself is named.
+   */
+  const solanaSelfInstead = (rest: string): string => {
+    const match = /^\.([\w$]+)/.exec(rest);
+    if (match === null) return `${POT_NAME}${rest}`;
+    const member = match[1]!;
+    const after = rest.slice(match[0].length);
+    if (member === "lamports") return `${POT_NAME}.${BALANCE_MEMBER}${after}`;
+    if (member === OWNER_MEMBER) return `Account(${POT_NAME}.address).${OWNER_MEMBER}${after}`;
+    return ACCOUNT_MEMBERS.has(member) || member === BALANCE_MEMBER || l.tokens.has(member)
+      ? `${POT_NAME}${rest}`
+      : POT_NAME;
   };
   const [first] = l.selfReads;
   const solanaSelf: AstNode[] = [];
