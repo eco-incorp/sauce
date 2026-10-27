@@ -55,6 +55,7 @@ import {
   v12SvmKitchenProgramId,
   type V12ReleaseSet,
 } from "../deployments/index.js";
+import { SDK_RELEASES } from "../embedded/sdk-releases.generated.js";
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
 import type { Landed } from "./keep.js";
@@ -76,63 +77,20 @@ const sdkVersion = (): string =>
     }
   ).version);
 
-let sdkTable: ReadonlyArray<Readonly<Record<string, string>>> | undefined;
-
-/**
- * Every released SDK and the releases it pinned, as the changelog's table under "Which versions
- * work together" lists them: one row per release, each cell keyed by its column's name lowercased
- * (`sdk`, `compiler`, `v12-evm`, `kitchen-evm`, …). The release process keeps that table and
- * `docs:check` holds it to `releases.json`, so it is the one place an SDK version is paired with the
- * compiler, engines and Kitchens it shipped. `docs/changelog.md` ships in the package three levels
- * above `sdk/{src,dist}/cli`, as the manifest does. Read once; empty where it is not there.
- */
-const sdkReleases = (): ReadonlyArray<Readonly<Record<string, string>>> =>
-  (sdkTable ??= readSdkReleases());
-
-function readSdkReleases(): Array<Record<string, string>> {
-  let text: string;
-  try {
-    text = readFileSync(new URL("../../../docs/changelog.md", import.meta.url), "utf8");
-  } catch {
-    return [];
-  }
-  const section = /^## Which versions work together\s*$([^]*?)(?=^## |(?![^]))/m.exec(text)?.[1];
-  // The header, the separator under it, then a row per release.
-  const [header, , ...rows] = (section ?? "")
-    .split("\n")
-    .filter((line) => line.trim().startsWith("|"))
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^\||\|$/g, "")
-        .split("|")
-        .map((cell) => cell.trim()),
-    );
-  if (header === undefined) return [];
-
-  return (
-    rows
-      .map((cells) =>
-        Object.fromEntries(
-          header.map((column, index) => [column.toLowerCase(), cells[index] ?? ""]),
-        ),
-      )
-      // The row of a release not out yet names no version.
-      .filter((row) => /^\d+\.\d+\.\d+$/.test(row.sdk ?? ""))
-  );
-}
-
 /**
  * The SDK releases that pinned `release` (a record's: its compiler and each component's version), as
- * the changelog's table lists them: `0.99.9 to 0.99.15` for consecutive releases, runs apart joined
- * by commas. `undefined` when none did, or the table is not there.
+ * the changelog's "Which versions work together" table lists them (`SDK_RELEASES`, which the build
+ * generates from it): `0.99.9 to 0.99.15` for consecutive releases, runs apart joined by commas.
+ * `undefined` when none did.
  */
 export function pairedSdkReleases(release: Readonly<Record<string, string>>): string | undefined {
-  const ordered = sdkReleases()
-    .map((row) => ({ sdk: row.sdk!, row, parts: row.sdk!.split(".").map(Number) }))
-    .sort(
-      (a, b) => a.parts[0]! - b.parts[0]! || a.parts[1]! - b.parts[1]! || a.parts[2]! - b.parts[2]!,
-    );
+  const ordered = SDK_RELEASES.map((row) => ({
+    sdk: row.sdk!,
+    row,
+    parts: row.sdk!.split(".").map(Number),
+  })).sort(
+    (a, b) => a.parts[0]! - b.parts[0]! || a.parts[1]! - b.parts[1]! || a.parts[2]! - b.parts[2]!,
+  );
   const runs: string[][] = [];
   let run: string[] | undefined;
   for (const { sdk, row } of ordered) {
