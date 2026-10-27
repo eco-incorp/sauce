@@ -58,20 +58,32 @@ function assertReady(): void {
 const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 /**
+ * Takes the escapes out of `error`'s `message` and `stack` where each is a string. A host's
+ * `Error.prepareStackTrace` may make `stack` anything, and a getter may throw: whatever happens
+ * here, the compiler's own error is what is thrown, its `diagnostics` with it.
+ */
+function plain(error: Error): void {
+  try {
+    if (typeof error.message === "string") error.message = error.message.replace(SGR, "");
+    const stack: unknown = error.stack;
+    if (typeof stack === "string") error.stack = stack.replace(SGR, "");
+  } catch {
+    // Left as the compiler gave it.
+  }
+}
+
+/**
  * Compile a SauceScript program to Sauce bytecode — the compiler's own `compile`, after a check
  * that its wasm is initialized. Synchronous in every environment once `ready()` has resolved, and
- * in Node without it. A failure is the compiler's own error, its `message` (and `stack`) plain
- * text, its `diagnostics` as the compiler gave them.
+ * in Node without it. A failure is the compiler's own error, its `message` (and a string `stack`)
+ * plain text, its `diagnostics` as the compiler gave them.
  */
 export function compile(options: CompileOptions): CompileResult {
   assertReady();
   try {
     return compileWasm(options);
   } catch (error) {
-    if (error instanceof Error) {
-      error.message = error.message.replace(SGR, "");
-      if (error.stack !== undefined) error.stack = error.stack.replace(SGR, "");
-    }
+    if (error instanceof Error) plain(error);
     throw error;
   }
 }

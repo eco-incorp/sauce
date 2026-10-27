@@ -49,4 +49,24 @@ describe("a compile error's message is plain text", () => {
     expect(error.stack).not.toContain(String.fromCharCode(27));
     expect(error.diagnostics).toEqual(raw.diagnostics);
   });
+
+  // A host's `Error.prepareStackTrace` may make `stack` anything (here the frames): the escapes are
+  // taken out of what is a string, and the compiler's own error is what is thrown, its diagnostics
+  // with it.
+  it.each([
+    ["/compiler compile", () => compile(options)],
+    ["compileSauceProgram", () => compileSauceProgram("base", SOURCE)],
+  ])("%s: the compiler's error, whatever a host makes its stack", (_, run) => {
+    const prepare = Error.prepareStackTrace;
+    Error.prepareStackTrace = (_error, frames) => frames;
+    let error: Error & { diagnostics?: unknown };
+    try {
+      error = thrown(run);
+    } finally {
+      Error.prepareStackTrace = prepare;
+    }
+    expect(error.message).toBe(raw.message.replace(SGR, ""));
+    expect(error.diagnostics).toEqual(raw.diagnostics);
+    expect(Array.isArray(error.stack)).toBe(true);
+  });
 });
