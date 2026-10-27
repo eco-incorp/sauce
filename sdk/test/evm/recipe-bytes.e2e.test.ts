@@ -136,8 +136,10 @@ describeEvm(
       );
       const decoded = decodeFunctionData({ abi: acrossAbi, data });
       expect(decoded.functionName).toBe("depositV3");
+      // The depositor is the Pot: it is refunded an unfilled deposit and holds the speed-up authority,
+      // so it must not be whoever called the cook (a relayer, under `cookSigned`).
       expect(decoded.args).toEqual([
-        OWNER.address,
+        engine.pot,
         RECIPIENT,
         TOKEN,
         OUTPUT_TOKEN,
