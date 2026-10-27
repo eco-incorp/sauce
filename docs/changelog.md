@@ -113,10 +113,13 @@ nothing moves.
   a recording uses, configured over its stdin, and anvil sees only that proxy's loopback URL.
 - **Fixed** (EVM): an `rpcUrl` with credentials in it (`https://user:pass@host/…`) records. They go
   as a Basic `Authorization` header, which Node's `fetch` requires, and a live fork takes them the
-  same way.
+  same way. Neither a URL the proxy cannot parse nor an endpoint's answer that echoes the header is
+  ever quoted in its output or in a failed recording's error.
+- **Fixed** (EVM): a live fork's requests go upstream once, as anvil sent them, so anvil's own
+  timeout and retries apply, and its proxy exits with the process that started it.
 
 **Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
-`ws://` or `wss://` one is refused.
+WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, is refused.
 
 ## SDK 0.99.17 — 2026-10-27
 

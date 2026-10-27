@@ -3,7 +3,7 @@
  * standing in for a chain's endpoint, and the file it writes replays with no RPC at all.
  */
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -346,6 +346,10 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
           { state: missing },
           /^recording needs an http\(s\) endpoint/,
         ],
+        // anvil's `--fork-url` took an IPC path, and a URL `new URL` cannot parse fails here,
+        // before any process starts, rather than in the proxy.
+        ["/tmp/secret-key/anvil.ipc", {}, /^a live fork needs an http\(s\) endpoint/],
+        ["https://u:secret@localhost:99999/", {}, /^a live fork needs an http\(s\) endpoint/],
       ] as const) {
         await assert.rejects(
           fork("base", { block, rpcUrl: url, ...options }),
@@ -506,9 +510,125 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("never quotes the Basic header an endpoint echoes in a recording's error", async () => {
+    const upstream = await local();
+    // An endpoint in front of the chain that, asked about one account, answers with the
+    // Authorization header it was sent, as text: `Basic YTpi` for `a:b`.
+    const echo = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => (body += chunk));
+      request.on("end", async () => {
+        if (body.includes("f1".padStart(40, "0")))
+          return response.end(request.headers.authorization);
+        const answer = await fetch(upstream.rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        });
+        response.writeHead(answer.status, { "content-type": "application/json" });
+        response.end(await answer.text());
+      });
+    });
+    echo.listen(0, "127.0.0.1");
+    await once(echo, "listening");
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-echo-"));
+    const state = join(dir, "echo.json.gz");
+    try {
+      const block = Number(await upstream.client.getBlockNumber());
+      const rpcUrl = `http://a:b@127.0.0.1:${(echo.address() as AddressInfo).port}/`;
+      const recording = await fork("base", { block, state, rpcUrl });
+      await recording.client
+        .getBalance({ address: `0x${"f1".padStart(40, "0")}` })
+        .catch(() => undefined);
+      await assert.rejects(
+        recording.stop(),
+        (error: unknown) =>
+          error instanceof Error &&
+          // anvil retries the read, and each answer is refused alike.
+          /^recording failed: the endpoint's answer is not JSON(; the endpoint's answer is not JSON)*$/.test(
+            error.message,
+          ) &&
+          !error.message.includes("YTpi") &&
+          !error.message.includes("Basic"),
+      );
+      assert.equal(existsSync(state), false);
+    } finally {
+      echo.closeAllConnections();
+      echo.close();
+      await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("quotes no key, and leaves no proxy, when a live fork's anvil exits at start", async () => {
+    // An anvil that dies at once, saying what it was given.
+    const fake = fakeAnvil(`console.error(process.argv.slice(2).join(" ")); process.exit(3);`);
+    const before = new Set(children().map(({ pid }) => pid));
+    try {
+      await assert.rejects(
+        fork("base", {
+          block: 1,
+          mode: "live",
+          rpcUrl: "http://alice:sauce-key@127.0.0.1:9/v2/sauce-key?k=sauce-key",
+          anvil: fake.path,
+        }),
+        (error: unknown) =>
+          error instanceof Error &&
+          /^anvil exited with code 3: .*--fork-url http:\/\/127\.0\.0\.1:\d+ /.test(
+            error.message,
+          ) &&
+          !error.message.includes("sauce-key"),
+      );
+      for (const { pid } of children().filter(({ pid }) => !before.has(pid))) {
+        assert.ok(await gone(pid), `pid ${pid} still runs`);
+      }
+    } finally {
+      for (const { pid } of children().filter(({ pid }) => !before.has(pid))) {
+        process.kill(pid, "SIGKILL");
+      }
+      rmSync(fake.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stops a live fork's node and its proxy when the node fails it once started", async () => {
+    // A node that answers as a chain does until it is asked anything else.
+    const fake = fakeAnvil(`
+      require("node:http").createServer((request, response) => {
+        let body = "";
+        request.on("data", (chunk) => (body += chunk));
+        request.on("end", () => {
+          const { id, method } = JSON.parse(body);
+          response.end(JSON.stringify(method === "eth_chainId"
+            ? { jsonrpc: "2.0", id, result: "0x2105" }
+            : { jsonrpc: "2.0", id, error: { code: -32000, message: "this node fails" } }));
+        });
+      }).listen(port, "127.0.0.1");
+    `);
+    const before = new Set(children().map(({ pid }) => pid));
+    try {
+      await assert.rejects(
+        fork("base", { block: 1, mode: "live", rpcUrl: "http://127.0.0.1:9", anvil: fake.path }),
+        /this node fails/,
+      );
+      for (const { pid } of children().filter(({ pid }) => !before.has(pid))) {
+        assert.ok(await gone(pid), `pid ${pid} still runs`);
+      }
+    } finally {
+      for (const { pid } of children().filter(({ pid }) => !before.has(pid))) {
+        process.kill(pid, "SIGKILL");
+      }
+      rmSync(fake.dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("the recorder", () => {
+  const RECORDER_SCRIPT = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../src/testing/recorder.mjs",
+  );
+
   it("sends an endpoint's credentials as a Basic header, and the URL without them", async () => {
     const seen: { url?: string; authorization?: string } = {};
     const endpoint = createServer((request, response) => {
@@ -598,6 +718,156 @@ describe("the recorder", () => {
       busy.closeAllConnections();
       busy.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a configuration it cannot parse with a fixed message, quoting nothing of it", () => {
+    // Both pass a `^https?://` check and fail `new URL`, whose error carries the URL it refused.
+    for (const upstream of ["https://u:s3cret@localhost:99999/", "http://u:s3cret@[::1"]) {
+      const refused = spawnSync(process.execPath, [RECORDER_SCRIPT], {
+        input: JSON.stringify({ upstream }),
+        encoding: "utf8",
+        timeout: 15_000,
+      });
+      assert.equal(refused.status, 1);
+      assert.equal(refused.stderr, "recorder: invalid configuration\n");
+      assert.equal(refused.stderr.includes("s3cret"), false);
+      assert.equal(refused.stderr.includes(upstream), false);
+      assert.equal(refused.stdout, "");
+    }
+  });
+
+  it("never quotes the Basic header an endpoint echoes, in its errors or on stderr", async () => {
+    // An endpoint that answers every request with the Authorization it was sent, as text.
+    const endpoint = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => response.end(request.headers.authorization));
+    });
+    endpoint.listen(0, "127.0.0.1");
+    await once(endpoint, "listening");
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-echo-"));
+    const out = join(dir, "recorded.json");
+    const recorder = spawn(process.execPath, [RECORDER_SCRIPT], { stdio: "pipe" });
+    let stderr = "";
+    recorder.stderr!.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+    try {
+      // `a:b` is `YTpi`: short, so a SyntaxError for the answer would quote the whole header.
+      const upstream = `http://a:b@127.0.0.1:${(endpoint.address() as AddressInfo).port}/`;
+      recorder.stdin!.end(JSON.stringify({ upstream, block: "0x1", out }));
+      const [listening] = (await once(recorder.stdout!, "data", {
+        signal: AbortSignal.timeout(10_000),
+      })) as [Buffer];
+      await fetch(`http://127.0.0.1:${Number(listening.toString().trim())}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
+        signal: AbortSignal.timeout(15_000),
+      });
+      const exited = once(recorder, "exit");
+      recorder.kill("SIGTERM");
+      await exited;
+      const written = readFileSync(out, "utf8");
+      const { errors } = JSON.parse(written) as { errors: string[] };
+      assert.deepEqual(errors, ["the endpoint's answer is not JSON"]);
+      for (const said of [written, stderr]) {
+        assert.equal(said.includes("YTpi"), false);
+        assert.equal(said.includes("Basic"), false);
+      }
+    } finally {
+      if (recorder.exitCode === null && recorder.signalCode === null) recorder.kill("SIGKILL");
+      endpoint.closeAllConnections();
+      endpoint.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("relays a live fork's request once, takes a bare % as anvil does, and names the cause", async () => {
+    const seen: (string | undefined)[] = [];
+    // An endpoint under load: a recording retries it, a live fork leaves that to anvil.
+    const busy = createServer((request, response) => {
+      seen.push(request.headers.authorization);
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(503);
+        response.end("busy");
+      });
+    });
+    busy.listen(0, "127.0.0.1");
+    await once(busy, "listening");
+    const started: ChildProcess[] = [];
+    /** A forwarding-only recorder in front of `upstream`, its stderr collected, and a POST to it. */
+    const live = async (upstream: string) => {
+      const recorder = spawn(process.execPath, [RECORDER_SCRIPT], { stdio: "pipe" });
+      started.push(recorder);
+      const said = { stderr: "" };
+      recorder.stderr!.on("data", (chunk: Buffer) => (said.stderr += chunk.toString()));
+      recorder.stdin!.end(JSON.stringify({ upstream }));
+      const [listening] = (await once(recorder.stdout!, "data", {
+        signal: AbortSignal.timeout(10_000),
+      })) as [Buffer];
+      const post = () =>
+        fetch(`http://127.0.0.1:${Number(listening.toString().trim())}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
+          signal: AbortSignal.timeout(15_000),
+        });
+      return { recorder, said, post };
+    };
+    try {
+      // A `%` that starts no escape stays, as anvil's own parser leaves it.
+      const throttled = await live(
+        `http://alice:100%zz@127.0.0.1:${(busy.address() as AddressInfo).port}/`,
+      );
+      const response = await throttled.post();
+      assert.equal(response.status, 503);
+      assert.equal(await response.text(), "busy");
+      assert.deepEqual(seen, [`Basic ${Buffer.from("alice:100%zz").toString("base64")}`]);
+
+      // Nothing listens there any more: the cause is named, the credentials are not. (A credential
+      // short enough to appear in the message, as `a:b` would, replaces it whole. Not port 9, which
+      // fetch refuses outright, with no cause.)
+      const closedServer = createServer();
+      closedServer.listen(0, "127.0.0.1");
+      await once(closedServer, "listening");
+      const { port } = closedServer.address() as AddressInfo;
+      closedServer.close();
+      await once(closedServer, "close");
+      const unreachable = await live(`http://alice:sauce-key@127.0.0.1:${port}/`);
+      assert.equal((await unreachable.post()).status, 502);
+      // Its stderr is a pipe, written asynchronously: read once it has closed.
+      const closed = once(unreachable.recorder, "close");
+      unreachable.recorder.kill("SIGTERM");
+      await closed;
+      assert.equal(unreachable.said.stderr, "recorder: fetch failed (ECONNREFUSED)\n");
+    } finally {
+      for (const recorder of started) recorder.kill("SIGKILL");
+      busy.closeAllConnections();
+      busy.close();
+    }
+  });
+
+  it("exits when the process that started it is killed", async () => {
+    // A parent that starts the recorder, says its pid, and is then killed outright.
+    const parent = spawn(
+      process.execPath,
+      [
+        "-e",
+        `const child = require("node:child_process").spawn(process.execPath, [${JSON.stringify(RECORDER_SCRIPT)}], { stdio: ["pipe", "pipe", "inherit"] });
+        child.stdin.end(JSON.stringify({ upstream: "http://127.0.0.1:9" }));
+        child.stdout.once("data", () => console.log(child.pid));`,
+      ],
+      { stdio: ["ignore", "pipe", "inherit"] },
+    );
+    const [said] = (await once(parent.stdout!, "data", {
+      signal: AbortSignal.timeout(10_000),
+    })) as [Buffer];
+    const pid = Number(said.toString().trim());
+    try {
+      parent.kill("SIGKILL");
+      assert.ok(await gone(pid), `the recorder (pid ${pid}) outlived its parent`);
+    } finally {
+      if (!(await gone(pid, 0))) process.kill(pid, "SIGKILL");
     }
   });
 });

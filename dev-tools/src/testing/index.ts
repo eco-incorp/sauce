@@ -159,11 +159,15 @@ export async function fork(
     throw new Error(`forking ${resolved.slug} needs \`block\`, the block it starts at`);
   }
   // Recording and a live fork both read the endpoint through the kit's proxy, which speaks HTTP.
-  if (options.rpcUrl !== undefined && mode !== "replay" && !/^https?:\/\//i.test(options.rpcUrl)) {
-    throw new Error(
-      `${mode === "live" ? "a live fork" : "recording"} needs an http(s) endpoint as \`rpcUrl\`, ` +
-        "not a WebSocket one",
-    );
+  // The refusal never quotes the URL: it may carry a key.
+  if (options.rpcUrl !== undefined && mode !== "replay") {
+    const protocol = URL.canParse(options.rpcUrl) ? new URL(options.rpcUrl).protocol : "";
+    if (protocol !== "http:" && protocol !== "https:") {
+      throw new Error(
+        `${mode === "live" ? "a live fork" : "recording"} needs an http(s) endpoint as \`rpcUrl\`: ` +
+          "a valid http:// or https:// URL, not a WebSocket or IPC one",
+      );
+    }
   }
   const node = await startForkNode({
     chainId: resolved.id,
