@@ -78,7 +78,7 @@ runs:
         path: |
           node_modules/.cache/sauce-program-fixtures
           node_modules/.cache/sauce-contract-code
-        key: chain-fixtures-${{ hashFiles('sdk/test/fixtures/fetched-programs.json', 'sdk/test/fixtures/svm-*-programs/manifest.json', 'actions/tests/state/*.genesis.json.gz', 'sdk/test/fixtures/cli/Permit2*.json') }}
+        key: chain-fixtures-${{ hashFiles('sdk/test/fixtures/fetched-programs.json', 'sdk/test/fixtures/svm-*-programs/manifest.json', 'actions/tests/state/*.genesis.json.gz', 'dev-tools/test/testing/state/*.json.gz', 'sdk/test/fixtures/cli/Permit2*.json') }}
         restore-keys: chain-fixtures-
 
     - name: Fetch the third-party Solana programs and contract code
