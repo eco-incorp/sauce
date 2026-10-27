@@ -576,13 +576,16 @@ export function checkNames(
     const name = nameOf(property);
     if (object.type === "Identifier") {
       // A Solana venue (`Orca.Whirlpool`, `Pancakeswap.CLMM`) is the Solana lowering's name: on a
-      // Solana chain, and in code a test rules out, which a Solana chain may take. Its pools are
-      // mainnet's: on another cluster the name is refused.
+      // Solana chain, and in code a test rules out, which a Solana chain may take, unless the
+      // program or its caller binds the name itself. Its pools are mainnet's: a live call on
+      // another cluster is refused.
       if (
         (chain.kind === "svm" || validating) &&
+        !shadowed(at, nameOf(object), object.start) &&
+        !defined.has(nameOf(object)) &&
         `${nameOf(object)}.${name}` in SVM_VENUE_NAMESPACES
       ) {
-        if (chain.kind === "svm" && !svmVenuesOn(chain)) {
+        if (!validating && chain.kind === "svm" && !svmVenuesOn(chain)) {
           fail(
             target,
             `\`${nameOf(object)}.${name}\` is not on ${chain.slug}: the Solana venues are ` +

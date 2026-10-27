@@ -64,6 +64,38 @@ describe("solana-devnet", () => {
     ).toThrow(/`Orca\.Whirlpool` is not on solana-devnet/);
   });
 
+  // The refusal is for a venue a program would call: not in code a test rules out, which any chain
+  // may take, nor a name the program or its caller binds itself.
+  it("refuses only a live, unbound venue name", () => {
+    const seven = compileSauceProgram("solana-devnet", "function main() { return 7; }").bytecode;
+    const programs = [
+      "function main() { if (false) { Orca.Whirlpool.swap(0, USDC, WSOL, 1, 0, 0); } return 7; }",
+      "function main() { const Orca = { Whirlpool: 7 }; return Orca.Whirlpool; }",
+    ];
+    for (const source of programs) {
+      expect([source, compileSauceProgram("solana-devnet", source).bytecode]).toEqual([
+        source,
+        seven,
+      ]);
+      // The same programs compile on mainnet, the control.
+      expect(() => compileSauceProgram("solana", source)).not.toThrow();
+    }
+    // A name the caller defines is the caller's, not the venue: a live use of it is not refused as
+    // one (the compiler, not this check, has the last word on what `Orca.Whirlpool` is then).
+    expect(() =>
+      compileSauceProgram("solana-devnet", "function main() { return Orca.Whirlpool; }", {
+        defines: { Orca: 7n },
+      }),
+    ).not.toThrow(/is not on solana-devnet/);
+    // And a live, unbound venue call is still refused.
+    expect(() =>
+      compileSauceProgram(
+        "solana-devnet",
+        "function main() { return Orca.Whirlpool.swap(0, USDC, WSOL, 1, 0, 0); }",
+      ),
+    ).toThrow(/`Orca\.Whirlpool` is not on solana-devnet/);
+  });
+
   it("is a preview chain until the release is on devnet", () => {
     expect(chainSupport(devnet)).toBe("preview");
     expect(chainSupport("solana")).toBe("supported");
