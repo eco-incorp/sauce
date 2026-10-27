@@ -1,5 +1,5 @@
 {
-  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07: the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
+  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07 (those upgraded since, again on 2026-10-27): the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
   "programs": [
     {
       "name": "raydium-cp-swap",
@@ -71,19 +71,19 @@
       "name": "meteora-damm-v2",
       "programId": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
       "file": "meteora-damm-v2.so.gz",
-      "sha256": "4d5b920baebc090f89b2e8796a3452ed067c9667a143058c96a312f2c1e6848b"
+      "sha256": "967ff9fb161eec2e62f66d2c899100739fb747c445f697b8625c86b31b9a2022"
     },
     {
       "name": "meteora-damm-v1",
       "programId": "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
       "file": "meteora-damm-v1.so.gz",
-      "sha256": "de81c5e8e2725857af73da5294323cecae4eb639f5b4b66e300662b5a0f2547b"
+      "sha256": "0856d35fa348f8d3570194ff9fe36095f34f0fa64c4286c0de5e207b1a788b22"
     },
     {
       "name": "meteora-vault",
       "programId": "24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi",
       "file": "meteora-vault.so.gz",
-      "sha256": "fd0f3dd9e38a51f3afe04084a9df9dad1017af3e482674d2eed5b16e47ec78eb"
+      "sha256": "2ca789753622df50bd4eb5d7a07769943d6795349196f7420657951875b827fd"
     },
     {
       "name": "aldrin",
@@ -119,7 +119,7 @@
       "name": "stabble-weighted-swap",
       "programId": "swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW",
       "file": "stabble-weighted-swap.so.gz",
-      "sha256": "847dbff22f4e1ec19c221b702035f87a2a483f089bf461ca4dd7bdad342f4ffe"
+      "sha256": "880b1ba903f20572b7002227723c282b644f39011808e78bce607e6bf3693cd0"
     },
     {
       "name": "stabble-vault",
@@ -137,13 +137,13 @@
       "name": "pumpswap",
       "programId": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
       "file": "pumpswap.so.gz",
-      "sha256": "2e2608ddce89d1d23216756f0ace0f718e9164660bcdb4a40221318dc56db4ca"
+      "sha256": "6a7ad34596d83b4c435b32f458a56e718e9f82eb4ad38e4316616d15d24d8ff7"
     },
     {
       "name": "pump-fee",
       "programId": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
       "file": "pump-fee.so.gz",
-      "sha256": "8a9bfa986ac0f97ade1a327a09ccc24421dfa52bb8ee462f75458e3e5bad48d9"
+      "sha256": "4f2955d0f6b40cc9ff7daa18ccad7d19119ba1249759f4e7e3bb691beee6b35e"
     },
     {
       "name": "bonkswap",
@@ -203,7 +203,7 @@
       "name": "taurusfi",
       "programId": "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
       "file": "taurusfi.so.gz",
-      "sha256": "026f5ef2073ef291d4ad5168e8ad1d8739c6d647ebfe6ee38943bb63a778f162"
+      "sha256": "cc7bff76ea223d72446cd5beb0e83132d5239f29587c4906a6d30bacf59fb334"
     },
     {
       "name": "riptide",
@@ -245,7 +245,7 @@
       "name": "goonfi-v2",
       "programId": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
       "file": "goonfi-v2.so.gz",
-      "sha256": "a24aa13a0a9a4d7d1c8752cc9d9a566a5fae3bc20ba0ca3ba11368abd613e43c"
+      "sha256": "cd78ffe66f2ca9068ef03ab7c57e61f5bc693824430a2ca897c2da2661288850"
     },
     {
       "name": "raydium-launchlab",
@@ -263,7 +263,7 @@
       "name": "meteora-dbc",
       "programId": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
       "file": "meteora-dbc.so.gz",
-      "sha256": "4c26a8a5da99f8ce932fa0300c46675b527090021fbb74214c9486bedda9f23b"
+      "sha256": "e2bfc853c1a1778dd8ee40ea9a0f3edf5587442360c57c685e7e3024ad0cad47"
     },
     {
       "name": "heaven",
@@ -335,7 +335,7 @@
       "name": "hylo",
       "programId": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
       "file": "hylo.so.gz",
-      "sha256": "c745eb73d5dfa951a6317bcd5ceef1e540f7367ff7165d12596835d0488f5719"
+      "sha256": "d29132a819bcc4f060de12fe949773181c8d0f74f946ec0c84822251ff0bf8a1"
     },
     {
       "name": "hylo-stability-pool",
@@ -467,7 +467,7 @@
       "name": "archer",
       "programId": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
       "file": "archer.so.gz",
-      "sha256": "682854dc48318ec900a81b774e3008b167c710d86e8ff7945268c08a8115252b"
+      "sha256": "5c5ff975a6f24bdffa5d54a82242e937e9710680219bc4e0f6dd9a0694b0a1d5"
     },
     {
       "name": "boop-fun",
