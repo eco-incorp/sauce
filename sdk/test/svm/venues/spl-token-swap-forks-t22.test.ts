@@ -14,7 +14,8 @@ import {
   makeSplTokenSwapForkAdapter,
   TOKEN_SWAP_V1_PROGRAM_ID,
 } from "../../../src/svm/venues/spl-token-swap-forks/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 
 const dec = getAddressDecoder();
 const aenc = getAddressEncoder();
@@ -61,12 +62,12 @@ function vault(amount: bigint): Uint8Array {
   return data;
 }
 
-function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
+function loaderOf(entries: Array<[Address, Uint8Array]>): OwnedAccountLoader {
   const map = new Map(entries.map(([a, d]) => [a as string, d]));
-  return async (a) => {
+  return ownedByShape(async (a) => {
     const d = map.get(a as string);
     return d === undefined ? null : new Uint8Array(d);
-  };
+  });
 }
 
 const adapter = makeSplTokenSwapForkAdapter("token-swap-v1", TOKEN_SWAP_V1_PROGRAM_ID);

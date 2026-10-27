@@ -98,7 +98,8 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -327,11 +328,12 @@ export function level0CumOffset(direction: "aToB" | "bToA"): number {
  * direction — self-drop, not a revert, at the orchestrator layer).
  */
 export async function fetchTesseraVConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   direction: "aToB" | "bToA",
   resolveVault?: TesseraVVaultResolver,
 ): Promise<TesseraVPoolConfig> {
+  const load = accountDataLoader(owned);
   if (direction === "bToA") {
     // See ladder.ts's header: the reverse swap-CPI account order was never
     // independently verified, and a launched-then-failing CPI aborts the
@@ -362,16 +364,19 @@ export async function fetchTesseraVConfig(
   const mintB = pubkeyAt(data, OFF_MINT_B);
   // The swap CPI carries an unused Token-2022 slot but the instruction is
   // legacy-SPL (Tokenkeg) only. Detect a Token-2022 (or otherwise un-routable)
-  // mint per side and GRACEFULLY SELF-DROP the pool (the SvmRoute orchestrator
-  // catches a fetchPoolConfig throw and drops the venue). The LEGACY path is
-  // byte-identical; an unreadable mint falls back to the legacy assumption.
+  // mint per side by its OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one) and GRACEFULLY SELF-DROP the pool (the
+  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue).
+  // The LEGACY path is byte-identical; an unreadable mint falls back to the
+  // legacy assumption.
   const _mints = [mintA, mintB];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const account = _mintAccounts[_i]!;
+    if (account === null) continue;
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

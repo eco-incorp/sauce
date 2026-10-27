@@ -117,7 +117,8 @@ import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -233,7 +234,8 @@ function bakeCoefficients(
 export const moonit = {
   slug: SLUG,
   programId: MOONIT_PROGRAM_ID,
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<MoonitPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<MoonitPoolConfig> {
+    const load = accountDataLoader(owned);
     const curveData = await loadAccount(load, pool, "curve account");
     if (!hasDiscriminator(curveData, CURVE_DISCRIMINATOR)) {
       throw new Error(`moonit pool ${pool} discriminator mismatch (not a CurveAccount)`);
@@ -249,18 +251,23 @@ export const moonit = {
     // Token-2022 safety: this venue's buy/sell ix is legacy-SPL (Tokenkeg) only,
     // so a Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS
     // the pool via a thrown, clearly-described error — the SvmRoute orchestrator
-    // catches a fetchPoolConfig throw and drops the venue. The legacy path stays
-    // byte-identical: a classic 82-byte mint classifies as legacy → no throw, and
-    // an unreadable mint (not vendored by a fixture) falls back to legacy.
+    // catches a fetchPoolConfig throw and drops the venue. A mint's token program
+    // is its OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+    // one). The legacy path stays byte-identical: a Tokenkeg-owned mint
+    // classifies as legacy → no throw, and an unreadable mint (not vendored by a
+    // fixture) falls back to legacy.
     for (const swapMint of [mint]) {
-      const swapMintData = await load(swapMint);
-      if (swapMintData === null) continue;
-      if (classifyMintProgram(swapMint, swapMintData) === TOKEN_2022_PROGRAM_ID) {
+      const swapMintAccount = await owned(swapMint);
+      if (swapMintAccount === null) continue;
+      if (
+        classifyMintProgram(swapMint, swapMintAccount.data, swapMintAccount.owner) ===
+        TOKEN_2022_PROGRAM_ID
+      ) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${swapMint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );
       }
-      const { blocking } = parseMintExtensions(swapMintData);
+      const { blocking } = parseMintExtensions(swapMintAccount.data);
       if (blocking.length > 0) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${swapMint} is un-routable: ${blocking.join("; ")}`,

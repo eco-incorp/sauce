@@ -6,7 +6,8 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   fetchGavelConfig,
   GAVEL_POOL_SIZE,
@@ -50,8 +51,8 @@ function buildPool(): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
-  return async (addr: Address) => map[addr] ?? null;
+function loaderFrom(map: Record<string, Uint8Array>): OwnedAccountLoader {
+  return ownedByShape(async (addr: Address) => map[addr] ?? null);
 }
 
 describe("gavel Token-2022 self-drop", () => {
@@ -61,6 +62,17 @@ describe("gavel Token-2022 self-drop", () => {
       [BASE_MINT]: makeT22Mint(),
       [QUOTE_MINT]: makeLegacyMint(),
     });
+    await expect(fetchGavelConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("REJECTS a pool whose 82-byte baseMint is owned by Token-2022 (extensionless Token-2022)", async () => {
+    const shaped = loaderFrom({
+      [POOL]: buildPool(),
+      [BASE_MINT]: makeLegacyMint(),
+      [QUOTE_MINT]: makeLegacyMint(),
+    });
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === BASE_MINT ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
     await expect(fetchGavelConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
@@ -80,5 +92,21 @@ describe("gavel Token-2022 self-drop", () => {
     const load = loaderFrom({ [POOL]: buildPool() }); // no mint accounts vendored
     const cfg = await fetchGavelConfig(load, POOL);
     expect(cfg.venue).toBe("gavel");
+  });
+
+  it("REJECTS a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [BASE_MINT, QUOTE_MINT]) {
+      const shaped = loaderFrom({
+        [POOL]: buildPool(),
+        [BASE_MINT]: makeLegacyMint(),
+        [QUOTE_MINT]: makeLegacyMint(),
+      });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchGavelConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

@@ -1,13 +1,20 @@
 /**
  * omnipair Token-2022 self-drop: a synthesized (otherwise valid) Pair account
  * whose token0Mint is a Token-2022 mint must make fetchOmnipairPoolConfig
- * REJECT (the graceful self-drop signal); the legacy path is unaffected.
+ * REJECT (the graceful self-drop signal); the legacy path is unaffected. The
+ * mint is classified by its OWNER: an extensionless Token-2022 mint is 82
+ * bytes, byte for byte a legacy one.
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import {
   fetchOmnipairPoolConfig,
+  OMNIPAIR_PROGRAM_ID,
   PAIR_ACCOUNT_SIZE,
   PAIR_DISCRIMINATOR,
 } from "../../../src/svm/venues/omnipair/index.js";
@@ -46,25 +53,39 @@ function buildPair(): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
+type Account = { data: Uint8Array; owner: Address };
+const pair = (): Account => ({ data: buildPair(), owner: OMNIPAIR_PROGRAM_ID });
+const t22 = (data: Uint8Array): Account => ({ data, owner: TOKEN_2022_PROGRAM_ID });
+const legacy = (data: Uint8Array): Account => ({ data, owner: TOKEN_PROGRAM_ID });
+
+function loaderFrom(map: Record<string, Account>): OwnedAccountLoader {
   return async (addr: Address) => map[addr] ?? null;
 }
 
 describe("omnipair Token-2022 self-drop", () => {
   it("REJECTS a pair whose token0Mint is a Token-2022 mint", async () => {
     const load = loaderFrom({
-      [POOL]: buildPair(),
-      [TOKEN0]: makeT22Mint(),
-      [TOKEN1]: makeLegacyMint(),
+      [POOL]: pair(),
+      [TOKEN0]: t22(makeT22Mint()),
+      [TOKEN1]: legacy(makeLegacyMint()),
+    });
+    await expect(fetchOmnipairPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("REJECTS a pair whose token0Mint is 82 bytes but owned by Token-2022 (extensionless)", async () => {
+    const load = loaderFrom({
+      [POOL]: pair(),
+      [TOKEN0]: t22(makeLegacyMint()),
+      [TOKEN1]: legacy(makeLegacyMint()),
     });
     await expect(fetchOmnipairPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
   it("does NOT drop a classic-legacy pair", async () => {
     const load = loaderFrom({
-      [POOL]: buildPair(),
-      [TOKEN0]: makeLegacyMint(),
-      [TOKEN1]: makeLegacyMint(),
+      [POOL]: pair(),
+      [TOKEN0]: legacy(makeLegacyMint()),
+      [TOKEN1]: legacy(makeLegacyMint()),
     });
     const cfg = await fetchOmnipairPoolConfig(load, POOL);
     expect(cfg.venue).toBe("omnipair");
@@ -72,8 +93,24 @@ describe("omnipair Token-2022 self-drop", () => {
   });
 
   it("does NOT drop when mint accounts are unreadable (falls back to legacy)", async () => {
-    const load = loaderFrom({ [POOL]: buildPair() });
+    const load = loaderFrom({ [POOL]: pair() });
     const cfg = await fetchOmnipairPoolConfig(load, POOL);
     expect(cfg.venue).toBe("omnipair");
+  });
+
+  it("REJECTS a pair whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [TOKEN0, TOKEN1]) {
+      const mintAccount = (m: Address): Account =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy(makeLegacyMint());
+      const load = loaderFrom({
+        [POOL]: pair(),
+        [TOKEN0]: mintAccount(TOKEN0),
+        [TOKEN1]: mintAccount(TOKEN1),
+      });
+      await expect(fetchOmnipairPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

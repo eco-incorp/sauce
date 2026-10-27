@@ -7,10 +7,15 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import {
   fetchInvariantPoolConfig,
+  INVARIANT_PROGRAM_ID,
   POOL_ACCOUNT_SIZE,
   POOL_DISCRIMINATOR,
 } from "../../../src/svm/venues/invariant/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const codec = getAddressCodec();
@@ -33,11 +38,22 @@ function buildPool(tokenX: Address, tokenY: Address): Uint8Array {
   return data;
 }
 
-function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
-  const map = new Map(entries.map(([a, d]) => [a as string, d]));
+/** Each entry is [address, data] (owned as its shape implies) or [address, data, owner]. */
+function loaderOf(
+  entries: Array<[Address, Uint8Array] | [Address, Uint8Array, Address]>,
+): OwnedAccountLoader {
+  const map = new Map(entries.map(([a, d, o]) => [a as string, { d, o }]));
   return async (addr) => {
-    const d = map.get(addr as string);
-    return d === undefined ? null : new Uint8Array(d);
+    const e = map.get(addr as string);
+    if (e === undefined) return null;
+    const owner =
+      e.o ??
+      (addr === POOL
+        ? INVARIANT_PROGRAM_ID
+        : e.d.length === 82
+          ? TOKEN_PROGRAM_ID
+          : TOKEN_2022_PROGRAM_ID);
+    return { data: new Uint8Array(e.d), owner };
   };
 }
 
@@ -61,6 +77,15 @@ describe("invariant Token-2022 self-drop", () => {
     await expect(fetchInvariantPoolConfig(load, POOL)).rejects.toThrow(/Token-2022|un-routable/);
   });
 
+  it("drops a pool whose 82-byte tokenX mint is owned by Token-2022 (extensionless Token-2022)", async () => {
+    const load = loaderOf([
+      [POOL, buildPool(tokenX, tokenY)],
+      [tokenX, makeLegacyMint(), TOKEN_2022_PROGRAM_ID],
+      [tokenY, makeLegacyMint()],
+    ]);
+    await expect(fetchInvariantPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
   it("does NOT drop for a classic 82-byte legacy mint (proceeds past the guard)", async () => {
     // Both mints legacy — the drop guard passes; the fetch proceeds and fails
     // later on the missing tickmap, proving the guard itself did not fire.
@@ -72,5 +97,19 @@ describe("invariant Token-2022 self-drop", () => {
     await expect(fetchInvariantPoolConfig(load, POOL)).rejects.not.toThrow(
       /Token-2022|un-routable/,
     );
+  });
+
+  it("refuses a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [tokenX, tokenY]) {
+      const load = loaderOf([
+        [POOL, buildPool(tokenX, tokenY)],
+        [tokenX, makeLegacyMint(), mint === tokenX ? foreign : TOKEN_PROGRAM_ID],
+        [tokenY, makeLegacyMint(), mint === tokenY ? foreign : TOKEN_PROGRAM_ID],
+      ]);
+      await expect(fetchInvariantPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

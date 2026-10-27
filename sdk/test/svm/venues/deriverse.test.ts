@@ -19,7 +19,7 @@ import {
   DERIVERSE_AUTH,
   DERIVERSE_PROGRAM_ID,
 } from "../../../src/svm/venues/deriverse/index.js";
-import { fixtureLoader, loadFixtures } from "../fixtures.js";
+import { fixtureLoader, loadFixtures, ownedByShape } from "../fixtures.js";
 
 const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/deriverse");
 const REAL_POOL = address("8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh");
@@ -79,7 +79,7 @@ describe("fetchPoolConfig against the real wSOL/USDC instrument fixture", () => 
   });
 
   it("rejects an account shorter than the InstrAccountHeader front slice", async () => {
-    const load = async (): Promise<Uint8Array> => new Uint8Array(100);
+    const load = ownedByShape(async (): Promise<Uint8Array> => new Uint8Array(100));
     await expect(deriverse.fetchPoolConfig(load, REAL_POOL)).rejects.toThrow(/at least 1064/);
   });
 });

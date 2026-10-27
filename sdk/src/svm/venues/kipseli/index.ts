@@ -197,7 +197,8 @@
 import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { readUintLE } from "../math.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -308,7 +309,11 @@ function pow10(n: number): bigint {
   return v;
 }
 
-async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<KipseliPoolConfig> {
+async function fetchPoolConfig(
+  owned: OwnedAccountLoader,
+  pool: Address,
+): Promise<KipseliPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} not found`);
   if (!POOL_ACCOUNT_SIZES.has(data.length)) {
@@ -327,22 +332,24 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
 
   // This venue's on-chain swap_v2 ix is legacy-SPL (Tokenkeg) only, so a
   // Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP
-  // the pool rather than be silently assumed legacy. The thrown error IS the
-  // graceful-drop signal (the SvmRoute orchestrator catches a fetchPoolConfig
-  // throw and drops the venue). An unreadable mint falls back to the legacy
-  // assumption, keeping the classic 82-byte path byte-identical.
+  // the pool rather than be silently assumed legacy. The mint's token program
+  // is its OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+  // one). The thrown error IS the graceful-drop signal (the SvmRoute
+  // orchestrator catches a fetchPoolConfig throw and drops the venue). An
+  // unreadable mint falls back to the legacy assumption, keeping the
+  // Tokenkeg-owned path byte-identical.
   const _mints = [baseMint, quoteMint];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) continue;
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

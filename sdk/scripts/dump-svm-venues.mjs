@@ -280,11 +280,12 @@ async function fetchAll(addresses) {
     );
   }
 }
+/** The venue adapters' loader: each account's data and owner, as the RPC returned them. */
 const loader = async (at) => {
   await fetchAll([at]);
   const account = read.get(at);
 
-  return account === null ? null : new Uint8Array(account.data);
+  return account === null ? null : { data: new Uint8Array(account.data), owner: account.owner };
 };
 
 async function program(name, id) {
@@ -366,7 +367,11 @@ async function quotable(venue, pool) {
     shown.set(shown.subarray(41, 43), 43); // fee_tier_index := tick_spacing
   }
   const load = async (account) =>
-    account === pool ? shown : mints.includes(account) ? null : loader(account);
+    account === pool
+      ? { data: shown, owner: read.get(pool).owner }
+      : mints.includes(account)
+        ? null
+        : loader(account);
 
   return { load, mints };
 }
@@ -550,7 +555,7 @@ async function moreOf({ venue, pool }) {
       new TextEncoder().encode("pool_tick_array_bitmap_extension"),
       getAddressCodec().encode(address(pool)),
     ]);
-    const data = await loader(extension);
+    const data = (await loader(extension))?.data ?? null;
     return data !== null && Buffer.from(data.subarray(0, 8)).toString("hex") === BITMAP_EXTENSION
       ? { more: [extension] }
       : {};

@@ -164,7 +164,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
 const SLUG = "gatorswap";
 export const GATORSWAP_PROGRAM_ID = address("gatorLx9aC1e5ZWAXscv5QRKiLXnLPLXjftVc81h1Hr");
@@ -229,7 +230,11 @@ function gatorswapConfig(cfg: PoolConfig): GatorswapPoolConfig {
   return cfg as GatorswapPoolConfig;
 }
 
-async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<GatorswapPoolConfig> {
+async function fetchPoolConfig(
+  owned: OwnedAccountLoader,
+  pool: Address,
+): Promise<GatorswapPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== GATOR_POOL_ACCOUNT_SIZE) {

@@ -6,12 +6,22 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
 import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
+import {
+  JUPITER_LEND_EARN_PROGRAM_ID,
   jupiterLendEarn,
   LENDING_ACCOUNT_SIZE,
 } from "../../../src/svm/venues/jupiter-lend-earn/index.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
+
+type Owned = { data: Uint8Array; owner: Address };
+const t22 = (data: Uint8Array = makeT22Mint()): Owned => ({ data, owner: TOKEN_2022_PROGRAM_ID });
+const legacy = (): Owned => ({ data: makeLegacyMint(), owner: TOKEN_PROGRAM_ID });
+const program = (data: Uint8Array): Owned => ({ data, owner: JUPITER_LEND_EARN_PROGRAM_ID });
 
 const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
 const MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC-shaped underlying
@@ -42,28 +52,53 @@ function buildTokenReserve(): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
+function loaderFrom(map: Record<string, Owned>): OwnedAccountLoader {
   return async (addr: Address) => map[addr] ?? null;
 }
 
 describe("jupiter-lend-earn Token-2022 self-drop", () => {
   it("REJECTS a market whose underlying mint is a Token-2022 mint", async () => {
     const load = loaderFrom({
-      [POOL]: buildLending(),
-      [MINT]: makeT22Mint(),
-      [FTOKEN_MINT]: makeLegacyMint(),
+      [POOL]: program(buildLending()),
+      [MINT]: t22(),
+      [FTOKEN_MINT]: legacy(),
+    });
+    await expect(jupiterLendEarn.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("REJECTS a market whose underlying mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const load = loaderFrom({
+      [POOL]: program(buildLending()),
+      [MINT]: t22(makeLegacyMint()),
+      [FTOKEN_MINT]: legacy(),
     });
     await expect(jupiterLendEarn.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
   it("does NOT drop a classic-legacy market", async () => {
     const load = loaderFrom({
-      [POOL]: buildLending(),
-      [MINT]: makeLegacyMint(),
-      [FTOKEN_MINT]: makeLegacyMint(),
-      [LIQ_RESERVE]: buildTokenReserve(),
+      [POOL]: program(buildLending()),
+      [MINT]: legacy(),
+      [FTOKEN_MINT]: legacy(),
+      [LIQ_RESERVE]: program(buildTokenReserve()),
     });
     const cfg = await jupiterLendEarn.fetchPoolConfig(load, POOL);
     expect(cfg.venue).toBe("jupiter-lend-earn");
+  });
+
+  it("REJECTS a market whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [MINT, FTOKEN_MINT]) {
+      const mintAccount = (m: Address): Owned =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy();
+      const load = loaderFrom({
+        [POOL]: program(buildLending()),
+        [MINT]: mintAccount(MINT),
+        [FTOKEN_MINT]: mintAccount(FTOKEN_MINT),
+      });
+      await expect(jupiterLendEarn.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

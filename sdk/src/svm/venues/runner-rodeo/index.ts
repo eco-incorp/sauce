@@ -116,7 +116,9 @@ import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { classifyMintProgram } from "../../token-program.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "runner-rodeo" as const;
 
@@ -127,7 +129,6 @@ function address_(s: string): Address {
 export const RUNNER_RODEO_PROGRAM_ID = address_("runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA");
 const WSOL = address_("So11111111111111111111111111111111111111112");
 const TOKEN_PROGRAM = address_("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const TOKEN_2022_PROGRAM = address_("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const ASSOCIATED_TOKEN_PROGRAM = address_("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /** PDA(["authority"], program) — re-derived + confirmed, see module header. */
@@ -208,14 +209,16 @@ function mintTransferFeeConfig(
 }
 
 /**
- * Which token program owns this mint, from its account data alone — a classic Tokenkeg mint
- * is EXACTLY 82 bytes; anything longer is token-2022 TLV. Mirrors (and stays byte-compatible
- * with) pumpfun-bonding-curve's own `detectTokenProgram`, minus its blanket TransferFeeConfig
+ * Which token program owns this mint — its OWNER, the only reliable signal (an extensionless
+ * Token-2022 mint is exactly 82 bytes, byte-identical to a classic Tokenkeg mint). A
+ * Token-2022 mint with extensions must still carry the Mint account-type byte. Unlike
+ * pumpfun-bonding-curve's `detectTokenProgram`, there is no blanket TransferFeeConfig
  * rejection — see this module's SCOPE section for why that check is done separately, gated on
  * the LIVE bps rather than the extension's presence.
  */
-function detectTokenProgram(mint: Address, data: Uint8Array): Address {
-  if (data.length === 82) return TOKEN_PROGRAM;
+function detectTokenProgram(mint: Address, data: Uint8Array, owner: Address): Address {
+  const program = classifyMintProgram(mint, data, owner);
+  if (program === TOKEN_PROGRAM || data.length === 82) return program;
   if (data.length < 166) {
     throw new Error(
       `runner-rodeo mint ${mint} data is ${data.length} bytes, not a token mint layout`,
@@ -226,7 +229,7 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
       `runner-rodeo mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
     );
   }
-  return TOKEN_2022_PROGRAM;
+  return program;
 }
 
 export interface RunnerRodeoPoolConfig extends PoolConfig {
@@ -249,7 +252,8 @@ export const runnerRodeo = {
   slug: SLUG,
   kind: "constant-product" as const,
   programId: RUNNER_RODEO_PROGRAM_ID,
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RunnerRodeoPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<RunnerRodeoPoolConfig> {
+    const load = accountDataLoader(owned);
     const psData = await loadAccount(load, pool, "pool state");
     if (!hasDiscriminator(psData, POOL_STATE_DISCRIMINATOR)) {
       throw new Error(
@@ -272,10 +276,12 @@ export const runnerRodeo = {
       );
     }
 
-    const [cfgData, mintData] = await Promise.all([
+    const [cfgData, mintAccount] = await Promise.all([
       loadAccount(load, configAccount, "config"),
-      loadAccount(load, baseMint, "base mint"),
+      owned(baseMint),
     ]);
+    if (mintAccount === null) throw new Error(`runner-rodeo base mint ${baseMint} not found`);
+    const mintData = mintAccount.data;
     if (cfgData.length < 79) {
       throw new Error(
         `runner-rodeo pool ${pool} config ${configAccount} is ${cfgData.length} bytes, expected at least 79`,
@@ -286,7 +292,7 @@ export const runnerRodeo = {
     const protocolFeeBpsA = readUintLE(cfgData, 75, 2);
     const protocolFeeBpsB = readUintLE(cfgData, 77, 2);
 
-    const baseTokenProgram = detectTokenProgram(baseMint, mintData);
+    const baseTokenProgram = detectTokenProgram(baseMint, mintData, mintAccount.owner);
     // A NonTransferable / DefaultAccountState=frozen base mint genuinely cannot route through the
     // program's transferChecked — self-drop it (safe; a dropped pool just self-limits).
     // PermanentDelegate/Confidential are advisories, not blocking, so a routable T22 mint passes.

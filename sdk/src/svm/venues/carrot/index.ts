@@ -102,11 +102,11 @@
  *
  * TOKEN PROGRAM: CRT and pyUSD are Token-2022; USDC/USDT are classic
  * Tokenkeg — this mirrors the reference SDK's OWN hardcoded
- * `get_token_program_id` (there is no way to derive "which token program"
- * from mint account BYTES alone: a Token-2022 mint with zero extensions is
- * byte-identical in its first 82 bytes to a classic mint, and the shared
- * `AccountLoader` interface exposes bytes only, never the account's owner
- * metadata) — `CARROT_TOKEN_2022_MINTS` names the known set explicitly.
+ * `get_token_program_id`. A mint's token program is its OWNER (a Token-2022
+ * mint with zero extensions is byte-identical in its first 82 bytes to a
+ * classic mint), which `fetchPoolConfig`'s loader now carries; but
+ * `CARROT_TOKEN_2022_MINTS` is public surface that names the known set for a
+ * caller that picks the program without reading the mint, so it stays.
  *
  * DISCOVERY: this is a SINGLETON (one vault, ever) with a basket, not a
  * "many pools, one 2-mint pair each" family — it does not fit
@@ -120,7 +120,8 @@ import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { assertOracleExponent } from "../oracle-exponent.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 export const CARROT_PROGRAM_ID = address("CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s");
 export const CRT_MINT = address("CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s");
@@ -273,9 +274,10 @@ function decodeOraclePriceOffset(data: Uint8Array, pool: Address, oracle: Addres
 // pool, net(grossOut, feeOfOutputMint) to the user) rather than here — a missed
 // netting is a safe self-limit; a wrong one would silently mis-quote.
 async function fetchCarrotPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<CarrotPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`carrot vault ${pool} account not found`);
   if (data.length < ASSET_FIRST_OFFSET)
@@ -404,8 +406,8 @@ async function fetchCarrotPoolConfig(
 export const carrot = {
   slug: "carrot" as const,
   programId: CARROT_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<CarrotPoolConfig> =>
-    fetchCarrotPoolConfig(load, pool),
+  fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<CarrotPoolConfig> =>
+    fetchCarrotPoolConfig(owned, pool),
 };
 
 /** Prepare-time direction gate: self-drops the SPECIFIC direction (not the whole vault) if its asset's oracle reading is stale. */

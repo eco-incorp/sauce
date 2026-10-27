@@ -9,7 +9,9 @@
 import { address, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { kipseli } from "../../../src/svm/venues/kipseli/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { ownedByShape } from "../fixtures.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("89dvMturcS87kYgrwyeWqqsaFZUi5dQQpBHs6pvfUu3v");
@@ -31,13 +33,13 @@ function synthPool(): Uint8Array {
   return data;
 }
 
-function loaderWith(mintBytes: Record<string, Uint8Array>): AccountLoader {
+function loaderWith(mintBytes: Record<string, Uint8Array>): OwnedAccountLoader {
   const pool = synthPool();
-  return async (addr: Address) => {
+  return ownedByShape(async (addr: Address) => {
     if (addr === POOL) return new Uint8Array(pool);
     const m = mintBytes[addr as string];
     return m === undefined ? null : new Uint8Array(m);
-  };
+  });
 }
 
 describe("kipseli Token-2022 self-drop", () => {
@@ -51,6 +53,13 @@ describe("kipseli Token-2022 self-drop", () => {
     await expect(kipseli.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
+  it("drops the pool when the base mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const shaped = loaderWith({ [QUOTE_MINT]: makeLegacyMint() });
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === BASE_MINT ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
+    await expect(kipseli.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
   it("passes the mint gate for two classic legacy mints (fails later, never on Token-2022)", async () => {
     const load = loaderWith({ [BASE_MINT]: makeLegacyMint(), [QUOTE_MINT]: makeLegacyMint() });
     let message = "";
@@ -60,5 +69,17 @@ describe("kipseli Token-2022 self-drop", () => {
       message = String(err);
     }
     expect(message).not.toMatch(/Token-2022/);
+  });
+
+  it("refuses the pool when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [BASE_MINT, QUOTE_MINT]) {
+      const shaped = loaderWith({ [BASE_MINT]: makeLegacyMint(), [QUOTE_MINT]: makeLegacyMint() });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(kipseli.fetchPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

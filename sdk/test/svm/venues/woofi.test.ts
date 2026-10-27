@@ -31,6 +31,7 @@ import {
 } from "../../../src/svm/venues/woofi/index.js";
 import * as woofiModule from "../../../src/svm/venues/woofi/index.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 
 const REAL_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/woofi");
 const PATCHED_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/woofi-patched");
@@ -65,13 +66,14 @@ describe("fetchWoofiConfig: decodes the real WooAmmPool bundle + resolves the ba
     const codec = getAddressCodec();
     const raw = codec.encode(address("7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs"));
     poolBuf.set(new Uint8Array(raw), 457);
-    const load = async (addr: string) =>
-      addr === POOL
-        ? new Uint8Array(poolBuf)
-        : data.get(addr)
-          ? new Uint8Array(data.get(addr)!)
-          : null;
-    await expect(fetchWoofiConfig(load as any, POOL)).rejects.toThrow(/base-to-base/);
+    const fixtureLoad = fixtureLoader(fixtures);
+    const load: OwnedAccountLoader = async (addr) => {
+      const account = await fixtureLoad(addr);
+      return addr === POOL && account !== null
+        ? { data: new Uint8Array(poolBuf), owner: account.owner }
+        : account;
+    };
+    await expect(fetchWoofiConfig(load, POOL)).rejects.toThrow(/base-to-base/);
   });
 });
 
@@ -93,13 +95,14 @@ describe("WooPool u128 fields at the deployed layout (state/woopool.rs: cap_bal@
     // 1e13 at byte 157 (the old patched fixture's bytes) and 1 at byte 163: u128 = 1e13 << 16 | 1 << 64.
     poolBuf.writeBigUInt64LE(10n ** 13n, 157);
     poolBuf[163] = 1;
-    const load = async (addr: string) =>
-      addr === base.woopoolBase
-        ? new Uint8Array(poolBuf)
-        : data.get(addr)
-          ? new Uint8Array(data.get(addr)!)
-          : null;
-    const cfg = await fetchWoofiConfig(load as never, POOL);
+    const fixtureLoad = fixtureLoader(fixtures);
+    const load: OwnedAccountLoader = async (addr) => {
+      const account = await fixtureLoad(addr);
+      return addr === base.woopoolBase && account !== null
+        ? { data: new Uint8Array(poolBuf), owner: account.owner }
+        : account;
+    };
+    const cfg = await fetchWoofiConfig(load, POOL);
     let expected = 0n;
     for (let i = 15; i >= 0; i--)
       expected = (expected << 8n) | BigInt(poolBuf[OFF_POOL_MIN_SWAP_AMOUNT + i]!);

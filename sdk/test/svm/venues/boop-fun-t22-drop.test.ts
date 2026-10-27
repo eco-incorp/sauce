@@ -10,9 +10,11 @@ import {
   getAddressEncoder,
   getProgramDerivedAddress,
 } from "@solana/kit";
+import type { Address } from "@solana/kit";
 import { boopFun, BOOP_FUN_PROGRAM_ID } from "../../../src/svm/venues/boop-fun/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 /** PDA(["config"], PROGRAM) — the fixed config account the fetch loads. */
 const CONFIG = address("AbgFqRWjGWgUaVrZrLLWU5HDY5dktmAL6zT9aacQW7y1");
@@ -46,13 +48,18 @@ function bondingCurveBytes(): Uint8Array {
   return data;
 }
 
-function loaderWith(pool: string, mint: Uint8Array | null): AccountLoader {
-  return (async (a: string) => {
-    if (a === pool) return bondingCurveBytes();
-    if (a === T22_MINT) return mint;
-    if (a === CONFIG) return new Uint8Array(16); // non-null; disc/pause checks run AFTER the mint block
+function loaderWith(
+  pool: string,
+  mint: Uint8Array | null,
+  mintOwner: Address = TOKEN_2022_PROGRAM_ID,
+): OwnedAccountLoader {
+  return async (a) => {
+    if (a === pool) return { data: bondingCurveBytes(), owner: BOOP_FUN_PROGRAM_ID };
+    if (a === T22_MINT) return mint === null ? null : { data: mint, owner: mintOwner };
+    // non-null; disc/pause checks run AFTER the mint block
+    if (a === CONFIG) return { data: new Uint8Array(16), owner: BOOP_FUN_PROGRAM_ID };
     return null;
-  }) as unknown as AccountLoader;
+  };
 }
 
 describe("boop-fun Token-2022 self-drop", () => {
@@ -68,5 +75,25 @@ describe("boop-fun Token-2022 self-drop", () => {
     await expect(
       boopFun.fetchPoolConfig(loaderWith(pool, makeT22Mint(NON_TRANSFERABLE_TLV)), address(pool)),
     ).rejects.toThrow(/Token-2022/);
+  });
+
+  it("drops a pool whose base mint is an extensionless 82-byte mint owned by Token-2022", async () => {
+    const pool = await deriveBondingCurve();
+    await expect(
+      boopFun.fetchPoolConfig(
+        loaderWith(pool, makeLegacyMint(), TOKEN_2022_PROGRAM_ID),
+        address(pool),
+      ),
+    ).rejects.toThrow(/Token-2022/);
+  });
+
+  it("refuses a pool whose base mint is an 82-byte mint owned by neither token program", async () => {
+    const pool = await deriveBondingCurve();
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      boopFun.fetchPoolConfig(loaderWith(pool, makeLegacyMint(), foreign), address(pool)),
+    ).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

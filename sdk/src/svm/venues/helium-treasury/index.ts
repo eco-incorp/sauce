@@ -120,7 +120,8 @@ import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -173,9 +174,10 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address =>
   codec.decode(data.subarray(offset, offset + 32));
 
 export async function fetchHeliumTreasuryPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<HeliumTreasuryPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} treasury management ${pool} does not exist`);
   if (data.length !== MGMT_ACCOUNT_SIZE) {
@@ -237,22 +239,22 @@ export async function fetchHeliumTreasuryPoolConfig(
 
   // The redeem_v0 burn/transfer path is Tokenkeg-only (token_program is
   // hardcoded to spl_token::id()), so detect a Token-2022 or un-routable mint
-  // via the shared data-shape resolver and SELF-DROP this treasury (the thrown
-  // error is the graceful-drop signal the SvmRoute orchestrator catches). The
-  // LEGACY path is byte-identical: a classic 82-byte mint classifies Tokenkeg
-  // with no extensions.
+  // by its OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+  // one) and SELF-DROP this treasury (the thrown error is the graceful-drop
+  // signal the SvmRoute orchestrator catches). The LEGACY path is
+  // byte-identical: a Tokenkeg-owned mint parses no extensions.
   const _mints = [treasuryMint, supplyMint];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) continue; // an unreadable mint falls back to the legacy assumption
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping treasury ${pool} — mint ${mint} is Token-2022 (this venue's redeem is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping treasury ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

@@ -12,15 +12,23 @@ import {
   sanctumInfinityPoolKey,
   __resetSanctumInfinityKeysForTest,
 } from "../../../src/svm/venues/sanctum-infinity/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { Address } from "@solana/kit";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../../../src/svm/token-program.js";
 import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
 const IN = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC (stand-in LST mint)
 const OUT = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"); // USDT
 
-function loader(mintOverrides: Record<string, Uint8Array>): AccountLoader {
-  return async (addr) => (addr in mintOverrides ? mintOverrides[addr] : null);
+/** Each override is a mint's bytes and owning program; every other account is absent. */
+function loader(
+  mintOverrides: Record<string, { data: Uint8Array; owner: Address }>,
+): OwnedAccountLoader {
+  return async (addr) => mintOverrides[addr] ?? null;
 }
+
+const t22 = (data: Uint8Array) => ({ data, owner: TOKEN_2022_PROGRAM_ID });
+const legacy = (data: Uint8Array) => ({ data, owner: TOKEN_PROGRAM_ID });
 
 describe("sanctum-infinity Token-2022 self-drop", () => {
   beforeEach(() => __resetSanctumInfinityKeysForTest());
@@ -28,7 +36,7 @@ describe("sanctum-infinity Token-2022 self-drop", () => {
   it("drops when the input mint is a Token-2022 mint", async () => {
     const key = sanctumInfinityPoolKey(IN, OUT);
     await expect(
-      sanctumInfinity.fetchPoolConfig(loader({ [IN]: makeT22Mint() }), key),
+      sanctumInfinity.fetchPoolConfig(loader({ [IN]: t22(makeT22Mint()) }), key),
     ).rejects.toThrow(/Token-2022/);
   });
 
@@ -36,9 +44,16 @@ describe("sanctum-infinity Token-2022 self-drop", () => {
     const key = sanctumInfinityPoolKey(IN, OUT);
     await expect(
       sanctumInfinity.fetchPoolConfig(
-        loader({ [IN]: makeLegacyMint(), [OUT]: makeT22Mint() }),
+        loader({ [IN]: legacy(makeLegacyMint()), [OUT]: t22(makeT22Mint()) }),
         key,
       ),
+    ).rejects.toThrow(/Token-2022/);
+  });
+
+  it("drops when the input mint is an extensionless 82-byte mint owned by Token-2022", async () => {
+    const key = sanctumInfinityPoolKey(IN, OUT);
+    await expect(
+      sanctumInfinity.fetchPoolConfig(loader({ [IN]: t22(makeLegacyMint()) }), key),
     ).rejects.toThrow(/Token-2022/);
   });
 
@@ -46,9 +61,27 @@ describe("sanctum-infinity Token-2022 self-drop", () => {
     const key = sanctumInfinityPoolKey(IN, OUT);
     await expect(
       sanctumInfinity.fetchPoolConfig(
-        loader({ [IN]: makeLegacyMint(), [OUT]: makeLegacyMint() }),
+        loader({ [IN]: legacy(makeLegacyMint()), [OUT]: legacy(makeLegacyMint()) }),
         key,
       ),
     ).rejects.not.toThrow(/Token-2022/);
+  });
+
+  it("refuses the pair when an 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [IN, OUT]) {
+      // A refused resolve forgets its key, so mint it again for each case.
+      const key = sanctumInfinityPoolKey(IN, OUT);
+      const mintAccount = (m: Address) =>
+        m === mint ? { data: makeLegacyMint(), owner: foreign } : legacy(makeLegacyMint());
+      await expect(
+        sanctumInfinity.fetchPoolConfig(
+          loader({ [IN]: mintAccount(IN), [OUT]: mintAccount(OUT) }),
+          key,
+        ),
+      ).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

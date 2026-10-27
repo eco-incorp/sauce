@@ -161,7 +161,8 @@ import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { getAddressCodec } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -273,9 +274,10 @@ export interface TaurusFiPoolConfig extends PoolConfig {
  * state (no plaintext pool-identity account exists at all; see file header).
  */
 export async function fetchTaurusFiConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<TaurusFiPoolConfig> {
+  const load = accountDataLoader(owned);
   const entry = TAURUSFI_POOL_REGISTRY[pool as unknown as string];
   if (entry === undefined) {
     throw new Error(
@@ -314,15 +316,17 @@ export async function fetchTaurusFiConfig(
   // This venue's swap CPI is legacy-SPL (Tokenkeg) only. Detect a Token-2022
   // (or otherwise un-routable) mint per side and GRACEFULLY SELF-DROP the pool
   // (the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
-  // venue). The LEGACY path is byte-identical; an unreadable mint falls back to
-  // the legacy assumption.
+  // venue). The mint's token program is its OWNER (an extensionless Token-2022
+  // mint is byte-identical to a legacy one). The LEGACY path is byte-identical;
+  // an unreadable mint falls back to the legacy assumption.
   const _mints = [entry.mint0, entry.mint1];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const account = _mintAccounts[_i]!;
+    if (account === null) continue;
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

@@ -27,7 +27,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, SwapUser, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -178,10 +179,11 @@ export const solfiV2 = {
    * directions share one pool account.
    */
   async fetchPoolConfig(
-    load: AccountLoader,
+    owned: OwnedAccountLoader,
     pool: Address,
     direction: 0 | 1 = 0,
   ): Promise<SolfiV2PoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`solfi-v2 pool ${pool} account not found`);
     if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -199,15 +201,18 @@ export const solfiV2 = {
     // The swap CPI is legacy-SPL (Tokenkeg) only for now, so SELF-DROP a pool
     // holding a Token-2022 mint (or an un-routable extension mint) — the thrown
     // error is the graceful-drop signal (SvmRoute drops the venue on a
-    // fetchPoolConfig throw). An unreadable mint falls back to the legacy
-    // assumption, keeping the byte-identical legacy path.
+    // fetchPoolConfig throw). The mint's token program is its OWNER (an
+    // extensionless Token-2022 mint is byte-identical to a legacy one). An
+    // unreadable mint falls back to the legacy assumption, keeping the
+    // byte-identical legacy path.
     const _mints = [mintA, mintB];
-    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
     for (let _i = 0; _i < _mints.length; _i++) {
       const mint = _mints[_i]!;
-      const mintData = _mintDatas[_i]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const account = _mintAccounts[_i]!;
+      if (account === null) continue;
+      const mintData = account.data;
+      if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `solfi-v2: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );

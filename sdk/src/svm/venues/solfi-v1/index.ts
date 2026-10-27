@@ -95,7 +95,8 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "solfi-v1";
 
@@ -164,10 +165,11 @@ const ADDRESS_CODEC = getAddressCodec();
  * independently verified throws rather than guessing).
  */
 export async function fetchSolfiV1Config(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   direction: 0 | 1 = 0,
 ): Promise<SolfiV1PoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {

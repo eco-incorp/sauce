@@ -14,7 +14,7 @@ import { compileSvm, wrapQuoteMain } from "../rs-compile.js";
 import { orcaLegacyTokenSwap } from "../../../src/svm/venues/orca-legacy-token-swap/index.js";
 import type { OrcaLegacyPoolConfig } from "../../../src/svm/venues/orca-legacy-token-swap/index.js";
 import { readUintLE } from "../../../src/svm/index.js";
-import type { AccountBytesMap, AccountLoader } from "../../../src/svm/index.js";
+import type { AccountBytesMap, OwnedAccountLoader } from "../../../src/svm/index.js";
 import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from "../fixtures.js";
 
 const POOL = address("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U");
@@ -34,9 +34,13 @@ const load = fixtureLoader(fixtures);
 const state = fixtureBytesMap(fixtures);
 const poolFixture = fixtures.find((fixture) => fixture.address === POOL)!;
 
-/** Loader serving the doctored pool bytes (other accounts untouched). */
-const doctoredLoader = (mutate: (data: Uint8Array) => Uint8Array | null): AccountLoader => {
-  return async (addr) => (addr === POOL ? mutate(fixtureData(poolFixture)) : load(addr));
+/** Loader serving the doctored pool bytes under the pool's captured owner (other accounts untouched). */
+const doctoredLoader = (mutate: (data: Uint8Array) => Uint8Array | null): OwnedAccountLoader => {
+  return async (addr) => {
+    if (addr !== POOL) return load(addr);
+    const data = mutate(fixtureData(poolFixture));
+    return data === null ? null : { data, owner: address(poolFixture.owner) };
+  };
 };
 
 /** State with a vault's SPL amount (u64 LE @64) overridden. */

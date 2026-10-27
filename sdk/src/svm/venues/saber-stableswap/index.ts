@@ -21,9 +21,10 @@ import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { memoizedCreateProgramAddress } from "../pda-memo.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -167,7 +168,8 @@ export const saberStableswap: SvmVenueAdapter = {
   kind: "stable",
   programId: SABER_STABLESWAP_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SaberPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<SaberPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`saber-stableswap pool account ${pool} not found`);
     if (data.length !== SWAP_INFO_LEN) {
@@ -194,18 +196,20 @@ export const saberStableswap: SvmVenueAdapter = {
     const mintA = pubkey.decode(data, 203);
     const mintB = pubkey.decode(data, 235);
     // Saber predates Token-2022 and its vaults are Tokenkeg-owned, but detect
-    // and SELF-DROP a pool holding a Token-2022 mint (or an un-routable
-    // extension mint) defensively — the thrown error is the graceful-drop
-    // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An
-    // unreadable mint falls back to the legacy assumption, leaving the
-    // byte-identical legacy path intact.
+    // (by the mint's OWNER: an extensionless Token-2022 mint is byte-identical
+    // to a legacy one) and SELF-DROP a pool holding a Token-2022 mint (or an
+    // un-routable extension mint) defensively — the thrown error is the
+    // graceful-drop signal (SvmRoute drops the venue on a fetchPoolConfig
+    // throw). An unreadable mint falls back to the legacy assumption, leaving
+    // the byte-identical legacy path intact.
     const mints = [mintA, mintB];
-    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
     for (let mi = 0; mi < mints.length; mi++) {
       const mint = mints[mi]!;
-      const mintData = mintDatas[mi]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const account = mintAccounts[mi]!;
+      if (account === null) continue;
+      const mintData = account.data;
+      if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );

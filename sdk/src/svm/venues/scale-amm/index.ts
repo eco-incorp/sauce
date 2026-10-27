@@ -29,7 +29,8 @@
  * different active-beneficiary count cannot share a compiled slot fragment.
  */
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, AccountBytesMap } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig, AccountBytesMap } from "../types.js";
 import {
   ata,
   computeScaleQuote,
@@ -123,7 +124,8 @@ export const scaleAmm = {
   kind: "constant-product" as const,
   programId: SCALE_AMM_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<ScaleAmmPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<ScaleAmmPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await loadRequired(load, pool, "pool");
     if (data.length !== POOL_SIZE) {
       throw new Error(`${SLUG} pool ${pool} data is ${data.length} bytes, expected ${POOL_SIZE}`);
@@ -160,12 +162,13 @@ export const scaleAmm = {
     const feeBeneficiaryWallet = pubkeyAt(configData, CONFIG_OFFSETS.feeBeneficiary);
     const platformFeeBps = readUintLE(configData, CONFIG_OFFSETS.platformFeeBps, 2);
 
-    const [mintAData, mintBData] = await Promise.all([
-      loadRequired(load, mintA, "mint_a"),
-      loadRequired(load, mintB, "mint_b"),
-    ]);
-    const tokenProgramA = detectTokenProgram(mintA, mintAData);
-    const tokenProgramB = detectTokenProgram(mintB, mintBData);
+    // The mint's token program is its OWNER (an extensionless Token-2022 mint is
+    // byte-identical to a legacy one), so read each mint with its owner.
+    const [mintAAccount, mintBAccount] = await Promise.all([owned(mintA), owned(mintB)]);
+    if (mintAAccount === null) throw new Error(`${SLUG}: mint_a ${mintA} not found`);
+    if (mintBAccount === null) throw new Error(`${SLUG}: mint_b ${mintB} not found`);
+    const tokenProgramA = detectTokenProgram(mintA, mintAAccount.data, mintAAccount.owner);
+    const tokenProgramB = detectTokenProgram(mintB, mintBAccount.data, mintBAccount.owner);
 
     const [vaultA, vaultB, platformFeeTaA] = await Promise.all([
       pda([pool, mintA], SCALE_AMM_PROGRAM_ID),

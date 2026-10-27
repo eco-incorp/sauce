@@ -89,7 +89,8 @@
 import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
 export const HEAVEN_PROGRAM_ID = address("HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o");
@@ -296,9 +297,10 @@ function heavenConfig(cfg: PoolConfig): HeavenPoolConfig {
 }
 
 async function fetchHeavenPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<HeavenPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await loadRequired(load, pool, "pool");
   if (data.length !== POOL_SIZE)
     throw new Error(`heaven pool ${pool} is ${data.length} bytes, expected ${POOL_SIZE}`);
@@ -471,8 +473,8 @@ function readSignedI128LE(data: Uint8Array, offset: number): bigint {
 export const heaven = {
   slug: "heaven" as const,
   programId: HEAVEN_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<HeavenPoolConfig> =>
-    fetchHeavenPoolConfig(load, pool),
+  fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<HeavenPoolConfig> =>
+    fetchHeavenPoolConfig(owned, pool),
 };
 
 export function heavenMints(base: PoolConfig): { inMint: Address; outMint: Address } {

@@ -149,7 +149,8 @@
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { hexString } from "../../../bytes.js";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { BINARYFI_ASSET_FLOOR_RATES } from "./asset-configs.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -230,7 +231,8 @@ export const binaryfi = {
    * a market whose asset has not been independently measured is dropped
    * the same way, per this file's module header.
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<BinaryFiPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<BinaryFiPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`binaryfi market ${pool} does not exist`);
     if (data.length !== MARKET_ACCOUNT_SIZE) {
@@ -254,16 +256,19 @@ export const binaryfi = {
     // The on-chain swap ix (disc 0x08) is legacy-SPL only (one token_program
     // slot, listed twice), so a Token-2022 mint (or one carrying an un-routable
     // extension) SELF-DROPS this market: the thrown error is the graceful-drop
-    // signal the SvmRoute orchestrator catches. An unreadable mint falls back to
-    // the legacy assumption (a classic 82-byte mint classifies legacy → no throw
-    // → config built byte-identically to before).
+    // signal the SvmRoute orchestrator catches. The mint's token program is its
+    // OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+    // one). An unreadable mint falls back to the legacy assumption (a
+    // Tokenkeg-owned mint classifies legacy → no throw → config built
+    // byte-identically to before).
     const mintList = [assetMint, quoteMint];
-    const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+    const mintAccounts = await Promise.all(mintList.map((mint) => owned(mint)));
     for (let mi = 0; mi < mintList.length; mi++) {
       const mint = mintList[mi]!;
-      const mintData = mintDatas[mi];
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintAccount = mintAccounts[mi]!;
+      if (mintAccount === null) continue;
+      const mintData = mintAccount.data;
+      if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `binaryfi: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );

@@ -25,7 +25,11 @@
  * from it because the SDK no longer exports one, and the consumer no longer
  * asks for one.
  *
- * 536 names total: 436 VALUES (below) + 100 TYPES
+ * 538 names total: 438 VALUES (below) + 100 TYPES
+ *
+ * The coalescing loader is the owner-aware one: a venue's `fetchPoolConfig` takes an
+ * `OwnedAccountLoader` (`coalescingOwnedAccountLoader`), and `accountDataLoader` gives the
+ * data-only view the remaining readers take.
  *
  * DOWN FROM 445: the pre-release engine's staging surface is gone with the vendored binary that ran
  * it — no release ships an engine with those instructions, so they could not execute against
@@ -339,6 +343,7 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "XORCA_VAULT_ATA",
   "__decodeMeteoraDbcConfig",
   "__decodeMeteoraDbcPool",
+  "accountDataLoader",
   "aldrin",
   "aldrinV2",
   "bakedDecimalScale",
@@ -354,7 +359,7 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "carrot",
   "carrotAllDirections",
   "ceilDiv",
-  "coalescingAccountLoader",
+  "coalescingOwnedAccountLoader",
   "complement",
   "computeScaleQuote",
   "crema",
@@ -600,8 +605,8 @@ const CONSUMER_UNION_TYPES: readonly string[] = [
 ];
 
 describe("consumer-union barrel surface (sauce-recipes)", () => {
-  it("pins the expected counts (437 values, 100 types) so a future edit is deliberate", () => {
-    expect(CONSUMER_UNION_VALUES.length).toBe(437);
+  it("pins the expected counts (438 values, 100 types) so a future edit is deliberate", () => {
+    expect(CONSUMER_UNION_VALUES.length).toBe(438);
     expect(CONSUMER_UNION_TYPES.length).toBe(100);
   });
 

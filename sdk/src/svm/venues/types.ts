@@ -10,22 +10,21 @@
 import type { Address } from "@solana/kit";
 
 /**
- * RPC-or-fixture account source: address in, raw account data out (null when
- * the account does not exist). fetchPoolConfig takes one of these so LiteSVM
- * fixture tests run without any RPC.
+ * Data-only account source: address in, raw account data out (null when the account does not
+ * exist). What the readers that need no owner take; `accountDataLoader` projects one out of an
+ * {@link OwnedAccountLoader}.
  */
 export type AccountLoader = (address: Address) => Promise<Uint8Array | null>;
 
 /**
- * The same source, WITH the owning program.
+ * RPC-or-fixture account source WITH the owning program: address in, the account's data and owner
+ * out (null when the account does not exist). `fetchPoolConfig` takes one of these, so LiteSVM
+ * fixture tests run without any RPC.
  *
  * Owner-based classification is the only correct way to tell a legacy SPL mint from a Token-2022
  * one — an extensionless T22 mint is byte-identical to a classic 82-byte mint, so no amount of data
- * inspection can separate them. `AccountLoader` drops the owner at this boundary, which made that
- * classification structurally impossible for an adapter; this hands it through.
- *
- * Additive on purpose: the data-only loader stays the argument every adapter takes, so adapters
- * move over one at a time rather than in one 64-file sweep.
+ * inspection can separate them. Every adapter's mint gate passes the owner to
+ * `classifyMintProgram`.
  */
 export type OwnedAccountLoader = (
   address: Address,
@@ -106,11 +105,12 @@ export interface SvmVenueAdapter {
   /**
    * Off-chain, once per pool: fetch + decode the pool account (and its
    * config/vault deps), returning everything the emitter and swap builder
-   * need. Accepts raw account data via the AccountLoader so LiteSVM fixtures
-   * work without RPC. Throws a clear error naming the gate when the pool is
-   * out of scope (status bits, curve_type, depeg, transfer-fee extensions).
+   * need. Reads accounts, with their owners, through the OwnedAccountLoader so
+   * LiteSVM fixtures work without RPC and a mint is classified by its owner.
+   * Throws a clear error naming the gate when the pool is out of scope (status
+   * bits, curve_type, depeg, Token-2022 mints, transfer-fee extensions).
    */
-  fetchPoolConfig(load: AccountLoader, pool: Address): Promise<PoolConfig>;
+  fetchPoolConfig(load: OwnedAccountLoader, pool: Address): Promise<PoolConfig>;
   /** Accounts to attach READ-ONLY for quoting (refs + resolved addresses from PoolConfig). */
   quoteAccounts(cfg: PoolConfig): VenueAccount[];
   /**

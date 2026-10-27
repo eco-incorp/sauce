@@ -4,11 +4,13 @@
  * graceful-drop signal the SvmRoute orchestrator catches. The on-chain swap ix
  * is legacy-SPL only for now.
  */
-import { getAddressDecoder } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import { byreal } from "../../../src/svm/venues/byreal/index.js";
 import { POOL_DISCRIMINATOR } from "../../../src/svm/venues/raydium-clmm/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { ownedByShape } from "../fixtures.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const POOL = getAddressDecoder().decode(
   Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1),
@@ -32,12 +34,12 @@ function poolBytes(): Uint8Array {
   return data;
 }
 
-function loaderWith(mint: Uint8Array | null): AccountLoader {
-  return (async (a: string) => {
+function loaderWith(mint: Uint8Array | null): OwnedAccountLoader {
+  return ownedByShape((async (a: string) => {
     if (a === POOL) return poolBytes();
     if (a === T22_MINT) return mint;
     return null;
-  }) as unknown as AccountLoader;
+  }) as unknown as AccountLoader);
 }
 
 describe("byreal Token-2022 self-drop", () => {
@@ -53,11 +55,28 @@ describe("byreal Token-2022 self-drop", () => {
     ).rejects.toThrow(/Token-2022/);
   });
 
+  it("drops a pool whose mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const shaped = loaderWith(null);
+    const owned: OwnedAccountLoader = async (a) =>
+      a === T22_MINT ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(a);
+    await expect(byreal.fetchPoolConfig(owned, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
   it("does NOT drop for an unreadable mint (falls back to the legacy assumption)", async () => {
     // A null mint -> `continue` -> no Token-2022 drop. The fetch then either
     // resolves or fails for an unrelated reason, but NEVER with a T22 message.
     await byreal.fetchPoolConfig(loaderWith(null), POOL).catch((e: unknown) => {
       expect(String(e)).not.toMatch(/Token-2022|un-routable/);
     });
+  });
+
+  it("refuses a pool whose mint is an 82-byte mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    const shaped = loaderWith(null);
+    const owned: OwnedAccountLoader = async (a) =>
+      a === T22_MINT ? { data: makeLegacyMint(), owner: foreign } : shaped(a);
+    await expect(byreal.fetchPoolConfig(owned, POOL)).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

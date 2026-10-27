@@ -67,7 +67,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
@@ -304,9 +305,10 @@ async function resolveWindow(
  * both directions' boundary windows. Read-only against the loader.
  */
 export async function fetchOrcaWhirlpoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<OrcaWhirlpoolPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== WHIRLPOOL_ACCOUNT_SIZE) {
@@ -331,24 +333,25 @@ export async function fetchOrcaWhirlpoolConfig(
   const tokenMintA = codec.decode(data.subarray(OFF_MINT_A, OFF_MINT_A + 32));
   const tokenMintB = codec.decode(data.subarray(OFF_MINT_B, OFF_MINT_B + 32));
   // The v1 swap instruction is legacy-SPL only; detect a Token-2022 mint (or
-  // one carrying an un-routable extension) via the shared data-shape resolver
-  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
-  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
-  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
-  // Tokenkeg, parses no extensions, and the config is built unchanged. An
-  // unreadable mint falls back to the legacy assumption (keeps fixtures green).
+  // one carrying an un-routable extension) by its OWNER (an extensionless
+  // Token-2022 mint is byte-identical to a legacy one) and SELF-DROP the pool.
+  // The thrown error is the graceful-drop signal — the SvmRoute orchestrator
+  // catches a fetchPoolConfig throw and drops the venue. The LEGACY path stays
+  // byte-identical: a Tokenkeg-owned mint classifies as Tokenkeg, parses no
+  // extensions, and the config is built unchanged. An unreadable mint falls
+  // back to the legacy assumption (keeps fixtures green).
   const mints = [tokenMintA, tokenMintB];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue;
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
