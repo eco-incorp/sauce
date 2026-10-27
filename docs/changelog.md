@@ -138,6 +138,15 @@ nothing moves.
 
 ### Actions documents
 
+- **Fixed** (EVM): a split swap from `compileSplitSwap` starts its counters at zero in every cook.
+  The program keeps each venue's slice count and running output in the Pot's transient storage,
+  which lasts the whole transaction, not the cook, and it reset only the venues' marginal quotes. A
+  second split cooked on the same Pot in the same transaction (a contract wallet's batch, or an
+  owner's two signed cooks that someone else submits together) took the first one's counts as its
+  own: it swapped more than its `amount` where the Pot held more, paying the extra output to its own
+  sweep recipient, or reverted the transaction. Each cook now starts from zero and spends its own
+  `amount`. The program costs about 850 gas more per candidate. A cook that finds more slices than
+  its buckets reverts.
 - **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
   as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
