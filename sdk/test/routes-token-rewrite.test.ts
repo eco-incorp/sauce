@@ -821,14 +821,15 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
     expect(message).not.toContain("__sauce_Pot");
   });
 
-  it.each(["base", "ethereum"])(
-    "on %s, `pot.owner.<native symbol>` is refused in `pot.owner`'s own terms, exactly",
-    (chain) => {
-      expect(refusal(chain, "return pot.owner.ETH;")).toBe(
-        NATIVE("pot.owner.ETH", "ETH", chain, "pot.owner.balance"),
-      );
-    },
-  );
+  it.each([
+    ["base", "ETH"],
+    ["ethereum", "ETH"],
+    ["avalanche", "AVAX"],
+  ])("on %s, `pot.owner.%s` is refused in `pot.owner`'s own terms, exactly", (chain, symbol) => {
+    expect(refusal(chain, `return pot.owner.${symbol};`)).toBe(
+      NATIVE(`pot.owner.${symbol}`, symbol, chain, "pot.owner.balance"),
+    );
+  });
 
   it("on Arc, whose native coin is the token USDC, pot.owner.USDC is the token and pot.owner.balance the coin", () => {
     const owner = { contracts: { PotOwner: { abi: [...POT_OWNER_ABI] } } };
