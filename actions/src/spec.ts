@@ -399,7 +399,7 @@ const SPECS: readonly ActionSpec[] = [
   swap(
     "balancerV3Swap",
     "Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls " +
-      "through Permit2.",
+      "through Permit2, or takes a WETH input as native ETH under `wethIsEth`.",
     "Router.swapSingleTokenExactIn",
     {
       router: f(contract, "the Balancer V3 Router"),
@@ -408,8 +408,14 @@ const SPECS: readonly ActionSpec[] = [
       tokenOut: f(token, "the token bought"),
       amountOutMin: MIN_OUT,
       deadline: DEADLINE,
-      wethIsEth: f(bool, "true to pay or receive native ETH for WETH"),
+      wethIsEth: f(
+        bool,
+        "true to trade the router's WETH as native ETH: a WETH input is paid from the Pot's ETH, " +
+          "sent as the call's value, and needs no Permit2 allowance; a WETH output is paid to the " +
+          "Pot as ETH",
+      ),
     },
+    { value: "the amount, when `wethIsEth` is set and `tokenIn` is the router's WETH" },
   ),
 
   swap(

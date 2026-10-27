@@ -261,9 +261,21 @@ class Lowering {
     method: MethodName<B>,
     args: Expr[],
   ): void {
+    this.stmts.push(`${this.valueCallExpr(binding, target, value, method, args)};`);
+  }
+
+  /** `valueCall` as an expression — not yet a statement — whose value is the call's return data. */
+  valueCallExpr<B extends BindingName>(
+    binding: B,
+    target: Expr,
+    value: Expr,
+    method: MethodName<B>,
+    args: Expr[],
+  ): Expr {
     const sel = this.bytes("sel", hexToBytes(methodSelector(binding, method)));
     const data = args.length === 0 ? sel : `${sel}.concat(${encodeArgs(args)})`;
-    this.stmts.push(`evm.call(${target}, ${value}, ${data});`);
+
+    return `evm.call(${target}, ${value}, ${data})`;
   }
 
   /** Bind `expr` to a fresh `const` and yield its name. */
@@ -879,7 +891,8 @@ function balancerV3Swap(
 ): ActionResult {
   // The V3 Router pays msg.sender — the executing account — and takes no recipient.
   const userData = l.bytes("ud", new Uint8Array());
-  const call = l.call("IBalancerV3Router", addr(action.router), "swapSingleTokenExactIn", [
+  const router = addr(action.router);
+  const args = [
     addr(action.pool),
     addr(action.tokenIn),
     addr(action.tokenOut),
@@ -888,9 +901,30 @@ function balancerV3Swap(
     word(action.deadline),
     flag(action.wethIsEth),
     userData,
-  ]);
+  ];
+  if (!action.wethIsEth) {
+    const call = l.call("IBalancerV3Router", router, "swapSingleTokenExactIn", args);
 
-  return captured(l, needsOutput, call, amountIn);
+    return captured(l, needsOutput, call, amountIn);
+  }
+
+  // With `wethIsEth` the Router takes an input that is its own WETH (`getWeth()`) as native ETH:
+  // it wraps exactly the input out of the value sent, reverts when the value is short and returns
+  // any excess. Any other input it pulls through Permit2. So the value is the input exactly when
+  // the Router reads it as ETH — and the call is raw, because a binding cannot attach value.
+  const weth = l.bind("weth", l.call("IBalancerV3Router", router, "getWeth", []));
+  const value = l.bind("val", `${addr(action.tokenIn)} == ${weth} ? ${amountIn} : 0`);
+  const call = l.valueCallExpr("IBalancerV3Router", router, value, "swapSingleTokenExactIn", args);
+  if (!needsOutput) {
+    l.stmts.push(`${call};`);
+
+    return l.result(amountIn);
+  }
+  // The return data is the `amountOut` the Router paid the Pot: WETH's paid as ETH under the flag.
+  const ret = l.bind("ret", call);
+  const decoded = l.bind("dec", `abi.decode(${ret}, ["Uint256"])`);
+
+  return l.result(l.bind("amt", `${decoded}[0]`));
 }
 
 function ambientSwap(

@@ -93,6 +93,20 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### Actions documents
+
+- **Fixed** (EVM): `balancerV3Swap` with `wethIsEth: true` pays a WETH input in native ETH. It
+  called the Router with no value, so the Router, which takes the router's own WETH as ETH under
+  that flag, reverted every such swap, whatever the Pot held. The program now asks the Router for
+  its WETH (`getWeth()`) and sends the amount as the call's value when `tokenIn` is that token, and
+  no value otherwise; the Router wraps exactly the amount. A WETH output is still paid to the Pot as
+  ETH, and is the action's output. `wethIsEth: false` compiles to the same program as before.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
