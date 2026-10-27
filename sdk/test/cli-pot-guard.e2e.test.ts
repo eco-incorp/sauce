@@ -978,11 +978,16 @@ describeEvm("the Pot is checked against the chain", () => {
       approver: { auto: true, canAsk: false, approve: async () => true },
       setup,
     };
-    await expect(runCommand(input, nodeIo())).rejects.toThrow(
-      `cook on Pot ${old}: ${old} on ethereum is a Pot of ${OLD}`,
+    const refusal = await runCommand(input, nodeIo()).then(
+      () => undefined,
+      (error: unknown) => error,
     );
     // Not even the Pot's deployment, the plan's first transaction, was sent.
     await nothingSent(fresh, balance, undefined);
+    expect(refusal).toBeInstanceOf(CliError);
+    expect((refusal as CliError).message).toContain(
+      `cook on Pot ${old}: ${old} on ethereum is a Pot of ${OLD}`,
+    );
   }, 120_000);
 
   it("sauce send waits for the Pot its plan's deployment made before holding the cook to the guard, on an endpoint that lags", async () => {
