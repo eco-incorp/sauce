@@ -126,10 +126,11 @@ Solana's new account spellings.
 
 - **Changed (both): `pot.owner` is the Pot's owner.** 0.99.16 refused it on Solana, and a compile for
   an EVM chain failed on it. On Solana it is the owner's account, above; on an EVM chain it is the
-  address the Pot's `owner()` returns, read where the program reads it, `pot.owner.balance` its
-  native coin and `pot.owner.USDC` its USDC. Any other account's `.owner` is still the program that
-  owns it: on Solana the Pot's is `Account(pot.address).owner`, and `Account(pot)` and
-  `Account(pot.address)` compile to the Pot's own account.
+  address the Pot's `owner()` returns (the zero address on a Shared Pot, which has no owner), read
+  where the program reads it, `pot.owner.balance` its native coin and `pot.owner.USDC` its USDC.
+  Any other account's `.owner` is still the program that owns it: on Solana the Pot's is
+  `Account(pot.address).owner`, and `Account(pot)` and `Account(pot.address)` compile to the Pot's
+  own account.
 - **Now refused (EVM): `Account(…)`.** Accounts are Solana's: a program compiled for an EVM chain
   that writes `Account(key)`, `Account.pda(…)` or `Account.<program>` is refused at the name. Code a
   test of a name rules out may write them, for a Solana chain to compile. `Account` as a type is

@@ -804,8 +804,18 @@ function compileForChain(
     }
   } else {
     // `pot.owner`, the Pot's `owner()`, before the token pass, which would read it as a member of
-    // the Pot; its `.<TOKEN>` is then the token pass's, on the address it returns.
-    const owner = readingBound(() => rewritePotOwner(source, bound));
+    // the Pot; its `.<TOKEN>` is then the token pass's, on the address it returns. The native coin
+    // is passed where no token has its symbol (Arc's USDC is one), so `pot.owner.USDC` there stays
+    // the token's balance.
+    const owner = readingBound(() =>
+      rewritePotOwner(
+        source,
+        bound,
+        native === undefined || tokenMap.has(native)
+          ? undefined
+          : { symbol: native, chain: chain.slug },
+      ),
+    );
     source = owner.source;
     if (owner.contracts !== undefined) contracts = { ...contracts, ...owner.contracts };
     const members = readingBound(() =>

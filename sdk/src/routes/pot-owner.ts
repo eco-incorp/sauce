@@ -15,7 +15,13 @@ import type { Abi } from "viem";
 import { walk, type AstNode } from "./ast-walk.js";
 import type { ContractsConfig } from "./compile-types.js";
 import { parseSauce } from "./parse.js";
-import { BALANCE_MEMBER, OWNER_MEMBER, POT_NAME, potOwners } from "./pot-sugar.js";
+import {
+  BALANCE_MEMBER,
+  nativeSymbolRefusal,
+  OWNER_MEMBER,
+  POT_NAME,
+  potOwners,
+} from "./pot-sugar.js";
 import { freeReadsIn } from "./protocol-rewrite.js";
 import { applySplices, type Splice } from "./token-rewrite.js";
 
@@ -43,11 +49,14 @@ const OWNER_READ = `${POT_OWNER_BINDING}.view(ctx.self()).${OWNER_MEMBER}()`;
 /**
  * `source` with each `pot.owner` the Pot's `owner()`, and the binding that reads it, for the
  * compile's contracts. `bound` is the names the compile binds beside the source: a `pot` among them
- * is the caller's.
+ * is the caller's. `native` is the chain's native coin where no token has its symbol: its old
+ * spelling `pot.owner.<symbol>` is refused here, naming `pot.owner.balance`, as the token pass would
+ * name the lowering this rewrites it to.
  */
 export function rewritePotOwner(
   source: string,
   bound: ReadonlySet<string>,
+  native?: { readonly symbol: string; readonly chain: string },
 ): { readonly source: string; readonly contracts?: ContractsConfig } {
   if (bound.has(POT_NAME) || !source.includes(OWNER_MEMBER)) return { source };
   const program = parseSauce(source);
@@ -63,20 +72,27 @@ export function rewritePotOwner(
   const called = new Set<AstNode>();
   /** Each `<x>.balance` read, by its `<x>`. */
   const balances = new Map<AstNode, AstNode>();
+  /** Each `<x>.<native symbol>` read, by its `<x>`. */
+  const symbols = new Map<AstNode, AstNode>();
   walk(program, (n) => {
     if (n.type === "Identifier" && n.name === POT_OWNER_BINDING) throw reserved();
     if (n.type === "CallExpression") called.add(n.callee as AstNode);
     const property = n.property as AstNode | undefined;
-    if (
-      n.type === "MemberExpression" &&
-      n.computed !== true &&
-      property?.type === "Identifier" &&
-      property.name === BALANCE_MEMBER
-    ) {
-      balances.set(n.object as AstNode, n);
+    if (n.type !== "MemberExpression" || n.computed === true || property?.type !== "Identifier") {
+      return;
     }
+    if (property.name === BALANCE_MEMBER) balances.set(n.object as AstNode, n);
+    if (property.name === native?.symbol) symbols.set(n.object as AstNode, n);
   });
   const splices = reads.map((read): Splice => {
+    if (native !== undefined && symbols.has(read) && !called.has(symbols.get(read)!)) {
+      throw nativeSymbolRefusal(
+        `${POT_NAME}.${OWNER_MEMBER}.${native.symbol}`,
+        native.symbol,
+        native.chain,
+        `${POT_NAME}.${OWNER_MEMBER}.${BALANCE_MEMBER}`,
+      );
+    }
     const balance = balances.get(read);
     return balance !== undefined && !called.has(balance)
       ? { start: balance.start, end: balance.end, replacement: `ctx.balance(${OWNER_READ})` }

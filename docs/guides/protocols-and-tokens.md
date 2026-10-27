@@ -213,11 +213,11 @@ Arc, whose coin is USDC, `pot.USDC` is the 6-decimal token and `pot.balance` the
 The holder can be:
 
 - **On an EVM chain**: any address. That is `pot`, `pot.owner` (your Pot's owner, read from the
-  Pot's `owner()`), a variable or parameter of the program, an address written out, a protocol
-  contract (`Aave.Pool`), a contract given an address (`UniswapV3.Pool(pool).USDC` reads `pool`'s
-  balance), or a call that returns an address (`UniswapV4.StateView.poolManager().USDC`). A program
-  that declares its own variable named `pot` owns the name, its `pot.owner` too, and reads that
-  variable's balance.
+  Pot's `owner()`; a Shared Pot has no owner, so there it is the zero address), a variable or
+  parameter of the program, an address written out, a protocol contract (`Aave.Pool`), a contract
+  given an address (`UniswapV3.Pool(pool).USDC` reads `pool`'s balance), or a call that returns an
+  address (`UniswapV4.StateView.poolManager().USDC`). A program that declares its own variable named
+  `pot` owns the name, its `pot.owner` too, and reads that variable's balance.
 - **A token's own contract too**: `WETH.balance` is the ETH locked in the WETH contract, and
   `USDC.WETH` is the WETH held by the USDC contract. On Solana, `USDC.balance` is the SOL in the
   USDC mint's account.

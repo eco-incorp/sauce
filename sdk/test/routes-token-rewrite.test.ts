@@ -20,6 +20,7 @@ import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-rout
 import { ambientNamesOf } from "../src/routes/rs-compile.js";
 import { chainAmbient } from "../src/routes/ambient.js";
 import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
+import { POT_OWNER_ABI } from "../src/routes/pot-owner.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -805,6 +806,31 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
       NATIVE("who.AVAX", "AVAX", "avalanche", "who.balance"),
     );
     expect(refusal("bsc", "return pot.BNB;")).toBe(NATIVE("pot.BNB", "BNB", "bsc", "pot.balance"));
+  });
+
+  it.each(["base", "ethereum"])(
+    "on %s, `pot.owner.<native symbol>` is refused in `pot.owner`'s own terms",
+    (chain) => {
+      const message = refusal(chain, "return pot.owner.ETH;");
+      expect(message).toBe(NATIVE("pot.owner.ETH", "ETH", chain, "pot.owner.balance"));
+      // The Pot's owner is read through a binding of the SDK's, which a program cannot write.
+      expect(message).not.toContain("__sauce_Pot");
+    },
+  );
+
+  it("on Arc, whose native coin is the token USDC, pot.owner.USDC is the token and pot.owner.balance the coin", () => {
+    const owner = { contracts: { PotOwner: { abi: [...POT_OWNER_ABI] } } };
+    const hex = (body: string, options = {}) =>
+      Buffer.from(
+        compileSauceProgram("arc", `function main(): Uint256 { ${body} }`, options).bytecode,
+      ).toString("hex");
+    expect(hex("return pot.owner.USDC;")).toBe(
+      hex("return USDC.balanceOf(PotOwner.view(ctx.self()).owner());", owner),
+    );
+    expect(hex("return pot.owner.balance;")).toBe(
+      hex("return ctx.balance(PotOwner.view(ctx.self()).owner());", owner),
+    );
+    expect(hex("return pot.owner.USDC;")).not.toBe(hex("return pot.owner.balance;"));
   });
 
   it("refuses bare `self` with the protocol rewrite off too", () => {

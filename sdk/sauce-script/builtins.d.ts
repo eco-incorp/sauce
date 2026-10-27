@@ -252,8 +252,8 @@ declare function Token(address: SauceInt): SauceTokenSource;
  * account list takes (`pot.writable()`, `pot.signer()`). Its balances: `pot.USDC` of a token the
  * chain registers, `pot.balance` of the native coin. Its owner, `pot.owner`: on Solana the owner's
  * account, which signs the cook (`pot.owner.address`, its key; `pot.owner.signer()`), on an EVM
- * chain the Pot's `owner()`. A program that declares its own `pot` owns the name, `pot.owner` with
- * it.
+ * chain the Pot's `owner()`, the zero address on a Shared Pot, which has no owner. A program that
+ * declares its own `pot` owns the name, `pot.owner` with it.
  */
 declare const pot: import("../routes/source-globals.generated.js").SauceSolanaAccount & {
   readonly owner: import("../routes/source-globals.generated.js").SauceSolanaAccount;
