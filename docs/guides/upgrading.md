@@ -218,7 +218,7 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
     `X != 0` or `X ? a : b`. The branch a test rules out is still not compiled, and the program's
     bytes do not change. The call is refused, saying so. A use of the name outside such a branch,
     and `require(X != 0)` on a chain without it, are refused at the use, naming the chain.
-12. **Write `"pot"` for the Pot outside programs too** (the release after 0.99.16). In an actions
+12. **Write `"pot"` for the Pot outside programs too** (0.99.17). In an actions
     document, a `recipient`, `onBehalfOf` or `owner` of `"self"` is refused: write `"pot"`. In
     TypeScript, write `Token.balanceOf({ token, owner: "pot" })` for the Pot's balance, and read a
     defaulted deposit beneficiary from `toDeposit` as `"pot"`. `ctx.self()` and
@@ -248,7 +248,7 @@ refuses three forms that 2.6.0 compiled wrongly (EVM):
   fields in the order the contract declares them. Write the fields in that order where the list is
   built, or write the list in the call itself, where it is still reordered.
 
-The [changelog](../changelog.md#sdk-unreleased) quotes each error.
+The [changelog](../changelog.md#sdk-09917--2026-10-27) quotes each error.
 
 ## Solana's accounts are `Account` and `pot.owner`
 
