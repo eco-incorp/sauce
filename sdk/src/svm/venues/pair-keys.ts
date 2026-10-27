@@ -69,7 +69,9 @@ export function pairKeyRegistry(slug: string, capacity: number = MAX_PAIR_KEYS):
       try {
         return await fetch(pair);
       } catch (error) {
-        pairs.delete(key);
+        // Forget the pair this resolve refused, and only that: a key minted again (or evicted and
+        // minted again) while the fetch was in flight holds a fresh entry a stale refusal must keep.
+        if (pairs.get(key) === pair) pairs.delete(key);
         throw error;
       }
     },

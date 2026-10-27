@@ -33,6 +33,14 @@ function mintAt(index: number): Address {
 
 const nothing: OwnedAccountLoader = async () => null;
 
+/** A fetch still in flight, refused when the test says. (`Promise.withResolvers` is past this
+ *  project's `lib`.) */
+function deferredRefusal(): { refusal: Promise<never>; refuse: (error: Error) => void } {
+  let refuse!: (error: Error) => void;
+  const refusal = new Promise<never>((_, reject) => (refuse = reject));
+  return { refusal, refuse };
+}
+
 describe("pairKeyRegistry", () => {
   it("holds at most its capacity, evicting the least recently used key", async () => {
     const registry = pairKeyRegistry("test", 3);
@@ -57,6 +65,41 @@ describe("pairKeyRegistry", () => {
 
   it("defaults to MAX_PAIR_KEYS, below the many keys the venue tests mint", () => {
     expect(MAX_PAIR_KEYS).toBeLessThan(MANY);
+  });
+
+  it("a refusal still forgets the pair it refused", async () => {
+    const registry = pairKeyRegistry("test", 3);
+    const key = registry.key(mintAt(0), OUT);
+    await expect(
+      registry.resolve(key, async () => {
+        throw new Error("refused");
+      }),
+    ).rejects.toThrow("refused");
+    expect(registry.lookup(key)).toBeUndefined();
+  });
+
+  it("a stale refusal does not erase the pair minted again meanwhile", async () => {
+    const registry = pairKeyRegistry("test", 3);
+    const key = registry.key(mintAt(0), OUT);
+    const { refusal, refuse } = deferredRefusal();
+    const pending = registry.resolve(key, () => refusal);
+    expect(registry.key(mintAt(0), OUT)).toBe(key); // minted again while the first is in flight
+    refuse(new Error("stale"));
+    await expect(pending).rejects.toThrow("stale");
+    expect(registry.lookup(key)).toEqual({ inMint: mintAt(0), outMint: OUT });
+  });
+
+  it("a stale refusal does not erase a pair evicted and minted again", async () => {
+    const registry = pairKeyRegistry("test", 1);
+    const key = registry.key(mintAt(0), OUT);
+    const { refusal, refuse } = deferredRefusal();
+    const pending = registry.resolve(key, () => refusal);
+    registry.key(mintAt(1), OUT); // capacity 1: evicts the first
+    expect(registry.lookup(key)).toBeUndefined();
+    registry.key(mintAt(0), OUT); // and it comes back
+    refuse(new Error("stale"));
+    await expect(pending).rejects.toThrow("stale");
+    expect(registry.lookup(key)).toEqual({ inMint: mintAt(0), outMint: OUT });
   });
 });
 
