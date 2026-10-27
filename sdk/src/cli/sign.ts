@@ -404,6 +404,9 @@ export async function cancelCommand(
   if (input.nonces.length === 0) throw new UsageError("missing --cancel <nonce>: what to cancel");
   requireSupported("cancelling signed cooks", [chain]);
   const target = input.target;
+  // The zero owner's Pot is a Shared Pot, which runs no signed cook and refuses its own
+  // invalidateNonces from every sender: there is no nonce of it to cancel.
+  if ("owner" in target) requirePotOwner(target.owner);
   const pot =
     "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
   const named = "owner" in target ? getAddress(target.owner) : undefined;

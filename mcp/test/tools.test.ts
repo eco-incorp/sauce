@@ -10,7 +10,14 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { decodeFunctionData, getAddress, numberToHex, type Address, type Hex } from "viem";
+import {
+  decodeFunctionData,
+  getAddress,
+  numberToHex,
+  zeroAddress,
+  type Address,
+  type Hex,
+} from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import {
@@ -1362,6 +1369,13 @@ describe("sauce_signed_cook", () => {
         }),
       ),
       /source signs a cook, and cancel signs none/,
+    );
+    // The zero owner is a Shared Pot's, which has no nonce to cancel: refused as sauce sign does.
+    assert.match(
+      failed(
+        await mcp.call("sauce_signed_cook", { chain: "base", owner: zeroAddress, cancel: ["1"] }),
+      ),
+      /Kitchen\.deployPot reverts for the owner 0x0{40}: a Pot with no owner is a Shared Pot/,
     );
   });
 
