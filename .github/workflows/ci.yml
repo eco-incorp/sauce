@@ -32,6 +32,10 @@ permissions:
   contents: read
   packages: read
 
+# Resolve repository variables in workflow scope; composite actions do not expose `vars`.
+env:
+  CHAIN_FIXTURE_RPC_CONFIG: ${{ vars.CHAIN_FIXTURE_RPC_CONFIG }}
+
 jobs:
   # Typecheck, the generated files, the other workspaces' typechecks, the browser, the manual and the
   # skills, and the unit tests that need no engine suite: the cheap checks, so a mistake there fails

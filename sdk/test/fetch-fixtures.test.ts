@@ -123,6 +123,14 @@ describe("maintenance fetches use explicit public RPC configuration", () => {
     expect(JSON.parse(result.stdout)).toEqual([]);
   });
 
+  it("CI resolves repository variables outside the composite action", () => {
+    const workflow = readFileSync(join(SDK, "../.github/workflows/ci.yml"), "utf8");
+    const action = readFileSync(join(SDK, "../.github/actions/setup/action.yml"), "utf8");
+    expect(workflow).toContain("CHAIN_FIXTURE_RPC_CONFIG: ${{ vars.CHAIN_FIXTURE_RPC_CONFIG }}");
+    expect(action).not.toMatch(/\$\{\{\s*vars\./);
+    expect(action).toContain('"$CHAIN_FIXTURE_RPC_CONFIG"');
+  });
+
   it("the fetchers never reach into the command's private endpoint registry", () => {
     for (const fetcher of FETCHERS) {
       const source = readFileSync(join(SCRIPTS, fetcher), "utf8");

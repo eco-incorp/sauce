@@ -83,8 +83,6 @@ runs:
 
     - name: Fetch the third-party Solana programs and contract code
       shell: bash
-      env:
-        CHAIN_FIXTURE_RPC_CONFIG: ${{ vars.CHAIN_FIXTURE_RPC_CONFIG }}
       run: |
         set -euo pipefail
         test -n "$CHAIN_FIXTURE_RPC_CONFIG" || { echo "::error::set the public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable"; exit 1; }
