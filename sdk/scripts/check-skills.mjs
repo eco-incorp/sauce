@@ -445,6 +445,8 @@ const UNDECLARED_NAMES = {
   "sauce-swaps": {
     executeOperation:
       "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",
+    uniswapV3FlashCallback:
+      "Uniswap V3's flash callback, which a borrower contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",
   },
   "sauce-chains": {
     getAccountInfo:

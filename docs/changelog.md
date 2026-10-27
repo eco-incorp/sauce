@@ -311,6 +311,20 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   Before, each key minted stayed in memory for the life of the process. A key that is no longer
   held fails with `unknown discovery key`; minting it again restores it.
 
+### The agent skills and the manual
+
+- **Removed**: seven of the ported Solidity examples, because their upstream licences do not
+  permit redistribution under the package's licence: Uniswap V3's `SwapExamples`
+  (`uniswap-v3-swap-examples.sauce.ts`), `LiquidityExamples`
+  (`uniswap-v3-liquidity-examples.sauce.ts`) and `PairFlash` (`uniswap-v3-pair-flash.sauce.ts`),
+  all GPL-2.0-or-later; Aave's credit delegation example (`aave-v3-credit-delegation.sauce.ts`),
+  AGPL-3.0; Pendle's router samples (`pendle-router-sample.sauce.ts`), UNLICENSED; and Balancer's
+  batch and flash swaps (`balancer-v2-batch-swap.sauce.ts`, `balancer-v2-flash-swap.sauce.ts`),
+  published with no licence. The ABI files only they imported (`SauceRouterFlash.json`,
+  `UniswapV3Positions.json`, `AaveV3Delegation.json`, `PendleRouterSample.json`) are removed with
+  them. Uniswap V4's swap guide, Compound III and Morpho Blue stay, in `sauce-swaps`,
+  `sauce-protocols` and [From Solidity examples to Sauce](guides/solidity-examples.md).
+
 **Also breaking:**
 
 - The Pot is `"pot"` outside programs too, with no alias, as it is `pot` inside them:

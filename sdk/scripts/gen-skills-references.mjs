@@ -101,19 +101,9 @@ export const SOLIDITY_EXAMPLES_GUIDE = "../guides/solidity-examples.md";
  * which the guide links; an example with such a line that is not listed here is an error.
  */
 export const PORTED_EXAMPLES = [
-  ["Uniswap V3: the swap examples", "sauce-swaps/examples/uniswap-v3-swap-examples.sauce.ts"],
-  ["Uniswap V3: a flash, as a flash swap", "sauce-swaps/examples/uniswap-v3-pair-flash.sauce.ts"],
-  [
-    "Uniswap V3: the liquidity examples",
-    "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts",
-  ],
-  ["Aave V3: credit delegation", "sauce-protocols/examples/aave-v3-credit-delegation.sauce.ts"],
   ["Compound III: MyContract", "sauce-protocols/examples/compound-v3-my-contract.sauce.ts"],
   ["Morpho Blue: the snippets", "sauce-protocols/examples/morpho-blue-snippets.sauce.ts"],
-  ["Pendle: the router samples", "sauce-protocols/examples/pendle-router-sample.sauce.ts"],
   ["Uniswap V4: the swap guide", "sauce-swaps/examples/uniswap-v4-swap.sauce.ts"],
-  ["Balancer V2: batch swaps", "sauce-swaps/examples/balancer-v2-batch-swap.sauce.ts"],
-  ["Balancer V2: a flash swap", "sauce-swaps/examples/balancer-v2-flash-swap.sauce.ts"],
 ];
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
@@ -2212,19 +2202,7 @@ function renderPortedGuide(examples) {
     "Every program here runs, not only compiles, before the package ships: through `sauce simulate`",
     "and `sauce run` on Ethereum's state at a fixed block, against the protocols' deployed contracts,",
     "with the tokens it spends already in the Pot and each result held to the protocol's own quotes",
-    "and accounts. The Uniswap flash swap is an arbitrage, so it runs there only after another trade",
-    "has moved one of its two pools: with its header's example on a block where the pools agree, the",
-    "cycle loses both fees and the whole transaction reverts, moving nothing. DAI is not one of the",
-    "`sauce` command's token symbols on Ethereum, so `--fund` and `--assume-balance` take it by its",
-    "address, which `sauce globals --chain ethereum --protocol Maker` gives.",
-    "",
-    "A flash loan changes most. A lender pays first and then calls its borrower back to be repaid,",
-    "Uniswap's pool through `uniswapV3FlashCallback` and Aave's Pool through `executeOperation`, and",
-    "a Pot cannot be called back by a program. The flash a program has is its Router's: a swap whose",
-    "output arrives first, with a program run inside the swap's callback, before the pool is paid.",
-    "Uniswap's `PairFlash` is ported that way below; Aave's flash-loan receiver has no port, since",
-    "the same trade is that flash swap. Balancer's flash swap needs no callback at all: the Vault",
-    "settles a batch of swaps as a whole, so it ports as it is.",
+    "and accounts.",
     "",
     "What a port saves is the contract, not its length: nothing is deployed, funded or upgraded, and",
     "nothing holds an approval between transactions, since the program runs in your Pot and is gone.",

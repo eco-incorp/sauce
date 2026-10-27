@@ -145,18 +145,12 @@ A protocol's router works in a program too, called as the protocol's Solidity ex
 approve it for the input (`USDC.approve(router, amount)`, or `approve(token, router, amount)` for a
 token the registry names only as a contract), then call it through its namespace. Its exact-output
 forms are the one thing the library has no function for: Uniswap V3's SwapRouter buys an exact
-amount for at most a maximum. [examples/uniswap-v3-swap-examples.sauce.ts](examples/uniswap-v3-swap-examples.sauce.ts)
-ports the four swaps of Uniswap's own `SwapExamples` contract to `UniswapV3.SwapRouter`: exact
-input and exact output, in one pool and along a path through two, each the function it was in
-Solidity, with the minimum (or maximum) a `main` input where the original passed none.
-[examples/uniswap-v4-swap.sauce.ts](examples/uniswap-v4-swap.sauce.ts) ports Uniswap's V4 swap
-guide: the Universal Router approved through `Permit2.Permit2` for exactly the input, then one
-`V4_SWAP` command whose actions swap in one pool, settle the input and take the output, its inputs
-built with `abi.encode` and checked against what arrived. To swap on V4 inside a program, the
-library's `uniswapV4` is shorter; this is how a program speaks to a router that takes commands.
-[examples/balancer-v2-batch-swap.sauce.ts](examples/balancer-v2-batch-swap.sauce.ts) ports
-Balancer's batch swap examples: token A to token C through B across two pools in one `batchSwap`,
-given in or given out, with the Vault's limits (positive in, negative out) from a `main` input.
+amount for at most a maximum. [examples/uniswap-v4-swap.sauce.ts](examples/uniswap-v4-swap.sauce.ts)
+ports Uniswap's V4 swap guide: the Universal Router approved through `Permit2.Permit2` for exactly
+the input, then one `V4_SWAP` command whose actions swap in one pool, settle the input and take the
+output, its inputs built with `abi.encode` and checked against what arrived. To swap on V4 inside a
+program, the library's `uniswapV4` is shorter; this is how a program speaks to a router that takes
+commands.
 
 ## Flash swaps
 
@@ -170,15 +164,10 @@ the Pot short fails the payment, and the whole transaction reverts. `program(() 
 the callback from a closure that reads the program's own values, and its `code` with its `args`
 appended is the callback's bytes; the program declares `flash` in an ABI beside it, since
 `@sauce/router` has no function for it, and calls it on `pot`.
-[examples/uniswap-v3-pair-flash.sauce.ts](examples/uniswap-v3-pair-flash.sauce.ts) ports Uniswap's
-`PairFlash` this way, with [examples/SauceRouterFlash.json](examples/SauceRouterFlash.json): the
-output of a swap in one pool, sold back in another before the first is paid, the profit to a payer.
 
 Balancer's flash swap needs none of that: one `batchSwap` that sells a token to one pool and buys it
 back from another is settled by the Vault as a whole, so the Pot sends nothing (its limits are zero)
 and receives the profit, and a cycle that would cost anything reverts on the limits.
-[examples/balancer-v2-flash-swap.sauce.ts](examples/balancer-v2-flash-swap.sauce.ts) ports Balancer's
-own example of it.
 
 ## Price limits and partial fills
 

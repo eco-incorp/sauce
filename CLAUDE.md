@@ -238,10 +238,12 @@ skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Ba
 results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances.
 The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
 `official-examples.mainnet` (`test:mainnet`) runs the protocols' own Solidity examples ported to
-Sauce (each header's `Ported from` line names the official file at a pinned commit; the generator's
-`PORTED_EXAMPLES` lists them for the manual's `docs/guides/solidity-examples.md`) through `sauce
-simulate` and `sauce run` on Ethereum state, each result held to the protocol's own quoter or
-accounts and to the balances it moved.
+Sauce (Uniswap V4's swap guide, Compound III and Morpho Blue; each header's `Ported from` line
+names the official file at a pinned commit; the generator's `PORTED_EXAMPLES` lists them for the
+manual's `docs/guides/solidity-examples.md`) through `sauce simulate` and `sauce run` on Ethereum
+state, each result held to the protocol's own quoter or accounts and to the balances it moved.
+Only examples whose upstream licence permits redistribution under the package's licence are
+ported: GPL, AGPL, UNLICENSED and unlicensed sources are not.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
