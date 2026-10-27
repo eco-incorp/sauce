@@ -105,6 +105,12 @@ nothing moves.
   as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
   `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
+- **Fixed** (EVM): `balancerV3Swap` with `wethIsEth: true` pays a WETH input in native ETH. It
+  called the Router with no value, so the Router, which takes the router's own WETH as ETH under
+  that flag, reverted every such swap, whatever the Pot held. The program now asks the Router for
+  its WETH (`getWeth()`) and sends the amount as the call's value when `tokenIn` is that token, and
+  no value otherwise; the Router wraps exactly the amount. A WETH output is still paid to the Pot as
+  ETH, and is the action's output. `wethIsEth: false` compiles to the same program as before.
 
 - **Fixed** (EVM): an `aaveV3Withdraw` whose output a later action spends, or that saves it with
   `saveOutputAs`, withdraws to the Pot whatever its `recipient` says, as every swap, wrap and stake

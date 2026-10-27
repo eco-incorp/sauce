@@ -171,6 +171,11 @@ const CATALOG = {
       "function swapSingleTokenExactIn(address pool, address tokenIn, address tokenOut, uint256 exactAmountIn, uint256 minAmountOut, uint256 deadline, bool wethIsEth, bytes userData) payable returns (uint256 amountOut)",
       `Balancer V3 is ${NOT_IN_REGISTRY}`,
     ),
+    // The WETH the Router pays and takes as native ETH under `wethIsEth`.
+    getWeth: local(
+      "function getWeth() view returns (address)",
+      `Balancer V3 is ${NOT_IN_REGISTRY}`,
+    ),
   }),
   IUniswapV2Router: () => ({
     // `fraxswapSwap`'s: Fraxswap's router is UniswapV2-compatible for this function.

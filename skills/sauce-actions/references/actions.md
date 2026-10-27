@@ -44,7 +44,7 @@ A sequence of protocol actions that compiles to one Sauce program executing on o
 | [`maverickV2Swap`](#maverickv2swap) | Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for. |
 | [`curveRouterNGSwap`](#curverouterngswap) | Swaps along a Curve RouterNG route of up to five hops. |
 | [`balancerV2BatchSwap`](#balancerv2batchswap) | Swaps along Balancer V2 pools in one batch; the output is a balance delta. |
-| [`balancerV3Swap`](#balancerv3swap) | Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2. |
+| [`balancerV3Swap`](#balancerv3swap) | Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2, or takes a WETH input as native ETH under `wethIsEth`. |
 | [`ambientSwap`](#ambientswap) | Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output is a balance delta. |
 | [`dodoV1Swap`](#dodov1swap) | Swaps through legacy DODO V1 (Classical) pairs via the DODO proxy, which pays the Pot. |
 | [`carbonSwap`](#carbonswap) | Trades against Carbon strategies by source amount; the controller pays the Pot. |
@@ -290,7 +290,7 @@ Each `steps` entry:
 
 ### balancerV3Swap
 
-Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2. Calls Router.swapSingleTokenExactIn.
+Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2, or takes a WETH input as native ETH under `wethIsEth`. Calls Router.swapSingleTokenExactIn.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |
@@ -302,7 +302,7 @@ Swaps an exact input through one Balancer V3 pool; the router pays the Pot and p
 | `tokenOut` | token | yes | the token bought |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
 | `deadline` | integer ≥ 0 | yes | Unix seconds after which the venue reverts |
-| `wethIsEth` | true or false | yes | true to pay or receive native ETH for WETH |
+| `wethIsEth` | true or false | yes | true to trade the router's WETH as native ETH: a WETH input is paid from the Pot's ETH, sent as the call's value, and needs no Permit2 allowance; a WETH output is paid to the Pot as ETH |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 

@@ -538,6 +538,80 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(WETH, env.pot), 0n, "the transfer spends exactly the output");
     });
 
+    describe("balancerV3Swap with wethIsEth", () => {
+      const swapEthForUsdc = (amount?: bigint): Action => ({
+        type: "balancerV3Swap",
+        router: BALANCER_V3_ROUTER,
+        pool: BALANCER_V3_USDC_WETH,
+        tokenIn: WETH,
+        tokenOut: USDC,
+        ...(amount === undefined ? {} : { amount: `${amount}` }),
+        amountOutMin: "1",
+        deadline: DEADLINE,
+        wethIsEth: true,
+      });
+
+      it("pays the Pot's native ETH for WETH: the input is the call's value", async () => {
+        const amount = ONE_ETH / 10n;
+        const ethBefore = await ether(env.pot);
+        const routerEth = await ether(BALANCER_V3_ROUTER);
+        await run([swapEthForUsdc(amount), { type: "transfer", token: USDC, recipient: RECEIVER }]);
+        assert.equal(ethBefore - (await ether(env.pot)), amount, "exactly the input left the Pot");
+        assert.equal(await balance(WETH, env.pot), 0n, "the Router wrapped it; the Pot holds none");
+        assert.equal(await balance(USDC, env.pot), 0n, "the transfer spends exactly the output");
+        assert.ok((await balance(USDC, RECEIVER)) > 0n);
+        assert.equal(await ether(BALANCER_V3_ROUTER), routerEth, "no ETH is left in the Router");
+      });
+
+      it("spends an ETH amount an earlier action produced", async () => {
+        const amount = ONE_ETH / 10n;
+        const ethBefore = await ether(env.pot);
+        await run([
+          { type: "wrapETH", amount: `${amount}`, weth: WETH },
+          { type: "unwrapETH", weth: WETH },
+          swapEthForUsdc(),
+          { type: "transfer", token: USDC, recipient: RECEIVER },
+        ]);
+        assert.equal(ethBefore - (await ether(env.pot)), amount);
+        assert.equal(await balance(WETH, env.pot), 0n);
+        assert.equal(await balance(USDC, env.pot), 0n);
+        assert.ok((await balance(USDC, RECEIVER)) > 0n);
+      });
+
+      it("receives native ETH for WETH, and its output is the ETH received", async () => {
+        await fund(USDC, USDC_100);
+        const ethBefore = await ether(env.pot);
+        const routerEth = await ether(BALANCER_V3_ROUTER);
+        await run([
+          { type: "approve", amount: `${USDC_100}`, token: USDC, spender: PERMIT2 },
+          {
+            type: "permit2Approve",
+            permit2: PERMIT2,
+            token: USDC,
+            spender: BALANCER_V3_ROUTER,
+            expiration: DEADLINE,
+          },
+          {
+            type: "balancerV3Swap",
+            router: BALANCER_V3_ROUTER,
+            pool: BALANCER_V3_USDC_WETH,
+            tokenIn: USDC,
+            tokenOut: WETH,
+            amountOutMin: "1",
+            deadline: DEADLINE,
+            wethIsEth: true,
+            saveOutputAs: "received",
+          },
+          { type: "wrapETH", amountRef: "received", weth: WETH },
+        ]);
+        const wrapped = await balance(WETH, env.pot);
+        assert.ok(wrapped > 0n, "the Pot was paid native ETH");
+        assert.equal(await ether(env.pot), ethBefore, "the wrap spent exactly the ETH received");
+        assert.equal(await balance(USDC, env.pot), 0n);
+        assert.equal(await ether(BALANCER_V3_ROUTER), routerEth, "no ETH is left in the Router");
+      });
+    });
+
     it("uniswapV2Swap sells WETH at the pair directly, and its output pays an approval", async () => {
       await run([
         { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
