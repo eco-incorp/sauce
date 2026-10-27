@@ -89,6 +89,7 @@
   },
   "files": [
     "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md",
     "sdk/dist",
     "sdk/runtime",
     "actions/dist",

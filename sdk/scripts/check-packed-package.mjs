@@ -161,12 +161,14 @@ try {
     { cwd: work, stdio: "inherit" },
   );
   assert.equal(installedManifest.license, "SEE LICENSE IN LICENSE.md");
-  assert.equal(
-    readFileSync(join(installedRoot, "LICENSE.md"), "utf8"),
-    readFileSync(join(root, "LICENSE.md"), "utf8"),
-    "the installed package must ship the repository license verbatim",
-  );
-  console.log("Clean package install: license metadata and full license text ship");
+  for (const file of ["LICENSE.md", "THIRD_PARTY_NOTICES.md"]) {
+    assert.equal(
+      readFileSync(join(installedRoot, file), "utf8"),
+      readFileSync(join(root, file), "utf8"),
+      `the installed package must ship the repository's ${file} verbatim`,
+    );
+  }
+  console.log("Clean package install: license metadata, license text and third-party notices ship");
 
   // What a library import loads is a dependency; what only the `sauce` command loads, for one
   // command each, is an optional peer of any version, which no install brings and no project's own
