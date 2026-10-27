@@ -18,6 +18,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import { bridge } from "../../src/protocols/across/functions.js";
 import { sendMessage } from "../../src/protocols/chainlink-ccip/functions.js";
+import { bridge as lifiBridge } from "../../src/protocols/lifi/functions.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
 import { compileSauceFunctionRust } from "../helpers.js";
 import { startGatedEngine, type GatedEngine } from "./gated-engine.js";
@@ -56,6 +57,10 @@ const acrossAbi = parseAbi([
 const ccipAbi = parseAbi([
   "function ccipSend(uint64 destinationChainSelector, (bytes receiver, bytes data, (address token, uint256 amount)[] tokenAmounts, address feeToken, bytes extraArgs) message) payable returns (bytes32)",
 ]);
+const lifiAbi = parseAbi([
+  "function startBridgeTokensViaAcrossV4((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData, (bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) acrossData) payable",
+]);
+const word = (address: string): Hex => `0x${"00".repeat(12)}${address.slice(2).toLowerCase()}`;
 
 let anvil: ChildProcess;
 let engine: GatedEngine;
@@ -130,6 +135,48 @@ describeEvm("exported recipes preserve empty bytes at the callee", () => {
       1700003600,
       0,
       "0x",
+    ]);
+  });
+
+  it("LI.FI bridge refunds an unfilled Across V4 deposit to the Pot, not the receiver", async () => {
+    const data = await executeRecipe(
+      lifiBridge,
+      "lifi",
+      `require(recipe(${RECORDER}, 7, ${TOKEN}, ${OUTPUT_TOKEN}, ${RECIPIENT}, 100, 99, 10, 1700000000, 1700003600) == 1);`,
+    );
+    const decoded = decodeFunctionData({ abi: lifiAbi, data });
+    expect(decoded.functionName).toBe("startBridgeTokensViaAcrossV4");
+    // Across refunds a deposit no relayer fills by `fillDeadline` on the source chain, so the
+    // refund address must be the Pot that paid it; the receiver is a destination-chain address.
+    expect(RECIPIENT.toLowerCase()).not.toBe(engine.pot.toLowerCase());
+    expect(decoded.args[1].refundAddress).toBe(word(engine.pot));
+    expect(decoded.args[1].receiverAddress).toBe(word(RECIPIENT));
+    expect(decoded.args).toEqual([
+      {
+        transactionId: `0x${"00".repeat(31)}07`,
+        bridge: "acrossV4",
+        integrator: "sauce",
+        referrer: zeroAddress,
+        sendingAssetId: TOKEN,
+        receiver: RECIPIENT,
+        minAmount: 100n,
+        destinationChainId: 10n,
+        hasSourceSwaps: false,
+        hasDestinationCall: false,
+      },
+      {
+        receiverAddress: word(RECIPIENT),
+        refundAddress: word(engine.pot),
+        sendingAssetId: word(TOKEN),
+        receivingAssetId: word(OUTPUT_TOKEN),
+        outputAmount: 99n,
+        outputAmountMultiplier: 0n,
+        exclusiveRelayer: `0x${"00".repeat(32)}`,
+        quoteTimestamp: 1700000000,
+        fillDeadline: 1700003600,
+        exclusivityParameter: 0,
+        message: "0x",
+      },
     ]);
   });
 
