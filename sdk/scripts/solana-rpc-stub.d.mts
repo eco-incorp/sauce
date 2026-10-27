@@ -13,4 +13,6 @@ export declare function solanaRpcStub(options?: {
   rateLimitScans?: number;
   /** What a scan of each program finds, whatever its filters. */
   scans?: Record<string, ReadonlyArray<{ pubkey: string; data: Uint8Array }>>;
+  /** The cluster's genesis hash, `getGenesisHash`'s answer: mainnet-beta's unless given. */
+  genesis?: string;
 }): Promise<SolanaRpcStub>;

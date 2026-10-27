@@ -25,6 +25,8 @@ const rentExempt = (size) => (128n + BigInt(size)) * 5080n;
  * (`getProgramAccounts`) of a program in `refuseScans` is always refused, and the first
  * `rateLimitScans` scans of any program are, as a rate-limited endpoint refuses them; a scan of a
  * program in `scans` (program -> [{ pubkey, data }]) finds those accounts, whatever its filters.
+ * Its cluster is `genesis`, mainnet-beta's unless given: the command reads it to pick the engine
+ * build a local rehearsal runs.
  * Resolves to { url, methods, close }: `methods` counts what was asked, and an unknown method — a
  * transaction history, say — is answered with an error naming it.
  */
@@ -37,6 +39,7 @@ export async function solanaRpcStub({
   refuseScans = [],
   rateLimitScans = 0,
   scans = {},
+  genesis = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
 } = {}) {
   let scanned = 0;
   const held = new Map(Object.entries(accounts));
@@ -83,6 +86,8 @@ export async function solanaRpcStub({
         return { context, value: 0 };
       case "getSlot":
         return Number(slot);
+      case "getGenesisHash":
+        return genesis;
       case "getBlockTime":
         return Math.floor(Date.now() / 1000);
       case "getLatestBlockhash":
