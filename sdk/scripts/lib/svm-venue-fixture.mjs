@@ -167,3 +167,34 @@ export function addToVenueFixture(sdk, { before, programs, pools, extended, acco
 
   return entries;
 }
+
+/**
+ * Re-pins the programs without moving anything else (`dump-svm-venues --programs`): each program
+ * whose code is not the one pinned is written again and its manifest entry replaced, and
+ * `programsSlot` records the slot they were read at; every account, and every pool's slot, stays as
+ * the fixture holds it. Returns the entries it replaced, beside the ones they replaced.
+ */
+export function repinVenuePrograms(sdk, { before, programs, slot, date }) {
+  const { programs: programDir } = roots(sdk);
+  const replaced = [];
+  for (const { entry, elf } of programs) {
+    const held = before.programs.find((item) => item.name === entry.name);
+    if (held === undefined) throw new Error(`the fixture holds no program ${entry.name}`);
+    if (held.sha256 === entry.sha256) continue;
+    writeFileSync(join(programDir, entry.file), gzipSync(elf, { level: 9 }));
+    replaced.push({ held, entry });
+  }
+  const fresh = new Map(replaced.map(({ entry }) => [entry.name, entry]));
+  const { programs: _programs, pools, accounts, ...head } = before;
+  const manifest = {
+    ...head,
+    programsSlot: slot,
+    programsDate: date,
+    programs: before.programs.map((held) => fresh.get(held.name) ?? held),
+    pools,
+    accounts,
+  };
+  writeFileSync(join(programDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  return replaced;
+}

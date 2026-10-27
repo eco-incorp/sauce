@@ -1207,7 +1207,7 @@ The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 (`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs from a pinned dump: the
 programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
 take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
-lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
+lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--programs|--check --rpc-config <file>`, the
 layout in `scripts/lib/svm-venue-fixture.mjs`). A redump refreshes a fixture file already holding
 an account rather than adding a second, so `raydium-clmm/` and `orca-whirlpool/`'s SOL/USDC pools
 are that snapshot's, read at one slot with every other venue's: the swap's split is only real
@@ -1220,8 +1220,15 @@ listed in `test/fixtures/fetched-programs.json`, and `pnpm --filter './sdk' fetc
 them. It reads each from mainnet-beta through the public endpoints (`getAccountInfo` of the program
 and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
 caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
-longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it, never
-edit the hash. Run it before a dump script's `--check`, which re-hashes every program file. A new
+longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is
+never edited to fit. For a venue program, `dump-svm-venues.mjs --programs` re-pins only the
+programs (`programsSlot` records when) and leaves every account at the dump's slot, so the suites'
+pool scenarios hold; it is for an upgrade whose instruction interface is unchanged, which the suites
+prove by passing on the new code. An exact-input program (a `solana program dump`, no script of
+its own) is re-pinned by its `manifest.json` entry once its suite passes on the re-read ELF, its
+pools' accounts kept: they are the state sauce-recipes' vectors and pins were taken at.
+An upgrade that changes a venue's accounts or data is a code change first. Run the fetch before a
+dump script's `--check`, which re-hashes every program file. A new
 dump is ignored by git until it is un-ignored in `.gitignore` (licence permitting) or listed in
 `fetched-programs.json`; the fetch refuses a program that is neither.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
