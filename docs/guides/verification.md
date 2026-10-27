@@ -179,7 +179,8 @@ two predate the sweep following `SafeERC20`:
 Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
 editor shows on hover. The current pin is
 `{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`: the 410-byte program
-produced by compiler 2.6.0. An explicit list replaces the default, so include the current pin
+produced by compilers 2.6.0 and 2.6.1, which compile it to the same bytes. An explicit list replaces
+the default, so include the current pin
 alongside any historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
 adds one.
 

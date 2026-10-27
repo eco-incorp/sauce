@@ -223,8 +223,8 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
     );
   });
 
-  it("pairs compiler 2.6.0 only with the released TRY and capped-copy engines", () => {
-    const current = v12ReleaseSet("2.6.0");
+  it("pairs compiler 2.6.1 only with the released TRY and capped-copy engines", () => {
+    const current = v12ReleaseSet("2.6.1");
     expect(current["v12-evm"].version).toBe("1.3.0");
     expect(current["kitchen-evm"].version).toBe("1.3.0");
     expect(current["v12-svm"].version).toBe("1.4.0");
@@ -233,7 +233,7 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
     for (const target of ["evm", "svm"] as const) {
       const component = target === "evm" ? "v12-evm" : "v12-svm";
       expect(() =>
-        assertEngineRunsCompiler(target, previous[component].engine!, "2.6.0"),
+        assertEngineRunsCompiler(target, previous[component].engine!, "2.6.1"),
       ).toThrow();
       expect(() => assertEngineRunsCompiler(target, current[component].engine!, "2.5.0")).toThrow();
     }
