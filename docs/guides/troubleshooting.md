@@ -102,6 +102,32 @@ it, are one of the refusals on this page.
 on a Pot that an earlier transaction of the same batch deploys is fine: that deployment is checked
 in its place, against where the Kitchen puts its Pot.
 
+A transaction the chain already has is read back, not sent again. When it is a Pot deployment that
+landed and left no Pot where the SDK expects one, the transaction after it is reported instead, and
+nothing after it is sent:
+
+```text
+not sent — because transaction 1 of 2 (Kitchen.deployPot at 0x1984…) landed and left no Pot at 0x3c…, where this SDK expects one: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: … Nothing after it was sent.
+```
+
+The reason after the colon is the Kitchen's, as in the next section. Fix that, and sign the
+transactions after the deployment again.
+
+### `Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000`
+
+```text
+sauce pot: Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000: a Pot with no owner is a Shared Pot, which Kitchen.deploySharedPot(salt) deploys. Nothing was simulated, built or sent.
+```
+
+**Cause.** The owner given (`--owner`, or a tool's `owner`) is the zero address. A private Pot needs
+an owner: the Kitchen's `deployPot` reverts for that one, and no call puts a Pot where the SDK would
+have it, so a transfer into that address would stay there. The command refuses it before it builds
+anything, with or without an RPC endpoint.
+
+**Fix.** Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may cook on and
+which `Kitchen.deploySharedPot(salt)` deploys: see
+[Pots and cooks in code](../api/README.md#pots-and-cooks-in-code).
+
 ### `this SDK does not match the deployed Kitchen`
 
 ```text
