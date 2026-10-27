@@ -457,6 +457,9 @@ export async function skillsReferences(api, documented) {
         .map((p) => ({ ...p, deployed: p.deployed.filter((d) => d.chain === chain.slug) })),
       venues: sourceGlobals.get(chain.slug).venues ?? [],
       accounts: sourceGlobals.get(chain.slug).accounts ?? [],
+      // The chain id a program compiled for the chain reads: on Solana, what its cluster's engine
+      // reports, which is not the SDK's key for testnet.
+      programChainId: String(names.defines.chainId),
     };
   });
 
@@ -671,20 +674,28 @@ const CHAIN_NOTES = {
     "Flashblocks state, so a read right after a send uses `pending` to see it.",
   ],
   solana: [
-    "The release's engine and Kitchen are deployed on mainnet, devnet and testnet. For devnet,",
-    "use `--chain solana-devnet` to resolve the chain id and token symbols to devnet's.",
-    "For testnet, use `--chain solana --rpc-url <testnet-rpc-url>` and explicit testnet",
-    "mint addresses: there is no testnet chain alias or token registry. The endpoint does not change",
-    "`solana`'s compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the",
-    "running cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees.",
-    "Local simulation selects the released engine build from the endpoint's cluster. The SDK's",
-    "venues are mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.",
+    "The release's engine and Kitchen are deployed on mainnet, devnet and testnet. Each test",
+    "cluster is a chain of its own: `--chain solana-devnet` and `--chain solana-testnet` resolve the",
+    "chain id and token symbols to that cluster's. An endpoint does not change `solana`'s",
+    "compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the running",
+    "cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees. Local",
+    "simulation selects the released engine build from the endpoint's cluster. The SDK's venues are",
+    "mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.",
   ],
   "solana-devnet": [
     "Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as",
     "1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's",
     "engine and Kitchen are deployed on devnet, with zero execution fees. The Solana venues are",
     "mainnet's programs and pools, so a venue name is refused here.",
+  ],
+  "solana-testnet": [
+    "Solana's testnet cluster, a chain of its own. Testnet runs devnet's engine build, so a program",
+    "compiled for it reads its chain id as 1399811150, as on devnet; 1399811151 is the SDK's key for",
+    "the chain, which names it to the command and the Pot store and which no program reads. Its",
+    "symbols are testnet's mints: the wrapped native alone, as Circle publishes no testnet USDC. The",
+    "release's engine and Kitchen are deployed on testnet, with zero execution fees. Its endpoint",
+    "must serve testnet: one of another cluster is refused. The Solana venues are mainnet's",
+    "programs and pools, so a venue name is refused here.",
   ],
 };
 
@@ -880,9 +891,10 @@ function renderGlobals(data) {
       "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
       "accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the",
       "symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions",
-      "(`balanceOf(USDC, account)`). Devnet is a chain of its own, `solana-devnet`: compiled for it,",
-      "the same symbols are devnet's mints. Each chain's file in `sauce-chains` names each mint's",
-      "token program: legacy SPL Token, or Token-2022, whose mints move by the checked writes.",
+      "(`balanceOf(USDC, account)`). Devnet and testnet are chains of their own, `solana-devnet` and",
+      "`solana-testnet`: compiled for one, the same symbols are its mints. Each chain's file in",
+      "`sauce-chains` names each mint's token program: legacy SPL Token, or Token-2022, whose mints",
+      "move by the checked writes.",
     );
   }
   tokens.push(
@@ -1136,7 +1148,7 @@ function renderChain(chain, support, site) {
     "| --- | --- |",
     `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and read; no transaction is built or sent"} |`,
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
-    `| Chain id | ${chain.id} |`,
+    `| Chain id | ${chain.id}${chain.programChainId === String(chain.id) ? "" : `, the SDK's key for the chain; a program reads ${chain.programChainId} (\`chainId\`, \`ctx.chainId()\`)`} |`,
     `| Kind | ${kindName(chain.kind)} |`,
     ...(chain.testnet ? ["| Network | testnet: its coin and tokens have no value |"] : []),
     `| Name in a program | \`${chain.key}\` |`,
@@ -1420,12 +1432,10 @@ function renderDeploymentsPage(data) {
     "",
     "The released EVM engine and Kitchen are deployed on Ethereum Sepolia, Base Sepolia and Arc",
     "Testnet. The released Solana engine and Kitchen are deployed on devnet and testnet, with zero",
-    "execution fees. Testnet uses devnet's engine build and chain id 1399811150; it has no separate",
-    "chain alias or token registry. Use `--chain solana --rpc-url <testnet-rpc-url>`",
-    "and explicit testnet mint addresses. The endpoint does not change compile-time chain identity;",
-    "`ctx.chainId()` reads the running cluster's chain id. The",
-    "[endpoint guide](../guides/cli.md#pick-a-chain-and-an-endpoint) explains the limits. Engine",
-    "deployment does not establish venue deployments: the SDK's Solana venues remain mainnet-only.",
+    "execution fees: `--chain solana-devnet` and `--chain solana-testnet`. Testnet runs devnet's",
+    "engine build, so a program compiled for either reads chain id 1399811150; `solana-testnet`'s",
+    "own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue",
+    "deployments: the SDK's Solana venues remain mainnet-only.",
     "",
     "## The release",
     "",

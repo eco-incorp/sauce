@@ -1233,7 +1233,9 @@ each flagged for `eth_simulateV1`, with the date they were checked), and nothing
 from anywhere else or an export that reaches `cli/`, so it never reaches a browser.
 `public-endpoints.ts` hands each chain to the command's clients as one loopback URL (like the MCP
 guard's forwarder) that falls back through the list on a network error, a timeout, 401, 403, 429 or
-5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
+5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. A request
+gets 8 s, under viem's 10 s; an endpoint may set its own `timeoutMs`, on a Solana chain only (its
+clients have no timeout): Solana testnet's single endpoint, slow to read accounts, waits 120 s. The
 executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
 it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
 `sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI.
@@ -1463,8 +1465,8 @@ what it cannot measure. MCP: `sauce_signed_cook` (pure, stdio and HTTP) and the 
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
 builds transactions on — Ethereum, Base, Arc and Solana, then the testnets Arc Testnet, Base
-Sepolia, Ethereum Sepolia and Solana Devnet, kept in their own `SUPPORTED_TESTNET_SLUGS` so one
-line takes them out
+Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet, kept in their own
+`SUPPORTED_TESTNET_SLUGS` so one line takes them out
 (`SUPPORTED_CHAIN_SLUGS`, and `supportedChainNames()` names the testnets apart); every other
 canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
 search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,
@@ -1484,12 +1486,19 @@ chain references and the manual's `docs/reference/chains.md` regenerate from the
 the README, the manual's pages and the skills that name the four (`git grep "Ethereum, Base"`). A
 testnet is added only where the release's stack is live at its addresses: EVM checks the engine,
 Router, Kitchen proxy, its EIP-1967 implementation slot and `router()`; Solana checks the engine
-and Kitchen release builds. Ethereum Sepolia (`sepolia`) and Solana Devnet (`solana-devnet`) are
-supported in `SUPPORTED_TESTNET_SLUGS`. Devnet is a canonical chain of its own (1399811150): its
-symbols are devnet's mints (`token-registry.ts#svmClusterOf`), it has no venue
-(`svm-venue-methods.ts#svmVenuesOn`), and a cook there is still held to the release's builds by
-`solana-release.ts#requireSolanaRelease`; its Pot records share `1399811149-devnet` with those a
-`--chain solana` against a devnet endpoint wrote. A test that builds or sends a transaction
+and Kitchen release builds. Ethereum Sepolia (`sepolia`), Solana Devnet (`solana-devnet`) and
+Solana Testnet (`solana-testnet`) are supported in `SUPPORTED_TESTNET_SLUGS`. Devnet and testnet
+are canonical chains of their own: their symbols are their cluster's mints
+(`token-registry.ts#svmClusterOf`; testnet registers only WSOL, as Circle publishes no testnet
+USDC), they have no venue (`svm-venue-methods.ts#svmVenuesOn`), an endpoint must serve the chain's
+cluster by genesis hash (`pots.ts#requireChainCluster`), and a cook there is still held to the
+release's builds by `solana-release.ts#requireSolanaRelease`; their Pot records share
+`1399811149-devnet`/`1399811149-testnet` with those a `--chain solana` against that cluster's
+endpoint wrote. Devnet's registry id, 1399811150, is its engine's CHAIN_ID. Testnet runs the
+devnet build, so its engine reports 1399811150 too, while its registry key is 1399811151:
+`routes/ambient.ts#programChainId` is the one place a chain's compiled `chainId` is chosen (the
+engine's id for the chain's cluster, from `svm/clusters.ts`), and nothing hands a program
+`chain.id` directly. A test that builds or sends a transaction
 through the CLI or MCP uses a supported chain.
 
 ## Agent skills

@@ -40,6 +40,12 @@ describe("a transaction's links", () => {
     });
   });
 
+  it("gives Solana's testnet Solscan's testnet page, and no trace: Phalcon does not list testnet", () => {
+    expect(txLinks(requireChain("solana-testnet"), SIGNATURE)).toEqual({
+      explorer: `https://solscan.io/tx/${SIGNATURE}?cluster=testnet`,
+    });
+  });
+
   it("prints each as a line of its own, the trace said to be for a browser", () => {
     expect(linkLines(txLinks(requireChain("base"), HASH))).toEqual([
       `  explorer: https://basescan.org/tx/${HASH}`,

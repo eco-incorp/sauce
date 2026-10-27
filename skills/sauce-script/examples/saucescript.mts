@@ -2,8 +2,6 @@
 // compiler refuses, what differs per target, and what compiling for a chain adds.
 //
 //   node saucescript.mts
-import { stripVTControlCharacters } from "node:util";
-
 import { routes } from "@eco-incorp/sauce";
 import { compile, type CompileResult } from "@eco-incorp/sauce/compiler";
 
@@ -24,8 +22,7 @@ function rejects(source: string, target: "evm" | "svm" = "evm"): string {
   try {
     build(source, target);
   } catch (error) {
-    // Diagnostics carry ANSI styling; strip it before matching.
-    return stripVTControlCharacters(String((error as Error).message));
+    return (error as Error).message;
   }
   throw new Error(`expected the compiler to reject:\n${source}`);
 }
@@ -124,7 +121,7 @@ const forChain = (source: string) => {
   try {
     return routes.compileSauceProgram("base", source);
   } catch (error) {
-    return stripVTControlCharacters(String((error as Error).message));
+    return (error as Error).message;
   }
 };
 const compiled = (source: string) => {
