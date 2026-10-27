@@ -29,7 +29,7 @@ function main(
   const endpoint = IEndpointV2.at(endpointAddress);
   return endpoint.send(
     { dstEid: dstEid, receiver: receiver, message: message, options: hex``, payInLzToken: false },
-    ctx.msgSender(),
+    ctx.self(),
   );
 }
 ```
@@ -39,6 +39,7 @@ function main(
 - `message`: Arbitrary message payload
 - `options`: Execution options (gas limits, etc.). Use ` hex`` ` for defaults
 - `payInLzToken`: false = pay fees in native token, true = pay in ZRO token
+- `_refundAddress`: receives the native and ZRO fee paid in excess. The template passes the Pot (`ctx.self()`), not whoever called the cook (a relayer, under a signed cook)
 - Requires native token (ETH) for messaging fees (sent as msg.value)
 
 ## Deployments and ABI

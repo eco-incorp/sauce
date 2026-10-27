@@ -149,6 +149,15 @@ nothing moves.
   chain pages list it. The `cctpBridge` action takes `"Cctp.TokenMessenger"` on them too. Every
   address is Circle's own, pinned by on-chain evidence like every registry row. Solana Devnet is
   not covered: the SDK has no Solana path for CCTP or Gateway.
+- **Fixed** (EVM): four bridge templates no longer name `ctx.msgSender()` as a refund or authority
+  address. That is the Pot's owner only when the owner sends the cook; under a signed cook it is
+  whoever submitted it. Stargate's `bridge` and LayerZero's `sendMessage` refund the excess fee to
+  the Pot, and deBridge's `bridge` gives the Pot the order's `givePatchAuthoritySrc` (its
+  `orderAuthorityAddressDst` stays `receiver`, an address on the destination chain). The zkSync
+  bridge's `depositETH` refunds L2 gas, and a failed deposit's value, to its `recipient`: zkSync
+  aliases a refund recipient with code on L1, so the Pot would strand it at an L2 address nobody
+  controls. The `sauce-protocols` documents say the same, and the `sauce-script` skill's Aave
+  example keeps its aTokens in the Pot instead of crediting `ctx.msgSender()`.
 - **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not

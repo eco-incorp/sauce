@@ -38,7 +38,7 @@ function main(
       takeAmount: takeAmount,
       takeChainId: takeChainId,
       receiverDst: receiver,
-      givePatchAuthoritySrc: ctx.msgSender(),
+      givePatchAuthoritySrc: ctx.self(),
       orderAuthorityAddressDst: receiver,
       allowedTakerDst: hex``,
       externalCall: hex``,
@@ -57,8 +57,8 @@ function main(
 - `takeAmount`: Minimum amount to receive on destination. Set slightly below `giveAmount` to account for market maker spread
 - `takeChainId`: Destination chain ID (uses EVM chain IDs)
 - `receiver`: Recipient address on destination chain (as bytes)
-- `givePatchAuthoritySrc`: Address allowed to increase give amount (set to `msg.sender`)
-- `orderAuthorityAddressDst`: Address that can cancel/modify order on destination (set to `receiver`)
+- `givePatchAuthoritySrc`: Address allowed to increase the give amount (`patchOrderGive`). The template passes the Pot (`ctx.self()`), which is the order's maker; not whoever called the cook (a relayer, under a signed cook)
+- `orderAuthorityAddressDst`: Address on the destination chain that can lower the order's take amount (`patchOrderTake`) and cancel it there (`sendEvmOrderCancel`), naming who is refunded on the source chain (with `allowedCancelBeneficiarySrc` empty, any address). The template keeps `receiver`, the party on the destination chain: the Pot exists there only if its owner deploys it on that chain, and a non-EVM destination cannot name it at all
 - `allowedTakerDst`: Restrict which market maker can fill (empty ` hex`` ` = any taker)
 - `externalCall`: Optional calldata to execute on destination after fill
 - `allowedCancelBeneficiarySrc`: Restrict who receives refund on cancellation (empty ` hex`` ` = order creator)
