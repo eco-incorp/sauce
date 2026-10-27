@@ -54,11 +54,11 @@ preview chain's file links its own.
 | [Linea](linea.md) | `linea` | 59144 | EVM | preview | 11 | 0 | 8 |
 | [Berachain](berachain.md) | `berachain` | 80094 | EVM | preview | — | 1 | 0 |
 | [Blast](blast.md) | `blast` | 81457 | EVM | preview | — | 0 | 5 |
-| [Base Sepolia](base-sepolia.md) | `base-sepolia` | 84532 | EVM | supported (testnet) | 6 | 1 | 2 |
+| [Base Sepolia](base-sepolia.md) | `base-sepolia` | 84532 | EVM | supported (testnet) | 6 | 2 | 5 |
 | [Scroll](scroll.md) | `scroll` | 534352 | EVM | preview | — | 0 | 8 |
-| [Arc Testnet](arc-testnet.md) | `arc-testnet` | 5042002 | EVM | supported (testnet) | 26 | 2 | 2 |
+| [Arc Testnet](arc-testnet.md) | `arc-testnet` | 5042002 | EVM | supported (testnet) | 26 | 3 | 2 |
 | [Zora](zora.md) | `zora` | 7777777 | EVM | preview | — | 0 | 2 |
-| [Ethereum Sepolia](sepolia.md) | `sepolia` | 11155111 | EVM | supported (testnet) | 0 | 1 | 2 |
+| [Ethereum Sepolia](sepolia.md) | `sepolia` | 11155111 | EVM | supported (testnet) | 0 | 2 | 6 |
 | [Aurora](aurora.md) | `aurora` | 1313161554 | EVM | preview | — | 0 | 0 |
 | [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | — | 1803 | 0 |
 | [Solana Devnet](solana-devnet.md) | `solana-devnet` | 1399811150 | Solana (SVM) | supported (testnet) | — | 2 | 0 |
