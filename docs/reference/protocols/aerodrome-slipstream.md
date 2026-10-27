@@ -25,7 +25,7 @@ Aerodrome's concentrated-liquidity pools (Uniswap V3-style, keyed by tick spacin
 - The `aerodrome` module carries Aerodrome's basic (stable/volatile) pools on Base; this one carries only Slipstream. Velodrome's Slipstream on Optimism and the Superchain is not in either
 - Aero publishes no address table for Arc. Each address here is Sourcify-verified from the dromos-labs/metadex-public codebase, and the position manager reports `factory() == CLFactory`
 - No voter or gauges are deployed on Arc yet, so pools there earn swap fees only
-- From a Pot program, `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` swaps a Slipstream pool: it calls the Pot's Router, which answers the pool's `uniswapV3SwapCallback` from the Pot. Find the pool with a CLFactory's `getPool(tokenA, tokenB, tickSpacing)`, such as `AerodromeSlipstream.CLFactoryGaugesV3.getPool(...)`, and on Base ask each CLFactory (above)
+- From a Pot program, `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` swaps a Slipstream pool: it calls the Pot's Router, which answers the pool's `uniswapV3SwapCallback` from the Pot. Find the pool with a CLFactory's `getPool(tokenA, tokenB, tickSpacing)`: on Arc the one factory, `AerodromeSlipstream.CLFactory.getPool(...)`; on Base ask each CLFactory (above), such as `AerodromeSlipstream.CLFactoryGaugesV3.getPool(...)`, which Arc does not have. The classic Aerodrome Router and its stable/volatile pools (`aerodrome`) are Base's only
 - The Base roles are `clFactory`/`nonfungiblePositionManager` (initial), `clFactoryGaugeCaps`/`nonfungiblePositionManagerGaugeCaps` and `clFactoryGaugesV3`/`nonfungiblePositionManagerGaugesV3`.
 
 ## Its names in a program

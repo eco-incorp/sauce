@@ -17,6 +17,41 @@ Circle's chain-abstracted USDC balance. Deposit USDC into the GatewayWallet on o
 | Namespace | `CircleGateway` on ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
 | Chains | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
 
+## In a Sauce program
+
+Deposit the Pot's USDC into Gateway for `depositor`, the user's own address:
+
+```ts
+function main(amount: Uint256, depositor: Address): Uint256 {
+  // USDC in its 6-decimal base units, on Arc too: 5000000 is 5 USDC.
+  require(pot.USDC >= amount, "amount is not in the Pot");
+  const before = CircleGateway.GatewayWallet.totalBalance(USDC, depositor);
+  USDC.approve(CircleGateway.GatewayWallet, amount);
+  CircleGateway.GatewayWallet.depositFor(USDC, depositor, amount);
+  const total = CircleGateway.GatewayWallet.totalBalance(USDC, depositor);
+  require(total - before == amount, "the Gateway balance did not rise by the deposit");
+  return total;
+}
+```
+
+- **Whose balance it credits.** `depositFor(token, depositor, value)` credits `depositor`.
+  `deposit(token, value)` credits the caller, which in a Sauce program is the Pot: the Gateway
+  balance is then the Pot's, not the user's. A balance credited to the Pot can be spent only by a
+  burn intent signed by a delegate the Pot adds for itself with the GatewayWallet's `addDelegate`,
+  which the registry's ABI does not declare. To let the user spend it through Gateway from their
+  wallet, deposit for their address.
+- **Approve exactly the amount** for `CircleGateway.GatewayWallet` first, and deposit exactly what
+  the Pot means to: a given `amount`, or the USDC a swap just delivered measured as a delta. On Arc
+  never deposit `pot.USDC` whole, because the same balance is the Pot's native coin, from which
+  any native fee the program pays comes.
+- **Read it back.** `totalBalance(USDC, depositor)` and `availableBalance(USDC, depositor)` both
+  rise by the deposit in the same transaction.
+- **Where the program ends.** The deposit is the on-chain step. Spending the balance on another
+  chain is off-chain first: a burn intent signed for the depositor goes to Circle's Gateway API,
+  which returns an attestation, and `CircleGateway.GatewayMinter.gatewayMint(attestationPayload,
+signature)` on the destination is a transaction of its own.
+- `isTokenSupported(USDC)` says whether the chain's Gateway takes USDC.
+
 ## Notes
 
 - Gateway uses Circle domain ids, the same ids as CCTP (Arc is 26), not EVM chain ids

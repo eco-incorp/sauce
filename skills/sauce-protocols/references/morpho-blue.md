@@ -210,7 +210,12 @@ an ABI import bound to the address), and the ABI functions are generated in
 
 ## Notes
 
-- Markets are identified by the full marketParams tuple, not an address or ID
+- A market is identified by its id, the keccak256 of its abi-encoded `MarketParams`, and is called
+  with all five params. To supply by id, read them with Morpho's `idToMarketParams(id)` (a read
+  the registry's ABI lacks, which `morpho-borrow` in this skill's examples declares in the ABI
+  file beside it), then call `supply(params, assets, 0, onBehalf, "")` with `onBehalf` the
+  user's wallet. A program takes the id as a `main` argument: the registry lists no markets, so
+  the id comes from the user or from Morpho's own app
 - Pass amount in `assets` param and set `shares` to 0 for standard operations
 - Each market is fully isolated -- no cross-market risk contagion
 - `lltv` is the Liquidation Loan-to-Value ratio (e.g. 86% = 860000000000000000)

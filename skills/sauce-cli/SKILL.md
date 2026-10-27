@@ -273,8 +273,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    native currency) gives the Pot that balance for the simulation only; a token that keeps no stored
    balance (rebasing, shares) is refused. On Arc, `USDC:<amount>` sets the Pot's native balance (the
    token is the native coin, which no token storage holds), and `ETH:<amount>` or
-   `native:<amount>` is native USDC there, not ether. On a local chain with Uniswap V3's own pools
-   at 2,650 USDC per WETH, it printed, addresses written as their roles:
+   `native:<amount>` is native USDC there, not ether. A simulation that passes with an assumed
+   balance shows the program works if the Pot holds it, not that the owner does: tell the user so.
+   On a local chain with Uniswap V3's own pools at 2,650 USDC per WETH, it printed, addresses
+   written as their roles:
 
    ```text
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
@@ -466,7 +468,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
   as the cook's value), simulated with them for its gas where an endpoint is given; a balance short
   of a transfer is said, as the batch would revert. `--format cast` prints a `cast send` line
   instead. It simulates only for gas: show the user the program, the arguments and
-  `sauce simulate`'s outcome first.
+  `sauce simulate`'s outcome first. The transactions carry no gas price fields (`maxFeePerGas`,
+  `maxPriorityFeePerGas`): the signer sets them, and on Arc and Arc Testnet it must set a
+  `maxFeePerGas` of at least 20 gwei, their minimum base fee, or the transaction is never included
+  (`sauce tx` notes it there, and `sauce send` refuses a transaction signed below it).
 - **`sauce send <signed>… --chain base`** broadcasts what a hardware wallet, a KMS or another tool
   signed (raw hex for EVM, the base64 wire transaction for Solana), in order, waits for each and
   prints what it did as `run` does. It takes no key. Each is simulated as signed first, and one that

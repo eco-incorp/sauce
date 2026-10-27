@@ -33,6 +33,11 @@ Arc Testnet is Arc's model exactly: USDC is the native coin at 18 decimals and t
 Every note on the [Arc](arc.md) page holds here too. Its USDC and EURC come from Circle's
 faucet.
 
+Arc Testnet has no DEX, lending market or oracle in the registry: it is for USDC and EURC
+moves, CCTP and Circle Gateway. For a pool, a swap, Morpho, Aave or Aerodrome, compile and
+simulate on `arc`. `USDC` has the same address on both; `EURC` differs, and `WETH` and `USYC`
+exist only on `arc`.
+
 ## In a program
 
 Compiled with `--chain arc-testnet`, a program names Arc Testnet's tokens and contracts with no
