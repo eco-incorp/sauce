@@ -64,8 +64,8 @@ jobs:
           fi
 
       # The SDK's suites run in the `sdk-*` jobs below: the engine e2e suites, one process each, and
-      # everything else, each in shards. The split must not silently drop a suite: assert the two
-      # halves still add up to every file jest can see.
+      # everything else. The split must not silently drop a suite: assert the two halves still add
+      # up to every file jest can see.
       - name: SDK — the split covers every suite
         run: |
           set -euo pipefail
@@ -127,14 +127,10 @@ jobs:
       - name: Actions — unit tests
         run: pnpm --filter './actions' test:unit
 
-  # The SDK's engine e2e suites, one process per suite, in four shards.
+  # The SDK's engine e2e suites, one process per suite, all of them in this job.
   sdk-e2e:
-    name: SDK engine e2e (${{ matrix.shard }})
+    name: SDK engine e2e
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -143,7 +139,7 @@ jobs:
       # SAUCE_RUST_ENGINE_SO / SAUCE_V12_RUNTIME_CREATION_HEX come from $GITHUB_ENV, exported by the
       # setup action. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
       # broken export is loud rather than a silent skip.
-      - name: SDK — test (engine e2e, shard ${{ matrix.shard }} of ${{ strategy.job-total }})
+      - name: SDK — test (engine e2e)
         # Set here because these steps invoke jest directly rather than through the package's
         # `test` script, which is where NODE_OPTIONS normally comes from.
         env:
@@ -165,13 +161,8 @@ jobs:
           # Each suite in its own short-lived process avoids it, and makes a crash name the suite.
           # (Distinct from the aborts fixed in the suites themselves — calling litesvm accessors on
           # a failed transaction or a closed account; see `kitchen-bench.ts`.)
-          # SHARDED across the matrix: this job takes every Nth suite of the sorted list, so the
-          # shards are disjoint and together cover every engine e2e suite. Nothing else about the
-          # step changed: still one process per suite, the same retry, the same failure report.
           node_modules/.bin/jest --config jest.config.cjs --listTests \
-            --testPathPattern '\.e2e\.test\.ts$' | sort \
-            | awk -v shard="${{ matrix.shard }}" -v shards="${{ strategy.job-total }}" 'NR % shards == shard % shards' \
-            > "$RUNNER_TEMP/e2e-suites.txt"
+            --testPathPattern '\.e2e\.test\.ts$' > "$RUNNER_TEMP/e2e-suites.txt"
           [ -s "$RUNNER_TEMP/e2e-suites.txt" ] || { echo "::error::no engine e2e suites matched"; exit 1; }
           failed=""
           while IFS= read -r suite; do
@@ -221,23 +212,19 @@ jobs:
           done < "$RUNNER_TEMP/e2e-suites.txt"
           [ -z "$failed" ] || { echo "::error::engine e2e suites failed:$failed"; exit 1; }
 
-  # Every other SDK suite, in three shards of one jest process each (jest splits the file list).
+  # Every other SDK suite, in one jest process, exactly as before.
   sdk-unit:
-    name: SDK tests (${{ matrix.shard }}/3)
+    name: SDK tests (everything else)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/build
 
-      - name: SDK — test (everything else, shard ${{ matrix.shard }} of 3)
+      - name: SDK — test (everything else)
         env:
           NODE_OPTIONS: --experimental-vm-modules
-        run: pnpm --filter './sdk' exec jest --config jest.config.cjs --testPathIgnorePatterns '\.e2e\.test\.ts$' --shard=${{ matrix.shard }}/3
+        run: pnpm --filter './sdk' exec jest --config jest.config.cjs --testPathIgnorePatterns '\.e2e\.test\.ts$'
 
   # The prod-like suites — every action, every quote, the split swap — run against real mainnet
   # contracts on a LOCAL anvil booted from state captured at a pinned block and checked in
