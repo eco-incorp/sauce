@@ -118,6 +118,18 @@ nothing moves.
   from the Pot: a Pot holding that amount paid out twice, and one without it reverted. Recompile
   such documents; an `aaveV3Withdraw` nothing spends still pays its `recipient`.
 
+### The SDK in TypeScript
+
+- **Fixed:** a registry call (`read`, `simulate`, `write`) on a viem client created without a
+  `chain` asks the node for the chain id again after a failed lookup. The first failure was kept as
+  the client's answer, so one transient `eth_chainId` error made every later call on that client
+  fail until the client was replaced. A lookup that succeeds is kept for `read` and `simulate`.
+- **Fixed:** `write` on a client without a `chain` asks for the chain id before every write instead
+  of trusting the first answer. A wallet client (`custom(window.ethereum)`) that switched network
+  between two writes sent the second unchecked, because viem does not check a chainless client's
+  chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
+  extra `eth_chainId` request per write.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
