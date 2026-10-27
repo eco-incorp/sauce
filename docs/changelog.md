@@ -93,6 +93,18 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### The SDK in TypeScript
+
+- **Fixed:** a registry call (`read`, `simulate`, `write`) on a viem client created without a
+  `chain` asks the node for the chain id again after a failed lookup. The first failure was kept as
+  the client's answer, so one transient `eth_chainId` error made every later call on that client
+  fail until the client was replaced. A lookup that succeeds is still asked once.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

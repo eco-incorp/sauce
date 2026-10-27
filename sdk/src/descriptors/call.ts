@@ -223,7 +223,13 @@ async function assertClientChain(
   if (id === undefined) {
     let reported = reportedChainIds.get(client);
     if (reported === undefined) {
-      reported = import("viem/actions").then(({ getChainId }) => getChainId(client));
+      const lookup = import("viem/actions").then(({ getChainId }) => getChainId(client));
+      // A lookup that fails must not be remembered as the client's answer: drop it, so the next
+      // call asks again instead of failing for as long as the client lives.
+      reported = lookup.catch((error: unknown) => {
+        reportedChainIds.delete(client);
+        throw error;
+      });
       reportedChainIds.set(client, reported);
     }
     id = await reported;

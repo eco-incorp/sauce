@@ -16,6 +16,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  custom,
   hexToBytes,
   http,
   type Address,
@@ -128,6 +129,31 @@ describeAnvil("ContractCall viem helpers, against a local Base", () => {
     const bare = createPublicClient({ transport });
     const pool = await Base.UniswapV3.Factory.at(deployed).getPool(USDC, WETH, 500).read(bare);
     expect(pool).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  });
+
+  it("a chain id lookup that fails is asked again on the next call, not remembered as the answer", async () => {
+    let chainIdRequests = 0;
+    const flaky = createPublicClient({
+      transport: custom(
+        {
+          async request({ method, params }) {
+            if (method === "eth_chainId" && ++chainIdRequests === 1) throw new Error("blip");
+            const response = await fetch(`http://127.0.0.1:${PORT}`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+            });
+
+            return ((await response.json()) as { result: unknown }).result;
+          },
+        },
+        { retryCount: 0 },
+      ),
+    });
+    const call = Base.UniswapV3.Factory.at(deployed).getPool(USDC, WETH, 500);
+    await expect(call.read(flaky)).rejects.toThrow();
+    expect(await call.read(flaky)).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(chainIdRequests).toBe(2);
   });
 
   it("a client on another chain is refused before anything is sent", async () => {
