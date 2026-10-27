@@ -226,11 +226,11 @@ describe("split swap, on mainnet state", { skip: skipReason(), timeout: 600_000 
     });
   }
 
-  /** One split of `X` across the four venues in two buckets, its USDT swept to `recipient`. */
-  const splitOf = (recipient: Address): Hex =>
+  /** One split of `X` across `venues`, indices into CANDIDATES, in two buckets, its USDT swept to `recipient`. */
+  const splitOf = (recipient: Address, venues: readonly number[] = [0, 1, 2, 3]): Hex =>
     toHex(
       compileSplitSwap({
-        candidates: CANDIDATES,
+        candidates: venues.map((venue) => CANDIDATES[venue]!),
         amount: `${X}`,
         buckets: 2,
         amountOutMin: `${FLOOR}`,
@@ -397,4 +397,46 @@ describe("split swap, on mainnet state", { skip: skipReason(), timeout: 600_000 
     ]);
     sameAsApart(together, apart);
   });
+
+  // Curve (index 2) wins at this size. Each pair puts the winner at a different index and gives the
+  // second split another candidate count, so its counters sit on keys the first one wrote as
+  // something else.
+  for (const [first, second] of [
+    [[2], [2]],
+    [[0], [0, 1, 2, 3]],
+    [
+      [0, 1, 2],
+      [0, 1, 2, 3],
+    ],
+    [
+      [0, 1, 2, 3],
+      [0, 1, 2],
+    ],
+    [
+      [2, 0, 1, 3],
+      [0, 1],
+    ],
+  ] as const) {
+    it(`splits over candidates ${first} then ${second} in one transaction each spend their own amount`, async () => {
+      const wallet = await deployBatchWallet(env.account.address);
+      const pot = await mintPot(wallet);
+      const cook = (recipient: Address, venues: readonly number[]) => ({
+        to: pot,
+        data: v12Pot.encodeCook(env.engine, splitOf(recipient, venues)),
+      });
+      const cookA = cook(RECIPIENT_A, first);
+      const cookB = cook(RECIPIENT_B, second);
+
+      const apart = await isolated(() =>
+        outcome(pot, async () => [
+          await batch(wallet, env.account, [cookA]),
+          await batch(wallet, env.account, [cookB]),
+        ]),
+      );
+      const together = await outcome(pot, async () => [
+        await batch(wallet, env.account, [cookA, cookB]),
+      ]);
+      sameAsApart(together, apart);
+    });
+  }
 });

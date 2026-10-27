@@ -106,8 +106,9 @@ nothing moves.
   second split cooked on the same Pot in the same transaction (a contract wallet's batch, or an
   owner's two signed cooks that someone else submits together) took the first one's counts as its
   own: it swapped more than its `amount` where the Pot held more, paying the extra output to its own
-  sweep recipient, or reverted the transaction. Each cook now spends exactly its `amount`. The
-  program is 10 bytes and about 900 gas larger per candidate.
+  sweep recipient, or reverted the transaction. Each cook now starts from zero and spends its own
+  `amount`. The program costs about 850 gas more per candidate. A cook that finds more slices than
+  its buckets reverts.
 - **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
   as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with

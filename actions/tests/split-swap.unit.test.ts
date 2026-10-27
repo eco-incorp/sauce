@@ -114,6 +114,19 @@ describe("split swap — program shape", () => {
     }
   });
 
+  it("spends at most its buckets: the execute loop caps the slices it reads", () => {
+    // A cook nested in a leg's external call shares the counters and could raise used[k] between
+    // the greedy and execute passes; the cap after the loop reverts instead of overspending.
+    for (const n of [1, 4]) {
+      const text = source(swap(3, n));
+      const execute = text.slice(text.indexOf("let totalOut = 0;"));
+      assert.match(execute, /slices = slices \+ share;/);
+      assert.match(execute, /swap_any\(k, share \* /);
+      const cap = execute.indexOf(`require(slices <= ${n});`);
+      assert.ok(cap > execute.lastIndexOf("swap_any("), "the cap follows every leg");
+    }
+  });
+
   it("every candidate is reachable from both dispatchers", () => {
     const text = source(swap(4, 4));
     const quoteAny = text.slice(

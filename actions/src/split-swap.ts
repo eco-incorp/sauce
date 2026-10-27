@@ -342,13 +342,19 @@ function mainFn(
   );
 
   // Execute loop: dispatch the swap for every candidate with used > 0, summing what each returns.
+  // The slices spent are capped at `n`: a cook nested inside a leg's external call shares these
+  // keys and could raise used[k] between the passes; the cap reverts instead of overspending.
   body.push(
     "let totalOut = 0;",
+    "let slices = 0;",
     `for (let k = 0; k < ${N}; k = k + 1) {`,
-    `  if (${used("k")} > 0) {`,
-    `    totalOut = totalOut + swap_any(k, ${used("k")} * ${bucketExpr});`,
+    `  const share = ${used("k")};`,
+    "  if (share > 0) {",
+    "    slices = slices + share;",
+    `    totalOut = totalOut + swap_any(k, share * ${bucketExpr});`,
     "  }",
     "}",
+    `require(slices <= ${n});`,
   );
 
   // The aggregate floor, over the realized sum — see `SplitSwap.amountOutMin`.
