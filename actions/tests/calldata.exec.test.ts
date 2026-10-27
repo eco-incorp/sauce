@@ -578,6 +578,35 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     });
   }
 
+  for (const { name, weth, value } of [
+    { name: "pays the input as native value when it is the Router's WETH", weth: A, value: AMOUNT },
+    { name: "sends no value when the input is not the Router's WETH", weth: B, value: 0n },
+  ]) {
+    it(`balancerV3Swap with wethIsEth ${name}`, async () => {
+      await record({ [toFunctionSelector("getWeth()")]: pad(weth as Hex) });
+      try {
+        const receipt = await env.cook(compiled({ ...SAMPLES.balancerV3Swap, wethIsEth: true }));
+        assert.equal(receipt.status, "success", "balancerV3Swap reverted");
+        assert.deepEqual(
+          recordedCalls(receipt, RECORDERS).map((c) => ({ ...c, to: c.to.toLowerCase() })),
+          [
+            {
+              to: T.toLowerCase(),
+              data: call(
+                "function swapSingleTokenExactIn(address,address,address,uint256,uint256,uint256,bool,bytes)",
+                "swapSingleTokenExactIn",
+                [A, A, B, AMOUNT, MIN, DEADLINE, true, "0x"],
+              ).toLowerCase(),
+              value,
+            },
+          ],
+        );
+      } finally {
+        await record();
+      }
+    });
+  }
+
   it("a saved output is delivered to the Pot: the amount @sauce/router returns, or a balance delta", async () => {
     const saved = (type: ActionType): Uint8Array =>
       compiled({ ...SAMPLES[type], saveOutputAs: "out" } as Action);
