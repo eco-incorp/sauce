@@ -99,11 +99,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # GH_TOKEN: the sdk build's sync step downloads V12RuntimeBytecode from the eco-incorp/v12
-      # v12-evm release, and that repo is private. Without it the artifact is skipped with a warning
-      # and the verify step below refuses to publish.
+      # v12-evm release, and that repo is private. Without it the sync, and so the build, stops.
+      # SAUCE_ARTIFACT_SOURCE pinned to the private packages: a release is built from the releases
+      # themselves, never from an earlier published package (sync-engine-artifacts.mjs).
       - name: Build all areas (sdk + actions + mcp)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SAUCE_ARTIFACT_SOURCE: github-packages
         run: pnpm build
 
       # `pnpm build`'s sync writes only the JSON artifacts; the SVM engine binaries land in
@@ -113,10 +115,10 @@ jobs:
       - name: Fetch + ship the SVM engine binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SAUCE_ARTIFACT_SOURCE: github-packages
         run: pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines
 
-      # The sdk build's sync is tolerant by design (a local dev tree without the release assets still
-      # builds), so a broken generation would NOT fail the build — it would ship an empty
+      # The sync stops on any failure, but a broken generation must never ship an empty
       # dist/artifacts, exactly how 0.7.0 broke. Hard-gate publish on the artifacts + templates
       # actually being present in the tarball dir.
       - name: Verify the tarball will ship the engine artifacts + templates
@@ -130,7 +132,7 @@ jobs:
             test -s "sdk/dist/artifacts/svm/$so.so" || { echo "::error::build did not produce sdk/dist/artifacts/svm/$so.so — refusing to publish (SVM engine would be missing from the package)"; exit 1; }
           done
           # The deployed addresses, assembled from each release's addresses.json — what ./deployments
-          # reads for the current Kitchen / engine / Router. Its own sync step is tolerant, so gate here.
+          # reads for the current Kitchen / engine / Router.
           test -s sdk/dist/artifacts/V12Deployments.json || { echo "::error::build did not produce sdk/dist/artifacts/V12Deployments.json — refusing to publish (deployed addresses would be missing)"; exit 1; }
           test -s sdk/dist/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/recipes/settle.sauce.ts"; exit 1; }
           test -s sdk/dist/svm/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/svm/recipes/settle.sauce.ts"; exit 1; }

@@ -305,6 +305,25 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   **If this repository is ever made public**, note that granting a public repository access to a
   private package lets FORKS of it read that package.
 
+  **Without the grant — a fork, an outside contributor — set `SAUCE_ARTIFACT_SOURCE=npm`** (read
+  only by the sync, a build script; nothing shipped reads it). The sync then takes every artifact
+  from the PUBLIC `@eco-incorp/sauce` tarball the row's `npm` names (`{ version, integrity }`, the
+  first published version built from that row, added once it is out): the tarball is held to the
+  committed integrity, its own `releases.json` must carry the row unchanged, every release asset in
+  it (both engines, both wire files, the Kitchen, its IDL, the creation code) to the row's digest,
+  and the derived files (the ABIs, `V12Deployments.json`, the gate) to the row's versions, engines,
+  Kitchen and Pot hash. Any mismatch refuses with nothing written. It is EXPLICIT, never a
+  fallback: a fork's workflow has a `GITHUB_TOKEN` (only without the grant), so "no credential"
+  cannot select it, and a failure of the private path names this mode and stays a failure. The two
+  never mix: this mode never reads the credential and caches under
+  `node_modules/.cache/sauce-engine-releases/npm/`, apart from the per-tag cache. CI selects it for
+  a fork's pull request and for a workflow in a fork's own repository (`.github/actions/setup`);
+  `publish.yml` pins the private source. A row with no `npm` (a compiler bump not published yet)
+  has no public source. The tarball carries no release manifest, so the manifests' cross-check —
+  corroboration, never the guarantee — is the one check this mode cannot repeat. In either mode
+  every failure stops the sync: nothing a previous sync left on disk stands in for a refused read
+  or a digest that does not match.
+
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
   `sdk/test/std/token/evm.e2e.test.ts` and other EVM execution suites. They deploy the pinned creation
