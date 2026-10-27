@@ -1005,6 +1005,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ? "It is deployed. Fund it with what the program spends."
         : `It is NOT deployed, and --pot does not say whose it is: deploy it first ` +
           `(${deployHint(input.chain, target)}), then fund it.`,
+    ...(funds?.notes ?? []),
     from,
     ...feeFloorNotes(input.chain),
     ...(client === undefined ? [UNVERIFIED_COOK, POT_UNCHECKED] : []),
@@ -1013,13 +1014,13 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
     chainId: input.chain.id,
     to: cook.pot,
     data: cook.data,
-    value: hexQuantity(value),
+    value: hexQuantity(cookValue),
   };
 
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    cast: castSend(cook.pot, cook.data, value),
+    cast: castSend(cook.pot, cook.data, cookValue),
     notes,
   };
 }
