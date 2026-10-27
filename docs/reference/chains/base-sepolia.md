@@ -23,6 +23,7 @@ them. Base Sepolia is a test network: its coin and tokens have no value.
 | In TypeScript | `import { BaseSepolia } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
+| CCTP domain | 6 |
 
 ## In a program
 
@@ -36,6 +37,10 @@ function main() {
   const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(pot) == held);
+  // `Cctp.TokenMessenger` is Base Sepolia's tokenMessenger: `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`.
+  require(Cctp.TokenMessenger != 0);
+  // The same contract, qualified by the chain's name, from a program on any chain.
+  require(BaseSepolia.Cctp.TokenMessenger == Cctp.TokenMessenger);
 }
 ```
 
@@ -47,7 +52,15 @@ function main() {
 
 ## Protocols
 
-The registry records no protocol deployment on this chain.
+Every protocol the registry records here, each contract with how a program names it: its
+namespace contract, or its ABI imported from `./protocols/<slug>/<Export>.json` and bound to the
+address.
+
+| Protocol | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Circle Gateway](../protocols/circle-gateway.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../protocols/circle-gateway.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
 
 ## Next
 

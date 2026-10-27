@@ -1,0 +1,23 @@
+[
+  {
+    "$comment": "A Pendle V2 market's readTokens(), from Pendle's market interface (IPMarket): the market's SY, PT and YT, in that order. The registry declares no market ABI.",
+    "type": "function",
+    "name": "readTokens",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "_SY",
+        "type": "address"
+      },
+      {
+        "name": "_PT",
+        "type": "address"
+      },
+      {
+        "name": "_YT",
+        "type": "address"
+      }
+    ]
+  }
+]

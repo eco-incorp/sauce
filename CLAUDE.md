@@ -237,6 +237,21 @@ build's output does not move.
 skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
 results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances.
 The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
+`examples.mainnet` (`test:mainnet`) runs the `sauce-swaps` and `sauce-protocols` examples on
+Ethereum state through `sauce simulate` and `sauce run`, in three groups it imports: Uniswap V3
+(`examples-uniswap-v3.mainnet.ts`: exact output and a path held to QuoterV2, a full-range position
+held to the position manager's reads and to its calls replayed from the Pot), Balancer V2 and
+Pendle (`examples-pendle-balancer.mainnet.ts`: batch swaps and the cycle held to the Vault's
+`queryBatchSwap`, Pendle trades to the balances they moved, mints and redeems to the SY's previews
+and the YT's index), and lending (`examples-lending.mainnet.ts`: Aave V3 credit delegation held to
+the debt token's allowance, Compound III to Comet's own reads and its refusal of a borrow past what
+the Pot may borrow, Morpho Blue to its position, market and oracle). It OWNS the
+`official-ethereum` blob: a capture rewrites a blob whole from what its one fork read, so the groups
+run on ONE anvil it starts, each reverting its changes, and a capture writes the union. A group is a
+module exporting `register(anvil)`, never a suite of its own; the entry's last test, which needs no
+engine, fails a module that reads the blob without being registered, one that starts its own anvil
+on it, and a script that names a group alone. `executed.json` names the group that runs each
+example, which `example-programs.mjs` accepts because a listed suite imports it.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -323,8 +338,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~1.2 KB each (code pinned, below), the docs examples suite's three
   (`docs-examples`, `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which no suite reads
-  at present.
+  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which
+  `examples.mainnet` alone reads and captures.
 
   **Contract code is pinned, not committed, in a blob captured since the pin form landed.** An
   account with code carries `codeHash` (keccak256) where an anvil genesis has `code`; capture writes
@@ -1718,7 +1733,9 @@ beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY
 `PATH` for an EVM chain, and reads no environment: the RPC, block and state file are arguments.
 `fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
 live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
-recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
+recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv;
+a live fork reaches its RPC through the same proxy, recording nothing, so no mode puts the URL, or a
+key in it, on anvil's command line or in the stderr a failed start quotes),
 `--no-storage-caching` for anvil (no RPC cache, read or written), dev accounts' code cleared, the
 genesis written
 with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
