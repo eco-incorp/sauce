@@ -54,26 +54,27 @@ The SDK is still below 1.0, and it has made breaking changes in patch releases. 
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -92,6 +93,30 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK Unreleased
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. Same compiler
+and engines as 0.99.17.
+
+### Solana Testnet
+
+- **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
+  its own, with the released engine and Kitchen deployed and zero execution fees, as on devnet.
+  0.99.17 reached testnet only as `--chain solana` with a testnet endpoint; that still works.
+  Testnet runs devnet's engine build, so a program compiled for it reads `chainId` as 1399811150,
+  the same value `ctx.chainId()` returns there; 1399811151 is the SDK's key for the chain, which
+  the command, the MCP server and the Pot store name it by and no program reads. Its one symbol is
+  `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
+  given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
+  an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
+  `solana-testnet`. Solscan links name the cluster, and the Solana venues are mainnet's, so a venue
+  name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
+  accounts (up to a minute for one request), so the command waits up to 120 s for each of its
+  answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
+  two there.
+- The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
+  the supported chains names it after the mainnets.
 
 ## SDK 0.99.17 — 2026-10-27
 
@@ -180,8 +205,7 @@ an effect, with no error. Two of the fixes refuse code that used to compile:
   itself is still reordered.
 - **Fixed** (Solana): a venue name supplied by the caller, such as `Orca` in `defines` or an ambient
   module, stays the caller's value through venue lowering and pool-loop handling. An active member
-  call on a scalar is refused instead of silently becoming an SDK swap, on mainnet, devnet and
-  testnet.
+  call on a scalar is refused instead of silently becoming an SDK swap, on mainnet and devnet.
 
 The settlement program compiles to the same 410 bytes and hash as under 2.6.0, so its pin is
 unchanged.
@@ -257,7 +281,7 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   address would report a cook that runs nothing. Offline, the deployed release cannot be checked:
   `tx`, `sign` and `pot` say so (`The Pot's address is NOT checked against the deployed Kitchen`).
 
-### Testnets: Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet
+### Testnets: Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet
 
 - **Added** (EVM): three testnets, where the release is deployed at its published addresses:
   **Arc Testnet** (`arc-testnet`, chain id 5042002), with Arc's model (USDC the native coin,
@@ -270,19 +294,13 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   own, with the released engine and Kitchen deployed. A program compiled for it reads `chainId`
   as 1399811150, which the devnet engine reports, and its symbols are devnet's mints (`USDC`,
   `WSOL`). The Solana venues are mainnet's, so a venue name is refused on it.
-- **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
-  its own, with the released engine and Kitchen deployed and zero execution fees, as on devnet.
-  Testnet runs devnet's engine build, so a program compiled for it reads `chainId` as 1399811150,
-  the same value `ctx.chainId()` returns there; 1399811151 is the SDK's key for the chain, which
-  the command, the MCP server and the Pot store name it by and no program reads. Its one symbol is
-  `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
-  given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
-  an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
-  `solana-testnet`. Solscan links name the cluster, and the Solana venues are mainnet's, so a venue
-  name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
-  accounts (up to a minute for one request), so the command waits up to 120 s for each of its
-  answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
-  two there.
+- The released Solana engine and Kitchen are also deployed on **Solana testnet**, with zero
+  execution fees on devnet and testnet. Testnet uses the same engine build and chain id
+  1399811150 as devnet. Use `--chain solana --rpc-url <testnet-rpc-url>` and explicit
+  testnet mint addresses. The endpoint does not change `solana`'s compile-time chain identity or
+  mainnet token symbols; `ctx.chainId()` reads the running cluster's chain id. Local simulation
+  selects the released engine build from the endpoint's cluster. There is no `solana-testnet` chain
+  or testnet venue registry.
 - The chain pages and the agent skills mark each testnet, and every message naming the supported
   chains names the testnets after the mainnets.
 
