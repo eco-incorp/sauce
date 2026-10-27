@@ -118,8 +118,8 @@ describe("the list", () => {
         for (const part of [...parsed.pathname.split("/"), ...parsed.searchParams.values()]) {
           expect(part.length >= 20 && /\d/.test(part)).toBe(false);
         }
-        // Solana's endpoints, mainnet's and devnet's, have no eth_simulateV1 to flag; every EVM
-        // one is flagged.
+        // Solana's endpoints, mainnet's, devnet's and testnet's, have no eth_simulateV1 to flag;
+        // every EVM one is flagged.
         expect(simulateV1 === undefined).toBe(requireChain(Number(id)).kind === "svm");
       }
     }
@@ -129,10 +129,12 @@ describe("the list", () => {
    * Supported chains with one public endpoint, each with why. Checked 2026-10-27: no second keyless
    * Solana devnet endpoint passed `scripts/check-public-rpcs.mjs`. OnFinality's and Tatum's answer
    * devnet's genesis but rate-limit the check; dRPC, Helius, Ankr, Triton, Shyft and BlockPI need a
-   * key or do not serve devnet. A testnet holds no value, and the one endpoint is the cluster's own.
+   * key or do not serve devnet. Testnet's own is the one keyless testnet endpoint the list carries.
+   * A testnet holds no value, and the one endpoint is the cluster's own.
    */
   const ONE_ENDPOINT: Readonly<Record<string, string>> = {
     "solana-devnet": "no second keyless devnet endpoint passes the check (2026-10-27)",
+    "solana-testnet": "Solana's own testnet endpoint is the one keyless one listed (2026-10-27)",
   };
 
   it("gives the supported chains at least two endpoints each, to fall back between", () => {

@@ -112,9 +112,9 @@ npm install
 
 The command reads a chain through an **RPC endpoint**, the URL of a node that answers questions
 about the chain. It sends transactions on four chains: **Ethereum**, **Base**, **Arc** and
-**Solana**, and on four testnets: **Arc Testnet** (`arc-testnet`), **Base Sepolia**
-(`base-sepolia`), **Ethereum Sepolia** (`sepolia`) and **Solana Devnet** (`solana-devnet`).
-Every other chain it knows is a **preview chain**.
+**Solana**, and on five testnets: **Arc Testnet** (`arc-testnet`), **Base Sepolia**
+(`base-sepolia`), **Ethereum Sepolia** (`sepolia`), **Solana Devnet** (`solana-devnet`) and
+**Solana Testnet** (`solana-testnet`). Every other chain it knows is a **preview chain**.
 [Chains](../reference/chains.md) lists them all.
 
 ### Supported and preview chains
@@ -122,21 +122,23 @@ Every other chain it knows is a **preview chain**.
 On Arc and Arc Testnet the native coin is USDC: gas, a cook's value and the Kitchen's fee are paid
 in it, not ETH.
 
-A testnet's coin and tokens have no value: try a program there before mainnet. Solana's devnet is a
-chain of its own: its chain id is 1399811150 and its symbols are devnet's mints. The released engine
-and Kitchen are deployed on devnet and testnet, with zero execution fees. This does not deploy
-mainnet venues on those clusters.
+A testnet's coin and tokens have no value: try a program there before mainnet. Solana's devnet and
+testnet are chains of their own, each with its own symbols: devnet's mints, and on testnet the
+wrapped native alone (`WSOL`). The released engine and Kitchen are deployed on both, with zero
+execution fees. This does not deploy mainnet venues on those clusters.
 
-Solana testnet has no chain alias or token registry. Use an explicit endpoint:
+Both report chain id 1399811150 to a program, `ctx.chainId()` and the compiled `chainId` alike:
+testnet runs devnet's engine build. `solana-testnet`'s own id, 1399811151, is the key the SDK and
+the command name the chain by. Each chain takes an endpoint of its own cluster only, told by its
+genesis hash, so a devnet endpoint given for `solana-testnet` is refused, and the reverse:
 
 ```sh
-sauce simulate program.sauce.ts --chain solana --rpc-url <testnet-rpc-url> --owner <owner>
+sauce simulate program.sauce.ts --chain solana-testnet --owner <owner>
 ```
 
-Testnet reports chain id 1399811150. The endpoint does not change `solana`'s compile-time chain
-identity or mainnet token symbols: use explicit testnet mint addresses, and `ctx.chainId()` when
-the program needs the running cluster's chain id. The same endpoint applies to `tx` and `run`.
-Local simulation selects the released engine build from the endpoint's actual cluster.
+`--chain solana` still takes an endpoint of any cluster, but keeps `solana`'s compile-time chain
+identity and mainnet token symbols. Local simulation selects the released engine build from the
+endpoint's actual cluster.
 
 On a preview chain a program still compiles and every read works, but the command builds and
 sends no transaction. `simulate` does not depend on the label: it runs wherever the release is
@@ -154,7 +156,7 @@ A refusal comes before the command reaches an endpoint or reads a key. The comma
 says why, which chains are supported, and how to ask for the one it refused:
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On a preview chain they build and send none. A program still compiles there and globals, price, pools and pot's prediction still read; simulate runs wherever the release is deployed on the chain, and says so where it is not.
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet. On a preview chain they build and send none. A program still compiles there and globals, price, pools and pot's prediction still read; simulate runs wherever the release is deployed on the chain, and says so where it is not.
 To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10).
 ```
 

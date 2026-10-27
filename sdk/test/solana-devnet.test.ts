@@ -20,7 +20,11 @@ describe("solana-devnet", () => {
     expect(devnet).toMatchObject({ id: 1399811150, kind: "svm", name: "Solana Devnet" });
     expect(BigInt(devnet.id)).toBe(ENGINE_CHAIN_IDS.devnet);
     expect(requireChain("devnet").slug).toBe("solana-devnet");
-    expect(svmChains().map((chain) => chain.slug)).toEqual(["solana", "solana-devnet"]);
+    expect(svmChains().map((chain) => chain.slug)).toEqual([
+      "solana",
+      "solana-devnet",
+      "solana-testnet",
+    ]);
     expect(svmClusterOf(devnet)).toBe("devnet");
     expect(svmClusterOf(requireChain("solana"))).toBe("mainnet-beta");
     expect(nativeCoinSymbol(devnet)).toBe("SOL");

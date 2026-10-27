@@ -37,7 +37,7 @@ const sameAddress = (a: string, b: string): boolean =>
 
 /** `sauce pot list`: the store's Pots, those on `chain` or of `owner` when given. A Solana Pot is
  *  recorded under Solana's chain and its cluster, so `solana-devnet` lists devnet's Solana records
- *  (`pots.ts#recordOn`), whichever chain recorded them. */
+ *  and `solana-testnet` testnet's (`pots.ts#recordOn`), whichever chain recorded them. */
 export function potListCommand(
   store: PotStore,
   filter: { readonly chain?: CanonicalChain; readonly owner?: string },

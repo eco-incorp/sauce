@@ -157,6 +157,13 @@ describe("the Pot store", () => {
       '"cluster": "mainnet-beta"',
     );
     expect(store.recordsOf(1399811149, SOLANA.pot, "devnet")).toEqual([devnet]);
+    // Testnet's beside devnet's, apart from both.
+    const testnet: PotRecord = { ...SOLANA, cluster: "testnet" };
+    expect(store.save(testnet)).toBe("created");
+    expect(readFileSync(join(dir, "1399811149-testnet", `${SOLANA.pot}.json`), "utf8")).toContain(
+      '"cluster": "testnet"',
+    );
+    expect(store.recordsOf(1399811149, SOLANA.pot, "testnet")).toEqual([testnet]);
     expect(() => store.save({ ...SOLANA, cluster: "../up" })).toThrow(/is not a cluster/);
   });
 

@@ -52,7 +52,7 @@ const query = (url: string): Record<string, string> =>
   Object.fromEntries(new URL(url).searchParams.entries());
 
 describe("support levels", () => {
-  it("supports Ethereum, Base, Arc and Solana and four testnets, and previews every other chain", () => {
+  it("supports Ethereum, Base, Arc and Solana and five testnets, and previews every other chain", () => {
     expect([...SUPPORTED_CHAIN_SLUGS]).toEqual([
       "ethereum",
       "base",
@@ -62,9 +62,10 @@ describe("support levels", () => {
       "base-sepolia",
       "sepolia",
       "solana-devnet",
+      "solana-testnet",
     ]);
     expect(supportedChains().map((chain) => chain.id)).toEqual([
-      1, 8453, 5042, 1399811149, 5042002, 84532, 11155111, 1399811150,
+      1, 8453, 5042, 1399811149, 5042002, 84532, 11155111, 1399811150, 1399811151,
     ]);
     for (const chain of canonicalChains) {
       const supported = (SUPPORTED_CHAIN_SLUGS as readonly string[]).includes(chain.slug);
@@ -74,7 +75,7 @@ describe("support levels", () => {
       ]);
       expect(isSupportedChain(chain)).toBe(supported);
     }
-    expect(previewChains()).toHaveLength(canonicalChains.length - 8);
+    expect(previewChains()).toHaveLength(canonicalChains.length - 9);
     expect(previewChains().map((chain) => chain.id)).toEqual(
       canonicalChains
         .filter((chain) => !SUPPORTED_CHAIN_SLUGS.includes(chain.slug as never))
@@ -89,6 +90,7 @@ describe("support levels", () => {
       "base-sepolia",
       "sepolia",
       "solana-devnet",
+      "solana-testnet",
     ]);
     expect(SUPPORTED_CHAIN_SLUGS.slice(-SUPPORTED_TESTNET_SLUGS.length)).toEqual([
       ...SUPPORTED_TESTNET_SLUGS,
@@ -100,7 +102,7 @@ describe("support levels", () => {
       ]);
     }
     expect(supportedChainNames()).toBe(
-      "Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet",
+      "Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet",
     );
   });
 
@@ -118,6 +120,10 @@ describe("support levels", () => {
       "solana-devnet",
       "devnet",
       1399811150,
+      "solana-testnet",
+      "testnet",
+      "Solana Testnet",
+      1399811151,
     ]) {
       expect([ref, chainSupport(ref)]).toEqual([ref, "supported"]);
     }

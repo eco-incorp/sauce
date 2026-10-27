@@ -180,7 +180,8 @@ an effect, with no error. Two of the fixes refuse code that used to compile:
   itself is still reordered.
 - **Fixed** (Solana): a venue name supplied by the caller, such as `Orca` in `defines` or an ambient
   module, stays the caller's value through venue lowering and pool-loop handling. An active member
-  call on a scalar is refused instead of silently becoming an SDK swap, on mainnet and devnet.
+  call on a scalar is refused instead of silently becoming an SDK swap, on mainnet, devnet and
+  testnet.
 
 The settlement program compiles to the same 410 bytes and hash as under 2.6.0, so its pin is
 unchanged.
@@ -256,7 +257,7 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   address would report a cook that runs nothing. Offline, the deployed release cannot be checked:
   `tx`, `sign` and `pot` say so (`The Pot's address is NOT checked against the deployed Kitchen`).
 
-### Testnets: Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet
+### Testnets: Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet
 
 - **Added** (EVM): three testnets, where the release is deployed at its published addresses:
   **Arc Testnet** (`arc-testnet`, chain id 5042002), with Arc's model (USDC the native coin,
@@ -269,13 +270,16 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   own, with the released engine and Kitchen deployed. A program compiled for it reads `chainId`
   as 1399811150, which the devnet engine reports, and its symbols are devnet's mints (`USDC`,
   `WSOL`). The Solana venues are mainnet's, so a venue name is refused on it.
-- The released Solana engine and Kitchen are also deployed on **Solana testnet**, with zero
-  execution fees on devnet and testnet. Testnet uses the same engine build and chain id
-  1399811150 as devnet. Use `--chain solana --rpc-url <testnet-rpc-url>` and explicit
-  testnet mint addresses. The endpoint does not change `solana`'s compile-time chain identity or
-  mainnet token symbols; `ctx.chainId()` reads the running cluster's chain id. Local simulation
-  selects the released engine build from the endpoint's cluster. There is no `solana-testnet` chain
-  or testnet venue registry.
+- **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
+  its own, with the released engine and Kitchen deployed and zero execution fees, as on devnet.
+  Testnet runs devnet's engine build, so a program compiled for it reads `chainId` as 1399811150,
+  the same value `ctx.chainId()` returns there; 1399811151 is the SDK's key for the chain, which
+  the command, the MCP server and the Pot store name it by and no program reads. Its one symbol is
+  `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
+  given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
+  an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
+  `solana-testnet`. Solscan links name the cluster, the built-in public endpoint is Solana's own,
+  and the Solana venues are mainnet's, so a venue name is refused on it.
 - The chain pages and the agent skills mark each testnet, and every message naming the supported
   chains names the testnets after the mainnets.
 

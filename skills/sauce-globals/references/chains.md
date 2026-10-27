@@ -53,3 +53,4 @@ preview chain.
 - `Aurora`: `aurora`, 1313161554, EVM, preview
 - `Solana`: `solana`, 1399811149, SVM, supported
 - `SolanaDevnet`: `solana-devnet`, 1399811150, SVM, supported, testnet
+- `SolanaTestnet`: `solana-testnet`, 1399811151, SVM, supported, testnet

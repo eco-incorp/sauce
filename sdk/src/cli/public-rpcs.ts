@@ -252,4 +252,8 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   // and Tatum's answer devnet's genesis but rate-limit the check (5 requests a minute on Tatum's),
   // and dRPC, Helius, Ankr, Triton, Shyft and BlockPI serve devnet with a key only.
   1399811150: [{ url: "https://api.devnet.solana.com", programAccounts: true }],
+  // Solana testnet, under the SDK's own key for it (its engine reports devnet's CHAIN_ID), checked
+  // 2026-10-27: Solana's own answers testnet's genesis, a slot, the wrapped-native mint, and a
+  // filtered getProgramAccounts.
+  1399811151: [{ url: "https://api.testnet.solana.com", programAccounts: true }],
 };

@@ -411,7 +411,7 @@ export const TOKEN_REGISTRY: Readonly<Record<number, readonly TokenRegistryRow[]
   );
 
 /** A Solana cluster a mint is registered on. `mainnet-beta` is the canonical `solana` chain. */
-export type SvmTokenCluster = "mainnet-beta" | "devnet";
+export type SvmTokenCluster = "mainnet-beta" | "devnet" | "testnet";
 
 export interface SvmTokenRow {
   /**
@@ -504,6 +504,19 @@ const SVM_TOKEN_ENTRIES: Readonly<Record<SvmTokenCluster, readonly SvmTokenEntry
       source: "probe:solana-devnet@2026-10-01",
     },
   ],
+  // testnet -- probe-verified 2026-10-27 at slot 457356454: the wrapped native only. Circle
+  // publishes USDC for Solana's mainnet and devnet, not testnet (developers.circle.com, USDC
+  // contract addresses), and neither of those mints is a mint account on testnet. Tether publishes
+  // no testnet USDT.
+  testnet: [
+    {
+      symbol: "WSOL",
+      mint: "So11111111111111111111111111111111111111112",
+      tokenProgram: TOKEN_PROGRAM_ID,
+      decimals: 9,
+      source: "probe:solana-testnet@2026-10-27",
+    },
+  ],
 };
 
 const svmKey = (mint: string): `0x${string}` =>
@@ -529,16 +542,19 @@ function svmRows(cluster: SvmTokenCluster): readonly SvmTokenRow[] {
 }
 
 /** Registered SPL mints, per Solana cluster: a program compiled for `solana` resolves its symbols
- *  to `mainnet-beta`'s, one compiled for `solana-devnet` to `devnet`'s. */
+ *  to `mainnet-beta`'s, one compiled for `solana-devnet` to `devnet`'s and one compiled for
+ *  `solana-testnet` to `testnet`'s. */
 export const SVM_TOKEN_REGISTRY: Readonly<Record<SvmTokenCluster, readonly SvmTokenRow[]>> = {
   "mainnet-beta": svmRows("mainnet-beta"),
   devnet: svmRows("devnet"),
+  testnet: svmRows("testnet"),
 };
 
 /** The cluster each canonical SVM chain is. */
 const SVM_CLUSTER_OF: Readonly<Record<number, SvmTokenCluster>> = {
   1399811149: "mainnet-beta",
   1399811150: "devnet",
+  1399811151: "testnet",
 };
 
 /** The Solana cluster `chain` is, or `undefined` off SVM. */
