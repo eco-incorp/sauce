@@ -100,6 +100,10 @@ nothing moves.
 
 ### Actions documents
 
+- **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
+  as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
+  (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
+  `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
 - **Fixed** (EVM): `acrossBridge` asks Across for the destination chain's token. The deposit's
   `outputToken`, the token a relayer sends on the destination, was the deposited token's own
   address, which is the destination's copy only where both chains share it: a USDC deposit from
