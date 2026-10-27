@@ -144,6 +144,17 @@ nothing moves.
 
 ### The registry
 
+- **Added** (EVM testnets): **CCTP and Circle Gateway on Arc Testnet, Base Sepolia and Ethereum
+  Sepolia.** A program compiled for one of them names `Cctp.TokenMessenger`,
+  `CircleGateway.GatewayWallet` and `CircleGateway.GatewayMinter`, which resolve to Circle's
+  testnet contracts there, not the mainnet ones: TokenMessengerV2
+  `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`, GatewayWallet
+  `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` and GatewayMinter
+  `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B`, at the same address on all three. Each chain's
+  CCTP domain is its mainnet's (Arc Testnet 26, Base Sepolia 6, Ethereum Sepolia 0), and the
+  chain pages list it. The `cctpBridge` action takes `"Cctp.TokenMessenger"` on them too. Every
+  address is Circle's own, pinned by on-chain evidence like every registry row. Solana Devnet is
+  not covered: the SDK has no Solana path for CCTP or Gateway.
 - **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
@@ -222,6 +233,26 @@ nothing moves.
   chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
   extra `eth_chainId` request per write.
 
+### The testing kit
+
+- **Fixed** (EVM): a live `fork()` keeps `rpcUrl` off anvil's command line. It passed the URL to
+  anvil as `--fork-url`, so the URL, and any key in it, showed in the process list while the fork
+  ran, and in the error a failed start quotes. A live fork now reads the endpoint through the proxy
+  a recording uses, configured over its stdin, and anvil sees only that proxy's loopback URL.
+- **Fixed** (EVM): an `rpcUrl` with credentials in it (`https://user:pass@host/…`) records. They go
+  as a Basic `Authorization` header, which Node's `fetch` requires, and a live fork takes them the
+  same way. Neither a URL the proxy cannot parse nor an endpoint's answer that echoes the header is
+  ever quoted in its output or in a failed recording's error.
+- **Fixed** (EVM): a live fork's requests go upstream once, as anvil sent them, so anvil's own
+  timeout and retries apply, and its proxy exits with the process that started it.
+
+**Also breaking:** a network fork (record or live) reaches its endpoint directly, never through
+`HTTP_PROXY`/`HTTPS_PROXY`, and anvil sends its loopback hop to the kit's proxy through
+`HTTP_PROXY` when that is set: set `NO_PROXY=127.0.0.1` for a test run behind a proxy.
+
+**Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
+WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, is refused.
+
 ### Solana Testnet
 
 - **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
@@ -249,6 +280,11 @@ nothing moves.
   price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
   Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
   `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+- **Added**: example programs for Uniswap V3 exact-output swaps, a multi-hop path, and opening and
+  managing a position (adding only to a position the Pot owns); Aave V3 credit delegation;
+  Compound III borrow and repay; Morpho Blue borrow and repay; Pendle PT and YT trades, and minting
+  and redeeming; and a Balancer V2 batch swap and flash cycle. They are in `sauce-swaps` and
+  `sauce-protocols`, and each runs on Ethereum's state.
 - **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
   them.
 
@@ -264,6 +300,11 @@ nothing moves.
   `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
+- **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
+  `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
+  quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
+  switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
+  the transaction fee.
 
 - **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
   swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and

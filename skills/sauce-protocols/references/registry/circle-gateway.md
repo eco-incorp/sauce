@@ -8,8 +8,8 @@ Circle's chain-abstracted USDC balance. Deposit USDC into the GatewayWallet on o
 | --- | --- |
 | Category | Cross-chain messaging |
 | Family | none |
-| Namespace | `CircleGateway` on ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
-| Chains | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
+| Namespace | `CircleGateway` on ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
+| Chains | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
 | Document | [circle-gateway.md](../circle-gateway.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
@@ -47,6 +47,12 @@ function main() {
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
+| [Arc Testnet](../../../sauce-chains/references/arc-testnet.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Arc Testnet](../../../sauce-chains/references/arc-testnet.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
 
 ## ABI
 

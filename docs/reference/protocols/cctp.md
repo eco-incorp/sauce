@@ -15,8 +15,8 @@ on this chain, Circle attests the burn, and a `receiveMessage` on the destinatio
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | `Cctp` on ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
-| Chains | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
+| Namespace | `Cctp` on ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia |
+| Chains | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia |
 
 ## When to use it
 
@@ -49,6 +49,10 @@ function main(amount: Uint256, recipient: Address, maxFee: Uint256) {
 ## Notes
 
 - Domains are Circle's numbering; the registry records them per chain.
+- On a testnet (Arc Testnet, Base Sepolia, Ethereum Sepolia) the TokenMessenger is Circle's
+  testnet contract, not the mainnet one, and the domain is the mainnet's (Arc Testnet 26, Base
+  Sepolia 6, Ethereum Sepolia 0). `Cctp.TokenMessenger` resolves to the chain's own; its
+  attestation comes from Circle's sandbox API, `https://iris-api-sandbox.circle.com`.
 
 ## Its names in a program
 
@@ -76,6 +80,9 @@ function main() {
 | [Arbitrum One](../chains/arbitrum.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Avalanche C-Chain](../chains/avalanche.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Linea](../chains/linea.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [Base Sepolia](../chains/base-sepolia.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Arc Testnet](../chains/arc-testnet.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Ethereum Sepolia](../chains/sepolia.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
 
 ## ABI
 

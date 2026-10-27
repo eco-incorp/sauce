@@ -131,5 +131,30 @@ has is a flash swap through the Pot's Router (`sauce-swaps`).
 - [examples/protocols.mts](examples/protocols.mts) compiles it for Base, Arbitrum and Optimism (the
   last two preview chains, compiled only), loads a protocol document, and compiles a protocol
   template.
+- [examples/aave-delegate-credit.sauce.ts](examples/aave-delegate-credit.sauce.ts) and
+  [examples/aave-repay-delegated.sauce.ts](examples/aave-repay-delegated.sauce.ts) open and close a
+  line of Aave V3 credit the Pot's collateral backs for another borrower, with the delegation calls
+  the registry's ABI lacks in [examples/AaveV3Delegation.json](examples/AaveV3Delegation.json).
+- [examples/compound-borrow.sauce.ts](examples/compound-borrow.sauce.ts) and
+  [examples/compound-repay.sauce.ts](examples/compound-repay.sauce.ts) borrow USDC from Compound
+  III against WETH, reading the market and what the Pot may borrow, then repay it all and claim the
+  rewards, with the reads the registry's ABI lacks in
+  [examples/CometMarket.json](examples/CometMarket.json).
+- [examples/morpho-borrow.sauce.ts](examples/morpho-borrow.sauce.ts) and
+  [examples/morpho-repay.sauce.ts](examples/morpho-repay.sauce.ts) borrow in a Morpho Blue market
+  by its id, reading the position and its health, then repay it by shares and withdraw, with
+  Morpho's reads in [examples/MorphoMarket.json](examples/MorphoMarket.json).
+- [examples/pendle-trade.sauce.ts](examples/pendle-trade.sauce.ts) and
+  [examples/pendle-mint-redeem.sauce.ts](examples/pendle-mint-redeem.sauce.ts) buy or sell a Pendle
+  market's PT or YT through Pendle's Router, and mint or redeem its SY, or its PT and YT together,
+  reading the market's tokens through [examples/PendleMarket.json](examples/PendleMarket.json),
+  with the Router functions the registry's ABI lacks in
+  [examples/PendleRouterTrades.json](examples/PendleRouterTrades.json).
+- [examples/v3-position-open.sauce.ts](examples/v3-position-open.sauce.ts) and
+  [examples/v3-position-manage.sauce.ts](examples/v3-position-manage.sauce.ts) open a full-range
+  Uniswap V3 position the Pot owns, or add to one, its range from the pool's tick spacing, then
+  remove a share of its liquidity, collect what it is owed and hand the NFT over, with the position
+  manager's calls the registry's ABI lacks in
+  [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
 - [references/index.md](references/index.md), `references/registry/<slug>.md` (generated) and
   `references/<slug>.md` (one document per protocol).
