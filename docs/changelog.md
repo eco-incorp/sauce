@@ -93,6 +93,18 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### Actions documents
+
+- **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
+  as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
+  (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
+  `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
