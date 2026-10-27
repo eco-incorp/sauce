@@ -274,10 +274,16 @@ export function makeSplTokenSwapForkAdapter(
       // Account model (RS compiler): quoteAccounts() order is [vault-in, vault-out],
       // so vault-in is slot 0 (acc0) and vault-out slot 1 (acc1). accountUint lowered
       // to CAST_LE and the SPL amount@64 is u64 LE, so `.toLe()` is the exact match.
+      // The program's checked_ceil_div fails when floor(rsIn * rsOut / (rsIn + netIn)) is 0,
+      // which is exactly rsIn * rsOut < rsIn + netIn: such a pool quotes 0 (the venue is
+      // unusable), the same bound referenceQuote refuses.
       return [
         `const rIn${i} = svm.sload(acc0, 64, 8).toLe();`,
         `const rOut${i} = svm.sload(acc1, 64, 8).toLe();`,
-        `const q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
+        `let q${i} = 0;`,
+        `if (rIn${i} * rOut${i} >= rIn${i} + ${netIn}) {`,
+        `  q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
+        `}`,
       ].join("\n");
     },
     buildSwap(cfg, user, amountIn) {

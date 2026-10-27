@@ -19,7 +19,7 @@
 //     no trailing slack, no dirty bytes above an address, a nonzero recipient), so an accepted
 //     payload is the UNIQUE byte encoding of the values it decodes to.
 //   • `validateSettleProgram` adds the authenticity half: one `keccak256` over the WHOLE program
-//     against `SETTLE_WIRE.PROGRAM_HASH`. Because the arguments are no longer inside the program,
+//     against `SETTLE_WIRE.PROGRAM_HASH`. Because the arguments are appended, not inside the program,
 //     a match means the payload runs the audited `settle.sauce.ts` and nothing else — the complete
 //     answer, from bytes alone, with no compiler. Prefer it; the structural tier exists for callers
 //     inspecting a payload they already know is not canonical.

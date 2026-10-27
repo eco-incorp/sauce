@@ -23,7 +23,7 @@ import { compileSauceProgram } from "../../sdk/dist/routes/index.js";
 
 import type { ActionContracts } from "./abis.js";
 import { compileEvm } from "./compile.js";
-import { chainLabel, resolveNames, wrappedNativeIssues } from "./names.js";
+import { acrossOutputTokens, chainLabel, resolveNames, wrappedNativeIssues } from "./names.js";
 import { parseProgram } from "./program.js";
 import { ProgramError, programIssues } from "./semantics.js";
 import { lowerActions, renderProgram, type Lowered } from "./to-sauce.js";
@@ -117,18 +117,20 @@ function targetChain(
 
 /**
  * Parses `program`, checks every name it uses — and the rules its resolved addresses must keep
- * (no swap of a token for itself, a chain's native-coin rules) — on the chain it compiles for, and
- * lowers it. Throws a `ProgramError` listing every problem with its path.
+ * (no swap of a token for itself, a chain's native-coin rules) — on the chain it compiles for,
+ * finds each Across deposit's destination token, and lowers it. Throws a `ProgramError` listing
+ * every problem with its path.
  */
 export function lowerProgram(program: ActionProgram, chain?: ChainRef): LoweredProgram {
   const parsed = parseProgram(program);
   const target = targetChain(parsed.chainId, chain);
   const { resolved, issues } = resolveNames(parsed.actions, target);
   issues.push(...wrappedNativeIssues(parsed.actions, target));
-  if (issues.length === 0) issues.push(...programIssues(resolved, target.id));
+  const across = acrossOutputTokens(parsed.actions, resolved, target);
+  if (issues.length === 0) issues.push(...programIssues(resolved, target.id), ...across.issues);
   if (issues.length > 0) throw new ProgramError(issues, target);
 
-  return { chain: target, program: parsed, lowered: lowerActions(parsed.actions) };
+  return { chain: target, program: parsed, lowered: lowerActions(across.actions) };
 }
 
 /** An action program as the SauceScript it lowers to on one chain: what `sauce actions` prints. */

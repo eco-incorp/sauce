@@ -392,11 +392,16 @@ export type SwapAction =
 // Bridges — the program's chain is the source
 // =============================================================================
 
-/** Across: deposit for the same token on the destination, less the relayer fee. */
+/** Across: deposit for the destination chain's token, less the relayer fee. */
 export interface AcrossBridgeAction extends Spends {
   type: "acrossBridge";
   spokePool: Contract;
   token: Token;
+  /**
+   * The token received on the destination, with `token`'s decimals. Default: the registry's token
+   * of `token`'s symbol on `destChainId`.
+   */
+  outputToken?: Address;
   destChainId: number;
   /** Receives on the destination. */
   recipient: Address;
