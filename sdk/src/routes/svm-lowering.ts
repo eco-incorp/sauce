@@ -720,7 +720,7 @@ export class SvmLowering {
     readonly stopped: ReadonlySet<string> = new Set(),
     /** The names the caller binds (its defines, its contract bindings, and ambient exports, a `pot`
      *  or `self` among them), separately from source declarations: SDK namespaces never replace
-     *  them, a `pot` or `self` among them is the caller's, and the accounts this adds are named
+     *  them, a `pot` or `self` among them is the caller's own, and the accounts this adds are named
      *  apart from them. */
     readonly bound: ReadonlySet<string> = new Set(),
   ) {

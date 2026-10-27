@@ -187,7 +187,7 @@ export function rewriteSvmTokenSyntax(
 }
 
 /**
- * Refuses the retired spellings of the Pot, each naming what to write: a bare `self` the program
+ * Refuses the spellings that are not the Pot, each naming what to write: a bare `self` the program
  * does not declare (`self.USDC` → `pot.USDC`, `self.SOL` → `pot.balance`, `self` → `pot`), and
  * `Solana.self` (`Solana.self.signer()` → `pot.signer()`).
  */

@@ -14,9 +14,9 @@
  * token (Arc's USDC) reads the token, and the coin is `.balance`. A program that declares its own
  * `pot` (an import included), or a compile that gives it one (a define, a contract binding), owns
  * the name, `pot.owner` with it. A `pot` only an ambient module exports is refused where the
- * program reads it (`ambientPotRefusal`): it would replace the Pot with no word in the program. The
- * old spellings — bare `self`, `self.<TOKEN>`, `Solana.self` and `<holder>.<native symbol>` — are
- * refused by name, each naming what to write instead.
+ * program reads it (`ambientPotRefusal`): it would replace the Pot with no word in the program.
+ * Bare `self`, `self.<TOKEN>`, `Solana.self` and `<holder>.<native symbol>` are refused by name,
+ * each naming what to write instead.
  */
 import { walk, type AstNode } from "./ast-walk.js";
 
@@ -29,7 +29,7 @@ export const OWNER_MEMBER = "owner";
 /** The member that reads a holder's native-coin balance. */
 export const BALANCE_MEMBER = "balance";
 
-/** The name the language no longer has for the Pot. */
+/** `self`: refused as a name for the Pot, which is `pot`. */
 export const RETIRED_POT_NAME = "self";
 
 /**

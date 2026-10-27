@@ -83,14 +83,11 @@ export interface ProgramPin {
 
 /** Stable failure codes — safe to `switch` on. Every one is a REAL rejection this decoder makes.
  *
- *  BREAKING vs the v1 grammar: eight codes are GONE, because the defects they named cannot occur on a
- *  fixed-width wire. `NON_MINIMAL_PUSH`, `TRUNCATED_PUSH`, `TRUNCATED_MINOUT`, `TRUNCATED_RECIPIENT`
- *  and `OVERSIZE_ADDRESS` all described a variable-length PUSH prologue that no longer exists;
- *  `ARITY_MISMATCH` and `NOT_SETTLE_SHAPED` described shape inference the whole-program hash now
- *  settles outright; `BODY_LENGTH` described a body slice that is no longer a separate region. Their
- *  uniqueness role is taken by §4's canonicality rules and `PROGRAM_HASH`. Only `EMPTY` and
- *  `ZERO_RECIPIENT` carry over. A consumer with an exhaustive `switch` on the old union will compile
- *  and silently stop matching, which is why this ships as a breaking change. */
+ *  The wire is fixed-width, so the codes name only defects a fixed-width payload can have: `EMPTY`
+ *  and `ZERO_RECIPIENT` for the payload and its recipient, `PROGRAM_TRUNCATED`, `ARGS_TRUNCATED`,
+ *  `ARGS_OVERLONG`, `TOKENS_OFFSET`, `TOKENS_EMPTY` and `DIRTY_ADDRESS_WORD` for its layout, and
+ *  `PROGRAM_HASH` for a program that is not the audited one. Canonicality (§4) and `PROGRAM_HASH`
+ *  together make each accepted payload the unique encoding of its meaning. */
 export type SettleFailureCode =
   | "EMPTY"
   | "PROGRAM_TRUNCATED"
