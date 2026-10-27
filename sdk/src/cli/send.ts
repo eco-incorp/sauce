@@ -559,7 +559,12 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
               : `nothing was sent — ${refusal.message}`,
           );
         }
-        sent.push(refused(refusal.message));
+        // Refused for a step the chain already has (a deployment that landed and left no Pot where
+        // this SDK expects one), this one is not sent because of it; else for what it, or a step
+        // after it, would do.
+        sent.push(
+          refused(onChain[refusal.step] === true ? `because ${refusal.message}` : refusal.message),
+        );
         break;
       }
       // A cook or a Pot's deployment, held to the deployed Kitchen again, on the state it is sent on.

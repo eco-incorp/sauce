@@ -816,10 +816,19 @@ describeEvm("the Pot is checked against the chain", () => {
         expect(out.sent).toHaveLength(2);
         expect(out.sent[0]).toMatchObject({ status: "success" });
         expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
-        expect(out.sent[1]!.reason).toContain(
-          `transaction 1 of ${withCook ? 3 : 2} (Kitchen.deployPot at`,
+        // Said as what happened: the deployment landed, left no Pot where this SDK expects one, and
+        // nothing after it was sent; never that it was not sent, nor that nothing was.
+        const reason = out.sent[1]!.reason!;
+        expect(reason).toContain(
+          `not sent — because transaction 1 of ${withCook ? 3 : 2} (Kitchen.deployPot at `,
         );
-        expect(out.sent[1]!.reason).toMatch(MISMATCH);
+        expect(reason).toContain(
+          `) landed and left no Pot at ${fresh.pot}, where this SDK expects one: the Kitchen `,
+        );
+        expect(reason).toMatch(MISMATCH);
+        expect(reason).toContain("Nothing after it was sent.");
+        expect(reason).not.toContain("Nothing was");
+        expect(reason).not.toMatch(/not sent — transaction 1/);
       });
       // Nothing after the deployment went out.
       expect(String(await local.publicClient.getBalance({ address: recipient }))).toBe("0");
@@ -1206,6 +1215,35 @@ describe("offline, the Pot's address cannot be checked", () => {
     if (result.code !== 0) throw new Error(`exited ${result.code}: ${result.stderr}`);
     expect(result.stdout + result.stderr).toContain(
       "The Pot's address is NOT checked against the deployed Kitchen",
+    );
+  });
+
+  describe("a private Pot of owner zero", () => {
+    /** Where `deployPot(0x0…0, salt)` would put it at the default salt: no Kitchen call can. */
+    const NOBODYS = getAddress(v12PredictPot(zeroAddress, `0x${"00".repeat(32)}`) as Address);
+
+    it.each([
+      ["pot", () => ["pot"], []],
+      ["tx --fund", () => ["tx", program, "--value", "1234", "--fund", "USDC:1"], ["--args", "41"]],
+      ["sign", () => ["sign", program, "--max-fee", "1234"], ["--args", "41"]],
+    ] as const)(
+      "%s refuses it with no endpoint, naming deploySharedPot, and prints no plan",
+      async (_, words, tail) => {
+        const run = (owner: Address) =>
+          sauce(...words(), "--chain", "ethereum", "--offline", "--owner", owner, ...tail);
+        // The same line for a real owner builds its plan: it is the owner that is refused.
+        const control = await run(OWNER);
+        if (control.code !== 0) throw new Error(`exited ${control.code}: ${control.stderr}`);
+        const refused = await run(zeroAddress);
+        expect(refused.code).toBe(1);
+        expect(refused.stderr).toContain(
+          "Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000: a " +
+            "Pot with no owner is a Shared Pot, which Kitchen.deploySharedPot(salt) deploys",
+        );
+        // Not a plan: nothing printed, and nothing aimed at the address no Pot can have.
+        expect(refused.stdout).toBe("");
+        expect(refused.stdout + refused.stderr).not.toContain(NOBODYS);
+      },
     );
   });
 });

@@ -51,6 +51,7 @@ import {
   requireCookContracts,
   requirePlanSendable,
   requirePot,
+  requirePotOwner,
   POT_UNCHECKED,
   potState,
   releasedContracts,
@@ -556,12 +557,15 @@ export interface Cook {
   readonly program: CompiledSauceProgram;
 }
 
-/** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. */
+/** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. A
+ *  Pot named by owner and salt must have an owner: no Kitchen call deploys one of the zero address
+ *  (`chain.ts#requirePotOwner`), so it is refused before anything is built, offline as well. */
 export function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
   const target = input.target;
+  if ("owner" in target) requirePotOwner(target.owner);
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
   const program = compileProgram(input, files);
@@ -1234,12 +1238,14 @@ const POT_DEPLOYMENT = "building the Pot's deployment";
 
 /**
  * `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. On a
- * preview chain only the prediction: the deployment is left out, and `refused` says why.
+ * preview chain only the prediction: the deployment is left out, and `refused` says why. An owner of
+ * the zero address is refused first, as no Kitchen call deploys its Pot (`chain.ts#requirePotOwner`).
  */
 export function potCommand(input: PotCommandInput): CommandOutput {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s Pot is predicted by solana.ts`);
   }
+  requirePotOwner(input.owner);
   const kitchen = kitchenAddress();
   const pot = v12PredictPot(input.owner, input.salt) as Address;
   const predicted = { chainId: input.chain.id, pot, owner: input.owner, salt: input.salt, kitchen };

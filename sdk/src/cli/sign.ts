@@ -50,6 +50,7 @@ import {
   POT_UNCHECKED,
   reasonOf,
   requirePot,
+  requirePotOwner,
   sendAndWait,
   type Sent,
 } from "./chain.js";
@@ -191,6 +192,8 @@ export async function signCommand(
   requireSupported("signing a cook", [chain]);
   const program = payloadOf(compiled, input.args);
   const target = input.target;
+  // A Pot named by its owner needs one: no Kitchen call deploys a Pot of the zero address.
+  if ("owner" in target) requirePotOwner(target.owner);
   const pot =
     "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
   const named = "owner" in target ? getAddress(target.owner) : undefined;

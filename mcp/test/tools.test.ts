@@ -1454,6 +1454,55 @@ describe("sauce_pot", () => {
   });
 });
 
+describe("a private Pot of owner zero, with no endpoint", () => {
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const refusal =
+    /Kitchen\.deployPot reverts for the owner 0x0{40}: a Pot with no owner is a Shared Pot, which Kitchen\.deploySharedPot\(salt\) deploys/;
+  const document = {
+    version: 1,
+    actions: [
+      { type: "argument", name: "amount" },
+      {
+        type: "uniswapV3Swap",
+        tokenIn: "USDC",
+        tokenOut: "WETH",
+        factory: "UniswapV3.Factory",
+        fee: 500,
+        amountOutMin: "1",
+        recipient: "pot",
+      },
+    ],
+  };
+  /** Each tool that builds the Pot's deployment, or plans a transfer into its address. */
+  const calls = (owner: string): Array<[string, Record<string, unknown>]> => [
+    ["sauce_pot", { chain: "base", owner }],
+    [
+      "sauce_tx",
+      {
+        ...{ source: PAY, chain: "base", owner, value: 0 },
+        ...{ args: [RECIPIENT, "1000000"], fund: ["USDC:1"] },
+      },
+    ],
+    ["sauce_actions", { program: document, chain: "base", owner, value: "0", args: ["1000"] }],
+    [
+      "sauce_signed_cook",
+      {
+        ...{ source: PAY, chain: "base", owner, args: [RECIPIENT, "1000000"] },
+        ...{ maxExecutionFee: "1234", nonce: "7", deadline: "2000000000", submitter: RECIPIENT },
+      },
+    ],
+  ];
+
+  for (const [tool] of calls(ZERO)) {
+    it(`${tool} refuses it before any plan, where the same call for a real owner builds one`, async () => {
+      const [, real] = calls(OWNER).find(([name]) => name === tool)!;
+      const [, zero] = calls(ZERO).find(([name]) => name === tool)!;
+      ok(await mcp.call(tool, real));
+      assert.match(failed(await mcp.call(tool, zero)), refusal);
+    });
+  }
+});
+
 describe("sauce_simulate", () => {
   it("summarizes a result to what decides a trade", () => {
     const full = {
