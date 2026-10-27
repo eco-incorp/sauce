@@ -105,13 +105,14 @@ nothing moves.
   which does not compile, and `Solana.self.owner` suggested `pot.owner`, the Pot's owner rather than
   the program that owns its account. Now `Solana.self.lamports` names `pot.balance`,
   `Solana.self.owner` names `Account(pot.address).owner`, a member the Pot's account or balances
-  have (`address`, `dataLen`, `signer()`, `writable()`, `balance`, a token) keeps its name, and any
-  other names `pot`.
+  have (`address`, `dataLen`, `signer()`, `writable()`, `balance`, a token) or a scalar method of
+  its key (`toBytesBe`, `toBytesLe`) keeps its name, and any other names `pot`.
 - **Fixed: a compile error's message is plain text.** The compiler sets its report's headlines in
   bold with ANSI escapes, whatever the terminal, and they reached every `error.message` (and
   `stack`) from `compileSauceProgram`, `compileSauceRoute` and `@eco-incorp/sauce/compiler`'s
   `compile`, and so logs, JSON and MCP results. The SDK now takes them out where it calls the
-  compiler; the words and `diagnostics` are the compiler's.
+  compiler; the words and `diagnostics` are the compiler's, and the error thrown is the compiler's
+  own whatever a host's `Error.prepareStackTrace` makes of its `stack`.
 
 ### The `sauce` command and the MCP server
 
