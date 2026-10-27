@@ -378,7 +378,12 @@ describeSvm("the token methods on Solana: every account derived by the command",
 
   it("runs the sauce-solana wrap example as its header says: the owner's SOL into the Pot's WSOL", async () => {
     const file = join(HERE, "../../skills/sauce-solana/examples/wrap.sauce.ts");
-    const header = readFileSync(file, "utf8")
+    const text = readFileSync(file, "utf8");
+    // Its accounts are `Account`'s and the owner is `pot.owner`: no spelling on Solana's name.
+    expect(text).toContain("Account.systemProgram");
+    expect(text).toContain("pot.owner.writable().signer()");
+    expect(text).not.toMatch(/\bSolana\./);
+    const header = text
       .split("\n")
       .filter((one) => one.startsWith("//"))
       .map((one) => one.replace(/^\/\/\s*/, ""));
@@ -811,7 +816,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const file = program(
       "accounts-spl",
       "function main(to: Address, amount: Uint256): Uint256 {\n" +
-        "  const dest = Solana.pda(Solana.associatedTokenProgram, [to, Solana.tokenProgram, USDC]).writable();\n" +
+        "  const dest = Account.pda(Account.associatedTokenProgram, [to, Account.tokenProgram, USDC]).writable();\n" +
         "  let data = hex`03`;\n" +
         "  svm.call(USDC.tokenProgram, [\n" +
         "    USDC.accountOf(pot).writable(),\n" +
@@ -892,10 +897,10 @@ describeSvm("the token methods on Solana: every account derived by the command",
     });
   }, 120_000);
 
-  it("holds Solana.account(key) to its key: another account in its slot is refused", async () => {
+  it("holds Account(key) to its key: another account in its slot is refused", async () => {
     const file = program(
       "accounts-key",
-      "function main(key: Address): Uint256 {\n  return Solana.account(key).dataLen;\n}\n",
+      "function main(key: Address): Uint256 {\n  return Account(key).dataLen;\n}\n",
     );
     const potAccount = harness.svm.getAccount(pot);
     if (!potAccount.exists) throw new Error("the Pot was created before the suite");
@@ -914,7 +919,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const file = program(
       "accounts-pda",
       "function main(kitchen: Address, salt: Uint256): Uint256 {\n" +
-        '  const found = Solana.pda(kitchen, ["pot", Solana.owner, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
+        '  const found = Account.pda(kitchen, ["pot", pot.owner, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
         '  require(found.address == pot, "not the Pot");\n' +
         "  return found.dataLen;\n" +
         "}\n",
@@ -945,7 +950,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const byArgument = program(
       "accounts-pda-argument",
       "function main(kitchen: Address, who: Address, salt: Uint256): Uint256 {\n" +
-        '  const found = Solana.pda(kitchen, ["pot", who, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
+        '  const found = Account.pda(kitchen, ["pot", who, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
         '  require(found.address == pot, "not the Pot");\n' +
         "  return found.dataLen;\n" +
         "}\n",
@@ -1051,7 +1056,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
       token: "function main(): Uint256 {\n  return pot.USDC;\n}\n",
       lamports: "function main(): Uint256 {\n  return pot.balance;\n}\n",
       signer:
-        "function main() {\n  svm.call(Solana.systemProgram, [pot.signer(), pot.writable()], hex`00`);\n}\n",
+        "function main() {\n  svm.call(Account.systemProgram, [pot.signer(), pot.writable()], hex`00`);\n}\n",
       // It names no `pot`: its authority slot derives as `authority`, which is the Pot here too.
       pays: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
     };
@@ -1104,7 +1109,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
 
       const seeded = program(
         "pot-slot-pda",
-        'function main(program: Address): Uint256 {\n  return Solana.pda(program, ["vault", pot]).dataLen;\n}\n',
+        'function main(program: Address): Uint256 {\n  return Account.pda(program, ["vault", pot]).dataLen;\n}\n',
       );
       const derived = json(await sauce("compile", seeded, "--chain", "solana", "--json")) as {
         manifest: { accounts: { name: string; derive?: string }[] };
@@ -1192,7 +1197,7 @@ describeSvm("the token methods on Solana: every account derived by the command",
     // One rule for every role a cook fills: a slot the lowering derived from the Pot, the owner or
     // the authority (their token accounts and the addresses they seed included) takes only the
     // account its derivation gives, on every command that builds the cook, through the Kitchen and
-    // cooked directly. `--account owner=<another key>` with `return Solana.owner.address;` used to
+    // cooked directly. `--account owner=<another key>` with `return pot.owner.address;` used to
     // return the other key.
     const tx = (file: string, ...rest: string[]) =>
       sauce(
@@ -1203,11 +1208,11 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const programs = {
       pot: "function main(): Address {\n  return pot;\n}\n",
       potToken: "function main(): Uint256 {\n  return pot.USDC;\n}\n",
-      owner: "function main(): Address {\n  return Solana.owner.address;\n}\n",
-      ownerToken: "function main(): Uint256 {\n  return Solana.owner.USDC;\n}\n",
+      owner: "function main(): Address {\n  return pot.owner.address;\n}\n",
+      ownerToken: "function main(): Uint256 {\n  return pot.owner.USDC;\n}\n",
       pays: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
       ownerSeeded:
-        'function main(program: Address): Uint256 {\n  return Solana.pda(program, ["vault", Solana.owner]).dataLen;\n}\n',
+        'function main(program: Address): Uint256 {\n  return Account.pda(program, ["vault", pot.owner]).dataLen;\n}\n',
     };
     let to: Address;
     let ownerUsdc: Address;

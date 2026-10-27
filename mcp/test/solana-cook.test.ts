@@ -333,9 +333,9 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
       await mcp.call("sauce_tx", {
         source:
           "function main(program: Address, amount: Uint256) {\n" +
-          "  svm.call(Solana.account(program), [\n" +
-          '    Solana.pda(program, ["state", Solana.owner]).writable(),\n' +
-          "    Solana.systemProgram,\n" +
+          "  svm.call(Account(program), [\n" +
+          '    Account.pda(program, ["state", pot.owner]).writable(),\n' +
+          "    Account.systemProgram,\n" +
           "  ], amount.toBytesLe(8));\n}\n",
         chain: "solana",
         owner: OWNER,
@@ -358,10 +358,29 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     }
   });
 
+  it("refuses an account spelled on Solana's name, naming what to write, building nothing", async () => {
+    for (const tool of ["sauce_compile", "sauce_tx", "sauce_simulate"]) {
+      asked.length = 0;
+      const refused = failed(
+        await mcp.call(tool, {
+          source: "function main(): Address {\n  return Solana.owner.address;\n}\n",
+          chain: "solana",
+          ...(tool === "sauce_compile" ? {} : { owner: OWNER, rpcUrl: url }),
+        }),
+      );
+      assert.match(
+        refused,
+        /`Solana\.owner`: the Pot's owner is `pot\.owner` \(`pot\.owner\.address`, its key; `pot\.owner\.signer\(\)`\)/,
+        `${tool}: ${refused}`,
+      );
+      assert.ok(!asked.includes("getLatestBlockhash"), `${tool} built nothing`);
+    }
+  });
+
   it("refuses another account in a slot derived from the Pot, through accounts, building nothing", async () => {
     const source =
       "function main(): Uint256 {\n" +
-      "  svm.call(Solana.systemProgram, [pot.signer()], hex`00`);\n" +
+      "  svm.call(Account.systemProgram, [pot.signer()], hex`00`);\n" +
       "  return pot.USDC + pot.balance;\n}\n";
     for (const tool of ["sauce_tx", "sauce_simulate"]) {
       for (const [name, given] of [
@@ -409,14 +428,14 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     const pays = "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
     const cases = [
       [
-        "function main(): Address {\n  return Solana.owner.address;\n}\n",
+        "function main(): Address {\n  return pot.owner.address;\n}\n",
         "owner",
         "owner",
         "the owner",
         [],
       ],
       [
-        "function main(): Uint256 {\n  return Solana.owner.USDC;\n}\n",
+        "function main(): Uint256 {\n  return pot.owner.USDC;\n}\n",
         "ownerUSDC",
         "owner:USDC",
         "the owner",

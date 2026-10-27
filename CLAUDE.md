@@ -1056,7 +1056,10 @@ wrapped in the `main` they are added to (`scriptAsMain`). A site in a function i
 a helper used other than by calling it by name, are refused, as is a helper `main` never reaches
 that would add accounts. A program that names `pot` anywhere derives its accounts from `pot`, and
 one that does not from `authority` (`CompiledSauceProgram.potMention` is where; `--via engine`
-refuses the first, naming it). A bare `pot` is `Account<Signer>`, the slot `Solana.self` was; the
+refuses the first, naming it). `pot.owner`, read and not called, is the Pot's owner and no mention
+of the Pot (`pot-sugar.ts#potOwners`): the owner's account on Solana, and on an EVM chain the Pot's
+`owner()`, through a binding the compile adds (`pot-owner.ts`, lowered before the token pass). A
+bare `pot` is `Account<Signer>`, the slot `Solana.self` was; the
 engine checks a signature where the program uses one, not at the entry
 (`svm/direct-engine.e2e.test.ts` measures it). The cook commands refuse any `--account` given for a
 slot derived from a cook role (`pot`, `owner`, `authority`, their token accounts and the addresses

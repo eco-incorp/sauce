@@ -30,7 +30,8 @@ import {
   type RsProbeInput,
 } from "./rs-compile.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
-import { ambientPotRefusal, POT_NAME, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { ambientPotRefusal, POT_NAME, potOwners, RETIRED_POT_NAME } from "./pot-sugar.js";
+import { ACCOUNT_FACTORY, ambientAccountRefusal } from "./svm-account-expressions.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import {
@@ -44,10 +45,12 @@ import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import {
+  freeReadsIn,
   freeReadsOf,
   rewriteProtocolAccessors,
   type ProtocolRewriteOptions,
 } from "./protocol-rewrite.js";
+import { rewritePotOwner } from "./pot-owner.js";
 import {
   bindableNames,
   checkNames,
@@ -559,17 +562,17 @@ function compileForChain(
         : { ...chainValues, ...inputs.defines };
 
   // The names the compile binds beside the source: the caller's defines, its contract bindings and
-  // each name its ambient modules export that a pass reads as the SDK's: the Pot's two names and
-  // every registry name (`bindableNames`). The compiler says which: `ambientNamesOf` asks it, with
-  // this compile's own options and the program's own imports, so a module is found exactly where
-  // the compile finds it, and of those names it asks only the ones the program or a module the
-  // compiler loads mentions. It asks only where it can matter: the SDK's own packages
+  // each name its ambient modules export that a pass reads as the SDK's: the Pot's two names,
+  // `Account` and every registry name (`bindableNames`). The compiler says which: `ambientNamesOf`
+  // asks it, with this compile's own options and the program's own imports, so a module is found
+  // exactly where the compile finds it, and of those names it asks only the ones the program or a
+  // module the compiler loads mentions. It asks only where it can matter: the SDK's own packages
   // (`@sauce/token`), which the SDK resolves ahead of any caller's mapping, export none of them,
-  // and of the Pot's two names it asks only those the program reads (`probeQuestions`), the rest
+  // and of the SDK's own names it asks only those the program reads (`probeQuestions`), the rest
   // being none the rewrites touch. A name among them is the caller's value, never the Pot and never
   // the registry's; a `pot` only an ambient module exports is refused where the program reads it
   // free (`ambientPotRefusal`), so no module's export stands in for the Pot with no word in the
-  // program.
+  // program, and so is an `Account` on Solana, where it is the account factory.
   //
   // A probe the compiler refuses for any other reason gives no answer. It reads the same modules
   // with the same options as the compile, so its refusal is one the compile raises too: the probe's
@@ -612,19 +615,25 @@ function compileForChain(
     ...Object.keys(inputs.contracts ?? {}),
     ...callerNames,
   ]);
-  // A define or a contract binding of `pot` is the caller's, given by that name; an import of it is
-  // the program's own, which no free read is.
-  if (
-    callerNames.has(POT_NAME) &&
-    !Object.hasOwn(inputs.defines ?? {}, POT_NAME) &&
-    !Object.hasOwn(inputs.contracts ?? {}, POT_NAME)
-  ) {
-    const [read] = freeReadsOf(sauce, POT_NAME);
-    if (read !== undefined) {
-      const { line, column } = positionOf(sauce, read.start);
-      throw ambientPotRefusal(line, column);
+  // A define or a contract binding of a name is the caller's, given by that name; an import of it is
+  // the program's own, which no free read is. Where only an ambient module exports the name, the
+  // program's first free read of it, where the compile would read that module's value.
+  const ambientRead = (name: string): SourcePosition | undefined => {
+    if (
+      !callerNames.has(name) ||
+      Object.hasOwn(inputs.defines ?? {}, name) ||
+      Object.hasOwn(inputs.contracts ?? {}, name)
+    ) {
+      return undefined;
     }
-  }
+    const [read] = freeReadsOf(sauce, name);
+    return read === undefined ? undefined : positionOf(sauce, read.start);
+  };
+  const potRead = ambientRead(POT_NAME);
+  if (potRead !== undefined) throw ambientPotRefusal(potRead.line, potRead.column);
+  // On an EVM chain a module's `Account` is the caller's value, as a define's would be.
+  const accountRead = chain.kind === "svm" ? ambientRead(ACCOUNT_FACTORY) : undefined;
+  if (accountRead !== undefined) throw ambientAccountRefusal(accountRead.line, accountRead.column);
   // A rewrite that reads `bound`, run as it is, but for a probe the compiler refused: a refusal the
   // rewrite makes then rests on no answer, and the probe's own refusal, which the compile would
   // raise too, is reported in its place.
@@ -780,7 +789,10 @@ function compileForChain(
       stoppable = lowered.stoppable;
       stoppableRuns = lowered.stoppableRuns;
       if (lowered.namesPot === true) {
-        const [read] = freeReadsOf(sauce, POT_NAME);
+        // Its first read of the Pot: a `pot.owner` reads the Pot's owner, and names no Pot.
+        const program = parseSauce(sauce);
+        const owners = potOwners(program);
+        const [read] = freeReadsIn(program, POT_NAME).filter((one) => !owners.has(one));
         if (read !== undefined) potMention = positionOf(sauce, read.start);
       }
     }
@@ -791,6 +803,21 @@ function compileForChain(
       );
     }
   } else {
+    // `pot.owner`, the Pot's `owner()`, before the token pass, which would read it as a member of
+    // the Pot; its `.<TOKEN>` is then the token pass's, on the address it returns. The native coin
+    // is passed where no token has its symbol (Arc's USDC is one), so `pot.owner.USDC` there stays
+    // the token's balance.
+    const owner = readingBound(() =>
+      rewritePotOwner(
+        source,
+        bound,
+        native === undefined || tokenMap.has(native)
+          ? undefined
+          : { symbol: native, chain: chain.slug },
+      ),
+    );
+    source = owner.source;
+    if (owner.contracts !== undefined) contracts = { ...contracts, ...owner.contracts };
     const members = readingBound(() =>
       rewriteTokenMembers(
         source,
@@ -959,7 +986,7 @@ function svmTokenValues(
 
 /**
  * What the probe asks about `sauce`, from the parse every rewrite reads it with (`parseSauce`): the
- * Pot's names (`pot`, `self`) among the identifiers it reads, as the parser names them (an escaped
+ * SDK's own names (`pot`, `self`, `Account`) among the identifiers it reads, as the parser names them (an escaped
  * spelling, `p\u006ft`, is the name it spells; a member's name, `ctx.self()`, is none); its import
  * declarations as written, which the probe's entry repeats so that the compiler loads the modules
  * the compile does; and every identifier it writes, an import's binding included, which the probe's
@@ -987,7 +1014,9 @@ function probeQuestions(sauce: string): {
     const name = (n as { name?: unknown }).name;
     if (n.type !== "Identifier" || typeof name !== "string") return;
     declared.add(name);
-    if (!members.has(n) && (name === POT_NAME || name === RETIRED_POT_NAME)) names.add(name);
+    if (!members.has(n) && [POT_NAME, RETIRED_POT_NAME, ACCOUNT_FACTORY].includes(name)) {
+      names.add(name);
+    }
   });
   const imports = (program.body as AstNode[])
     .filter((statement) => statement.type === "ImportDeclaration")
