@@ -1,8 +1,19 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPTS = join(SDK, "scripts");
@@ -117,6 +128,85 @@ describe("maintenance fetches use explicit public RPC configuration", () => {
       const source = readFileSync(join(SCRIPTS, fetcher), "utf8");
       expect(source).not.toMatch(/public-rpcs|createTsLoader|PUBLIC_RPCS/);
       expect(source).toContain("readFixtureRpcConfig");
+    }
+  });
+});
+
+describe("materialized programs always match their pin", () => {
+  it.each([
+    ["absent", true, false],
+    ["matching", true, false],
+    ["wrong revision", true, false],
+    ["corrupt gzip", true, false],
+    ["wrong revision", false, true],
+    ["corrupt gzip", false, true],
+    ["absent", true, true],
+    ["wrong revision", true, true],
+    ["corrupt gzip", true, true],
+  ])("%s in-place fixture, known-unfetchable: %s, cached: %s", (state, unfetchable, cached) => {
+    const sdk = join(temporary, "repo/sdk");
+    const scripts = join(sdk, "scripts");
+    const fixtures = join(sdk, "test/fixtures");
+    const fixture = "svm-exact-in-programs";
+    mkdirSync(scripts, { recursive: true });
+    mkdirSync(join(fixtures, fixture), { recursive: true });
+    copyFileSync(join(SCRIPTS, FETCHERS[0]!), join(scripts, FETCHERS[0]!));
+    symlinkSync(join(SCRIPTS, "lib"), join(scripts, "lib"), "dir");
+    const bytes = Buffer.from("pinned program revision");
+    const pin = {
+      name: "denali",
+      file: "denali.so.gz",
+      programId: "DNL1tgEj7wyDijjNFkD3LzNy7RPpkFkSRzVDqev1sGxM",
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+    writeFileSync(join(fixtures, fixture, "manifest.json"), JSON.stringify({ programs: [pin] }));
+    writeFileSync(
+      join(fixtures, "fetched-programs.json"),
+      JSON.stringify({
+        programs: [{ fixture, name: pin.name }],
+        knownUnfetchable: unfetchable
+          ? [{ fixture, name: pin.name, reason: "upgraded on mainnet" }]
+          : [],
+      }),
+    );
+    const dest = join(fixtures, fixture, pin.file);
+    if (state !== "absent")
+      writeFileSync(
+        dest,
+        state === "corrupt gzip"
+          ? Buffer.from("not a gzip")
+          : gzipSync(state === "matching" ? bytes : Buffer.from("another program revision")),
+      );
+    if (cached) {
+      const cache = join(sdk, "../node_modules/.cache/sauce-program-fixtures");
+      mkdirSync(cache, { recursive: true });
+      writeFileSync(join(cache, `${pin.programId}-${pin.sha256}.so`), bytes);
+    }
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import=data:text/javascript,globalThis.fetch=()=>{throw new Error('unexpected network access')}",
+        join(scripts, FETCHERS[0]!),
+        "--offline",
+      ],
+      { cwd: sdk, encoding: "utf8" },
+    );
+    expect(result.stderr).not.toContain("unexpected network access");
+    if (unfetchable && !cached && (state === "wrong revision" || state === "corrupt gzip")) {
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("in-place program failed its sha256 pin; removed it");
+      expect(existsSync(dest)).toBe(false);
+      expect(result.stdout).not.toContain("skipped svm-exact-in-programs/denali");
+    } else if (cached) {
+      expect(result.status).toBe(0);
+      expect(gunzipSync(readFileSync(dest))).toEqual(bytes);
+      expect(result.stdout).toContain("1 from the cache, 0 fetched");
+    } else {
+      expect(result.status).toBe(0);
+      expect(existsSync(dest)).toBe(state === "matching");
+      expect(result.stdout).toContain(
+        state === "absent" ? "1 known unfetchable, skipped, 0 refused" : "1 already in place",
+      );
     }
   });
 });

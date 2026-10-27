@@ -102,6 +102,8 @@ nothing moves.
 - **Maintenance only:** test fixture fetchers require an explicit public-only `--rpc-config` for
   online setup; CI supplies it through the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`.
   Offline replay and cache verification remain config-free; shipped runtime behavior is unchanged.
+  Invalid materialized program files are removed and repaired from a verified raw cache when
+  available. Without that cache, an invalid known-unfetchable copy is refused, never skipped.
 
 ### SauceScript
 

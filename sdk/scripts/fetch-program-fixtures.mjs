@@ -21,10 +21,11 @@
 // available, a listed program whose bytes are tracked.
 //
 // `knownUnfetchable` in the same file names listed programs mainnet no longer serves at their pin,
-// each with its `reason`. Such a program is skipped instead of fetched or refused, its reason
-// printed: a copy already in place that gunzips to its pin is kept (and counted as in place), and
-// the suites that run it skip its cases when it is absent. An entry naming a program the list does
-// not is refused, so the exceptions cannot outlive the programs.
+// each with its `reason`. Such a program is skipped only when absent and not in the verified cache,
+// its reason printed. A copy already in place that gunzips to its pin is kept (and counted as in
+// place); the suites skip its cases when absent. An entry naming no listed program is refused.
+// Invalid in-place copies are removed and repaired from the verified raw cache when available.
+// Without that cache, an invalid known-unfetchable copy is refused, never accepted as absent.
 //
 // Run: `pnpm --filter './sdk' fetch-program-fixtures --rpc-config <path>` (CI's setup does).
 // `--offline` reads only the cache and the fixture directories, with no config or network.
@@ -149,14 +150,20 @@ for (const { fixture, name } of list) {
     refuse(what, `${relative(REPO, dest)} is tracked by git: its bytes must not be committed`);
     continue;
   }
-  if (existsSync(dest) && sha256(gunzipSync(readFileSync(dest))) === pin.sha256) {
-    placed++;
-    continue;
-  }
-  if (unfetchable.has(what)) {
-    say(`skipped ${what}: ${unfetchable.get(what)}`);
-    skipped++;
-    continue;
+  let invalidPlaced = false;
+  if (existsSync(dest)) {
+    let matches = false;
+    try {
+      matches = sha256(gunzipSync(readFileSync(dest))) === pin.sha256;
+    } catch {
+      // An unreadable gzip is an invalid materialization, never evidence for the pin.
+    }
+    if (matches) {
+      placed++;
+      continue;
+    }
+    rmSync(dest);
+    invalidPlaced = true;
   }
 
   const entry = join(CACHE, `${pin.programId}-${pin.sha256}.so`);
@@ -167,9 +174,21 @@ for (const { fixture, name } of list) {
       elf = bytes;
       cached++;
     } else {
-      say(`cached ${name} failed its pin; fetching it again`);
+      say(`cached ${name} failed its pin; deleted it`);
       rmSync(entry, { force: true });
     }
+  }
+  if (elf === undefined && unfetchable.has(what)) {
+    if (invalidPlaced)
+      refuse(
+        what,
+        "in-place program failed its sha256 pin; removed it, not a missing-file exception",
+      );
+    else {
+      say(`skipped ${what}: ${unfetchable.get(what)}`);
+      skipped++;
+    }
+    continue;
   }
   if (elf === undefined) {
     if (values.offline) {

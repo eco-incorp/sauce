@@ -1231,9 +1231,11 @@ and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its mani
 caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
 longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is
 never edited to fit. Until that fix lands, the program may be entered in the same file's
-`knownUnfetchable` with a `reason`: the fetch then skips it, printing the reason (a local copy
-matching the pin is kept), its suite's cases skip with the reason in their titles when it is absent
-(`exact-in-harness.ts#unfetchableAbsent`), and an entry naming no listed program is refused. For a
+`knownUnfetchable` with a `reason`: an absent file without a verified raw cache is skipped with
+that reason. A local copy matching the pin is kept; an invalid one is removed and repaired from
+the verified cache, or refused when that cache is absent. Its suite's cases skip with the reason
+in their titles when it is absent (`exact-in-harness.ts#unfetchableAbsent`), and an entry naming
+no listed program is refused. For a
 venue program, `dump-svm-venues.mjs --programs` re-pins only the
 programs (`programsSlot` records when) and leaves every account at the dump's slot, so the suites'
 pool scenarios hold; it is for an upgrade whose instruction interface is unchanged, which the suites
