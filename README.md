@@ -13,7 +13,7 @@ transaction, a token) and have never used Sauce. You need nothing else to start.
 
 You write the program in a small, safe slice of TypeScript called SauceScript. Sauce turns it into
 one transaction on Ethereum, Base, Arc or Solana (or the testnets Arc Testnet, Base Sepolia,
-Ethereum Sepolia and Solana Devnet), and an engine already on chain runs every step of
+Ethereum Sepolia, Solana Devnet and Solana Testnet), and an engine already on chain runs every step of
 it inside that transaction. Here is a whole program, the one the quick start runs:
 
 ```js
@@ -112,8 +112,9 @@ Sauce borrows its words from a kitchen. Your program is a recipe.
 - **Cook**: the transaction that runs one program on your Pot. Every step happens, or none does.
 - **Kitchen**: the contract that makes Pots and charges a small flat fee for each cook.
 
-Your Pot's address is known before it exists, so you can send it tokens right away. `sauce run`
-creates it the first time it needs it.
+Your Pot's address is known before it exists, but fund it once it is deployed: a Kitchen release
+with new Pot code derives another address. `sauce run` creates it the first time it needs it, and
+`sauce run --fund` creates it, then moves your tokens in, in one go.
 
 ## Supported chains
 

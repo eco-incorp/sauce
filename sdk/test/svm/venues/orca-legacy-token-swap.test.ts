@@ -213,7 +213,10 @@ describe("emitQuote", () => {
       [
         `const rIn3 = svm.sload(acc0, 64, 8).toLe();`,
         `const rOut3 = svm.sload(acc1, 64, 8).toLe();`,
-        `const q3 = rOut3 - (rIn3 * rOut3 + rIn3 + 996999999) / (rIn3 + 997000000);`,
+        `let q3 = 0;`,
+        `if (rIn3 * rOut3 >= rIn3 + 997000000) {`,
+        `  q3 = rOut3 - (rIn3 * rOut3 + rIn3 + 996999999) / (rIn3 + 997000000);`,
+        `}`,
       ].join("\n"),
     );
   });
@@ -233,6 +236,12 @@ describe("emitQuote", () => {
       meta.kind === "slot" ? accounts[meta.index]?.address : undefined,
     );
     expect(boundAddresses).toEqual([cfg.vaultIn, cfg.vaultOut]);
+  });
+
+  it("guards the zero floor-quotient the program rejects, as referenceQuote does", () => {
+    const fragment = orcaLegacyTokenSwap.emitQuote(cfg, 0, 1_000_000_000n);
+    expect(fragment).toContain("let q0 = 0;");
+    expect(fragment).toContain("if (rIn0 * rOut0 >= rIn0 + 997000000) {");
   });
 
   it("refuses to emit a quote whose fees consume the whole input", () => {

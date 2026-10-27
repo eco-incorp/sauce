@@ -54,26 +54,27 @@ The SDK is still below 1.0, and it has made breaking changes in patch releases. 
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -97,6 +98,176 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
 nothing moves.
+
+### SauceScript
+
+- **Fixed (Solana): the refusal of `Solana.self.<member>` names a spelling that compiles.** It
+  suggested `pot.<member>` whatever the member, so `Solana.self.lamports` suggested `pot.lamports`,
+  which does not compile, and `Solana.self.owner` suggested `pot.owner`, the Pot's owner rather than
+  the program that owns its account. Now `Solana.self.lamports` names `pot.balance`,
+  `Solana.self.owner` names `Account(pot.address).owner`, a member the Pot's account or balances
+  have (`address`, `dataLen`, `signer()`, `writable()`, `balance`, a token) or a scalar method of
+  its key (`toBytesBe`, `toBytesLe`) keeps its name, and any other names `pot`.
+- **Fixed: a compile error's message is plain text.** The compiler sets its report's headlines in
+  bold with ANSI escapes, whatever the terminal, and they reached every `error.message` (and
+  `stack`) from `compileSauceProgram`, `compileSauceRoute` and `@eco-incorp/sauce/compiler`'s
+  `compile`, and so logs, JSON and MCP results. The SDK now takes them out where it calls the
+  compiler; the words and `diagnostics` are the compiler's, and the error thrown is the compiler's
+  own whatever a host's `Error.prepareStackTrace` makes of its `stack`.
+
+### The `sauce` command and the MCP server
+
+- **Fixed: `sauce sign --cancel` refuses an owner of the zero address**, as `sauce sign` and
+  `sauce pot` do, and so does `sauce_signed_cook` with `cancel`. It printed an `invalidateNonces`
+  for a Pot that cannot exist: no Kitchen call deploys a private Pot of the zero address, and a
+  Shared Pot, which has no owner, runs no signed cook and refuses every cancellation.
+- **Fixed: the note on a plan whose cook would revert no longer says to fund the Pot's address
+  before it is deployed.** `sauce tx` and `sauce_tx` said "Fund the Pot first (its address takes
+  tokens before it is deployed)". A Kitchen upgrade that changes the Pot's code moves the Pot's
+  address, and what was sent to the old one stays where no Pot is ever deployed. When the plan
+  deploys the Pot and moves nothing into it, the note now says to deploy it first, with
+  `sauce pot --deploy` or `sauce run --fund`, which deploys before it funds; when the plan funds it
+  too, to fund the Pot and build the plan again. With an endpoint, `--fund` plans the transfer after
+  the Pot's deployment; offline, the plan has no deployment step. A plan that deploys the Pot with
+  no `--fund` said to send its transactions in order, then fund the Pot: after the cook. It now says
+  to send the deployment, fund the Pot, then send the cook (or plan with `--fund`). `sauce sign`'s
+  warning that a Pot with no code cannot pay the Kitchen's fee now says to send `deployPot` before
+  funding it. The README, the quick start (which now deploys the Pot with `sauce pot --deploy`
+  before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
+  Pot's address before it exists.
+
+### The registry
+
+- **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
+  `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
+  `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
+  control there (a contract or smart wallet deployed only on the destination). The refund now goes
+  to the Pot that paid the deposit (`ctx.self()`). On a Shared Pot, which anyone may cook, a
+  refund that lands there is anyone's: bridge from a Private Pot.
+- **Fixed** (EVM): Across's `bridge` template deposits as the Pot. Its `depositV3` named
+  `ctx.msgSender()` as the depositor, who is refunded a deposit no relayer fills and holds the
+  speed-up authority: the owner in a direct cook, but whoever submitted a signed cook
+  (`cookSigned`). The depositor is now the Pot (`ctx.self()`), as the actions document's
+  `acrossBridge` already was. The Shared Pot caveat above applies.
+
+### Actions documents
+
+- **Fixed** (EVM): a split swap from `compileSplitSwap` starts its counters at zero in every cook.
+  The program keeps each venue's slice count and running output in the Pot's transient storage,
+  which lasts the whole transaction, not the cook, and it reset only the venues' marginal quotes. A
+  second split cooked on the same Pot in the same transaction (a contract wallet's batch, or an
+  owner's two signed cooks that someone else submits together) took the first one's counts as its
+  own: it swapped more than its `amount` where the Pot held more, paying the extra output to its own
+  sweep recipient, or reverted the transaction. Each cook now starts from zero and spends its own
+  `amount`. The program costs about 850 gas more per candidate. A cook that finds more slices than
+  its buckets reverts.
+- **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
+  as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
+  (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
+  `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
+- **Fixed** (EVM): `acrossBridge` asks Across for the destination chain's token. The deposit's
+  `outputToken`, the token a relayer sends on the destination, was the deposited token's own
+  address, which is the destination's copy only where both chains share it: a USDC deposit from
+  Ethereum to Optimism asked for a token at Ethereum's USDC address on Optimism rather than
+  Optimism's USDC, so no relayer filled it and it was refunded after `fillDeadline`. The default is
+  now the registry's token of the same symbol on `destChainId`, and a new optional `outputToken`
+  gives another token's address there (Arbitrum's `USDT0` for Ethereum's `USDT`). The zero address,
+  Across's old "equivalent token", is not an option: the SpokePool refuses it with
+  `InvalidOutputToken`.
+- **Fixed** (EVM): `balancerV3Swap` with `wethIsEth: true` pays a WETH input in native ETH. It
+  called the Router with no value, so the Router, which takes the router's own WETH as ETH under
+  that flag, reverted every such swap, whatever the Pot held. The program now asks the Router for
+  its WETH (`getWeth()`) and sends the amount as the call's value when `tokenIn` is that token, and
+  no value otherwise; the Router wraps exactly the amount. A WETH output is still paid to the Pot as
+  ETH, and is the action's output. `wethIsEth: false` compiles to the same program as before.
+- **Fixed** (EVM): an `aaveV3Withdraw` whose output a later action spends, or that saves it with
+  `saveOutputAs`, withdraws to the Pot whatever its `recipient` says, as every swap, wrap and stake
+  already did. Before, it paid its own `recipient` while the next action spent the same amount again
+  from the Pot: a Pot holding that amount paid out twice, and one without it reverted. Recompile
+  such documents; an `aaveV3Withdraw` nothing spends still pays its `recipient`.
+- **Fixed** (EVM): an `ambientSwap` whose `inBaseQty` differs from `isBuy` is refused. That pairing
+  is Ambient's exact-output swap: `amount` became what the Pot receives, and the dex pulled whatever
+  input it needed, up to the allowance, so the Pot could spend more than the `amount` the action
+  promises. Write `inBaseQty` equal to `isBuy` (`true`/`true` pays base, `false`/`false` pays quote),
+  as every existing example does.
+
+**Also breaking:**
+
+- An `acrossBridge` is refused at its `outputToken` unless the registry lists its token on the
+  program's chain and its output on `destChainId`, with the same decimals: the deposit asks for
+  `amount - relayerFee` of the output in the input's units, which a token of other decimals would
+  fill for dust (USDC to BNB Chain's 18-decimal USDC, which the registry does not list). With no
+  `outputToken`, the output is the registry's token of the input's symbol on `destChainId`; a
+  given `outputToken` is held to the same rule.
+- An `acrossBridge` is also refused at its `outputToken` when `destChainId` is the program's own
+  chain or a chain of the other kind (a mainnet deposit to a testnet, or the reverse), and when
+  `outputToken` is the zero address: Across does not bridge between those, and its SpokePool
+  refuses a zero output token with `InvalidOutputToken`.
+
+### The SDK in TypeScript
+
+- **Fixed:** a registry call (`read`, `simulate`, `write`) on a viem client created without a
+  `chain` asks the node for the chain id again after a failed lookup. The first failure was kept as
+  the client's answer, so one transient `eth_chainId` error made every later call on that client
+  fail until the client was replaced. A lookup that succeeds is kept for `read` and `simulate`.
+- **Fixed:** `write` on a client without a `chain` asks for the chain id before every write instead
+  of trusting the first answer. A wallet client (`custom(window.ethereum)`) that switched network
+  between two writes sent the second unchecked, because viem does not check a chainless client's
+  chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
+  extra `eth_chainId` request per write.
+
+### Solana Testnet
+
+- **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
+  its own, with the released engine and Kitchen deployed and zero execution fees, as on devnet.
+  0.99.17 reached testnet only as `--chain solana` with a testnet endpoint; that still works.
+  Testnet runs devnet's engine build, so a program compiled for it reads `chainId` as 1399811150,
+  the same value `ctx.chainId()` returns there; 1399811151 is the SDK's key for the chain, which
+  the command, the MCP server and the Pot store name it by and no program reads. Its one symbol is
+  `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
+  given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
+  an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
+  `solana-testnet`. Solscan links name the cluster, and the Solana venues are mainnet's, so a venue
+  name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
+  accounts (up to a minute for one request), so the command waits up to 120 s for each of its
+  answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
+  two there.
+- The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
+  the supported chains names it after the mainnets.
+
+### Skills
+
+- **Fixed: a `priceLimit` of `0` on Solana is not "no limit".** `sauce-swaps` said a zero limit
+  leaves `minOut` the only bound on both targets. That holds on an EVM chain. On Solana, a swap at a
+  price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
+  Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
+  `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+
+### Solana venues in TypeScript
+
+- **Fixed** (Solana): a Crema swap built from a slot (`Crema.CLMM.swap(Crema.CLMM.pool(…), …)`) on a
+  pool with one or two readable tick arrays carried three, so the router sent three and Crema
+  refused the unmarked ones: the transaction failed and its fee was lost. The slot now ends its
+  tick arrays with the System program after the last readable one, which the router reads as "pass
+  no more". Pools with three readable arrays are unchanged.
+- **Fixed** (Solana): the Orca legacy token swap and SPL Token Swap fork adapters' quote fragment
+  returns 0 for a pool whose floor quotient `rsIn * rsOut / (rsIn + netIn)` is 0. The program's
+  `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
+  from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
+  already refused it.
+
+- **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
+  swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
+  the search itself starts one spacing above where it is resumed, so a tick right next to a found
+  one was skipped (ticks 1, 2 and 3 gave the window 1 and 3). A Y→X swap that crossed the skipped
+  tick lacked its account, and Invariant's program failed it. The X→Y window was right.
+
+### SauceScript
+
+- **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
+  parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
+  unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
+  variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
 
 ### License
 
@@ -329,6 +500,11 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   each, forgetting the least recently used first, and `fetchPoolConfig` forgets a pair it refuses.
   Before, each key minted stayed in memory for the life of the process. A key that is no longer
   held fails with `unknown discovery key`; minting it again restores it.
+
+### The agent skills and the manual
+
+- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
+  them.
 
 **Also breaking:**
 
@@ -770,7 +946,7 @@ upgrade authority, which can replace them after the check.
 - **Added**: ten of the protocols' own Solidity examples, ported to Sauce (Uniswap V3's swap,
   flash and liquidity examples, Uniswap V4's swap guide, Balancer V2's batch and flash swaps, Aave
   V3 credit delegation, Compound III, Morpho Blue and Pendle), each beside the file it ports, in
-  `sauce-swaps` and `sauce-protocols` and in [From Solidity examples to Sauce](guides/solidity-examples.md).
+  `sauce-swaps` and `sauce-protocols` and in From Solidity examples to Sauce.
   The swaps, the liquidity examples and the flash swaps execute on Ethereum's state at a fixed
   block; the PairFlash port runs once a trade has moved one of its two pools.
 

@@ -77,6 +77,8 @@ const FRAXSWAP_ROUTER = "0xC14d550632db8592D1243Edc8B95b0Ad06703867";
 const FLUID_WSTETH_ETH = "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7";
 
 const ACROSS_SPOKE_POOL = "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5";
+/** USDC on Optimism, the destination the Across deposit asks for: not Ethereum's address. */
+const USDC_OPTIMISM = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85";
 const STARGATE_POOL_USDC = "0xc026395860Db2d07ee33e05fE50ed7bD583189C7";
 /** Arbitrum's LayerZero endpoint id. */
 const LZ_ARBITRUM = 30110;
@@ -538,6 +540,80 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(WETH, env.pot), 0n, "the transfer spends exactly the output");
     });
 
+    describe("balancerV3Swap with wethIsEth", () => {
+      const swapEthForUsdc = (amount?: bigint): Action => ({
+        type: "balancerV3Swap",
+        router: BALANCER_V3_ROUTER,
+        pool: BALANCER_V3_USDC_WETH,
+        tokenIn: WETH,
+        tokenOut: USDC,
+        ...(amount === undefined ? {} : { amount: `${amount}` }),
+        amountOutMin: "1",
+        deadline: DEADLINE,
+        wethIsEth: true,
+      });
+
+      it("pays the Pot's native ETH for WETH: the input is the call's value", async () => {
+        const amount = ONE_ETH / 10n;
+        const ethBefore = await ether(env.pot);
+        const routerEth = await ether(BALANCER_V3_ROUTER);
+        await run([swapEthForUsdc(amount), { type: "transfer", token: USDC, recipient: RECEIVER }]);
+        assert.equal(ethBefore - (await ether(env.pot)), amount, "exactly the input left the Pot");
+        assert.equal(await balance(WETH, env.pot), 0n, "the Router wrapped it; the Pot holds none");
+        assert.equal(await balance(USDC, env.pot), 0n, "the transfer spends exactly the output");
+        assert.ok((await balance(USDC, RECEIVER)) > 0n);
+        assert.equal(await ether(BALANCER_V3_ROUTER), routerEth, "no ETH is left in the Router");
+      });
+
+      it("spends an ETH amount an earlier action produced", async () => {
+        const amount = ONE_ETH / 10n;
+        const ethBefore = await ether(env.pot);
+        await run([
+          { type: "wrapETH", amount: `${amount}`, weth: WETH },
+          { type: "unwrapETH", weth: WETH },
+          swapEthForUsdc(),
+          { type: "transfer", token: USDC, recipient: RECEIVER },
+        ]);
+        assert.equal(ethBefore - (await ether(env.pot)), amount);
+        assert.equal(await balance(WETH, env.pot), 0n);
+        assert.equal(await balance(USDC, env.pot), 0n);
+        assert.ok((await balance(USDC, RECEIVER)) > 0n);
+      });
+
+      it("receives native ETH for WETH, and its output is the ETH received", async () => {
+        await fund(USDC, USDC_100);
+        const ethBefore = await ether(env.pot);
+        const routerEth = await ether(BALANCER_V3_ROUTER);
+        await run([
+          { type: "approve", amount: `${USDC_100}`, token: USDC, spender: PERMIT2 },
+          {
+            type: "permit2Approve",
+            permit2: PERMIT2,
+            token: USDC,
+            spender: BALANCER_V3_ROUTER,
+            expiration: DEADLINE,
+          },
+          {
+            type: "balancerV3Swap",
+            router: BALANCER_V3_ROUTER,
+            pool: BALANCER_V3_USDC_WETH,
+            tokenIn: USDC,
+            tokenOut: WETH,
+            amountOutMin: "1",
+            deadline: DEADLINE,
+            wethIsEth: true,
+            saveOutputAs: "received",
+          },
+          { type: "wrapETH", amountRef: "received", weth: WETH },
+        ]);
+        const wrapped = await balance(WETH, env.pot);
+        assert.ok(wrapped > 0n, "the Pot was paid native ETH");
+        assert.equal(await ether(env.pot), ethBefore, "the wrap spent exactly the ETH received");
+        assert.equal(await balance(USDC, env.pot), 0n);
+        assert.equal(await ether(BALANCER_V3_ROUTER), routerEth, "no ETH is left in the Router");
+      });
+    });
+
     it("uniswapV2Swap sells WETH at the pair directly, and its output pays an approval", async () => {
       await run([
         { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
@@ -868,7 +944,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
   // ---- bridges ------------------------------------------------------------------------------
 
   describe("bridges", () => {
-    it("acrossBridge deposits USDC for the destination, less the relayer fee", async () => {
+    it("acrossBridge deposits USDC for Optimism's USDC, less the relayer fee", async () => {
       await fund(USDC, USDC_100);
       const receipt = await run([
         { type: "approve", amount: `${USDC_100}`, token: USDC, spender: ACROSS_SPOKE_POOL },
@@ -896,6 +972,8 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         })
         .find((event) => event?.eventName === "FundsDeposited");
       assert.ok(deposit, "no FundsDeposited event");
+      assert.equal(deposit.args.inputToken, pad(USDC.toLowerCase() as Address));
+      assert.equal(deposit.args.outputToken, pad(USDC_OPTIMISM.toLowerCase() as Address));
       assert.equal(deposit.args.inputAmount, USDC_100);
       assert.equal(deposit.args.outputAmount, USDC_100 - 250_000n);
       assert.equal(deposit.args.destinationChainId, 10n);
@@ -1080,6 +1158,56 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         { type: "transfer", token: USDC, recipient: RECEIVER },
       ]);
       assert.equal(await balance(USDC, RECEIVER), 40_000_000n);
+    });
+
+    /** A second external address, so a leaked output cannot hide behind RECEIVER's own balance. */
+    const THIRD = "0x000000000000000000000000000000000000bEEF";
+
+    /** Supplies USDC_100 to Aave, then leaves `preexisting` USDC in the Pot beside the aUSDC. */
+    async function supplyThenFund(preexisting: bigint): Promise<void> {
+      await fund(USDC, USDC_100);
+      await run([
+        { type: "approve", amount: `${USDC_100}`, token: USDC, spender: AAVE_V3_POOL },
+        { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: USDC, onBehalfOf: "pot" },
+      ]);
+      assert.equal(await balance(USDC, env.pot), 0n);
+      await fund(USDC, preexisting);
+    }
+
+    it("a chained aaveV3Withdraw delivers to the Pot whatever its recipient says, so the transfer spends the withdrawn amount and not the Pot's own USDC", async () => {
+      const preexisting = 40_000_000n;
+      await supplyThenFund(preexisting);
+      await run([
+        {
+          type: "aaveV3Withdraw",
+          amount: "40000000",
+          pool: AAVE_V3_POOL,
+          token: USDC,
+          recipient: RECEIVER,
+        },
+        { type: "transfer", token: USDC, recipient: RECEIVER },
+      ]);
+      assert.equal(await balance(USDC, RECEIVER), 40_000_000n, "RECEIVER got it once, not twice");
+      assert.equal(await balance(USDC, env.pot), preexisting, "the Pot's own USDC is untouched");
+    });
+
+    it("a saved aaveV3Withdraw output pays the later spender, and its own external recipient receives nothing", async () => {
+      const preexisting = 40_000_000n;
+      await supplyThenFund(preexisting);
+      await run([
+        {
+          type: "aaveV3Withdraw",
+          amount: "40000000",
+          pool: AAVE_V3_POOL,
+          token: USDC,
+          recipient: RECEIVER,
+          saveOutputAs: "withdrawn",
+        },
+        { type: "transfer", token: USDC, recipient: THIRD, amountRef: "withdrawn" },
+      ]);
+      assert.equal(await balance(USDC, THIRD), 40_000_000n, "the spender received the output");
+      assert.equal(await balance(USDC, RECEIVER), 0n, "the withdraw's own recipient got nothing");
+      assert.equal(await balance(USDC, env.pot), preexisting, "the Pot's own USDC is untouched");
     });
 
     it("aaveV3Borrow borrows USDC against WETH collateral, and aaveV3Repay repays it", async () => {

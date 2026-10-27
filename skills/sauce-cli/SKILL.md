@@ -123,8 +123,9 @@ its own fields, so nothing is converted:
   the Pot's owner, so one batch deploys the Pot and cooks on it, and a cook that reverts leaves no
   Pot behind. With `--fund USDC:100` (the tool's `fund`), the plan also moves the owner's tokens
   into the Pot between the two (`ETH:<amount>` rides as the cook's value): deploying, funding and
-  cooking are one approval, all of it or none. Tokens sent to the Pot's address before it exists
-  are there when it is deployed too.
+  cooking are one approval, all of it or none. Fund a Pot by a transfer only once it is deployed:
+  a Kitchen release with new Pot code derives another address, and tokens sent to the old one stay
+  where no Pot is deployed.
 - **Phantom MCP**: the agent gets a wallet of its own, held by Phantom; fund its address
   (`wallet_addresses`) first. On an EVM chain, `evm_send` with each transaction as its input, in
   order, each landed before the next (`sauce inspect <hash>`). On Solana,

@@ -780,7 +780,7 @@
     },
     "action_balancerV3Swap": {
       "title": "balancerV3Swap",
-      "description": "Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2. Calls Router.swapSingleTokenExactIn.",
+      "description": "Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2, or takes a WETH input as native ETH under `wethIsEth`. Calls Router.swapSingleTokenExactIn.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -819,7 +819,7 @@
         },
         "wethIsEth": {
           "type": "boolean",
-          "description": "true to pay or receive native ETH for WETH"
+          "description": "true to trade the router's WETH as native ETH: a WETH input is paid from the Pot's ETH, sent as the call's value, and needs no Permit2 allowance; a WETH output is paid to the Pot as ETH"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",
@@ -872,7 +872,7 @@
         "isBuy": { "type": "boolean", "description": "true pays base and receives quote" },
         "inBaseQty": {
           "type": "boolean",
-          "description": "true when the amount is denominated in the base token"
+          "description": "true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends"
         },
         "tip": {
           "type": "integer",
@@ -1117,7 +1117,7 @@
     },
     "action_acrossBridge": {
       "title": "acrossBridge",
-      "description": "Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. Calls SpokePool.depositV3.",
+      "description": "Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. Calls SpokePool.depositV3.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1144,7 +1144,11 @@
           "$ref": "#/$defs/contract",
           "description": "the origin SpokePool; it pulls the token, so approve it first"
         },
-        "token": { "$ref": "#/$defs/token", "description": "the token bridged (input and output)" },
+        "token": { "$ref": "#/$defs/token", "description": "the token deposited, on this chain" },
+        "outputToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId`"
+        },
         "destChainId": {
           "type": "integer",
           "minimum": 1,
@@ -1633,7 +1637,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the asset withdrawn" },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the asset; `\"pot\"` is the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",

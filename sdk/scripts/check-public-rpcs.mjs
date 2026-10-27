@@ -10,8 +10,8 @@
 //     whether `eth_simulateV1` runs that call with `validation: false` and `traceTransfers`, as the
 //     command sends it: an endpoint flagged `simulateV1` must run it (one flagged false that runs it
 //     is noted, not failed: false only keeps the command from sending it there).
-//   - Solana: `getGenesisHash` is the cluster's (mainnet's, devnet's), `getSlot` answers a slot,
-//     and the cluster's USDC mint reads;
+//   - Solana: `getGenesisHash` is the cluster's (mainnet's, devnet's, testnet's), `getSlot` answers
+//     a slot, and a mint the registry has on the cluster reads (USDC; testnet's wrapped native);
 //     and whether a filtered `getProgramAccounts` answers: an endpoint flagged `programAccounts`
 //     must answer it.
 // It prints a line per endpoint and exits 1 when any fails or its flag is wrong. The endpoints are
@@ -30,15 +30,20 @@ const { CANONICAL_CHAINS } = load(join(SDK, "src/chains/canonical.ts"));
 const { values } = parseArgs({ options: { chains: { type: "string" } } });
 const only = values.chains === undefined ? undefined : values.chains.split(",").map(Number);
 
-/** Each Solana chain's cluster, by the chain id the SDK gives it: its genesis and its USDC mint. */
+/** Each Solana chain's cluster, by the chain id the SDK gives it: its genesis and a mint the
+ *  registry has there (USDC, else the wrapped native: testnet has no USDC). */
 const SOLANA_CLUSTERS = {
   1399811149: {
     genesis: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
-    usdc: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   },
   1399811150: {
     genesis: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-    usdc: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  },
+  1399811151: {
+    genesis: "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
+    mint: "So11111111111111111111111111111111111111112",
   },
 };
 /** An address with no code, given code that returns its storage slot 0, and slot 0 set to 42. */
@@ -51,14 +56,15 @@ const OVERRIDE = {
 };
 const FORTY_TWO = `0x${"2a".padStart(64, "0")}`;
 
-/** One JSON-RPC call: its result, or a throw naming the HTTP status or the RPC error. */
-async function rpc(url, method, params) {
+/** One JSON-RPC call: its result, or a throw naming the HTTP status or the RPC error. An endpoint
+ *  the list gives a timeout of its own (`timeoutMs`) is given that long. */
+async function rpc(url, method, params, timeoutMs = 15_000) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     redirect: "error",
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`${method}: HTTP ${response.status}`);
@@ -94,19 +100,20 @@ async function checkEvm(chainId, url) {
 }
 
 /** What is wrong with an endpoint of the Solana cluster `cluster`, or `undefined`. */
-async function checkSolana(url, cluster) {
-  const genesis = await rpc(url, "getGenesisHash", []);
+async function checkSolana(url, cluster, timeoutMs) {
+  const ask = (method, params) => rpc(url, method, params, timeoutMs);
+  const genesis = await ask("getGenesisHash", []);
   if (genesis !== cluster.genesis) return { problem: `serves the cluster of genesis ${genesis}` };
-  if (typeof (await rpc(url, "getSlot", [])) !== "number") return { problem: "answered no slot" };
-  const mint = await rpc(url, "getAccountInfo", [cluster.usdc, { encoding: "base64" }]);
-  if (mint?.value === null || mint?.value === undefined) return { problem: "read no USDC mint" };
-  // A filtered scan, as `sauce pools` sends one: Raydium CLMM's 1,544-byte pools holding USDC.
-  const scan = await rpc(url, "getProgramAccounts", [
+  if (typeof (await ask("getSlot", [])) !== "number") return { problem: "answered no slot" };
+  const mint = await ask("getAccountInfo", [cluster.mint, { encoding: "base64" }]);
+  if (mint?.value === null || mint?.value === undefined) return { problem: "read no mint" };
+  // A filtered scan, as `sauce pools` sends one: Raydium CLMM's 1,544-byte pools holding the mint.
+  const scan = await ask("getProgramAccounts", [
     "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
     {
       encoding: "base64",
       dataSlice: { offset: 0, length: 0 },
-      filters: [{ dataSize: 1544 }, { memcmp: { offset: 105, bytes: cluster.usdc } }],
+      filters: [{ dataSize: 1544 }, { memcmp: { offset: 105, bytes: cluster.mint } }],
     },
   ]).catch(() => undefined);
 
@@ -119,12 +126,14 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
   const chainId = Number(key);
   if (only !== undefined && !only.includes(chainId)) continue;
   const slug = CANONICAL_CHAINS.find((chain) => chain.id === chainId)?.slug ?? `chain ${chainId}`;
-  for (const { url, simulateV1, programAccounts } of list) {
+  for (const { url, simulateV1, programAccounts, timeoutMs } of list) {
     let found;
     try {
       const cluster = SOLANA_CLUSTERS[chainId];
       found =
-        cluster !== undefined ? await checkSolana(url, cluster) : await checkEvm(chainId, url);
+        cluster !== undefined
+          ? await checkSolana(url, cluster, timeoutMs)
+          : await checkEvm(chainId, url);
     } catch (error) {
       found = { problem: error.cause?.code ?? error.message };
     }

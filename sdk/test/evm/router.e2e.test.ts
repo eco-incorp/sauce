@@ -11,6 +11,11 @@
  *   3. The same pools through `tryUniswapV3`: the paid swap delivers exactly what `uniswapV3` does,
  *      and each refusal above — an unanswered callback, `InputExceedsAuthorized`, a codeless pool, a
  *      pool for another pair — returns 0 with the Pot and the pool untouched and the cook landed.
+ *   4. `Router.flash(callback, swap)`, the one Router entry that runs a program as the Pot inside the
+ *      callback of a pool it swaps with: the callback runs as the Pot and repays with a nested swap,
+ *      a short repayment reverts the whole cook, the nested swap's floor is what keeps the Pot's own
+ *      balance from paying a shortfall, and each of the Router's refusals leaves every balance as it
+ *      was.
  *
  * The pool is v12's own `test/mocks/MockV3Pool.sol` (copied into `fixtures/`, built by forge from
  * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, and a
@@ -22,15 +27,18 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  bytesToHex,
   createPublicClient,
   createTestClient,
   createWalletClient,
   decodeErrorResult,
   encodeAbiParameters,
+  encodeErrorResult,
   encodeFunctionData,
   getAddress,
   http,
   parseAbi,
+  stringToHex,
   toFunctionSelector,
 } from "viem";
 import type { Abi, Address, Hex } from "viem";
@@ -57,7 +65,9 @@ if (!RUNTIME_HEX_PATH && process.env.CI) {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const json = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
-const MOCK_ERC20 = json<{ creationCode: Hex }>(join(HERE, "../std/token/fixtures/MockERC20.json"));
+const MOCK_ERC20 = json<{ abi: Abi; creationCode: Hex }>(
+  join(HERE, "../std/token/fixtures/MockERC20.json"),
+);
 const MOCK_V3_POOL = json<{ abi: Abi; creationCode: Hex }>(join(HERE, "fixtures/MockV3Pool.json"));
 const ROUTER = json<{ abi: Abi; bytecode: Hex }>(join(HERE, "../../src/artifacts/Router.json"));
 const ISAUCE_ROUTER = json<{ abi: Abi }>(join(HERE, "../../src/artifacts/ISauceRouter.json"));
@@ -132,6 +142,14 @@ const revertOf = async (from: Address, to: Address, data: Hex): Promise<Hex | un
 
 const potRouter = (pot: Address): Promise<Address> =>
   publicClient.readContract({ abi: v12PotAbi, address: pot, functionName: "router" });
+
+const balance = (token: Address, holder: Address): Promise<bigint> =>
+  publicClient.readContract({
+    abi: erc20,
+    address: token,
+    args: [holder],
+    functionName: "balanceOf",
+  });
 
 let anvil: ChildProcess;
 let sauce: GatedEngine;
@@ -284,14 +302,6 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       return at;
     };
 
-    const balance = (token: Address, holder: Address): Promise<bigint> =>
-      publicClient.readContract({
-        abi: erc20,
-        address: token,
-        args: [holder],
-        functionName: "balanceOf",
-      });
-
     /** The route call a program calling `@sauce/router`'s `uniswapV3` on the pool compiles to. */
     const swapCall = (at: Address): { to: Address; data: Hex } => {
       const source = [
@@ -439,6 +449,269 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
         const { to, data } = trySwapCall(at, 1n);
         expect(await sendAs(OWNER, to, data)).toBe("reverted");
       });
+    });
+  });
+
+  describe("Router.flash: a program the Pot runs inside the callback of the pool it borrows from", () => {
+    const ONE = 10n ** 18n;
+    /** Above the lowest price a V3 pool takes: a bound for selling token0 that never binds. */
+    const PRICE_BOUND = 4_295_128_740n;
+    /** The borrow pool pays 2 token1 for each token0 the Pot owes it. */
+    const BORROW_RATE = 2n * ONE;
+    /** What the Pot owes the borrow pool, and the token1 that pool sends it first. */
+    const OWED = 3_000n;
+    const BORROWED = (OWED * BORROW_RATE) / ONE;
+    /** A resale pool paying 1 token0 for 1.5 token1 turns BORROWED into more than OWED… */
+    const KIND_RATE = (3n * ONE) / 2n;
+    const PROFIT = (BORROWED * ONE) / KIND_RATE - OWED;
+    /** …and one paying 1 token0 for 3 token1 turns it into less. */
+    const HARSH_RATE = 3n * ONE;
+    const SHORTFALL = OWED - (BORROWED * ONE) / HARSH_RATE;
+    /** What the Pot holds before the cook: token0 enough to cover SHORTFALL, or not. */
+    const HELD0 = 5_000n;
+    const SCANT0 = 400n;
+    const HELD1 = 777n;
+    const POOL_FUNDS = 10n ** 12n;
+
+    interface Flash {
+      token0: Address;
+      token1: Address;
+      /** The pool `flash` sells token0 into: it sends the Pot token1 before it is paid. */
+      borrow: Address;
+      /** The pool the callback sells that token1 into, for token0. */
+      resale: Address;
+    }
+
+    const mint = (token: Address, to: Address, amount: bigint) =>
+      sendAs(
+        OWNER,
+        token,
+        encodeFunctionData({ abi: erc20, args: [to, amount], functionName: "mint" }),
+      );
+
+    /** Two fresh tokens, a borrow pool and a resale pool of them, and the Pot's holdings. */
+    const scenario = async (resaleRate: bigint, held0: bigint): Promise<Flash> => {
+      const [a, b] = [await deploy(MOCK_ERC20.creationCode), await deploy(MOCK_ERC20.creationCode)];
+      const [token0, token1] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
+      const pools: Address[] = [];
+      for (const rate of [BORROW_RATE, resaleRate]) {
+        pools.push(
+          await deploy(
+            `${MOCK_V3_POOL.creationCode}${encodeAbiParameters(
+              [{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "uint256" }],
+              [token0, token1, 3000, rate],
+            ).slice(2)}` as Hex,
+          ),
+        );
+      }
+      const [borrow, resale] = pools as [Address, Address];
+      expect(await mint(token1, borrow, POOL_FUNDS)).toBe("success");
+      expect(await mint(token0, resale, POOL_FUNDS)).toBe("success");
+      expect(await mint(token0, sauce.pot, held0)).toBe("success");
+      expect(await mint(token1, sauce.pot, HELD1)).toBe("success");
+
+      return { token0, token1, borrow, resale };
+    };
+
+    /** Every balance the flash can move: the Pot's and the two pools', token0 then token1. */
+    const ledger = async (s: Flash) => ({
+      pot: [await balance(s.token0, sauce.pot), await balance(s.token1, sauce.pot)],
+      borrow: [await balance(s.token0, s.borrow), await balance(s.token1, s.borrow)],
+      resale: [await balance(s.token0, s.resale), await balance(s.token1, s.resale)],
+    });
+
+    /** The Router's `swapV3` calldata `flash` runs: OWED token0 into the borrow pool, to the Pot. */
+    const borrowSwap = (s: Flash): Hex =>
+      encodeFunctionData({
+        abi: ISAUCE_ROUTER.abi,
+        args: [s.borrow, s.token0, true, OWED, PRICE_BOUND, sauce.pot],
+        functionName: "swapV3",
+      });
+
+    interface Program {
+      /** The token1 the callback requires the Pot to hold on entry: the pool paid out first. */
+      entry1: bigint;
+      /** The token0 `main` requires the Pot to hold once `flash` returns. */
+      after0: bigint;
+      /** Who the callback requires it runs as: the Pot `main` read, unless planted. */
+      identity?: Address;
+      /** The `minOut` of the callback's sale of what the borrow pool sent; 0 sets no floor. */
+      floor?: bigint;
+      /** The swap `flash` runs, the borrow pool's `swapV3` unless given. */
+      swap?: Hex;
+    }
+
+    /**
+     * A program that borrows through `flash`, called on `pot` through the Router ABI. Its callback
+     * is a `program(() => …)` closure over `self`, which `main` read before the flash: it requires
+     * that it runs as that Pot, logs who it ran as, requires the pool's output to be there already,
+     * and sells that output in the resale pool to repay.
+     */
+    const flashSource = (s: Flash, p: Program): string => {
+      const identity = p.identity === undefined ? "self" : `${BigInt(p.identity)}n`;
+      const swap = (p.swap ?? borrowSwap(s)).slice(2);
+
+      return [
+        'import { uniswapV3 } from "@sauce/router";',
+        'import { balanceOf } from "@sauce/token";',
+        'import { ISauceRouter } from "./artifacts/ISauceRouter.json";',
+        "function main() {",
+        "  const self = ctx.self();",
+        "  const callback = program(() => {",
+        `    require(ctx.self() == ${identity}, "callback: not the Pot");`,
+        `    require(pot == ${identity}, "callback: pot is not the Pot");`,
+        "    log(abi.encode(ctx.self(), pot, self));",
+        `    require(balanceOf(${BigInt(s.token1)}n, pot) == ${p.entry1}n, "callback: no output yet");`,
+        `    uniswapV3(${BigInt(s.resale)}n, ${BigInt(s.token1)}n, ${BigInt(s.token0)}n, ${BORROWED}n, 0n, ${p.floor ?? 0n}n, pot);`,
+        "  });",
+        `  ISauceRouter.at(pot).flash(callback.code.concat(callback.args), hex\`${swap}\`);`,
+        `  require(balanceOf(${BigInt(s.token0)}n, pot) == ${p.after0}n, "after: token0 held");`,
+        "}",
+      ].join("\n");
+    };
+
+    const cookOf = (s: Flash, p: Program): Hex =>
+      compileSauceRoute("base", flashSource(s, p), { engine: sauce.engine, pot: sauce.pot })
+        .calls[0]!.data;
+
+    /** `data` from `from` to `to` is refused, with `error` in its revert data, and moves nothing. */
+    const refuses = async (
+      s: Flash,
+      [from, to, data]: readonly [typeof OWNER, Address, Hex],
+      error?: Hex,
+    ): Promise<void> => {
+      const before = await ledger(s);
+      const refusal = await revertOf(from.address, to, data);
+      expect(refusal).toBeDefined();
+      if (error !== undefined) expect(refusal).toContain(error.slice(2));
+      expect(await sendAs(from, to, data)).toBe("reverted");
+      expect(await ledger(s)).toEqual(before);
+    };
+
+    /** The resale repays OWED and leaves PROFIT; the Pot's own holdings are not touched. */
+    const PROFITABLE: Program = { entry1: HELD1 + BORROWED, after0: HELD0 + PROFIT };
+
+    it("runs the callback as the Pot, repays the pool with a nested swap and keeps the profit", async () => {
+      const s = await scenario(KIND_RATE, HELD0);
+      const hash = await walletClient.sendTransaction({
+        account: OWNER,
+        chain: null,
+        data: cookOf(s, PROFITABLE),
+        gas: GAS_LIMIT,
+        to: sauce.pot,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      expect(receipt.status).toBe("success");
+      // The callback's log: `ctx.self()`, `pot` and the `self` main read before the flash, all the Pot.
+      const pot = BigInt(sauce.pot);
+      expect(receipt.logs.map((log) => log.data)).toContain(
+        encodeAbiParameters(
+          [{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
+          [pot, pot, pot],
+        ),
+      );
+      expect(await ledger(s)).toEqual({
+        pot: [HELD0 + PROFIT, HELD1],
+        borrow: [OWED, POOL_FUNDS - BORROWED],
+        resale: [POOL_FUNDS - OWED - PROFIT, BORROWED],
+      });
+    });
+
+    it("reverts the whole cook when the callback leaves the Pot short of what it owes", async () => {
+      // The resale returns OWED - SHORTFALL, and the Pot's SCANT0 does not make up SHORTFALL.
+      const s = await scenario(HARSH_RATE, SCANT0);
+      await refuses(
+        s,
+        [OWNER, sauce.pot, cookOf(s, { entry1: HELD1 + BORROWED, after0: 0n })],
+        encodeErrorResult({
+          abi: MOCK_ERC20.abi,
+          args: [sauce.pot, SCANT0 + OWED - SHORTFALL, OWED],
+          errorName: "ERC20InsufficientBalance",
+        }),
+      );
+    });
+
+    it("pays a shortfall out of the Pot's own balance unless the nested swap sets a floor", async () => {
+      const s = await scenario(HARSH_RATE, HELD0);
+      const unfloored: Program = { entry1: HELD1 + BORROWED, after0: HELD0 - SHORTFALL };
+      // A floor at what the Pot owes refuses the resale's OWED - SHORTFALL, and nothing moves…
+      await refuses(s, [OWNER, sauce.pot, cookOf(s, { ...unfloored, floor: OWED })]);
+      // …and without one the same cook lands, the Pot's own token0 paying the difference.
+      expect(await sendAs(OWNER, sauce.pot, cookOf(s, unfloored))).toBe("success");
+      expect(await ledger(s)).toEqual({
+        pot: [HELD0 - SHORTFALL, HELD1],
+        borrow: [OWED, POOL_FUNDS - BORROWED],
+        resale: [POOL_FUNDS - OWED + SHORTFALL, BORROWED],
+      });
+    });
+
+    it("refuses a borrow pool that never calls back: CallbackNotRun", async () => {
+      const s = await scenario(KIND_RATE, HELD0);
+      const skip = encodeFunctionData({
+        abi: MOCK_V3_POOL.abi,
+        args: [true],
+        functionName: "setSkipCallback",
+      });
+      expect(await sendAs(OWNER, s.borrow, skip)).toBe("success");
+      await refuses(
+        s,
+        [OWNER, sauce.pot, cookOf(s, PROFITABLE)],
+        encodeErrorResult({ abi: ROUTER.abi, errorName: "CallbackNotRun" }),
+      );
+    });
+
+    it("refuses a swap that is none of its own entry points: UnknownSwap", async () => {
+      const s = await scenario(KIND_RATE, HELD0);
+      // The pool's own `swap`, rather than the Router's `swapV3` on it.
+      const swap = encodeFunctionData({
+        abi: MOCK_V3_POOL.abi,
+        args: [sauce.pot, true, OWED, PRICE_BOUND, "0x"],
+        functionName: "swap",
+      });
+      await refuses(
+        s,
+        [OWNER, sauce.pot, cookOf(s, { ...PROFITABLE, swap })],
+        encodeErrorResult({ abi: ROUTER.abi, args: [swap.slice(0, 10)], errorName: "UnknownSwap" }),
+      );
+    });
+
+    it("refuses flash called on the Pot or the Router by anyone, the owner too: UnauthorizedCaller", async () => {
+      const s = await scenario(KIND_RATE, HELD0);
+      // The callback a caller would run as the Pot if it could: it hands them the Pot's token0.
+      const drain = compileSauceRoute(
+        "base",
+        [
+          'import { transfer } from "@sauce/token";',
+          "function main() {",
+          `  transfer(${BigInt(s.token0)}n, ${BigInt(STRANGER.address)}n, ${HELD0}n);`,
+          "}",
+        ].join("\n"),
+        { engine: sauce.engine, pot: sauce.pot },
+      ).compiled.bytecode[0]!;
+      const data = encodeFunctionData({
+        abi: ISAUCE_ROUTER.abi,
+        args: [bytesToHex(drain), borrowSwap(s)],
+        functionName: "flash",
+      });
+      const unauthorized = encodeErrorResult({ abi: ROUTER.abi, errorName: "UnauthorizedCaller" });
+
+      await refuses(s, [STRANGER, sauce.pot, data], unauthorized);
+      await refuses(s, [OWNER, sauce.pot, data], unauthorized);
+      await refuses(s, [STRANGER, sauce.router, data], unauthorized);
+      expect(await balance(s.token0, STRANGER.address)).toBe(0n);
+    });
+
+    it("PLANTED: a wrong expectation in the callback or after the flash reverts the same cook", async () => {
+      const s = await scenario(KIND_RATE, HELD0);
+      const planted = (program: Program, reason: string) =>
+        refuses(s, [OWNER, sauce.pot, cookOf(s, program)], stringToHex(reason));
+      // The Router's own address is who a callback run as the Router, not the Pot, would see.
+      await planted({ ...PROFITABLE, identity: sauce.router }, "callback: not the Pot");
+      await planted({ ...PROFITABLE, entry1: HELD1 }, "callback: no output yet");
+      await planted({ ...PROFITABLE, after0: HELD0 + PROFIT + 1n }, "after: token0 held");
+      // Unplanted, the same cook on the same pools lands.
+      expect(await sendAs(OWNER, sauce.pot, cookOf(s, PROFITABLE))).toBe("success");
     });
   });
 });

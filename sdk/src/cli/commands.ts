@@ -791,8 +791,14 @@ export async function planGas(
             ? `${rehearsal.what ?? "a transfer"} would revert (${rehearsal.reason}), so no gas is ` +
               "suggested: the owner must hold what it transfers"
             : `the cook is given no gas: simulated after ${landed}, on the chain as it is, it ` +
-              `would revert (${rehearsal.reason}). Fund the Pot first (its address takes tokens ` +
-              `before it is deployed) and build it again for its gas, or ${roomless}`,
+              `would revert (${rehearsal.reason}). ${
+                before.length > 0 || plan.salt === undefined
+                  ? "Fund the Pot and build it again for its gas"
+                  : "The Pot has no code yet: deploy it first (`sauce pot --deploy` with the signer, " +
+                    "or `sauce run --fund`, which deploys before it funds), and do not send tokens to " +
+                    "its address before it is deployed, as a Kitchen upgrade that changes the Pot's " +
+                    "code moves the address and strands them. Then build the plan again for its gas"
+              }, or ${roomless}`,
     };
   }
   if (rehearsal.gas === undefined) {
@@ -964,10 +970,11 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(deployFirst
           ? [
               `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account ` +
-                "may send it; the Pot is the owner's either way), and the cook comes last. Send " +
+                "may send it; the Pot is the owner's either way), and the cook comes last. " +
                 (transfers.length === 0
-                  ? "them in order, then fund the Pot with what the program spends."
-                  : "them in order."),
+                  ? "Send the deployment, fund the Pot with what the program spends, then send " +
+                    "the cook (or plan with `--fund`)."
+                  : "Send them in order."),
             ]
           : []),
         ...setup

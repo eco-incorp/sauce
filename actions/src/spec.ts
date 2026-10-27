@@ -399,7 +399,7 @@ const SPECS: readonly ActionSpec[] = [
   swap(
     "balancerV3Swap",
     "Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls " +
-      "through Permit2.",
+      "through Permit2, or takes a WETH input as native ETH under `wethIsEth`.",
     "Router.swapSingleTokenExactIn",
     {
       router: f(contract, "the Balancer V3 Router"),
@@ -408,8 +408,14 @@ const SPECS: readonly ActionSpec[] = [
       tokenOut: f(token, "the token bought"),
       amountOutMin: MIN_OUT,
       deadline: DEADLINE,
-      wethIsEth: f(bool, "true to pay or receive native ETH for WETH"),
+      wethIsEth: f(
+        bool,
+        "true to trade the router's WETH as native ETH: a WETH input is paid from the Pot's ETH, " +
+          "sent as the call's value, and needs no Permit2 allowance; a WETH output is paid to the " +
+          "Pot as ETH",
+      ),
     },
+    { value: "the amount, when `wethIsEth` is set and `tokenIn` is the router's WETH" },
   ),
 
   swap(
@@ -422,7 +428,10 @@ const SPECS: readonly ActionSpec[] = [
       quote: f(token, "the pool's quote token"),
       poolIdx: f(uintN(53), "the pool type index (420 is the standard pool)"),
       isBuy: f(bool, "true pays base and receives quote"),
-      inBaseQty: f(bool, "true when the amount is denominated in the base token"),
+      inBaseQty: f(
+        bool,
+        "true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends",
+      ),
       tip: f(uintN(16), "0 accepts the pool's default fee"),
       limitPrice: f(uint128, "the worst acceptable price, as a Q64.64 square-root price"),
       amountOutMin: f(uint128, "the least output accepted; the dex reverts below it"),
@@ -498,11 +507,15 @@ const SPECS: readonly ActionSpec[] = [
   // -- bridges --------------------------------------------------------------------------------
   bridge(
     "acrossBridge",
-    "Deposits into an Across SpokePool for the same token on the destination, less the relayer fee.",
+    "Deposits into an Across SpokePool for the destination chain's token, less the relayer fee.",
     "SpokePool.depositV3",
     {
       spokePool: f(contract, "the origin SpokePool; it pulls the token, so approve it first"),
-      token: f(token, "the token bridged (input and output)"),
+      token: f(token, "the token deposited, on this chain"),
+      outputToken: opt(
+        address,
+        "the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId`",
+      ),
       destChainId: f(int(1, Number.MAX_SAFE_INTEGER), "the destination chain id"),
       recipient: f(address, "receives on the destination"),
       relayerFee: f(uint256, "kept by the relayer: the destination receives `amount - relayerFee`"),
@@ -642,7 +655,7 @@ const SPECS: readonly ActionSpec[] = [
     {
       pool: f(contract, "the Aave V3 Pool"),
       token: f(token, "the asset withdrawn"),
-      recipient: f(recipient, 'receives the asset; `"pot"` is the Pot'),
+      recipient: RECIPIENT,
     },
     { output: "realized" },
   ),

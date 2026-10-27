@@ -44,13 +44,13 @@ A sequence of protocol actions that compiles to one Sauce program executing on o
 | [`maverickV2Swap`](#maverickv2swap) | Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for. |
 | [`curveRouterNGSwap`](#curverouterngswap) | Swaps along a Curve RouterNG route of up to five hops. |
 | [`balancerV2BatchSwap`](#balancerv2batchswap) | Swaps along Balancer V2 pools in one batch; the output is a balance delta. |
-| [`balancerV3Swap`](#balancerv3swap) | Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2. |
+| [`balancerV3Swap`](#balancerv3swap) | Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2, or takes a WETH input as native ETH under `wethIsEth`. |
 | [`ambientSwap`](#ambientswap) | Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output is a balance delta. |
 | [`dodoV1Swap`](#dodov1swap) | Swaps through legacy DODO V1 (Classical) pairs via the DODO proxy, which pays the Pot. |
 | [`carbonSwap`](#carbonswap) | Trades against Carbon strategies by source amount; the controller pays the Pot. |
 | [`fraxswapSwap`](#fraxswapswap) | Swaps an exact input along a Fraxswap path; the output is a balance delta. |
 | [`fluidDexT1Swap`](#fluiddext1swap) | Swaps an exact ERC-20 input through a Fluid DEX T1 pool. |
-| [`acrossBridge`](#acrossbridge) | Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. |
+| [`acrossBridge`](#acrossbridge) | Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. |
 | [`stargateBridge`](#stargatebridge) | Sends through a Stargate V2 ERC-20 pool (taxi), paying the LayerZero fee it quotes. |
 | [`cctpBridge`](#cctpbridge) | Burns USDC through Circle's CCTP V2 TokenMessenger for minting on the destination. |
 | [`hyperlaneBridge`](#hyperlanebridge) | Transfers through a Hyperlane ERC-20 warp route, paying the interchain gas it quotes. |
@@ -290,7 +290,7 @@ Each `steps` entry:
 
 ### balancerV3Swap
 
-Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2. Calls Router.swapSingleTokenExactIn.
+Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2, or takes a WETH input as native ETH under `wethIsEth`. Calls Router.swapSingleTokenExactIn.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |
@@ -302,7 +302,7 @@ Swaps an exact input through one Balancer V3 pool; the router pays the Pot and p
 | `tokenOut` | token | yes | the token bought |
 | `amountOutMin` | base-10 integer string, uint256 | yes | the least output accepted; the venue reverts below it |
 | `deadline` | integer ≥ 0 | yes | Unix seconds after which the venue reverts |
-| `wethIsEth` | true or false | yes | true to pay or receive native ETH for WETH |
+| `wethIsEth` | true or false | yes | true to trade the router's WETH as native ETH: a WETH input is paid from the Pot's ETH, sent as the call's value, and needs no Permit2 allowance; a WETH output is paid to the Pot as ETH |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
@@ -319,7 +319,7 @@ Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output i
 | `quote` | token | yes | the pool's quote token |
 | `poolIdx` | integer ≥ 0 | yes | the pool type index (420 is the standard pool) |
 | `isBuy` | true or false | yes | true pays base and receives quote |
-| `inBaseQty` | true or false | yes | true when the amount is denominated in the base token |
+| `inBaseQty` | true or false | yes | true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends |
 | `tip` | integer 0–65535 | yes | 0 accepts the pool's default fee |
 | `limitPrice` | base-10 integer string, uint128 | yes | the worst acceptable price, as a Q64.64 square-root price |
 | `amountOutMin` | base-10 integer string, uint128 | yes | the least output accepted; the dex reverts below it |
@@ -400,14 +400,15 @@ Swaps an exact ERC-20 input through a Fluid DEX T1 pool. Calls FluidDexT1.swapIn
 
 ### acrossBridge
 
-Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. Calls SpokePool.depositV3.
+Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. Calls SpokePool.depositV3.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |
 | `type` | `"acrossBridge"` | yes | the action |
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `spokePool` | contract | yes | the origin SpokePool; it pulls the token, so approve it first |
-| `token` | token | yes | the token bridged (input and output) |
+| `token` | token | yes | the token deposited, on this chain |
+| `outputToken` | address | no | the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId` |
 | `destChainId` | integer ≥ 1 | yes | the destination chain id |
 | `recipient` | address | yes | receives on the destination |
 | `relayerFee` | base-10 integer string, uint256 | yes | kept by the relayer: the destination receives `amount - relayerFee` |
@@ -601,7 +602,7 @@ Withdraws a token from Aave V3; the output is the amount withdrawn. Calls Pool.w
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `pool` | contract | yes | the Aave V3 Pool |
 | `token` | token | yes | the asset withdrawn |
-| `recipient` | address or `"pot"` | yes | receives the asset; `"pot"` is the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 

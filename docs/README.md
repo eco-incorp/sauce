@@ -4,7 +4,7 @@
 > live onchain state, chooses a path and composes contract calls in one transaction: swap, pay,
 > lend, bridge. Your program enforces the conditions you write, and an unhandled failure reverts
 > every step. It runs through your own Pot on Ethereum, Base, Arc or Solana (or the testnets Arc
-> Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet), so you deploy no
+> Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet), so you deploy no
 > contract for each program and look up no address.
 
 **How to use this manual.** You need to know TypeScript and the basic ideas of a blockchain: a
@@ -51,7 +51,6 @@ Write programs:
 
 - [Programs and arguments](guides/cli-programs.md): the program file, `--args`, compile errors, your editor, and JSON actions documents.
 - [Protocols and tokens](guides/protocols-and-tokens.md): call tokens and protocols by name inside a program, in SauceScript and in TypeScript.
-- [From Solidity examples to Sauce](guides/solidity-examples.md): the protocols' own Solidity examples ported to Sauce and run, each beside its source.
 - [Actions](guides/actions.md): write the steps as JSON instead of code, then run them.
 - [Look things up](guides/cli-lookup.md): a chain's names, prices, pools, and taking transactions apart.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several pools.

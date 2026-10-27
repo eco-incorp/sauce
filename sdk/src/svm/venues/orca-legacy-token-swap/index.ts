@@ -202,10 +202,17 @@ export const orcaLegacyTokenSwap = {
     // params, not `accountUint("<address>", …)` string refs. Param `acc<k>` is
     // `quoteAccounts()[k]` — vault-in is slot 0, vault-out slot 1 — and `accountUint`
     // lowered to CAST_LE, so `svm.sload(…).toLe()` is the exact endianness match.
+    // The program's checked_ceil_div fails when floor(rsIn * rsOut / (rsIn + netIn)) is 0,
+    // which is exactly rsIn * rsOut < rsIn + netIn: such a pool quotes 0 (the venue is
+    // unusable) rather than the positive amount the bare ceiling formula would give, the
+    // same bound referenceQuote refuses.
     return [
       `const rIn${i} = svm.sload(acc0, 64, 8).toLe();`,
       `const rOut${i} = svm.sload(acc1, 64, 8).toLe();`,
-      `const q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
+      `let q${i} = 0;`,
+      `if (rIn${i} * rOut${i} >= rIn${i} + ${netIn}) {`,
+      `  q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
+      `}`,
     ].join("\n");
   },
 

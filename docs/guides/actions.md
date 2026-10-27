@@ -272,7 +272,7 @@ An action's output is one of:
 - **its amount** — the amount the action spent, unchanged: transfers, approvals, supplies, borrows, repayments, bridges, WETH wrapping.
 - **the value read** — for a source action.
 
-When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "pot"` to keep an unspent output in the Pot.
+When a later action spends or saves an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "pot"` to keep an unspent output in the Pot.
 
 ### Source actions
 
@@ -401,7 +401,7 @@ The venues the library does not cover, each through its own contract:
 | --------------------- | --------------------------------------------------------------------------------- | -------- |
 | `curveRouterNGSwap`   | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)` | received |
 | `balancerV2BatchSwap` | Vault `batchSwap`                                                                 | received |
-| `balancerV3Swap`      | Router `swapSingleTokenExactIn`, pulling through Permit2                          | received |
+| `balancerV3Swap`      | Router `swapSingleTokenExactIn`, through Permit2 or as ETH (`wethIsEth`)          | received |
 | `ambientSwap`         | CrocSwapDex `userCmd(1, …)`                                                       | received |
 | `dodoV1Swap`          | DODO proxy `dodoSwapV1`, for legacy V1 (Classical) pairs                          | received |
 | `carbonSwap`          | CarbonController `tradeBySourceAmount`                                            | received |
@@ -412,7 +412,7 @@ The venues the library does not cover, each through its own contract:
 
 | Action            | Calls                                                    | Output     |
 | ----------------- | -------------------------------------------------------- | ---------- |
-| `acrossBridge`    | SpokePool `depositV3`, the same token on the destination | its amount |
+| `acrossBridge`    | SpokePool `depositV3`, for the destination chain's token | its amount |
 | `stargateBridge`  | Stargate V2 pool `quoteSend`, then `send` (taxi)         | its amount |
 | `cctpBridge`      | CCTP V2 TokenMessenger `depositForBurn`                  | its amount |
 | `hyperlaneBridge` | Warp route `quoteGasPayment`, then `transferRemote`      | its amount |
@@ -455,7 +455,7 @@ The venues the library does not cover, each through its own contract:
 
 ### Notes
 
-- **Approvals.** A `@sauce/router` swap needs none: it pushes its input to the pool, or approves exactly its input itself (`curveSwap`, `balancerV2Swap`, leaving a zero allowance), or the Pot's Router pays the pool from the Pot. Any other venue that pulls from the Pot needs an approval first; the field docs in the schema say which. DODO V1 pulls through its DODOApprove contract, not the proxy. Balancer V3's router pulls through Permit2: `approve` the token to Permit2, then `permit2Approve` the router. A Hyperlane warp route that charges a fee pulls the amount plus the fee, so approve more than the amount.
+- **Approvals.** A `@sauce/router` swap needs none: it pushes its input to the pool, or approves exactly its input itself (`curveSwap`, `balancerV2Swap`, leaving a zero allowance), or the Pot's Router pays the pool from the Pot. Any other venue that pulls from the Pot needs an approval first; the field docs in the schema say which. DODO V1 pulls through its DODOApprove contract, not the proxy. Balancer V3's router pulls through Permit2: `approve` the token to Permit2, then `permit2Approve` the router (not for a WETH input under `wethIsEth`, which the Pot pays in ETH). A Hyperlane warp route that charges a fee pulls the amount plus the fee, so approve more than the amount.
 - **Paths.** A swap through several pools is several swap actions: each spends the previous one's output, which arrives in the Pot. The Uniswap and Maverick periphery routers' multi-hop entry points are not actions; Curve's RouterNG and Balancer's `batchSwap` are, because they reach swap types and Vault netting the per-pool functions do not.
 - **Direction and orientation** come from the action's own fields, and a trade that contradicts them is refused before anything moves: a Uniswap V2 or V4 direction is the sort order of `tokenIn` and `tokenOut`; `dodoV2Swap` must trade the `baseToken`/`quoteToken` it names, and `traderJoeLBSwap` the `tokenX`/`tokenY` it names or, when it names neither, the ones the program reads from the pair; the library checks a V3 or Maverick pool's tokens. Where the tokens are names, the check runs once the compile has resolved them.
 - **Uniswap V4** takes the pool key as `tokenIn` and `tokenOut` in sort order with `fee`, `tickSpacing` and `hooks` (absent for none); `"native"` is the native currency, keyed as the zero address, which the Pot pays from its own balance.
@@ -465,7 +465,8 @@ The venues the library does not cover, each through its own contract:
   - The output and `amountOutMin` refer to the last step's `assetOutIndex`, wherever that asset appears in `assets`. The floor is on the Pot's balance of that asset: its net payout across the whole batch, not just the final step's proceeds.
   - Other assets have no output floor, including assets received by earlier independent legs; their limits let the Vault take any amount.
   - `"native"` and the zero address are the same asset; native ETH and WETH remain separate Pot balances. The batch sends no native value to the Vault, so a native-input batch reverts even when the Pot holds enough ETH.
-- **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
+- **Balancer V3 `wethIsEth`** trades the router's own WETH (its `getWeth()`) as native ETH. A WETH `tokenIn` is paid from the Pot's ETH: the amount is sent as the call's value, and the router wraps exactly that. A WETH `tokenOut` is paid to the Pot as ETH, and is the output. Any other token is pulled through Permit2, as without the flag.
+- **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. The deposit names the token a relayer sends on the destination, its `outputToken`: by default the registry's token of `token`'s symbol on `destChainId` (Optimism's USDC for Ethereum's, at another address); give `outputToken`, its address on the destination, for a token of another symbol there (Arbitrum's `USDT0` for Ethereum's `USDT`). Either way the registry must list both tokens, with the same decimals, since the deposit asks for `amount - relayerFee` of the output counted in the input's units: a token it does not list on both chains (any BNB Chain token, for one) is refused rather than deposited for an amount in the wrong units. A deposit to the program's own chain, between a mainnet and a testnet, or for the zero address as `outputToken` (which the SpokePool refuses, `InvalidOutputToken`) is refused too. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
 - **Stargate** sends in taxi mode and refunds the Pot. **CCTP** lets anyone relay the mint (`destinationCaller` is zero); `maxFee` defaults to `"0"` and `minFinalityThreshold` to 2000, a standard transfer.
 - **Lido withdrawals** mint the withdrawal NFT to `owner`, which claims the ETH once Lido finalizes it.
 - **Rocket Pool** upgrades move the deposit pool: read the live address from RocketStorage. rETH refuses to move in the block it was minted in, so a program cannot stake and then transfer or burn the same rETH.

@@ -35,10 +35,6 @@
 //                                                                  rendered as a guide
 //   ../guides/solana-distributed-swap.md                           the `sauce-solana-distributed-swap`
 //                                                                  skill and its venues reference
-//   ../guides/solidity-examples.md                                 the protocols' own examples ported to
-//                                                                  Sauce (`PORTED_EXAMPLES`): each
-//                                                                  official source, its line counts
-//                                                                  and the program's whole file
 //
 // The two audiences differ only in their links and in how they name what the other has: a skill
 // names another skill (`sauce-swaps`), and a manual page links the page that covers it. The manual
@@ -92,29 +88,6 @@ export const DOCS_GENERATED_DIRS = [".", "chains", "protocols"];
  *  skills, by path relative to `docs/reference/`. */
 export const DISTRIBUTED_SWAP_GUIDE = "../guides/distributed-swap.md";
 export const SOLANA_DISTRIBUTED_SWAP_GUIDE = "../guides/solana-distributed-swap.md";
-/** The protocols' own examples ported to Sauce, as a guide. */
-export const SOLIDITY_EXAMPLES_GUIDE = "../guides/solidity-examples.md";
-
-/**
- * The example programs that port a protocol's own example, in the guide's order: the heading each
- * gets, and its file under `skills/`. Each file's header names its source in a `Ported from` line,
- * which the guide links; an example with such a line that is not listed here is an error.
- */
-export const PORTED_EXAMPLES = [
-  ["Uniswap V3: the swap examples", "sauce-swaps/examples/uniswap-v3-swap-examples.sauce.ts"],
-  ["Uniswap V3: a flash, as a flash swap", "sauce-swaps/examples/uniswap-v3-pair-flash.sauce.ts"],
-  [
-    "Uniswap V3: the liquidity examples",
-    "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts",
-  ],
-  ["Aave V3: credit delegation", "sauce-protocols/examples/aave-v3-credit-delegation.sauce.ts"],
-  ["Compound III: MyContract", "sauce-protocols/examples/compound-v3-my-contract.sauce.ts"],
-  ["Morpho Blue: the snippets", "sauce-protocols/examples/morpho-blue-snippets.sauce.ts"],
-  ["Pendle: the router samples", "sauce-protocols/examples/pendle-router-sample.sauce.ts"],
-  ["Uniswap V4: the swap guide", "sauce-swaps/examples/uniswap-v4-swap.sauce.ts"],
-  ["Balancer V2: batch swaps", "sauce-swaps/examples/balancer-v2-batch-swap.sauce.ts"],
-  ["Balancer V2: a flash swap", "sauce-swaps/examples/balancer-v2-flash-swap.sauce.ts"],
-];
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
 
@@ -484,6 +457,9 @@ export async function skillsReferences(api, documented) {
         .map((p) => ({ ...p, deployed: p.deployed.filter((d) => d.chain === chain.slug) })),
       venues: sourceGlobals.get(chain.slug).venues ?? [],
       accounts: sourceGlobals.get(chain.slug).accounts ?? [],
+      // The chain id a program compiled for the chain reads: on Solana, what its cluster's engine
+      // reports, which is not the SDK's key for testnet.
+      programChainId: String(names.defines.chainId),
     };
   });
 
@@ -698,20 +674,28 @@ const CHAIN_NOTES = {
     "Flashblocks state, so a read right after a send uses `pending` to see it.",
   ],
   solana: [
-    "The release's engine and Kitchen are deployed on mainnet, devnet and testnet. For devnet,",
-    "use `--chain solana-devnet` to resolve the chain id and token symbols to devnet's.",
-    "For testnet, use `--chain solana --rpc-url <testnet-rpc-url>` and explicit testnet",
-    "mint addresses: there is no testnet chain alias or token registry. The endpoint does not change",
-    "`solana`'s compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the",
-    "running cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees.",
-    "Local simulation selects the released engine build from the endpoint's cluster. The SDK's",
-    "venues are mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.",
+    "The release's engine and Kitchen are deployed on mainnet, devnet and testnet. Each test",
+    "cluster is a chain of its own: `--chain solana-devnet` and `--chain solana-testnet` resolve the",
+    "chain id and token symbols to that cluster's. An endpoint does not change `solana`'s",
+    "compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the running",
+    "cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees. Local",
+    "simulation selects the released engine build from the endpoint's cluster. The SDK's venues are",
+    "mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.",
   ],
   "solana-devnet": [
     "Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as",
     "1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's",
     "engine and Kitchen are deployed on devnet, with zero execution fees. The Solana venues are",
     "mainnet's programs and pools, so a venue name is refused here.",
+  ],
+  "solana-testnet": [
+    "Solana's testnet cluster, a chain of its own. Testnet runs devnet's engine build, so a program",
+    "compiled for it reads its chain id as 1399811150, as on devnet; 1399811151 is the SDK's key for",
+    "the chain, which names it to the command and the Pot store and which no program reads. Its",
+    "symbols are testnet's mints: the wrapped native alone, as Circle publishes no testnet USDC. The",
+    "release's engine and Kitchen are deployed on testnet, with zero execution fees. Its endpoint",
+    "must serve testnet: one of another cluster is refused. The Solana venues are mainnet's",
+    "programs and pools, so a venue name is refused here.",
   ],
 };
 
@@ -907,9 +891,10 @@ function renderGlobals(data) {
       "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
       "accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the",
       "symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions",
-      "(`balanceOf(USDC, account)`). Devnet is a chain of its own, `solana-devnet`: compiled for it,",
-      "the same symbols are devnet's mints. Each chain's file in `sauce-chains` names each mint's",
-      "token program: legacy SPL Token, or Token-2022, whose mints move by the checked writes.",
+      "(`balanceOf(USDC, account)`). Devnet and testnet are chains of their own, `solana-devnet` and",
+      "`solana-testnet`: compiled for one, the same symbols are its mints. Each chain's file in",
+      "`sauce-chains` names each mint's token program: legacy SPL Token, or Token-2022, whose mints",
+      "move by the checked writes.",
     );
   }
   tokens.push(
@@ -1163,7 +1148,7 @@ function renderChain(chain, support, site) {
     "| --- | --- |",
     `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and read; no transaction is built or sent"} |`,
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
-    `| Chain id | ${chain.id} |`,
+    `| Chain id | ${chain.id}${chain.programChainId === String(chain.id) ? "" : `, the SDK's key for the chain; a program reads ${chain.programChainId} (\`chainId\`, \`ctx.chainId()\`)`} |`,
     `| Kind | ${kindName(chain.kind)} |`,
     ...(chain.testnet ? ["| Network | testnet: its coin and tokens have no value |"] : []),
     `| Name in a program | \`${chain.key}\` |`,
@@ -1447,12 +1432,10 @@ function renderDeploymentsPage(data) {
     "",
     "The released EVM engine and Kitchen are deployed on Ethereum Sepolia, Base Sepolia and Arc",
     "Testnet. The released Solana engine and Kitchen are deployed on devnet and testnet, with zero",
-    "execution fees. Testnet uses devnet's engine build and chain id 1399811150; it has no separate",
-    "chain alias or token registry. Use `--chain solana --rpc-url <testnet-rpc-url>`",
-    "and explicit testnet mint addresses. The endpoint does not change compile-time chain identity;",
-    "`ctx.chainId()` reads the running cluster's chain id. The",
-    "[endpoint guide](../guides/cli.md#pick-a-chain-and-an-endpoint) explains the limits. Engine",
-    "deployment does not establish venue deployments: the SDK's Solana venues remain mainnet-only.",
+    "execution fees: `--chain solana-devnet` and `--chain solana-testnet`. Testnet runs devnet's",
+    "engine build, so a program compiled for either reads chain id 1399811150; `solana-testnet`'s",
+    "own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue",
+    "deployments: the SDK's Solana venues remain mainnet-only.",
     "",
     "## The release",
     "",
@@ -2159,103 +2142,6 @@ function renderCommandReference(commands) {
   return lines.join("\n");
 }
 
-/** A file's lines that are neither blank nor only a comment: the code a reader reads. */
-function codeLines(text) {
-  return text
-    .replace(/\/\*[^]*?\*\//g, (comment) => "\n".repeat(comment.split("\n").length - 1))
-    .split("\n")
-    .filter((line) => line.trim() !== "" && !line.trim().startsWith("//")).length;
-}
-
-/** A file's lines, the last newline not counted as another. */
-const allLines = (text) => text.trimEnd().split("\n").length;
-
-/**
- * The ported examples as one guide: for each, its official source (from the header's `Ported from`
- * paragraph: `Ported from <repo>, <path> (<n> lines, <m> of code):` and the URL on the next line),
- * both programs' line counts, and the Sauce program's whole file, whose header says what changed.
- */
-function renderPortedGuide(examples) {
-  const ported = examples.map(({ heading, path, text }) => {
-    const lines = text.split("\n");
-    const at = lines.findIndex((line) => line.startsWith("// Ported from "));
-    const source = /^\/\/ Ported from ([^,]+), (.+) \((\d+) lines, (\d+) of code\):$/.exec(
-      lines[at] ?? "",
-    );
-    const url = /^\/\/ (https:\/\/\S+)$/.exec(lines[at + 1] ?? "");
-    if (source === null || url === null)
-      throw new Error(
-        `${path} has no "// Ported from <repo>, <path> (<n> lines, <m> of code):" line and URL`,
-      );
-    const [, repo, file, total, code] = source;
-
-    return { heading, path, text, repo, file, total, code, url: url[1] };
-  });
-  const anchor = (heading) =>
-    heading
-      .toLowerCase()
-      .replace(/[^a-z0-9 -]/g, "")
-      .replace(/ /g, "-");
-
-  return [
-    "<!-- Generated by sdk/scripts/gen-skills-references.mjs from the examples PORTED_EXAMPLES lists. Edit those files, or the generator, not this page. -->",
-    "",
-    "# From Solidity examples to Sauce",
-    "",
-    "The protocols publish their own examples in Solidity: a contract you deploy, fund and then call.",
-    "Each example below is one of them ported to Sauce: one program, compiled for a chain and sent as",
-    "one transaction from your Pot, with nothing deployed. The protocol's contracts are named, never",
-    "written as addresses (`UniswapV3.SwapRouter`), each function of the Solidity contract is a",
-    "function of the program, and what it took as arguments `main` takes. The header of each program",
-    "says what changed and why, and gives the `sauce` command that runs it.",
-    "",
-    "Every program here runs, not only compiles, before the package ships: through `sauce simulate`",
-    "and `sauce run` on Ethereum's state at a fixed block, against the protocols' deployed contracts,",
-    "with the tokens it spends already in the Pot and each result held to the protocol's own quotes",
-    "and accounts. The Uniswap flash swap is an arbitrage, so it runs there only after another trade",
-    "has moved one of its two pools: with its header's example on a block where the pools agree, the",
-    "cycle loses both fees and the whole transaction reverts, moving nothing. DAI is not one of the",
-    "`sauce` command's token symbols on Ethereum, so `--fund` and `--assume-balance` take it by its",
-    "address, which `sauce globals --chain ethereum --protocol Maker` gives.",
-    "",
-    "A flash loan changes most. A lender pays first and then calls its borrower back to be repaid,",
-    "Uniswap's pool through `uniswapV3FlashCallback` and Aave's Pool through `executeOperation`, and",
-    "a Pot cannot be called back by a program. The flash a program has is its Router's: a swap whose",
-    "output arrives first, with a program run inside the swap's callback, before the pool is paid.",
-    "Uniswap's `PairFlash` is ported that way below; Aave's flash-loan receiver has no port, since",
-    "the same trade is that flash swap. Balancer's flash swap needs no callback at all: the Vault",
-    "settles a batch of swaps as a whole, so it ports as it is.",
-    "",
-    "What a port saves is the contract, not its length: nothing is deployed, funded or upgraded, and",
-    "nothing holds an approval between transactions, since the program runs in your Pot and is gone.",
-    "Some ports come out shorter than their Solidity and some about as long, as the counts below show.",
-    "Lines are counted whole, and as code: neither blank nor only a comment. A Solidity count leaves",
-    "out the libraries and interfaces the example imports; a Sauce program imports nothing it does",
-    "not ship with.",
-    "",
-    "| Example | Ported from | Solidity lines (code) | Sauce lines (code) |",
-    "| --- | --- | ---: | ---: |",
-    ...ported.map(
-      (p) =>
-        `| [${p.heading}](#${anchor(p.heading)}) | [${p.repo}, \`${posix.basename(p.file)}\`](${p.url}) | ` +
-        `${p.total} (${p.code}) | ${allLines(p.text)} (${codeLines(p.text)}) |`,
-    ),
-    "",
-    ...ported.flatMap((p) => [
-      `## ${p.heading}`,
-      "",
-      `Ported from ${p.repo}, [\`${p.file}\`](${p.url}): ${p.total} lines of Solidity, ${p.code} of` +
-        ` them code. In Sauce, \`${posix.basename(p.path)}\`: ${allLines(p.text)} lines, ` +
-        `${codeLines(p.text)} of them code.`,
-      "",
-      "```ts",
-      ...p.text.trimEnd().split("\n"),
-      "```",
-      "",
-    ]),
-  ].join("\n");
-}
-
 /** The note a page rendered from a skill opens with: its source, so an edit goes there. */
 const renderedFrom = (file) =>
   `<!-- Generated from ${relative(join(SDK, ".."), file)} for the manual. Edit that file, not this one. -->`;
@@ -2320,7 +2206,6 @@ export function renderDocsReference(data, skillFiles) {
       ),
     ].join("\n"),
   };
-  files[SOLIDITY_EXAMPLES_GUIDE] = renderPortedGuide(skillFiles.ported);
   for (const chain of data.chains) {
     files[site.chain(chain.slug)] = renderChain(chain, data.support, site);
     if (chain.tokens.some((t) => t.stock))
@@ -2401,7 +2286,6 @@ function introduced(page, path, intro, next) {
     protocols: link("Protocols", "reference/protocols.md"),
     [DISTRIBUTED_SWAP_GUIDE]: link("`@sauce/router`", "api/router.md"),
     [SOLANA_DISTRIBUTED_SWAP_GUIDE]: link("Solana", "guides/solana.md"),
-    [SOLIDITY_EXAMPLES_GUIDE]: link("Protocols and tokens", "guides/protocols-and-tokens.md"),
   }[path.startsWith("../guides/") ? path : posix.dirname(path)];
   const crumb = [
     path.startsWith("../guides/") ? "**How-to guide**" : "**Reference**",
@@ -2491,10 +2375,6 @@ function docsNext(data) {
       ["`@sauce/router` on Solana", "api/router-solana.md", "every Solana venue's swap function"],
       ["How Sauce runs on Solana", "concepts/solana-model.md", "accounts, staging and compute"],
     ],
-    [SOLIDITY_EXAMPLES_GUIDE]: [
-      ["Protocols and tokens", "guides/protocols-and-tokens.md", "calling protocols by name"],
-      ["Run a program", "guides/cli-run.md", "simulate a ported example, then run it"],
-    ],
   };
   for (const chain of data.chains) {
     next[site.chain(chain.slug)] = [
@@ -2571,10 +2451,6 @@ function docsIntros(data) {
       "The same order on Solana: buy a lot of a token, never paying more than a set price for any " +
       "of it, spread over the pools of several Solana exchanges. Each pool sells what it can below " +
       "your price, and what you have not spent moves on to the next, in one transaction.",
-    [SOLIDITY_EXAMPLES_GUIDE]:
-      "Protocols publish their examples as Solidity contracts you deploy, fund and call. Each one " +
-      "here is ported to Sauce: one program that does the same from your Pot, in one transaction, " +
-      "with nothing deployed, shown beside the file it was ported from.",
   };
   for (const chain of data.chains) {
     intros[site.chain(chain.slug)] =
@@ -2683,29 +2559,7 @@ function skillFiles(dir, data) {
       "solana-distributed-swap.sauce.ts",
     ),
     solanaVenues: read("sauce-solana-distributed-swap", "references", "venues.md"),
-    ported: portedExamples(dir),
   };
-}
-
-/** The ported examples under the skills directory `dir`, in `PORTED_EXAMPLES`' order. */
-function portedExamples(dir) {
-  const listed = new Set(PORTED_EXAMPLES.map(([, path]) => path));
-  for (const skill of readdirSync(dir)) {
-    const examples = join(dir, skill, "examples");
-    if (!existsSync(examples)) continue;
-    for (const name of readdirSync(examples).filter((n) => n.endsWith(".sauce.ts"))) {
-      const path = `${skill}/examples/${name}`;
-      const text = readFileSync(join(examples, name), "utf8");
-      if (/^\/\/ Ported from /m.test(text) && !listed.has(path))
-        throw new Error(`${path} ports an example, but PORTED_EXAMPLES does not list it`);
-    }
-  }
-
-  return PORTED_EXAMPLES.map(([heading, path]) => ({
-    heading,
-    path,
-    text: readFileSync(join(dir, path), "utf8"),
-  }));
 }
 
 /** Each rendered file against the one in `dir`, and the files in its generated directories that

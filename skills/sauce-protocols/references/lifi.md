@@ -48,7 +48,7 @@ function main(
     },
     {
       receiverAddress: receiver,
-      refundAddress: receiver,
+      refundAddress: ctx.self(),
       sendingAssetId: sendingAsset,
       receivingAssetId: receivingAsset,
       outputAmount: outputAmount,
@@ -69,6 +69,11 @@ function main(
 - `referrer`: Referral address for fee sharing. `address(0)` for none
 - `sendingAssetId` / `receivingAssetId`: token sent, and token received on the destination
 - `minAmount` / `outputAmount`: amount bridged, and the amount the Across relayer delivers
+- `refundAddress`: where Across returns a deposit no relayer fills by `fillDeadline`, on the
+  source chain. The Pot (`ctx.self()`), which paid it: `receiver` is a destination address, which
+  the Pot's owner may not control on the source chain. The refund arrives after `fillDeadline`, in
+  a Pot a later cook can empty: on a Shared Pot (owner zero), which anyone may cook, it is anyone's,
+  so bridge from a Private Pot
 - `quoteTimestamp` / `fillDeadline`: the Across quote's timestamp and fill deadline
 - `hasSourceSwaps` / `hasDestinationCall`: `true` only with pre-bridge swaps or a destination call
 - Requires ERC-20 approval to the LiFi Diamond

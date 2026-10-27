@@ -454,12 +454,15 @@ const BLOCKHASH_SLOTS = 150n;
 
 /**
  * A Solana endpoint at `url`, answered from `svm`. `known` names the accounts `getProgramAccounts`
- * scans, the bank having no way to list its own: without it the call is refused.
+ * scans, the bank having no way to list its own: without it the call is refused. `genesisHash` is
+ * the cluster it says it serves: a local bank's by default, or a public cluster's, for a command
+ * held to that cluster (`solana-devnet`, `solana-testnet`).
  */
 export function solanaShim(
   svm: LiteSVM,
   url: string,
   known?: () => readonly Address[],
+  genesisHash: string = SHIM_GENESIS_HASH,
 ): SolanaShim {
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
@@ -594,7 +597,7 @@ export function solanaShim(
       }
       // A local bank is no public cluster: a Pot created on it is recorded as this one's.
       case "getGenesisHash":
-        return answer(id, SHIM_GENESIS_HASH);
+        return answer(id, genesisHash);
       case "getSlot": {
         // No commitment is the server's default, finalized (which a client leaves out).
         const commitment = (params[0] as { commitment?: string } | undefined)?.commitment;

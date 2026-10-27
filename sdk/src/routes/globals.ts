@@ -108,7 +108,7 @@ export function uninstallRouteGlobals(target: object = globalThis): void {
 
 /**
  * The most recent `installRouteGlobals()` result -- EMPTY until a host calls
- * it, because the SDK no longer installs on import. A live view rather than a
+ * it, because importing the SDK installs nothing. A live view rather than a
  * frozen snapshot, so it can never claim an install that has since been
  * undone; `uninstallRouteGlobals()` resets it.
  */

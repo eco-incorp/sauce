@@ -100,6 +100,33 @@ describe("split swap — program shape", () => {
     }
   });
 
+  it("writes every counter before reading it: the Pot's transient storage outlives the cook", () => {
+    // A split cooked earlier in the same transaction leaves its used/total/marg behind; the init
+    // loop must overwrite all three (split-swap.mainnet.test.ts runs two cooks in one transaction).
+    for (const N of [1, 3]) {
+      const text = source(swap(N, 2));
+      const init = text.indexOf(`for (let i = 0; i < ${N}; i = i + 1) {`);
+      assert.ok(init >= 0 && init < text.indexOf("evm.tload("), "the init loop comes first");
+      const loop = text.slice(init, text.indexOf("}", init));
+      assert.match(loop, /evm\.tstore\(i, 0\);/);
+      assert.match(loop, new RegExp(`evm\\.tstore\\(${N} \\+ i, 0\\);`));
+      assert.match(loop, new RegExp(`evm\\.tstore\\(${2 * N} \\+ i, quote_any\\(i, `));
+    }
+  });
+
+  it("spends at most its buckets: the execute loop caps the slices it reads", () => {
+    // A cook nested in a leg's external call shares the counters and could raise used[k] between
+    // the greedy and execute passes; the cap after the loop reverts instead of overspending.
+    for (const n of [1, 4]) {
+      const text = source(swap(3, n));
+      const execute = text.slice(text.indexOf("let totalOut = 0;"));
+      assert.match(execute, /slices = slices \+ share;/);
+      assert.match(execute, /swap_any\(k, share \* /);
+      const cap = execute.indexOf(`require(slices <= ${n});`);
+      assert.ok(cap > execute.lastIndexOf("swap_any("), "the cap follows every leg");
+    }
+  });
+
   it("every candidate is reachable from both dispatchers", () => {
     const text = source(swap(4, 4));
     const quoteAny = text.slice(
@@ -193,6 +220,25 @@ describe("split swap — approvals and the sweep", () => {
             issue.message === 'the Pot is "pot", not "self": write "pot"',
         ),
     );
+  });
+
+  it("refuses a sweep recipient an ordinary transfer refuses, instead of padding it to an address", () => {
+    // `"0x1"` and `"1"` would be left-padded to 0x…01, an address no one holds a key to: the swept
+    // output would be burned. `parseActions` rejects each of them for a plain `transfer`.
+    for (const recipient of ["0x1", "1", "0", "0x0", "", "0xdeadbeef"]) {
+      assert.throws(
+        () =>
+          compileSplitSwap(
+            swap(2, 1, {
+              sweep: { token: USDT, recipient } as unknown as SplitSwap["sweep"],
+            }),
+          ),
+        (error: unknown) =>
+          error instanceof ProgramError &&
+          error.issues.some((issue) => issue.path.startsWith("sweep.")),
+        `recipient ${JSON.stringify(recipient)}`,
+      );
+    }
   });
 
   it("refuses a retired sweep recipient as document validation, whatever the chain", () => {

@@ -127,6 +127,77 @@ describe("action programs — chaining is part of the document", () => {
   });
 });
 
+describe("action programs — an output a later action spends is delivered to the Pot", () => {
+  const EXTERNAL = "0x3000000000000000000000000000000000000001";
+  const withdraw = {
+    type: "aaveV3Withdraw",
+    pool: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+    token: USDC,
+    amount: "1000000",
+    recipient: EXTERNAL,
+  };
+  const lowered = (actions: unknown[]): string =>
+    compileProgram(parseProgram({ version: 1, chainId: 1, actions })).source;
+
+  it("withdraws to the Pot, whatever its recipient says, when a later action spends the output", () => {
+    const source = lowered([withdraw, { type: "transfer", token: USDC, recipient: EXTERNAL }]);
+    assert.match(source, /\.withdraw\([^;]*, 1000000, pot\);/);
+  });
+
+  it("withdraws to the Pot when a named output is read later", () => {
+    const source = lowered([
+      { ...withdraw, saveOutputAs: "out" },
+      { type: "transfer", token: USDC, recipient: EXTERNAL, amountRef: "out" },
+    ]);
+    assert.match(source, /\.withdraw\([^;]*, 1000000, pot\);/);
+  });
+
+  it("keeps the recipient when nothing spends the output", () => {
+    const source = lowered([withdraw]);
+    assert.match(
+      source,
+      /\.withdraw\([^;]*, 1000000, 0x3000000000000000000000000000000000000001\);/,
+    );
+  });
+});
+
+describe("action programs — an ambientSwap spends its amount", () => {
+  const ambient = (isBuy: boolean, inBaseQty: boolean) => ({
+    ...SAMPLES.ambientSwap,
+    isBuy,
+    inBaseQty,
+  });
+  const parse = (action: unknown) => parseProgram({ version: 1, chainId: 1, actions: [action] });
+
+  it("accepts the amount denominated in the token paid, in both directions", () => {
+    for (const [isBuy, inBaseQty] of [
+      [true, true],
+      [false, false],
+    ] as const) {
+      assert.doesNotThrow(() => parse(ambient(isBuy, inBaseQty)), `${isBuy}/${inBaseQty}`);
+    }
+  });
+
+  it("refuses an exact-output pairing, whose qty is what the Pot receives", () => {
+    for (const [isBuy, inBaseQty, wanted] of [
+      [true, false, "true"],
+      [false, true, "false"],
+    ] as const) {
+      assert.throws(
+        () => parse(ambient(isBuy, inBaseQty)),
+        (error: unknown) =>
+          error instanceof ProgramError &&
+          error.issues.some(
+            (issue) =>
+              issue.path === "actions[0].inBaseQty" &&
+              issue.message.startsWith(`must be ${wanted}: the amount is what the swap spends`),
+          ),
+        `${isBuy}/${inBaseQty}`,
+      );
+    }
+  });
+});
+
 describe("action programs — errors are precise and complete", () => {
   const cases: Array<[string, unknown, RegExp]> = [
     [

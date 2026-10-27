@@ -80,7 +80,7 @@ export interface SvmVenueAccessor {
   poolConfig(load: OwnedAccountLoader, pool: Address): Promise<PoolConfig>;
   /** `adapter.quoteAccounts` — the read-only accounts the quote fragment reads. */
   quoteAccounts(cfg: PoolConfig): VenueAccount[];
-  /** `adapter.emitQuote` — a SauceScript fragment; `amountIn` is baked as a compile-time literal, not amount-parametric. */
+  /** `adapter.emitQuote` — a SauceScript fragment; `amountIn` is baked as a compile-time literal, not amount-parametric. A quote of 0 means the venue is unusable for this amount. */
   quoteSource(cfg: PoolConfig, i: number, amountIn: bigint): string;
   /** `adapter.buildSwap` — pure encoding; `accounts` entries are refs the caller resolves, and venue-level min_out is 1. */
   swap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap;

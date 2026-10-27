@@ -9,8 +9,10 @@
  *
  * Main algorithm (all three passes are real `for` loops — the per-candidate state lives in
  * transient storage keyed by `i`):
- *   1. Init:    for i in 0..N-1 { marg[i] = quote_any(i, bucket); }
- *               used[i] and total[i] default to 0 (TLOAD of untouched keys).
+ *   1. Init:    for i in 0..N-1 { used[i] = 0; total[i] = 0; marg[i] = quote_any(i, bucket); }
+ *               Every key is written here before any pass reads it. Transient storage is the
+ *               Pot's and lasts the whole transaction, not the cook, so an earlier cook in the
+ *               same transaction (another split, or this one again) may have left values behind.
  *   2. Greedy:  for iter in 0..n-1 {
  *                 for i in 0..N-1 argmax → (bestMarg, bestIdx);
  *                 used[bestIdx]  += 1;
@@ -120,6 +122,17 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
   const sweepAction: Action[] =
     sweep === undefined ? [] : [{ type: "transfer", amount: "0", ...sweep }];
+  // The sweep is lowered as a transfer, so a malformed recipient (`"0x1"`, `"1"`) must be refused
+  // here as a transfer's would be, not left-padded to an address the swept output is burned at.
+  try {
+    parseActions(sweepAction, "sweep");
+  } catch (error) {
+    if (!(error instanceof ProgramError)) throw error;
+    // The sweep is one object, not a list: name `sweep.recipient`, not `sweep[0].recipient`.
+    throw new ProgramError(
+      error.issues.map((issue) => ({ ...issue, path: issue.path.replace(/^sweep\[0\]/, "sweep") })),
+    );
+  }
   if (usesNames([...candidates, ...approvals, ...sweepAction])) {
     if (chain === undefined) {
       throw new Error(
@@ -286,9 +299,14 @@ function mainFn(
     );
   }
 
-  // Init loop: marg[i] = quote_any(i, bucket).
+  // Init loop: used[i] = 0, total[i] = 0, marg[i] = quote_any(i, bucket). The zeroing is what makes
+  // the counters this cook's own: the Pot's transient storage outlives the cook, so a split cooked
+  // earlier in the same transaction left its used/total behind, and inheriting them swapped more
+  // than `amount` and swept the excess to this cook's recipient.
   body.push(
     `for (let i = 0; i < ${N}; i = i + 1) {`,
+    `  evm.tstore(${key(0, "i")}, 0);`,
+    `  evm.tstore(${key(N, "i")}, 0);`,
     `  evm.tstore(${key(2 * N, "i")}, quote_any(i, ${bucketExpr}));`,
     "}",
   );
@@ -324,13 +342,19 @@ function mainFn(
   );
 
   // Execute loop: dispatch the swap for every candidate with used > 0, summing what each returns.
+  // The slices spent are capped at `n`: a cook nested inside a leg's external call shares these
+  // keys and could raise used[k] between the passes; the cap reverts instead of overspending.
   body.push(
     "let totalOut = 0;",
+    "let slices = 0;",
     `for (let k = 0; k < ${N}; k = k + 1) {`,
-    `  if (${used("k")} > 0) {`,
-    `    totalOut = totalOut + swap_any(k, ${used("k")} * ${bucketExpr});`,
+    `  const share = ${used("k")};`,
+    "  if (share > 0) {",
+    "    slices = slices + share;",
+    `    totalOut = totalOut + swap_any(k, share * ${bucketExpr});`,
     "  }",
     "}",
+    `require(slices <= ${n});`,
   );
 
   // The aggregate floor, over the realized sum — see `SplitSwap.amountOutMin`.
