@@ -138,6 +138,9 @@ nothing moves.
 - **Fixed: `sauce tx --fund ETH:<amount>` with no token to fund carries the amount in the cook's
   value.** A plan that was the cook alone (no transfer and no deployment to plan) took the Kitchen's
   fee as its value and dropped the native amount, so the cook ran without it.
+- **Fixed: `sauce mcp --http` starts its RPC guard again after a start that failed.** The guard's
+  loopback forwarder kept its first start, failed or not, so one failure to listen made every later
+  tool call given an `rpcUrl` fail until the server was restarted.
 
 ### The registry
 
