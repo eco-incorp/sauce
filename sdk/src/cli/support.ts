@@ -6,7 +6,7 @@
  * skills' generator and checker read the built module.
  *
  * For the initial release the command supports transactions on four chains: Ethereum, Base, Arc
- * and Solana, and on Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet
+ * and Solana, and on Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet
  * ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
  * program for it compiles, and the command's reads work there (`globals`, `price`, `pools`, `pot`'s
  * prediction), but it builds no transaction for it to sign and sends none. Simulation is not
@@ -51,6 +51,7 @@ export const SUPPORTED_TESTNET_SLUGS = [
   "base-sepolia",
   "sepolia",
   "solana-devnet",
+  "solana-testnet",
 ] as const;
 
 /** The chains the release supports, by slug, in the order the docs name them: the testnets last. */

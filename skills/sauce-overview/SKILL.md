@@ -82,10 +82,11 @@ bridge protocol (`sauce-protocols`).
 ## Supported and preview chains
 
 Transactions are built and sent on **Ethereum, Base, Arc and Solana** (`ethereum`, `base`, `arc`,
-`solana`), and on the testnets **Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet**
-(`arc-testnet`, `base-sepolia`, `sepolia`, `solana-devnet`), whose coin and tokens have no value,
-only. Every other chain the SDK knows is a **preview chain**: a program compiles for it and reads
-work there, and a simulation runs wherever the release is deployed on the chain, but
+`solana`), and on the testnets **Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and
+Solana Testnet** (`arc-testnet`, `base-sepolia`, `sepolia`, `solana-devnet`, `solana-testnet`),
+whose coin and tokens have no value, only. Every other chain the SDK knows is a **preview chain**:
+a program compiles for it and reads work there, and a simulation runs wherever the release is
+deployed on the chain, but
 the `sauce` command and the MCP server build and send no transaction on it. The refusal comes
 before any key or endpoint is read, names the
 supported chains, and links that chain's request; no flag lifts it. Each chain's file in

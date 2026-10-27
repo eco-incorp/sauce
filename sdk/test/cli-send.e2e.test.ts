@@ -177,7 +177,15 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(unfunded.plan.transactions).toHaveLength(2);
     expect(unfunded.plan.transactions[1]!.gas).toBeUndefined();
     expect(unfunded.notes).toMatch(/The cook is given no gas: simulated after the deployment/);
-    expect(unfunded.notes).toMatch(/Fund the Pot first/);
+    expect(unfunded.notes).toContain(
+      "The Pot has no code yet: deploy it first (`sauce pot --deploy` with the signer, or " +
+        "`sauce run --fund`, which deploys before it funds), and do not send tokens to its " +
+        "address before it is deployed, as a Kitchen upgrade that changes the Pot's code moves " +
+        "the address and strands them. Then build the plan again for its gas",
+    );
+    expect(unfunded.notes).not.toContain("takes tokens before it is deployed");
+    // Funded at the address here only to give the rehearsal a cook that succeeds; the plan's
+    // deployment and cook below are then sent and land.
     for (const token of [usdc, usdt]) await ethereum.mint(token, unfunded.plan.pot, FUNDED);
 
     const funded = await build();

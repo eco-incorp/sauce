@@ -8,7 +8,7 @@ import { ENGINE_CHAIN_IDS } from "./engine.js";
  * `createSauceSvmClient`.
  */
 export interface SolanaCluster {
-  cluster: "mainnet-beta" | "devnet" | "localnet";
+  cluster: "mainnet-beta" | "devnet" | "testnet" | "localnet";
   /** Synthetic chain id reported by the engine's CHAIN_ID opcode on this cluster. */
   engineChainId: bigint;
   /** No engine deployment exists yet — callers supply the program id, matching the repo convention. */
@@ -22,6 +22,11 @@ export const SOLANA_CLUSTERS: Record<SolanaCluster["cluster"], SolanaCluster> = 
   },
   devnet: {
     cluster: "devnet",
+    engineChainId: ENGINE_CHAIN_IDS.devnet,
+  },
+  // Testnet runs the devnet build, so its engine reports devnet's id.
+  testnet: {
+    cluster: "testnet",
     engineChainId: ENGINE_CHAIN_IDS.devnet,
   },
   localnet: {

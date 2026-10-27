@@ -12,8 +12,6 @@ import { svmTokenRows, TOKEN_REGISTRY } from "../routes/token-registry.js";
 
 /** The entry name `rs-compile.ts` compiles every route program under. */
 const ENTRY = "main.js";
-// eslint-disable-next-line no-control-regex
-const ANSI = /\u001b\[[0-9;]*m/g;
 
 /** `error`, a failure of compiling `text` (read from `file`) for `chain`, as a message about `file`. */
 export function describeCompileError(
@@ -22,7 +20,7 @@ export function describeCompileError(
   text: string,
   chain: CanonicalChain,
 ): string {
-  const message = (error instanceof Error ? error.message : String(error)).replace(ANSI, "");
+  const message = error instanceof Error ? error.message : String(error);
   const loc = (error as { loc?: { line?: unknown; column?: unknown } } | null)?.loc;
   if (error instanceof SyntaxError && typeof loc?.line === "number") {
     return syntaxError(message, loc.line, Number(loc.column ?? 0), file, text);
