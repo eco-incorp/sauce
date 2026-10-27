@@ -20,7 +20,7 @@ import { NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 
 import { ACTION_SPECS, type FieldKind } from "./spec.js";
 import { balancerBatchIssues, type ProgramIssue } from "./semantics.js";
-import type { Action } from "./types.js";
+import type { AcrossBridgeAction, Action } from "./types.js";
 
 /** A registry token symbol: the registry's own ticker rule (`token-registry.ts`). */
 export const TOKEN_SYMBOL_RE = /^[A-Z][A-Z0-9]{1,10}$/;
@@ -89,6 +89,8 @@ interface NamedContract {
 interface ChainNames {
   readonly chain: CanonicalChain;
   readonly tokens: ReadonlyMap<string, Address>;
+  /** Each token symbol's decimals. */
+  readonly decimals: ReadonlyMap<string, number>;
   /** Its tokenized stocks' symbols, which a refusal counts rather than lists. */
   readonly stocks: ReadonlySet<string>;
   /** `Namespace.Contract` -> the contract. */
@@ -120,12 +122,14 @@ export function chainNames(chain: CanonicalChain): ChainNames {
   }
   // The tokens and, among them, the stocks, in one pass: once per chain, as the whole listing is.
   const tokens = new Map<string, Address>();
+  const decimals = new Map<string, number>();
   const stocks = new Set<string>();
   for (const token of globals.tokens) {
     tokens.set(token.symbol, token.address);
+    decimals.set(token.symbol, token.decimals);
     if (token.stock !== undefined) stocks.add(token.symbol);
   }
-  const names: ChainNames = { chain, tokens, stocks, contracts, namespaces };
+  const names: ChainNames = { chain, tokens, decimals, stocks, contracts, namespaces };
   cache.set(chain.id, names);
 
   return names;
@@ -409,6 +413,126 @@ export function wrappedNativeIssues(
         ]
       : [],
   );
+}
+
+/** The registry symbol of the token at `address` on `names.chain`, if it lists one. */
+function symbolAt(address: string, names: ChainNames): string | undefined {
+  const wanted = address.toLowerCase();
+  for (const [symbol, at] of names.tokens) if (at.toLowerCase() === wanted) return symbol;
+
+  return undefined;
+}
+
+/**
+ * The token Across delivers for `action`, which deposits `input` on `names.chain`, or why the
+ * registry cannot say: `outputToken` as given, else the registry's token of `input`'s symbol on
+ * `destChainId`. The deposit asks for `amount - relayerFee` of it, counted in `input`'s units, so
+ * the registry must list both tokens, with the same decimals: a given `outputToken` it cannot
+ * check is refused rather than deposited for an amount in the wrong units.
+ */
+function acrossOutput(
+  action: AcrossBridgeAction,
+  input: string,
+  names: ChainNames,
+): { readonly address: Address } | { readonly problem: string } {
+  if (action.destChainId === names.chain.id) {
+    return {
+      problem: `chain ${action.destChainId} is the program's own chain: Across bridges to another one`,
+    };
+  }
+  if (action.outputToken?.toLowerCase() === ZERO_ADDRESS) {
+    return {
+      problem:
+        "the zero address is no token: the SpokePool refuses it (`InvalidOutputToken`), so give " +
+        "`outputToken`, the token's address on the destination",
+    };
+  }
+  const destination = (CANONICAL_CHAINS as readonly CanonicalChain[]).find(
+    (chain) => chain.kind === "evm" && chain.id === action.destChainId,
+  );
+  if (
+    destination !== undefined &&
+    (getChain(destination.id)?.testnet === true) !== (getChain(names.chain.id)?.testnet === true)
+  ) {
+    return {
+      problem: `${onChain(destination)} and ${onChain(names.chain)} are not both mainnets or both testnets: Across does not bridge between them`,
+    };
+  }
+  const there = destination === undefined ? undefined : chainNames(destination);
+  const symbol = symbolAt(input, names);
+  const output =
+    action.outputToken ?? (symbol === undefined ? undefined : there?.tokens.get(symbol));
+  if (output === undefined) {
+    const give = "give `outputToken`, the token's address there";
+    if (there === undefined) {
+      return {
+        problem: `chain ${action.destChainId} is not one of the SDK's EVM chains, so the registry has no token there to receive: ${give}`,
+      };
+    }
+    if (symbol === undefined) {
+      return {
+        problem: `${input} is not a registry token on ${onChain(names.chain)}, so the registry cannot find its counterpart on ${onChain(there.chain)}: ${give}`,
+      };
+    }
+
+    return { problem: `no token "${symbol}" on ${onChain(there.chain)} to receive: ${give}` };
+  }
+  const received = there === undefined ? undefined : symbolAt(output, there);
+  const sent = symbol === undefined ? undefined : names.decimals.get(symbol);
+  const got = received === undefined ? undefined : there?.decimals.get(received);
+  const units =
+    "the deposit asks for `amount - relayerFee` of the output, counted in the input's units";
+  if (sent === undefined || got === undefined) {
+    // Only a given `outputToken` reaches here: a default is the registry's token of `symbol`.
+    const unlisted =
+      sent === undefined
+        ? `${input} is not a registry token on ${onChain(names.chain)}`
+        : there === undefined
+          ? `chain ${action.destChainId} is not one of the SDK's EVM chains`
+          : `${output} is not a registry token on ${onChain(there.chain)}`;
+    const known = sent === undefined ? "" : ` (${symbol} has ${sent})`;
+    return {
+      problem:
+        `${unlisted}, so the registry cannot hold the output's decimals to the input's${known}: ` +
+        `an \`outputToken\` is taken only where the registry lists both tokens with the same decimals, since ${units}`,
+    };
+  }
+  if (sent !== got) {
+    return {
+      problem: `${symbol} has ${sent} decimals and ${received} on ${onChain(there!.chain)} has ${got}: ${units}`,
+    };
+  }
+
+  return { address: output as Address };
+}
+
+/**
+ * Every `acrossBridge` with its `outputToken`: the token a relayer sends on the destination, which
+ * the SpokePool takes as given. It refuses the zero address (`InvalidOutputToken`), and the
+ * deposited token's own address is the destination's token only where the two chains share it.
+ * `resolved` is `actions` with every name an address (`resolveNames`); a deposit whose output the
+ * registry cannot name, or cannot hold to the input's decimals, is refused at its `outputToken`.
+ */
+export function acrossOutputTokens(
+  actions: readonly Action[],
+  resolved: readonly Action[],
+  chain: CanonicalChain,
+  path = "actions",
+): { readonly actions: Action[]; readonly issues: ProgramIssue[] } {
+  const names = chainNames(chain);
+  const issues: ProgramIssue[] = [];
+  const out = actions.map((action, i): Action => {
+    if (action.type !== "acrossBridge") return action;
+    const found = acrossOutput(action, (resolved[i] as AcrossBridgeAction).token, names);
+    if ("problem" in found) {
+      issues.push({ path: `${path}[${i}].outputToken`, message: found.problem });
+      return action;
+    }
+
+    return { ...action, outputToken: found.address };
+  });
+
+  return { actions: out, issues };
 }
 
 /** True when any action names a token or a contract rather than giving its address. */

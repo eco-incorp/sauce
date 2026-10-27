@@ -361,6 +361,99 @@ describe("names — refused on the chain that lacks them", () => {
     assert.match(found[0]!, /no protocol namespace "UniswapV33" — did you mean UniswapV3\?/);
   });
 
+  describe("acrossBridge's outputToken, the token a relayer sends on the destination", () => {
+    const across = (fields: object): ActionProgram =>
+      doc({ ...SAMPLES.acrossBridge, outputToken: undefined, ...fields });
+    /** The `outputToken` argument of the program's `depositV3` call. */
+    const outputToken = (source: string): string | undefined =>
+      /depositV3\((.*)\);/.exec(source)?.[1]?.split(", ")[3];
+
+    it("defaults to the registry's token of the deposit's symbol on the destination", () => {
+      for (const token of ["USDC", addressOf("ethereum", "USDC")]) {
+        const { source } = compileProgram(across({ token, destChainId: 8453 }), {
+          chain: "ethereum",
+        });
+        assert.equal(outputToken(source), addressOf("base", "USDC").toLowerCase(), source);
+      }
+    });
+
+    it("takes an outputToken the registry lists with the deposit's decimals, as given", () => {
+      // Optimism's USDT, not the default USDC: a token of its own, with USDC's 6 decimals.
+      const given = addressOf("optimism", "USDT");
+      const { source } = compileProgram(across({ token: "USDC", outputToken: given }), {
+        chain: "ethereum",
+      });
+      assert.equal(outputToken(source), given.toLowerCase(), source);
+    });
+
+    const refused: [string, object, RegExp][] = [
+      [
+        "a token the registry does not list on the program's chain",
+        { token: "0x1000000000000000000000000000000000000001" },
+        /^actions\[0\]\.outputToken: 0x1000000000000000000000000000000000000001 is not a registry token on Ethereum \(chain 1\), so the registry cannot find its counterpart on Optimism \(chain 10\): give `outputToken`/,
+      ],
+      [
+        "an outputToken for a deposited token the registry does not list",
+        {
+          token: "0x1000000000000000000000000000000000000001",
+          outputToken: addressOf("optimism", "USDC"),
+        },
+        /^actions\[0\]\.outputToken: 0x1000000000000000000000000000000000000001 is not a registry token on Ethereum \(chain 1\), so the registry cannot hold the output's decimals to the input's: an `outputToken` is taken only where the registry lists both tokens with the same decimals/,
+      ],
+      [
+        "an outputToken the registry does not list on the destination (BNB Chain's 18-decimal USDC)",
+        {
+          token: "USDC",
+          destChainId: 56,
+          outputToken: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+        },
+        /^actions\[0\]\.outputToken: 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d is not a registry token on BNB Chain \(chain 56\), so the registry cannot hold the output's decimals to the input's \(USDC has 6\): an `outputToken` is taken only where the registry lists both tokens with the same decimals, since the deposit asks for `amount - relayerFee` of the output, counted in the input's units$/,
+      ],
+      [
+        "an outputToken on a destination that is not one of the SDK's chains",
+        { token: "USDC", destChainId: 999_999, outputToken: addressOf("optimism", "USDC") },
+        /^actions\[0\]\.outputToken: chain 999999 is not one of the SDK's EVM chains, so the registry cannot hold the output's decimals to the input's \(USDC has 6\)/,
+      ],
+      [
+        "a symbol the destination lacks",
+        { token: "USDC", destChainId: 56 },
+        /^actions\[0\]\.outputToken: no token "USDC" on BNB Chain \(chain 56\) to receive: give `outputToken`/,
+      ],
+      [
+        "a destination that is not one of the SDK's chains",
+        { token: "USDC", destChainId: 999_999 },
+        /^actions\[0\]\.outputToken: chain 999999 is not one of the SDK's EVM chains.*: give `outputToken`/,
+      ],
+      [
+        "an outputToken whose decimals are not the deposit's",
+        { token: "USDC", outputToken: addressOf("optimism", "WETH") },
+        /^actions\[0\]\.outputToken: USDC has 6 decimals and WETH on Optimism \(chain 10\) has 18: the deposit asks for `amount - relayerFee` of the output, counted in the input's units$/,
+      ],
+      [
+        "the zero address as the outputToken",
+        { token: "USDC", outputToken: "0x0000000000000000000000000000000000000000" },
+        /^actions\[0\]\.outputToken: the zero address is no token: the SpokePool refuses it \(`InvalidOutputToken`\)/,
+      ],
+      [
+        "the program's own chain as the destination",
+        { token: "USDC", destChainId: 1 },
+        /^actions\[0\]\.outputToken: chain 1 is the program's own chain: Across bridges to another one$/,
+      ],
+      [
+        "a testnet as the destination of a mainnet deposit",
+        { token: "USDC", destChainId: 11_155_111 },
+        /^actions\[0\]\.outputToken: Ethereum Sepolia \(chain 11155111\) and Ethereum \(chain 1\) are not both mainnets or both testnets/,
+      ],
+    ];
+    for (const [label, fields, message] of refused) {
+      it(`refuses ${label}`, () => {
+        const found = problems(() => compileProgram(across(fields), { chain: "ethereum" }));
+        assert.equal(found.length, 1, found.join("\n"));
+        assert.match(found[0]!, message);
+      });
+    }
+  });
+
   it("refuses a factory of the wrong kind for the key, naming the ones that fit", () => {
     const found = problems(() =>
       compileProgram(doc({ ...V3_BY_KEY, factory: "UniswapV2.Factory" }), { chain: "base" }),

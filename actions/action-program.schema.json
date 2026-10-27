@@ -1117,7 +1117,7 @@
     },
     "action_acrossBridge": {
       "title": "acrossBridge",
-      "description": "Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. Calls SpokePool.depositV3.",
+      "description": "Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. Calls SpokePool.depositV3.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1144,7 +1144,11 @@
           "$ref": "#/$defs/contract",
           "description": "the origin SpokePool; it pulls the token, so approve it first"
         },
-        "token": { "$ref": "#/$defs/token", "description": "the token bridged (input and output)" },
+        "token": { "$ref": "#/$defs/token", "description": "the token deposited, on this chain" },
+        "outputToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId`"
+        },
         "destChainId": {
           "type": "integer",
           "minimum": 1,

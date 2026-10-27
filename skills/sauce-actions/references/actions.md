@@ -50,7 +50,7 @@ A sequence of protocol actions that compiles to one Sauce program executing on o
 | [`carbonSwap`](#carbonswap) | Trades against Carbon strategies by source amount; the controller pays the Pot. |
 | [`fraxswapSwap`](#fraxswapswap) | Swaps an exact input along a Fraxswap path; the output is a balance delta. |
 | [`fluidDexT1Swap`](#fluiddext1swap) | Swaps an exact ERC-20 input through a Fluid DEX T1 pool. |
-| [`acrossBridge`](#acrossbridge) | Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. |
+| [`acrossBridge`](#acrossbridge) | Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. |
 | [`stargateBridge`](#stargatebridge) | Sends through a Stargate V2 ERC-20 pool (taxi), paying the LayerZero fee it quotes. |
 | [`cctpBridge`](#cctpbridge) | Burns USDC through Circle's CCTP V2 TokenMessenger for minting on the destination. |
 | [`hyperlaneBridge`](#hyperlanebridge) | Transfers through a Hyperlane ERC-20 warp route, paying the interchain gas it quotes. |
@@ -400,14 +400,15 @@ Swaps an exact ERC-20 input through a Fluid DEX T1 pool. Calls FluidDexT1.swapIn
 
 ### acrossBridge
 
-Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. Calls SpokePool.depositV3.
+Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. Calls SpokePool.depositV3.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |
 | `type` | `"acrossBridge"` | yes | the action |
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `spokePool` | contract | yes | the origin SpokePool; it pulls the token, so approve it first |
-| `token` | token | yes | the token bridged (input and output) |
+| `token` | token | yes | the token deposited, on this chain |
+| `outputToken` | address | no | the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId` |
 | `destChainId` | integer ≥ 1 | yes | the destination chain id |
 | `recipient` | address | yes | receives on the destination |
 | `relayerFee` | base-10 integer string, uint256 | yes | kept by the relayer: the destination receives `amount - relayerFee` |
