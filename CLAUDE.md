@@ -333,23 +333,20 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   block interval (12 s on Ethereum, 2 s elsewhere — WOOFi's oracle goes stale 120 s
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
-  network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
-  venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
-  `holdings-{ethereum,base}` ~1.2 KB each (code pinned, below), the docs examples suite's three
-  (`docs-examples`, `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which
-  `examples.mainnet` alone reads and captures.
+  network. Every blob is committed with its contract code pinned (below), so each holds balances,
+  nonces and storage only: 185 KB for all 17, the largest `swap-base` ~75 KB, `actions` ~30 KB and
+  `official-ethereum` ~21 KB (which `examples.mainnet` alone reads and captures).
 
-  **Contract code is pinned, not committed, in a blob captured since the pin form landed.** An
-  account with code carries `codeHash` (keccak256) where an anvil genesis has `code`; capture writes
-  the code to the content-addressed `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, and
-  `pnpm --filter './sdk' fetch-contract-code` (`sdk/scripts/fetch-contract-code.mjs`, run by CI's
-  setup action) fills that cache from each blob's chain (`eth_getCode` at `latest` through the
-  public endpoints, held to the hash; code at an address changes only by self-destruct or an
-  EIP-7702 delegation, which it names when it refuses). Replay puts each code back before anvil
-  boots and fails, naming the fetch, when one is missing. A blob that still carries `code` replays
-  as it always did; only `holdings-{ethereum,base}` are converted so far.
+  **Contract code is pinned, not committed.** An account with code carries `codeHash` (keccak256)
+  where an anvil genesis has `code`; capture writes the code to the content-addressed
+  `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, and `pnpm --filter './sdk'
+fetch-contract-code` (`sdk/scripts/fetch-contract-code.mjs`, run by CI's setup action) fills that
+  cache from each blob's chain (`eth_getCode` at `latest` through the public endpoints, held to the
+  hash; code at an address changes only by self-destruct or an EIP-7702 delegation, which it names
+  when it refuses). Replay puts each code back before anvil boots and fails, naming the fetch, when
+  one is missing. The testing kit's `test/testing/state/base.json.gz` is pinned the same way (see
+  `dev-tools/` below). Never commit a blob with `code` in it: third-party code is fetched, not
+  committed.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -1783,7 +1780,11 @@ command's that start a process, which `no-embedded-rpc.test.ts` lists;
 (`test/testing/`, node:test) are `node.test.ts`, `program.test.ts` (no chain), `local.test.ts`,
 `record.test.ts` (records from an anvil on the machine, then replays with it stopped) and Base
 replayed from `test/testing/state/base.json.gz`; record that again as the actions suites do
-(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). The package script gives each test
+(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). That file pins each contract's code by
+its `codeHash`, as the actions blobs do: `fetch-contract-code` fetches it from Base, and the suite's
+`support.ts#replayState` puts it back into a temporary copy the kit replays (`pinStateCode` moves
+it out again after a recording); the shipped kit's own format is unchanged. The package script
+gives each test
 and hook `--test-timeout`, as the guide tells consumers to.
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
@@ -1814,8 +1815,11 @@ writes in place, as `sauce simulate`'s copy does. `simulate` is a snapshot, the 
 by `sdk/scripts/solana-rpc-stub.mjs` on loopback — `solana-support.ts#pinnedCluster` — then replays
 with it closed) and `solana-examples.test.ts`, which runs the skills' and the manual's Solana examples (listed in
 `skills-check/executed.json` and `docs/examples/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
-one CI runs) from `test/testing/state/solana-examples.json.gz`. Record that again with
-`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC; the packed check runs a Solana cook,
+one CI runs) from `test/testing/state/solana-examples.json.gz`. That file pins the Whirlpool
+program by its sha256 and holds no ELF: `solana-support.ts#replaySolanaState` puts back the venue
+dump's copy, which `fetch-program-fixtures` fetches. Record it again with
+`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC (`pinSolanaPrograms` then takes the
+ELF out); the packed check runs a Solana cook,
 staged too, from a clean install with LiteSVM beside it, and checks the error naming LiteSVM
 without it.
 
