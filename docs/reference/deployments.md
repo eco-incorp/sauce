@@ -17,13 +17,10 @@ Solana, `getAccountInfo` returns an executable account). In TypeScript each valu
 
 The released EVM engine and Kitchen are deployed on Ethereum Sepolia, Base Sepolia and Arc
 Testnet. The released Solana engine and Kitchen are deployed on devnet and testnet, with zero
-execution fees. Testnet uses devnet's engine build and chain id 1399811150; it has no separate
-chain alias or token registry. Use `--chain solana --rpc-url <testnet-rpc-url>`
-and explicit testnet mint addresses. The endpoint does not change compile-time chain identity;
-`ctx.chainId()` reads the running cluster's chain id. The
-[endpoint guide](../guides/cli.md#pick-a-chain-and-an-endpoint) explains the limits. Engine
-deployment does not establish venue deployments: the SDK records its Solana venues per
-cluster, on mainnet and seven of them on devnet, and none on testnet.
+execution fees: `--chain solana-devnet` and `--chain solana-testnet`. Testnet runs devnet's
+engine build, so a program compiled for either reads chain id 1399811150; `solana-testnet`'s
+own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue
+deployments: the SDK's Solana venues remain mainnet-only.
 
 ## The release
 

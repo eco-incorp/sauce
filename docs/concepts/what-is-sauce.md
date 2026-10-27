@@ -106,8 +106,8 @@ returned, refuse it below a minimum you set, and pay out exactly that.
 ## Where it runs
 
 The `sauce` command sends transactions on **Ethereum**, **Base**, **Arc** and **Solana**, and on the
-testnets **Arc Testnet**, **Base Sepolia**, **Ethereum Sepolia** and **Solana Devnet**. Sauce knows
-45 chains in all, testnets included. On
+testnets **Arc Testnet**, **Base Sepolia**, **Ethereum Sepolia**, **Solana Devnet** and **Solana
+Testnet**. Sauce knows 46 chains in all, testnets included. On
 the others, the **preview chains**, a program compiles, and simulates
 wherever the release is deployed, but nothing is sent. [Names and registries](names-and-registries.md) explains how a name such as `USDC`
 finds its address on each chain.

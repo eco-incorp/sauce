@@ -321,6 +321,32 @@ describe("the retired spellings, refused naming what to write", () => {
         "address, `pot.<TOKEN>` its balance of a token, `pot.balance` its native coin).",
     );
   });
+
+  // `Solana.self` was the Pot's account: what each refusal names compiles, in the same place.
+  const value = (type: string) => `function main(): ${type} {\n  return X;\n}\n`;
+  const account =
+    "function main(): Uint256 {\n  svm.call(Account.systemProgram, [X], hex``);\n  return 0;\n}\n";
+  it.each([
+    ["Solana.self.lamports", "pot.balance", value("Uint256")],
+    ["Solana.self.balance", "pot.balance", value("Uint256")],
+    ["Solana.self.SOL", "pot.balance", value("Uint256")],
+    ["Solana.self.USDC", "pot.USDC", value("Uint256")],
+    ["Solana.self.dataLen", "pot.dataLen", value("Uint256")],
+    ["Solana.self.owner", "Account(pot.address).owner", value("Uint256")],
+    ["Solana.self.address", "pot.address", value("Address")],
+    ["Solana.self", "pot", value("Address")],
+    ["Solana.self.key", "pot", value("Address")],
+    ["Solana.self.signer().writable()", "pot.signer().writable()", account],
+    // A scalar method is the Pot's key's, as on `pot` (`pot.address.toBytesBe(32)`).
+    ["Solana.self.toBytesBe(32)", "pot.toBytesBe(32)", value("bytes")],
+    ["Solana.self.toBytesLe(8)", "pot.toBytesLe(8)", value("bytes")],
+  ])("%s names %s, which compiles on solana", (site, instead, program) => {
+    expect(refusal(program.replace("X", site))).toBe(
+      `\`${site}\`: the Pot is \`pot\`, not \`self\`: write \`${instead}\` (\`pot\` is the Pot's ` +
+        "address, `pot.<TOKEN>` its balance of a token, `pot.balance` its native coin).",
+    );
+    expect(compile(program.replace("X", instead)).bytecode.length).toBeGreaterThan(0);
+  });
 });
 
 describe("where a site stands", () => {

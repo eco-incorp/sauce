@@ -18,8 +18,9 @@ You will need:
   the wallet's address ([Wallets and signing](cli-wallets.md) says more);
 - `pay.sauce.ts`, the quick start's program, which pays a recipient USDC from your Pot.
 
-Simulating needs no money. A real run needs a little ETH in your wallet for gas and the Kitchen's
-fee, and the USDC the program pays, in your Pot. [Costs](../concepts/costs.md) explains each.
+Simulating needs no money. Creating your Pot (step 3) and a real run need a little ETH in your
+wallet for gas and the Kitchen's fee, and the run needs the USDC the program pays, in your Pot.
+[Costs](../concepts/costs.md) explains each.
 
 ## The steps
 
@@ -30,14 +31,14 @@ sauce globals --chain base
 # 2. Check that the program compiles.
 sauce compile pay.sauce.ts --chain base
 
-# 3. Your Pot's address. It is known before the Pot exists, so you can send it tokens now.
-sauce pot --chain base --wallet me
+# 3. Create your Pot and print its address. Send it tokens only once it is deployed.
+sauce pot --chain base --wallet me --deploy
 
 # 4. Try it: no password, no money, nothing sent.
 sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args <recipient> 1000000
 
-# 5. Run it. The first time, it asks to create your Pot.
+# 5. Run it, with the USDC it pays in your Pot: sent there after step 3, or add --fund USDC:1.
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 
@@ -223,8 +224,10 @@ refused, since the cook would revert.
 
 A program spends what your Pot holds. There are two ways to get tokens there.
 
-**Send them to the Pot's address**, from any wallet or exchange, like any other address.
-`sauce pot --chain base --wallet me` prints the address. The Pot does not need to exist yet.
+**Send them to the Pot's address** once the Pot is deployed, from any wallet or exchange, like any
+other address. `sauce pot --chain base --wallet me` prints the address, and with `--deploy` creates
+the Pot first. Do not send tokens to it before it exists: a Kitchen release with new Pot code
+derives another address, and what was sent to the old one stays where no Pot is deployed.
 
 **Or let the run pull them in.** `--fund` moves tokens from your wallet into the Pot in the same
 transaction as the cook:

@@ -77,6 +77,29 @@ describe("svmPoolSlot", () => {
     }
   });
 
+  it("crema-sol-usdc: a tick array the pool's map does not hold is the System program, as Crema refuses an unmarked one", async () => {
+    const p = pool("crema-sol-usdc");
+    const [lower, higher] = key(WSOL) < key(USDC) ? [WSOL, USDC] : [USDC, WSOL];
+    const SYSTEM = address("11111111111111111111111111111111");
+    for (const [pay, ticks] of [
+      [lower, p.payA],
+      [higher, p.payB],
+    ] as const) {
+      // Of the three arrays the window names, only the first, or the first two, exist.
+      for (const [present, expected] of [
+        [1, [ticks[0], SYSTEM, SYSTEM]],
+        [2, [ticks[0], ticks[1], SYSTEM]],
+        [3, [...ticks]],
+      ] as const) {
+        const missing = ticks.slice(present);
+        const partial: OwnedAccountLoader = async (at) =>
+          missing.includes(at as never) ? null : load(at);
+        const slot = await svmPoolSlot(partial, p.pool, pay, "mainnet-beta");
+        expect(svmSlotAccounts(slot).slice(6)).toEqual(expected);
+      }
+    }
+  });
+
   it("refuses a pool no price-limit venue owns, and a token its pair does not hold", async () => {
     const usdcUsdt = pool("stabble-clmm-usdc-usdt");
     await expect(svmPoolSlot(load, usdcUsdt.pool, WSOL, "mainnet-beta")).rejects.toThrow(

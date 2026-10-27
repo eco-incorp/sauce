@@ -52,8 +52,8 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
  * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The venue
  * accessor tree is gated on the chain's cluster (`token-registry.ts#svmClusterOf`), not a
  * hardcoded chain name: its adapters quote their venues' mainnet programs (`svm/accessors.ts`), so
- * every EVM chain, and Solana's devnet, provably cannot get it. A program's venue namespaces
- * (`Orca.Whirlpool`) are another surface, per cluster (`routes/svm-venue-methods.ts`).
+ * every EVM chain, and Solana's devnet and testnet, provably cannot get it. A program's venue
+ * namespaces (`Orca.Whirlpool`) are another surface, per cluster (`routes/svm-venue-methods.ts`).
  */
 function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;

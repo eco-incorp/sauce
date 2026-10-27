@@ -295,6 +295,14 @@ export async function svmClmmSlot(
   }
   if (venue.layout === "crema") {
     const cfg = await fetchCremaPoolConfig(load, pool, program);
+    // Crema refuses a tick array its map does not mark, and `cpiCrema` passes the slot's leading
+    // arrays up to the first System program: an array past the readable prefix is that sentinel.
+    const { tickArrays, readable } = paysLower ? cfg.windows.aToB : cfg.windows.bToA;
+    const ticks = tickArrays.map((array, index) => (index < readable ? array : SYSTEM)) as [
+      Address,
+      Address,
+      Address,
+    ];
     return {
       program,
       pool,
@@ -302,7 +310,7 @@ export async function svmClmmSlot(
       vaultA: cfg.tokenVaultA,
       vaultB: cfg.tokenVaultB,
       extra: cfg.tickArrayMap,
-      ticks: window(cfg.windows),
+      ticks,
     };
   }
   throw new Error(`${venue.name} is not a concentrated-liquidity venue`);

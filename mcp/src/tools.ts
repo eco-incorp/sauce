@@ -94,6 +94,7 @@ import {
   TABLES_PER_RUN,
   registeredBalances,
   requirePot,
+  requirePotOwner,
   requireSupported,
   resolvePriceTokens,
   signCommand,
@@ -875,7 +876,11 @@ export async function signedCookCall(
     const chain = parseChain(String(args.chain), "chain");
     if (chain.kind !== "evm") throw new UsageError(SIGNED_COOKS_ARE_EVM);
     requireSupported("cancelling signed cooks", [chain]);
-    const target = potTarget(named, signer?.address);
+    // The Pot as the call names it, before any key or endpoint: a Pot of owner zero is refused
+    // first; only a Pot left to the signer waits for it.
+    const given = args.pot === undefined && args.owner === undefined ? undefined : potTarget(named);
+    if (given !== undefined && "owner" in given) requirePotOwner(given.owner);
+    const target = given ?? potTarget(named, signer?.address);
     const nonces = args.cancel.map((nonce) => parseUint256("cancel", integerText(nonce, "cancel")));
     const account = await signer?.unlock();
     const rpcUrl =

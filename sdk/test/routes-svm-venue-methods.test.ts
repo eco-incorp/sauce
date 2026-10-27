@@ -275,6 +275,22 @@ describe("Solana's venue namespaces", () => {
     );
   });
 
+  it("writes a loop out whatever sits between `pool` and its parenthesis", () => {
+    const loopOf = (call: string) =>
+      "function main(priceLimit: Uint256): Uint256 {\n" +
+      "  let bought = 0;\n" +
+      "  for (const spacing of [1, 4]) {\n" +
+      `    bought += Orca.Whirlpool.swap(Orca.Whirlpool.${call}(USDC, WSOL, spacing), USDC, WSOL, pot.USDC, priceLimit, 0);\n` +
+      "  }\n" +
+      "  return bought;\n}\n";
+    const plain = compile(loopOf("pool"));
+    for (const call of ["pool ", "pool\n  ", "pool/* a comment */", "pool // a comment\n  "]) {
+      const program = compile(loopOf(call));
+      expect(program.source).not.toContain("for (");
+      expect(program.derivedAccounts).toEqual(plain.derivedAccounts);
+    }
+  });
+
   describe("refusals of a pool by key", () => {
     const swapAt = (pool: string, body = "") =>
       compile(
@@ -387,13 +403,16 @@ describe("Solana's venue namespaces", () => {
     const loop =
       "function main() { for (const s of [1, 4]) { Orca.Whirlpool.pool(USDC, WSOL, s); } }";
 
-    it.each(["solana", "solana-devnet"])("refuses a scalar receiver on %s", (chain) => {
-      for (const Orca of [7n, 8n]) {
-        expect(() => compileSauceProgram(chain, source, { defines: { Orca } })).toThrow();
-      }
-    });
+    it.each(["solana", "solana-devnet", "solana-testnet"])(
+      "refuses a scalar receiver on %s",
+      (chain) => {
+        for (const Orca of [7n, 8n]) {
+          expect(() => compileSauceProgram(chain, source, { defines: { Orca } })).toThrow();
+        }
+      },
+    );
 
-    it.each(["solana", "solana-devnet"])(
+    it.each(["solana", "solana-devnet", "solana-testnet"])(
       "refuses an ambient scalar receiver on %s instead of emitting a swap",
       (chain) => {
         for (const value of [7, 8]) {
