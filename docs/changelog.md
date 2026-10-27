@@ -180,8 +180,10 @@ SDK. Upgrade @eco-incorp/sauce (sauce update)`. It says where the SDK deploys th
 calldata carries no owner and salt it can be read from …`), where the decoder's own error escaped or
   the call reached the chain. `sauce send` still reports what the chain already has of the batch.
 - **Now refused** (EVM): `deployPot` with owner zero, with or without `routerFixed`, before any
-  funding is sent. The refusal names `deploySharedPot(salt)` for deploying an ownerless Shared Pot,
-  rather than reporting a release mismatch or letting funding land before the deployment reverts.
+  funding is sent. `pot` and a cook's private-Pot plan reject a zero `--owner` even without an RPC
+  endpoint, so no unsigned deployment or funding plan is printed. The refusal names
+  `deploySharedPot(salt)` for deploying an ownerless Shared Pot, rather than reporting a release
+  mismatch or letting funding land before the deployment reverts. Importing a Shared Pot is unchanged.
 - **Changed** (EVM): on a chain where the released Kitchen has no code, `sign`, `send`, a wallet's
   send and the MCP `sauce_pot` say `the released Kitchen … is not deployed on <chain>: this SDK's
 cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than that the SDK does
@@ -191,8 +193,8 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   transaction after it is checked and sent. An endpoint behind the chain had the cook refused as
   going to an address with no code.
 - **Changed** (EVM): `simulate` refuses rather than warns, because a simulation on the wrong
-  address would report a cook that runs nothing. Offline, nothing can be checked: `tx`, `sign` and
-  `pot` say so in their notes (`The Pot's address is NOT checked against the deployed Kitchen`).
+  address would report a cook that runs nothing. Offline, the deployed release cannot be checked:
+  `tx`, `sign` and `pot` say so (`The Pot's address is NOT checked against the deployed Kitchen`).
 
 ### The registry
 

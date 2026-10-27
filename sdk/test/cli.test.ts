@@ -1124,6 +1124,24 @@ describe("sauce tx", () => {
     expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
   });
 
+  it("refuses an offline funding plan for a private Pot with no owner", async () => {
+    const program = file("offline.sauce.ts", "function main() { return 7; }");
+    const run = await sauce(
+      ...[
+        "tx",
+        program,
+        "--chain",
+        "base",
+        "--owner",
+        "0x0000000000000000000000000000000000000000",
+      ],
+      ...["--value", "0", "--fund", "USDC:1"],
+    );
+    expect(run.code).toBe(2);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("deploySharedPot");
+  });
+
   it("plans the owner's transfers into the Pot before the cook with --fund, ETH as its value", async () => {
     const run = await sauce(
       ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES, "--value", "1234"],
@@ -1582,6 +1600,19 @@ describe("sauce pot", () => {
       (await sauce("pot", "--owner", OWNER, "--chain", "base")).stdout,
     ) as { salt: string };
     expect(byDefault.salt).toBe(DEFAULT_POT_SALT);
+  });
+
+  it("refuses an offline deployment plan for a private Pot with no owner", async () => {
+    const run = await sauce(
+      "pot",
+      "--chain",
+      "base",
+      "--owner",
+      "0x0000000000000000000000000000000000000000",
+    );
+    expect(run.code).toBe(2);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("deploySharedPot");
   });
 
   it("tells a signer elsewhere Arc's minimum base fee, which its transactions carry no fee for", async () => {

@@ -16,6 +16,7 @@ import {
   formatGwei,
   getAddress,
   hexToBytes,
+  zeroAddress,
   type Address,
   type Hex,
   type PublicClient,
@@ -523,6 +524,15 @@ export function payloadOf(
 /** Where a cook runs: a Pot named outright, or derived from its owner and salt. */
 export type PotInput = { readonly pot: Address } | ({ readonly owner: Address } & SaltChoice);
 
+function requirePrivateOwner(owner: Address): void {
+  if (getAddress(owner) === zeroAddress) {
+    throw new UsageError(
+      "--owner must be nonzero for a private Pot: Kitchen.deployPot rejects owner zero. " +
+        "A Shared Pot is deployed with Kitchen.deploySharedPot(salt)",
+    );
+  }
+}
+
 export interface CookInput extends ProgramInput {
   readonly target: PotInput;
   /** Values for `main`'s parameters; required exactly when it declares some. */
@@ -562,6 +572,7 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
   const target = input.target;
+  if ("owner" in target) requirePrivateOwner(target.owner);
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
   const program = compileProgram(input, files);
@@ -1240,6 +1251,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s Pot is predicted by solana.ts`);
   }
+  requirePrivateOwner(input.owner);
   const kitchen = kitchenAddress();
   const pot = v12PredictPot(input.owner, input.salt) as Address;
   const predicted = { chainId: input.chain.id, pot, owner: input.owner, salt: input.salt, kitchen };
