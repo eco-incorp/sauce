@@ -235,6 +235,21 @@ output, use the value form and read its result: `const value = call.catch(() => 
 Successful-return decoding remains outside that single-call catch. Use a general `try` block
 when recovery needs to cover a multi-step operation instead.
 
+## Moving from compiler 2.6.0 to 2.6.1
+
+Compiler 2.6.1 pairs with the same engines and Kitchens as 2.6.0, so Pots and their addresses do
+not change. Recompile anyway: 2.6.1 fixes programs that compiled to the wrong behaviour, and it
+refuses three forms that 2.6.0 compiled wrongly (EVM):
+
+- **A helper that returns an array or a signed integer from inside a `try`** needs a return-type
+  annotation, as it already did outside a `try`: `function helper(): Int256 { … }`.
+- **The `return`s of one `try` block must agree in type**, in `main` too.
+- **A list of structs held in a local and passed to a contract call** must write each struct's
+  fields in the order the contract declares them. Write the fields in that order where the list is
+  built, or write the list in the call itself, where it is still reordered.
+
+The [changelog](../changelog.md#sdk-unreleased) quotes each error.
+
 ## Check settlement pins
 
 If your application verifies settlement programs, a compiler upgrade can change a program's bytes
