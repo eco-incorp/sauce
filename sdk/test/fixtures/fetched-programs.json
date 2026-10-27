@@ -1,5 +1,5 @@
 {
-  "$comment": "The third-party Solana programs the suites run whose licence does not allow committing them (closed source, no licence granted, BUSL, GPL, AGPL, non-commercial, or a permissive source not proven to be the deployed program). Their bytes are never committed. `sdk/scripts/fetch-program-fixtures.mjs` reads each from mainnet-beta, holds it to the pin its fixture's manifest.json records (programId, sha256), caches it under node_modules/.cache/sauce-program-fixtures and writes it where the suites read it. Every other program of those fixtures is committed. `knownUnfetchable` names listed programs mainnet no longer serves at their pin, each with its reason: the fetch skips them rather than refusing them (a matching local copy is kept), and the suites that run them skip their cases, with the reason, when the program is absent.",
+  "$comment": "The third-party Solana programs the suites run whose licence does not allow committing them (closed source, no licence granted, BUSL, GPL, AGPL, non-commercial, or a permissive source not proven to be the deployed program). Their bytes are never committed. `sdk/scripts/fetch-program-fixtures.mjs` reads each from mainnet-beta, holds it to the pin its fixture's manifest.json records (programId, sha256), caches it under node_modules/.cache/sauce-program-fixtures and writes it where the suites read it. Every other program of those fixtures is committed.",
   "programs": [
     {
       "fixture": "svm-exact-in-programs",
@@ -375,13 +375,6 @@
       "fixture": "svm-venue-programs",
       "name": "pancakeswap-clmm",
       "licence": "unknown (no public program source found)"
-    }
-  ],
-  "knownUnfetchable": [
-    {
-      "fixture": "svm-exact-in-programs",
-      "name": "denali",
-      "reason": "upgraded on mainnet; interface change, fix pending"
     }
   ]
 }

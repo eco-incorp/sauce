@@ -134,16 +134,15 @@ describe("maintenance fetches use explicit public RPC configuration", () => {
 
 describe("materialized programs always match their pin", () => {
   it.each([
-    ["absent", true, false],
-    ["matching", true, false],
-    ["wrong revision", true, false],
-    ["corrupt gzip", true, false],
-    ["wrong revision", false, true],
-    ["corrupt gzip", false, true],
-    ["absent", true, true],
-    ["wrong revision", true, true],
-    ["corrupt gzip", true, true],
-  ])("%s in-place fixture, known-unfetchable: %s, cached: %s", (state, unfetchable, cached) => {
+    ["absent", false],
+    ["absent", true],
+    ["matching", false],
+    ["matching", true],
+    ["wrong revision", false],
+    ["wrong revision", true],
+    ["corrupt gzip", false],
+    ["corrupt gzip", true],
+  ])("%s in-place fixture, cached: %s", (state, cached) => {
     const sdk = join(temporary, "repo/sdk");
     const scripts = join(sdk, "scripts");
     const fixtures = join(sdk, "test/fixtures");
@@ -154,20 +153,15 @@ describe("materialized programs always match their pin", () => {
     symlinkSync(join(SCRIPTS, "lib"), join(scripts, "lib"), "dir");
     const bytes = Buffer.from("pinned program revision");
     const pin = {
-      name: "denali",
-      file: "denali.so.gz",
+      name: "fixture-program",
+      file: "fixture-program.so.gz",
       programId: "DNL1tgEj7wyDijjNFkD3LzNy7RPpkFkSRzVDqev1sGxM",
       sha256: createHash("sha256").update(bytes).digest("hex"),
     };
     writeFileSync(join(fixtures, fixture, "manifest.json"), JSON.stringify({ programs: [pin] }));
     writeFileSync(
       join(fixtures, "fetched-programs.json"),
-      JSON.stringify({
-        programs: [{ fixture, name: pin.name }],
-        knownUnfetchable: unfetchable
-          ? [{ fixture, name: pin.name, reason: "upgraded on mainnet" }]
-          : [],
-      }),
+      JSON.stringify({ programs: [{ fixture, name: pin.name }] }),
     );
     const dest = join(fixtures, fixture, pin.file);
     if (state !== "absent")
@@ -192,21 +186,19 @@ describe("materialized programs always match their pin", () => {
       { cwd: sdk, encoding: "utf8" },
     );
     expect(result.stderr).not.toContain("unexpected network access");
-    if (unfetchable && !cached && (state === "wrong revision" || state === "corrupt gzip")) {
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain("in-place program failed its sha256 pin; removed it");
-      expect(existsSync(dest)).toBe(false);
-      expect(result.stdout).not.toContain("skipped svm-exact-in-programs/denali");
+    if (state === "matching") {
+      expect(result.status).toBe(0);
+      expect(gunzipSync(readFileSync(dest))).toEqual(bytes);
+      expect(result.stdout).toContain("1 already in place, 0 from the cache, 0 fetched, 0 refused");
     } else if (cached) {
       expect(result.status).toBe(0);
       expect(gunzipSync(readFileSync(dest))).toEqual(bytes);
-      expect(result.stdout).toContain("1 from the cache, 0 fetched");
+      expect(result.stdout).toContain("0 already in place, 1 from the cache, 0 fetched, 0 refused");
     } else {
-      expect(result.status).toBe(0);
-      expect(existsSync(dest)).toBe(state === "matching");
-      expect(result.stdout).toContain(
-        state === "absent" ? "1 known unfetchable, skipped, 0 refused" : "1 already in place",
-      );
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("not in the cache, and --offline");
+      expect(existsSync(dest)).toBe(false);
+      expect(result.stdout).toContain("0 already in place, 0 from the cache, 0 fetched, 1 refused");
     }
   });
 });

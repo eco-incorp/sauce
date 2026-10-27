@@ -103,7 +103,10 @@ nothing moves.
   online setup; CI supplies it through the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`.
   Offline replay and cache verification remain config-free; shipped runtime behavior is unchanged.
   Invalid materialized program files are removed and repaired from a verified raw cache when
-  available. Without that cache, an invalid known-unfetchable copy is refused, never skipped.
+  available, otherwise fetched and checked against the same pin. Offline setup refuses any missing
+  or invalid program without a verified cache entry; missing programs are never skipped.
+  Hylo and its stability-pool test programs were re-read after their mainnet upgrades and held
+  to the unchanged real-execution vectors before their fixture pins were refreshed.
 
 ### SauceScript
 

@@ -53,7 +53,6 @@ import {
   SYSTEM,
   TOKEN,
   TOKEN_2022,
-  unfetchableAbsent,
   venueProgram,
   venueProgramId,
 } from "./exact-in-harness.js";
@@ -2021,16 +2020,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
       let harness: EngineHarness;
       let slot: SlotAccount[];
       const base = venue.name.charAt(0).toLowerCase() + venue.name.slice(1);
-      // A program mainnet no longer serves at its pin, and absent here: its cases skip, saying why.
-      const absent = unfetchableAbsent(venue.programs);
-      const it =
-        absent === undefined
-          ? test
-          : (title: string, fn: () => Promise<void>, timeout?: number) =>
-              test.skip(`${title} — skipped: ${absent}`, fn, timeout);
-
       beforeAll(async () => {
-        if (absent !== undefined) return;
         harness = await boot(
           venue.clock,
           venue.dirs,
@@ -2046,7 +2036,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           );
       }, 120_000);
 
-      it("swaps both ways, every form alike: the recipes' instruction, their pins", async () => {
+      test("swaps both ways, every form alike: the recipes' instruction, their pins", async () => {
         const program = slot[0]!.address;
         const writable = new Set(slot.filter((a) => a.writable).map((a) => a.address));
         for (const trade of venue.cases(harness))
@@ -2187,7 +2177,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         }
       }, 300_000);
 
-      it("a swap below its floor reverts", async () => {
+      test("a swap below its floor reverts", async () => {
         const trade = venue.cases(harness)[0]!;
         const program = slot[0]!.address;
         const { received } = succeeded(
@@ -2201,7 +2191,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
       }, 300_000);
 
       if (venue.name === "Denali")
-        it("the instruction forms reject an impossible floor, not missing event accounts", async () => {
+        test("the instruction forms reject an impossible floor, not missing event accounts", async () => {
           const program = slot[0]!.address;
           for (const trade of venue.cases(harness)) {
             const vector = VECTORS[trade.vector!]!;
@@ -2238,7 +2228,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           }
         }, 300_000);
 
-      it("skips, having moved nothing", async () => {
+      test("skips, having moved nothing", async () => {
         const trade = venue.cases(harness)[0]!;
         const program = slot[0]!.address;
         const cases: {
@@ -2286,7 +2276,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         }
       }, 300_000);
 
-      it("refuses a slot or a list naming another program, before the authority signs into it", async () => {
+      test("refuses a slot or a list naming another program, before the authority signs into it", async () => {
         const trade = venue.cases(harness)[0]!;
         const other =
           venue.name === "Saber"

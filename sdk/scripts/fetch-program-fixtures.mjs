@@ -20,12 +20,8 @@
 // neither listed here nor present on disk (a dump not committed and not fetched), and, where git is
 // available, a listed program whose bytes are tracked.
 //
-// `knownUnfetchable` in the same file names listed programs mainnet no longer serves at their pin,
-// each with its `reason`. Such a program is skipped only when absent and not in the verified cache,
-// its reason printed. A copy already in place that gunzips to its pin is kept (and counted as in
-// place); the suites skip its cases when absent. An entry naming no listed program is refused.
-// Invalid in-place copies are removed and repaired from the verified raw cache when available.
-// Without that cache, an invalid known-unfetchable copy is refused, never accepted as absent.
+// Invalid in-place copies are removed and repaired from the verified raw cache when available,
+// otherwise fetched and checked against the same pin. Offline setup refuses an uncached program.
 //
 // Run: `pnpm --filter './sdk' fetch-program-fixtures --rpc-config <path>` (CI's setup does).
 // `--offline` reads only the cache and the fixture directories, with no config or network.
@@ -58,7 +54,7 @@ try {
   process.exit(1);
 }
 
-const { programs: list, knownUnfetchable = [] } = JSON.parse(
+const { programs: list } = JSON.parse(
   readFileSync(join(FIXTURES, "fetched-programs.json"), "utf8"),
 );
 const manifests = new Map();
@@ -72,20 +68,8 @@ const manifestOf = (fixture) => {
 };
 const listed = new Set(list.map(({ fixture, name }) => `${fixture}/${name}`));
 
-/** The listed programs skipped rather than fetched, by `<fixture>/<name>`, to their reasons. */
-const unfetchable = new Map(
-  knownUnfetchable.map(({ fixture, name, reason }) => [`${fixture}/${name}`, reason]),
-);
-
 const refusals = [];
 const refuse = (what, why) => refusals.push(`${what}: ${why}`);
-
-for (const [what, reason] of unfetchable) {
-  if (!listed.has(what))
-    refuse(what, "in knownUnfetchable but not in programs: a stale entry, remove it");
-  if (typeof reason !== "string" || reason.trim() === "")
-    refuse(what, "in knownUnfetchable without a reason");
-}
 
 // Every program of these fixtures is either committed or fetched.
 for (const fixture of new Set(list.map((entry) => entry.fixture)))
@@ -137,7 +121,6 @@ const writeAtomically = (path, bytes) => {
 let placed = 0;
 let cached = 0;
 let fetched = 0;
-let skipped = 0;
 for (const { fixture, name } of list) {
   const what = `${fixture}/${name}`;
   const pin = manifestOf(fixture).find((program) => program.name === name);
@@ -150,7 +133,6 @@ for (const { fixture, name } of list) {
     refuse(what, `${relative(REPO, dest)} is tracked by git: its bytes must not be committed`);
     continue;
   }
-  let invalidPlaced = false;
   if (existsSync(dest)) {
     let matches = false;
     try {
@@ -163,7 +145,6 @@ for (const { fixture, name } of list) {
       continue;
     }
     rmSync(dest);
-    invalidPlaced = true;
   }
 
   const entry = join(CACHE, `${pin.programId}-${pin.sha256}.so`);
@@ -177,18 +158,6 @@ for (const { fixture, name } of list) {
       say(`cached ${name} failed its pin; deleted it`);
       rmSync(entry, { force: true });
     }
-  }
-  if (elf === undefined && unfetchable.has(what)) {
-    if (invalidPlaced)
-      refuse(
-        what,
-        "in-place program failed its sha256 pin; removed it, not a missing-file exception",
-      );
-    else {
-      say(`skipped ${what}: ${unfetchable.get(what)}`);
-      skipped++;
-    }
-    continue;
   }
   if (elf === undefined) {
     if (values.offline) {
@@ -224,7 +193,7 @@ for (const { fixture, name } of list) {
 
 say(
   `${list.length} listed: ${placed} already in place, ${cached} from the cache, ${fetched} fetched, ` +
-    `${skipped} known unfetchable, skipped, ${refusals.length} refused`,
+    `${refusals.length} refused`,
 );
 if (refusals.length > 0) {
   for (const refusal of refusals) console.error(`[fetch-program-fixtures] refused ${refusal}`);

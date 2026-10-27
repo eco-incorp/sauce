@@ -1230,12 +1230,10 @@ them. It uses the explicit public-only config described above to read each from 
 and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
 caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
 longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is
-never edited to fit. Until that fix lands, the program may be entered in the same file's
-`knownUnfetchable` with a `reason`: an absent file without a verified raw cache is skipped with
-that reason. A local copy matching the pin is kept; an invalid one is removed and repaired from
-the verified cache, or refused when that cache is absent. Its suite's cases skip with the reason
-in their titles when it is absent (`exact-in-harness.ts#unfetchableAbsent`), and an entry naming
-no listed program is refused. For a
+never edited to fit. A local copy matching the pin is kept; an invalid one is removed and repaired
+from the verified raw cache, or fetched and held to the same pin when online. Offline setup refuses
+any missing or invalid program without a verified cache entry; the suites do not skip missing
+programs. For a
 venue program, `dump-svm-venues.mjs --programs` re-pins only the
 programs (`programsSlot` records when) and leaves every account at the dump's slot, so the suites'
 pool scenarios hold; it is for an upgrade whose instruction interface is unchanged, which the suites

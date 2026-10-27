@@ -336,13 +336,15 @@
       "name": "hylo",
       "programId": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
       "file": "hylo.so.gz",
-      "sha256": "d29132a819bcc4f060de12fe949773181c8d0f74f946ec0c84822251ff0bf8a1"
+      "sha256": "4465fc2836c9b778e0f31931325ced821c3c60e70456f415f6a915eaffc1177d",
+      "redeploySlot": 462249329
     },
     {
       "name": "hylo-stability-pool",
       "programId": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
       "file": "hylo-stability-pool.so.gz",
-      "sha256": "0fc5ee1613b9f3e8aeeceee25a3cd53d3fb586d22f5a6d598a10b3e74d5e5976"
+      "sha256": "06bf6677dc9aeaf110fc658319919f3608f92d418e1b3a27207cb2a43b8e94e7",
+      "redeploySlot": 462250276
     },
     {
       "name": "carrot",
