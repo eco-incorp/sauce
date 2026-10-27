@@ -105,6 +105,14 @@ nothing moves.
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
   `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
 
+### Solana venues
+
+- **Fixed** (Solana): the Orca legacy token swap and SPL Token Swap fork adapters' quote fragment
+  returns 0 for a pool whose floor quotient `rsIn * rsOut / (rsIn + netIn)` is 0. The program's
+  `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
+  from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
+  already refused it.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
