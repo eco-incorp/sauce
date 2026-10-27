@@ -29,12 +29,9 @@ import {
 } from "./decode.js";
 
 /**
- * TWO fragments, because the two cooks no longer share a signature.
- *
- * They used to: one `cook(bytes[])` fragment decoded a `V12Pot` and a v1 `SauceRouter` alike. v12
- * #432 changed the Pot to `cook(address engine, bytes program)` — the engine is named per call —
- * while a v1 `SauceRouter` still takes `bytes[]`. A single fragment now silently fails on one of
- * them, so both are tried, v12 first.
+ * TWO fragments, because the two cooks have different signatures: a `V12Pot` takes
+ * `cook(address engine, bytes program)` (the engine is named per call) and a `SauceRouter` takes
+ * `cook(bytes[])`. One fragment fails on the other, so both are tried, the Pot's first.
  */
 const COOK_V12_ABI = parseAbi([
   "function cook(address engine, bytes program) payable returns (bytes)",

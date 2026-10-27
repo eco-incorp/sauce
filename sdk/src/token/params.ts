@@ -102,7 +102,7 @@ export function validateApproveSpec(spec: TokenApproveSpec, target: TokenTarget)
   assertAmountInput(spec.amount, "Token.approve amount", target);
 }
 
-/** Refuses the Pot's retired name as a balance's owner, naming the one it has: `"pot"`. */
+/** Refuses `self` as a balance's owner; the Pot's name is `"pot"`. */
 export function refuseRetiredOwner(owner: unknown): void {
   if (owner === "self") {
     throw new Error('Token.balanceOf: the Pot is "pot", not "self": write owner: "pot"');
