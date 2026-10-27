@@ -21,7 +21,30 @@ for await (const chunk of process.stdin) input += chunk;
 const { upstream, block, out, deadline = 60_000 } = JSON.parse(input);
 const recording = out !== undefined;
 if (!upstream || (recording && !block)) throw new Error("recorder: missing its configuration");
+const { endpoint, headers, password } = requestOf(upstream);
 const pinned = String(block).toLowerCase();
+
+/**
+ * Where to POST, and with what headers. Node's fetch refuses a URL that carries credentials
+ * (`https://user:pass@host/…`), which anvil's `--fork-url` took: they go as the Basic header anvil
+ * would have sent, and the URL without them.
+ */
+function requestOf(url) {
+  const target = new URL(url);
+  const headers = { "content-type": "application/json" };
+  if (target.username === "" && target.password === "") return { endpoint: url, headers };
+  const user = decodeURIComponent(target.username);
+  const secret = decodeURIComponent(target.password);
+  headers.authorization = `Basic ${Buffer.from(`${user}:${secret}`).toString("base64")}`;
+  target.username = "";
+  target.password = "";
+
+  return { endpoint: target.href, headers, password: secret };
+}
+
+/** Whether `text` holds the endpoint, or a part of it, that may carry a key. */
+const revealing = (text) =>
+  [upstream, endpoint, password].some((part) => part && String(text).includes(part));
 
 /** address -> { balance, nonce, code, storage: { slot: value } } */
 const accounts = {};
@@ -95,9 +118,9 @@ async function forward(body) {
   for (let attempt = 1; ; attempt++) {
     let answer;
     try {
-      const response = await fetch(upstream, {
+      const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body,
         signal: AbortSignal.timeout(Math.max(1, Math.min(20_000, until - Date.now()))),
       });
@@ -134,7 +157,7 @@ const server = createServer(async (req, res) => {
   } catch (error) {
     // Never echo the upstream error: it can carry the RPC URL.
     errors.push(
-      error instanceof Error && !String(error.message).includes(upstream)
+      error instanceof Error && !revealing(error.message)
         ? error.message
         : "upstream request failed",
     );

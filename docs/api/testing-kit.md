@@ -57,15 +57,15 @@ Starts a copy of `chain` as it was at a pinned point. On an EVM chain it boots `
 ten test accounts exist, and account 0's Pot is deployed. Returns a `TestChain`, or a
 `SolanaTestChain` when `chain` is Solana.
 
-| Option          | EVM | Solana | Meaning                                                                                   |
-| --------------- | --- | ------ | ----------------------------------------------------------------------------------------- |
-| `block`         | yes | no     | The block the copy starts at. Required on an EVM chain; refused on Solana                 |
-| `state`         | yes | yes    | The recorded state file (`.json.gz`): replayed when it exists, written when it does not   |
-| `rpcUrl`        | yes | yes    | The chain's endpoint, read only to record or to fork live; it must serve state at `block` |
-| `mode`          | yes | yes    | `"auto"` (the default), `"replay"`, `"record"` or `"live"`; see the modes below           |
-| `zeroFee`       | yes | yes    | `true` clears the Kitchen's fee; by default the chain's own fee is kept                   |
-| `blockInterval` | yes | no     | Seconds between blocks after the pinned one: 12 on Ethereum and 2 on every other chain    |
-| `anvil`         | yes | no     | The `anvil` binary; by default the one on `PATH`                                          |
+| Option          | EVM | Solana | Meaning                                                                                                                                                                  |
+| --------------- | --- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `block`         | yes | no     | The block the copy starts at. Required on an EVM chain; refused on Solana                                                                                                |
+| `state`         | yes | yes    | The recorded state file (`.json.gz`): replayed when it exists, written when it does not                                                                                  |
+| `rpcUrl`        | yes | yes    | The chain's endpoint, read only to record or to fork live; it must serve state at `block`. On an EVM chain an http(s) URL, any `user:pass@` in it sent as a Basic header |
+| `mode`          | yes | yes    | `"auto"` (the default), `"replay"`, `"record"` or `"live"`; see the modes below                                                                                          |
+| `zeroFee`       | yes | yes    | `true` clears the Kitchen's fee; by default the chain's own fee is kept                                                                                                  |
+| `blockInterval` | yes | no     | Seconds between blocks after the pinned one: 12 on Ethereum and 2 on every other chain                                                                                   |
+| `anvil`         | yes | no     | The `anvil` binary; by default the one on `PATH`                                                                                                                         |
 
 | Mode       | Starts when                             | Needs    | What happens                                                          |
 | ---------- | --------------------------------------- | -------- | --------------------------------------------------------------------- |

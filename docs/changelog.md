@@ -93,6 +93,24 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### The testing kit
+
+- **Fixed** (EVM): a live `fork()` keeps `rpcUrl` off anvil's command line. It passed the URL to
+  anvil as `--fork-url`, so the URL, and any key in it, showed in the process list while the fork
+  ran, and in the error a failed start quotes. A live fork now reads the endpoint through the proxy
+  a recording uses, configured over its stdin, and anvil sees only that proxy's loopback URL.
+- **Fixed** (EVM): an `rpcUrl` with credentials in it (`https://user:pass@host/…`) records. They go
+  as a Basic `Authorization` header, which Node's `fetch` requires, and a live fork takes them the
+  same way.
+
+**Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
+`ws://` or `wss://` one is refused.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

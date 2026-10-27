@@ -54,8 +54,9 @@ export interface ForkOptions {
    * tests. With no file there yet, the fork records one (and needs `rpcUrl`).
    */
   readonly state?: string;
-  /** The chain's RPC, to record or to fork live. It must serve state at `block` (an archive node,
-   *  for a block that is not recent). */
+  /** The chain's RPC, to record or to fork live: an http(s) URL, which may carry credentials
+   *  (`https://user:pass@…`, sent as a Basic header). It must serve state at `block` (an archive
+   *  node, for a block that is not recent). */
   readonly rpcUrl?: string;
   /**
    * "auto" (default): replay `state` when it exists, record it when it does not, fork live when no
@@ -156,6 +157,13 @@ export async function fork(
   }
   if (!("block" in options)) {
     throw new Error(`forking ${resolved.slug} needs \`block\`, the block it starts at`);
+  }
+  // Recording and a live fork both read the endpoint through the kit's proxy, which speaks HTTP.
+  if (options.rpcUrl !== undefined && mode !== "replay" && !/^https?:\/\//i.test(options.rpcUrl)) {
+    throw new Error(
+      `${mode === "live" ? "a live fork" : "recording"} needs an http(s) endpoint as \`rpcUrl\`, ` +
+        "not a WebSocket one",
+    );
   }
   const node = await startForkNode({
     chainId: resolved.id,

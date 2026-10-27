@@ -338,6 +338,21 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
         /pass `rpcUrl` once to record it/,
       );
       await assert.rejects(fork("base", { block }), /a live fork needs `rpcUrl`/);
+      // The proxy speaks HTTP; the refusal does not repeat the URL.
+      for (const [url, options, said] of [
+        ["wss://ws.example/v2/secret-key", {}, /^a live fork needs an http\(s\) endpoint/],
+        [
+          "ws://127.0.0.1:9/secret-key",
+          { state: missing },
+          /^recording needs an http\(s\) endpoint/,
+        ],
+      ] as const) {
+        await assert.rejects(
+          fork("base", { block, rpcUrl: url, ...options }),
+          (error: unknown) =>
+            error instanceof Error && said.test(error.message) && !error.message.includes("secret"),
+        );
+      }
       await assert.rejects(
         fork("base", { block, state: missing, mode: "replay" }),
         /replay needs a recorded state file/,
@@ -358,12 +373,16 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
 
   it("keeps a live fork's endpoint off every command line", async () => {
     const upstream = await local();
-    // A key in the URL, as hosted endpoints carry one; anvil ignores the query.
+    // A key in the URL, as hosted endpoints carry one, in its query and as a password: anvil
+    // ignores both, and Node's fetch takes the password only as a header.
     const key = `sauce-key-${process.pid}-${Date.now()}`;
+    const rpcUrl = new URL(`${upstream.rpcUrl}/?key=${key}`);
+    rpcUrl.username = "sauce";
+    rpcUrl.password = `${key}-password`;
     const before = new Set(children().map(({ pid }) => pid));
     try {
       const block = Number(await upstream.client.getBlockNumber());
-      const live = await fork("base", { block, rpcUrl: `${upstream.rpcUrl}/?key=${key}` });
+      const live = await fork("base", { block, rpcUrl: rpcUrl.href });
       try {
         const started = children().filter(({ pid }) => !before.has(pid));
         assert.ok(
@@ -490,6 +509,51 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
 });
 
 describe("the recorder", () => {
+  it("sends an endpoint's credentials as a Basic header, and the URL without them", async () => {
+    const seen: { url?: string; authorization?: string } = {};
+    const endpoint = createServer((request, response) => {
+      seen.url = request.url;
+      seen.authorization = request.headers.authorization;
+      request.resume();
+      request.on("end", () => response.end('{"jsonrpc":"2.0","id":1,"result":"0x2105"}'));
+    });
+    endpoint.listen(0, "127.0.0.1");
+    await once(endpoint, "listening");
+    const recorder = spawn(
+      process.execPath,
+      [resolve(dirname(fileURLToPath(import.meta.url)), "../../src/testing/recorder.mjs")],
+      { stdio: ["pipe", "pipe", "inherit"] },
+    );
+    try {
+      const port = (endpoint.address() as AddressInfo).port;
+      // Forwarding only: no `out`, as a live fork starts it.
+      const upstream = `http://alice:p%40ss%20word@127.0.0.1:${port}/v2/path?x=1`;
+      recorder.stdin!.end(JSON.stringify({ upstream }));
+      const [listening] = (await once(recorder.stdout!, "data")) as [Buffer];
+      const response = await fetch(`http://127.0.0.1:${Number(listening.toString().trim())}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
+        signal: AbortSignal.timeout(15_000),
+      });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { jsonrpc: "2.0", id: 1, result: "0x2105" });
+      assert.equal(seen.url, "/v2/path?x=1");
+      assert.equal(
+        seen.authorization,
+        `Basic ${Buffer.from("alice:p@ss word").toString("base64")}`,
+      );
+
+      const exited = once(recorder, "exit");
+      recorder.kill("SIGTERM");
+      assert.deepEqual(await exited, [0, null]);
+    } finally {
+      if (recorder.exitCode === null && recorder.signalCode === null) recorder.kill("SIGKILL");
+      endpoint.closeAllConnections();
+      endpoint.close();
+    }
+  });
+
   it("gives up on an endpoint that keeps refusing within its deadline", async () => {
     // An endpoint that answers every request as an RPC under load does: 503.
     const busy = createServer((request, response) => {
