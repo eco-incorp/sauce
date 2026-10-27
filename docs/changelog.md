@@ -262,6 +262,11 @@ WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, 
   price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
   Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
   `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+- **Added**: example programs for Uniswap V3 exact-output swaps, a multi-hop path, and opening and
+  managing a position (adding only to a position the Pot owns); Aave V3 credit delegation;
+  Compound III borrow and repay; Morpho Blue borrow and repay; Pendle PT and YT trades, and minting
+  and redeeming; and a Balancer V2 batch swap and flash cycle. They are in `sauce-swaps` and
+  `sauce-protocols`, and each runs on Ethereum's state.
 
 ### Solana venues in TypeScript
 

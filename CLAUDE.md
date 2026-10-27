@@ -237,6 +237,21 @@ build's output does not move.
 skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
 results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances.
 The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
+`examples.mainnet` (`test:mainnet`) runs the `sauce-swaps` and `sauce-protocols` examples on
+Ethereum state through `sauce simulate` and `sauce run`, in three groups it imports: Uniswap V3
+(`examples-uniswap-v3.mainnet.ts`: exact output and a path held to QuoterV2, a full-range position
+held to the position manager's reads and to its calls replayed from the Pot), Balancer V2 and
+Pendle (`examples-pendle-balancer.mainnet.ts`: batch swaps and the cycle held to the Vault's
+`queryBatchSwap`, Pendle trades to the balances they moved, mints and redeems to the SY's previews
+and the YT's index), and lending (`examples-lending.mainnet.ts`: Aave V3 credit delegation held to
+the debt token's allowance, Compound III to Comet's own reads and its refusal of a borrow past what
+the Pot may borrow, Morpho Blue to its position, market and oracle). It OWNS the
+`official-ethereum` blob: a capture rewrites a blob whole from what its one fork read, so the groups
+run on ONE anvil it starts, each reverting its changes, and a capture writes the union. A group is a
+module exporting `register(anvil)`, never a suite of its own; the entry's last test, which needs no
+engine, fails a module that reads the blob without being registered, one that starts its own anvil
+on it, and a script that names a group alone. `executed.json` names the group that runs each
+example, which `example-programs.mjs` accepts because a listed suite imports it.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -323,8 +338,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
   `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which no suite reads
-  at present.
+  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which
+  `examples.mainnet` alone reads and captures.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
