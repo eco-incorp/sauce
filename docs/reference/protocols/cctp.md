@@ -46,6 +46,25 @@ function main(amount: Uint256, recipient: Address, maxFee: Uint256) {
 }
 ```
 
+To Arc the domain is 26, for Arc and Arc Testnet alike. From Base to `recipient` on Arc, the
+burn is `Cctp.TokenMessenger.depositForBurn(amount, 26, recipient, USDC, 0, maxFee, 2000)`, after
+the same `approve`:
+
+```ts
+function main(amount: Uint256, recipient: Address, maxFee: Uint256) {
+  // Arc is CCTP domain 26; on a testnet the same id reaches Arc Testnet.
+  USDC.approve(Cctp.TokenMessenger, amount);
+  Cctp.TokenMessenger.depositForBurn(amount, 26, recipient, USDC, 0, maxFee, 2000);
+}
+```
+
+A burn on Arc spends Arc's `USDC` token, in its 6 decimals. Burn a given amount rather than
+`pot.USDC` whole: the token and the Pot's native coin are one balance there.
+
+A simulation or a cook of the burn shows only the source chain: USDC leaves the Pot and is burned.
+The mint on the destination comes after Circle attests the burn, in a transaction of its own, which
+no program here sends.
+
 ## Notes
 
 - Domains are Circle's numbering; the registry records them per chain.

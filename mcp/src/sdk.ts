@@ -95,6 +95,7 @@ export {
   previewRefusal,
   PreviewChainError,
   requireSupported,
+  SUPPORTED_CHAIN_SLUGS,
   supportedChainNames,
   type PreviewChainRefusal,
 } from "../../sdk/dist/cli/support.js";

@@ -215,6 +215,17 @@ pool's fee, and move it by the slippage you accept. Never a pool's price alone (
 a stale price), nor the deepest pool's mid price (it sits up to its fee away from the cheap pools).
 `sauce pools --chain <chain> <tokenA> <tokenB>` lists each pool's price with and without its fee.
 
+**The better of two venues, chosen while the program runs**: read each pool (a missing or empty one
+skipped), price it from its `slot0().sqrtPriceX96` with its own fee taken off (Slipstream's from
+`AerodromeSlipstream.Pool(pool).fee()`, which can change any block), and swap on the better one
+with the same limit and `minOut`: the pair is the same at both, so one `sqrtPriceLimitX96` serves
+both. [examples/best-venue-swap.sauce.ts](examples/best-venue-swap.sauce.ts) does this for a Uniswap
+V3 pool against a Slipstream pool on Arc and Base. On Arc the one Slipstream factory is
+`AerodromeSlipstream.CLFactory`; `AerodromeSlipstream.CLFactoryGaugesV3` and
+`AerodromeSlipstream.CLFactoryGaugeCaps` are Base's only, and each Base factory keeps its own
+pools. The comparison is the price now, before the trade moves it; to fill one order from every
+pool under one limit, see `sauce-distributed-swap`.
+
 ## The guard
 
 Required on every leg. The library checks `minOut`; what is left is the input a price limit left
@@ -239,15 +250,16 @@ sauce run swap-leg.sauce.ts --chain base --keystore <keystore> \
 
 ## When a swap reverts
 
-| Revert                                   | From       | Means                                                                                   |
-| ---------------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
-| `SPL`                                    | the pool   | the price limit is on the wrong side of the pool's current price, or at or past a bound |
-| `AS`                                     | the pool   | the amount is zero                                                                      |
-| `LOK`                                    | the pool   | the pool is not initialized (or is mid-swap)                                            |
-| `IIA`                                    | the pool   | its callback paid less input than it asked for                                          |
-| `TF`                                     | the pool   | its transfer of the output token failed                                                 |
-| `InputTokenMismatch()`                   | the Router | the input token does not match the pool key and direction                               |
-| `InputExceedsAuthorized()`, `0x510db218` | the Router | the pool asked for more input than the exact input offered                              |
+| Revert                                   | From        | Means                                                                                                                                                                                       |
+| ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SPL`                                    | the pool    | the price limit is on the wrong side of the pool's current price, or at or past a bound                                                                                                     |
+| `AS`                                     | the pool    | the amount is zero                                                                                                                                                                          |
+| `LOK`                                    | the pool    | the pool is not initialized (or is mid-swap)                                                                                                                                                |
+| `IIA`                                    | the pool    | its callback paid less input than it asked for                                                                                                                                              |
+| `TF`                                     | the pool    | its transfer of the output token failed                                                                                                                                                     |
+| `InputTokenMismatch()`                   | the Router  | the input token does not match the pool key and direction                                                                                                                                   |
+| `InputExceedsAuthorized()`, `0x510db218` | the Router  | the pool asked for more input than the exact input offered                                                                                                                                  |
+| none: empty revert data                  | the library | the swap delivered less than `minOut`: the library's check carries no message, so the command shows only the revert and its gas. Check `minOut` against a fresh quote (`sauce pools`) first |
 
 A revert inside the program (a `require`, the library's `minOut` check) is the program's own; the
 cook reverts as a whole either way.
@@ -532,6 +544,9 @@ against the deployed program before sending it.
 
 - [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts): one guarded Uniswap V3 leg that
   returns its unspent input.
+- [examples/best-venue-swap.sauce.ts](examples/best-venue-swap.sauce.ts): a Uniswap V3 pool and an
+  Aerodrome Slipstream pool priced after their fees, the swap on the better one, `minOut`, the
+  unspent input returned.
 - [examples/solana-swap.sauce.ts](examples/solana-swap.sauce.ts): a swap at one Orca whirlpool by
   its namespace, the pool found by its key, what arrived forwarded.
 - [examples/exact-output.sauce.ts](examples/exact-output.sauce.ts): an exact amount bought through

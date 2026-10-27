@@ -156,5 +156,10 @@ has is a flash swap through the Pot's Router (`sauce-swaps`).
   remove a share of its liquidity, collect what it is owed and hand the NFT over, with the position
   manager's calls the registry's ABI lacks in
   [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
+- [examples/gateway-deposit.sauce.ts](examples/gateway-deposit.sauce.ts) deposits the Pot's USDC
+  into Circle Gateway for a depositor with `depositFor`, on every chain with Gateway and `USDC`,
+  testnets included, and reads the balance back;
+  [examples/swap-then-gateway.sauce.ts](examples/swap-then-gateway.sauce.ts) swaps a token to USDC
+  first and deposits exactly what the swap delivered, measured as a delta.
 - [references/index.md](references/index.md), `references/registry/<slug>.md` (generated) and
   `references/<slug>.md` (one document per protocol).

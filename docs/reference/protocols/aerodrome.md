@@ -24,6 +24,9 @@ DEX on Base. Fork of Velodrome with ve(3,3) tokenomics. Supports both stable and
 - Solidly-style pools on Base, two per pair: **volatile** (constant product) and **stable** (a
   curve for assets meant to trade near 1:1). Its concentrated-liquidity pools are Aerodrome
   Slipstream (`aerodrome-slipstream`).
+- **Base only.** On Arc, Aerodrome runs only Slipstream pools (Aero Lite): swap there through
+  `aerodrome-slipstream`, finding the pool with `AerodromeSlipstream.CLFactory`. `Aerodrome.Router`
+  and `Aerodrome.PoolFactory` are Base's, and a program for Arc that names them does not compile.
 
 ## Pitfalls for a program
 
