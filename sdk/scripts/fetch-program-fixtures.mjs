@@ -20,6 +20,12 @@
 // neither listed here nor present on disk (a dump not committed and not fetched), and, where git is
 // available, a listed program whose bytes are tracked.
 //
+// `knownUnfetchable` in the same file names listed programs mainnet no longer serves at their pin,
+// each with its `reason`. Such a program is skipped instead of fetched or refused, its reason
+// printed: a copy already in place that gunzips to its pin is kept (and counted as in place), and
+// the suites that run it skip its cases when it is absent. An entry naming a program the list does
+// not is refused, so the exceptions cannot outlive the programs.
+//
 // Run: `pnpm --filter './sdk' fetch-program-fixtures` (CI's setup does, after the engine sync).
 // `--offline` reads only the cache and the fixture directories.
 import { execFileSync } from "node:child_process";
@@ -42,7 +48,9 @@ const SOLANA = 1399811149;
 const { values } = parseArgs({ options: { offline: { type: "boolean", default: false } } });
 const say = (line) => console.log(`[fetch-program-fixtures] ${line}`);
 
-const list = JSON.parse(readFileSync(join(FIXTURES, "fetched-programs.json"), "utf8")).programs;
+const { programs: list, knownUnfetchable = [] } = JSON.parse(
+  readFileSync(join(FIXTURES, "fetched-programs.json"), "utf8"),
+);
 const manifests = new Map();
 const manifestOf = (fixture) => {
   if (!manifests.has(fixture))
@@ -54,8 +62,20 @@ const manifestOf = (fixture) => {
 };
 const listed = new Set(list.map(({ fixture, name }) => `${fixture}/${name}`));
 
+/** The listed programs skipped rather than fetched, by `<fixture>/<name>`, to their reasons. */
+const unfetchable = new Map(
+  knownUnfetchable.map(({ fixture, name, reason }) => [`${fixture}/${name}`, reason]),
+);
+
 const refusals = [];
 const refuse = (what, why) => refusals.push(`${what}: ${why}`);
+
+for (const [what, reason] of unfetchable) {
+  if (!listed.has(what))
+    refuse(what, "in knownUnfetchable but not in programs: a stale entry, remove it");
+  if (typeof reason !== "string" || reason.trim() === "")
+    refuse(what, "in knownUnfetchable without a reason");
+}
 
 // Every program of these fixtures is either committed or fetched.
 for (const fixture of new Set(list.map((entry) => entry.fixture)))
@@ -108,6 +128,7 @@ const writeAtomically = (path, bytes) => {
 let placed = 0;
 let cached = 0;
 let fetched = 0;
+let skipped = 0;
 for (const { fixture, name } of list) {
   const what = `${fixture}/${name}`;
   const pin = manifestOf(fixture).find((program) => program.name === name);
@@ -122,6 +143,11 @@ for (const { fixture, name } of list) {
   }
   if (existsSync(dest) && sha256(gunzipSync(readFileSync(dest))) === pin.sha256) {
     placed++;
+    continue;
+  }
+  if (unfetchable.has(what)) {
+    say(`skipped ${what}: ${unfetchable.get(what)}`);
+    skipped++;
     continue;
   }
 
@@ -171,7 +197,7 @@ for (const { fixture, name } of list) {
 
 say(
   `${list.length} listed: ${placed} already in place, ${cached} from the cache, ${fetched} fetched, ` +
-    `${refusals.length} refused`,
+    `${skipped} known unfetchable, skipped, ${refusals.length} refused`,
 );
 if (refusals.length > 0) {
   for (const refusal of refusals) console.error(`[fetch-program-fixtures] refused ${refusal}`);

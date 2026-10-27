@@ -52,6 +52,7 @@ import {
   SYSTEM,
   TOKEN,
   TOKEN_2022,
+  unfetchableAbsent,
   venueProgram,
   venueProgramId,
 } from "./exact-in-harness.js";
@@ -2018,8 +2019,16 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
       let harness: EngineHarness;
       let slot: SlotAccount[];
       const base = venue.name.charAt(0).toLowerCase() + venue.name.slice(1);
+      // A program mainnet no longer serves at its pin, and absent here: its cases skip, saying why.
+      const absent = unfetchableAbsent(venue.programs);
+      const it =
+        absent === undefined
+          ? test
+          : (title: string, fn: () => Promise<void>, timeout?: number) =>
+              test.skip(`${title} — skipped: ${absent}`, fn, timeout);
 
       beforeAll(async () => {
+        if (absent !== undefined) return;
         harness = await boot(
           venue.clock,
           venue.dirs,

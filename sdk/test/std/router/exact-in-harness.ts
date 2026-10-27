@@ -5,7 +5,7 @@
  * what the recipient received, what the paying account paid, the venue's own instruction as the
  * engine sent it, and the compute units the cook and the venue each used.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import {
@@ -149,6 +149,27 @@ export const venueProgramId = (name: string): Address => {
   const entry = MANIFEST.programs.find((program) => program.name === name);
   if (entry === undefined) throw new Error(`no program ${name} in the fixture`);
   return entry.programId;
+};
+
+/** The programs `fetch-program-fixtures` skips (`fetched-programs.json`'s `knownUnfetchable`). */
+const UNFETCHABLE = (
+  JSON.parse(
+    readFileSync(new URL("../../fixtures/fetched-programs.json", import.meta.url), "utf8"),
+  ) as { knownUnfetchable?: { fixture: string; name: string; reason: string }[] }
+).knownUnfetchable?.filter((entry) => entry.fixture === "svm-exact-in-programs");
+
+/**
+ * Why a venue's cases cannot run: one of its programs is known unfetchable and its file is absent,
+ * as `"<name> <reason>"`; undefined when every program is there or fetchable.
+ */
+export const unfetchableAbsent = (names: readonly string[]): string | undefined => {
+  for (const name of names) {
+    const entry = UNFETCHABLE?.find((program) => program.name === name);
+    const file = MANIFEST.programs.find((program) => program.name === name)?.file;
+    if (entry !== undefined && (file === undefined || !existsSync(new URL(file, PROGRAMS))))
+      return `${name} ${entry.reason}`;
+  }
+  return undefined;
 };
 
 /** Every account a venue's fixture placed, as it was before any cook: each cook starts from it. */

@@ -1221,7 +1221,11 @@ them. It reads each from mainnet-beta through the public endpoints (`getAccountI
 and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
 caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
 longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is
-never edited to fit. For a venue program, `dump-svm-venues.mjs --programs` re-pins only the
+never edited to fit. Until that fix lands, the program may be entered in the same file's
+`knownUnfetchable` with a `reason`: the fetch then skips it, printing the reason (a local copy
+matching the pin is kept), its suite's cases skip with the reason in their titles when it is absent
+(`exact-in-harness.ts#unfetchableAbsent`), and an entry naming no listed program is refused. For a
+venue program, `dump-svm-venues.mjs --programs` re-pins only the
 programs (`programsSlot` records when) and leaves every account at the dump's slot, so the suites'
 pool scenarios hold; it is for an upgrade whose instruction interface is unchanged, which the suites
 prove by passing on the new code. An exact-input program (a `solana program dump`, no script of
