@@ -93,6 +93,23 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### The registry
+
+- **Fixed** (EVM): four bridge templates no longer name `ctx.msgSender()` as a refund or authority
+  address. That is the Pot's owner only when the owner sends the cook; under a signed cook it is
+  whoever submitted it. Stargate's `bridge` and LayerZero's `sendMessage` refund the excess fee to
+  the Pot, and deBridge's `bridge` gives the Pot the order's `givePatchAuthoritySrc` (its
+  `orderAuthorityAddressDst` stays `receiver`, an address on the destination chain). The zkSync
+  bridge's `depositETH` refunds L2 gas, and a failed deposit's value, to its `recipient`: zkSync
+  aliases a refund recipient with code on L1, so the Pot would strand it at an L2 address nobody
+  controls. The `sauce-protocols` documents say the same, and the `sauce-script` skill's Aave
+  example keeps its aTokens in the Pot instead of crediting `ctx.msgSender()`.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
