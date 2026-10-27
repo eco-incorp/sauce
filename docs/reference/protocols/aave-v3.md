@@ -35,6 +35,10 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 - The aToken minted to `onBehalfOf` is rebasing: its balance grows with interest, so measure it
   as a delta, not as the amount supplied.
 - A reserve can be frozen, paused or at its supply cap, and then `supply` reverts.
+- On the testnets (Sepolia, Base Sepolia) a market lists Aave's own test tokens, which a program
+  names by address. Most registry tokens are not reserves there: Sepolia's `USDC` (Circle's) and
+  `WETH`, and Base Sepolia's `USDC`, are not, and `supply` of one reverts. Base Sepolia's `WETH`
+  is one.
 - Borrowing needs collateral and keeps the position's health factor (from
   `getUserAccountData`, scaled by 1e18) above 1; below it, anyone may liquidate.
 - `withdraw` with `~0` withdraws everything; it reverts if that would leave a borrow

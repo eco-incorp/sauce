@@ -146,8 +146,9 @@ nothing moves.
 
 - **Added** (EVM): the official deployments of Uniswap and Aave V3 on the EVM testnets, as each
   protocol documents them, so a program compiled for a testnet names them as on a mainnet. Aave's
-  testnet markets list their own test tokens, not the registry's `USDC`: a program names those by
-  address. A Uniswap V3 or V4 swap runs there through `@sauce/router`, but `quoteAction` cannot
+  testnet markets list their own test tokens, not the registry's `USDC` (Circle's, on Sepolia and
+  Base Sepolia, is no Aave reserve): a program names those by address. A Uniswap V3 or V4 swap
+  runs there through `@sauce/router`, but `quoteAction` cannot
   quote it and a split swap with such a candidate reverts: the quote service it prices through is
   not deployed on the testnets.
   - Sepolia: `UniswapV2` (`Factory`, `Router`), `UniswapV3` (`Factory`, `SwapRouter02`, `QuoterV2`,
