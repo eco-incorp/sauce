@@ -315,6 +315,11 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
 
 - **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
   them.
+- **Added**: example programs for Uniswap V3 exact-output swaps, a multi-hop path, and opening and
+  managing a position; Aave V3 credit delegation; Compound III borrow and repay; Morpho Blue
+  borrow and repay; Pendle PT and YT trades, and minting and redeeming; and a Balancer V2 batch
+  swap and flash cycle. They are in `sauce-swaps` and `sauce-protocols`, and each runs on
+  Ethereum's state.
 
 **Also breaking:**
 

@@ -147,6 +147,13 @@ only as a contract), then call it through its namespace. Its exact-output forms 
 the library has no function for: Uniswap V3's SwapRouter buys an exact amount for at most a
 maximum.
 
+[examples/exact-output.sauce.ts](examples/exact-output.sauce.ts) is that exact-output swap: it
+approves the router for the maximum, calls `exactOutputSingle`, and resets what is left of the
+allowance. [examples/swap-path.sauce.ts](examples/swap-path.sauce.ts) routes through several pools
+in one call: the router's `path` is each token's 20 bytes with the 3-byte fee of the next pool
+between them (`token.toBytesBe(20)`, `fee.toBytesBe(3)`, joined with `.concat`), written from the
+token paid for `exactInput` and from the token bought for `exactOutput`.
+
 ## Flash swaps
 
 A flash loan's lender pays first and then calls the borrower back to be repaid
@@ -163,6 +170,7 @@ through the Router ABI above, `ISauceRouter.at(pot).flash(callback, swap)`.
 Balancer's flash swap needs none of that: one `batchSwap` that sells a token to one pool and buys it
 back from another is settled by the Vault as a whole, so the Pot sends nothing (its limits are zero)
 and receives the profit, and a cycle that would cost anything reverts on the limits.
+[examples/balancer-flash-cycle.sauce.ts](examples/balancer-flash-cycle.sauce.ts) is that cycle.
 
 ## Price limits and partial fills
 
@@ -521,6 +529,15 @@ against the deployed program before sending it.
   returns its unspent input.
 - [examples/solana-swap.sauce.ts](examples/solana-swap.sauce.ts): a swap at one Orca whirlpool by
   its namespace, the pool found by its key, what arrived forwarded.
+- [examples/exact-output.sauce.ts](examples/exact-output.sauce.ts): an exact amount bought through
+  Uniswap V3's SwapRouter for at most a maximum, the allowance it left reset.
+- [examples/swap-path.sauce.ts](examples/swap-path.sauce.ts): several Uniswap V3 pools in one
+  SwapRouter call, the path written in the program, exact input or exact output.
+- [examples/balancer-batch-swap.sauce.ts](examples/balancer-batch-swap.sauce.ts): a two-pool
+  Balancer V2 batch swap, given in or given out, its limit held to the Vault's own
+  `queryBatchSwap`, which [examples/BalancerV2Query.json](examples/BalancerV2Query.json) declares.
+- [examples/balancer-flash-cycle.sauce.ts](examples/balancer-flash-cycle.sauce.ts): a Balancer V2
+  cycle through two pools in one `batchSwap` under zero limits, the profit to a recipient.
 - [examples/swaps.mts](examples/swaps.mts) compiles the leg and pins the library's functions and
   their argument order, the Router's entry points, their price parameters and callbacks, and on
   Solana the functions, their arguments and size, and the namespace example's accounts.

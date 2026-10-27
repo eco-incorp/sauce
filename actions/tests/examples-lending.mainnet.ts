@@ -5,10 +5,13 @@
  * `simulate` for what `main` returns, then `run` to send the cook, on Ethereum's state captured at
  * its pinned block (`mainnet.ts`), through the released engine, Kitchen and Pot. No RPC is reached.
  *
- * Every result is held to something the program did not compute: Aave's account data, aTokens, debt
- * tokens and delegation allowance; Comet's utilization, rates, balances and its own refusal of a
- * borrow past what the Pot may borrow, and CometRewards' record of what it paid; Morpho's position,
- * market totals and oracle; and the balances and allowances each run left.
+ * Every result is held to something the program did not compute: Aave's aTokens, debt tokens and
+ * delegation allowance; Comet's utilization, rates, balances and its own refusal of a borrow past
+ * what the Pot may borrow, and CometRewards' record of what it paid; Morpho's position, market
+ * totals and oracle; and the balances and allowances each run left.
+ *
+ * A group, not a suite of its own: `examples.mainnet.test.ts` registers it on the one anvil every
+ * group reading `official-ethereum` shares, and a capture there writes all of their state.
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -27,7 +30,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
-import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
+import { OWNER_KEY, REPO_ROOT, type Anvil } from "./anvil.js";
 import { allowance, balanceOf, setBalance } from "./swap-venues.js";
 
 const EXAMPLES = join(REPO_ROOT, "skills/sauce-protocols/examples");
@@ -54,7 +57,6 @@ const MONTH = 30 * 86_400;
 const abi = {
   erc20: parseAbi(["function transfer(address to, uint256 amount) returns (bool)"]),
   aave: parseAbi([
-    "function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
     "function getReserveAToken(address asset) view returns (address)",
     "function getReserveVariableDebtToken(address asset) view returns (address)",
     "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)",
@@ -108,18 +110,19 @@ async function sauce(argv: readonly string[]): Promise<Run> {
   return { code, stdout, stderr };
 }
 
-describe(
-  "the sauce-protocols lending examples, executed",
-  { skip: skipReason(), timeout: 1_800_000 },
-  () => {
+/** Registers the group's tests on `anvil()`, which the entry starts before they run. */
+export function register(anvil: () => Anvil): void {
+  describe("the sauce-protocols lending examples, executed", () => {
     let env: Anvil;
+    let group: Hex;
     let snapshot: Hex;
 
     before(async () => {
-      env = await startAnvil({ mainnet: "official-ethereum", chain: "ethereum" });
+      env = anvil();
+      group = await env.testClient.snapshot();
     });
     after(async () => {
-      await env?.stop();
+      await env.testClient.revert({ id: group });
     });
     beforeEach(async () => {
       snapshot = await env.testClient.snapshot();
@@ -500,5 +503,5 @@ describe(
         assert.match(String(refused.reason), /no Morpho Blue market has that id/);
       });
     });
-  },
-);
+  });
+}

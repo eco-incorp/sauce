@@ -13,6 +13,9 @@
  *   position minted to the Pot, added to, its fees collected, half its liquidity removed and
  *   collected, and the NFT handed over, each held to the position manager's own reads and to the
  *   same calls replayed from the Pot with `eth_call`.
+ *
+ * A group, not a suite of its own: `examples.mainnet.test.ts` registers it on the one anvil every
+ * group reading `official-ethereum` shares, and a capture there writes all of their state.
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -33,7 +36,7 @@ import {
 import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
-import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
+import { OWNER_KEY, REPO_ROOT, type Anvil } from "./anvil.js";
 import { allowance, balanceOf, setBalance } from "./swap-venues.js";
 
 const SWAPS = join(REPO_ROOT, "skills/sauce-swaps/examples");
@@ -119,18 +122,19 @@ async function sauce(
   return { code, stdout, stderr };
 }
 
-describe(
-  "the Uniswap V3 examples of sauce-swaps and sauce-protocols, executed",
-  { skip: skipReason(), timeout: 1_800_000 },
-  () => {
+/** Registers the group's tests on `anvil()`, which the entry starts before they run. */
+export function register(anvil: () => Anvil): void {
+  describe("the Uniswap V3 examples of sauce-swaps and sauce-protocols, executed", () => {
     let env: Anvil;
+    let group: Hex;
     let snapshot: Hex;
 
     before(async () => {
-      env = await startAnvil({ mainnet: "official-ethereum", chain: "ethereum" });
+      env = anvil();
+      group = await env.testClient.snapshot();
     });
     after(async () => {
-      await env?.stop();
+      await env.testClient.revert({ id: group });
     });
     beforeEach(async () => {
       snapshot = await env.testClient.snapshot();
@@ -579,5 +583,5 @@ describe(
         assert.match(String(over.reason), /share is at most 10000/);
       });
     });
-  },
-);
+  });
+}

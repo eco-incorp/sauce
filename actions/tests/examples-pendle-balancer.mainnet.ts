@@ -8,6 +8,9 @@
  * Every result is held to something the program did not compute: each Balancer batch to the
  * Vault's own `queryBatchSwap` on the same steps, each Pendle mint of SY to the SY's own
  * `previewDeposit`, and every trade to the balances it moved and the allowances it left.
+ *
+ * A group, not a suite of its own: `examples.mainnet.test.ts` registers it on the one anvil every
+ * group reading `official-ethereum` shares, and a capture there writes all of their state.
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -17,7 +20,7 @@ import { encodeAbiParameters, getAddress, parseAbi, toHex, type Address, type He
 import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
-import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
+import { OWNER_KEY, REPO_ROOT, type Anvil } from "./anvil.js";
 import { allowance, balanceOf, NATIVE, setBalance } from "./swap-venues.js";
 
 const example = (skill: string, name: string): string =>
@@ -79,18 +82,19 @@ async function sauce(argv: readonly string[]): Promise<Run> {
   return { code, stdout, stderr };
 }
 
-describe(
-  "the Balancer V2 and Pendle examples, executed",
-  { skip: skipReason(), timeout: 1_800_000 },
-  () => {
+/** Registers the group's tests on `anvil()`, which the entry starts before they run. */
+export function register(anvil: () => Anvil): void {
+  describe("the Balancer V2 and Pendle examples, executed", () => {
     let env: Anvil;
+    let group: Hex;
     let snapshot: Hex;
 
     before(async () => {
-      env = await startAnvil({ mainnet: "official-ethereum", chain: "ethereum" });
+      env = anvil();
+      group = await env.testClient.snapshot();
     });
     after(async () => {
-      await env?.stop();
+      await env.testClient.revert({ id: group });
     });
     beforeEach(async () => {
       snapshot = await env.testClient.snapshot();
@@ -555,5 +559,5 @@ describe(
         });
       });
     });
-  },
-);
+  });
+}

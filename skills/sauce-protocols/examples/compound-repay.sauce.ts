@@ -5,7 +5,8 @@
 // first; supplying `~0` repays exactly what is owed and no more. Refuses a debt above `maxRepay`.
 // The market's and CometRewards' calls the registry's Comet ABI does not declare are in
 // CometMarket.json beside this file, as Compound III's interfaces declare them. Returns the USDC
-// repaid, the WETH withdrawn, and the reward token and the amount of it claimed.
+// repaid, the WETH withdrawn, and the reward token and the amount of it claimed. The claim pays
+// what the market's reward speed for borrowing earned, so it pays nothing while that speed is 0.
 //
 //   sauce run compound-repay.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <rewards> <maxRepay> <to>
