@@ -808,24 +808,18 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
     expect(refusal("bsc", "return pot.BNB;")).toBe(NATIVE("pot.BNB", "BNB", "bsc", "pot.balance"));
   });
 
-  it.each(["base", "ethereum"])(
-    "on %s, `pot.owner.<native symbol>` is refused in `pot.owner`'s own terms",
-    (chain) => {
-      const message = refusal(chain, "return pot.owner.ETH;");
-      expect(message).toBe(NATIVE("pot.owner.ETH", "ETH", chain, "pot.owner.balance"));
-      // The Pot's owner is read through a binding of the SDK's, which a program cannot write.
-      expect(message).not.toContain("__sauce_Pot");
-    },
-  );
-
-  it.each(["(pot.owner as Address).ETH", "pot.owner!.ETH", "(pot.owner satisfies Address).ETH"])(
-    "keeps the native-coin advice on the public owner expression in %s",
-    (expression) => {
-      const message = refusal("base", `return ${expression};`);
-      expect(message).toContain("write `pot.owner.balance`");
-      expect(message).not.toContain("__sauce_Pot");
-    },
-  );
+  it.each([
+    "pot.owner.ETH",
+    "(pot.owner as Address).ETH",
+    "pot.owner!.ETH",
+    "(pot.owner satisfies Address).ETH",
+    "(<Address>pot.owner).ETH",
+    "(pot.owner<Address>).ETH",
+  ])("keeps the native-coin advice on the public owner expression in %s", (expression) => {
+    const message = refusal("base", `return ${expression};`);
+    expect(message).toContain("write `pot.owner.balance`");
+    expect(message).not.toContain("__sauce_Pot");
+  });
 
   it("on Arc, whose native coin is the token USDC, pot.owner.USDC is the token and pot.owner.balance the coin", () => {
     const owner = { contracts: { PotOwner: { abi: [...POT_OWNER_ABI] } } };

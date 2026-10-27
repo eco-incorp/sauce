@@ -87,7 +87,9 @@ export function rewritePotOwner(
       while (
         holder.type === "TSAsExpression" ||
         holder.type === "TSNonNullExpression" ||
-        holder.type === "TSSatisfiesExpression"
+        holder.type === "TSSatisfiesExpression" ||
+        holder.type === "TSTypeAssertion" ||
+        holder.type === "TSInstantiationExpression"
       ) {
         holder = holder.expression as AstNode;
       }

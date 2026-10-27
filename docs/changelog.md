@@ -132,7 +132,7 @@ Solana's new account spellings.
   `Account(pot.address).owner`, and `Account(pot)` and `Account(pot.address)` compile to the Pot's
   own account.
   On EVM, using a native symbol instead of `.balance` names `pot.owner.balance` in the error,
-  including through a type assertion, non-null assertion or `satisfies` expression.
+  including through TypeScript type wrappers.
 - **Now refused (EVM): `Account(…)`.** Accounts are Solana's: a program compiled for an EVM chain
   that writes `Account(key)`, `Account.pda(…)` or `Account.<program>` is refused at the name. Code a
   test of a name rules out may write them, for a Solana chain to compile. `Account` as a type is
