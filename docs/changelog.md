@@ -93,6 +93,22 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### Actions documents
+
+- **Fixed** (EVM): a split swap from `compileSplitSwap` starts its counters at zero in every cook.
+  The program keeps each venue's slice count and running output in the Pot's transient storage,
+  which lasts the whole transaction, not the cook, and it reset only the venues' marginal quotes. A
+  second split cooked on the same Pot in the same transaction (a contract wallet's batch, or an
+  owner's two signed cooks that someone else submits together) took the first one's counts as its
+  own: it swapped more than its `amount` where the Pot held more, paying the extra output to its own
+  sweep recipient, or reverted the transaction. Each cook now spends exactly its `amount`. The
+  program is 10 bytes and about 900 gas larger per candidate.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

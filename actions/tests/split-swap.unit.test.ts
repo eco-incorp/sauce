@@ -100,6 +100,20 @@ describe("split swap — program shape", () => {
     }
   });
 
+  it("writes every counter before reading it: the Pot's transient storage outlives the cook", () => {
+    // A split cooked earlier in the same transaction leaves its used/total/marg behind; the init
+    // loop must overwrite all three (split-swap.mainnet.test.ts runs two cooks in one transaction).
+    for (const N of [1, 3]) {
+      const text = source(swap(N, 2));
+      const init = text.indexOf(`for (let i = 0; i < ${N}; i = i + 1) {`);
+      assert.ok(init >= 0 && init < text.indexOf("evm.tload("), "the init loop comes first");
+      const loop = text.slice(init, text.indexOf("}", init));
+      assert.match(loop, /evm\.tstore\(i, 0\);/);
+      assert.match(loop, new RegExp(`evm\\.tstore\\(${N} \\+ i, 0\\);`));
+      assert.match(loop, new RegExp(`evm\\.tstore\\(${2 * N} \\+ i, quote_any\\(i, `));
+    }
+  });
+
   it("every candidate is reachable from both dispatchers", () => {
     const text = source(swap(4, 4));
     const quoteAny = text.slice(

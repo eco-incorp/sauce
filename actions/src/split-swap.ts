@@ -9,8 +9,10 @@
  *
  * Main algorithm (all three passes are real `for` loops — the per-candidate state lives in
  * transient storage keyed by `i`):
- *   1. Init:    for i in 0..N-1 { marg[i] = quote_any(i, bucket); }
- *               used[i] and total[i] default to 0 (TLOAD of untouched keys).
+ *   1. Init:    for i in 0..N-1 { used[i] = 0; total[i] = 0; marg[i] = quote_any(i, bucket); }
+ *               Every key is written here before any pass reads it. Transient storage is the
+ *               Pot's and lasts the whole transaction, not the cook, so an earlier cook in the
+ *               same transaction (another split, or this one again) may have left values behind.
  *   2. Greedy:  for iter in 0..n-1 {
  *                 for i in 0..N-1 argmax → (bestMarg, bestIdx);
  *                 used[bestIdx]  += 1;
@@ -286,9 +288,14 @@ function mainFn(
     );
   }
 
-  // Init loop: marg[i] = quote_any(i, bucket).
+  // Init loop: used[i] = 0, total[i] = 0, marg[i] = quote_any(i, bucket). The zeroing is what makes
+  // the counters this cook's own: the Pot's transient storage outlives the cook, so a split cooked
+  // earlier in the same transaction left its used/total behind, and inheriting them swapped more
+  // than `amount` and swept the excess to this cook's recipient.
   body.push(
     `for (let i = 0; i < ${N}; i = i + 1) {`,
+    `  evm.tstore(${key(0, "i")}, 0);`,
+    `  evm.tstore(${key(N, "i")}, 0);`,
     `  evm.tstore(${key(2 * N, "i")}, quote_any(i, ${bucketExpr}));`,
     "}",
   );
