@@ -229,7 +229,9 @@ address in `deployments` is recorded, not proof of live code.
 - **JSON action programs** (`/actions`): `compileProgram(program, { chain })` compiles a document for
   any chain that has its names; a name the chain lacks throws `ProgramError`, whose `issues` and
   `chain` say which. `argument` actions become runtime amounts; `quoteAction(...)` and
-  `compileSplitSwap(...)` resolve names on `chain` the same way. Writing the documents is
+  `compileSplitSwap(...)` resolve names on `chain` the same way. A Uniswap V3 or V4 quote prices
+  through the quote service, which the testnets do not have: there its call returns no data, which
+  `decode` cannot decode, and a split swap with such a candidate reverts. Writing the documents is
   `sauce-actions`'s. Reference: `node_modules/@eco-incorp/sauce/docs/guides/actions.md`.
 - **Settlement verification** (`/verify`, `/svm/verify`): `validateSettleProgram`,
   `decodeSettleCall` (a cook's calldata), historical pins. It identifies the program and its

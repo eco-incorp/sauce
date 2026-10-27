@@ -138,6 +138,20 @@ nothing moves.
 
 ### The registry
 
+- **Added** (EVM): the official deployments of Uniswap and Aave V3 on the EVM testnets, as each
+  protocol documents them, so a program compiled for a testnet names them as on a mainnet. Aave's
+  testnet markets list their own test tokens, not the registry's `USDC`: a program names those by
+  address. A Uniswap V3 or V4 swap runs there through `@sauce/router`, but `quoteAction` cannot
+  quote it and a split swap with such a candidate reverts: the quote service it prices through is
+  not deployed on the testnets.
+  - Sepolia: `UniswapV2` (`Factory`, `Router`), `UniswapV3` (`Factory`, `SwapRouter02`, `QuoterV2`,
+    `NonfungiblePositionManager`), `UniswapV4` (`PoolManager`, `UniversalRouter`,
+    `PositionManager`, `StateView`), `AaveV3` (`Pool`, `PoolAddressesProvider`), and the token
+    `WETH` (WETH9).
+  - Base Sepolia: the same `UniswapV3`, `UniswapV4` and `AaveV3` contracts, and `WETH` (the WETH9
+    predeploy). Uniswap documents no V2 there.
+  - Arc Testnet: the token `WETH`, which is bridged ETH as on Arc, not a wrapped native. Uniswap and
+    Aave document no deployment there.
 - **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not

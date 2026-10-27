@@ -326,7 +326,7 @@ Arguments use ABI-v1: each action argument is a 32-byte word, and `argumentOffse
 `quoteAction(action, options)` returns the `eth_call` that prices a swap action at its own `amount`: `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance.
 
 - An action that names a token or a contract needs `options.chain`, the chain to resolve the names on, because the quote is calldata built here. A pool given by key is refused (see [pools by key](#pools-by-key)).
-- Venues that price through a separate contract take its address in `options`. `router` is the generation-3 quote service (`v12QuoteRouterAddress()`), for `uniswapV3Swap` and `uniswapV4Swap`; the content-addressed execution Router (`v12RouterAddress()`) has no quote method. Other options are `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`.
+- Venues that price through a separate contract take its address in `options`. `router` is the generation-3 quote service (`v12QuoteRouterAddress()`), for `uniswapV3Swap` and `uniswapV4Swap`; the content-addressed execution Router (`v12RouterAddress()`) has no quote method. Other options are `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`. The quote service is not deployed on the testnets (Arc Testnet, Base Sepolia, Sepolia): its call returns no data there, which `decode` cannot decode, so a Uniswap V3 or V4 swap is not quoted on them.
 - The rest price on the contract the action names: a Uniswap V2 pair's reserves, a Curve pool's `get_dy`, a DODO pool's `querySellBase`/`querySellQuote`, an LB pair's `getSwapOut` (zero when the pair cannot take the whole input, since the swap would revert), WooPPV2's `query`.
 - Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
 
@@ -334,6 +334,7 @@ Arguments use ABI-v1: each action argument is a 32-byte word, and `argumentOffse
 
 - Candidates are ordinary swap actions without an amount, each with its `pool`; each delivers to the Pot. A candidate must have an on-chain quote with a runtime amount, which every swap has except the three Balancer swaps and Carbon.
 - `chain` resolves the candidates', approvals' and sweep's names, and is needed only when they use any.
+- On the testnets a `uniswapV3Swap` or `uniswapV4Swap` candidate makes the program revert: it quotes through the quote service, which is not deployed there. A Uniswap V2 candidate quotes on its pair and runs.
 - `amountOutMin` bounds the total output, checked once after every leg, and `"0"` waives it explicitly.
 - `approvals` run first, for a candidate that pulls through a periphery contract; a `@sauce/router` swap needs none.
 
