@@ -1,0 +1,72 @@
+[
+  {
+    "$comment": "The Balancer V2 Vault's queryBatchSwap(kind, swaps, assets, funds), from Balancer's Vault reference (IVault). The registry's BalancerV2VaultABI does not declare it. It performs the swaps and reverts to return the asset deltas (positive: the sender pays, negative: the recipient receives), and the Vault hands them back as its result; it is not a view, so it is called like any other function. Each BatchSwapStep is (poolId, assetInIndex, assetOutIndex, amount, userData); kind 0 is GIVEN_IN, 1 is GIVEN_OUT.",
+    "type": "function",
+    "name": "queryBatchSwap",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "kind",
+        "type": "uint8"
+      },
+      {
+        "name": "swaps",
+        "type": "tuple[]",
+        "components": [
+          {
+            "name": "poolId",
+            "type": "bytes32"
+          },
+          {
+            "name": "assetInIndex",
+            "type": "uint256"
+          },
+          {
+            "name": "assetOutIndex",
+            "type": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "name": "userData",
+            "type": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "assets",
+        "type": "address[]"
+      },
+      {
+        "name": "funds",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "sender",
+            "type": "address"
+          },
+          {
+            "name": "fromInternalBalance",
+            "type": "bool"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "name": "toInternalBalance",
+            "type": "bool"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "assetDeltas",
+        "type": "int256[]"
+      }
+    ]
+  }
+]
