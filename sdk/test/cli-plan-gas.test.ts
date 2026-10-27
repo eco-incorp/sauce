@@ -125,6 +125,26 @@ describe("the gas sauce tx suggests for a plan's deployment and cook", () => {
     );
   });
 
+  it("does not say to deploy the Pot when the plan already deploys it and moves the tokens in", async () => {
+    const gas = await planGas(
+      client,
+      {
+        ...target,
+        before: [{ what: "transfer 100 USDC to the Pot", tx: { to: USDC, data: "0x", value: 0n } }],
+      },
+      cook,
+      answering({ ...base, ok: false, stage: "cook", reason: "ERC20InsufficientBalance" }),
+    );
+    expect(gas.cook).toBeUndefined();
+    expect(gas.note).toBe(
+      "the cook is given no gas: simulated after the deployment and the transfers, on the chain " +
+        "as it is, it would revert (ERC20InsufficientBalance). Fund the Pot and build it again " +
+        "for its gas, or sign the cook with a gas limit that has room, or once the deployment " +
+        "and the transfers have landed: a signer's own estimate, taken while the Pot has no " +
+        "code, is far too low",
+    );
+  });
+
   it("gives none when the endpoint ran the cook but could not estimate it", async () => {
     const gas = await planGas(
       client,

@@ -792,7 +792,7 @@ export async function planGas(
               "suggested: the owner must hold what it transfers"
             : `the cook is given no gas: simulated after ${landed}, on the chain as it is, it ` +
               `would revert (${rehearsal.reason}). ${
-                plan.salt === undefined
+                before.length > 0 || plan.salt === undefined
                   ? "Fund the Pot and build it again for its gas"
                   : "The Pot has no code yet: deploy it first (`sauce pot --deploy` with the signer, " +
                     "or `sauce run --fund`, which deploys before it funds), and do not send tokens to " +
