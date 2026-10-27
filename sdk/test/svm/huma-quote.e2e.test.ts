@@ -54,8 +54,7 @@ describeSvm("huma emitQuote status gate, executed on the engine", () => {
     const { bytecode, manifest } = compileSvm(
       wrapQuoteMain(accounts.length, huma.emitQuote(config, 0, amount), "q0"),
     );
-    const names: Record<string, string> = {};
-    accounts.forEach((account, index) => (names[`acc${index}`] = account));
+    const names = Object.fromEntries(accounts.map((account, index) => [`acc${index}`, account]));
     const result = expectOk(
       await execute(harness, { bytecode, manifest } as ExecutableOutput, names),
     );
