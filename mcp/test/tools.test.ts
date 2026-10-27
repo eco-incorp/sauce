@@ -37,7 +37,8 @@ import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
-import { simulateSummary, TOOL_NAMES } from "../src/tools.js";
+import { signedCookCall, simulateSummary, TOOL_NAMES } from "../src/tools.js";
+import type { Reach } from "../src/reach.js";
 import { solanaRpcStub } from "../../sdk/scripts/solana-rpc-stub.mjs";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
@@ -1375,6 +1376,24 @@ describe("sauce_signed_cook", () => {
       failed(
         await mcp.call("sauce_signed_cook", { chain: "base", owner: zeroAddress, cancel: ["1"] }),
       ),
+      /Kitchen\.deployPot reverts for the owner 0x0{40}: a Pot with no owner is a Shared Pot/,
+    );
+    // ...before the wallet is unlocked or an endpoint is reached.
+    const reached = (what: string) => () => {
+      throw new Error(`${what} was reached`);
+    };
+    const reach: Reach = {
+      endpoint: reached("the endpoint"),
+      require: reached("the endpoint"),
+      scrub: (text) => text,
+      publicNotes: () => [],
+      release: () => {},
+    };
+    await assert.rejects(
+      signedCookCall({ chain: "base", owner: zeroAddress, cancel: ["1"] }, false, reach, {
+        address: OWNER,
+        unlock: reached("the wallet"),
+      }),
       /Kitchen\.deployPot reverts for the owner 0x0{40}: a Pot with no owner is a Shared Pot/,
     );
   });

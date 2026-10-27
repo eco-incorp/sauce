@@ -43,7 +43,14 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, connectAt, endpointFor, POT_UNCHECKED } from "./chain.js";
+import {
+  chainServedBy,
+  connect,
+  connectAt,
+  endpointFor,
+  POT_UNCHECKED,
+  requirePotOwner,
+} from "./chain.js";
 import {
   type Approver,
   type ArgsInput,
@@ -2207,13 +2214,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (chain.kind !== "evm") throw new UsageError(SIGNED_COOKS_ARE_EVM);
         // Before any endpoint or key.
         requireSupported("cancelling signed cooks", [chain]);
+        // The Pot as the flags name it, also before any endpoint or key, so a Pot of owner zero is
+        // refused first; only a Pot left to the signer waits for it.
+        const named =
+          stringFlag(args, "pot") === undefined && stringFlag(args, "owner") === undefined
+            ? undefined
+            : potInput(args);
+        if (named !== undefined && "owner" in named) requirePotOwner(named.owner);
         const signer = hasSigner(args, io) ? await signerOf(args, io) : undefined;
         const rpcUrl = endpoint(args, io, chain);
 
         return cancelCommand(
           {
             chain,
-            target: potInput(args, signer?.address),
+            target: named ?? potInput(args, signer?.address),
             nonces: cancel.map((nonce) => parseUint256("cancel", nonce)),
             ...(rpcUrl === undefined ? {} : { rpcUrl }),
           },
