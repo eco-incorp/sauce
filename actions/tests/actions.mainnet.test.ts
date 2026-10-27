@@ -1082,6 +1082,56 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(USDC, RECEIVER), 40_000_000n);
     });
 
+    /** A second external address, so a leaked output cannot hide behind RECEIVER's own balance. */
+    const THIRD = "0x000000000000000000000000000000000000bEEF";
+
+    /** Supplies USDC_100 to Aave, then leaves `preexisting` USDC in the Pot beside the aUSDC. */
+    async function supplyThenFund(preexisting: bigint): Promise<void> {
+      await fund(USDC, USDC_100);
+      await run([
+        { type: "approve", amount: `${USDC_100}`, token: USDC, spender: AAVE_V3_POOL },
+        { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: USDC, onBehalfOf: "pot" },
+      ]);
+      assert.equal(await balance(USDC, env.pot), 0n);
+      await fund(USDC, preexisting);
+    }
+
+    it("a chained aaveV3Withdraw delivers to the Pot whatever its recipient says, so the transfer spends the withdrawn amount and not the Pot's own USDC", async () => {
+      const preexisting = 40_000_000n;
+      await supplyThenFund(preexisting);
+      await run([
+        {
+          type: "aaveV3Withdraw",
+          amount: "40000000",
+          pool: AAVE_V3_POOL,
+          token: USDC,
+          recipient: RECEIVER,
+        },
+        { type: "transfer", token: USDC, recipient: RECEIVER },
+      ]);
+      assert.equal(await balance(USDC, RECEIVER), 40_000_000n, "RECEIVER got it once, not twice");
+      assert.equal(await balance(USDC, env.pot), preexisting, "the Pot's own USDC is untouched");
+    });
+
+    it("a saved aaveV3Withdraw output pays the later spender, and its own external recipient receives nothing", async () => {
+      const preexisting = 40_000_000n;
+      await supplyThenFund(preexisting);
+      await run([
+        {
+          type: "aaveV3Withdraw",
+          amount: "40000000",
+          pool: AAVE_V3_POOL,
+          token: USDC,
+          recipient: RECEIVER,
+          saveOutputAs: "withdrawn",
+        },
+        { type: "transfer", token: USDC, recipient: THIRD, amountRef: "withdrawn" },
+      ]);
+      assert.equal(await balance(USDC, THIRD), 40_000_000n, "the spender received the output");
+      assert.equal(await balance(USDC, RECEIVER), 0n, "the withdraw's own recipient got nothing");
+      assert.equal(await balance(USDC, env.pot), preexisting, "the Pot's own USDC is untouched");
+    });
+
     it("aaveV3Borrow borrows USDC against WETH collateral, and aaveV3Repay repays it", async () => {
       await run([
         ...wrapAndApprove(ONE_ETH, AAVE_V3_POOL),
