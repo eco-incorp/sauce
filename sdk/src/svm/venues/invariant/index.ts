@@ -398,7 +398,9 @@ async function resolveWindowFromBitmap(
       : nextInitialized(bitmap, cursor, tickSpacing);
     if (found === null) break;
     foundTicks.push(found);
-    cursor = xToY ? found - tickSpacing : found + tickSpacing; // don't check the current tick again
+    // prevInitialized searches from its tick inclusive, so step below the found one;
+    // nextInitialized already starts one spacing above its tick, so resume at the found one.
+    cursor = xToY ? found - tickSpacing : found;
   }
   const tickAddresses = await Promise.all(foundTicks.map((tick) => deriveTickPda(pool, tick)));
 

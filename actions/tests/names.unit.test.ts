@@ -570,6 +570,7 @@ describe("names — native", () => {
       ...SAMPLES.ambientSwap,
       base: "native",
       isBuy: false,
+      inBaseQty: false,
       saveOutputAs: "eth",
     };
     const batch = {

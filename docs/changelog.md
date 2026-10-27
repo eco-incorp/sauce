@@ -136,6 +136,20 @@ nothing moves.
   before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
   Pot's address before it exists.
 
+### The registry
+
+- **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
+  `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
+  `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
+  control there (a contract or smart wallet deployed only on the destination). The refund now goes
+  to the Pot that paid the deposit (`ctx.self()`). On a Shared Pot, which anyone may cook, a
+  refund that lands there is anyone's: bridge from a Private Pot.
+- **Fixed** (EVM): Across's `bridge` template deposits as the Pot. Its `depositV3` named
+  `ctx.msgSender()` as the depositor, who is refunded a deposit no relayer fills and holds the
+  speed-up authority: the owner in a direct cook, but whoever submitted a signed cook
+  (`cookSigned`). The depositor is now the Pot (`ctx.self()`), as the actions document's
+  `acrossBridge` already was. The Shared Pot caveat above applies.
+
 ### Actions documents
 
 - **Fixed** (EVM): a split swap from `compileSplitSwap` starts its counters at zero in every cook.
@@ -171,6 +185,11 @@ nothing moves.
   already did. Before, it paid its own `recipient` while the next action spent the same amount again
   from the Pot: a Pot holding that amount paid out twice, and one without it reverted. Recompile
   such documents; an `aaveV3Withdraw` nothing spends still pays its `recipient`.
+- **Fixed** (EVM): an `ambientSwap` whose `inBaseQty` differs from `isBuy` is refused. That pairing
+  is Ambient's exact-output swap: `amount` became what the Pot receives, and the dex pulled whatever
+  input it needed, up to the allowance, so the Pot could spend more than the `amount` the action
+  promises. Write `inBaseQty` equal to `isBuy` (`true`/`true` pays base, `false`/`false` pays quote),
+  as every existing example does.
 
 **Also breaking:**
 
@@ -236,6 +255,12 @@ nothing moves.
   `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
+
+- **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
+  swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
+  the search itself starts one spacing above where it is resumed, so a tick right next to a found
+  one was skipped (ticks 1, 2 and 3 gave the window 1 and 3). A Y→X swap that crossed the skipped
+  tick lacked its account, and Invariant's program failed it. The X→Y window was right.
 
 ### SauceScript
 
