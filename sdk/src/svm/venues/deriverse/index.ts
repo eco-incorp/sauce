@@ -2,8 +2,8 @@
  * Deriverse venue adapter (program DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD) —
  * a hybrid CLOB + embedded constant-product AMM. No IDL/docs exist; this
  * adapter was built by reading Deriverse's own public repos: the `drv-models`
- * common-types crate (github.com/deriverse/drv-smart-contract-common, MIT/
- * public, tag v0.2.68 — `InstrAccountHeader`'s exact `#[repr(C)]` layout, the
+ * common-types crate (github.com/deriverse/drv-smart-contract-common, licensed
+ * under Apache-2.0, see THIRD_PARTY_NOTICES.md; tag v0.2.68 — `InstrAccountHeader`'s exact `#[repr(C)]` layout, the
  * `Swap` instruction's `SwapData` encoding and account order) and the
  * `jupiter-deriverse` aggregator adapter (github.com/deriverse/jupiter-deriverse)
  * — a REFERENCE IMPLEMENTATION of the venue's own quote math (`amm.rs`,
