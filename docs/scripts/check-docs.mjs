@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { versionTableOf } from "../../sdk/scripts/lib/sdk-releases.mjs";
 import {
   defineFlagProblems,
   executedExamplesProblems,
@@ -360,33 +361,20 @@ console.log(`Manual links: ${manual.length} files checked`);
       ["engine", "kitchen", "potInitCodeHash"].some((key) => entry?.[key] === null) ||
       Object.values(entry?.assets ?? {}).some((digest) => digest === null);
     const changelog = outsideFences(join(docs, "changelog.md"));
-    const COLUMNS = ["SDK", "Compiler", ...COMPONENTS];
-    const section = /^## Which versions work together\s*$([^]*?)(?=^## |(?![^]))/m.exec(changelog);
-    const cells = (line) =>
-      line
-        .trim()
-        .replace(/^\||\|$/g, "")
-        .split("|")
-        .map((cell) => cell.trim());
-    const tableLines = (section?.[1] ?? "").split("\n").filter((line) => line.startsWith("|"));
-    const header = tableLines.length ? cells(tableLines[0]) : [];
-    const parsed = section && COLUMNS.every((column, i) => header[i] === column);
-    if (!section)
-      problems.push("docs/changelog.md: has no ## Which versions work together section");
-    else if (!parsed)
-      problems.push(
-        `docs/changelog.md: the table under ## Which versions work together has columns ${header.join(", ") || "(none)"}; it needs ${COLUMNS.join(", ")}`,
-      );
-    if (parsed) {
-      const table = tableLines.slice(2).map((line) => {
-        const row = cells(line);
-        return Object.fromEntries(COLUMNS.map((column, i) => [column, row[i] ?? ""]));
-      });
+    // The table as the build reads it (`sdk/scripts/lib/sdk-releases.mjs`): every line of it a row,
+    // each row's cells versions, the Unreleased one included.
+    let table;
+    try {
+      table = versionTableOf(changelog);
+    } catch (error) {
+      problems.push(error.message);
+    }
+    if (table) {
       for (const row of releases.releases) {
         if (COMPONENTS.some((component) => pending(row[component]))) continue;
         // A component with no version is one no release publishes: its cell is not compared, and
         // the row's other cells still are.
-        const want = { Compiler: row.compiler };
+        const want = { compiler: row.compiler };
         for (const component of COMPONENTS) {
           const version = row[component]?.version;
           if (typeof version === "string" && version !== "") want[component] = version;
@@ -401,7 +389,7 @@ console.log(`Manual links: ${manual.length} files checked`);
           );
       }
       const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      for (const { SDK: sdk } of table)
+      for (const { sdk } of table)
         if (
           /^\d+\.\d+\.\d+$/.test(sdk) &&
           !new RegExp(`^## SDK ${escaped(sdk)}(?= |$)`, "m").test(changelog)

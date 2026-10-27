@@ -1,13 +1,14 @@
-// The changelog's "Which versions work together" table as data, for the generators: every released
-// SDK and the compiler, engines and Kitchens it pinned, which a refusal of a Pot names
-// (`cli/pots.ts#pairedSdkReleases`). `gen-embedded-sources.mjs` writes it into
+// The changelog's "Which versions work together" table as data: every SDK and the compiler,
+// engines and Kitchens it pinned. `versionTableOf` reads every row, which `pnpm docs:check` holds to
+// `releases.json` (`docs/scripts/check-docs.mjs`); `sdkReleasesOf` the released ones, which a refusal
+// of a Pot names (`cli/pots.ts#pairedSdkReleases`) and `gen-embedded-sources.mjs` writes into
 // `src/embedded/sdk-releases.generated.ts`, so the SDK reads no docs at run time.
 //
 // Each row is keyed by its column's name lowercased (`sdk`, `compiler`, `v12-evm`, `kitchen-evm`,
 // `v12-svm`, `kitchen-svm`), in the table's order, every version exactly as the table gives it.
-// The row of the SDK not released yet (`Unreleased`) is validated and left out: it names no
-// version, and none is made up for it. The package's own version is no help there, since the
-// release workflow stamps it only after the build.
+// The row of the SDK not released yet (`Unreleased`) is validated, and `sdkReleasesOf` leaves it
+// out: it names no version, and none is made up for it. The package's own version is no help
+// there, since the release workflow stamps it only after the build.
 //
 // A table this cannot read throws, naming what is wrong, so the build fails rather than ship a
 // refusal that names no SDK release; so does a line of it that is not a row, rather than drop the
@@ -27,8 +28,11 @@ const cellsOf = (line) =>
     .split("|")
     .map((cell) => cell.trim());
 
-/** Every released SDK of `changelog`'s version table, in its order: `{ sdk, compiler, … }`. */
-export function sdkReleasesOf(changelog) {
+/**
+ * Every row of `changelog`'s version table, in its order, the Unreleased one included:
+ * `{ sdk, compiler, … }`.
+ */
+export function versionTableOf(changelog) {
   const section = SECTION.exec(changelog)?.[1];
   if (section === undefined) {
     throw new Error(`${WHERE}: no "## Which versions work together" section`);
@@ -71,7 +75,7 @@ export function sdkReleasesOf(changelog) {
     );
   }
   const seen = new Set();
-  const releases = [];
+  const entries = [];
   for (const row of rows) {
     const sdk = row[0];
     if (row.length !== COLUMNS.length) {
@@ -91,11 +95,17 @@ export function sdkReleasesOf(changelog) {
         );
       }
     }
-    if (sdk === "Unreleased") continue;
-    releases.push(
+    entries.push(
       Object.fromEntries(COLUMNS.map((column, index) => [column.toLowerCase(), row[index]])),
     );
   }
+
+  return entries;
+}
+
+/** Every released SDK of `changelog`'s version table, in its order: `{ sdk, compiler, … }`. */
+export function sdkReleasesOf(changelog) {
+  const releases = versionTableOf(changelog).filter((row) => row.sdk !== "Unreleased");
   if (releases.length === 0) {
     throw new Error(
       `${WHERE}: the table under ## Which versions work together names no released SDK`,

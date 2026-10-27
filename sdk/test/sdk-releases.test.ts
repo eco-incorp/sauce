@@ -10,7 +10,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { sdkReleasesOf } from "../scripts/lib/sdk-releases.mjs";
+import { sdkReleasesOf, versionTableOf } from "../scripts/lib/sdk-releases.mjs";
 import { SDK_RELEASES } from "../src/embedded/sdk-releases.generated.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -113,5 +113,28 @@ describe("the SDK releases a refusal names", () => {
     expect(() =>
       sdkReleasesOf(withTable([HEADER, row("0.99.10"), "", row("0.99.9")].join("\n"))),
     ).toThrow(/the row "\| 0\.99\.9 \| 2\.5\.0[^"]*" follows a blank line/);
+  });
+
+  it("are read by the one parser of the table, which the docs check reads it through too", () => {
+    const unreleased = "| Unreleased | 2.6.0 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |";
+    expect(versionTableOf(withTable(`${HEADER}\n${unreleased}\n${ROW}`))).toEqual([
+      {
+        sdk: "Unreleased",
+        compiler: "2.6.0",
+        "v12-evm": "1.3.0",
+        "kitchen-evm": "1.3.0",
+        "v12-svm": "1.4.0",
+        "kitchen-svm": "1.1.0",
+      },
+      RELEASE_0_99_9,
+    ]);
+    expect(() => versionTableOf(withTable(`${HEADER}\n${unreleased}\n${ROW.slice(2)}`))).toThrow(
+      /in the version table is not a row/,
+    );
+    // `pnpm docs:check` takes the table from it, not from a parse of its own: a row the build
+    // refuses is refused there too, and no row is dropped by one and kept by the other.
+    const check = readFileSync(resolve(SDK, "..", "docs", "scripts", "check-docs.mjs"), "utf8");
+    expect(check).toContain("versionTableOf(");
+    expect(check).not.toContain("Which versions work together\\s*$");
   });
 });
