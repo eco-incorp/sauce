@@ -16,8 +16,8 @@ import { resolve } from "path";
 import { address, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { kipseli } from "../../../src/svm/venues/kipseli/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { fixtureBytesMap, fixtureLoader, loadFixtures } from "../fixtures.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { fixtureBytesMap, fixtureLoader, loadFixtures, ownedByShape } from "../fixtures.js";
 import { readUintLE } from "../../../src/svm/venues/math.js";
 
 const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/kipseli");
@@ -100,9 +100,9 @@ describe("kipseli.fetchPoolConfig — strict per-size gate", () => {
     return data;
   }
 
-  function sizedLoader(size: number): AccountLoader {
+  function sizedLoader(size: number): OwnedAccountLoader {
     const pool = synthPool(size);
-    return async (a: Address) => (a === POOL ? new Uint8Array(pool) : null);
+    return ownedByShape(async (a: Address) => (a === POOL ? new Uint8Array(pool) : null));
   }
 
   // 496, 840 and 848 all clear the SIZE gate (they fail later at the vault reads this loader

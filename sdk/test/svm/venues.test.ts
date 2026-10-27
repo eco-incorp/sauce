@@ -126,9 +126,12 @@ describe("fixtures", () => {
     );
   });
 
-  it("fixtureLoader returns decoded bytes for known addresses and null otherwise", async () => {
+  it("fixtureLoader returns decoded bytes and the captured owner for known addresses and null otherwise", async () => {
     const load = fixtureLoader(fixtures);
-    expect(await load(WSOL_MINT as Parameters<typeof load>[0])).toEqual(bytesA);
+    expect(await load(WSOL_MINT as Parameters<typeof load>[0])).toEqual({
+      data: bytesA,
+      owner: TOKEN_PROGRAM,
+    });
     expect(await load(SYSTEM_PROGRAM as Parameters<typeof load>[0])).toBeNull();
   });
 

@@ -7,8 +7,10 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
 import { fetchHeliumTreasuryPoolConfig } from "../../../src/svm/venues/helium-treasury/index.js";
+import { ownedByShape } from "../fixtures.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
@@ -49,8 +51,8 @@ function buildTreasuryTokenAccount(): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
-  return async (addr: Address) => map[addr] ?? null;
+function loaderFrom(map: Record<string, Uint8Array>): OwnedAccountLoader {
+  return ownedByShape(async (addr: Address) => map[addr] ?? null);
 }
 
 describe("helium-treasury Token-2022 self-drop", () => {
@@ -64,6 +66,18 @@ describe("helium-treasury Token-2022 self-drop", () => {
     await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
+  it("REJECTS a treasury whose supplyMint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const shaped = loaderFrom({
+      [POOL]: buildMgmt(),
+      [TREASURY]: buildTreasuryTokenAccount(),
+    });
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === SUPPLY_MINT
+        ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID }
+        : shaped(addr);
+    await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
   it("classic-legacy mints pass the Token-2022 gate (fails later on the breaker read)", async () => {
     const load = loaderFrom({
       [POOL]: buildMgmt(),
@@ -73,5 +87,22 @@ describe("helium-treasury Token-2022 self-drop", () => {
       // circuit breaker PDA intentionally not vendored
     });
     await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/circuit breaker/i);
+  });
+
+  it("REJECTS a treasury whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    for (const mint of [TREASURY_MINT, SUPPLY_MINT]) {
+      const shaped = loaderFrom({
+        [POOL]: buildMgmt(),
+        [TREASURY]: buildTreasuryTokenAccount(),
+        [SUPPLY_MINT]: makeLegacyMint(),
+        [TREASURY_MINT]: makeLegacyMint(),
+      });
+      const load: OwnedAccountLoader = async (addr) =>
+        addr === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+      await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

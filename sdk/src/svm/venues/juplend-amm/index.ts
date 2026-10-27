@@ -116,8 +116,16 @@ import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type {
+  OwnedAccountLoader,
+  PoolConfig,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 import { JUPITER_LEND_LIQUIDITY_PROGRAM_ID } from "../jupiter-lend-earn/index.js";
+import { TOKEN_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
 const SLUG = "juplend-amm";
@@ -211,17 +219,19 @@ async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Pro
 }
 
 /**
- * Which token program owns a mint, from the mint account bytes alone (no
- * `owner` field on AccountLoader reads): a classic SPL mint is exactly 82
- * bytes; anything else must be token-2022 TLV. A plain / advisory-only
- * Token-2022 mint (PermanentDelegate, ConfidentialTransfer — PYUSD/USDG carry
- * these and trade fine) routes exactly like a legacy mint; a genuinely
- * un-routable extension set (NonTransferable / DefaultAccountState=frozen)
- * self-drops, and a TransferFeeConfig-bearing mint is dropped (see the
- * TODO below).
+ * Which token program owns a mint: its OWNER (an extensionless Token-2022 mint
+ * is 82 bytes, byte-identical to a classic SPL mint, so the bytes alone cannot
+ * tell them apart). A Token-2022 mint with no extensions carries nothing to
+ * gate; one with extensions must be a token-2022 TLV mint layout. A plain /
+ * advisory-only Token-2022 mint (PermanentDelegate, ConfidentialTransfer —
+ * PYUSD/USDG carry these and trade fine) routes exactly like a legacy mint; a
+ * genuinely un-routable extension set (NonTransferable /
+ * DefaultAccountState=frozen) self-drops, and a TransferFeeConfig-bearing mint
+ * is dropped (see the TODO below).
  */
-function detectTokenProgram(mint: Address, data: Uint8Array): Address {
-  if (data.length === 82) return TOKEN_PROGRAM;
+function detectTokenProgram(mint: Address, data: Uint8Array, owner: Address): Address {
+  if (classifyMintProgram(mint, data, owner) === TOKEN_PROGRAM_ID) return TOKEN_PROGRAM;
+  if (data.length === 82) return TOKEN_2022_PROGRAM;
   if (data.length < 166) {
     throw new Error(
       `juplend-amm mint ${mint} data is ${data.length} bytes, not a token mint layout`,
@@ -269,10 +279,11 @@ export const juplendAmm = {
    * `_swapIn`'s routing-amount branch has no route, `DexNoSwapRoute`).
    */
   async fetchPoolConfig(
-    load: AccountLoader,
+    owned: OwnedAccountLoader,
     pool: Address,
     swap0to1 = true,
   ): Promise<JuplendAmmPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`juplend-amm pool ${pool} account not found`);
     if (data.length !== DEX_ACCOUNT_SIZE) {
@@ -304,11 +315,11 @@ export const juplendAmm = {
     const token1 = pubkeyAt(data, OFF_TOKEN_1);
     const feePpm = readUintLE(data, OFF_FEE, 4);
 
-    const [mint0Data, mint1Data] = await Promise.all([load(token0), load(token1)]);
-    if (mint0Data === null || mint1Data === null)
+    const [mint0, mint1] = await Promise.all([owned(token0), owned(token1)]);
+    if (mint0 === null || mint1 === null)
       throw new Error(`juplend-amm pool ${pool} mint account(s) not found`);
-    const tokenProgram0 = detectTokenProgram(token0, mint0Data);
-    const tokenProgram1 = detectTokenProgram(token1, mint1Data);
+    const tokenProgram0 = detectTokenProgram(token0, mint0.data, mint0.owner);
+    const tokenProgram1 = detectTokenProgram(token1, mint1.data, mint1.owner);
 
     const [tokenReserve0, tokenReserve1, rateModel0, rateModel1, liquidity] = await Promise.all([
       pda(["reserve", new Uint8Array(encoder.encode(token0))], JUPLEND_LIQUIDITY_PROGRAM_ID),

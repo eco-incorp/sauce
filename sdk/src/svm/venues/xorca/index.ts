@@ -149,7 +149,8 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "xorca";
 
@@ -202,9 +203,10 @@ export interface XorcaPoolConfig extends PoolConfig {
  * misquoted — rather than trusting the hardcoded address blindly.
  */
 export async function fetchXorcaConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<XorcaPoolConfig> {
+  const load = accountDataLoader(owned);
   if (pool !== XORCA_STATE_PDA) {
     throw new Error(`${SLUG}: pool ${pool} is not the xORCA state singleton ${XORCA_STATE_PDA}`);
   }

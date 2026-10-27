@@ -98,7 +98,7 @@
  * are many orders of magnitude below the `minOut` floor any real caller sets.
  *
  * Gates (fetchPoolConfig, all recoverable/self-drop classes): wrong size/
- * discriminator; either mint not a classic 82-byte Tokenkeg mint (Token-2022
+ * discriminator; either mint not owned by classic Tokenkeg (Token-2022
  * transfer-fee/extension mints are out of scope, same restriction as
  * defituna/raydium-cp-swap's classic-SPL-only swap path); an uninitialized
  * pair (`reserve0 === 0 || reserve1 === 0`, mirroring `Pair::is_initialized`);
@@ -108,7 +108,8 @@ import { address, getAddressCodec } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -157,9 +158,10 @@ async function derivePda(seeds: Uint8Array[]): Promise<Address> {
 
 /** Fetch + decode one Pair, deriving the fixed accounts the swap CPI needs. Read-only against the loader. */
 export async function fetchOmnipairPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<OmnipairPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pair account ${pool} not found`);
   if (data.length !== PAIR_ACCOUNT_SIZE) {
@@ -188,16 +190,18 @@ export async function fetchOmnipairPoolConfig(
 
   // The swap path is Tokenkeg-only (Token-2022 transfer-fee/extension mints are
   // out of scope), so detect a Token-2022 or un-routable mint via the shared
-  // data-shape resolver and SELF-DROP the pool (the thrown error is the
-  // graceful-drop signal the SvmRoute orchestrator catches). The LEGACY path is
-  // byte-identical: a classic 82-byte mint classifies Tokenkeg with no extensions.
+  // resolver, by the mint's OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one), and SELF-DROP the pool (the thrown error is
+  // the graceful-drop signal the SvmRoute orchestrator catches). The LEGACY path
+  // is byte-identical: a Tokenkeg-owned mint classifies Tokenkeg with no extensions.
   const mints = [token0Mint, token1Mint];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue; // an unreadable mint falls back to the legacy assumption
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

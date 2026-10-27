@@ -50,7 +50,8 @@
  * every address is what it claims to be.
  */
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import {
   ata,
   CONFIG_SEED,
@@ -132,7 +133,8 @@ export const scaleVmm = {
   kind: "constant-product" as const,
   programId: SCALE_VMM_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pair: Address): Promise<ScaleVmmPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pair: Address): Promise<ScaleVmmPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await loadRequired(load, pair, "pair");
     if (data.length !== PAIR_SIZE) {
       throw new Error(`${SLUG} pair ${pair} data is ${data.length} bytes, expected ${PAIR_SIZE}`);
@@ -173,12 +175,13 @@ export const scaleVmm = {
     const feeBeneficiaryWallet = pubkeyAt(configData, CONFIG_OFFSETS.feeBeneficiary);
     const platformFeeBps = readUintLE(configData, CONFIG_OFFSETS.platformFeeBps, 2);
 
-    const [mintAData, mintBData] = await Promise.all([
-      loadRequired(load, mintA, "mint_a"),
-      loadRequired(load, mintB, "mint_b"),
-    ]);
-    const tokenProgramA = detectTokenProgram(mintA, mintAData);
-    const tokenProgramB = detectTokenProgram(mintB, mintBData);
+    // The mint's token program is its OWNER (an extensionless Token-2022 mint is
+    // byte-identical to a legacy one), so read each mint with its owner.
+    const [mintAAccount, mintBAccount] = await Promise.all([owned(mintA), owned(mintB)]);
+    if (mintAAccount === null) throw new Error(`${SLUG}: mint_a ${mintA} not found`);
+    if (mintBAccount === null) throw new Error(`${SLUG}: mint_b ${mintB} not found`);
+    const tokenProgramA = detectTokenProgram(mintA, mintAAccount.data, mintAAccount.owner);
+    const tokenProgramB = detectTokenProgram(mintB, mintBAccount.data, mintBAccount.owner);
 
     const [vaultA, vaultB, platformFeeTaA, ammPool] = await Promise.all([
       pda([pair, mintA], SCALE_VMM_PROGRAM_ID),

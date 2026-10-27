@@ -140,9 +140,10 @@
 import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -329,7 +330,11 @@ export function perenaSwapOut(live: PerenaLiveState, x: bigint): bigint {
   return mulDivFloor(raw, 10_000n - MARGIN_BPS, 10_000n);
 }
 
-async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<PerenaPoolConfig> {
+async function fetchPoolConfig(
+  owned: OwnedAccountLoader,
+  pool: Address,
+): Promise<PerenaPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== STABLE_POOL_ACCOUNT_SIZE) {

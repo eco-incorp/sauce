@@ -7,14 +7,24 @@
  * mirroring the perena-star self-drop test), a legacy mint reaches the same
  * point, and only a blocking (NonTransferable / frozen) mint self-drops. A
  * TransferFeeConfig mint stays rejected (fee netting is a documented follow-up
- * — see TODO(t22-fee-netting) in the adapter).
+ * — see TODO(t22-fee-netting) in the adapter). An 82-byte base mint carries no
+ * extension, so its program is its OWNER: an extensionless Token-2022 mint is
+ * byte for byte a legacy one.
  *
  * No mainnet fixture is vendored, so this builds a minimal synthetic 429-byte
  * PoolState.
  */
 import { address, getAddressCodec } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { raydiumLaunchlab } from "../../../src/svm/venues/raydium-launchlab/index.js";
+import type { Address } from "@solana/kit";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
+import {
+  RAYDIUM_LAUNCHLAB_PROGRAM_ID,
+  raydiumLaunchlab,
+} from "../../../src/svm/venues/raydium-launchlab/index.js";
 import {
   makeT22Mint,
   makeLegacyMint,
@@ -28,6 +38,8 @@ const PLATFORM_CONFIG = address("8Wf5TiAheLUqBrKXeYg2JtAFFMWtKdG2BSFgqUcPVwTt");
 const BASE_MINT = address("So11111111111111111111111111111111111111112");
 const QUOTE_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const POOL_STATE_DISCRIMINATOR = [247, 237, 227, 245, 215, 195, 222, 70];
+const GLOBAL_CONFIG_DISCRIMINATOR = [149, 8, 156, 202, 160, 252, 176, 217];
+const PLATFORM_CONFIG_DISCRIMINATOR = [160, 78, 128, 0, 248, 83, 230, 160];
 
 /** A minimal 429-byte PoolState: disc, status=Fund(0), token_program_flag, and the referenced pubkeys. */
 function makePoolState(tokenProgramFlag: number): Uint8Array {
@@ -43,13 +55,34 @@ function makePoolState(tokenProgramFlag: number): Uint8Array {
   return buf;
 }
 
-function loaderWith(flag: number, mintData: Uint8Array | null): AccountLoader {
+type Account = { data: Uint8Array; owner: Address };
+const t22 = (data: Uint8Array): Account => ({ data, owner: TOKEN_2022_PROGRAM_ID });
+const legacy = (data: Uint8Array): Account => ({ data, owner: TOKEN_PROGRAM_ID });
+
+/** A config account: its discriminator, then zeros (global config curve_type@16 = 0, Constant). */
+function configAccount(discriminator: number[]): Account {
+  const data = new Uint8Array(64);
+  data.set(discriminator, 0);
+  return { data, owner: RAYDIUM_LAUNCHLAB_PROGRAM_ID };
+}
+
+/**
+ * `validConfigs` false: both config accounts are present with a wrong
+ * discriminator, so passing the token gate surfaces the global-config mismatch.
+ * true: both configs are valid and the fetch resolves to a config.
+ */
+function loaderWith(flag: number, mint: Account | null, validConfigs = false): OwnedAccountLoader {
   const pool = makePoolState(flag);
+  const config = (discriminator: number[]): Account =>
+    validConfigs
+      ? configAccount(discriminator)
+      : { data: new Uint8Array(8), owner: RAYDIUM_LAUNCHLAB_PROGRAM_ID };
   return async (addr) => {
-    if (addr === POOL) return new Uint8Array(pool);
-    if (addr === BASE_MINT) return mintData === null ? null : new Uint8Array(mintData);
-    if (addr === GLOBAL_CONFIG) return new Uint8Array(8); // present but wrong discriminator
-    if (addr === PLATFORM_CONFIG) return new Uint8Array(8);
+    if (addr === POOL) return { data: new Uint8Array(pool), owner: RAYDIUM_LAUNCHLAB_PROGRAM_ID };
+    if (addr === BASE_MINT)
+      return mint === null ? null : { data: new Uint8Array(mint.data), owner: mint.owner };
+    if (addr === GLOBAL_CONFIG) return config(GLOBAL_CONFIG_DISCRIMINATOR);
+    if (addr === PLATFORM_CONFIG) return config(PLATFORM_CONFIG_DISCRIMINATOR);
     return null;
   };
 }
@@ -59,28 +92,79 @@ describe("raydium-launchlab Token-2022 handling", () => {
     // Passing resolveBaseTokenProgram surfaces the (deliberately wrong)
     // global-config discriminator — proof the Token-2022 base mint was NOT dropped.
     await expect(
-      raydiumLaunchlab.fetchPoolConfig(loaderWith(1, makeT22Mint()), POOL),
+      raydiumLaunchlab.fetchPoolConfig(loaderWith(1, t22(makeT22Mint())), POOL),
     ).rejects.toThrow(`raydium-launchlab global config ${GLOBAL_CONFIG} discriminator mismatch`);
   });
 
   it("passes the token gate for a legacy base mint (flag 0, byte-identical legacy path)", async () => {
     await expect(
-      raydiumLaunchlab.fetchPoolConfig(loaderWith(0, makeLegacyMint()), POOL),
+      raydiumLaunchlab.fetchPoolConfig(loaderWith(0, legacy(makeLegacyMint())), POOL),
     ).rejects.toThrow(`raydium-launchlab global config ${GLOBAL_CONFIG} discriminator mismatch`);
+  });
+
+  it("resolves an 82-byte base mint owned by Token-2022 (extensionless) to Token-2022", async () => {
+    const cfg = await raydiumLaunchlab.fetchPoolConfig(
+      loaderWith(1, t22(makeLegacyMint()), true),
+      POOL,
+    );
+    expect(cfg.baseTokenProgram).toBe(TOKEN_2022_PROGRAM_ID);
+  });
+
+  it("resolves an 82-byte base mint owned by Tokenkeg to Tokenkeg (legacy unchanged)", async () => {
+    const cfg = await raydiumLaunchlab.fetchPoolConfig(
+      loaderWith(1, legacy(makeLegacyMint()), true),
+      POOL,
+    );
+    expect(cfg.baseTokenProgram).toBe(TOKEN_PROGRAM_ID);
   });
 
   it("drops the pool when the base mint carries a blocking NonTransferable extension", async () => {
     await expect(
-      raydiumLaunchlab.fetchPoolConfig(loaderWith(1, makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
+      raydiumLaunchlab.fetchPoolConfig(loaderWith(1, t22(makeT22Mint(NON_TRANSFERABLE_TLV))), POOL),
     ).rejects.toThrow(/un-routable/);
   });
 
   it("still rejects a TransferFeeConfig base mint (fee-netting is a documented follow-up)", async () => {
     await expect(
       raydiumLaunchlab.fetchPoolConfig(
-        loaderWith(1, makeT22Mint(tlvEntry(1, new Uint8Array(108)))),
+        loaderWith(1, t22(makeT22Mint(tlvEntry(1, new Uint8Array(108))))),
         POOL,
       ),
     ).rejects.toThrow(/TransferFeeConfig/);
+  });
+
+  it("refuses an 82-byte base mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      raydiumLaunchlab.fetchPoolConfig(
+        loaderWith(1, { data: makeLegacyMint(), owner: foreign }, true),
+        POOL,
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
+
+  it("refuses an extension-shaped base mint owned by neither token program", async () => {
+    // A Token-2022 layout is no proof of Token-2022: only the owner is. Before the owner was read
+    // for every length, an account of this shape passed as Token-2022 whoever owned it.
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      raydiumLaunchlab.fetchPoolConfig(
+        loaderWith(1, { data: makeT22Mint(), owner: foreign }, true),
+        POOL,
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
+
+  it("refuses an extension-shaped account the legacy program owns: it is not a mint", async () => {
+    const data = makeT22Mint();
+    await expect(
+      raydiumLaunchlab.fetchPoolConfig(loaderWith(1, legacy(data), true), POOL),
+    ).rejects.toThrow(
+      `raydium-launchlab base mint ${BASE_MINT} is a ${data.length}-byte account of the legacy token program, not a mint`,
+    );
   });
 });

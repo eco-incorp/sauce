@@ -175,7 +175,8 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
 const SLUG = "flint";
 export const FLINT_PROGRAM_ID = address("FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z");
@@ -306,7 +307,8 @@ function directed(cfg: FlintPoolConfig) {
       };
 }
 
-async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<FlintPoolConfig> {
+async function fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<FlintPoolConfig> {
+  const load = accountDataLoader(owned);
   // Per-side token programs are threaded from the curated registry (tokenProgramA/
   // tokenProgramB), each real-evidence-confirmed per pair — the Token-2022 side
   // (pumpCmXq) carries TOKEN_2022_PROGRAM and its own `checkedMint` for the swap

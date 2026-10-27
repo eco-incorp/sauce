@@ -3,12 +3,15 @@
  * is legacy-SPL (Tokenkeg) only (outMint is always wrapped SOL), so a
  * Token-2022 LST mint must GRACEFULLY SELF-DROP. No checked-in fixture, so the
  * LstInfo / global Pool / stake-pool accounts are minimal synthesized stubs
- * (enough to pass the pre-existing shape gates and reach the mint check).
+ * (enough to pass the pre-existing shape gates and reach the mint check). A
+ * mint is classified by its OWNER: an extensionless Token-2022 mint is 82
+ * bytes, byte for byte a legacy one, so only the owner can tell them apart.
  */
 import { address, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
 import { vaultLiquidUnstake } from "../../../src/svm/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const GLOBAL_POOL = "9nyw5jxhzuSs88HxKJyDCsWBZMhxj2uNXsFcyHF5KBAb";
 const LST_INFO = "Hhugr5Bw2NpmM4zKgDcQpypnVG7UPjcFFtHeaTbz764h";
@@ -36,15 +39,19 @@ function stakePoolBytes(): Uint8Array {
   return out;
 }
 
-function loader(mintData: Uint8Array | null): AccountLoader {
-  const map = new Map<string, Uint8Array>([
-    [LST_INFO, lstInfoBytes()],
-    [GLOBAL_POOL, globalPoolBytes()],
-    [STAKE_POOL, stakePoolBytes()],
+/** The synthesized venue accounts (owned by the venue program) and, when given, the LST mint. */
+function loader(mint: { data: Uint8Array; owner: Address } | null): OwnedAccountLoader {
+  const program = vaultLiquidUnstake.programId;
+  const map = new Map<string, { data: Uint8Array; owner: Address }>([
+    [LST_INFO, { data: lstInfoBytes(), owner: program }],
+    [GLOBAL_POOL, { data: globalPoolBytes(), owner: program }],
+    [STAKE_POOL, { data: stakePoolBytes(), owner: program }],
   ]);
-  if (mintData) map.set(LST_MINT, mintData);
+  if (mint) map.set(LST_MINT, mint);
   return async (addr) => map.get(String(addr)) ?? null;
 }
+
+const t22 = (data = makeT22Mint()) => ({ data, owner: TOKEN_2022_PROGRAM_ID });
 
 describe("vault-liquid-unstake Token-2022 self-drop", () => {
   test("legacy (unvendored LST mint) decodes — legacy path unchanged", async () => {
@@ -55,16 +62,34 @@ describe("vault-liquid-unstake Token-2022 self-drop", () => {
 
   test("a Token-2022 LST mint self-drops", async () => {
     await expect(
-      vaultLiquidUnstake.fetchPoolConfig(loader(makeT22Mint()), address(LST_INFO)),
+      vaultLiquidUnstake.fetchPoolConfig(loader(t22()), address(LST_INFO)),
     ).rejects.toThrow(/dropping pool/);
+  });
+
+  test("an extensionless (82-byte) Token-2022 LST mint self-drops as Token-2022", async () => {
+    await expect(
+      vaultLiquidUnstake.fetchPoolConfig(loader(t22(makeLegacyMint())), address(LST_INFO)),
+    ).rejects.toThrow(/Token-2022/);
   });
 
   test("a NonTransferable LST mint self-drops as un-routable", async () => {
     await expect(
       vaultLiquidUnstake.fetchPoolConfig(
-        loader(makeT22Mint(NON_TRANSFERABLE_TLV)),
+        loader(t22(makeT22Mint(NON_TRANSFERABLE_TLV))),
         address(LST_INFO),
       ),
     ).rejects.toThrow(/dropping pool/);
+  });
+
+  test("an 82-byte LST mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      vaultLiquidUnstake.fetchPoolConfig(
+        loader({ data: makeLegacyMint(), owner: foreign }),
+        address(LST_INFO),
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${LST_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

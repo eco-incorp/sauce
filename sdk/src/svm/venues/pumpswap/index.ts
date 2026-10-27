@@ -31,10 +31,13 @@ import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { ceilDiv, readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { TOKEN_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { accountDataLoader } from "../../loader.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type {
   AccountBytesMap,
   AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -138,15 +141,17 @@ async function ata(
 }
 
 /**
- * Which token program serves this mint, from its account data alone: a classic
- * layout is exactly 82 bytes (assumed Tokenkeg — an extensionless token-2022
- * mint is indistinguishable, and every pump token-2022 mint carries
- * extensions), anything longer must be token-2022 TLV. Gate (documented in
- * the historical venue investigation): a TransferFeeConfig extension makes vault deltas
- * diverge from user amounts, so such mints are rejected.
+ * Which token program serves this mint: its OWNER (an extensionless token-2022
+ * mint is 82 bytes, byte-identical to a classic Tokenkeg mint, so the bytes
+ * alone cannot tell them apart). An extensionless token-2022 mint carries
+ * nothing to gate; one with extensions must be a token-2022 TLV mint layout.
+ * Gate (documented in the historical venue investigation): a TransferFeeConfig
+ * extension makes vault deltas diverge from user amounts, so such mints are
+ * rejected.
  */
-function detectTokenProgram(mint: Address, data: Uint8Array): Address {
-  if (data.length === 82) return TOKEN_PROGRAM;
+function detectTokenProgram(mint: Address, data: Uint8Array, owner: Address): Address {
+  if (classifyMintProgram(mint, data, owner) === TOKEN_PROGRAM_ID) return TOKEN_PROGRAM;
+  if (data.length === 82) return TOKEN_2022_PROGRAM;
   if (data.length < 166) {
     throw new Error(`pumpswap mint ${mint} data is ${data.length} bytes, not a token mint layout`);
   }
@@ -231,6 +236,16 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
   return data;
 }
 
+async function loadOwnedAccount(
+  owned: OwnedAccountLoader,
+  addr: Address,
+  what: string,
+): Promise<{ data: Uint8Array; owner: Address }> {
+  const account = await owned(addr);
+  if (account === null) throw new Error(`pumpswap ${what} ${addr} not found`);
+  return account;
+}
+
 /**
  * buy_exact_quote_in effective quote input, using the buy formula in the
  * historical venue investigation: strip the fee share off the spendable budget,
@@ -271,11 +286,11 @@ const writable = (addr: Address): VenueAccount => ({ ref: addr, address: addr, w
 
 /** Fetch from a 32-byte pool key. The loader and returned config retain their string-address API. */
 export async function fetchPumpswapConfigBytes(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Uint8Array,
 ): Promise<PumpswapPoolConfig> {
   if (pool.length !== 32) throw new Error(`pumpswap pool key must be 32 bytes, got ${pool.length}`);
-  return pumpswapAdapter.fetchPoolConfig(load, getAddressDecoder().decode(pool));
+  return pumpswapAdapter.fetchPoolConfig(owned, getAddressDecoder().decode(pool));
 }
 
 export const pumpswapAdapter = {
@@ -283,7 +298,8 @@ export const pumpswapAdapter = {
   kind: "constant-product",
   programId: PUMPSWAP_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<PumpswapPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<PumpswapPoolConfig> {
+    const load = accountDataLoader(owned);
     const poolData = await loadAccount(load, pool, "pool");
     if (!hasDiscriminator(poolData, POOL_DISCRIMINATOR)) {
       throw new Error(`pumpswap pool ${pool} discriminator mismatch (not a pump amm Pool account)`);
@@ -321,15 +337,15 @@ export const pumpswapAdapter = {
     const [
       globalConfigData,
       feeConfigData,
-      baseMintData,
-      quoteMintData,
+      baseMintAccount,
+      quoteMintAccount,
       baseVaultData,
       quoteVaultData,
     ] = await Promise.all([
       loadAccount(load, GLOBAL_CONFIG, "global config"),
       loadAccount(load, FEE_CONFIG, "fee config"),
-      loadAccount(load, baseMint, "base mint"),
-      loadAccount(load, quoteMint, "quote mint"),
+      loadOwnedAccount(owned, baseMint, "base mint"),
+      loadOwnedAccount(owned, quoteMint, "quote mint"),
       loadAccount(load, baseVault, "base vault"),
       loadAccount(load, quoteVault, "quote vault"),
     ]);
@@ -347,8 +363,16 @@ export const pumpswapAdapter = {
       throw new Error(`pumpswap fee config ${FEE_CONFIG} discriminator mismatch`);
     }
 
-    const baseTokenProgram = detectTokenProgram(baseMint, baseMintData);
-    const quoteTokenProgram = detectTokenProgram(quoteMint, quoteMintData);
+    const baseTokenProgram = detectTokenProgram(
+      baseMint,
+      baseMintAccount.data,
+      baseMintAccount.owner,
+    );
+    const quoteTokenProgram = detectTokenProgram(
+      quoteMint,
+      quoteMintAccount.data,
+      quoteMintAccount.owner,
+    );
 
     // Canonical pump pools (creator == the bonding curve's pool-authority PDA
     // for the base mint) pay the market-cap fee tier; everything else pays
@@ -365,7 +389,7 @@ export const pumpswapAdapter = {
       if (tiers.length === 0) throw new Error(`pumpswap fee config ${FEE_CONFIG} has no fee tiers`);
       const baseReserve = readUintLE(baseVaultData, 64, 8);
       const quoteReserve = readUintLE(quoteVaultData, 64, 8);
-      const baseMintSupply = readUintLE(baseMintData, 36, 8);
+      const baseMintSupply = readUintLE(baseMintAccount.data, 36, 8);
       if (baseReserve === 0n) {
         throw new Error(
           `pumpswap pool ${pool} base vault is empty, cannot compute the market-cap fee tier`,

@@ -165,23 +165,22 @@
  * comparisons), at most as expensive as raydium-cp-swap's own per-rung
  * fee-adjusted CP formula.
  *
- * ── Token-2022 assets: not distinguished (documented simplification, not a
- *    permission gate) ──
+ * ── Token-2022 assets: self-dropped ──
  *
- * `AccountLoader` returns raw bytes only (no owning-program field), so
- * `fetchPoolConfig` cannot see whether `vault_asset_mint` is Token or
- * Token-2022 owned. Every one of the sampled vaults' assets (HUB, USDC, wSOL,
- * USDS, and others) is a classic SPL Token mint, so `assetTokenProgram` is
- * pinned to the classic Token program. A future Token-2022-asset vault would
- * fail its OWN CPI cleanly (a program-ownership mismatch on the passed
- * token-program account) rather than corrupt anything — a self-drop for that
- * one vault, not a systemic risk. `lpTokenProgram` needs no such handling:
- * the IDL fixes it to the classic Token program unconditionally (LP shares
- * are never Token-2022).
+ * `fetchPoolConfig` reads each mint with its OWNER, the token program that
+ * serves it (an extensionless Token-2022 mint is byte-identical to a classic
+ * one, so the owner is the only reliable signal). Every one of the sampled
+ * vaults' assets (HUB, USDC, wSOL, USDS, and others) is a classic SPL Token
+ * mint, so `assetTokenProgram` is pinned to the classic Token program, and a
+ * Token-2022-asset vault self-drops at fetch time rather than reaching a CPI
+ * whose wire semantics this adapter has not verified. `lpTokenProgram` needs
+ * no such handling: the IDL fixes it to the classic Token program
+ * unconditionally (LP shares are never Token-2022), checked defensively.
  */
 import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { memoizedFindAssociatedTokenPda, memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -236,9 +235,10 @@ function protocolPda(): Promise<Address> {
  * case, fixed forever per vault so safe to bake at prepare time).
  */
 export async function fetchVoltrConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<VoltrPoolConfig> {
+  const load = accountDataLoader(owned);
   const raw = await load(pool);
   if (raw === null) throw new Error(`${SLUG}: vault account ${pool} not found`);
   if (raw.length < VAULT_MIN_LEN) {
@@ -284,30 +284,30 @@ export async function fetchVoltrConfig(
     tokenProgram: SPL_TOKEN_PROGRAM_ID,
   });
 
-  const [assetMintRaw, lpMintRaw] = await Promise.all([load(assetMint), load(lpMint)]);
-  if (assetMintRaw === null) throw new Error(`${SLUG}: asset mint ${assetMint} not found`);
-  if (lpMintRaw === null) throw new Error(`${SLUG}: lp mint ${lpMint} not found`);
-  const assetDecimals = assetMintRaw[MINT_DECIMALS_OFFSET]!;
-  const lpDecimals = lpMintRaw[MINT_DECIMALS_OFFSET]!;
+  const [assetMintAccount, lpMintAccount] = await Promise.all([owned(assetMint), owned(lpMint)]);
+  if (assetMintAccount === null) throw new Error(`${SLUG}: asset mint ${assetMint} not found`);
+  if (lpMintAccount === null) throw new Error(`${SLUG}: lp mint ${lpMint} not found`);
+  const assetDecimals = assetMintAccount.data[MINT_DECIMALS_OFFSET]!;
+  const lpDecimals = lpMintAccount.data[MINT_DECIMALS_OFFSET]!;
 
   // `deposit_vault`/`instant_withdraw_vault` pass the classic Token program for
   // the asset side; a Token-2022 asset changes wire semantics this adapter has
   // not verified against. Detect a Token-2022 (or otherwise un-routable) mint
-  // and GRACEFULLY SELF-DROP the pool (the SvmRoute orchestrator catches a
-  // fetchPoolConfig throw and drops the venue) instead of relying on the CPI to
-  // fail on-chain. Reuses the mint bytes already loaded above; the LEGACY path
-  // is byte-identical (a classic 82-byte mint classifies Tokenkeg, parses no
-  // extensions). LP shares are always classic per the IDL, checked defensively.
-  for (const [m, mintData] of [
-    [assetMint, assetMintRaw],
-    [lpMint, lpMintRaw],
+  // by its OWNER and GRACEFULLY SELF-DROP the pool (the SvmRoute orchestrator
+  // catches a fetchPoolConfig throw and drops the venue) instead of relying on
+  // the CPI to fail on-chain. Reuses the mint accounts already loaded above; the
+  // LEGACY path is byte-identical (a Tokenkeg-owned mint parses no extensions).
+  // LP shares are always classic per the IDL, checked defensively.
+  for (const [m, mintAccount] of [
+    [assetMint, assetMintAccount],
+    [lpMint, lpMintAccount],
   ] as const) {
-    if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+    if (classifyMintProgram(m, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,

@@ -72,7 +72,14 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type {
+  OwnedAccountLoader,
+  PoolConfig,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -209,7 +216,8 @@ export const goonfiV2 = {
    * oracle-relay or mint account, a non-ascending fee-tier table (a corrupt or
    * unrecognized layout variant — fail closed rather than guess).
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<GoonfiV2PoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<GoonfiV2PoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`goonfi-v2 pool ${pool} account not found`);
     if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -229,26 +237,31 @@ export const goonfiV2 = {
     const vaultB = pubkeyAt(data, GOONFI_OFF_VAULT_B);
     const oracle = pubkeyAt(data, GOONFI_OFF_ORACLE);
 
-    const [mintAData, mintBData, oracleData] = await Promise.all([
-      load(mintA),
-      load(mintB),
+    const [mintAAccount, mintBAccount, oracleData] = await Promise.all([
+      owned(mintA),
+      owned(mintB),
       load(oracle),
     ]);
-    if (mintAData === null || mintBData === null)
+    if (mintAAccount === null || mintBAccount === null)
       throw new Error(`goonfi-v2 pool ${pool} mint account(s) not found`);
+    const mintAData = mintAAccount.data;
+    const mintBData = mintBAccount.data;
     if (mintAData.length < 45 || mintBData.length < 45) {
       throw new Error(`goonfi-v2 pool ${pool} mint account(s) too short to be an SPL mint`);
     }
     // This venue's on-chain swap ix is legacy-SPL (Tokenkeg) only, so a
     // Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS the
     // pool via a thrown error (the SvmRoute orchestrator catches it and drops
-    // the venue). Reuses the already-fetched mint bytes; a classic 82-byte mint
-    // classifies legacy → no throw → config built byte-identically to before.
-    for (const [mint, mintData] of [
-      [mintA, mintAData],
-      [mintB, mintBData],
+    // the venue). The mint's token program is its OWNER (an extensionless
+    // Token-2022 mint is byte-identical to a legacy one). Reuses the
+    // already-fetched mint accounts; a Tokenkeg-owned mint → no throw → config
+    // built byte-identically to before.
+    for (const [mint, mintAccount] of [
+      [mintA, mintAAccount],
+      [mintB, mintBAccount],
     ] as const) {
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintData = mintAccount.data;
+      if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );

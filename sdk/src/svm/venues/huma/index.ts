@@ -87,8 +87,9 @@ import { address, getAddressCodec, getAddressEncoder, getUtf8Encoder } from "@so
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -343,7 +344,8 @@ export const huma: SvmVenueAdapter = {
   kind: "constant-product", // no curve concept fits better; gates only rung defaults/helper inclusion (see types.ts).
   programId: HUMA_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<HumaPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<HumaPoolConfig> {
+    const load = accountDataLoader(owned);
     const modeConfig = pool;
     const poolConfigAccount = HUMA_CURATED_MODE_CONFIGS[modeConfig as string];
     if (poolConfigAccount === undefined) {
@@ -375,34 +377,39 @@ export const huma: SvmVenueAdapter = {
       getAddressEncoder().encode(poolConfigAccount) as Uint8Array,
       getAddressEncoder().encode(modeConfig) as Uint8Array,
     ]);
-    const modeMintData = await load(modeMint);
-    if (modeMintData === null) throw new Error(`${SLUG} mode_mint account ${modeMint} not found`);
+    const modeMintAccount = await owned(modeMint);
+    if (modeMintAccount === null)
+      throw new Error(`${SLUG} mode_mint account ${modeMint} not found`);
 
     // The deposit/instant_withdraw ix moves both the underlying mint and the
     // mode share mint through legacy-SPL (Tokenkeg) transfers only, so a
     // Token-2022 mint (or one carrying an un-routable extension) on either side
-    // must SELF-DROP the pool rather than be silently assumed legacy. The thrown
-    // error IS the graceful-drop signal (the SvmRoute orchestrator catches it
-    // and drops the venue). The mode-mint bytes are reused; the underlying mint
-    // is loaded on demand and, if unreadable, falls back to the legacy
-    // assumption, keeping the classic 82-byte path byte-identical.
+    // must SELF-DROP the pool rather than be silently assumed legacy. A mint's
+    // token program is its OWNER (an extensionless Token-2022 mint is
+    // byte-identical to a legacy one). The thrown error IS the graceful-drop
+    // signal (the SvmRoute orchestrator catches it and drops the venue). The
+    // mode-mint account is reused; the underlying mint is loaded on demand and,
+    // if unreadable, falls back to the legacy assumption, keeping the classic
+    // 82-byte path byte-identical.
     const _mintEntries = [
       [decodedConfig.underlyingMint, null],
-      [modeMint, modeMintData],
+      [modeMint, modeMintAccount],
     ] as const;
-    const _mintDatas = await Promise.all(
-      _mintEntries.map(([mint, preloaded]) => preloaded ?? load(mint)),
+    const _mintAccounts = await Promise.all(
+      _mintEntries.map(([mint, preloaded]) => preloaded ?? owned(mint)),
     );
     for (let _i = 0; _i < _mintEntries.length; _i++) {
       const mint = _mintEntries[_i]![0];
-      const mintData = _mintDatas[_i]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintAccount = _mintAccounts[_i]!;
+      if (mintAccount === null) continue;
+      if (
+        classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID
+      ) {
         throw new Error(
           `${SLUG}: dropping pool ${modeConfig} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );
       }
-      const { blocking } = parseMintExtensions(mintData);
+      const { blocking } = parseMintExtensions(mintAccount.data);
       if (blocking.length > 0) {
         throw new Error(
           `${SLUG}: dropping pool ${modeConfig} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

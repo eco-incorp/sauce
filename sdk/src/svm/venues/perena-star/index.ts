@@ -129,11 +129,10 @@
  * `programId` on the wire) — confirmed by re-simulating with exactly that
  * (8 trailing `programId` accounts) and observing a clean success at all
  * three sampled sizes, both via `unitsConsumed` and the real balance delta.
- * `junior_mint`/`bank_mint` are assumed classic SPL Token (not Token-2022) —
- * confirmed against the one live tranche's real transactions; the
- * `AccountLoader` this framework's `fetchPoolConfig` receives carries no
- * owner field to detect Token-2022 generically (unlike raydium-cp-swap,
- * whose pool state stores each mint's owning program directly).
+ * `junior_mint`/`bank_mint` must be classic SPL Token (not Token-2022) —
+ * confirmed against the one live tranche's real transactions; `fetchPoolConfig`
+ * classifies each mint by its OWNER (an extensionless Token-2022 mint is
+ * byte-identical to a legacy one) and self-drops a Token-2022 one.
  *
  * CU — see ../budget.ts's `perena-star` entry for the measurement citation
  * (real `simulateTransaction` runs against the live mainnet tranche, both
@@ -142,7 +141,8 @@
 import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -185,9 +185,10 @@ export interface PerenaStarPoolConfig extends PoolConfig {
 }
 
 async function fetchPerenaStarPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<PerenaStarPoolConfig> {
+  const load = accountDataLoader(owned);
   const decoder = getAddressDecoder();
   const pubkey = (data: Uint8Array, offset: number): Address =>
     decoder.decode(data.subarray(offset, offset + 32));
@@ -215,16 +216,18 @@ async function fetchPerenaStarPoolConfig(
   // legacy-SPL (Tokenkeg) token program, so a Token-2022 mint (or one carrying an
   // un-routable extension) SELF-DROPS the pool via a thrown, clearly-described
   // error — the SvmRoute orchestrator catches a fetchPoolConfig throw and drops
-  // the venue. The legacy path stays byte-identical: a classic 82-byte mint
-  // classifies as legacy → no throw, and an unreadable mint (not vendored by a
-  // fixture) falls back to legacy.
+  // the venue. The mint's token program is its OWNER (an extensionless
+  // Token-2022 mint is byte-identical to a legacy one). The legacy path stays
+  // byte-identical: a Tokenkeg-owned mint classifies as legacy → no throw, and an
+  // unreadable mint (not vendored by a fixture) falls back to legacy.
   const mints = [bankMint, juniorMint];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue;
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `perena-star: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

@@ -17,8 +17,14 @@ import { address } from "@solana/kit";
 import { compileSvm, wrapQuoteMain } from "../rs-compile.js";
 import { meteoraDammV2 } from "../../../src/svm/venues/meteora-damm-v2/index.js";
 import type { MeteoraDammV2PoolConfig } from "../../../src/svm/venues/meteora-damm-v2/index.js";
-import type { AccountLoader, PoolConfig } from "../../../src/svm/index.js";
-import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from "../fixtures.js";
+import type { OwnedAccountLoader, PoolConfig } from "../../../src/svm/index.js";
+import {
+  fixtureBytesMap,
+  fixtureData,
+  fixtureLoader,
+  loadFixtures,
+  ownedByShape,
+} from "../fixtures.js";
 import {
   makeT22Mint,
   NON_TRANSFERABLE_TLV,
@@ -64,9 +70,9 @@ function doctoredData(mutate: (data: Uint8Array) => void): Uint8Array {
 function doctoredLoader(
   mutate: (data: Uint8Array) => void,
   extra: Record<string, Uint8Array> = {},
-): AccountLoader {
+): OwnedAccountLoader {
   const data = doctoredData(mutate);
-  return async (addr) => (addr === POOL ? data : (extra[addr] ?? null));
+  return ownedByShape(async (addr) => (addr === POOL ? data : (extra[addr] ?? null)));
 }
 
 /** Token-2022 mint with a TransferFeeConfig extension (type 1, 108 bytes). */
@@ -120,7 +126,7 @@ describe("meteora-damm-v2 fetchPoolConfig", () => {
   });
 
   it("gates on account size", async () => {
-    const load: AccountLoader = async () => fixtureData(poolFixture).subarray(0, 1111);
+    const load = ownedByShape(async () => fixtureData(poolFixture).subarray(0, 1111));
     await expect(meteoraDammV2.fetchPoolConfig(load, POOL)).rejects.toThrow(
       `meteora-damm-v2 pool ${POOL} account data is 1111 bytes, expected 1112`,
     );
@@ -338,7 +344,10 @@ describe("meteora-damm-v2 referenceQuote", () => {
       data[484] = 1;
     });
     const cfg: MeteoraDammV2PoolConfig = {
-      ...(await meteoraDammV2.fetchPoolConfig(async () => doctored, POOL)),
+      ...(await meteoraDammV2.fetchPoolConfig(
+        ownedByShape(async () => doctored),
+        POOL,
+      )),
       direction: "bToA",
     };
     // dIn = 1e8 - ceil(1e8 * 400000 / 1e9) = 99960000, then the curve output
@@ -355,7 +364,10 @@ describe("meteora-damm-v2 referenceQuote", () => {
       writeLE(data, 72, 2, 80n); // bin_step
       writeLE(data, 120, 16, 10000n); // volatility_accumulator
     });
-    const cfg = await meteoraDammV2.fetchPoolConfig(async () => doctored, POOL);
+    const cfg = await meteoraDammV2.fetchPoolConfig(
+      ownedByShape(async () => doctored),
+      POOL,
+    );
     expect(cfg.dynamicFee).toEqual({ binStep: 80n, variableFeeControl: 5000n });
     // variable = ceil((10000 * 80)^2 * 5000 / 1e11) = 32000; total 432000;
     // 81566288 - ceil(81566288 * 432000 / 1e9) = 81566288 - 35237.
@@ -369,7 +381,10 @@ describe("meteora-damm-v2 referenceQuote", () => {
       writeLE(data, 72, 2, 80n);
       writeLE(data, 120, 16, 10000n);
     });
-    const cfg = await meteoraDammV2.fetchPoolConfig(async () => doctored, POOL);
+    const cfg = await meteoraDammV2.fetchPoolConfig(
+      ownedByShape(async () => doctored),
+      POOL,
+    );
     // base + variable >> 5e8 cap (fee_version 0): out = 81566288 - 81566288/2.
     expect(meteoraDammV2.referenceQuote(cfg, { [POOL]: doctored }, ONE_SOL, NOW)).toBe(40_783_144n);
   });

@@ -53,9 +53,10 @@
 import { getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { memoizedCreateProgramAddress } from "../pda-memo.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SwapUser,
   VenueAccount,
@@ -156,7 +157,7 @@ export interface SplTokenSwapForkAdapter {
   slug: string;
   kind: "constant-product";
   programId: Address;
-  fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SplTokenSwapForkPoolConfig>;
+  fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<SplTokenSwapForkPoolConfig>;
   quoteAccounts(cfg: SplTokenSwapForkPoolConfig): VenueAccount[];
   emitQuote(cfg: SplTokenSwapForkPoolConfig, i: number, amountIn: bigint): string;
   buildSwap(cfg: SplTokenSwapForkPoolConfig, user: SwapUser, amountIn: bigint): VenueSwap;
@@ -196,7 +197,8 @@ export function makeSplTokenSwapForkAdapter(
     slug,
     kind: "constant-product",
     programId,
-    async fetchPoolConfig(load, pool) {
+    async fetchPoolConfig(owned, pool) {
+      const load = accountDataLoader(owned);
       if (unresolvedGate !== undefined) {
         throw new Error(
           `${slug} pool ${pool}: family gated pending resolution — ${unresolvedGate}`,

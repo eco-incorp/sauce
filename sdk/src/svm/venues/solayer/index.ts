@@ -137,7 +137,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -179,9 +180,10 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 
 /** Off-chain, once per pool: decode the EndoAVS account and gate its two mints. Read-only against the loader. */
 export async function fetchSolayerPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<SolayerPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool account ${pool} not found`);
   if (data.length !== ENDO_AVS_ACCOUNT_SIZE) {
@@ -208,18 +210,23 @@ export async function fetchSolayerPoolConfig(
 
   // Both directions transfer/mint/burn via the classic Tokenkeg program, so a
   // Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP.
-  // Detect the real token program per mint via the shared data-shape resolver;
-  // the thrown error IS the graceful drop (SvmRoute catches a fetchPoolConfig
-  // throw and drops the venue). LEGACY path byte-identical: a classic 82-byte
-  // mint classifies Tokenkeg, parses no extensions, config built unchanged. An
-  // unreadable mint falls back to the legacy assumption (keeps existing tests green).
-  const [receiptMintData, lstMintData] = await Promise.all([load(receiptMint), load(lstMint)]);
-  for (const [mint, mintData] of [
-    [receiptMint, receiptMintData],
-    [lstMint, lstMintData],
+  // The mint's token program is its OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one); the thrown error IS the graceful drop
+  // (SvmRoute catches a fetchPoolConfig throw and drops the venue). LEGACY path
+  // byte-identical: a Tokenkeg-owned mint parses no extensions, config built
+  // unchanged. An unreadable mint falls back to the legacy assumption (keeps
+  // existing tests green).
+  const [receiptMintAccount, lstMintAccount] = await Promise.all([
+    owned(receiptMint),
+    owned(lstMint),
+  ]);
+  for (const [mint, account] of [
+    [receiptMint, receiptMintAccount],
+    [lstMint, lstMintAccount],
   ] as const) {
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    if (account === null) continue;
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

@@ -102,7 +102,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { getEpochFee, parseMintExtensions } from "../../token-extensions.js";
 
 const SLUG = "gamma";
@@ -157,9 +158,10 @@ export interface GammaPoolConfig extends PoolConfig {
 
 /** Fetch + decode one GAMMA pool (mirrors raydium-cp-swap's fetchPoolConfig gates). Read-only against the loader. */
 export async function fetchGammaPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<GammaPoolConfig> {
+  const load = accountDataLoader(owned);
   const codec = getAddressCodec();
   const pubkey = (data: Uint8Array, offset: number): Address =>
     codec.decode(data.subarray(offset, offset + 32)) as Address;

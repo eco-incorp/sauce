@@ -42,9 +42,10 @@ import {
   weightedCoreQuoteLines,
   type StabbleTokenScale,
 } from "../stabble-common.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -98,9 +99,10 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
   programId: WEIGHTED_SWAP_PROGRAM_ID,
 
   async fetchPoolConfig(
-    load: AccountLoader,
+    owned: OwnedAccountLoader,
     pool: Address,
   ): Promise<StabbleWeightedSwapPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     const common = decodeStabblePoolCommon(
       pool,
@@ -130,24 +132,28 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
 
     // This venue's v1 `swap` entry point is legacy-SPL (Tokenkeg) only — no
     // Token-2022/transfer-fee accounting (see the module doc SCOPE). Detect a
-    // Token-2022 (or otherwise un-routable) mint per side and GRACEFULLY
-    // SELF-DROP the pool: the SvmRoute orchestrator catches a fetchPoolConfig
-    // throw and drops the venue. The LEGACY path is byte-identical — a classic
-    // 82-byte mint classifies as Tokenkeg, parses no extensions, and the config
-    // is built exactly as before; an unreadable mint (a fixture that does not
-    // vendor it) falls back to the legacy assumption.
+    // Token-2022 (or otherwise un-routable) mint per side by its OWNER (an
+    // extensionless Token-2022 mint is byte-identical to a legacy one) and
+    // GRACEFULLY SELF-DROP the pool: the SvmRoute orchestrator catches a
+    // fetchPoolConfig throw and drops the venue. The LEGACY path is
+    // byte-identical — a Tokenkeg-owned mint classifies as Tokenkeg, parses no
+    // extensions, and the config is built exactly as before; an unreadable
+    // mint (a fixture that does not vendor it) falls back to the legacy
+    // assumption.
     const _mints = [tokenA.mint, tokenB.mint];
-    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
     for (let _i = 0; _i < _mints.length; _i++) {
       const mint = _mints[_i]!;
-      const mintData = _mintDatas[_i]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintAccount = _mintAccounts[_i]!;
+      if (mintAccount === null) continue;
+      if (
+        classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID
+      ) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );
       }
-      const { blocking } = parseMintExtensions(mintData);
+      const { blocking } = parseMintExtensions(mintAccount.data);
       if (blocking.length > 0) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

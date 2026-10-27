@@ -21,15 +21,16 @@ import { fileURLToPath } from "node:url";
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { fetchMetaDaoFutarchySpotConfig } from "../../../src/svm/venues/metadao-futarchy/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const load = (name: string): { address: Address; data: Uint8Array } => {
+const load = (name: string): { address: Address; owner: Address; data: Uint8Array } => {
   const fixture = JSON.parse(
     readFileSync(join(HERE, `../fixtures/metadao-futarchy/${name}.json`), "utf8"),
-  ) as { address: Address; base64Data: string };
+  ) as { address: Address; owner: Address; base64Data: string };
   return {
     address: fixture.address,
+    owner: address(fixture.owner),
     data: new Uint8Array(Buffer.from(fixture.base64Data, "base64")),
   };
 };
@@ -43,15 +44,17 @@ const DAO_SIZE = 1264;
 const QUOTE_RESERVES_OFFSET = 109;
 const BASE_RESERVES_OFFSET = 117;
 
-function loaderOf(daoData: Uint8Array): AccountLoader {
-  const accounts: Record<string, Uint8Array> = {
-    [dao.address]: daoData,
-    [baseMint.address]: baseMint.data,
-    [quoteMint.address]: quoteMint.data,
+function loaderOf(daoData: Uint8Array): OwnedAccountLoader {
+  const accounts: Record<string, { data: Uint8Array; owner: Address }> = {
+    [dao.address]: { data: daoData, owner: dao.owner },
+    [baseMint.address]: { data: baseMint.data, owner: baseMint.owner },
+    [quoteMint.address]: { data: quoteMint.data, owner: quoteMint.owner },
   };
   return async (addr) => {
-    const data = accounts[addr as string];
-    return data === undefined ? null : new Uint8Array(data);
+    const account = accounts[addr as string];
+    return account === undefined
+      ? null
+      : { data: new Uint8Array(account.data), owner: account.owner };
   };
 }
 

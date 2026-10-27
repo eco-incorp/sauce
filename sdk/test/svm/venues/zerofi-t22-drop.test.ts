@@ -15,7 +15,8 @@ import {
   ZEROFI_POOL_FEE_PPM,
   ZEROFI_POOL_AUTHORITY,
 } from "../../../src/svm/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG");
@@ -48,14 +49,17 @@ function oracleBytes(): Uint8Array {
   out.set([0, 0, 0, 0, 0, 0, 0xf0, 0x3f], 0x30);
   return out;
 }
-function loader(mintA: Uint8Array, mintB: Uint8Array): AccountLoader {
+/** Accounts are owned as their shape implies, unless `ownerA` names mintA's owner. */
+function loader(mintA: Uint8Array, mintB: Uint8Array, ownerA?: Address): OwnedAccountLoader {
   const map = new Map<string, Uint8Array>([
     [String(POOL), poolBytes()],
     [String(ORACLE), oracleBytes()],
     [String(MINT_A), mintA],
     [String(MINT_B), mintB],
   ]);
-  return async (addr) => map.get(String(addr)) ?? null;
+  const shaped = ownedByShape(async (addr) => map.get(String(addr)) ?? null);
+  return async (addr) =>
+    ownerA !== undefined && addr === MINT_A ? { data: mintA, owner: ownerA } : shaped(addr);
 }
 
 beforeAll(() => {
@@ -86,9 +90,34 @@ describe("zerofi Token-2022 self-drop", () => {
     ).rejects.toThrow(/dropping pool/);
   });
 
+  test("an 82-byte mintA owned by Token-2022 (extensionless Token-2022) self-drops", async () => {
+    await expect(
+      zerofi.fetchPoolConfig(
+        loader(makeLegacyMint(), makeLegacyMint(), TOKEN_2022_PROGRAM_ID),
+        POOL,
+        0,
+      ),
+    ).rejects.toThrow(/Token-2022/);
+  });
+
   test("a NonTransferable mintB self-drops as un-routable", async () => {
     await expect(
       zerofi.fetchPoolConfig(loader(makeLegacyMint(), makeT22Mint(NON_TRANSFERABLE_TLV)), POOL, 0),
     ).rejects.toThrow(/dropping pool/);
+  });
+
+  test("an 82-byte mint owned by neither token program is refused", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      zerofi.fetchPoolConfig(loader(makeLegacyMint(), makeLegacyMint(), foreign), POOL, 0),
+    ).rejects.toThrow(
+      `token-program: mint ${MINT_A} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+    const shaped = loader(makeLegacyMint(), makeLegacyMint());
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT_B ? { data: makeLegacyMint(), owner: foreign } : shaped(addr);
+    await expect(zerofi.fetchPoolConfig(load, POOL, 0)).rejects.toThrow(
+      `token-program: mint ${MINT_B} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

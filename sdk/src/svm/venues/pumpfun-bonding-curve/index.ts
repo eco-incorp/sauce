@@ -126,8 +126,10 @@ import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
+import { accountDataLoader } from "../../loader.js";
 import { parseMintExtensions } from "../../token-extensions.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "pumpfun-bonding-curve" as const;
 
@@ -175,15 +177,17 @@ async function ata(owner: Address, mint: Address, tokenProgram: Address): Promis
 const SEED = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 /**
- * Which token program owns this mint, from its account data alone (the `AccountLoader`
- * contract has no owner metadata): a classic Tokenkeg mint is EXACTLY 82 bytes; anything
- * longer is token-2022 TLV. Copied from (and kept byte-identical to) the pumpswap
+ * Which token program owns this mint: its OWNER (an extensionless Token-2022 mint is
+ * EXACTLY 82 bytes, byte-identical to a classic Tokenkeg mint, so the bytes alone cannot
+ * tell them apart). An extensionless Token-2022 mint carries nothing to gate; one with
+ * extensions must be a token-2022 TLV mint layout. Kept in step with the pumpswap
  * adapter's own `detectTokenProgram` — a TransferFeeConfig extension (type 1) is
  * rejected: it would make vault/ATA deltas diverge from the amounts this module's
  * constant-product math assumes.
  */
-function detectTokenProgram(mint: Address, data: Uint8Array): Address {
-  if (data.length === 82) return TOKEN_PROGRAM;
+function detectTokenProgram(mint: Address, data: Uint8Array, owner: Address): Address {
+  if (classifyMintProgram(mint, data, owner) === TOKEN_PROGRAM_ID) return TOKEN_PROGRAM;
+  if (data.length === 82) return TOKEN_2022_PROGRAM;
   if (data.length < 166) {
     throw new Error(
       `pumpfun-bonding-curve mint ${mint} data is ${data.length} bytes, not a token mint layout`,
@@ -321,10 +325,11 @@ export const pumpfunBondingCurve = {
    * a named error if a caller omits it.
    */
   async fetchPoolConfig(
-    load: AccountLoader,
+    owned: OwnedAccountLoader,
     pool: Address,
     mint: Address,
   ): Promise<PumpfunBondingCurvePoolConfig> {
+    const load = accountDataLoader(owned);
     const bcData = await loadAccount(load, pool, "bonding curve");
     if (!hasDiscriminator(bcData, BONDING_CURVE_DISCRIMINATOR)) {
       throw new Error(
@@ -369,12 +374,15 @@ export const pumpfunBondingCurve = {
       );
     }
 
-    const [mintData, globalData, feeConfigData] = await Promise.all([
-      loadAccount(load, mint, "base mint"),
+    const [mintAccount, globalData, feeConfigData] = await Promise.all([
+      owned(mint).then((account) => {
+        if (account === null) throw new Error(`pumpfun-bonding-curve base mint ${mint} not found`);
+        return account;
+      }),
       loadAccount(load, GLOBAL, "global"),
       loadAccount(load, FEE_CONFIG, "fee config"),
     ]);
-    const baseTokenProgram = detectTokenProgram(mint, mintData);
+    const baseTokenProgram = detectTokenProgram(mint, mintAccount.data, mintAccount.owner);
     if (!hasDiscriminator(globalData, GLOBAL_DISCRIMINATOR)) {
       throw new Error(`pumpfun-bonding-curve global ${GLOBAL} discriminator mismatch`);
     }

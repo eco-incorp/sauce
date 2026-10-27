@@ -16,7 +16,8 @@ import { address } from "@solana/kit";
 import { compileSvm, wrapQuoteMain } from "../rs-compile.js";
 import { saberStableswap } from "../../../src/svm/venues/saber-stableswap/index.js";
 import type { SaberPoolConfig } from "../../../src/svm/venues/saber-stableswap/index.js";
-import type { AccountBytesMap, AccountLoader } from "../../../src/svm/index.js";
+import type { AccountBytesMap } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from "../fixtures.js";
 
 const POOL = address("YAkoNb6HKmSxQN9L8hiBE5tPJRsniSSMzND1boHmZxe");
@@ -44,11 +45,12 @@ beforeAll(async () => {
   cfg = (await saberStableswap.fetchPoolConfig(load, POOL)) as SaberPoolConfig;
 });
 
-/** Loader serving a mutated copy of the pool fixture (other accounts untouched). */
-function doctoredLoader(mutate: (data: Uint8Array) => Uint8Array | void): AccountLoader {
+/** Loader serving a mutated copy of the pool fixture, still owned as captured (other accounts untouched). */
+function doctoredLoader(mutate: (data: Uint8Array) => Uint8Array | void): OwnedAccountLoader {
   let data = fixtureData(poolFixture);
   data = mutate(data) ?? data;
-  return async (addr) => (addr === POOL ? data : load(addr));
+  const owner = address(poolFixture.owner);
+  return async (addr) => (addr === POOL ? { data, owner } : load(addr));
 }
 
 function writeU64LE(data: Uint8Array, offset: number, value: bigint): void {
@@ -90,7 +92,7 @@ describe("saber-stableswap fetchPoolConfig", () => {
   });
 
   it("throws when the pool account does not exist", async () => {
-    const empty: AccountLoader = async () => null;
+    const empty: OwnedAccountLoader = async () => null;
     await expect(saberStableswap.fetchPoolConfig(empty, POOL)).rejects.toThrow(
       `saber-stableswap pool account ${POOL} not found`,
     );
