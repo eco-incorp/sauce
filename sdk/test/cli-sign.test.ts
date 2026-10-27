@@ -349,6 +349,18 @@ describe("sauce sign", () => {
         1,
         "cancelling signed cooks is refused: it involves arbitrum",
       ],
+      // The zero owner is a Shared Pot's, which signs and cancels nothing: no private Pot of it exists.
+      [
+        ["sign", "--cancel", "1", "--chain", "base", "--owner", zeroAddress, "--offline"],
+        2,
+        "Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000",
+      ],
+      // Refused before the signer is unlocked (here a keystore that is not there) or an endpoint.
+      [
+        ["sign", "--cancel", "1", "--chain", "base", "--owner", zeroAddress],
+        2,
+        "Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000",
+      ],
     ];
     for (const [argv, code, message] of cases) {
       const deadline = argv.includes("--within") ? ["--deadline", "2000000000"] : [];
@@ -357,6 +369,9 @@ describe("sauce sign", () => {
         ...deadline,
         ...(argv.includes("--cancel") && !argv.includes(file) ? [] : ARGS),
         ...(argv.includes("arbitrum") ? ["--rpc-url", "http://127.0.0.1:9"] : []),
+        ...(argv.includes(zeroAddress) && !argv.includes("--offline")
+          ? ["--keystore", join(work, "absent.json"), "--rpc-url", "http://127.0.0.1:9"]
+          : []),
       );
       expect([argv, run.code, run.stderr]).toEqual([argv, code, expect.stringContaining(message)]);
     }

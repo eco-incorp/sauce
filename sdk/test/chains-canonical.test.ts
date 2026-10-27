@@ -29,8 +29,8 @@ import {
 import { listProtocols } from "../src/protocols/index.js";
 
 describe("canonical chain registry: structural invariants", () => {
-  it("has exactly 45 entries", () => {
-    expect(canonicalChains.length).toBe(45);
+  it("has exactly 46 entries", () => {
+    expect(canonicalChains.length).toBe(46);
   });
 
   it("has unique ids and unique slugs", () => {
@@ -120,12 +120,29 @@ describe("canonical chain registry: Solana / SVM", () => {
   });
 
   it("evmChains/svmChains partition correctly", () => {
-    expect(svmChains().map((chain) => chain.slug)).toEqual(["solana", "solana-devnet"]);
+    expect(svmChains().map((chain) => chain.slug)).toEqual([
+      "solana",
+      "solana-devnet",
+      "solana-testnet",
+    ]);
     expect(evmChains().length).toBe(43);
   });
 
+  it("registers Solana's testnet under a key of its own, alias 'testnet' its alone", () => {
+    expect(chainById(1399811151)?.slug).toBe("solana-testnet");
+    expect(chainByAlias("testnet")?.slug).toBe("solana-testnet");
+    expect(chainByAlias("Solana Testnet")?.id).toBe(1399811151);
+    expect(
+      canonicalChains.filter((chain) =>
+        [chain.slug, chain.name, ...chain.aliases].some(
+          (name) => normalizeChainKey(name) === "testnet",
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
   it("is absent from the EVM-only `chains` export (additivity, reverse direction)", () => {
-    for (const id of [1399811149, 1399811150]) {
+    for (const id of [1399811149, 1399811150, 1399811151]) {
       expect(getChain(id)).toBeUndefined();
       expect(Object.keys(chains).map(Number)).not.toContain(id);
     }

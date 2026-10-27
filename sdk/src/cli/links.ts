@@ -5,8 +5,8 @@
  * nothing here reaches the network, and the command never reads these pages.
  *
  * Phalcon names each chain by a slug of its own (its explorer's chain list): Ethereum is `eth`,
- * Base `base`, Solana `solana`. A chain it does not list gets no trace link: Solana's devnet among
- * them, whose transactions Solscan shows under its `cluster` parameter.
+ * Base `base`, Solana `solana`. A chain it does not list gets no trace link: Solana's devnet and
+ * testnet among them, whose transactions Solscan shows under its `cluster` parameter.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { chains } from "../chains/index.js";

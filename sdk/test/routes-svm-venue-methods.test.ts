@@ -387,13 +387,16 @@ describe("Solana's venue namespaces", () => {
     const loop =
       "function main() { for (const s of [1, 4]) { Orca.Whirlpool.pool(USDC, WSOL, s); } }";
 
-    it.each(["solana", "solana-devnet"])("refuses a scalar receiver on %s", (chain) => {
-      for (const Orca of [7n, 8n]) {
-        expect(() => compileSauceProgram(chain, source, { defines: { Orca } })).toThrow();
-      }
-    });
+    it.each(["solana", "solana-devnet", "solana-testnet"])(
+      "refuses a scalar receiver on %s",
+      (chain) => {
+        for (const Orca of [7n, 8n]) {
+          expect(() => compileSauceProgram(chain, source, { defines: { Orca } })).toThrow();
+        }
+      },
+    );
 
-    it.each(["solana", "solana-devnet"])(
+    it.each(["solana", "solana-devnet", "solana-testnet"])(
       "refuses an ambient scalar receiver on %s instead of emitting a swap",
       (chain) => {
         for (const value of [7, 8]) {

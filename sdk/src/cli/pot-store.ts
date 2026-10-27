@@ -9,7 +9,8 @@
  * writers cannot both win. `<chain>` is the chain id, and on Solana a cluster other than mainnet's
  * after it (`1399811149-devnet`): the Kitchen's id is the same on every cluster, so a devnet Pot
  * has a mainnet Pot's address, and is never filed as it. A Solana Pot is Solana's record of its
- * cluster whichever SVM chain made or found it (`pots.ts`): `solana-devnet`'s are filed there too.
+ * cluster whichever SVM chain made or found it (`pots.ts`): `solana-devnet`'s and
+ * `solana-testnet`'s are filed there too.
  * The loser of a race finds the file there and checks it names the same Pot (the same chain,
  * cluster, address, owner, salt and Kitchen).
  * A second record of it with no other deployment — its import after its deployment, the same
