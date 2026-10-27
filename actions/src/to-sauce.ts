@@ -1244,7 +1244,7 @@ function aaveV3Withdraw(
   const call = l.call("IAaveV3Pool", addr(action.pool), "withdraw", [
     addr(action.token),
     amount,
-    recipient(l, action.recipient),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amount);
