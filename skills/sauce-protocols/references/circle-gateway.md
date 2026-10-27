@@ -70,3 +70,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Spending a Gateway balance on another chain is off-chain first: sign a burn intent, submit it to Circle's Gateway API, then call `gatewayMint` with the returned attestation
 - Both contracts are upgradeable (EIP-1967) proxies. Arc's Minter runs a different, smaller implementation from the other chains' that dispatches the same functions
 - Circle also runs Gateway on HyperEVM (domain 19) and World Chain (14), which are not SDK chains. It has no Solana mainnet deployment
+- On a testnet (Arc Testnet, Base Sepolia, Ethereum Sepolia) the Wallet and Minter are Circle's
+  testnet pair, not the mainnet addresses; `CircleGateway.GatewayWallet` and
+  `CircleGateway.GatewayMinter` resolve to the chain's own. Their burn intents go to Circle's
+  testnet Gateway API, `https://gateway-api-testnet.circle.com`

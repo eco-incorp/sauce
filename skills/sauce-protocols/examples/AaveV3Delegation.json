@@ -1,0 +1,37 @@
+[
+  {
+    "$comment": "Aave V3's reserve-token lookups and credit delegation, which the registry's Aave V3 ABI does not declare: getReserveAToken() and getReserveVariableDebtToken() from Aave V3's IPool interface reference, approveDelegation() and borrowAllowance() from its ICreditDelegationToken (VariableDebtToken) interface reference.",
+    "type": "function",
+    "name": "getReserveAToken",
+    "stateMutability": "view",
+    "inputs": [{ "name": "asset", "type": "address" }],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "getReserveVariableDebtToken",
+    "stateMutability": "view",
+    "inputs": [{ "name": "asset", "type": "address" }],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "approveDelegation",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "delegatee", "type": "address" },
+      { "name": "amount", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "borrowAllowance",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "fromUser", "type": "address" },
+      { "name": "toUser", "type": "address" }
+    ],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  }
+]
