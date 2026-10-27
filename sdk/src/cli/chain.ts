@@ -506,33 +506,44 @@ async function potRefusal(
 
 /**
  * Refuses a Pot not deployed yet that the deployed Kitchen does not put where this SDK deploys it:
- * the Kitchen's own `predictPot(owner, salt)` must be the SDK's `v12PredictPot(owner, salt)`. A
- * Kitchen upgraded to other Pot code derives another address; an SDK that still predicts the old one
- * would send its cook to an address with no code, which "succeeds", runs nothing, and keeps the
- * cook's value.
+ * the Kitchen's own `predictPot(owner, salt)` (`predictPot(owner, salt, true)` for a fixed-router
+ * Pot, `predictSharedPot(salt)` for a Shared one) must be where this SDK has the Pot. A Kitchen
+ * upgraded to other Pot code derives another address; an SDK that still predicts the old one would
+ * send its cook to an address with no code, which "succeeds", runs nothing, and keeps the cook's
+ * value.
  */
 export async function requireKitchenPredicts(
   client: PublicClient,
   chain: CanonicalChain,
   owner: Address,
   salt: Hex,
+  kind: PotKind = "private",
 ): Promise<void> {
   const kitchen = getAddress(v12KitchenAddress());
-  const sdk = getAddress(v12PredictPot(owner, salt));
-  const of = { owner: getAddress(owner), salt, kind: "private", pot: sdk } as const;
+  const sdk = ownReleasePot(owner, salt, kind);
+  const of = { owner: getAddress(owner), salt, kind, pot: sdk } as const;
+  const at = { address: kitchen, abi: v12KitchenAbi } as const;
+  const predict = kind === "shared" ? "predictSharedPot" : "predictPot";
+  const whose =
+    kind === "shared"
+      ? `the Shared Pot of salt ${salt}`
+      : `the Pot of owner ${owner} and salt ${salt}`;
   let live: Address;
   try {
     live = getAddress(
-      await client.readContract({
-        address: kitchen,
-        abi: v12KitchenAbi,
-        functionName: "predictPot",
-        args: [owner, salt],
-      }),
+      kind === "shared"
+        ? await client.readContract({ ...at, functionName: "predictSharedPot", args: [salt] })
+        : kind === "private-fixed-router"
+          ? await client.readContract({
+              ...at,
+              functionName: "predictPot",
+              args: [owner, salt, true],
+            })
+          : await client.readContract({ ...at, functionName: "predictPot", args: [owner, salt] }),
     );
   } catch (error) {
     if (!answered(error)) {
-      throw new CliError(`reading the Kitchen's predictPot() failed: ${reasonOf(error)}`);
+      throw new CliError(`reading the Kitchen's ${predict}() failed: ${reasonOf(error)}`);
     }
     // No answer because no code: the release is not deployed on the chain, which is no mismatch.
     if (!(await hasCode(client, kitchen, "the Kitchen's code"))) {
@@ -541,9 +552,8 @@ export async function requireKitchenPredicts(
     throw await potRefusal(
       client,
       chain,
-      `the Kitchen ${kitchen} on ${chain.slug} does not answer predictPot() for the Pot of owner ` +
-        `${owner} and salt ${salt}, which this SDK has at ${sdk}: this SDK does not match the ` +
-        "deployed Kitchen.",
+      `the Kitchen ${kitchen} on ${chain.slug} does not answer ${predict}() for ${whose}, which ` +
+        `this SDK has at ${sdk}: this SDK does not match the deployed Kitchen.`,
       of,
     );
   }
@@ -551,9 +561,9 @@ export async function requireKitchenPredicts(
     throw await potRefusal(
       client,
       chain,
-      `the Kitchen ${kitchen} on ${chain.slug} puts the Pot of owner ${owner} and salt ${salt} at ` +
-        `${live}, but this SDK has it at ${sdk}: this SDK does not match the deployed Kitchen, and ` +
-        "a cook it sends goes where the Kitchen puts no Pot.",
+      `the Kitchen ${kitchen} on ${chain.slug} puts ${whose} at ${live}, but this SDK has it at ` +
+        `${sdk}: this SDK does not match the deployed Kitchen, and a cook it sends goes where the ` +
+        "Kitchen puts no Pot.",
       of,
     );
   }
@@ -658,9 +668,9 @@ const COOKS = new Set<string>(
     )
     .map((item) => toFunctionSelector(item)),
 );
-/** The Kitchen's deployments: `deployPot(owner, salt)`, the one every command sends and the guard
- *  holds to the Kitchen's prediction; with `routerFixed`, and a Shared Pot's, which a plan may send
- *  before a cook on the Pot they make. */
+/** The Kitchen's deployments: `deployPot(owner, salt)`, the one every command sends, with
+ *  `routerFixed`, and a Shared Pot's: each held to the Kitchen's prediction, so a cook on the Pot a
+ *  plan's deployment makes is not exempt from the check. */
 const DEPLOY_POT = toFunctionSelector("function deployPot(address owner, bytes32 salt)");
 const DEPLOY_POT_FIXED = toFunctionSelector(
   "function deployPot(address owner, bytes32 salt, bool routerFixed)",
@@ -670,21 +680,27 @@ const DEPLOY_SHARED_POT = toFunctionSelector("function deploySharedPot(bytes32 s
 /** A transaction's selector, as the guard compares them. */
 const selectorOf = (tx: TxRequest): string => tx.data.slice(0, 10).toLowerCase();
 
-/** The refusal of a `deployPot(owner, salt)` the guard cannot check. */
-const UNREADABLE_DEPLOYMENT =
-  "Kitchen.deployPot's calldata carries no owner and salt it can be read from, so where it puts " +
-  "the Pot cannot be checked. Nothing was sent";
+/** The refusal of a Kitchen deployment whose calldata carries nothing the guard can read it by. */
+function unreadable(tx: TxRequest): string {
+  const shared = selectorOf(tx) === DEPLOY_SHARED_POT;
+
+  return (
+    `Kitchen.${shared ? "deploySharedPot" : "deployPot"}'s calldata carries no ` +
+    `${shared ? "salt" : "owner and salt"} it can be read from, so where it puts the Pot cannot ` +
+    "be checked. Nothing was sent"
+  );
+}
 
 /**
- * The Pot a call to the released Kitchen deploys, as the release this SDK pins places it, and
- * whether the guard holds it to the Kitchen's prediction (`deployPot(owner, salt)`, the one every
- * command sends); `"unreadable"` for that call when its calldata carries no owner and salt;
- * `undefined` for any other call.
+ * The Pot a call to the released Kitchen deploys, as the release this SDK pins places it, and its
+ * kind, which the guard holds to the Kitchen's prediction (`deployPot(owner, salt)`, with or without
+ * `routerFixed`, and `deploySharedPot(salt)`); `"unreadable"` for such a call when its calldata
+ * carries no owner and salt; `undefined` for any other call.
  */
 function deploymentOf(
   tx: TxRequest,
 ):
-  | { readonly owner: Address; readonly salt: Hex; readonly pot: Address; readonly held: boolean }
+  | { readonly owner: Address; readonly salt: Hex; readonly pot: Address; readonly kind: PotKind }
   | "unreadable"
   | undefined {
   if (getAddress(tx.to) !== getAddress(v12KitchenAddress())) return undefined;
@@ -694,7 +710,7 @@ function deploymentOf(
     if (selector === DEPLOY_POT) {
       const [owner, salt] = decodeAbiParameters([{ type: "address" }, { type: "bytes32" }], args);
 
-      return { owner, salt, pot: getAddress(v12PredictPot(owner, salt)), held: true };
+      return { owner, salt, pot: getAddress(v12PredictPot(owner, salt)), kind: "private" };
     }
     if (selector === DEPLOY_POT_FIXED) {
       const [owner, salt, fixed] = decodeAbiParameters(
@@ -703,7 +719,7 @@ function deploymentOf(
       );
       const kind = fixed ? "private-fixed-router" : "private";
 
-      return { owner, salt, pot: ownReleasePot(owner, salt, kind), held: false };
+      return { owner, salt, pot: ownReleasePot(owner, salt, kind), kind };
     }
     if (selector === DEPLOY_SHARED_POT) {
       const [salt] = decodeAbiParameters([{ type: "bytes32" }], args);
@@ -712,12 +728,15 @@ function deploymentOf(
         owner: zeroAddress,
         salt,
         pot: ownReleasePot(zeroAddress, salt, "shared"),
-        held: false,
+        kind: "shared",
       };
     }
   } catch {
-    // Only the deployment the guard holds to the Kitchen is refused for calldata it cannot read.
-    return selector === DEPLOY_POT ? "unreadable" : undefined;
+    return selector === DEPLOY_POT ||
+      selector === DEPLOY_POT_FIXED ||
+      selector === DEPLOY_SHARED_POT
+      ? "unreadable"
+      : undefined;
   }
 
   return undefined;
@@ -728,8 +747,9 @@ export interface PlanStep {
   readonly tx: TxRequest;
   /** How a refusal names it in a plan of more than one: `transaction 2 of 3 (cook on Pot 0x…)`. */
   readonly what: string;
-  /** On the chain already (`sauce send` reads it back): not held to the guard again, but a Pot it
-   *  deploys is there for the steps after it. */
+  /** On the chain already (`sauce send` reads it back): not held to the guard again, and a Pot it
+   *  deploys is there for the steps after it — once that Pot has code; until then the deployment is
+   *  held to the Kitchen's prediction as one still to send. */
   readonly sent?: boolean;
 }
 
@@ -751,13 +771,15 @@ export class PlanRefusal extends CliError {
  * Holds every step of a plan that reaches a Pot to the guard at once, before the first is sent, so a
  * plan never sends its first steps (an approval, a transfer into the Pot) only for a later one to be
  * refused. A cook must go to a Pot of the release this SDK pins ({@link requireReleasePot}) — never to
- * an address with no code, unless a step before it deploys the Pot there — and the released
- * Kitchen's `deployPot(owner, salt)` must put the Pot where this SDK predicts it
+ * an address with no code, unless a step before it deploys the Pot there — and each of the released
+ * Kitchen's deployments, `deployPot(owner, salt)` with or without `routerFixed` and
+ * `deploySharedPot(salt)`, must put its Pot where this SDK predicts it
  * ({@link requireKitchenPredicts}). Every deployment is read first, before the chain is: one whose
- * calldata carries no owner and salt is refused. Steps already `sent` are not checked again. A
- * refusal is a {@link PlanRefusal}, its message prefixed with the step's `what` in a plan of more
- * than one. What is checked is the chain as the endpoint shows it now, so each send checks its own
- * step again ({@link requireSendable}).
+ * calldata carries no owner and salt is refused. Steps already `sent` are not checked again, but for
+ * a deployment whose Pot has no code yet (pending, or landed where this SDK has no Pot), which is held
+ * as one still to send. A refusal is a {@link PlanRefusal}, its message prefixed with the step's
+ * `what` in a plan of more than one. What is checked is the chain as the endpoint shows it now, so
+ * each send checks its own step again ({@link requireSendable}).
  */
 export async function requirePlanSendable(
   client: PublicClient,
@@ -772,17 +794,13 @@ export async function requirePlanSendable(
   const deployments = steps.map((step) => deploymentOf(step.tx));
   for (const [index, step] of steps.entries()) {
     if (!step.sent && deployments[index] === "unreadable") {
-      throw refuse(index, UNREADABLE_DEPLOYMENT);
+      throw refuse(index, unreadable(step.tx));
     }
   }
-  const reaches = steps.some((step, index) => {
-    const deployment = deployments[index];
-
-    return (
-      !step.sent &&
-      (typeof deployment === "object" ? deployment.held : COOKS.has(selectorOf(step.tx)))
-    );
-  });
+  const reaches = steps.some(
+    (step, index) =>
+      !step.sent && (deployments[index] !== undefined || COOKS.has(selectorOf(step.tx))),
+  );
   if (!reaches) return;
   const chainId = await request("the chain id", () => client.getChainId());
   const chain = resolveChain(chainId);
@@ -797,9 +815,17 @@ export async function requirePlanSendable(
     const deployment = deployments[index];
     try {
       if (typeof deployment === "object") {
-        if (!step.sent && deployment.held) {
-          await requireKitchenPredicts(client, chain, deployment.owner, deployment.salt);
-        }
+        // A deployment the chain already has is there when its Pot has code, and a cook on it is
+        // checked as on any Pot; one it has not landed (pending, or landed elsewhere) is held to the
+        // prediction like one still to send, since the Pot the cooks after it name is this SDK's.
+        if (step.sent && (await hasCode(client, deployment.pot, "the Pot's code"))) continue;
+        await requireKitchenPredicts(
+          client,
+          chain,
+          deployment.owner,
+          deployment.salt,
+          deployment.kind,
+        );
         deploying.add(deployment.pot);
       } else if (!step.sent && COOKS.has(selectorOf(step.tx))) {
         const pot = getAddress(step.tx.to);

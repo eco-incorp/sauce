@@ -37,13 +37,18 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
-import type { Approver } from "../src/cli/approvals.js";
+import type { Approver, SetupStep } from "../src/cli/approvals.js";
 import { CliError } from "../src/cli/args.js";
-import { requireKitchenPredicts, requireReleasePot, sendAndWait } from "../src/cli/chain.js";
+import {
+  requireKitchenPredicts,
+  requirePlanSendable,
+  requireReleasePot,
+  sendAndWait,
+} from "../src/cli/chain.js";
 import { runCommand, type RunInput } from "../src/cli/commands.js";
 import { fundingFor } from "../src/cli/inputs.js";
 import { keeping } from "../src/cli/keep.js";
-import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
+import { PotStore, type PotKind, type PotRecord } from "../src/cli/pot-store.js";
 import { nodeIo, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress, v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
@@ -52,6 +57,7 @@ import {
   describeEvm,
   erc20,
   fixture,
+  interceptingEndpoint,
   jsonOf,
   laggingEndpoint,
   registered,
@@ -530,6 +536,48 @@ describeEvm("the Pot is checked against the chain", () => {
     value: 0n,
   };
 
+  /** The same for `deployPot(owner, salt, routerFixed)` and for `deploySharedPot(salt)`. */
+  const MALFORMED_DEPLOY_FIXED = {
+    ...MALFORMED_DEPLOY,
+    data: `${toFunctionSelector("function deployPot(address owner, bytes32 salt, bool routerFixed)")}${"00".repeat(8)}` as Hex,
+  };
+  const MALFORMED_DEPLOY_SHARED = {
+    ...MALFORMED_DEPLOY,
+    data: `${toFunctionSelector("function deploySharedPot(bytes32 salt)")}${"00".repeat(8)}` as Hex,
+  };
+
+  /** `kind`'s deployment of `who`'s Pot as a transaction, and where the Kitchen itself puts it. */
+  async function deploymentOfKind(kind: PotKind, who: Owner) {
+    const calls = {
+      private: { deploy: ["deployPot", [who.address, who.salt]], predict: "predictPot" },
+      "private-fixed-router": {
+        deploy: ["deployPot", [who.address, who.salt, true]],
+        predict: "predictPot",
+      },
+      shared: { deploy: ["deploySharedPot", [who.salt]], predict: "predictSharedPot" },
+    } as const;
+    const { deploy, predict } = calls[kind];
+    const tx = {
+      to: kitchen,
+      data: encodeFunctionData({
+        abi: v12KitchenAbi,
+        functionName: deploy[0],
+        args: deploy[1],
+      } as never),
+      value: 0n,
+    };
+    const pot = getAddress(
+      (await local.publicClient.readContract({
+        address: kitchen,
+        abi: v12KitchenAbi,
+        functionName: predict,
+        args: deploy[1],
+      } as never)) as Address,
+    );
+
+    return { tx, pot };
+  }
+
   /** `send` while the Kitchen puts every Pot elsewhere, returning what it returned. */
   async function whileMispredictingSend<T>(send: () => Promise<T>): Promise<T> {
     let result: T | undefined;
@@ -584,6 +632,8 @@ describeEvm("the Pot is checked against the chain", () => {
     ["a cook on a Pot of another release", "old"],
     ["a cook on an address with no code", "empty"],
     ["a deployment the Kitchen puts elsewhere", "mispredicted"],
+    ["a fixed-router deployment the Kitchen puts elsewhere", "mispredicted-fixed"],
+    ["a Shared Pot's deployment the Kitchen puts elsewhere", "mispredicted-shared"],
     ["a deployPot whose calldata carries no owner and salt", "malformed"],
   ] as const)(
     "sauce send refuses a batch whose later transaction is %s, before the first is sent",
@@ -595,25 +645,24 @@ describeEvm("the Pot is checked against the chain", () => {
         refused === "old"
           ? await mintOldReleasePot(local, fresh.address, potSalt(`batch-${refused} old`))
           : undefined;
+      const deploy = (functionName: "deployPot" | "deploySharedPot", args: readonly unknown[]) => ({
+        to: kitchen,
+        data: encodeFunctionData({ abi: v12KitchenAbi, functionName, args } as never),
+        value: 0n,
+      });
+      const mismatch = "this SDK does not match the deployed Kitchen";
       const [step, reason] =
         refused === "old"
           ? [cookOn(old!), `${old} on ethereum is a Pot of ${OLD}`]
           : refused === "empty"
             ? [cookOn(fresh.pot), `the cook goes to ${fresh.pot}, which has no code on ethereum`]
             : refused === "mispredicted"
-              ? [
-                  {
-                    to: kitchen,
-                    data: encodeFunctionData({
-                      abi: v12KitchenAbi,
-                      functionName: "deployPot",
-                      args: [fresh.address, fresh.salt],
-                    }),
-                    value: 0n,
-                  },
-                  "this SDK does not match the deployed Kitchen",
-                ]
-              : [MALFORMED_DEPLOY, "carries no owner and salt"];
+              ? [deploy("deployPot", [fresh.address, fresh.salt]), mismatch]
+              : refused === "mispredicted-fixed"
+                ? [deploy("deployPot", [fresh.address, fresh.salt, true]), mismatch]
+                : refused === "mispredicted-shared"
+                  ? [deploy("deploySharedPot", [fresh.salt]), mismatch]
+                  : [MALFORMED_DEPLOY, "carries no owner and salt"];
       // The plan's first transaction pays a recipient; its second is the one the guard refuses.
       const signed = [
         await signedBy(fresh, { to: recipient, data: "0x", value: 1_000n }, 0),
@@ -621,7 +670,9 @@ describeEvm("the Pot is checked against the chain", () => {
       ];
       const send = () =>
         sauceWith(NO_TERMINAL, "send", ...signed, "--chain", "ethereum", "--rpc-url", local.rpcUrl);
-      const sent = refused === "mispredicted" ? await whileMispredictingSend(send) : await send();
+      const sent = refused.startsWith("mispredicted")
+        ? await whileMispredictingSend(send)
+        : await send();
       const said = sent.stdout + sent.stderr;
       expect(sent.code).toBe(1);
       expect(said).toContain("nothing was sent — transaction 2 of 2 (");
@@ -633,19 +684,139 @@ describeEvm("the Pot is checked against the chain", () => {
     120_000,
   );
 
-  it("refuses a Kitchen.deployPot with no owner and salt in its calldata, not with the decoder's error", async () => {
-    const fresh = await owner("malformed-alone");
-    const balance = await local.publicClient.getBalance({ address: fresh.address });
-    const refused = sendAndWait(
-      local.publicClient,
-      local.rpcUrl,
-      privateKeyToAccount(fresh.key),
-      MALFORMED_DEPLOY,
-    );
-    await expect(refused).rejects.toBeInstanceOf(CliError);
-    await expect(refused).rejects.toThrow("carries no owner and salt");
-    await nothingSent(fresh, balance, undefined);
-  }, 60_000);
+  it.each([
+    ["deployPot(owner, salt)", MALFORMED_DEPLOY, "Kitchen.deployPot's calldata carries no owner"],
+    [
+      "deployPot(owner, salt, routerFixed)",
+      MALFORMED_DEPLOY_FIXED,
+      "Kitchen.deployPot's calldata carries no owner",
+    ],
+    [
+      "deploySharedPot(salt)",
+      MALFORMED_DEPLOY_SHARED,
+      "Kitchen.deploySharedPot's calldata carries no salt",
+    ],
+  ] as const)(
+    "refuses a Kitchen.%s with no arguments in its calldata, not with the decoder's error",
+    async (_, tx, said) => {
+      const fresh = await owner("malformed-alone");
+      const balance = await local.publicClient.getBalance({ address: fresh.address });
+      const refused = sendAndWait(
+        local.publicClient,
+        local.rpcUrl,
+        privateKeyToAccount(fresh.key),
+        tx,
+      );
+      await expect(refused).rejects.toBeInstanceOf(CliError);
+      await expect(refused).rejects.toThrow(said);
+      await expect(refused).rejects.not.toThrow(/AbiDecoding|Data size/);
+      await nothingSent(fresh, balance, undefined);
+    },
+    60_000,
+  );
+
+  it.each([
+    ["a deployment", "private", "the Pot of owner"],
+    ["a fixed-router deployment", "private-fixed-router", "the Pot of owner"],
+    ["a Shared Pot's deployment", "shared", "the Shared Pot of salt"],
+  ] as const)(
+    "holds %s to the Kitchen's own prediction, and takes the cook on the Pot it makes",
+    async (_, kind, whose) => {
+      const fresh = await owner(`plan-${kind}`);
+      const { tx, pot } = await deploymentOfKind(kind, fresh);
+      const plan = [
+        { tx, what: "deploy" },
+        { tx: cookOn(pot), what: "cook" },
+      ];
+      // The Kitchen puts the Pot where this SDK has it: the plan stands, the cook on it unchecked.
+      await expect(requirePlanSendable(local.publicClient, plan)).resolves.toBeUndefined();
+      await whileMispredicting(newer, async () => {
+        await expect(requirePlanSendable(local.publicClient, plan)).rejects.toMatchObject({
+          step: 0,
+          message: expect.stringContaining("deploy: the Kitchen"),
+          reason: expect.stringContaining(
+            `puts ${whose} ${kind === "shared" ? fresh.salt : `${fresh.address} and salt ${fresh.salt}`} ` +
+              `at ${ELSEWHERE}, but this SDK has it at ${pot}: this SDK does not match the deployed ` +
+              "Kitchen",
+          ),
+        });
+        // The deployment alone is held the same, by the check each send makes.
+        await expect(requirePlanSendable(local.publicClient, [plan[0]!])).rejects.toThrow(MISMATCH);
+      });
+    },
+    120_000,
+  );
+
+  it.each([
+    ["a fixed-router deployment", "private-fixed-router"],
+    ["a Shared Pot's deployment", "shared"],
+  ] as const)(
+    "refuses %s the Kitchen puts elsewhere at the send itself, with nothing else in the plan",
+    async (_, kind) => {
+      const fresh = await owner(`alone-${kind}`);
+      const balance = await local.publicClient.getBalance({ address: fresh.address });
+      const { tx } = await deploymentOfKind(kind, fresh);
+      await whileMispredicting(newer, async () => {
+        await expect(
+          sendAndWait(local.publicClient, local.rpcUrl, privateKeyToAccount(fresh.key), tx),
+        ).rejects.toThrow(MISMATCH);
+        const sent = await sauceWith(
+          NO_TERMINAL,
+          ...["send", await signedBy(fresh, tx, 0), "--chain", "ethereum"],
+          ...["--rpc-url", local.rpcUrl],
+        );
+        expect(sent.code).toBe(1);
+        expect(sent.stdout + sent.stderr).toMatch(MISMATCH);
+      });
+      await nothingSent(fresh, balance, undefined);
+    },
+    120_000,
+  );
+
+  it("sauce send holds a deployment the chain already has, whose Pot has no code, to the Kitchen before it sends what follows it", async () => {
+    const fresh = await owner("landed-elsewhere");
+    const recipient = privateKeyToAccount(generatePrivateKey()).address;
+    const { tx } = await deploymentOfKind("private", fresh);
+    const landing = await signedBy(fresh, tx, 0);
+    // The deployment landed on a Kitchen that put no Pot where this SDK has it: here, one that does
+    // nothing at all, so its receipt names no Pot and the address the cook goes to has no code.
+    const idle = privateKeyToAccount(generatePrivateKey()).address;
+    await local.testClient.setCode({ address: idle, bytecode: "0x00" });
+    await withKitchenImplementation(local, idle, async () => {
+      const hash = await local.publicClient.sendRawTransaction({ serializedTransaction: landing });
+      const receipt = await local.publicClient.waitForTransactionReceipt({ hash });
+      expect(receipt.status).toBe("success");
+      expect(receipt.logs).toEqual([]);
+    });
+    expect(await local.publicClient.getCode({ address: fresh.pot })).toBeUndefined();
+    // Sent again with what was to follow it, while the Kitchen puts that Pot elsewhere.
+    await whileMispredicting(newer, async () => {
+      const batch = await sauceWith(
+        NO_TERMINAL,
+        ...[
+          "send",
+          landing,
+          await signedBy(fresh, { to: recipient, data: "0x", value: 1_000n }, 1),
+        ],
+        ...[await signedBy(fresh, cookOn(fresh.pot), 2), "--chain", "ethereum"],
+        ...["--rpc-url", local.rpcUrl, "--json"],
+      );
+      expect(batch.code).toBe(1);
+      const out = JSON.parse(batch.stdout) as {
+        ok: boolean;
+        sent: Array<{ hash: string; status: string; reason?: string }>;
+      };
+      expect(out.ok).toBe(false);
+      expect(out.sent).toHaveLength(2);
+      expect(out.sent[0]).toMatchObject({ status: "success" });
+      expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
+      expect(out.sent[1]!.reason).toContain("transaction 1 of 3 (Kitchen.deployPot at");
+      expect(out.sent[1]!.reason).toMatch(MISMATCH);
+    });
+    // Nothing after the deployment went out.
+    expect(String(await local.publicClient.getBalance({ address: recipient }))).toBe("0");
+    expect(await local.publicClient.getTransactionCount({ address: fresh.address })).toBe(1);
+  }, 120_000);
 
   it("sauce run --fund holds the cook to the guard before each transaction it sends first", async () => {
     const fresh = await owner("fund-then-gone");
@@ -711,6 +882,107 @@ describeEvm("the Pot is checked against the chain", () => {
     } finally {
       await local.testClient.setCode({ address: fresh.pot, bytecode: code! });
     }
+  }, 120_000);
+
+  it("sauce run --fund-mode transfer holds the cook to the guard before the transfer it sends first", async () => {
+    const fresh = await owner("transfer-then-gone");
+    await deployPot(fresh);
+    await local.mint(usdc, fresh.address, 10_000_000n);
+    const code = await local.publicClient.getCode({ address: fresh.pot });
+    const balance = await local.publicClient.getBalance({ address: fresh.address });
+    // The Pot passes the guard when the run starts, and a transfer is not asked about; by the time
+    // the funding rehearses it, the Pot's code is gone: the chain moved on while the run read it.
+    const transfer = toFunctionSelector("function transfer(address to, uint256 amount)");
+    let gone = false;
+    const endpoint = await interceptingEndpoint(local.rpcUrl, async (request) => {
+      if (gone || request.method !== "eth_call") return;
+      const call = request.params?.[0] as { to?: Address; data?: Hex; input?: Hex };
+      if (call.to === undefined || getAddress(call.to) !== usdc) return;
+      if (!(call.data ?? call.input ?? "0x").startsWith(transfer)) return;
+      gone = true;
+      await local.testClient.setCode({ address: fresh.pot, bytecode: "0x" });
+    });
+    const account = privateKeyToAccount(fresh.key);
+    const approver: Approver = { auto: true, canAsk: false, approve: async () => true };
+    const input: RunInput = {
+      file: program,
+      text: PROGRAM,
+      chain: local.chain,
+      defines: {},
+      target: { owner: fresh.address, salt: fresh.salt },
+      args: { from: "--args", values: ["41"] },
+      rpcUrl: endpoint.url,
+      account,
+      approver,
+      fund: fundingFor({
+        chain: local.chain,
+        rpcUrl: endpoint.url,
+        fund: ["USDC:1"],
+        mode: "transfer",
+        sweep: false,
+        send: true,
+        account,
+        approver,
+      }),
+    };
+    try {
+      await expect(runCommand(input, nodeIo())).rejects.toThrow(
+        `the cook goes to ${fresh.pot}, which has no code on ethereum`,
+      );
+      expect(gone).toBe(true);
+      // The transfer was never sent: the cook it was for would have been refused.
+      expect(String(await local.balanceOf(usdc, fresh.pot))).toBe("0");
+      expect(await local.publicClient.getTransactionCount({ address: fresh.address })).toBe(0);
+      expect(String(await local.publicClient.getBalance({ address: fresh.address }))).toBe(
+        String(balance),
+      );
+    } finally {
+      await endpoint.stop();
+      await local.testClient.setCode({ address: fresh.pot, bytecode: code! });
+    }
+  }, 120_000);
+
+  it("sauce run holds what is left of its plan to the guard before each setup step, the Pot's deployment first", async () => {
+    const fresh = await owner("deploy-then-refused");
+    const old = await mintOldReleasePot(local, fresh.address, potSalt("deploy-then-refused old"));
+    const balance = await local.publicClient.getBalance({ address: fresh.address });
+    // The run deploys the Pot first, then a setup step of its own on the same chain: here a cook on
+    // the owner's Pot of another release, which the guard refuses. Held with the rest of the plan
+    // before the first is sent, it stops the run before the Pot's deployment goes out.
+    const refused = cookOn(old);
+    const setup: RunInput["setup"] = async (reach) => [
+      {
+        action: `cook on Pot ${old}`,
+        reason: `Pot ${old} cooks first`,
+        offer: "Cook it now",
+        estimate: "its gas",
+        planned: {
+          what: `cook on Pot ${old}`,
+          chainId: local.chain.id,
+          to: refused.to,
+          data: refused.data,
+          value: "0x0",
+        },
+        send: () => reach.cook!.send!(refused),
+      } satisfies SetupStep,
+    ];
+    const input: RunInput = {
+      file: program,
+      text: PROGRAM,
+      chain: local.chain,
+      defines: {},
+      target: { owner: fresh.address, salt: fresh.salt },
+      args: { from: "--args", values: ["41"] },
+      rpcUrl: local.rpcUrl,
+      account: privateKeyToAccount(fresh.key),
+      approver: { auto: true, canAsk: false, approve: async () => true },
+      setup,
+    };
+    await expect(runCommand(input, nodeIo())).rejects.toThrow(
+      `cook on Pot ${old}: ${old} on ethereum is a Pot of ${OLD}`,
+    );
+    // Not even the Pot's deployment, the plan's first transaction, was sent.
+    await nothingSent(fresh, balance, undefined);
   }, 120_000);
 
   it("sauce send waits for the Pot its plan's deployment made before holding the cook to the guard, on an endpoint that lags", async () => {
