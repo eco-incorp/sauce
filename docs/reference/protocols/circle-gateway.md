@@ -14,8 +14,8 @@ Circle's chain-abstracted USDC balance. Deposit USDC into the GatewayWallet on o
 | --- | --- |
 | Category | Cross-chain messaging |
 | Family | none |
-| Namespace | `CircleGateway` on ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
-| Chains | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
+| Namespace | `CircleGateway` on ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
+| Chains | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
 
 ## Notes
 
@@ -23,6 +23,10 @@ Circle's chain-abstracted USDC balance. Deposit USDC into the GatewayWallet on o
 - Spending a Gateway balance on another chain is off-chain first: sign a burn intent, submit it to Circle's Gateway API, then call `gatewayMint` with the returned attestation
 - Both contracts are upgradeable (EIP-1967) proxies. Arc's Minter runs a different, smaller implementation from the other chains' that dispatches the same functions
 - Circle also runs Gateway on HyperEVM (domain 19) and World Chain (14), which are not SDK chains. It has no Solana mainnet deployment
+- On a testnet (Arc Testnet, Base Sepolia, Ethereum Sepolia) the Wallet and Minter are Circle's
+  testnet pair, not the mainnet addresses; `CircleGateway.GatewayWallet` and
+  `CircleGateway.GatewayMinter` resolve to the chain's own. Their burn intents go to Circle's
+  testnet Gateway API, `https://gateway-api-testnet.circle.com`
 
 ## Its names in a program
 
@@ -59,6 +63,12 @@ function main() {
 | [Arbitrum One](../chains/arbitrum.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Avalanche C-Chain](../chains/avalanche.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Avalanche C-Chain](../chains/avalanche.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
+| [Base Sepolia](../chains/base-sepolia.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Base Sepolia](../chains/base-sepolia.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
+| [Arc Testnet](../chains/arc-testnet.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Arc Testnet](../chains/arc-testnet.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
+| [Ethereum Sepolia](../chains/sepolia.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Ethereum Sepolia](../chains/sepolia.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
 
 ## ABI
 
