@@ -198,11 +198,12 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
 
 /**
  * flag===0 -> classic Tokenkeg (structurally cannot carry any extension, so
- * this never reads the mint at all); flag===1 -> Token-2022, and the mint IS
- * fetched to reject a TransferFeeConfig extension (type 1) — same convention
- * pumpswap/pumpfun-bonding-curve use for their own base-mint gate. An 82-byte
- * mint has no extension room, and its program is its OWNER: an extensionless
- * Token-2022 mint is byte-identical to a legacy one.
+ * this never reads the mint at all); flag===1 -> the mint IS fetched, and its
+ * program is its OWNER, whatever its length: an extensionless Token-2022 mint
+ * is byte-identical to a legacy one, and a Token-2022 layout proves nothing
+ * about who owns the account. A Token-2022 mint is then gated on its
+ * extensions, rejecting a TransferFeeConfig (type 1) — same convention
+ * pumpswap/pumpfun-bonding-curve use for their own base-mint gate.
  */
 async function resolveBaseTokenProgram(
   owned: OwnedAccountLoader,
@@ -217,12 +218,16 @@ async function resolveBaseTokenProgram(
   const account = await owned(mint);
   if (account === null) throw new Error(`${SLUG} base mint ${mint} not found`);
   const data = account.data;
-  if (data.length === 82) {
-    // No extension room possible: nothing to gate, the owner names the program.
-    return classifyMintProgram(mint, data, account.owner) === TOKEN_2022_PROGRAM_ID
-      ? TOKEN_2022_PROGRAM
-      : TOKEN_PROGRAM;
+  if (classifyMintProgram(mint, data, account.owner) !== TOKEN_2022_PROGRAM_ID) {
+    if (data.length !== 82) {
+      throw new Error(
+        `${SLUG} base mint ${mint} is a ${data.length}-byte account of the legacy token program, not a mint`,
+      );
+    }
+    return TOKEN_PROGRAM;
   }
+  // A Token-2022 mint with no extension room: nothing to gate.
+  if (data.length === 82) return TOKEN_2022_PROGRAM;
   if (data.length < 166) {
     throw new Error(
       `${SLUG} base mint ${mint} data is ${data.length} bytes, not a token-2022 mint layout`,

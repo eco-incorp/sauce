@@ -132,4 +132,39 @@ describe("raydium-launchlab Token-2022 handling", () => {
       ),
     ).rejects.toThrow(/TransferFeeConfig/);
   });
+
+  it("refuses an 82-byte base mint owned by neither token program", async () => {
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      raydiumLaunchlab.fetchPoolConfig(
+        loaderWith(1, { data: makeLegacyMint(), owner: foreign }, true),
+        POOL,
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
+
+  it("refuses an extension-shaped base mint owned by neither token program", async () => {
+    // A Token-2022 layout is no proof of Token-2022: only the owner is. Before the owner was read
+    // for every length, an account of this shape passed as Token-2022 whoever owned it.
+    const foreign = address("11111111111111111111111111111111");
+    await expect(
+      raydiumLaunchlab.fetchPoolConfig(
+        loaderWith(1, { data: makeT22Mint(), owner: foreign }, true),
+        POOL,
+      ),
+    ).rejects.toThrow(
+      `token-program: mint ${BASE_MINT} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+    );
+  });
+
+  it("refuses an extension-shaped account the legacy program owns: it is not a mint", async () => {
+    const data = makeT22Mint();
+    await expect(
+      raydiumLaunchlab.fetchPoolConfig(loaderWith(1, legacy(data), true), POOL),
+    ).rejects.toThrow(
+      `raydium-launchlab base mint ${BASE_MINT} is a ${data.length}-byte account of the legacy token program, not a mint`,
+    );
+  });
 });

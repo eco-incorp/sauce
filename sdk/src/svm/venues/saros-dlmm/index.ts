@@ -88,12 +88,12 @@
  * program rejects a SHORTER (omitted) account list with
  * `AccountNotEnoughKeys`.
  *
- * CLASSIC-SPL-ONLY (mirrors meteora-dlmm's identical, disclosed weakness):
- * gated via mint account length !== 82. The Pair account itself carries no
- * token-program flag (unlike meteora-dlmm's dedicated byte) — the swap ix's
- * `token_program_x`/`token_program_y` are caller-supplied generic accounts,
- * so a length-82 Token-2022 mint WITH NO extensions would misclassify as
- * classic (identical gap to meteora-dlmm's own).
+ * CLASSIC-SPL-ONLY (as meteora-dlmm): a Token-2022 mint self-drops. The Pair
+ * account itself carries no token-program flag (unlike meteora-dlmm's
+ * dedicated byte) — the swap ix's `token_program_x`/`token_program_y` are
+ * caller-supplied generic accounts — so each mint is classified by its OWNER,
+ * which also catches an extensionless Token-2022 mint (82 bytes, the same as
+ * a classic one).
  *
  * VALIDATED against the REAL saros-dlmm program (`solana program dump`,
  * executed via LiteSVM on real mainnet pool + bin-array state, pair
