@@ -157,8 +157,8 @@ has: it runs one swap whose pool sends the output first (the calldata of `swapV3
 pool's callback, and pays the pool after it, out of what the Pot then holds. A callback that leaves
 the Pot short fails the payment, and the whole transaction reverts. `program(() => { … })` compiles
 the callback from a closure that reads the program's own values, and its `code` with its `args`
-appended is the callback's bytes; the program declares `flash` in an ABI beside it, since
-`@sauce/router` has no function for it, and calls it on `pot`.
+appended is the callback's bytes. `@sauce/router` has no function for `flash`: call it on `pot`
+through the Router ABI above, `ISauceRouter.at(pot).flash(callback, swap)`.
 
 Balancer's flash swap needs none of that: one `batchSwap` that sells a token to one pool and buys it
 back from another is settled by the Vault as a whole, so the Pot sends nothing (its limits are zero)
