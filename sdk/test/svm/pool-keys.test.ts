@@ -48,8 +48,8 @@ const read = (file: string): Configs =>
   JSON.parse(readFileSync(new URL(`../fixtures/svm-pool-keys/${file}`, import.meta.url), "utf8"));
 
 /** Each AmmConfig each cluster's Raydium-code programs kept and each fee tier of its whirlpools'
- *  configs, as the cluster held them. */
-const CLUSTER_CONFIGS: Readonly<Record<SvmTokenCluster, Configs>> = {
+ *  configs, as the cluster held them. Testnet has no venue, so nothing to dump. */
+const CLUSTER_CONFIGS: Readonly<Record<Exclude<SvmTokenCluster, "testnet">, Configs>> = {
   "mainnet-beta": read("amm-configs.json"),
   devnet: read("amm-configs.devnet.json"),
 };
@@ -126,7 +126,7 @@ describe("a venue's pool by key", () => {
     },
   );
 
-  it.each(Object.keys(CLUSTER_CONFIGS) as SvmTokenCluster[])(
+  it.each(Object.keys(CLUSTER_CONFIGS) as (keyof typeof CLUSTER_CONFIGS)[])(
     "knows every config the Raydium-code programs keep on %s, each its account's fee and spacing",
     (cluster) => {
       const dumped = CLUSTER_CONFIGS[cluster].venues;
@@ -151,7 +151,7 @@ describe("a venue's pool by key", () => {
       }
     },
   );
-  it.each(Object.keys(CLUSTER_CONFIGS) as SvmTokenCluster[])(
+  it.each(Object.keys(CLUSTER_CONFIGS) as (keyof typeof CLUSTER_CONFIGS)[])(
     "knows every fee tier the whirlpools' configs keep on %s, each its account's index and spacing",
     (cluster) => {
       const dumped = CLUSTER_CONFIGS[cluster].whirlpools;
