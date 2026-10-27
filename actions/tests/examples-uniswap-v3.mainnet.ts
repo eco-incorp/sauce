@@ -551,6 +551,14 @@ export function register(anvil: () => Anvil): void {
         await cook<Managed>(MANAGE, manage(tokenId, 0n, recipient, newOwner));
         assert.equal(await ownerOf(tokenId), newOwner);
         assert.equal((await position(tokenId))[7], grown - half);
+
+        // Not the Pot's any more: adding to it is refused, and nothing leaves the Pot.
+        const refused = await simulate(
+          OPEN,
+          open(tokenId, pool, 500n * DAI_UNIT, 500n * USDC_UNIT),
+        );
+        assert.equal(refused.ok, false);
+        assert.match(refused.reason ?? "", /the position is not the Pot's/);
       });
 
       it("refuses a minimum the mint cannot meet, a share above all, and a position on another pool", async () => {

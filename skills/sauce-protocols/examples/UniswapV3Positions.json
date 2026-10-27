@@ -1,6 +1,6 @@
 [
   {
-    "$comment": "The NonfungiblePositionManager's reads and transfer the registry's Uniswap V3 ABI does not declare: positions() from Uniswap V3's INonfungiblePositionManager interface reference, safeTransferFrom() from ERC-721 (EIP-721).",
+    "$comment": "The NonfungiblePositionManager's reads and transfer the registry's Uniswap V3 ABI does not declare: positions() from Uniswap V3's INonfungiblePositionManager interface reference, ownerOf() and safeTransferFrom() from ERC-721 (EIP-721).",
     "type": "function",
     "name": "positions",
     "stateMutability": "view",
@@ -19,6 +19,13 @@
       { "name": "tokensOwed0", "type": "uint128" },
       { "name": "tokensOwed1", "type": "uint128" }
     ]
+  },
+  {
+    "type": "function",
+    "name": "ownerOf",
+    "stateMutability": "view",
+    "inputs": [{ "name": "tokenId", "type": "uint256" }],
+    "outputs": [{ "name": "owner", "type": "address" }]
   },
   {
     "type": "function",

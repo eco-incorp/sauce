@@ -1,9 +1,9 @@
 // Puts the Pot's tokens into a full-range Uniswap V3 position that the Pot owns. With `tokenId` 0 it
 // mints a new position on `pool`, from the lowest tick to the highest the pool's tick spacing
-// allows; with a position's id it adds to that position, which must be on `pool`. The pool's
-// tokens, fee and tick spacing are read from the pool. The position manager takes the two tokens in
-// the pool's price ratio, so one amount is used in full and the other in part: what it does not
-// take stays in the Pot, and the allowances are withdrawn. The NFT stays in the Pot;
+// allows; with a position's id it adds to that position, which must be the Pot's and on `pool`. The
+// pool's tokens, fee and tick spacing are read from the pool. The position manager takes the two
+// tokens in the pool's price ratio, so one amount is used in full and the other in part: what it
+// does not take stays in the Pot, and the allowances are withdrawn. The NFT stays in the Pot;
 // v3-position-manage.sauce.ts takes fees and liquidity out and hands it over. A position's own
 // reads come from UniswapV3Positions.json beside this file. Returns the position, the liquidity
 // added and what it took of the pool's token0 and token1 (token0 is the lower address).
@@ -71,6 +71,8 @@ function main(
     spent0 = minted.amount0;
     spent1 = minted.amount1;
   } else {
+    require(UniswapV3Positions.at(manager).ownerOf(tokenId) ==
+      pot, "the position is not the Pot's");
     const position = UniswapV3Positions.at(manager).positions(tokenId);
     require(position.token0 == token0 &&
       position.token1 == token1 &&
