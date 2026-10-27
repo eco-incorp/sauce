@@ -293,8 +293,9 @@ that others can write is refused too: `chmod 600` it.
 **Cause.** A `require` in your program failed: here, the Pot holds less USDC than the program
 spends. In the quick start's program that is the check doing its job.
 
-**Fix.** Put tokens in your Pot: send them to its address (`sauce pot --chain <chain> --wallet me`
-prints it), or add `--fund USDC:<amount>` to pull them from your wallet in the same cook
+**Fix.** Put tokens in your Pot: once it is deployed, send them to its address (`sauce pot --chain
+<chain> --wallet me` prints it; `--deploy` creates it first), or add `--fund USDC:<amount>` to pull
+them from your wallet in the same cook, after the Pot's deployment
 ([Put tokens in your Pot](cli-run.md#put-tokens-in-your-pot)). To simulate before funding, pass
 `--assume-balance USDC:<amount>`.
 

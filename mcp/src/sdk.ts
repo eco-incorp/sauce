@@ -30,6 +30,7 @@ export {
   potState,
   registeredBalances,
   requirePot,
+  requirePotOwner,
 } from "../../sdk/dist/cli/chain.js";
 export {
   compileCommand,
