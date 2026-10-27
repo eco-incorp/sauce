@@ -216,6 +216,26 @@ nothing moves.
   chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
   extra `eth_chainId` request per write.
 
+### The testing kit
+
+- **Fixed** (EVM): a live `fork()` keeps `rpcUrl` off anvil's command line. It passed the URL to
+  anvil as `--fork-url`, so the URL, and any key in it, showed in the process list while the fork
+  ran, and in the error a failed start quotes. A live fork now reads the endpoint through the proxy
+  a recording uses, configured over its stdin, and anvil sees only that proxy's loopback URL.
+- **Fixed** (EVM): an `rpcUrl` with credentials in it (`https://user:pass@host/…`) records. They go
+  as a Basic `Authorization` header, which Node's `fetch` requires, and a live fork takes them the
+  same way. Neither a URL the proxy cannot parse nor an endpoint's answer that echoes the header is
+  ever quoted in its output or in a failed recording's error.
+- **Fixed** (EVM): a live fork's requests go upstream once, as anvil sent them, so anvil's own
+  timeout and retries apply, and its proxy exits with the process that started it.
+
+**Also breaking:** a network fork (record or live) reaches its endpoint directly, never through
+`HTTP_PROXY`/`HTTPS_PROXY`, and anvil sends its loopback hop to the kit's proxy through
+`HTTP_PROXY` when that is set: set `NO_PROXY=127.0.0.1` for a test run behind a proxy.
+
+**Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
+WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, is refused.
+
 ### Solana Testnet
 
 - **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of

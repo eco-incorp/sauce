@@ -69,7 +69,7 @@ interface StateFile {
 export interface ForkNode {
   readonly url: string;
   readonly mode: ForkMode;
-  /** Stops anvil; in record mode, also writes the state file. Await it. */
+  /** Stops anvil and its proxy; in record mode, also writes the state file. Await it. */
   stop(): Promise<void>;
 }
 
@@ -131,30 +131,59 @@ async function noncesOf(url: string, accounts: readonly string[]): Promise<Recor
 }
 
 export async function startForkNode(options: ForkNodeOptions): Promise<ForkNode> {
-  const { chainId, block, blockInterval, mode } = options;
+  const { chainId, block, mode } = options;
   switch (mode) {
     case "replay":
       return replay(options.state!, chainId, block, options.anvil);
     case "record":
       return record(options, options.state!, options.rpcUrl!);
-    case "live": {
-      const node = await startAnvil(
-        [
-          "--fork-url",
-          options.rpcUrl!,
-          "--fork-block-number",
-          String(block),
-          "--chain-id",
-          String(chainId),
-        ],
-        options.anvil === undefined ? {} : { binary: options.anvil },
-      );
-      await plainDevAccounts(node.url);
-      await pinClock(node.url, blockInterval);
-
-      return { url: node.url, mode, stop: node.stop };
-    }
+    case "live":
+      return live(options, options.rpcUrl!);
   }
+}
+
+/**
+ * A live fork: anvil reaches `upstream` through the proxy, forwarding only, as a recording does
+ * through it recording. Given to anvil on its command line, the URL (and any key in it) would show
+ * in the process list, and in anvil's stderr, which a failed start quotes.
+ */
+async function live(options: ForkNodeOptions, upstream: string): Promise<ForkNode> {
+  const { chainId, block, blockInterval } = options;
+  const forwarder = await startProxy({ upstream });
+  let node: AnvilProcess;
+  try {
+    node = await startAnvil(
+      [
+        "--fork-url",
+        forwarder.url,
+        "--fork-block-number",
+        String(block),
+        "--chain-id",
+        String(chainId),
+      ],
+      options.anvil === undefined ? {} : { binary: options.anvil },
+    );
+  } catch (error) {
+    await forwarder.stop();
+    throw error;
+  }
+  try {
+    await plainDevAccounts(node.url);
+    await pinClock(node.url, blockInterval);
+  } catch (error) {
+    await node.stop();
+    await forwarder.stop();
+    throw error;
+  }
+
+  return {
+    url: node.url,
+    mode: "live",
+    async stop() {
+      await node.stop();
+      await forwarder.stop();
+    },
+  };
 }
 
 async function replay(
@@ -263,12 +292,14 @@ interface RecordedAccount {
 
 const RECORDER = join(dirname(fileURLToPath(import.meta.url)), "recorder.mjs");
 
-/** Starts the recording proxy in front of `upstream`. `close()` stops it and returns the records. */
-async function startRecorder(upstream: string, block: number, work: string) {
-  const out = join(work, "recorded.json");
+/**
+ * Starts the proxy (`recorder.mjs`) with `config` on its stdin, never its command line, and answers
+ * once it listens. `stop()` ends it.
+ */
+async function startProxy(config: { upstream: string; block?: string; out?: string }) {
   const child = spawn(process.execPath, [RECORDER], { stdio: ["pipe", "pipe", "inherit"] });
   stopWithProcess(child);
-  child.stdin!.end(JSON.stringify({ upstream, block: `0x${block.toString(16)}`, out }));
+  child.stdin!.end(JSON.stringify(config));
   const port = await new Promise<number>((ok, fail) => {
     child.stdout!.once("data", (chunk: Buffer) => ok(Number(chunk.toString().trim())));
     child.once("exit", (code) => fail(new Error(`the recorder exited with code ${code}`)));
@@ -276,10 +307,24 @@ async function startRecorder(upstream: string, block: number, work: string) {
 
   return {
     url: `http://127.0.0.1:${port}`,
-    async close(): Promise<Map<string, RecordedAccount>> {
+    async stop(): Promise<void> {
+      if (child.exitCode !== null || child.signalCode !== null) return;
       const exited = new Promise((ok) => child.once("exit", ok));
       child.kill("SIGTERM");
       await exited;
+    },
+  };
+}
+
+/** Starts the recording proxy in front of `upstream`. `close()` stops it and returns the records. */
+async function startRecorder(upstream: string, block: number, work: string) {
+  const out = join(work, "recorded.json");
+  const proxy = await startProxy({ upstream, block: `0x${block.toString(16)}`, out });
+
+  return {
+    url: proxy.url,
+    async close(): Promise<Map<string, RecordedAccount>> {
+      await proxy.stop();
       const { accounts, errors } = JSON.parse(readFileSync(out, "utf8")) as {
         accounts: Record<string, RecordedAccount>;
         errors: string[];
