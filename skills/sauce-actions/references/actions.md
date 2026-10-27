@@ -319,7 +319,7 @@ Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output i
 | `quote` | token | yes | the pool's quote token |
 | `poolIdx` | integer ≥ 0 | yes | the pool type index (420 is the standard pool) |
 | `isBuy` | true or false | yes | true pays base and receives quote |
-| `inBaseQty` | true or false | yes | true when the amount is denominated in the base token |
+| `inBaseQty` | true or false | yes | true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends |
 | `tip` | integer 0–65535 | yes | 0 accepts the pool's default fee |
 | `limitPrice` | base-10 integer string, uint128 | yes | the worst acceptable price, as a Q64.64 square-root price |
 | `amountOutMin` | base-10 integer string, uint128 | yes | the least output accepted; the dex reverts below it |

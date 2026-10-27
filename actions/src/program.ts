@@ -31,6 +31,7 @@ import {
   TOKEN_SYMBOL_RE,
 } from "./names.js";
 import {
+  ambientSwapIssues,
   balancerBatchIssues,
   IDENTIFIER_RE,
   ProgramError,
@@ -407,6 +408,7 @@ function checkAction(c: Checker, path: string, value: unknown): Action | undefin
   }
   if (c.issues.length > before) return undefined;
   c.issues.push(...balancerBatchIssues(value as unknown as Action, path));
+  c.issues.push(...ambientSwapIssues(value as unknown as Action, path));
   if (c.issues.length > before) return undefined;
 
   // A deep copy, in canonical key order.

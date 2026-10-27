@@ -872,7 +872,7 @@
         "isBuy": { "type": "boolean", "description": "true pays base and receives quote" },
         "inBaseQty": {
           "type": "boolean",
-          "description": "true when the amount is denominated in the base token"
+          "description": "true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends"
         },
         "tip": {
           "type": "integer",

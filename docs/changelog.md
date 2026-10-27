@@ -185,6 +185,11 @@ nothing moves.
   already did. Before, it paid its own `recipient` while the next action spent the same amount again
   from the Pot: a Pot holding that amount paid out twice, and one without it reverted. Recompile
   such documents; an `aaveV3Withdraw` nothing spends still pays its `recipient`.
+- **Fixed** (EVM): an `ambientSwap` whose `inBaseQty` differs from `isBuy` is refused. That pairing
+  is Ambient's exact-output swap: `amount` became what the Pot receives, and the dex pulled whatever
+  input it needed, up to the allowance, so the Pot could spend more than the `amount` the action
+  promises. Write `inBaseQty` equal to `isBuy` (`true`/`true` pays base, `false`/`false` pays quote),
+  as every existing example does.
 
 **Also breaking:**
 
