@@ -168,14 +168,8 @@ export async function startAnvil(
   }
   const url = `http://127.0.0.1:${port}`;
   const binary = options.binary ?? "anvil";
-  // anvil honours HTTP_PROXY with no loopback bypass, and a fork reads its endpoint through the
-  // kit's loopback proxy: that hop stays direct (the proxy reaches the endpoint through HTTP_PROXY).
-  const bypass = [process.env.NO_PROXY ?? process.env.no_proxy, "127.0.0.1", "localhost"]
-    .filter(Boolean)
-    .join(",");
   const child = spawn(binary, ["--port", String(port), "--silent", ...args], {
     stdio: ["ignore", "ignore", "pipe"],
-    env: { ...process.env, NO_PROXY: bypass, no_proxy: bypass },
   });
   let stderr = "";
   child.stderr!.on("data", (chunk: Buffer) => {

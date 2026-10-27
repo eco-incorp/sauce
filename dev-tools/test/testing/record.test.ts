@@ -7,7 +7,7 @@ import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_pr
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { connect, type AddressInfo, type Socket } from "node:net";
+import { connect, type AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -404,57 +404,6 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
         assert.ok(await gone(pid), `pid ${pid} still runs`);
       }
     } finally {
-      await upstream.stop();
-    }
-  });
-
-  it("reaches the endpoint through HTTP_PROXY, as anvil did, and keeps its own hop direct", async () => {
-    const upstream = await local();
-    // A forward proxy, as a corporate network runs one: it tunnels what it is asked to (CONNECT),
-    // and refuses a plain proxied request, which is what anvil would send it for the kit's hop.
-    const tunnelled: string[] = [];
-    const refused: string[] = [];
-    const proxy = createServer((request, response) => {
-      refused.push(request.url ?? "");
-      response.writeHead(502);
-      response.end();
-    });
-    proxy.on("connect", (request, client: Socket, head: Buffer) => {
-      tunnelled.push(request.url ?? "");
-      const { hostname, port } = new URL(`http://${request.url}`);
-      const target = connect(Number(port), hostname, () => {
-        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        target.write(head);
-        target.pipe(client);
-        client.pipe(target);
-      });
-      target.on("error", () => client.destroy());
-      client.on("error", () => target.destroy());
-    });
-    proxy.listen(0, "127.0.0.1");
-    await once(proxy, "listening");
-    const names = ["HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"] as const;
-    const saved = new Map(names.map((name) => [name, process.env[name]]));
-    for (const name of names) delete process.env[name];
-    process.env.HTTP_PROXY = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
-    try {
-      const block = Number(await upstream.client.getBlockNumber());
-      const live = await fork("base", { block, rpcUrl: upstream.rpcUrl });
-      try {
-        assert.equal((await live.run(program("multiply"), { args: [6n, 7n, 100n] })).returned, 42n);
-      } finally {
-        await live.stop();
-      }
-      assert.ok(tunnelled.length > 0, "the endpoint was not reached through the proxy");
-      assert.deepEqual(new Set(tunnelled), new Set([new URL(upstream.rpcUrl).host]));
-      assert.deepEqual(refused, [], "anvil sent the kit's loopback hop to the proxy");
-    } finally {
-      for (const [name, value] of saved) {
-        if (value === undefined) delete process.env[name];
-        else process.env[name] = value;
-      }
-      proxy.closeAllConnections();
-      proxy.close();
       await upstream.stop();
     }
   });

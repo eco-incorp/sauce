@@ -76,6 +76,11 @@ ten test accounts exist, and account 0's Pot is deployed. Returns a `TestChain`,
 `"auto"` picks the first row that applies. Passing a mode forces it: `"replay"` refuses to start
 without the file, and `"record"` records the file again.
 
+On an EVM chain, recording and a live fork both read `rpcUrl` through a proxy the kit runs on
+loopback, which reaches the endpoint directly and never through `HTTP_PROXY`/`HTTPS_PROXY`. anvil
+does honour `HTTP_PROXY`, with no loopback exception, so set `NO_PROXY=127.0.0.1` in a test run that
+has `HTTP_PROXY` set.
+
 ### `local(options?)`
 
 Starts an empty chain: the Sauce release at its addresses, ten test accounts, account 0's Pot, no
