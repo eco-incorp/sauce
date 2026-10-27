@@ -30,7 +30,9 @@ export type ChainKind = "evm" | "svm";
  * ids that have them.
  */
 export interface CanonicalChain {
-  /** Numeric chain id. EVM chain id, or Solana's id, 1399811149. */
+  /** Numeric chain id. EVM chain id, or the SDK's key for a Solana cluster: 1399811149 mainnet,
+   *  1399811150 devnet, 1399811151 testnet (`routes/ambient.ts#programChainId` is what a program
+   *  reads). */
   readonly id: number;
   /** Stable lowercase kebab-case key. */
   readonly slug: string;
@@ -120,7 +122,7 @@ export const CANONICAL_CHAINS = [
   { id: 9745, slug: "plasma", name: "Plasma", kind: "evm", aliases: [] },
   { id: 57073, slug: "ink", name: "Ink", kind: "evm", aliases: [] },
 
-  // --- SVM (2) ---
+  // --- SVM (3) ---
   {
     id: 1399811149,
     slug: "solana",
@@ -137,6 +139,17 @@ export const CANONICAL_CHAINS = [
     name: "Solana Devnet",
     kind: "svm",
     aliases: ["devnet"],
+  },
+  // Solana's testnet cluster. 1399811151 is the SDK's registry key for it, not a value the engine
+  // reports: testnet runs the devnet engine build, whose CHAIN_ID is 1399811150 on both clusters
+  // (`svm/engine.ts#ENGINE_CHAIN_IDS`). A program compiled for this chain reads `chainId` as what
+  // the engine reports (`routes/ambient.ts#programChainId`), never as this key.
+  {
+    id: 1399811151,
+    slug: "solana-testnet",
+    name: "Solana Testnet",
+    kind: "svm",
+    aliases: ["testnet"],
   },
 ] as const satisfies readonly CanonicalChain[];
 
