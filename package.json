@@ -97,6 +97,7 @@
     "dev-tools/dist/testing",
     "actions/action-program.schema.json",
     "sdk/src/protocols",
+    "sdk/src/svm/venues/hylo",
     "skills",
     "docs/**/*.md",
     "docs/examples/*.ts"

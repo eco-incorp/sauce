@@ -285,7 +285,8 @@ nothing moves.
 - **Added: `THIRD_PARTY_NOTICES.md`** lists the third-party code, math and interface definitions
   the package carries, with each one's source, license and copyright holder, and the license
   texts. The Hylo venue's quote module, a transliteration of Hylo's SDK, carries the Mozilla
-  Public License 2.0 notice that license requires.
+  Public License 2.0 notice that license requires, and the package ships its source,
+  `sdk/src/svm/venues/hylo/index.ts`.
 
 ## SDK 0.99.17 — 2026-10-27
 

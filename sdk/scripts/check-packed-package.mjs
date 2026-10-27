@@ -161,14 +161,24 @@ try {
     { cwd: work, stdio: "inherit" },
   );
   assert.equal(installedManifest.license, "SEE LICENSE IN LICENSE.md");
-  for (const file of ["LICENSE.md", "THIRD_PARTY_NOTICES.md"]) {
+  // The Hylo venue's quote math is MPL-2.0 (THIRD_PARTY_NOTICES.md), whose section 3.2 requires its
+  // Source Code Form to be available with the executable form, so the package ships the .ts file.
+  const mplSource = "sdk/src/svm/venues/hylo/index.ts";
+  for (const file of ["LICENSE.md", "THIRD_PARTY_NOTICES.md", mplSource]) {
     assert.equal(
       readFileSync(join(installedRoot, file), "utf8"),
       readFileSync(join(root, file), "utf8"),
       `the installed package must ship the repository's ${file} verbatim`,
     );
   }
-  console.log("Clean package install: license metadata, license text and third-party notices ship");
+  assert.match(
+    readFileSync(join(installedRoot, mplSource), "utf8"),
+    /Mozilla Public License, v\. 2\.0/,
+    `${mplSource} carries its MPL-2.0 notice`,
+  );
+  console.log(
+    "Clean package install: license metadata, license text, third-party notices and the MPL source ship",
+  );
 
   // What a library import loads is a dependency; what only the `sauce` command loads, for one
   // command each, is an optional peer of any version, which no install brings and no project's own
