@@ -319,6 +319,25 @@ WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, 
   unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
   variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
 
+### License
+
+- **Changed: the package is licensed under the Eco, Inc. Proprietary License 1.1**, which replaces
+  the Eco, Inc. Proprietary License 1.0 for every version published, earlier ones included. It
+  separates the SDK Components (the SDK, the command, the MCP server, the agent skills, the
+  documentation, the examples and the interface definitions of the compiler, the engines and the
+  Kitchens) from the Core Components (the compiler, the engines, the Kitchens and the contracts
+  themselves), and its Additional Use Grant lets you use, modify and distribute the SDK
+  Components, and run and redistribute unmodified Core Components, solely to create, compile,
+  test, simulate and execute programs for use with the Authorized Contracts: the contracts Eco,
+  Inc. publishes at docs.eco.com or in the package's [deployments reference](reference/deployments.md),
+  and every Pot. Annex A names the files of the package that are Core Components.
+  [LICENSE.md](../LICENSE.md) is the license itself.
+- **Added: `THIRD_PARTY_NOTICES.md`** lists the third-party code, math and interface definitions
+  the package carries, with each one's source, license and copyright holder, and the license
+  texts. The Hylo venue's quote module, a transliteration of Hylo's SDK, carries the Mozilla
+  Public License 2.0 notice that license requires, and the package ships its source,
+  `sdk/src/svm/venues/hylo/index.ts`.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
