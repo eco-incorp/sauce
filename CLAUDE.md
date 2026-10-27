@@ -1448,8 +1448,9 @@ what it cannot measure. MCP: `sauce_signed_cook` (pure, stdio and HTTP) and the 
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
-builds transactions on — Ethereum, Base, Arc and Solana, then the testnets Arc Testnet and Base
-Sepolia, kept in their own `SUPPORTED_TESTNET_SLUGS` so one line takes them out
+builds transactions on — Ethereum, Base, Arc and Solana, then the testnets Arc Testnet, Base
+Sepolia, Ethereum Sepolia and Solana Devnet, kept in their own `SUPPORTED_TESTNET_SLUGS` so one
+line takes them out
 (`SUPPORTED_CHAIN_SLUGS`, and `supportedChainNames()` names the testnets apart); every other
 canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
 search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,

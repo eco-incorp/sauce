@@ -150,7 +150,7 @@ unchanged.
   `WSOL`). The Solana venues are mainnet's, so a venue name is refused on it.
 - The released Solana engine and Kitchen are also deployed on **Solana testnet**, with zero
   execution fees on devnet and testnet. Testnet uses the same engine build and chain id
-  1399811150 as devnet. Use `--chain solana --rpc-url https://api.testnet.solana.com` and explicit
+  1399811150 as devnet. Use `--chain solana --rpc-url <testnet-rpc-url>` and explicit
   testnet mint addresses. The endpoint does not change `solana`'s compile-time chain identity or
   mainnet token symbols; `ctx.chainId()` reads the running cluster's chain id. Local simulation
   selects the released engine build from the endpoint's cluster. There is no `solana-testnet` chain

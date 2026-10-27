@@ -139,6 +139,18 @@ describe("the chain a send is for", () => {
       }),
     ).rejects.toThrow("the plan's cursor is solana-devnet's, not solana's");
   });
+
+  // solana-devnet is a supported chain: a signed Solana transaction sent there passes the support
+  // gate and goes on to the endpoint, where (nothing listening) it fails, sending nothing.
+  it("lets a signed send on solana-devnet past the support gate", async () => {
+    const sent = sendCommand({
+      chain: requireChain("solana-devnet"),
+      rpcUrl: "http://127.0.0.1:9/",
+      transactions: [solanaWire([1], 1, 2)],
+    });
+    await expect(sent).rejects.toThrow();
+    await expect(sent).rejects.not.toThrow(/preview chain|is refused/);
+  });
 });
 
 /** A legacy Solana wire transaction: `signatures` (64 bytes each, a zero one unsigned), then a

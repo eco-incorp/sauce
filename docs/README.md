@@ -4,7 +4,7 @@
 > live onchain state, chooses a path and composes contract calls in one transaction: swap, pay,
 > lend, bridge. Your program enforces the conditions you write, and an unhandled failure reverts
 > every step. It runs through your own Pot on Ethereum, Base, Arc or Solana (or the testnets Arc
-> Testnet and Base Sepolia), so you deploy no
+> Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet), so you deploy no
 > contract for each program and look up no address.
 
 **How to use this manual.** You need to know TypeScript and the basic ideas of a blockchain: a

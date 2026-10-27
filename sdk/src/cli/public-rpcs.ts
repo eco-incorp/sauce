@@ -248,6 +248,8 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
     { url: "https://solana-rpc.publicnode.com", programAccounts: false },
   ],
   // Solana devnet, under the chain id the SDK gives it (the devnet engine's CHAIN_ID), checked
-  // 2026-10-26
+  // 2026-10-27. Solana's own is the one keyless devnet endpoint that passes the check: OnFinality's
+  // and Tatum's answer devnet's genesis but rate-limit the check (5 requests a minute on Tatum's),
+  // and dRPC, Helius, Ankr, Triton, Shyft and BlockPI serve devnet with a key only.
   1399811150: [{ url: "https://api.devnet.solana.com", programAccounts: true }],
 };

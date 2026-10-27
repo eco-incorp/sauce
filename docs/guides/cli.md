@@ -130,7 +130,7 @@ mainnet venues on those clusters.
 Solana testnet has no chain alias or token registry. Use an explicit endpoint:
 
 ```sh
-sauce simulate program.sauce.ts --chain solana --rpc-url https://api.testnet.solana.com --owner <owner>
+sauce simulate program.sauce.ts --chain solana --rpc-url <testnet-rpc-url> --owner <owner>
 ```
 
 Testnet reports chain id 1399811150. The endpoint does not change `solana`'s compile-time chain

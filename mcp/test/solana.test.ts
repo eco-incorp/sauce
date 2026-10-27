@@ -8,9 +8,15 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 
+import { address } from "@solana/kit";
+
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+/** `sauce_pot`'s salt when none is given. */
+const ZERO_SALT = new Uint8Array(32);
 /** Each cluster's genesis hash, by the endpoint path that serves it. */
 const GENESIS: Readonly<Record<string, string>> = {
   "/devnet": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
@@ -116,7 +122,7 @@ describe("sauce_pot on Solana", () => {
     assert.deepEqual(asked, [`getAccountInfo ${String(empty.pot)}`]);
   });
 
-  it("reads a Pot on solana-devnet through a devnet endpoint alone, its deployment left out", async () => {
+  it("predicts a Pot on solana-devnet through a devnet endpoint alone, with its create_pot", async () => {
     asked.length = 0;
     const devnet = ok(
       await mcp.call("sauce_pot", {
@@ -128,10 +134,38 @@ describe("sauce_pot on Solana", () => {
     );
     const solana = ok(await mcp.call("sauce_pot", { chain: "solana", owner: OWNER }));
     assert.equal(devnet.chain, "solana-devnet");
-    // The Kitchen's id is the same on every cluster, and so is the Pot's address.
+    // Devnet is a supported chain: nothing is refused, and the deployment is there to sign.
+    assert.equal(devnet.refused, undefined);
+    // The release's program ids, the same on every cluster, and so is the Pot's address.
+    assert.equal(devnet.engine, v12SvmEngineProgramId());
+    assert.equal(devnet.kitchen, v12SvmKitchenProgramId());
+    const pda = await derivePotPda(address(v12SvmKitchenProgramId()), address(OWNER), ZERO_SALT);
+    assert.equal(devnet.pot, pda.address);
     assert.equal(devnet.pot, solana.pot);
-    assert.equal((devnet.refused as { code: string }).code, "preview-chain");
-    assert.equal(devnet.instruction, undefined);
+    // The Kitchen's create_pot for the owner and salt: what mainnet's prediction builds, byte for
+    // byte, to the release's Kitchen, the owner signing and paying, the Pot written.
+    const instruction = devnet.instruction as {
+      programAddress: string;
+      accounts: Array<{ address: string; role: string }>;
+      data: string;
+    };
+    assert.deepEqual(instruction, solana.instruction);
+    assert.equal(instruction.programAddress, v12SvmKitchenProgramId());
+    assert.ok(instruction.data.length > 0);
+    assert.ok(
+      instruction.accounts.some(
+        (meta) =>
+          meta.address === OWNER && /signer/i.test(meta.role) && /writable/i.test(meta.role),
+      ),
+      "the owner signs and pays",
+    );
+    assert.ok(
+      instruction.accounts.some(
+        (meta) => meta.address === devnet.pot && /writable/i.test(meta.role),
+      ),
+      "the Pot is written",
+    );
+    // Read through the devnet endpoint alone: its cluster, then the Pot. Nothing is sent.
     assert.deepEqual(asked, ["getGenesisHash ", `getAccountInfo ${String(devnet.pot)}`]);
 
     // An endpoint of another cluster is refused, named, before the Pot is read.
