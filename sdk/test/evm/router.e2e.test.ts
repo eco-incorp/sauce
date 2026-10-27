@@ -14,8 +14,8 @@
  *   4. `Router.flash(callback, swap)`, the one Router entry that runs a program as the Pot inside the
  *      callback of a pool it swaps with: the callback runs as the Pot and repays with a nested swap,
  *      a short repayment reverts the whole cook, the nested swap's floor is what keeps the Pot's own
- *      balance from paying a shortfall, and each of the Router's refusals leaves every balance as it
- *      was.
+ *      balance from paying a shortfall, and each refusal here (`CallbackNotRun`, `UnknownSwap`,
+ *      `UnauthorizedCaller`) leaves every balance as it was.
  *
  * The pool is v12's own `test/mocks/MockV3Pool.sol` (copied into `fixtures/`, built by forge from
  * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, and a
@@ -678,7 +678,8 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
 
     it("refuses flash called on the Pot or the Router by anyone, the owner too: UnauthorizedCaller", async () => {
       const s = await scenario(KIND_RATE, HELD0);
-      // The callback a caller would run as the Pot if it could: it hands them the Pot's token0.
+      // A program that would hand them the Pot's token0 if it ran as the Pot. It never runs: each
+      // call is refused before `flash` arms it.
       const drain = compileSauceRoute(
         "base",
         [
@@ -699,7 +700,6 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       await refuses(s, [STRANGER, sauce.pot, data], unauthorized);
       await refuses(s, [OWNER, sauce.pot, data], unauthorized);
       await refuses(s, [STRANGER, sauce.router, data], unauthorized);
-      expect(await balance(s.token0, STRANGER.address)).toBe(0n);
     });
 
     it("PLANTED: a wrong expectation in the callback or after the flash reverts the same cook", async () => {

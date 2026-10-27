@@ -1,6 +1,9 @@
 /**
  * Orca Whirlpools tick math — exact transcription of
- * `programs/whirlpool/src/math/tick_math.rs` `sqrt_price_from_tick_index`:
+ * `programs/whirlpool/src/math/tick_math.rs` `sqrt_price_from_tick_index` in
+ * orca-so/whirlpools (https://github.com/orca-so/whirlpools) at commit
+ * 8ab2e923138badb2fcb1069cc9947f44df3e48eb, Copyright (c) 2022 Orca Foundation, licensed under
+ * the Apache License, Version 2.0 (see THIRD_PARTY_NOTICES.md):
  * positive ticks accumulate in Q96 with `(r * C) >> 96` steps and a final `>> 32`,
  * negative ticks accumulate in Q64 with `(r * C) >> 64` steps. Verified against
  * the source's own pinned bit-value test table (see the unit suite).

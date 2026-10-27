@@ -5,6 +5,11 @@
  * job and NOT reverse-engineering — the layout source is the published Rust
  * crate (`invariant-types`/`programs/invariant/src/{structs,math,util}.rs`).
  *
+ * LICENSE: the tick-map scan and the price and swap-step math below match, constant for constant
+ * and on every tested input, Invariant's TypeScript SDK (`sdk/src/math.ts`, `sdk/src/tickmap.ts`)
+ * in invariant-labs/protocol at commit a30e3b6d86a34400fae202299dba969daff36359, Copyright 2022
+ * Akudama GmbH, licensed under the MIT License (`sdk/license.txt`; see THIRD_PARTY_NOTICES.md).
+ *
  * GROUND-TRUTHED LIVE against real mainnet state at integration time (2026-07-31):
  * - `Pool` zero-copy account: 400 bytes (8-byte Anchor discriminator
  *   sha256('account:Pool')[0..8] + 392 bytes, `#[repr(packed)]`, NO padding).
