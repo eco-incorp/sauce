@@ -297,7 +297,12 @@ const RECORDER = join(dirname(fileURLToPath(import.meta.url)), "recorder.mjs");
  * once it listens. `stop()` ends it.
  */
 async function startProxy(config: { upstream: string; block?: string; out?: string }) {
-  const child = spawn(process.execPath, [RECORDER], { stdio: ["pipe", "pipe", "inherit"] });
+  const child = spawn(process.execPath, [RECORDER], {
+    stdio: ["pipe", "pipe", "inherit"],
+    // Node's fetch reads HTTP(S)_PROXY and NO_PROXY only when asked: the endpoint is reached through
+    // the same proxy anvil reached it through before the kit put this process in between.
+    env: { ...process.env, NODE_USE_ENV_PROXY: "1" },
+  });
   stopWithProcess(child);
   child.stdin!.end(JSON.stringify(config));
   const port = await new Promise<number>((ok, fail) => {

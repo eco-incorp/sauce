@@ -7,10 +7,11 @@ import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_pr
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
+import { connect, type AddressInfo, type Socket } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { encodeFunctionData, type Address } from "viem";
@@ -403,6 +404,57 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
         assert.ok(await gone(pid), `pid ${pid} still runs`);
       }
     } finally {
+      await upstream.stop();
+    }
+  });
+
+  it("reaches the endpoint through HTTP_PROXY, as anvil did, and keeps its own hop direct", async () => {
+    const upstream = await local();
+    // A forward proxy, as a corporate network runs one: it tunnels what it is asked to (CONNECT),
+    // and refuses a plain proxied request, which is what anvil would send it for the kit's hop.
+    const tunnelled: string[] = [];
+    const refused: string[] = [];
+    const proxy = createServer((request, response) => {
+      refused.push(request.url ?? "");
+      response.writeHead(502);
+      response.end();
+    });
+    proxy.on("connect", (request, client: Socket, head: Buffer) => {
+      tunnelled.push(request.url ?? "");
+      const { hostname, port } = new URL(`http://${request.url}`);
+      const target = connect(Number(port), hostname, () => {
+        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        target.write(head);
+        target.pipe(client);
+        client.pipe(target);
+      });
+      target.on("error", () => client.destroy());
+      client.on("error", () => target.destroy());
+    });
+    proxy.listen(0, "127.0.0.1");
+    await once(proxy, "listening");
+    const names = ["HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"] as const;
+    const saved = new Map(names.map((name) => [name, process.env[name]]));
+    for (const name of names) delete process.env[name];
+    process.env.HTTP_PROXY = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
+    try {
+      const block = Number(await upstream.client.getBlockNumber());
+      const live = await fork("base", { block, rpcUrl: upstream.rpcUrl });
+      try {
+        assert.equal((await live.run(program("multiply"), { args: [6n, 7n, 100n] })).returned, 42n);
+      } finally {
+        await live.stop();
+      }
+      assert.ok(tunnelled.length > 0, "the endpoint was not reached through the proxy");
+      assert.deepEqual(new Set(tunnelled), new Set([new URL(upstream.rpcUrl).host]));
+      assert.deepEqual(refused, [], "anvil sent the kit's loopback hop to the proxy");
+    } finally {
+      for (const [name, value] of saved) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      proxy.closeAllConnections();
+      proxy.close();
       await upstream.stop();
     }
   });
@@ -844,6 +896,50 @@ describe("the recorder", () => {
       for (const recorder of started) recorder.kill("SIGKILL");
       busy.closeAllConnections();
       busy.close();
+    }
+  });
+
+  it("stays up when a client hangs up mid-body", async () => {
+    const endpoint = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => response.end('{"jsonrpc":"2.0","id":1,"result":"0x2105"}'));
+    });
+    endpoint.listen(0, "127.0.0.1");
+    await once(endpoint, "listening");
+    const recorder = spawn(process.execPath, [RECORDER_SCRIPT], {
+      stdio: ["pipe", "pipe", "inherit"],
+    });
+    try {
+      const upstream = `http://127.0.0.1:${(endpoint.address() as AddressInfo).port}/`;
+      recorder.stdin!.end(JSON.stringify({ upstream }));
+      const [listening] = (await once(recorder.stdout!, "data", {
+        signal: AbortSignal.timeout(10_000),
+      })) as [Buffer];
+      const port = Number(listening.toString().trim());
+      // Half a request, then gone. The proxy is another process with nothing to observe, so the waits
+      // are real: one for it to read the headers and start on the body, one for it to see the hang-up
+      // (and, before the fix, to die of it).
+      const socket = connect(port, "127.0.0.1");
+      await once(socket, "connect");
+      socket.write(
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n" +
+          'Content-Length: 100\r\n\r\n{"jsonrpc"',
+      );
+      await delay(100);
+      socket.destroy();
+      await delay(500);
+      assert.equal(recorder.exitCode, null, "the proxy exited");
+      const response = await fetch(`http://127.0.0.1:${port}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
+        signal: AbortSignal.timeout(15_000),
+      });
+      assert.equal(response.status, 200);
+    } finally {
+      if (recorder.exitCode === null && recorder.signalCode === null) recorder.kill("SIGKILL");
+      endpoint.closeAllConnections();
+      endpoint.close();
     }
   });
 

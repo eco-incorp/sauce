@@ -116,7 +116,9 @@ nothing moves.
   same way. Neither a URL the proxy cannot parse nor an endpoint's answer that echoes the header is
   ever quoted in its output or in a failed recording's error.
 - **Fixed** (EVM): a live fork's requests go upstream once, as anvil sent them, so anvil's own
-  timeout and retries apply, and its proxy exits with the process that started it.
+  timeout and retries apply, and its proxy exits with the process that started it. With
+  `HTTP_PROXY`/`HTTPS_PROXY` set, the endpoint is reached through that proxy, as anvil reached it,
+  and anvil's hop to the kit's loopback proxy stays direct.
 
 **Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
 WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, is refused.
