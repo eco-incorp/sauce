@@ -94,14 +94,14 @@ function afterFee(amount: Uint256): Uint256 {
   return amount - amount / 1000;
 }
 
-// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
-// owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
-// `pot` there would keep them in the Pot.
+// Supplies the USDC this Pot holds, less 0.1%, to Aave V3, keeping the aTokens in the Pot (`pot`).
+// To credit the owner's wallet instead, take it as a `main` parameter: `ctx.msgSender()` is the
+// owner only when the owner sends the cook, and a signed cook's sender is whoever submitted it.
 const held = pot.USDC;
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
 USDC.approve(AaveV3.Pool, supplied);
-AaveV3.Pool.supply(USDC, supplied, ctx.msgSender(), 0);
+AaveV3.Pool.supply(USDC, supplied, pot, 0);
 ```
 
 ## The header
@@ -256,7 +256,8 @@ Every call comes from the Pot. A call that credits its caller, or names `pot` as
 beneficiary, leaves the output in the Pot. A call that names a beneficiary (a lending market's
 `onBehalfOf`, a vault's `receiver`, a swap's `recipient`, a bridge's `to`) credits that address:
 make it a `main` parameter, the user's wallet or `pot` as the user chose (`sauce-overview`
-says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner.
+says to ask). Never name `ctx.msgSender()` as a beneficiary or refund address: it is the owner
+only when the owner sends the cook, and under a signed cook it is whoever submitted it.
 
 ```sauce chain=base,ethereum
 // Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
