@@ -192,6 +192,11 @@ describe("invariant boundary window tick scan", () => {
     expect(w.xToY).toEqual([0, -1, -2]);
   });
 
+  it("xToY visits every adjacent initialized tick (spacing 10)", async () => {
+    const w = await windowsOf(0, 10, [0, -10, -20, -50]);
+    expect(w.xToY).toEqual([0, -10, -20]);
+  });
+
   it("both directions walk away from the same current tick", async () => {
     const w = await windowsOf(5, 1, [3, 4, 5, 6, 7]);
     expect(w.xToY).toEqual([5, 4, 3]);
