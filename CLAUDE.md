@@ -1488,7 +1488,9 @@ devnet build, so its engine reports 1399811150 too, while its registry key is 13
 engine's id for the chain's cluster, from `svm/clusters.ts`), and nothing hands a program
 `chain.id` directly. `@sauce/router`'s Solana arm writes no venue program: its guards read the
 defines `__SAUCE_<VENUE>_PROGRAM`, which every SDK compile for a Solana chain supplies from
-`svmRouterDefines(cluster)` (`/svm`), so a raw `compile()` of the arm passes them or fails closed.
+`svmRouterDefines(cluster)` (`/svm`), so a raw `compile()` of the arm passes them, as
+`[name, value.toString()]` pairs, or fails closed. Caller defines and tokens named `__SAUCE_…` are
+refused at `sauce-route.ts#readCompileInputs`, and the program defines are merged last.
 A test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills

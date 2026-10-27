@@ -290,9 +290,21 @@ nothing moves.
 **Also breaking:**
 
 - A raw `compile()` of `@sauce/router`'s Solana arm passes `svmRouterDefines(cluster)`, for
-  `"mainnet-beta"` or `"devnet"`, as its `defines`. The library no longer writes a venue's
-  program, and a compile without them fails, naming the define. The SDK's own compiles for a
-  Solana chain supply them.
+  `"mainnet-beta"` or `"devnet"`, as its `defines`, each entry as the `[name, value]` text pair the
+  compiler takes:
+
+  ```ts
+  Object.entries(svmRouterDefines(cluster)).map(([name, value]): [string, string] => [
+    name,
+    value.toString(),
+  ]);
+  ```
+
+  The library no longer writes a venue's program, and a compile without them fails, naming the
+  define. The SDK's own compiles for a Solana chain supply them.
+
+- Caller defines and tokens may not use the reserved `__SAUCE_` names: every compile, the
+  `sauce` command's and the MCP server's included, refuses one, naming it.
 - The SDK's Solana pool helpers, which no package entry exports, change with it:
   `svmPoolKeyProblem` and `svmPoolCandidates` take the cluster first, `svmPoolSlot` takes it last,
   and `svmPhoenixSlot` and `svmDlmmSlot` take the venue's program first. `SVM_KEYED_VENUES`,

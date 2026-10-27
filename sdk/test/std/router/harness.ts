@@ -81,11 +81,15 @@ export const compileStdRouter = (
     ...(target === "svm" ? { defines: routerDefines(cluster) } : {}),
   });
 
-/** `svmRouterDefines(cluster)` as a raw compile takes defines: name, then the value's text. */
-export const routerDefines = (cluster: SvmTokenCluster): [string, string][] =>
-  Object.entries(svmRouterDefines(cluster)).map(([name, value]) => [
+/**
+ * `svmRouterDefines(cluster)` as a raw compile takes defines, `[name, value]` text pairs, written
+ * exactly as `docs/api/router-solana.md` tells a raw `compile()` caller to write them, so every
+ * compile here checks that instruction against the compiler's `CompileOptions`.
+ */
+export const routerDefines = (cluster: SvmTokenCluster): CompileOptions["defines"] =>
+  Object.entries(svmRouterDefines(cluster)).map(([name, value]): [string, string] => [
     name,
-    `0x${value.toString(16)}`,
+    value.toString(),
   ]);
 
 /**
@@ -95,7 +99,7 @@ export const routerDefines = (cluster: SvmTokenCluster): [string, string][] =>
 export const compileStdRouterArm = (
   entry: string,
   arm: string,
-  defines: [string, string][] = routerDefines("mainnet-beta"),
+  defines: CompileOptions["defines"] = routerDefines("mainnet-beta"),
 ): CompileResult =>
   compile({
     target: "svm",

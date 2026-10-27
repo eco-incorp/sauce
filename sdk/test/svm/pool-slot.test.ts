@@ -115,6 +115,21 @@ describe("svmPoolSlot", () => {
     );
   });
 
+  it("on devnet, refuses a pool of mainnet's Raydium program or of devnet's legacy one", async () => {
+    // Devnet's Raydium CLMM is its own program (DRayAUg…): mainnet's, and the legacy devnet program
+    // `devi51…`, own no pool a namespace swaps at there, whatever the pool's bytes.
+    const p = pool("raydium-clmm-sol-usdc");
+    await expect(svmPoolSlot(load, p.pool, USDC, "devnet")).rejects.toThrow(
+      `${p.pool} is owned by ${p.program}, which is not a venue a namespace swaps at on devnet`,
+    );
+    const legacy = address("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
+    const forged: OwnedAccountLoader = async (at) =>
+      at === p.pool ? { data: BYTES.get(at)!, owner: legacy } : load(at);
+    await expect(svmPoolSlot(forged, p.pool, USDC, "devnet")).rejects.toThrow(
+      `${p.pool} is owned by ${legacy}, which is not a venue a namespace swaps at on devnet`,
+    );
+  });
+
   it.each([
     ["raydium-clmm-sol-usdc", "Raydium CLMM pool"],
     ["orca-whirlpool-sol-usdc", "Orca Whirlpools pool"],

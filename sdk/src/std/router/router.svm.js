@@ -124,7 +124,8 @@
 // `__SAUCE_DEFITUNA_PROGRAM`, `__SAUCE_CREMA_PROGRAM`, `__SAUCE_PHOENIX_PROGRAM` and
 // `__SAUCE_METEORA_DLMM_PROGRAM`, each the program's 32-byte key on the cluster the program runs on.
 // The SDK's compiles for a Solana chain supply them from its venue table; a raw `compile()` passes
-// `svmRouterDefines(cluster)` from `@eco-incorp/sauce/svm`. A compile that supplies none fails,
+// `svmRouterDefines(cluster)` from `@eco-incorp/sauce/svm`, each entry as a `[name, value]` text
+// pair (`[name, value.toString()]`). A compile that supplies none fails,
 // naming the first, and never guards by another cluster's program. A venue the cluster lacks is given
 // an address no program can be deployed at, so its guard admits no pool there.
 //

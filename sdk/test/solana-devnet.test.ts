@@ -147,3 +147,61 @@ describe("solana-devnet", () => {
     expect(chainSupport("solana")).toBe("supported");
   });
 });
+
+// `@sauce/router`'s Solana guards read each venue's program from a `__SAUCE_<VENUE>_PROGRAM` define
+// the SDK supplies per cluster. A define reaches every module the compile loads, so a caller's value
+// of that name would make a guard accept its program: the name is the SDK's alone.
+describe("the SDK's reserved `__SAUCE_` names", () => {
+  const key = (base58: string) =>
+    Buffer.from(getAddressEncoder().encode(base58 as never)).toString("hex");
+  const RAYDIUM: Record<string, string> = {
+    solana: key("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"),
+    "solana-devnet": key("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"),
+  };
+  const ATTACKER = "ab".repeat(32);
+  const swap =
+    "function main(pool: Address) { return Raydium.CLMM.swap(pool, USDC, WSOL, 1, 10, 0); }";
+  const bytecode = (chain: string, source: string) =>
+    Buffer.from(compileSauceProgram(chain, source).bytecode).toString("hex");
+
+  it.each(["solana", "solana-devnet", "base"])(
+    "refuses a caller's define or token named with one, on %s",
+    (chain) => {
+      const source = chain === "base" ? "function main() { return 1; }" : swap;
+      const reserved = /`__SAUCE_RAYDIUM_CLMM_PROGRAM` is reserved/;
+      expect(() =>
+        compileSauceProgram(chain, source, {
+          defines: { __SAUCE_RAYDIUM_CLMM_PROGRAM: BigInt(`0x${ATTACKER}`) },
+        }),
+      ).toThrow(reserved);
+      expect(() =>
+        compileSauceProgram(chain, source, {
+          tokens: { __SAUCE_RAYDIUM_CLMM_PROGRAM: `0x${ATTACKER}` },
+        }),
+      ).toThrow(reserved);
+    },
+  );
+
+  it.each(["solana", "solana-devnet"])(
+    "keeps %s's program in the guard when the program declares the name itself",
+    (chain) => {
+      const own = bytecode(chain, `const __SAUCE_RAYDIUM_CLMM_PROGRAM = 0x${ATTACKER};\n${swap}`);
+      expect(own).toContain(RAYDIUM[chain]);
+      expect(own).not.toContain(ATTACKER);
+      expect(own).toBe(bytecode(chain, swap));
+    },
+  );
+
+  it("gives mainnet and devnet each its own program, compiled one after another", () => {
+    const runs = ["solana", "solana-devnet", "solana", "solana-devnet"].map(
+      (chain) => [chain, bytecode(chain, swap)] as const,
+    );
+    for (const [chain, hex] of runs) {
+      const other = chain === "solana" ? "solana-devnet" : "solana";
+      expect(hex).toContain(RAYDIUM[chain]);
+      expect(hex).not.toContain(RAYDIUM[other]);
+    }
+    expect(runs[2]![1]).toBe(runs[0]![1]);
+    expect(runs[3]![1]).toBe(runs[1]![1]);
+  });
+});
