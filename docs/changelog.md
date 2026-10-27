@@ -244,8 +244,8 @@ calldata carries no owner and salt it can be read from …`), where the decoder'
   Shared Pot (`Kitchen.deployPot reverts for the owner 0x0…0: a Pot with no owner is a Shared Pot,
 which Kitchen.deploySharedPot(salt) deploys …`), rather than reporting a release mismatch or
   letting funding land before the deployment reverts. Importing a Shared Pot is unchanged.
-- **Changed** (EVM): on a chain where the released Kitchen has no code, `sign`, `send`, a wallet's
-  send and the MCP `sauce_pot` say `the released Kitchen … is not deployed on <chain>: this SDK's
+- **Changed** (EVM): on a chain where the released Kitchen has no code, `sign`, `send` and a wallet's
+  send say `the released Kitchen … is not deployed on <chain>: this SDK's
 cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than that the SDK does
   not match the Kitchen.
 - **Changed** (EVM): `sauce send` and a wallet's send wait, after a transaction that deploys a Pot,

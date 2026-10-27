@@ -774,9 +774,13 @@ describeEvm("the Pot is checked against the chain", () => {
     120_000,
   );
 
-  it.each([false, true])(
-    "sauce send checks an already-landed deployment with no Pot before a transfer (cook follows: %s)",
-    async (withCook) => {
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ] as const)(
+    "sauce send checks an already-landed deployment with no Pot before a transfer (cook follows: %s, Pot store: %s)",
+    async (withCook, withStore) => {
       const fresh = await owner("landed-elsewhere");
       const recipient = privateKeyToAccount(generatePrivateKey()).address;
       const { tx } = await deploymentOfKind("private", fresh);
@@ -797,7 +801,9 @@ describeEvm("the Pot is checked against the chain", () => {
       // Sent again with what was to follow it, while the Kitchen puts that Pot elsewhere.
       await whileMispredicting(newer, async () => {
         const batch = await sauceWith(
-          NO_TERMINAL,
+          withStore
+            ? { ...NO_TERMINAL, potsDir: mkdtempSync(join(tmpdir(), "sauce-pots-")) }
+            : NO_TERMINAL,
           ...[
             "send",
             landing,
