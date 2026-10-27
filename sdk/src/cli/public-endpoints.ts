@@ -11,7 +11,8 @@
  * asks again starts at the next; and it sends `eth_simulateV1` only to an endpoint that runs it
  * (`simulateV1`), and a Solana program's scan (`getProgramAccounts`) only to one that answers it
  * (`programAccounts`), where the chain has one. One endpoint gets 8 seconds, less than viem's own
- * timeout, so a client still waiting is answered by the next.
+ * timeout, so a client still waiting is answered by the next; an endpoint the list gives a timeout
+ * of its own (`timeoutMs`, a slow Solana node's, whose clients wait) gets that instead.
  *
  * NODE-ONLY: the `sauce` command and its MCP server use it; nothing browser-facing imports it.
  */
@@ -27,7 +28,8 @@ export interface PublicEndpointsOptions {
   readonly rpcs?: Readonly<Record<number, readonly PublicRpc[]>>;
   /** How a request reaches an endpoint: the global `fetch`, unless a test gives another. */
   readonly fetch?: typeof fetch;
-  /** How long one endpoint may take to answer one request before the next is tried, in ms. */
+  /** How long one endpoint may take to answer one request before the next is tried, in ms, where
+   *  the endpoint names no `timeoutMs` of its own. */
   readonly timeoutMs?: number;
 }
 
@@ -106,7 +108,7 @@ async function relay(
         headers: { "content-type": "application/json", accept: "application/json" },
         body,
         redirect: "error",
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(rpcs[index]!.timeoutMs ?? timeoutMs),
       });
       const reply = {
         status: answer.status,

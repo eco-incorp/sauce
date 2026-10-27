@@ -358,8 +358,12 @@ describeEvm("a command deploys the Pot it needs", () => {
     });
     expect(getAddress(cook!.to)).toBe(fresh.pot);
     expect(BigInt(cook!.value)).toBeGreaterThan(0n);
+    // The Pot is funded between its deployment and the cook, never before it exists.
     expect(planned.stderr).toContain(
-      `Your Pot ${fresh.pot} on ethereum isn't deployed yet: the first transaction deploys it`,
+      `Your Pot ${fresh.pot} on ethereum isn't deployed yet: the first transaction deploys it ` +
+        "(any account may send it; the Pot is the owner's either way), and the cook comes last. " +
+        "Send the deployment, fund the Pot with what the program spends, then send the cook " +
+        "(or plan with `--fund`).",
     );
     // As cast lines: the deploy, then the cook.
     const cast = await tx("--format", "cast");

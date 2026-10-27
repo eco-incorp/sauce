@@ -1,11 +1,12 @@
 /**
- * `solana-devnet` through the `sauce` command, in process: every Solana path acts for the chain the
- * user named. It is a supported chain, so transaction commands reach the endpoint and check its
- * released programs before building or sending; `compile` and reads say `solana-devnet`.
- * Its endpoint must serve devnet: `solana-devnet` against
- * another cluster's is refused, naming the cluster it serves, while `solana` against a devnet
- * endpoint works as it always did. A devnet Pot is one record in the Pot store, under Solana's chain
- * and devnet's cluster, whichever of the two chains recorded it or reads it back.
+ * `solana-devnet` and `solana-testnet` through the `sauce` command, in process: every Solana path
+ * acts for the chain the user named. Each is a supported chain, so transaction commands reach the
+ * endpoint and check its released programs before building or sending; `compile` and reads say the
+ * chain. Each one's endpoint must serve its cluster: `solana-devnet` against another cluster's is
+ * refused, naming the cluster it serves, and `solana-testnet` likewise (a devnet endpoint included,
+ * though the two run one engine build), while `solana` against a devnet endpoint works as it always
+ * did. A devnet or testnet Pot is one record in the Pot store, under Solana's chain and its cluster,
+ * whichever chain recorded it or reads it back.
  */
 import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
 import { once } from "node:events";
@@ -396,5 +397,110 @@ describe("a Solana transaction that names no chain", () => {
     expect(() =>
       planChain([{ ...tx, chainId: 1399811149 }], requireChain("solana-devnet")),
     ).toThrow("the transactions are for chain 1399811149, not solana-devnet (1399811150)");
+  });
+});
+
+describe("solana-testnet", () => {
+  it("sauce tx and sauce pot --deploy reach a testnet endpoint and refuse a missing engine", async () => {
+    const testnet = await serving(TESTNET_GENESIS);
+    const program = file("main.sauce.ts", PROGRAM);
+    const signer = keypair("owner.json");
+    const reach = ["--rpc-url", testnet.url];
+    const runs = [
+      await sauce("tx", program, "--chain", "solana-testnet", "--owner", OWNER, ...reach),
+      await sauce("pot", "--deploy", "--chain", "testnet", "--keypair", signer, ...reach),
+    ];
+    for (const run of runs) {
+      expect(run.code).toBe(1);
+      expect(run.stderr).not.toMatch(/preview chain|is refused|give a testnet endpoint/);
+      expect(run.stderr).toContain(
+        `the released engine ${v12SvmEngineProgramId()} is not deployed on solana-testnet`,
+      );
+    }
+    expect(testnet.methods).toContain("getGenesisHash");
+    expect(testnet.methods).not.toContain("sendTransaction");
+  });
+
+  it("compiles and predicts a Pot as solana-testnet's, the same Pot as on every cluster", async () => {
+    const compiled = await sauce(
+      ...["compile", file("main.sauce.ts", PROGRAM), "--chain", "solana-testnet", "--json"],
+    );
+    expect(compiled.code).toBe(0);
+    expect(json(compiled)).toMatchObject({ chain: "solana-testnet" });
+    const mainnet = json(await sauce("pot", "--chain", "solana", "--owner", OWNER));
+    const pot = json(await sauce("pot", "--chain", "solana-testnet", "--owner", OWNER));
+    expect(pot).toMatchObject({ chain: "solana-testnet", owner: OWNER, pot: mainnet.pot });
+    expect(pot).not.toHaveProperty("refused");
+  });
+
+  it.each([
+    [MAINNET_GENESIS, "mainnet-beta"],
+    [DEVNET_GENESIS, "devnet"],
+    [LOCAL_GENESIS, `another cluster, whose genesis hash is ${LOCAL_GENESIS}`],
+  ])(
+    "refuses solana-testnet against %s's endpoint, naming what it serves, having read nothing else",
+    async (genesis, served) => {
+      const other = await serving(genesis);
+      const refusal =
+        `solana-testnet is Solana's testnet cluster, and the endpoint serves ${served}: give a ` +
+        "testnet endpoint";
+      const runs = [
+        await sauce("pot", "--chain", "solana-testnet", "--owner", OWNER, "--rpc-url", other.url),
+        await sauce(
+          ...["simulate", file("main.sauce.ts", PROGRAM), "--chain", "solana-testnet"],
+          ...["--owner", OWNER, "--rpc-url", other.url],
+        ),
+        await sauce(
+          ...["reclaim", "--chain", "solana-testnet", "--owner", OWNER, "--rpc-url", other.url],
+        ),
+      ];
+      for (const run of runs) {
+        expect(run.code).toBe(1);
+        expect(run.stderr).toContain(refusal);
+        expect(run.stderr).not.toContain(other.url);
+      }
+      expect(other.methods).toEqual(["getGenesisHash"]);
+    },
+  );
+
+  it("lists a testnet Pot through solana-testnet and solana, never through solana-devnet", async () => {
+    const store = join(work, "pots");
+    const kitchen = v12SvmKitchenProgramId() as Address;
+    const { address: pot } = await derivePotPda(kitchen, OWNER, new Uint8Array(32));
+    const testnet = await serving(TESTNET_GENESIS, { [pot]: v12SvmEngineProgramId() });
+    const imported = await sauce(
+      ...["pot", "import", "--chain", "solana-testnet", "--owner", OWNER],
+      ...["--rpc-url", testnet.url, "--pots", store, "--json"],
+    );
+    expect(imported.code).toBe(0);
+    expect(readdirSync(store)).toEqual(["1399811149-testnet"]);
+    expect(json(imported).pots).toEqual([
+      expect.objectContaining({ chain: "solana", chainId: 1399811149, cluster: "testnet", pot }),
+    ]);
+    for (const chain of ["solana-testnet", "testnet", "solana"]) {
+      const list = await sauce("pot", "list", "--chain", chain, "--pots", store, "--json");
+      expect([chain, json(list).pots]).toEqual([chain, json(imported).pots]);
+    }
+    const devnet = await sauce(
+      "pot",
+      "list",
+      "--chain",
+      "solana-devnet",
+      "--pots",
+      store,
+      "--json",
+    );
+    expect(json(devnet).pots).toEqual([]);
+    const shown = await sauce("pot", "list", "--chain", "solana-testnet", "--pots", store);
+    expect(shown.stdout).toContain(`solana (testnet)  ${pot}  private`);
+  });
+
+  it("sends a Solana transaction that names solana-testnet on it, and refuses another chain", () => {
+    const tx = { kind: "svm" as const, transaction: "AQAB", what: "the cook" };
+    expect(planChain([tx], requireChain("solana-testnet")).slug).toBe("solana-testnet");
+    expect(planChain([{ ...tx, chainId: 1399811151 }]).slug).toBe("solana-testnet");
+    expect(() =>
+      planChain([{ ...tx, chainId: 1399811150 }], requireChain("solana-testnet")),
+    ).toThrow("the transactions are for chain 1399811150, not solana-testnet (1399811151)");
   });
 });
