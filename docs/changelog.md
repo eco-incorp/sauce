@@ -106,6 +106,11 @@ nothing moves.
   control there (a contract or smart wallet deployed only on the destination). The refund now goes
   to the Pot that paid the deposit (`ctx.self()`). On a Shared Pot, which anyone may cook, a
   refund that lands there is anyone's: bridge from a Private Pot.
+- **Fixed** (EVM): Across's `bridge` template deposits as the Pot. Its `depositV3` named
+  `ctx.msgSender()` as the depositor, who is refunded a deposit no relayer fills and holds the
+  speed-up authority: the owner in a direct cook, but whoever submitted a signed cook
+  (`cookSigned`). The depositor is now the Pot (`ctx.self()`), as the actions document's
+  `acrossBridge` already was. The Shared Pot caveat above applies.
 
 ### Actions documents
 
