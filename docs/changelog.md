@@ -115,6 +115,21 @@ and engines as 0.99.16.
   its own ABI (`WstETHBridgedABI`). `Lido.WstETH` is on Ethereum only. `Lido.WstETH.wrap(…)` and the
   stETH-rate reads compiled on Arbitrum and reverted there; they no longer compile there.
 
+### Solana venues in TypeScript
+
+- **Fixed** (Solana): every venue adapter classifies a mint by its owner. A Token-2022 mint with no
+  extensions is 82 bytes, the same as a legacy SPL mint, so a venue whose swap is legacy-only (WooFi
+  and the others that drop Token-2022 pools) took such a mint for a legacy one, and the swap then
+  failed on chain. `fetchPoolConfig` now refuses the pool, naming the mint as Token-2022.
+- **Fixed** (Solana): `primeAlphaqStatsAccounts` keeps only well-formed AlphaQ stats accounts from
+  the endpoint it is given: base64 data of exactly 336 bytes and a `BASE-QUOTE` symbol of capital
+  letters and digits. It never replaces a market the SDK already lists, keeps at most 1,024 markets,
+  and a failed call can be retried; before, a failure was kept for the life of the process.
+- **Fixed** (Solana): `mswapPoolKey` and `sanctumInfinityPoolKey` remember at most 4,096 pairs
+  each, forgetting the least recently used first, and `fetchPoolConfig` forgets a pair it refuses.
+  Before, each key minted stayed in memory for the life of the process. A key that is no longer
+  held fails with `unknown discovery key`; minting it again restores it.
+
 **Also breaking:**
 
 - The Pot is `"pot"` outside programs too, with no alias, as it is `pot` inside them:
@@ -131,6 +146,13 @@ and engines as 0.99.16.
     Pot's balance; `owner: "self"` is refused, naming `"pot"`.
   - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
     is `bigint | "pot" | null`.
+- `fetchPoolConfig` on every Solana venue adapter (`@eco-incorp/sauce/svm`: each adapter, the
+  `fetch…Config` functions, and `poolConfig` on `venue(...)` and `Solana.<Venue>`) takes an
+  `OwnedAccountLoader`, which returns each account's data and owner, instead of an
+  `AccountLoader`. `coalescingAccountLoader` is removed.
+  To migrate, pass `coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc))`, or a loader of your
+  own that returns `{ data, owner }`. Where you still need a data-only `AccountLoader`, take
+  `accountDataLoader(load)`.
 
 ## SDK 0.99.16 — 2026-10-26
 
