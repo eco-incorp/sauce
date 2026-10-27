@@ -635,8 +635,8 @@ function tokenName(
 /**
  * Resolves one name to the account a cook attaches. `pot` and `owner` stay as they are (and
  * `authority` becomes one of them), so the cook gives each its signing role; every other name
- * becomes an address. Throws `SvmAccountNameError` for a name the language does not have (`self`
- * among them, naming what to write), a symbol the chain does not register, any `pot` form cooked
+ * becomes an address. Throws `SvmAccountNameError` for a name the language does not have (the
+ * name `self` is refused; the Pot is `pot`), a symbol the chain does not register, any `pot` form cooked
  * with no Pot (`via: "engine"`), or an argument not given.
  */
 export async function resolveSvmAccountName(
