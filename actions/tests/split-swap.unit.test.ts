@@ -195,6 +195,32 @@ describe("split swap — approvals and the sweep", () => {
     );
   });
 
+  it("refuses a retired sweep recipient as document validation, whatever the chain", () => {
+    // Whether the Pot is "pot" or "self" does not depend on a deployment, so no chain is named in the
+    // error, and an unsupported chain is not what the caller is told about first.
+    for (const chain of [undefined, "ethereum", "solana"] as const) {
+      const run = () =>
+        compileSplitSwap(
+          swap(2, 1, {
+            sweep: { token: USDT, recipient: "self" } as unknown as SplitSwap["sweep"],
+            ...(chain === undefined ? {} : { chain }),
+          }),
+        );
+      assert.throws(
+        run,
+        (error: unknown) =>
+          error instanceof ProgramError &&
+          error.chain === undefined &&
+          error.issues.length === 1 &&
+          error.issues[0]!.path === "sweep.recipient" &&
+          error.issues[0]!.message === 'the Pot is "pot", not "self": write "pot"' &&
+          error.message.startsWith("invalid action program (1 issue):") &&
+          !/does not compile for/.test(error.message),
+        `chain ${String(chain)}`,
+      );
+    }
+  });
+
   it("rejects an approval without an amount", () => {
     const { amount: _, ...bare } = approve(CURVE_ROUTER_NG);
     assert.throws(
