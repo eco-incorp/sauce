@@ -36,8 +36,10 @@ has the same three roles, and that section says what differs.
    transaction, and the Pot is the owner's whoever sends it; sending it again returns the Pot
    already there. You need not do it as a step of your own: the `sauce` command deploys your Pot
    the first time a run needs it.
-3. **It is funded like any address.** Send it tokens or native coin from any wallet, or let a run
-   pull them from your wallet in the same transaction ([Run a program](../guides/cli-run.md)).
+3. **It is funded like any address, once it is deployed.** Send it tokens or native coin from any
+   wallet, or let a run pull them from your wallet in the same transaction, after the Pot's
+   deployment ([Run a program](../guides/cli-run.md)). Tokens sent to the address before then stay
+   there if a release with new Pot code derives the Pot elsewhere.
 4. **Its owner authorizes programs on it.** Normally the owner sends a `cook` transaction to the
    Pot. Newly created Pots also support [signed cooks](#signed-cooks).
 5. **What it holds leaves only through a cook.** A Pot has no withdraw function: a program moves
