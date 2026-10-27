@@ -166,6 +166,20 @@ export function register(anvil: () => Anvil): void {
       return rehearsal.returned as Record<string, string>;
     }
 
+    /** A refused cook: the rehearsal reverts with `reason`, and `sauce run` exits without a cook. */
+    async function refuse(name: string, args: readonly string[], reason: RegExp): Promise<void> {
+      const rehearsal = await simulate(name, args);
+      assert.equal(rehearsal.ok, false, `${name} ran: ${JSON.stringify(rehearsal.returned)}`);
+      assert.match(String(rehearsal.reason), reason);
+      const { code, stdout, stderr } = await sauce([
+        ...["run", example(name), "--chain", "ethereum", "--rpc-url", env.rpc],
+        ...["--private-key", OWNER_KEY, "--salt-hex", POT_SALT, "--json"],
+        ...["--args", ...args],
+      ]);
+      assert.notEqual(code, 0, `sauce run sent it:\n${stdout}`);
+      assert.match(`${stderr}${stdout}`, reason);
+    }
+
     const fund = (token: "USDC" | "WETH", holder: Address, amount: bigint) =>
       setBalance(env, token === "USDC" ? USDC : WETH, BALANCE_SLOT[token], holder, amount);
 
@@ -384,6 +398,21 @@ export function register(anvil: () => Anvil): void {
         const potUsdc = await balanceOf(env, USDC, env.pot);
         const toWeth = await balanceOf(env, WETH, to);
         const toComp = await balanceOf(env, COMP, to);
+        // Below what is owed now, the repay is refused and nothing moves.
+        const owing = await comet<bigint>("borrowBalanceOf", [env.pot]);
+        assert.ok(owing > LOAN, `a month's interest accrued: ${owing}`);
+        const before = [owing, potUsdc, await allowance(env, USDC, env.pot, COMET), toWeth];
+        await refuse("compound-repay", [REWARDS, String(LOAN), to], /the debt is above maxRepay/);
+        assert.deepEqual(
+          [
+            await comet<bigint>("borrowBalanceOf", [env.pot]),
+            await balanceOf(env, USDC, env.pot),
+            await allowance(env, USDC, env.pot, COMET),
+            await balanceOf(env, WETH, to),
+          ],
+          before,
+        );
+        assert.equal(await comet<bigint>("collateralBalanceOf", [env.pot, WETH]), ONE_WETH);
         const closed = await cook("compound-repay", [REWARDS, String(LOAN + 50n * USDC_UNIT), to]);
         const paid = potUsdc - (await balanceOf(env, USDC, env.pot));
         assert.ok(paid > LOAN, `the interest was repaid too, not only ${paid}`);
@@ -476,6 +505,19 @@ export function register(anvil: () => Anvil): void {
         await fund("USDC", env.pot, LOAN + 20n * USDC_UNIT);
         const potUsdc = await balanceOf(env, USDC, env.pot);
         const toWeth = await balanceOf(env, WETH, to);
+        // Below what is owed now, the repay is refused and nothing moves.
+        const held = await morpho<readonly bigint[]>("position", [ID, env.pot]);
+        const before = [held, potUsdc, await allowance(env, USDC, env.pot, MORPHO), toWeth];
+        await refuse("morpho-repay", [ID, String(LOAN), to], /the debt is above maxRepay/);
+        assert.deepEqual(
+          [
+            await morpho<readonly bigint[]>("position", [ID, env.pot]),
+            await balanceOf(env, USDC, env.pot),
+            await allowance(env, USDC, env.pot, MORPHO),
+            await balanceOf(env, WETH, to),
+          ],
+          before,
+        );
         const closed = await cook("morpho-repay", [ID, String(LOAN + 20n * USDC_UNIT), to]);
         const paid = potUsdc - (await balanceOf(env, USDC, env.pot));
         assert.ok(paid > LOAN, `the interest was repaid too, not only ${paid}`);
