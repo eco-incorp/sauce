@@ -83,7 +83,7 @@
     "@solana-program/token": "^0.17.0",
     "@solana/kit": "^8.5.0",
     "litesvm": "1.6.0",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.1",
     "viem": "^2.45.1"
   },
   "devDependencies": {
