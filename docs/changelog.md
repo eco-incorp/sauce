@@ -56,7 +56,7 @@ Each SDK release and the five releases it pins:
 
 | SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
 | 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
@@ -95,8 +95,39 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 ## SDK Unreleased
 
-Compiler 2.6.0, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. Same compiler
-and engines as 0.99.16.
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
+and Kitchens are 0.99.16's; only the compiler moves. Recompile programs.
+
+### SauceScript
+
+Compiler 2.6.1 fixes five cases where a program compiled, ran, and gave a wrong value or skipped
+an effect, with no error. Two of the fixes refuse code that used to compile:
+
+- **Fixed** (EVM): A storage, transient-storage, balance or code read inside a loop that changes
+  it was computed once, before the loop, when optimizing (the default), so the optimized and
+  unoptimized programs gave different answers. The read now runs on every iteration.
+- **Fixed** (both): Taking one element of an array literal on the spot, as in
+  `[chargeFee(), 7][1]`, skipped the calls in the other elements, and so their writes. Every
+  element now runs, in order. An element that can revert (a division by zero, an index out of
+  range) now runs too, and reverts, when a later element writes: `[1 / zero, 7, charge()][1]`
+  reverts where it gave 7.
+- **Now refused** (EVM): A helper with no return-type annotation that returns an array or a signed
+  integer from inside a `try`. It returned a raw word where the caller expected the value. The
+  error is the one the same `return` gives outside a `try`: "returning an array of 3 × number from
+  a function other than `main` needs a return-type annotation …", or "a helper returning a signed
+  integer needs an explicit `: Int256` return annotation". Annotate the helper's return type.
+- **Now refused** (EVM): `return`s in one `try` block that disagree in type, in `main` too: "this
+  `try` block's `return`s disagree in type: … every `return` in it must agree, or the function
+  needs a return-type annotation". Only the first was checked before.
+- **Now refused** (EVM): A list of structs held in a local and passed to a contract call whose
+  struct declares its fields in another order. The fields were encoded in the order written, so
+  the contract received them swapped: "this argument's fields name `IFoo.f()`'s components (a, b)
+  in another order, and it is not a literal written here, so there is nothing left to reorder …".
+  Write the fields in the declared order where the value is built. A list written in the call
+  itself is still reordered.
+
+The settlement program compiles to the same 410 bytes and hash as under 2.6.0, so its pin is
+unchanged.
 
 ### The `sauce` command and the MCP server
 
