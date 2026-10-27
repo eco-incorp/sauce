@@ -93,6 +93,41 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### SauceScript
+
+- **Fixed (Solana): the refusal of `Solana.self.<member>` names a spelling that compiles.** It
+  suggested `pot.<member>` whatever the member, so `Solana.self.lamports` suggested `pot.lamports`,
+  which does not compile, and `Solana.self.owner` suggested `pot.owner`, the Pot's owner rather than
+  the program that owns its account. Now `Solana.self.lamports` names `pot.balance`,
+  `Solana.self.owner` names `Account(pot.address).owner`, a member the Pot's account or balances
+  have (`address`, `dataLen`, `signer()`, `writable()`, `balance`, a token) keeps its name, and any
+  other names `pot`.
+- **Fixed: a compile error's message is plain text.** The compiler sets its report's headlines in
+  bold with ANSI escapes, whatever the terminal, and they reached every `error.message` (and
+  `stack`) from `compileSauceProgram`, `compileSauceRoute` and `@eco-incorp/sauce/compiler`'s
+  `compile`, and so logs, JSON and MCP results. The SDK now takes them out where it calls the
+  compiler; the words and `diagnostics` are the compiler's.
+
+### The `sauce` command and the MCP server
+
+- **Fixed: `sauce sign --cancel` refuses an owner of the zero address**, as `sauce sign` and
+  `sauce pot` do, and so does `sauce_signed_cook` with `cancel`. It printed an `invalidateNonces`
+  for a Pot that cannot exist: no Kitchen call deploys a private Pot of the zero address, and a
+  Shared Pot, which has no owner, runs no signed cook and refuses every cancellation.
+
+### Skills
+
+- **Fixed: a `priceLimit` of `0` on Solana is not "no limit".** `sauce-swaps` said a zero limit
+  leaves `minOut` the only bound on both targets. That holds on an EVM chain. On Solana, a swap at a
+  price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
+  Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
+  `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+
 ## SDK Unreleased
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

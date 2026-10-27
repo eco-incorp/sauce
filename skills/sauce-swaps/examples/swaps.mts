@@ -332,7 +332,7 @@ check(
 check(
   /A `priceLimit` of `0` on Solana is not "none"\.\*\* Paying the lower-key token of the pair \(WSOL\s+before USDC/.test(
     pitfalls,
-  ) && /the cook fails, dividing by zero/.test(pitfalls),
+  ) && /the cook\s+fails, dividing by zero/.test(pitfalls),
   "the Pitfalls say a zero priceLimit on Solana fails the cook paying the lower-key token",
 );
 check(
