@@ -340,13 +340,23 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   **Contract code is pinned, not committed.** An account with code carries `codeHash` (keccak256)
   where an anvil genesis has `code`; capture writes the code to the content-addressed
   `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, and `pnpm --filter './sdk'
-fetch-contract-code` (`sdk/scripts/fetch-contract-code.mjs`, run by CI's setup action) fills that
-  cache from each blob's chain (`eth_getCode` at `latest` through the public endpoints, held to the
+fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-contract-code.mjs`,
+  run by CI's setup action) fills that cache from each blob's chain (`eth_getCode` at `latest`
+  through the explicitly configured public endpoints, held to the
   hash; code at an address changes only by self-destruct or an EIP-7702 delegation, which it names
   when it refuses). Replay puts each code back before anvil boots and fails, naming the fetch, when
   one is missing. The testing kit's `test/testing/state/base.json.gz` is pinned the same way (see
-  `dev-tools/` below). Never commit a blob with `code` in it: third-party code is fetched, not
-  committed.
+  `dev-tools/` below). Never commit third-party program code in a blob; the non-program `0xef`
+  marker is the exception and stays inline as `code`.
+  Both fixture fetchers require `--rpc-config <path>` for online runs: a flat JSON object mapping
+  chain ids to public, keyless HTTPS URLs or nonempty lists of them in fallback order. Keep this
+  separate from credential-bearing capture configs in gitignored `sdk/fixtures.rpc.config.json`,
+  with ids `1`, `8453`, `43114`, `10` and `1399811149`. With `pnpm --filter './sdk'`, relative
+  paths resolve from `sdk`, hence `--rpc-config fixtures.rpc.config.json`. There is no default,
+  environment lookup or access to the CLI-only RPC roster. CI takes the public-only JSON from
+  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`, writes it to a runner temporary
+  file and passes its absolute path. `--offline` needs no config and uses verified local caches
+  without any network access.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -1212,9 +1222,11 @@ when every pool's price is one moment's. The CLI suite runs its cluster at mainn
 Kitchen fee, which a rehearsal's local copy must take from the cluster.
 **Only the programs whose licence allows it are committed** (MIT, Apache-2.0: the `!` lines in
 `.gitignore`). The rest of both program fixtures, this one's and `svm-exact-in-programs/`, are
-listed in `test/fixtures/fetched-programs.json`, and `pnpm --filter './sdk' fetch-program-fixtures`
+listed in `test/fixtures/fetched-programs.json`, and
+`pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`
 (`scripts/fetch-program-fixtures.mjs`, run by CI's setup action) writes them where the suites read
-them. It reads each from mainnet-beta through the public endpoints (`getAccountInfo` of the program
+them. It uses the explicit public-only config described above to read each from mainnet-beta
+(`getAccountInfo` of the program
 and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
 caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
 longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is

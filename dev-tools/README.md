@@ -20,7 +20,10 @@ the RPC from the gitignored `sdk/rpc.config.json`. The Solana examples suite rep
 `test/testing/state/solana-examples.json.gz`, which `RECAPTURE_SOLANA_STATE=1` records again from
 the SDK's pinned mainnet dumps, served on loopback: no RPC at all. Neither file holds third-party
 code (contract code is pinned by `codeHash`, the Whirlpool program by its sha256): run
-`pnpm --filter './sdk' fetch-contract-code` and `fetch-program-fixtures` before the suites.
+`pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json` and
+`pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json` before the
+suites. Use the separate gitignored `sdk/fixtures.rpc.config.json` with public, keyless HTTPS
+endpoints only, not the capture config. `--offline` verifies local caches without a config or network.
 
 ## The dev harness
 

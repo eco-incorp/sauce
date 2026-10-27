@@ -21,6 +21,8 @@ sdk/src/embedded/*.generated.ts
 
 # RPC URLs for sdk/scripts/capture-registry-abi.mjs --rpc-config (see sdk/rpc.config.example.json)
 sdk/rpc.config.json
+# Explicit public/keyless RPC endpoints for the maintenance-only fixture fetchers.
+sdk/fixtures.rpc.config.json
 
 # Logs
 *.log

@@ -20,8 +20,8 @@
 //
 //   1. takes the code from `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, re-hashed on
 //      every run (a cache entry failing its pin is deleted and fetched again);
-//   2. else reads it with `eth_getCode` at `latest` (`lib/evm-code.mjs`), through the chain's public
-//      endpoints in `src/cli/public-rpcs.ts`, retrying and falling back from one to the next. The
+//   2. else reads it with `eth_getCode` at `latest` (`lib/evm-code.mjs`), through the explicit
+//      public-only `--rpc-config`, retrying and falling back from one endpoint to the next. The
 //      code at an address does not change unless the account self-destructs or becomes an EIP-7702
 //      delegation, and public endpoints are not archive nodes, so `latest` is what is read;
 //   3. refuses it, caching nothing, when its keccak256 is not the pin, naming the chain, the
@@ -30,8 +30,8 @@
 //
 // Every pin is attempted before it exits, so one run names every refusal.
 //
-// Run: `pnpm --filter './sdk' fetch-contract-code` (CI's setup does). `--offline` reads only the
-// cache.
+// Run: `pnpm --filter './sdk' fetch-contract-code --rpc-config <path>` (CI's setup does).
+// `--offline` reads only the cache, with no config or network.
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -54,7 +54,7 @@ import {
   createEvmReader,
   describeMismatch,
 } from "./lib/evm-code.mjs";
-import { createTsLoader } from "./lib/load-ts.mjs";
+import { readFixtureRpcConfig } from "./lib/fixture-rpc-config.mjs";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = resolve(SDK, "..");
@@ -66,7 +66,9 @@ const CACHE = join(REPO, "node_modules", ".cache", "sauce-contract-code");
 /** Reads in flight at once, over every chain. */
 const CONCURRENCY = 4;
 
-const { values } = parseArgs({ options: { offline: { type: "boolean", default: false } } });
+const { values } = parseArgs({
+  options: { offline: { type: "boolean", default: false }, "rpc-config": { type: "string" } },
+});
 const say = (line) => console.log(`[fetch-contract-code] ${line}`);
 
 const refusals = [];
@@ -155,23 +157,24 @@ const tracked = (path) => {
 if (tracked(PERMIT2))
   refuse(relative(REPO, PERMIT2), "is tracked by git: Permit2's runtime must not be committed");
 
+let endpoints;
+try {
+  endpoints = readFixtureRpcConfig(values, new Set([...pins.values()].map((pin) => pin.chainId)));
+} catch (error) {
+  console.error(`[fetch-contract-code] ${error.message}`);
+  process.exit(1);
+}
 const readers = new Map();
-let publicRpcs;
 const readerFor = (chainId) => {
-  if (!readers.has(chainId)) {
-    publicRpcs ??= createTsLoader(SDK)(join(SDK, "src/cli/public-rpcs.ts")).PUBLIC_RPCS;
-    const endpoints = (publicRpcs[chainId] ?? []).map((endpoint) => endpoint.url);
+  if (!readers.has(chainId))
     readers.set(
       chainId,
-      endpoints.length === 0
-        ? null
-        : createEvmReader({
-            chainId,
-            endpoints,
-            log: (line) => say(`  chain ${chainId}: ${line}`),
-          }),
+      createEvmReader({
+        chainId,
+        endpoints: endpoints.get(chainId),
+        log: (line) => say(`  chain ${chainId}: ${line}`),
+      }),
     );
-  }
   return readers.get(chainId);
 };
 
@@ -210,8 +213,6 @@ async function settle({ chainId, address, codeHash, where }) {
   }
   if (values.offline) return refuse(what, `code ${codeHash} is not in the cache, and --offline`);
   const reader = readerFor(chainId);
-  if (reader === null)
-    return refuse(what, `src/cli/public-rpcs.ts lists no public endpoint for chain ${chainId}`);
   let live;
   try {
     live = await reader.getCode(address);

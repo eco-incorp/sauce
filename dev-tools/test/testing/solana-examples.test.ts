@@ -8,7 +8,9 @@
  * The state file was recorded from the SDK's pinned mainnet dumps served on loopback
  * (`solana-support.ts#pinnedCluster`); `RECAPTURE_SOLANA_STATE=1` records it again from there. It
  * pins the Whirlpool program by its sha256 and holds no ELF: `replaySolanaState` puts back the venue
- * dump's copy, which `pnpm --filter './sdk' fetch-program-fixtures` fetches from mainnet, and
+ * dump's copy, which
+ * `pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`
+ * fetches from mainnet, and
  * `pinSolanaPrograms` takes it out again after a recording.
  */
 import assert from "node:assert/strict";

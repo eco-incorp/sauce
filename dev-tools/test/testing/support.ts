@@ -68,7 +68,9 @@ export interface ReplayedState {
 
 /**
  * A committed EVM state file pins third-party contract code by its keccak256 (`codeHash`) instead of
- * holding it; `pnpm --filter './sdk' fetch-contract-code` reads that code from the chain into
+ * holding it;
+ * `pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json`
+ * reads that code from the chain into
  * `CODE_CACHE`. This writes the file the kit replays: `state`'s, with each `codeHash` entry's code
  * put back from the cache, in a directory of its own. `remove()` deletes it.
  */
@@ -89,7 +91,8 @@ export function replayState(state: string): ReplayedState {
     throw new Error(
       `${relative(process.cwd(), state)} pins the code of ${missing.length} account(s) that ` +
         `${CODE_CACHE} does not hold (or holds failing its hash): ${missing.join(", ")}. Run ` +
-        "`pnpm --filter './sdk' fetch-contract-code`, which reads them from the chain and holds " +
+        "`pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json`, " +
+        "which reads them from the chain and holds " +
         "each to its hash",
     );
   }

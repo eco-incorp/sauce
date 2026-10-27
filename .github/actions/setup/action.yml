@@ -67,8 +67,8 @@ runs:
     # The repository commits no third-party binary whose licence does not allow it. The Solana
     # programs (`sdk/test/fixtures/fetched-programs.json`) and the contract code of the captured
     # chain states are PINNED instead, by sha256 / keccak256 in the fixtures, and read here from the
-    # chains through the SDK's public endpoints (`sdk/src/cli/public-rpcs.ts`), retried and with a
-    # fallback endpoint. A read that does not hash to its pin is refused: the program was upgraded
+    # chains through the explicit public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable,
+    # retried with endpoint fallback. A read that does not hash to its pin is refused: it was upgraded
     # since the dump, and a suite run on other bytes proves nothing about the pinned ones. The cache
     # is content-addressed and re-hashed on every run, so a restored stale cache cannot pass for a pin;
     # a warm cache means no request at all.
@@ -83,10 +83,14 @@ runs:
 
     - name: Fetch the third-party Solana programs and contract code
       shell: bash
+      env:
+        CHAIN_FIXTURE_RPC_CONFIG: ${{ vars.CHAIN_FIXTURE_RPC_CONFIG }}
       run: |
         set -euo pipefail
-        pnpm --filter './sdk' fetch-program-fixtures
-        pnpm --filter './sdk' fetch-contract-code
+        test -n "$CHAIN_FIXTURE_RPC_CONFIG" || { echo "::error::set the public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable"; exit 1; }
+        printf '%s\n' "$CHAIN_FIXTURE_RPC_CONFIG" > "$RUNNER_TEMP/fixture-rpcs.json"
+        pnpm --filter './sdk' fetch-program-fixtures --rpc-config "$RUNNER_TEMP/fixture-rpcs.json"
+        pnpm --filter './sdk' fetch-contract-code --rpc-config "$RUNNER_TEMP/fixture-rpcs.json"
 
     # No runtime DERIVATION step any more, and its absence is the point.
     #

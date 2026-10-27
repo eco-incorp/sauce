@@ -6,7 +6,8 @@
  * the node's hardfork, next base fee and dev nonces.
  *
  * The committed file pins each contract's code by its keccak256 (`codeHash`) and holds no code:
- * `pnpm --filter './sdk' fetch-contract-code` reads it from Base, and `replayState` puts it back
+ * `pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json` reads it
+ * from Base, and `replayState` puts it back
  * into the file the kit replays. A recording writes the code inline, and `pinStateCode` moves it
  * into the cache, leaving the committed form.
  */

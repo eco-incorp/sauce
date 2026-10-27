@@ -6,6 +6,9 @@ name: CI
 # sets up the same way (`.github/actions/setup`, `.github/actions/build`) and runs a slice of what
 # the single job ran, with the same commands. Nothing was added or dropped: `Build & Test`, the last
 # job, passes only when every one of them passed.
+# Setup performs the maintenance fixture network reads using public-only JSON from the repository
+# Actions variable CHAIN_FIXTURE_RPC_CONFIG, written to a runner temporary file and passed with
+# --rpc-config. The suites then replay pinned local state offline; replay does not use that config.
 #
 # `ci` is named `Build & Test` on purpose. It is the check's name from before the split, so a
 # required-check rule, a merge queue or a script that waits for it keeps working, and it is the one

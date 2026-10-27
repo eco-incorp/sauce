@@ -99,6 +99,10 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
 nothing moves.
 
+- **Maintenance only:** test fixture fetchers require an explicit public-only `--rpc-config` for
+  online setup; CI supplies it through the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`.
+  Offline replay and cache verification remain config-free; shipped runtime behavior is unchanged.
+
 ### SauceScript
 
 - **Fixed (Solana): the refusal of `Solana.self.<member>` names a spelling that compiles.** It

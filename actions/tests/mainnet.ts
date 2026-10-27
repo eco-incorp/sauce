@@ -27,7 +27,8 @@
  * CONTRACT CODE is not in the blob. An account with code carries `codeHash` (its keccak256) where
  * an anvil genesis has `code`, and capture writes the code itself into the content-addressed cache
  * `node_modules/.cache/sauce-contract-code/<codeHash>.hex`. `pnpm --filter './sdk'
- * fetch-contract-code` fills that cache from the chain (`eth_getCode`, held to the hash); replay
+ * fetch-contract-code --rpc-config fixtures.rpc.config.json` fills that cache from the chain
+ * (`eth_getCode`, held to the hash); replay
  * takes each code from it, hashes it again, and puts it in the genesis anvil boots from. Code
  * beginning 0xef — an EIP-7702 delegation, a node's precompile marker — is no program and stays
  * inline as `code`, and so does every code of a blob captured before this form: such a blob
@@ -212,7 +213,8 @@ function replayGenesis(blob: string): Buffer {
       `${blob} pins the code of ${missing.length} account(s) that ${CODE_CACHE} does not hold (or ` +
         `holds failing its hash): ${missing.slice(0, 3).join(", ")}` +
         (missing.length > 3 ? `, and ${missing.length - 3} more` : "") +
-        ". Run `pnpm --filter './sdk' fetch-contract-code`, which reads them from the chain and " +
+        ". Run `pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json`, " +
+        "which reads them from the chain and " +
         "holds each to its hash",
     );
   }

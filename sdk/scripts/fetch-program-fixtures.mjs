@@ -10,7 +10,7 @@
 //   2. else takes the ELF from `node_modules/.cache/sauce-program-fixtures/`, re-hashed on every run
 //      (a cache entry failing its pin is deleted and fetched again);
 //   3. else reads it from mainnet-beta (`lib/solana-program-elf.mjs`: `getAccountInfo` of the program
-//      and its ProgramData, nothing else), through the public endpoints `src/cli/public-rpcs.ts` lists,
+//      and its ProgramData, nothing else), through the explicit public-only `--rpc-config`,
 //      retrying a failure or rate limit;
 //   4. refuses it, writing nothing, when its sha256 is not the pin: the program was upgraded (or
 //      closed) since it was dumped, and a suite run against other bytes proves nothing about the pin.
@@ -26,8 +26,8 @@
 // the suites that run it skip its cases when it is absent. An entry naming a program the list does
 // not is refused, so the exceptions cannot outlive the programs.
 //
-// Run: `pnpm --filter './sdk' fetch-program-fixtures` (CI's setup does, after the engine sync).
-// `--offline` reads only the cache and the fixture directories.
+// Run: `pnpm --filter './sdk' fetch-program-fixtures --rpc-config <path>` (CI's setup does).
+// `--offline` reads only the cache and the fixture directories, with no config or network.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { gunzipSync, gzipSync } from "node:zlib";
 
-import { createTsLoader } from "./lib/load-ts.mjs";
+import { readFixtureRpcConfig } from "./lib/fixture-rpc-config.mjs";
 import { createReader, readProgramElf, sha256 } from "./lib/solana-program-elf.mjs";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,8 +45,17 @@ const CACHE = join(REPO, "node_modules", ".cache", "sauce-program-fixtures");
 /** Solana mainnet-beta, under the chain id the SDK gives it. */
 const SOLANA = 1399811149;
 
-const { values } = parseArgs({ options: { offline: { type: "boolean", default: false } } });
+const { values } = parseArgs({
+  options: { offline: { type: "boolean", default: false }, "rpc-config": { type: "string" } },
+});
 const say = (line) => console.log(`[fetch-program-fixtures] ${line}`);
+let endpoints;
+try {
+  endpoints = readFixtureRpcConfig(values, [SOLANA]);
+} catch (error) {
+  console.error(`[fetch-program-fixtures] ${error.message}`);
+  process.exit(1);
+}
 
 const { programs: list, knownUnfetchable = [] } = JSON.parse(
   readFileSync(join(FIXTURES, "fetched-programs.json"), "utf8"),
@@ -110,9 +119,8 @@ const tracked = (() => {
 let reader;
 const readerFor = () => {
   if (reader !== undefined) return reader;
-  const { PUBLIC_RPCS } = createTsLoader(SDK)(join(SDK, "src/cli/public-rpcs.ts"));
   reader = createReader({
-    endpoints: PUBLIC_RPCS[SOLANA].map((endpoint) => endpoint.url),
+    endpoints: endpoints.get(SOLANA),
     log: (line) => say(`  ${line}`),
   });
   return reader;

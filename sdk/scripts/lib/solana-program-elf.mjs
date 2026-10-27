@@ -10,8 +10,7 @@
 //                        status)
 //
 // Reads are `getAccountInfo` and nothing else: no key, no transaction, no `getProgramAccounts`.
-// The endpoints are handed in (the SDK's own public list, `src/cli/public-rpcs.ts`, which the
-// fetch script loads) so this module holds no URL.
+// Callers supply the endpoints explicitly, so this module holds no URL.
 import { createHash } from "node:crypto";
 
 import { getAddressDecoder } from "@solana/kit";

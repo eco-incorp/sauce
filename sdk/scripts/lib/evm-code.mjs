@@ -6,8 +6,7 @@
 // `eth_getCode` at `latest`, nothing else: no key, no transaction. Public endpoints are not archive
 // nodes, so there is no historical read. The code at an address does not change unless the account
 // self-destructs and is created again, or becomes an EIP-7702 delegation; the pin catches both, and
-// `describeMismatch` says which. The endpoints are handed in (the SDK's own public list,
-// `src/cli/public-rpcs.ts`, which the callers load) so this module holds no URL.
+// `describeMismatch` says which. Callers supply the endpoints explicitly, so this module holds no URL.
 import { keccak256 } from "viem";
 
 /** A keccak256 digest as the pins write it: 0x and 64 lowercase hex digits. */

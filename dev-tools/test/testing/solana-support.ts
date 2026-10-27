@@ -124,7 +124,9 @@ function venueProgram(programId: string, sha256: string): Buffer | string {
 /**
  * A committed Solana state file pins each third-party program by its sha256 (`{ sha256 }`) instead of
  * holding its ELF, which is the venue dump's (`sdk/test/fixtures/svm-venue-programs`), fetched from
- * mainnet by `pnpm --filter './sdk' fetch-program-fixtures`. This writes the file the kit replays:
+ * mainnet by
+ * `pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`.
+ * This writes the file the kit replays:
  * `state`'s, with each program's ELF put back, in a directory of its own.
  */
 export function replaySolanaState(state: string): ReplayedState {
@@ -139,7 +141,8 @@ export function replaySolanaState(state: string): ReplayedState {
   if (missing.length > 0) {
     throw new Error(
       `${relative(process.cwd(), state)} pins programs that cannot be put back: ` +
-        `${missing.join("; ")}. Run \`pnpm --filter './sdk' fetch-program-fixtures\``,
+        `${missing.join("; ")}. Run ` +
+        "`pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`",
     );
   }
   const dir = mkdtempSync(join(tmpdir(), "sauce-testing-solana-state-"));
