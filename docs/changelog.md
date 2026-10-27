@@ -136,6 +136,20 @@ nothing moves.
   before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
   Pot's address before it exists.
 
+### The registry
+
+- **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
+  `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
+  `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
+  control there (a contract or smart wallet deployed only on the destination). The refund now goes
+  to the Pot that paid the deposit (`ctx.self()`). On a Shared Pot, which anyone may cook, a
+  refund that lands there is anyone's: bridge from a Private Pot.
+- **Fixed** (EVM): Across's `bridge` template deposits as the Pot. Its `depositV3` named
+  `ctx.msgSender()` as the depositor, who is refunded a deposit no relayer fills and holds the
+  speed-up authority: the owner in a direct cook, but whoever submitted a signed cook
+  (`cookSigned`). The depositor is now the Pot (`ctx.self()`), as the actions document's
+  `acrossBridge` already was. The Shared Pot caveat above applies.
+
 ### Actions documents
 
 - **Fixed** (EVM): a split swap from `compileSplitSwap` starts its counters at zero in every cook.

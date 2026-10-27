@@ -5,7 +5,7 @@ function main(diamondAddress: Address, transactionId: Uint256, sendingAsset: Add
   const lifi = ILiFiDiamond.at(diamondAddress);
   lifi.startBridgeTokensViaAcrossV4(
     {transactionId: transactionId, bridge: "acrossV4", integrator: "sauce", referrer: 0x0000000000000000000000000000000000000000, sendingAssetId: sendingAsset, receiver: receiver, minAmount: amount, destinationChainId: destinationChainId, hasSourceSwaps: false, hasDestinationCall: false},
-    {receiverAddress: receiver, refundAddress: receiver, sendingAssetId: sendingAsset, receivingAssetId: receivingAsset, outputAmount: outputAmount, outputAmountMultiplier: 0, exclusiveRelayer: 0, quoteTimestamp: quoteTimestamp, fillDeadline: fillDeadline, exclusivityParameter: 0, message: ""}
+    {receiverAddress: receiver, refundAddress: ctx.self(), sendingAssetId: sendingAsset, receivingAssetId: receivingAsset, outputAmount: outputAmount, outputAmountMultiplier: 0, exclusiveRelayer: 0, quoteTimestamp: quoteTimestamp, fillDeadline: fillDeadline, exclusivityParameter: 0, message: ""}
   );
   return 1;
 }
