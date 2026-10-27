@@ -94,10 +94,47 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK Unreleased (after 0.99.17)
+## SDK Unreleased
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
 nothing moves.
+
+### SauceScript
+
+- **Fixed (Solana): the refusal of `Solana.self.<member>` names a spelling that compiles.** It
+  suggested `pot.<member>` whatever the member, so `Solana.self.lamports` suggested `pot.lamports`,
+  which does not compile, and `Solana.self.owner` suggested `pot.owner`, the Pot's owner rather than
+  the program that owns its account. Now `Solana.self.lamports` names `pot.balance`,
+  `Solana.self.owner` names `Account(pot.address).owner`, a member the Pot's account or balances
+  have (`address`, `dataLen`, `signer()`, `writable()`, `balance`, a token) or a scalar method of
+  its key (`toBytesBe`, `toBytesLe`) keeps its name, and any other names `pot`.
+- **Fixed: a compile error's message is plain text.** The compiler sets its report's headlines in
+  bold with ANSI escapes, whatever the terminal, and they reached every `error.message` (and
+  `stack`) from `compileSauceProgram`, `compileSauceRoute` and `@eco-incorp/sauce/compiler`'s
+  `compile`, and so logs, JSON and MCP results. The SDK now takes them out where it calls the
+  compiler; the words and `diagnostics` are the compiler's, and the error thrown is the compiler's
+  own whatever a host's `Error.prepareStackTrace` makes of its `stack`.
+
+### The `sauce` command and the MCP server
+
+- **Fixed: `sauce sign --cancel` refuses an owner of the zero address**, as `sauce sign` and
+  `sauce pot` do, and so does `sauce_signed_cook` with `cancel`. It printed an `invalidateNonces`
+  for a Pot that cannot exist: no Kitchen call deploys a private Pot of the zero address, and a
+  Shared Pot, which has no owner, runs no signed cook and refuses every cancellation.
+- **Fixed: the note on a plan whose cook would revert no longer says to fund the Pot's address
+  before it is deployed.** `sauce tx` and `sauce_tx` said "Fund the Pot first (its address takes
+  tokens before it is deployed)". A Kitchen upgrade that changes the Pot's code moves the Pot's
+  address, and what was sent to the old one stays where no Pot is ever deployed. When the plan
+  deploys the Pot and moves nothing into it, the note now says to deploy it first, with
+  `sauce pot --deploy` or `sauce run --fund`, which deploys before it funds; when the plan funds it
+  too, to fund the Pot and build the plan again. With an endpoint, `--fund` plans the transfer after
+  the Pot's deployment; offline, the plan has no deployment step. A plan that deploys the Pot with
+  no `--fund` said to send its transactions in order, then fund the Pot: after the cook. It now says
+  to send the deployment, fund the Pot, then send the cook (or plan with `--fund`). `sauce sign`'s
+  warning that a Pot with no code cannot pay the Kitchen's fee now says to send `deployPot` before
+  funding it. The README, the quick start (which now deploys the Pot with `sauce pot --deploy`
+  before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
+  Pot's address before it exists.
 
 ### The registry
 
@@ -131,6 +168,60 @@ nothing moves.
   already did. Before, it paid its own `recipient` while the next action spent the same amount again
   from the Pot: a Pot holding that amount paid out twice, and one without it reverted. Recompile
   such documents; an `aaveV3Withdraw` nothing spends still pays its `recipient`.
+
+### The SDK in TypeScript
+
+- **Fixed:** a registry call (`read`, `simulate`, `write`) on a viem client created without a
+  `chain` asks the node for the chain id again after a failed lookup. The first failure was kept as
+  the client's answer, so one transient `eth_chainId` error made every later call on that client
+  fail until the client was replaced. A lookup that succeeds is kept for `read` and `simulate`.
+- **Fixed:** `write` on a client without a `chain` asks for the chain id before every write instead
+  of trusting the first answer. A wallet client (`custom(window.ethereum)`) that switched network
+  between two writes sent the second unchecked, because viem does not check a chainless client's
+  chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
+  extra `eth_chainId` request per write.
+
+### Solana Testnet
+
+- **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
+  its own, with the released engine and Kitchen deployed and zero execution fees, as on devnet.
+  0.99.17 reached testnet only as `--chain solana` with a testnet endpoint; that still works.
+  Testnet runs devnet's engine build, so a program compiled for it reads `chainId` as 1399811150,
+  the same value `ctx.chainId()` returns there; 1399811151 is the SDK's key for the chain, which
+  the command, the MCP server and the Pot store name it by and no program reads. Its one symbol is
+  `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
+  given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
+  an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
+  `solana-testnet`. Solscan links name the cluster, and the Solana venues are mainnet's, so a venue
+  name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
+  accounts (up to a minute for one request), so the command waits up to 120 s for each of its
+  answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
+  two there.
+- The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
+  the supported chains names it after the mainnets.
+
+### Skills
+
+- **Fixed: a `priceLimit` of `0` on Solana is not "no limit".** `sauce-swaps` said a zero limit
+  leaves `minOut` the only bound on both targets. That holds on an EVM chain. On Solana, a swap at a
+  price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
+  Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
+  `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+
+### Solana venues in TypeScript
+
+- **Fixed** (Solana): a Crema swap built from a slot (`Crema.CLMM.swap(Crema.CLMM.pool(…), …)`) on a
+  pool with one or two readable tick arrays carried three, so the router sent three and Crema
+  refused the unmarked ones: the transaction failed and its fee was lost. The slot now ends its
+  tick arrays with the System program after the last readable one, which the router reads as "pass
+  no more". Pools with three readable arrays are unchanged.
+
+### SauceScript
+
+- **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
+  parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
+  unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
+  variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
 
 ## SDK 0.99.17 — 2026-10-27
 

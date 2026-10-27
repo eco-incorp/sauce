@@ -63,11 +63,11 @@ argument 1 (token: Address): '0x12' is not an address: 20 bytes of 0x-prefixed h
 ### `… is refused: it involves …, a preview chain`
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. …
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. The sauce command and its MCP server build and send transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet. …
 ```
 
 **Cause.** The command builds and sends transactions only on Ethereum, Base, Arc and Solana, and
-the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. Every
+the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet. Every
 other chain is a preview chain, where it builds and sends none.
 
 **Fix.** Compile, read and simulate there freely (simulate runs wherever the release is deployed), and send on a supported chain. To ask for the chain,
@@ -293,8 +293,9 @@ that others can write is refused too: `chmod 600` it.
 **Cause.** A `require` in your program failed: here, the Pot holds less USDC than the program
 spends. In the quick start's program that is the check doing its job.
 
-**Fix.** Put tokens in your Pot: send them to its address (`sauce pot --chain <chain> --wallet me`
-prints it), or add `--fund USDC:<amount>` to pull them from your wallet in the same cook
+**Fix.** Put tokens in your Pot: once it is deployed, send them to its address (`sauce pot --chain
+<chain> --wallet me` prints it; `--deploy` creates it first), or add `--fund USDC:<amount>` to pull
+them from your wallet in the same cook, after the Pot's deployment
 ([Put tokens in your Pot](cli-run.md#put-tokens-in-your-pot)). To simulate before funding, pass
 `--assume-balance USDC:<amount>`.
 

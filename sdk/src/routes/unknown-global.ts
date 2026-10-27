@@ -134,10 +134,7 @@ export function notAToken(
 
 /** The compiler's own account of a failure: the last line of its chain of causes. */
 function headline(error: unknown): string | undefined {
-  const message = String((error as Error | undefined)?.message ?? error).replace(
-    new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"),
-    "",
-  );
+  const message = String((error as Error | undefined)?.message ?? error);
   const causes = [...message.matchAll(/─▶ (.+)/g)];
   return causes.length === 0 ? undefined : causes[causes.length - 1]![1]!.trim();
 }
@@ -156,7 +153,7 @@ export function freeHolderError(
   cause: unknown,
 ): Error | undefined {
   if (holders === undefined || holders.size === 0) return undefined;
-  const message = String((cause as Error | undefined)?.message ?? cause).replace(STYLE, "");
+  const message = String((cause as Error | undefined)?.message ?? cause);
   const at = /\(bytes (\d+)\.\.(\d+)\)/.exec(message);
   if (at === null) return undefined;
   // The compiler counts bytes; the parse counts UTF-16 units.
@@ -200,7 +197,7 @@ export function freeHolderError(
  * of `source`: the compiler counts bytes, the parse counts units.
  */
 function failedSpans(source: string, cause: unknown): (readonly [number, number])[] {
-  const message = String((cause as Error | undefined)?.message ?? cause).replace(STYLE, "");
+  const message = String((cause as Error | undefined)?.message ?? cause);
   const bytes = new TextEncoder().encode(source);
   const unit = (offset: number): number =>
     new TextDecoder().decode(bytes.subarray(0, offset)).length;
@@ -291,9 +288,6 @@ export function locatedError(
   );
 }
 
-/** The ANSI escapes the compiler's message is styled with. */
-const STYLE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-
 /**
  * For a compile that failed reading a member of a value that is no record — `pot.USDCC`,
  * `to.WETHH` — an error saying the name is not a token on `chain`, with the near matches among its
@@ -310,7 +304,7 @@ export function unknownBalanceError(
   names: { readonly tokens: Iterable<string> },
   cause: unknown,
 ): Error | undefined {
-  const message = String((cause as Error | undefined)?.message ?? cause).replace(STYLE, "");
+  const message = String((cause as Error | undefined)?.message ?? cause);
   const at = /field access is only valid on a tuple \(bytes (\d+)\.\.(\d+)\)/.exec(message);
   if (at === null) return undefined;
   // The compiler counts bytes; the parse counts UTF-16 units.
