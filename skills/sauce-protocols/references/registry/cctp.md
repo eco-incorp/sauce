@@ -8,8 +8,8 @@ Circle's Cross-Chain Transfer Protocol (v2) — permissionless native USDC bridg
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | `Cctp` on ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
-| Chains | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
+| Namespace | `Cctp` on ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia |
+| Chains | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia |
 | Document | [cctp.md](../cctp.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
@@ -38,6 +38,9 @@ function main() {
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Linea](../../../sauce-chains/references/linea.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Arc Testnet](../../../sauce-chains/references/arc-testnet.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
 
 ## ABI
 

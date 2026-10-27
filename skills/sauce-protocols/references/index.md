@@ -155,7 +155,7 @@ destination; LI.FI, Socket and Squid route across bridges from an off-chain quot
 | [Across](across.md) ([registry](registry/across.md)) | — | `Across`: ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
 | [Arbitrum Native Bridge](arbitrum-bridge.md) ([registry](registry/arbitrum-bridge.md)) | — | `ArbitrumBridge`: ethereum, arbitrum | ethereum, arbitrum |
 | [Base Native Bridge](base-bridge.md) ([registry](registry/base-bridge.md)) | — | `BaseBridge`: ethereum, base | ethereum, base |
-| [CCTP](cctp.md) ([registry](registry/cctp.md)) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
+| [CCTP](cctp.md) ([registry](registry/cctp.md)) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia |
 | [Celer Network](celer.md) ([registry](registry/celer.md)) | — | `Celer`: ethereum, optimism, bsc, polygon, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
 | [Connext (Everclear)](connext.md) ([registry](registry/connext.md)) | — | `Connext`: ethereum, optimism, base, arbitrum | ethereum, optimism, base, arbitrum |
 | [deBridge](debridge.md) ([registry](registry/debridge.md)) | — | `Debridge`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
@@ -183,7 +183,7 @@ messages, each with its own set of verifiers and a fee paid at send time in the 
 | --- | --- | --- | --- |
 | [Axelar](axelar.md) ([registry](registry/axelar.md)) | — | `Axelar`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
 | [Chainlink CCIP](chainlink-ccip.md) ([registry](registry/chainlink-ccip.md)) | — | `ChainlinkCcip`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
-| [Circle Gateway](circle-gateway.md) ([registry](registry/circle-gateway.md)) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
+| [Circle Gateway](circle-gateway.md) ([registry](registry/circle-gateway.md)) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
 | [Hyperlane](hyperlane.md) ([registry](registry/hyperlane.md)) | — | `Hyperlane`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | [LayerZero](layerzero.md) ([registry](registry/layerzero.md)) | — | `Layerzero`: ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
 | [Wormhole](wormhole.md) ([registry](registry/wormhole.md)) | — | `Wormhole`: ethereum, optimism, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |

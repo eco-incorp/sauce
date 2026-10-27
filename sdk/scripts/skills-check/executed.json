@@ -32,6 +32,34 @@
     "sauce-examples/examples/supply-idle.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
+    "sauce-protocols/examples/aave-delegate-credit.sauce.ts": [
+      "actions/tests/examples-lending.mainnet.ts"
+    ],
+    "sauce-protocols/examples/aave-repay-delegated.sauce.ts": [
+      "actions/tests/examples-lending.mainnet.ts"
+    ],
+    "sauce-protocols/examples/compound-borrow.sauce.ts": [
+      "actions/tests/examples-lending.mainnet.ts"
+    ],
+    "sauce-protocols/examples/compound-repay.sauce.ts": [
+      "actions/tests/examples-lending.mainnet.ts"
+    ],
+    "sauce-protocols/examples/morpho-borrow.sauce.ts": [
+      "actions/tests/examples-lending.mainnet.ts"
+    ],
+    "sauce-protocols/examples/morpho-repay.sauce.ts": ["actions/tests/examples-lending.mainnet.ts"],
+    "sauce-protocols/examples/pendle-mint-redeem.sauce.ts": [
+      "actions/tests/examples-pendle-balancer.mainnet.ts"
+    ],
+    "sauce-protocols/examples/pendle-trade.sauce.ts": [
+      "actions/tests/examples-pendle-balancer.mainnet.ts"
+    ],
+    "sauce-protocols/examples/v3-position-manage.sauce.ts": [
+      "actions/tests/examples-uniswap-v3.mainnet.ts"
+    ],
+    "sauce-protocols/examples/v3-position-open.sauce.ts": [
+      "actions/tests/examples-uniswap-v3.mainnet.ts"
+    ],
     "sauce-solana/examples/pay.sauce.ts": [
       "sdk/test/cli-solana-token-methods.e2e.test.ts",
       "dev-tools/test/testing/solana-examples.test.ts"
@@ -39,10 +67,18 @@
     "sauce-solana/examples/solana.sauce.ts": ["dev-tools/test/testing/solana-examples.test.ts"],
     "sauce-solana/examples/token-2022.sauce.ts": ["dev-tools/test/testing/solana-examples.test.ts"],
     "sauce-solana/examples/wrap.sauce.ts": ["sdk/test/cli-solana-token-methods.e2e.test.ts"],
+    "sauce-swaps/examples/balancer-batch-swap.sauce.ts": [
+      "actions/tests/examples-pendle-balancer.mainnet.ts"
+    ],
+    "sauce-swaps/examples/balancer-flash-cycle.sauce.ts": [
+      "actions/tests/examples-pendle-balancer.mainnet.ts"
+    ],
+    "sauce-swaps/examples/exact-output.sauce.ts": ["actions/tests/examples-uniswap-v3.mainnet.ts"],
     "sauce-swaps/examples/solana-swap.sauce.ts": [
       "sdk/test/cli-solana-venues.e2e.test.ts",
       "dev-tools/test/testing/solana-examples.test.ts"
     ],
+    "sauce-swaps/examples/swap-path.sauce.ts": ["actions/tests/examples-uniswap-v3.mainnet.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"

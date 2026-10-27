@@ -1,4 +1,12 @@
 /**
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * Its quote math is a transliteration of hylo-so/sdk (https://github.com/hylo-so/sdk), which is
+ * licensed under the Mozilla Public License 2.0; see THIRD_PARTY_NOTICES.md.
+ */
+
+/**
  * Hylo Exchange — a mint/redeem stablecoin venue on Solana, program
  * HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn. hyUSD is minted/redeemed
  * against USDC 1:1-by-USD-value (fee + oracle adjusted) through a SINGLE
@@ -14,7 +22,7 @@
  * programId)`, 15,980 bytes, 150,227 decompressed) for every account layout
  * and instruction shape, cross-checked byte-for-byte against the OPEN-SOURCE
  * `hylo-so/sdk` Rust workspace (`hylo-core`/`hylo-quotes`, github.com/hylo-so/sdk,
- * MIT-style public repo — unlike Perena/SolFi this venue's quote math has a
+ * licensed under MPL-2.0 — unlike Perena/SolFi this venue's quote math has a
  * real, public reference implementation, so this port is a DIRECT transliteration
  * of `hylo-core::exchange_math`/`conversion::UsdcStablecoinConversion`/
  * `fees::controller::FeeExtract`/`pyth::query_pyth_price` and

@@ -1,5 +1,16 @@
 name: CI
 
+# ONE WORKFLOW, SEVERAL JOBS. This used to be a single job running every step in sequence, about 30
+# minutes on one 2-vCPU runner, and almost none of it depended on the rest: after the install, the
+# engine sync and the builds (under a minute together) the suites are independent. Each job below
+# sets up the same way (`.github/actions/setup`, `.github/actions/build`) and runs a slice of what
+# the single job ran, with the same commands. Nothing was added or dropped: `Build & Test`, the last
+# job, passes only when every one of them passed.
+#
+# `ci` is named `Build & Test` on purpose. It is the check's name from before the split, so a
+# required-check rule, a merge queue or a script that waits for it keeps working, and it is the one
+# result `publish.yml` gates on through `workflow_call`.
+
 on:
   pull_request:
   push:
@@ -11,79 +22,24 @@ on:
   # drift, and a gate that has drifted is the thing being fixed here.
   workflow_call:
 
+# `packages: read` is what lets the built-in GITHUB_TOKEN pull the v12 engine artifacts from
+# GHCR. It is not a default worth relying on: an org that sets restricted default permissions
+# would otherwise fail the sync with a 403 that reads like a missing grant.
+permissions:
+  contents: read
+  packages: read
+
 jobs:
-  ci:
-    name: Build & Test
+  # Typecheck, the generated files, the other workspaces' typechecks, the browser, the manual and the
+  # skills, and the unit tests that need no engine suite: the cheap checks, so a mistake there fails
+  # in a few minutes instead of behind half an hour of suites.
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
-    # `packages: read` is what lets the built-in GITHUB_TOKEN pull the v12 engine artifacts from
-    # GHCR. It is not a default worth relying on: an org that sets restricted default permissions
-    # would otherwise fail the sync with a 403 that reads like a missing grant.
-    permissions:
-      contents: read
-      packages: read
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: v1.5.1
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # ---- engine artifacts + the v12 releases --------------------------------
-      # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
-      # SDK consumers for their local tests/deploys, and are build output rather than committed, so
-      # this both regenerates them and asserts the generation produced every one.
-      #
-      # Everything comes from the v12 RELEASES, each asset pinned by version AND by a digest committed
-      # in sdk/src/deployments/releases.json, in the row of the installed compiler. The components
-      # release independently, so there is no single shared commit to pin — the digest is the
-      # guarantee. `--fetch-v12-engines` downloads them into a
-      # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
-      # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
-      # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
-      # been silently absent. The artifacts come from GHCR, where the packages are private and this
-      # repository is granted read on each, so the built-in GITHUB_TOKEN is the whole credential —
-      # no PAT, and nothing published publicly.
-      #
-      # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
-      # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
-      # line in jest's summary, which is how they went unrun for their whole life before.
-      - name: Sync engine artifacts and fetch the v12 engines
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"
-          grep -E '^SAUCE_[A-Z0-9_]+=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
-          # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): five ABIs from the
-          # release's abis.json, IERC20 declared in the script, IUniswapV3Pool from @uniswap/v3-core,
-          # V12RuntimeBytecode from the release's creation code, V12EngineGate and V12Deployments. Assert
-          # all 11 exist, so a broken generation (a missing node_modules entry, an unreachable release)
-          # fails CI here instead of shipping an empty dir — the exact regression that broke 0.7.0.
-          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12QuoteRouter V12Kitchen V12KitchenProxy V12Pot V12RuntimeBytecode V12EngineGate V12Deployments; do
-            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json"; exit 1; }
-          done
-
-      # No runtime DERIVATION step any more, and its absence is the point.
-      #
-      # The EVM suites deploy creation code at its release address: the constructor binds the
-      # engine identity used by the Pot EVAL relay. SAUCE_V12_RUNTIME_CREATION_HEX comes from sync.
-      # -----------------------------------------------------------------------
-
-      # ---- SVM engine binary ------------------------------------------------
       # The tests too: `typecheck` also checks sdk/tsconfig.test.json. sdk/tsconfig.json's `include`
       # is src-only and ts-jest runs with diagnostics off, which is how a test file that did not
       # parse once shipped through three green runs.
@@ -107,13 +63,82 @@ jobs:
             exit 1
           fi
 
+      # The SDK's suites run in the `sdk-*` jobs below: the engine e2e suites, one process each, and
+      # everything else. The split must not silently drop a suite: assert the two halves still add
+      # up to every file jest can see.
+      - name: SDK — the split covers every suite
+        run: |
+          set -euo pipefail
+          cd sdk
+          all=$(node_modules/.bin/jest --config jest.config.cjs --listTests | wc -l)
+          e2e=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathPattern '\.e2e\.test\.ts$' | wc -l)
+          rest=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathIgnorePatterns '\.e2e\.test\.ts$' | wc -l)
+          echo "all=$all e2e=$e2e rest=$rest"
+          [ "$all" -eq "$((e2e + rest))" ] || { echo "::error::the test split covers $((e2e + rest)) of $all suites"; exit 1; }
+
+      - name: Actions — typecheck
+        run: pnpm --filter './actions' typecheck
+
+      - name: Actions — build
+        run: pnpm --filter './actions' build
+
+      - name: MCP — typecheck
+        run: pnpm --filter './mcp' typecheck
+
+      - name: MCP — build
+        run: pnpm --filter './mcp' build
+
+      # dev-tools reads the SDK's dist/ too. Its tests run under tsx, which strips types without
+      # checking them; this is where they are checked.
+      - name: Dev Tools — typecheck
+        run: pnpm --filter './dev-tools' typecheck
+
+      - name: Dev Tools — build
+        run: pnpm --filter './dev-tools' build
+
+      # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
+      # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
+      # the README's route example, a raw ABI-entry compile, the settle recipe, two builders and an
+      # actions program run in headless Chromium and must produce the bytes Node does. The packed
+      # check repeats both against the installed tarball.
+      - name: Browser — no Node in any browser-facing export
+        run: node sdk/scripts/check-browser-bundles.mjs
+
+      - name: Browser — install headless Chromium
+        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+
+      - name: Browser — compile in headless Chromium, byte-identical to Node
+        run: node sdk/scripts/check-browser-compile.mjs
+
+      - name: Documentation — links and executable examples
+        run: pnpm docs:check
+
+      # The agent skills `sauce skills install` ships: every program compiled through the `sauce`
+      # bin on each chain its index names and its command line run offline, every command line's
+      # flags held to the CLI, every runner executed with the network disabled, the SauceScript
+      # reference held to the compiler, and the wording rules (no versions, agent names, engine
+      # internals or invented addresses). It needs the SDK and actions builds above.
+      - name: Agent skills — examples, commands and wording
+        run: pnpm skills:check
+
+      # `test:unit` needs no RPC: its `*.exec.test.ts` suites execute on a local anvil through the
+      # released engine (Foundry and SAUCE_V12_RUNTIME_CREATION_HEX are set up by the setup action,
+      # and they throw under CI rather than skip).
+      - name: Actions — unit tests
+        run: pnpm --filter './actions' test:unit
+
+  # The SDK's engine e2e suites, one process per suite, all of them in this job.
+  sdk-e2e:
+    name: SDK engine e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
+
       # SAUCE_RUST_ENGINE_SO / SAUCE_V12_RUNTIME_CREATION_HEX come from $GITHUB_ENV, exported by the
-      # engine steps above. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
+      # setup action. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
       # broken export is loud rather than a silent skip.
-      #
-      # TWO invocations, engine suites first — see the next step for why. Together they cover every
-      # suite: the patterns are exact complements, and a file matching neither would fail the count
-      # asserted below.
       - name: SDK — test (engine e2e)
         # Set here because these steps invoke jest directly rather than through the package's
         # `test` script, which is where NODE_OPTIONS normally comes from.
@@ -187,97 +212,85 @@ jobs:
           done < "$RUNNER_TEMP/e2e-suites.txt"
           [ -z "$failed" ] || { echo "::error::engine e2e suites failed:$failed"; exit 1; }
 
+  # Every other SDK suite, in one jest process, exactly as before.
+  sdk-unit:
+    name: SDK tests (everything else)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
+
       - name: SDK — test (everything else)
         env:
           NODE_OPTIONS: --experimental-vm-modules
         run: pnpm --filter './sdk' exec jest --config jest.config.cjs --testPathIgnorePatterns '\.e2e\.test\.ts$'
 
-      # The split must not silently drop a suite: assert the two halves still add up to every file
-      # jest can see.
-      - name: SDK — the split covers every suite
-        run: |
-          set -euo pipefail
-          cd sdk
-          all=$(node_modules/.bin/jest --config jest.config.cjs --listTests | wc -l)
-          e2e=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathPattern '\.e2e\.test\.ts$' | wc -l)
-          rest=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathIgnorePatterns '\.e2e\.test\.ts$' | wc -l)
-          echo "all=$all e2e=$e2e rest=$rest"
-          [ "$all" -eq "$((e2e + rest))" ] || { echo "::error::the test split covers $((e2e + rest)) of $all suites"; exit 1; }
+  # The prod-like suites — every action, every quote, the split swap — run against real mainnet
+  # contracts on a LOCAL anvil booted from state captured at a pinned block and checked in
+  # (`actions/tests/state/*.genesis.json.gz`, see `actions/tests/mainnet.ts`). No secret and no
+  # network: a replayed suite refuses to fork and fails on any non-local request. Recapturing is a
+  # maintainer step (CLAUDE.md), never part of CI.
+  actions-mainnet:
+    name: Actions mainnet-state suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
 
-      - name: Actions — typecheck
-        run: pnpm --filter './actions' typecheck
-
-      - name: Actions — build
-        run: pnpm --filter './actions' build
-
-      # The MCP server reads the SDK's dist/ (the sauce command's own modules), so it comes after
-      # the SDK build, as actions does.
-      - name: MCP — typecheck
-        run: pnpm --filter './mcp' typecheck
-
-      - name: MCP — build
-        run: pnpm --filter './mcp' build
-
-      # dev-tools reads the SDK's dist/ too, so this comes after the SDK build. Its tests run under
-      # tsx, which strips types without checking them; this is where they are checked.
-      - name: Dev Tools — typecheck
-        run: pnpm --filter './dev-tools' typecheck
-
-      # The testing kit (`@eco-incorp/sauce/testing`) ships from dev-tools/dist, which the packed
-      # check at the end installs.
-      - name: Dev Tools — build
-        run: pnpm --filter './dev-tools' build
-
-      # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
-      # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
-      # the README's route example, a raw ABI-entry compile, the settle recipe, two builders and an
-      # actions program run in headless Chromium and must produce the bytes Node does. The packed
-      # check at the end repeats both against the installed tarball.
-      - name: Browser — no Node in any browser-facing export
-        run: node sdk/scripts/check-browser-bundles.mjs
-
-      - name: Browser — install headless Chromium
-        run: pnpm exec playwright-core install --with-deps --only-shell chromium
-
-      - name: Browser — compile in headless Chromium, byte-identical to Node
-        run: node sdk/scripts/check-browser-compile.mjs
-
-      - name: Documentation — links and executable examples
-        run: pnpm docs:check
-
-      # The agent skills `sauce skills install` ships: every program compiled through the `sauce`
-      # bin on each chain its index names and its command line run offline, every command line's
-      # flags held to the CLI, every runner executed with the network disabled, the SauceScript
-      # reference held to the compiler, and the wording rules (no versions, agent names, engine
-      # internals or invented addresses). It needs the SDK and actions builds above.
-      - name: Agent skills — examples, commands and wording
-        run: pnpm skills:check
-
-      - name: Actions — unit tests
-        run: pnpm --filter './actions' test:unit
-
-      # `test:unit` needs no RPC: its `*.exec.test.ts` suites execute on a local anvil through the
-      # released engine (Foundry and SAUCE_V12_RUNTIME_CREATION_HEX are set up above, and they throw
-      # under CI rather than skip).
-      #
-      # The prod-like suites — every action, every quote, the split swap — run against real mainnet
-      # contracts on a LOCAL anvil booted from state captured at a pinned block and checked in
-      # (`actions/tests/state/*.genesis.json.gz`, see `actions/tests/mainnet.ts`). No secret and no
-      # network: a replayed suite refuses to fork and fails on any non-local request. Recapturing is a
-      # maintainer step (CLAUDE.md), never part of CI.
       - name: Actions — mainnet-state suites
         run: pnpm --filter './actions' test:mainnet
+
+  # Every MCP tool in process, the bin over stdio and Streamable HTTP, and the tools against a
+  # local anvil with the released gated stack (the CLI suites' harness, which throws under CI
+  # without SAUCE_V12_RUNTIME_CREATION_HEX rather than skip). No live RPC.
+  mcp-and-dev-tools:
+    name: MCP and Dev Tools tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
 
       - name: Dev Tools — test
         run: pnpm --filter './dev-tools' test
 
-      # Every tool in process, the bin over stdio and Streamable HTTP, and the tools against a
-      # local anvil with the released gated stack (the CLI suites' harness, which throws under CI
-      # without SAUCE_V12_RUNTIME_CREATION_HEX rather than skip). No live RPC.
       - name: MCP — test
         run: pnpm --filter './mcp' test
 
-      # A consumer install, from the packed tarball into an empty directory — which is the only way
-      # to catch a workspace dependency that every in-repo test resolves for free.
+  # A consumer install, from the packed tarball into an empty directory — which is the only way
+  # to catch a workspace dependency that every in-repo test resolves for free.
+  packed:
+    name: Packed SDK, clean consumer install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
+
+      # The packed check repeats the browser bundle and compile checks against the installed
+      # tarball, which needs the same headless Chromium `checks` installs.
+      - name: Browser — install headless Chromium
+        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+
       - name: Verify a clean consumer install of the packed SDK
         run: node sdk/scripts/check-packed-package.mjs
+
+  # The one result that stands for all of the above, under the name this check always had.
+  # `if: always()` so a failed or cancelled job makes THIS fail, rather than leaving it skipped,
+  # which a `needs` consumer can read as passing.
+  ci:
+    name: Build & Test
+    if: always()
+    needs: [checks, sdk-e2e, sdk-unit, actions-mainnet, mcp-and-dev-tools, packed]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = "success" ] || { echo "::error::a CI job did not succeed ($RESULTS)"; exit 1; }
+          done

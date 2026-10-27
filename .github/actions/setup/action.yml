@@ -1,0 +1,68 @@
+name: Set up the workspace
+description: >
+  Foundry, pnpm, Node, the install, and the v12 engine artifacts — everything a CI job needs before
+  it builds or tests. A composite action so every job of ci.yml sets up identically; checkout comes
+  first, in the job, because a local action is read from the checked-out tree.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: v1.5.1
+
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.28.2
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    # ---- engine artifacts + the v12 releases --------------------------------
+    # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
+    # SDK consumers for their local tests/deploys, and are build output rather than committed, so
+    # this both regenerates them and asserts the generation produced every one.
+    #
+    # Everything comes from the v12 RELEASES, each asset pinned by version AND by a digest committed
+    # in sdk/src/deployments/releases.json, in the row of the installed compiler. The components
+    # release independently, so there is no single shared commit to pin — the digest is the
+    # guarantee. `--fetch-v12-engines` downloads them into a
+    # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
+    # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
+    # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
+    # been silently absent. The artifacts come from GHCR, where the packages are private and this
+    # repository is granted read on each, so the built-in GITHUB_TOKEN is the whole credential —
+    # no PAT, and nothing published publicly.
+    #
+    # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
+    # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
+    # line in jest's summary, which is how they went unrun for their whole life before.
+    - name: Sync engine artifacts and fetch the v12 engines
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"
+        grep -E '^SAUCE_[A-Z0-9_]+=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
+        # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): five ABIs from the
+        # release's abis.json, IERC20 declared in the script, IUniswapV3Pool from @uniswap/v3-core,
+        # V12RuntimeBytecode from the release's creation code, V12EngineGate and V12Deployments. Assert
+        # all 11 exist, so a broken generation (a missing node_modules entry, an unreachable release)
+        # fails CI here instead of shipping an empty dir — the exact regression that broke 0.7.0.
+        for a in IERC20 ISauceRouter IUniswapV3Pool Router V12QuoteRouter V12Kitchen V12KitchenProxy V12Pot V12RuntimeBytecode V12EngineGate V12Deployments; do
+          test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json"; exit 1; }
+        done
+
+    # No runtime DERIVATION step any more, and its absence is the point.
+    #
+    # The EVM suites deploy creation code at its release address: the constructor binds the
+    # engine identity used by the Pot EVAL relay. SAUCE_V12_RUNTIME_CREATION_HEX comes from sync.

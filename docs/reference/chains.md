@@ -57,11 +57,11 @@ section says.
 | [Linea](chains/linea.md) | `linea` | 59144 | EVM | preview | 11 | 0 | 8 |
 | [Berachain](chains/berachain.md) | `berachain` | 80094 | EVM | preview | — | 1 | 0 |
 | [Blast](chains/blast.md) | `blast` | 81457 | EVM | preview | — | 0 | 5 |
-| [Base Sepolia](chains/base-sepolia.md) | `base-sepolia` | 84532 | EVM | supported (testnet) | — | 2 | 3 |
+| [Base Sepolia](chains/base-sepolia.md) | `base-sepolia` | 84532 | EVM | supported (testnet) | 6 | 1 | 2 |
 | [Scroll](chains/scroll.md) | `scroll` | 534352 | EVM | preview | — | 0 | 8 |
-| [Arc Testnet](chains/arc-testnet.md) | `arc-testnet` | 5042002 | EVM | supported (testnet) | — | 3 | 0 |
+| [Arc Testnet](chains/arc-testnet.md) | `arc-testnet` | 5042002 | EVM | supported (testnet) | 26 | 2 | 2 |
 | [Zora](chains/zora.md) | `zora` | 7777777 | EVM | preview | — | 0 | 2 |
-| [Ethereum Sepolia](chains/sepolia.md) | `sepolia` | 11155111 | EVM | supported (testnet) | — | 2 | 4 |
+| [Ethereum Sepolia](chains/sepolia.md) | `sepolia` | 11155111 | EVM | supported (testnet) | 0 | 1 | 2 |
 | [Aurora](chains/aurora.md) | `aurora` | 1313161554 | EVM | preview | — | 0 | 0 |
 | [Solana](chains/solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | — | 1803 | 0 |
 | [Solana Devnet](chains/solana-devnet.md) | `solana-devnet` | 1399811150 | Solana (SVM) | supported (testnet) | — | 2 | 0 |

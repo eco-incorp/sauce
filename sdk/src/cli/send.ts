@@ -95,6 +95,7 @@ import {
 } from "./svm-plan.js";
 import {
   accountsNow,
+  BEFORE_READ_MS,
   movedBy,
   svmLeftInPot,
   svmLeftInPotJson,
@@ -937,7 +938,9 @@ async function sendSvm(
     }
     // What it moves: every account it may write, read before it is sent and once it lands.
     const tracked = writableAccounts(tx.transaction, tables);
-    const before = await accountsNow(rpc, tracked).catch(() => undefined);
+    const before = await accountsNow(rpc, tracked, AbortSignal.timeout(BEFORE_READ_MS)).catch(
+      () => undefined,
+    );
     const result = await sendAndConfirm(rpc, input.rpcUrl, input.chain, tx.transaction);
     const after =
       result.ok && before !== undefined

@@ -16,6 +16,7 @@ them. Ethereum Sepolia is a test network: its coin and tokens have no value.
 | Name in a program | `Sepolia` |
 | Native coin | ETH (Ether), 18 decimals |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
+| CCTP domain | 0 |
 
 ## In a program
 
@@ -29,10 +30,10 @@ function main() {
   const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(pot) == held);
-  // `AaveV3.Pool` is Ethereum Sepolia's pool: `0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951`.
-  require(AaveV3.Pool != 0);
+  // `Cctp.TokenMessenger` is Ethereum Sepolia's tokenMessenger: `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`.
+  require(Cctp.TokenMessenger != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Sepolia.AaveV3.Pool == AaveV3.Pool);
+  require(Sepolia.Cctp.TokenMessenger == Cctp.TokenMessenger);
 }
 ```
 
@@ -41,7 +42,6 @@ function main() {
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | 6 |
-| `WETH` | `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14` | 18 |
 
 ## Protocols
 
@@ -51,15 +51,6 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951` | `AaveV3.Pool` |
-| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | poolAddressesProvider | `0x012bAC54348C0E635dCAc9D5FB99f06F24136C9A` | `AaveV3.PoolAddressesProvider` |
-| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0xF62c03E08ada871A0bEb309762E260a7a6a880E6` | `UniswapV2.Factory` |
-| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3` | `UniswapV2.Router` |
-| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x0227628f3F023bb0B980b67D528571c95c6DaC1c` | `UniswapV3.Factory` |
-| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0x1238536071E1c677A632429e3655c799b22cDA52` | `UniswapV3.NonfungiblePositionManager` |
-| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | quoterV2 | `0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3` | `UniswapV3.QuoterV2` |
-| [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E` | `UniswapV3.SwapRouter02` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` | `UniswapV4.PoolManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4` | `UniswapV4.PositionManager` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C` | `UniswapV4.StateView` |
-| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x7E4f6c5e954Da5c61B3423D81E2277431Ac043f3` | `UniswapV4.UniversalRouter` |
+| [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |

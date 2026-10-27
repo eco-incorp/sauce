@@ -133,8 +133,14 @@ nothing moves.
   to send the deployment, fund the Pot, then send the cook (or plan with `--fund`). `sauce sign`'s
   warning that a Pot with no code cannot pay the Kitchen's fee now says to send `deployPot` before
   funding it. The README, the quick start (which now deploys the Pot with `sauce pot --deploy`
-  before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
-  Pot's address before it exists.
+  before sending it USDC), the guides, `sauce run --help` and the `sauce-cli` skill no longer say to
+  send tokens to a Pot's address before it exists, or that a Pot is never deployed by hand.
+- **Fixed: `sauce tx --fund ETH:<amount>` with no token to fund carries the amount in the cook's
+  value.** A plan that was the cook alone (no transfer and no deployment to plan) took the Kitchen's
+  fee as its value and dropped the native amount, so the cook ran without it.
+- **Fixed: `sauce mcp --http` starts its RPC guard again after a start that failed.** The guard's
+  loopback forwarder kept its first start, failed or not, so one failure to listen made every later
+  tool call given an `rpcUrl` fail until the server was restarted.
 
 ### The registry
 
@@ -152,6 +158,26 @@ nothing moves.
     predeploy). Uniswap documents no V2 there.
   - Arc Testnet: the token `WETH`, which is bridged ETH as on Arc, not a wrapped native. Uniswap and
     Aave document no deployment there.
+- **Added** (EVM testnets): **CCTP and Circle Gateway on Arc Testnet, Base Sepolia and Ethereum
+  Sepolia.** A program compiled for one of them names `Cctp.TokenMessenger`,
+  `CircleGateway.GatewayWallet` and `CircleGateway.GatewayMinter`, which resolve to Circle's
+  testnet contracts there, not the mainnet ones: TokenMessengerV2
+  `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`, GatewayWallet
+  `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` and GatewayMinter
+  `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B`, at the same address on all three. Each chain's
+  CCTP domain is its mainnet's (Arc Testnet 26, Base Sepolia 6, Ethereum Sepolia 0), and the
+  chain pages list it. The `cctpBridge` action takes `"Cctp.TokenMessenger"` on them too. Every
+  address is Circle's own, pinned by on-chain evidence like every registry row. Solana Devnet is
+  not covered: the SDK has no Solana path for CCTP or Gateway.
+- **Fixed** (EVM): four bridge templates no longer name `ctx.msgSender()` as a refund or authority
+  address. That is the Pot's owner only when the owner sends the cook; under a signed cook it is
+  whoever submitted it. Stargate's `bridge` and LayerZero's `sendMessage` refund the excess fee to
+  the Pot, and deBridge's `bridge` gives the Pot the order's `givePatchAuthoritySrc` (its
+  `orderAuthorityAddressDst` stays `receiver`, an address on the destination chain). The zkSync
+  bridge's `depositETH` refunds L2 gas, and a failed deposit's value, to its `recipient`: zkSync
+  aliases a refund recipient with code on L1, so the Pot would strand it at an L2 address nobody
+  controls. The `sauce-protocols` documents say the same, and the `sauce-script` skill's Aave
+  example keeps its aTokens in the Pot instead of crediting `ctx.msgSender()`.
 - **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
@@ -230,6 +256,26 @@ nothing moves.
   chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
   extra `eth_chainId` request per write.
 
+### The testing kit
+
+- **Fixed** (EVM): a live `fork()` keeps `rpcUrl` off anvil's command line. It passed the URL to
+  anvil as `--fork-url`, so the URL, and any key in it, showed in the process list while the fork
+  ran, and in the error a failed start quotes. A live fork now reads the endpoint through the proxy
+  a recording uses, configured over its stdin, and anvil sees only that proxy's loopback URL.
+- **Fixed** (EVM): an `rpcUrl` with credentials in it (`https://user:pass@host/…`) records. They go
+  as a Basic `Authorization` header, which Node's `fetch` requires, and a live fork takes them the
+  same way. Neither a URL the proxy cannot parse nor an endpoint's answer that echoes the header is
+  ever quoted in its output or in a failed recording's error.
+- **Fixed** (EVM): a live fork's requests go upstream once, as anvil sent them, so anvil's own
+  timeout and retries apply, and its proxy exits with the process that started it.
+
+**Also breaking:** a network fork (record or live) reaches its endpoint directly, never through
+`HTTP_PROXY`/`HTTPS_PROXY`, and anvil sends its loopback hop to the kit's proxy through
+`HTTP_PROXY` when that is set: set `NO_PROXY=127.0.0.1` for a test run behind a proxy.
+
+**Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
+WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, is refused.
+
 ### Solana Testnet
 
 - **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
@@ -245,7 +291,8 @@ nothing moves.
   name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
   accounts (up to a minute for one request), so the command waits up to 120 s for each of its
   answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
-  two there.
+  two there. A send still gives 8 s to the accounts it reads only to report what it moved, since
+  a blockhash lives about a minute; past that it sends without that report.
 - The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
   the supported chains names it after the mainnets.
 
@@ -256,6 +303,13 @@ nothing moves.
   price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
   Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
   `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+- **Added**: example programs for Uniswap V3 exact-output swaps, a multi-hop path, and opening and
+  managing a position (adding only to a position the Pot owns); Aave V3 credit delegation;
+  Compound III borrow and repay; Morpho Blue borrow and repay; Pendle PT and YT trades, and minting
+  and redeeming; and a Balancer V2 batch swap and flash cycle. They are in `sauce-swaps` and
+  `sauce-protocols`, and each runs on Ethereum's state.
+- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
+  them.
 
 ### Solana venues in TypeScript
 
@@ -269,6 +323,11 @@ nothing moves.
   `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
+- **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
+  `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
+  quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
+  switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
+  the transaction fee.
 
 - **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
   swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
@@ -282,6 +341,25 @@ nothing moves.
   parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
   unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
   variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
+
+### License
+
+- **Changed: the package is licensed under the Eco, Inc. Proprietary License 1.1**, which replaces
+  the Eco, Inc. Proprietary License 1.0 for every version published, earlier ones included. It
+  separates the SDK Components (the SDK, the command, the MCP server, the agent skills, the
+  documentation, the examples and the interface definitions of the compiler, the engines and the
+  Kitchens) from the Core Components (the compiler, the engines, the Kitchens and the contracts
+  themselves), and its Additional Use Grant lets you use, modify and distribute the SDK
+  Components, and run and redistribute unmodified Core Components, solely to create, compile,
+  test, simulate and execute programs for use with the Authorized Contracts: the contracts Eco,
+  Inc. publishes at docs.eco.com or in the package's [deployments reference](reference/deployments.md),
+  and every Pot. Annex A names the files of the package that are Core Components.
+  [LICENSE.md](../LICENSE.md) is the license itself.
+- **Added: `THIRD_PARTY_NOTICES.md`** lists the third-party code, math and interface definitions
+  the package carries, with each one's source, license and copyright holder, and the license
+  texts. The Hylo venue's quote module, a transliteration of Hylo's SDK, carries the Mozilla
+  Public License 2.0 notice that license requires, and the package ships its source,
+  `sdk/src/svm/venues/hylo/index.ts`.
 
 ## SDK 0.99.17 — 2026-10-27
 
@@ -500,11 +578,6 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   each, forgetting the least recently used first, and `fetchPoolConfig` forgets a pair it refuses.
   Before, each key minted stayed in memory for the life of the process. A key that is no longer
   held fails with `unknown discovery key`; minting it again restores it.
-
-### The agent skills and the manual
-
-- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
-  them.
 
 **Also breaking:**
 

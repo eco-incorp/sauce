@@ -1181,6 +1181,18 @@ describe("sauce tx", () => {
     );
   });
 
+  it("carries a native-only --fund in the single cook's value", async () => {
+    const run = await sauce(
+      ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES, "--value", "1234"],
+      ...["--fund", "ETH:0.000000000000001"],
+    );
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as { to: Address; value: string };
+    // No transfer to plan, so the plan is the cook alone, carrying the fee and the ETH.
+    expect(out.to).toBe(v12PredictPot(OWNER, DEFAULT_POT_SALT));
+    expect(out.value).toBe(`0x${(1234n + 1000n).toString(16)}`);
+  });
+
   it("refuses a --fund it cannot plan: a token twice, a token's decimals with no endpoint, Solana", async () => {
     const tx = (...fund: string[]) =>
       sauce(

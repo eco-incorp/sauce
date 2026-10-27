@@ -17,6 +17,7 @@ them. Arc Testnet is a test network: its coin and tokens have no value.
 | Native coin | USDC (USDC), 18 decimals; also the ERC-20 `USDC` (6 decimals), one balance |
 | Minimum base fee | 20 gwei: a transaction with a lower `maxFeePerGas` is never included |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
+| CCTP domain | 26 |
 
 ## Notes
 
@@ -37,6 +38,10 @@ function main() {
   const held = EURC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(EURC).balanceOf(pot) == held);
+  // `Cctp.TokenMessenger` is Arc Testnet's tokenMessenger: `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`.
+  require(Cctp.TokenMessenger != 0);
+  // The same contract, qualified by the chain's name, from a program on any chain.
+  require(ArcTestnet.Cctp.TokenMessenger == Cctp.TokenMessenger);
 }
 ```
 
@@ -50,4 +55,12 @@ function main() {
 
 ## Protocols
 
-The registry records no protocol deployment on this chain.
+Every protocol the registry records here, each contract with how a program names it: its
+namespace contract, or its ABI imported from `./protocols/<slug>/<Export>.json` and bound to the
+address.
+
+| Protocol | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
