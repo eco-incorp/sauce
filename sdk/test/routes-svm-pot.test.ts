@@ -335,6 +335,9 @@ describe("the retired spellings, refused naming what to write", () => {
     ["Solana.self", "pot", value("Address")],
     ["Solana.self.key", "pot", value("Address")],
     ["Solana.self.signer().writable()", "pot.signer().writable()", account],
+    // A scalar method is the Pot's key's, as on `pot` (`pot.address.toBytesBe(32)`).
+    ["Solana.self.toBytesBe(32)", "pot.toBytesBe(32)", value("bytes")],
+    ["Solana.self.toBytesLe(8)", "pot.toBytesLe(8)", value("bytes")],
   ])("%s names %s, which compiles on solana", (site, instead, program) => {
     expect(refusal(program.replace("X", site))).toBe(
       `\`${site}\`: the Pot is \`pot\`, not \`self\`: write \`${instead}\` (\`pot\` is the Pot's ` +

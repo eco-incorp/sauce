@@ -102,6 +102,7 @@ import {
   selfRefusal,
 } from "./pot-sugar.js";
 import { nearMatches } from "./unknown-global.js";
+import { SCALAR_METHODS } from "./protocol-rewrite.js";
 
 const TOKEN_LIBRARY = "@sauce/token";
 
@@ -226,9 +227,10 @@ function refuseRetiredPot(l: SvmLowering): void {
   };
   /**
    * What `Solana.self<rest>` is now. `Solana.self` was the Pot's account: its fields and roles are
-   * `pot`'s, and so are its balances (`.<TOKEN>`, `.balance`); its lamports are `pot.balance`; its
-   * `.owner`, the program that owns it, is `Account(pot.address).owner`, `pot.owner` being the Pot's
-   * owner; any other member is not `pot`'s, so only `pot` itself is named.
+   * `pot`'s, and so are its balances (`.<TOKEN>`, `.balance`) and its key's scalar methods
+   * (`.toBytesBe(32)`); its lamports are `pot.balance`; its `.owner`, the program that owns it, is
+   * `Account(pot.address).owner`, `pot.owner` being the Pot's owner; any other member is not
+   * `pot`'s, so only `pot` itself is named.
    */
   const solanaSelfInstead = (rest: string): string => {
     const match = /^\.([\w$]+)/.exec(rest);
@@ -237,7 +239,10 @@ function refuseRetiredPot(l: SvmLowering): void {
     const after = rest.slice(match[0].length);
     if (member === "lamports") return `${POT_NAME}.${BALANCE_MEMBER}${after}`;
     if (member === OWNER_MEMBER) return `Account(${POT_NAME}.address).${OWNER_MEMBER}${after}`;
-    return ACCOUNT_MEMBERS.has(member) || member === BALANCE_MEMBER || l.tokens.has(member)
+    return ACCOUNT_MEMBERS.has(member) ||
+      member === BALANCE_MEMBER ||
+      SCALAR_METHODS.has(member) ||
+      l.tokens.has(member)
       ? `${POT_NAME}${rest}`
       : POT_NAME;
   };
