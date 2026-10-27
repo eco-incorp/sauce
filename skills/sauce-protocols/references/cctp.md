@@ -44,3 +44,7 @@ an ABI import bound to the address), and the ABI functions are generated in
 ## Notes
 
 - Domains are Circle's numbering; the registry records them per chain.
+- On a testnet (Arc Testnet, Base Sepolia, Ethereum Sepolia) the TokenMessenger is Circle's
+  testnet contract, not the mainnet one, and the domain is the mainnet's (Arc Testnet 26, Base
+  Sepolia 6, Ethereum Sepolia 0). `Cctp.TokenMessenger` resolves to the chain's own; its
+  attestation comes from Circle's sandbox API, `https://iris-api-sandbox.circle.com`.

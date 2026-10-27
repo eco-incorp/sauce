@@ -138,6 +138,17 @@ nothing moves.
 
 ### The registry
 
+- **Added** (EVM testnets): **CCTP and Circle Gateway on Arc Testnet, Base Sepolia and Ethereum
+  Sepolia.** A program compiled for one of them names `Cctp.TokenMessenger`,
+  `CircleGateway.GatewayWallet` and `CircleGateway.GatewayMinter`, which resolve to Circle's
+  testnet contracts there, not the mainnet ones: TokenMessengerV2
+  `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`, GatewayWallet
+  `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` and GatewayMinter
+  `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B`, at the same address on all three. Each chain's
+  CCTP domain is its mainnet's (Arc Testnet 26, Base Sepolia 6, Ethereum Sepolia 0), and the
+  chain pages list it. The `cctpBridge` action takes `"Cctp.TokenMessenger"` on them too. Every
+  address is Circle's own, pinned by on-chain evidence like every registry row. Solana Devnet is
+  not covered: the SDK has no Solana path for CCTP or Gateway.
 - **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
