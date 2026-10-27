@@ -9,8 +9,8 @@ import type { SettleFailureCode } from "./decode.js";
  *
  * ONE constant covers the whole corpus because the program is INVARIANT: `main` takes
  * `(tokens, minOut, recipient)` as runtime entry arguments, so no caller value reaches the
- * compiler. That is the property the appended-args model rests on, and `verify.compile.test.ts` recompiles
- * this and compares — a LIVE pin, unlike the v1 corpus it replaces, whose compiler no longer exists.
+ * compiler. That is the property the appended-args model rests on, and `verify.compile.test.ts`
+ * recompiles this and compares it: a LIVE pin.
  */
 export const SETTLE_PROGRAM: Hex =
   "0xa50201fad1514702000eb19000b6d002019a0120955402019a21d1d1d00120d4212295540240000120d22348020033b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000000031310100d2d146020070b10200a6b00120d4210120d223210120d5210120d3230120e1f12121d3d3d151d14642020197b1d8f1e3e4d0f1e3e4e52295549b010121020065b0d40201ba01209554f1e3e4e50201da012095540100d4970100e164990024010100000470a08231000462a301a10120970100d348020104b1d2d147020104b1901c736574746c653a2062616c616e63652062656c6f77206d696e4f7574b60100d551d146020112b1020188b0d0d6970100e164990024010100000470a08231000462a301a10120970100d14802017eb1d1d7970100d2d69900440102000004a9059cbb0004002462a2010100d1514302016fb1d0a101200100e19701014302016bb19000b602017db00100d3d997724502017db19000b6e00101f121e1e0020106b0e101208ae1d18905200000000031009000b6" as Hex;
@@ -55,11 +55,9 @@ const B = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf" as Hex; // Base cbBTC
  * exactly `v.tokens` to `v.recipient` under `v.minOut`. The bytes below are what the engine reads,
  * not what this package's encoder happens to emit.
  *
- * `v3` carries `Z = 0x0000000000000000000000000000000000ff00aa` — the address the retired v1 corpus
- * used as its trap, because a minimal-length PUSH squeezed it into 3 bytes and a fixed 20-byte read
- * misframed everything after it. On THIS wire it is an ordinary 32-byte word: the layout is
- * fixed-width, so leading zero bytes cost nothing and mean nothing. The hazard moved, and
- * `SETTLE_REJECTIONS` is where it went.
+ * `v3` carries `Z = 0x0000000000000000000000000000000000ff00aa`, an address with leading zero
+ * bytes. The wire is fixed-width, so it is an ordinary 32-byte word: leading zero bytes cost
+ * nothing and mean nothing. `SETTLE_REJECTIONS` holds the payloads a decoder must refuse.
  */
 export const SETTLE_VECTORS: readonly ConformanceVector[] = [
   {
@@ -110,7 +108,7 @@ export interface RejectionVector {
 }
 
 /**
- * Payloads a conformant decoder MUST refuse — the successor to the v1 corpus's `v3` trap.
+ * Payloads a conformant decoder MUST refuse.
  *
  * The `engineAccepts` rows are the trap proper, and they are the reason this corpus exists at all: the
  * engine RUNS them and produces exactly the behavior of the canonical payload beside them, so they

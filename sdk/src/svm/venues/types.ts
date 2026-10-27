@@ -114,9 +114,10 @@ export interface SvmVenueAdapter {
   /** Accounts to attach READ-ONLY for quoting (refs + resolved addresses from PoolConfig). */
   quoteAccounts(cfg: PoolConfig): VenueAccount[];
   /**
-   * SauceScript fragment computing `const q<i> = <amountOut>` for exactIn
-   * amountIn (bigint literal baked). May call shared helper functions
-   * (declared once by the generator).
+   * SauceScript fragment computing `q<i>`, the amountOut for exactIn
+   * amountIn (bigint literal baked). A quote of 0 means the venue is unusable
+   * for this amount (the program would fail); do not swap there. May call
+   * shared helper functions (declared once by the generator).
    */
   emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string;
   /**

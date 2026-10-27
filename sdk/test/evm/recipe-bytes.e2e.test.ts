@@ -14,12 +14,14 @@ import {
   zeroAddress,
   type Hex,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
+import { encodeCookSigned, randomCookNonce, signedCookTypedData } from "../../src/evm/engine.js";
 import { bridge } from "../../src/protocols/across/functions.js";
 import { sendMessage } from "../../src/protocols/chainlink-ccip/functions.js";
 import { bridge as debridgeBridge } from "../../src/protocols/debridge/functions.js";
 import { sendMessage as layerZeroSend } from "../../src/protocols/layerzero/functions.js";
+import { bridge as lifiBridge } from "../../src/protocols/lifi/functions.js";
 import { bridge as stargateBridge } from "../../src/protocols/stargate/functions.js";
 import { depositETH } from "../../src/protocols/zksync-bridge/functions.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
@@ -35,6 +37,11 @@ if (!RUNTIME_HEX_PATH && process.env.CI) {
 
 const OWNER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+);
+// Anvil's second dev account: submits the owner's signed cooks, so it is neither the owner, the Pot
+// nor the recipient.
+const SUBMITTER = privateKeyToAccount(
+  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
 );
 const RECORDER = "0x0000000000000000000000000000000000001234";
 const TOKEN = "0x1111111111111111111111111111111111111111";
@@ -74,7 +81,10 @@ const layerZeroAbi = parseAbi([
 const dlnSourceAbi = parseAbi([
   "function createOrder((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) orderCreation, bytes affiliateFee, uint32 referralCode, bytes permitEnvelope) payable returns (bytes32)",
 ]);
-const RECIPIENT_WORD = `0x${"00".repeat(12)}${RECIPIENT.slice(2)}`;
+const lifiAbi = parseAbi([
+  "function startBridgeTokensViaAcrossV4((bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall) bridgeData, (bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message) acrossData) payable",
+]);
+const word = (address: string): Hex => `0x${"00".repeat(12)}${address.slice(2).toLowerCase()}`;
 
 let anvil: ChildProcess;
 let engine: GatedEngine;
@@ -83,6 +93,7 @@ const executeRecipe = async (
   source: string,
   protocol: string,
   invocation: string,
+  submitter?: PrivateKeyAccount,
 ): Promise<Hex> => {
   // Only rename the entry point to supply concrete arguments; the exported recipe body and its
   // ABI import are compiled unchanged by the same helper as the SDK's recipe compilation tests.
@@ -92,13 +103,40 @@ function main(): void { ${invocation} }`;
     program,
     resolve(HERE, "../../src/protocols", protocol),
   );
-  const hash = await walletClient.sendTransaction({
-    account: OWNER,
-    chain: null,
-    to: engine.pot,
-    data: engine.cookData(toHex(bytecode)),
-    gas: 10_000_000n,
-  });
+  let hash: Hex;
+  if (submitter) {
+    // OWNER signs and `submitter`, who is not the owner, sends it: `cookSigned`, where
+    // `ctx.msgSender()` is the submitter.
+    const execution = {
+      chainId: await publicClient.getChainId(),
+      pot: engine.pot,
+      engine: engine.engine,
+      program: toHex(bytecode),
+      maxExecutionFee: 0n,
+      nonce: randomCookNonce(),
+      deadline: 4_000_000_000n,
+    };
+    const tx = encodeCookSigned({
+      ...execution,
+      signature: await OWNER.signTypedData(signedCookTypedData(execution)),
+    });
+    hash = await walletClient.sendTransaction({
+      account: submitter,
+      chain: null,
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+      gas: 10_000_000n,
+    });
+  } else {
+    hash = await walletClient.sendTransaction({
+      account: OWNER,
+      chain: null,
+      to: engine.pot,
+      data: engine.cookData(toHex(bytecode)),
+      gas: 10_000_000n,
+    });
+  }
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   expect(receipt.status).toBe("success");
   const calls = receipt.logs.filter((log) => log.address.toLowerCase() === RECORDER.toLowerCase());
@@ -154,6 +192,63 @@ describeEvm(
       ]);
     });
 
+    // Across refunds a deposit no relayer fills by `fillDeadline` on the source chain, so the refund
+    // address must be the Pot that paid it: not the receiver, a destination-chain address, and not
+    // the cook's submitter (the owner on a direct cook, a relayer under `cookSigned`). The four are
+    // distinct addresses, so the refund read back from the calldata names exactly one of them.
+    const lifiAcrossV4 = async (submitter?: PrivateKeyAccount) => {
+      expect(
+        new Set(
+          [RECIPIENT, OWNER.address, SUBMITTER.address, engine.pot].map((a) => a.toLowerCase()),
+        ).size,
+      ).toBe(4);
+      const data = await executeRecipe(
+        lifiBridge,
+        "lifi",
+        `require(recipe(${RECORDER}, 7, ${TOKEN}, ${OUTPUT_TOKEN}, ${RECIPIENT}, 100, 99, 10, 1700000000, 1700003600) == 1);`,
+        submitter,
+      );
+      const decoded = decodeFunctionData({ abi: lifiAbi, data });
+      expect(decoded.functionName).toBe("startBridgeTokensViaAcrossV4");
+      expect(decoded.args[1].refundAddress).toBe(word(engine.pot));
+      expect(decoded.args[1].receiverAddress).toBe(word(RECIPIENT));
+      expect(decoded.args).toEqual([
+        {
+          transactionId: `0x${"00".repeat(31)}07`,
+          bridge: "acrossV4",
+          integrator: "sauce",
+          referrer: zeroAddress,
+          sendingAssetId: TOKEN,
+          receiver: RECIPIENT,
+          minAmount: 100n,
+          destinationChainId: 10n,
+          hasSourceSwaps: false,
+          hasDestinationCall: false,
+        },
+        {
+          receiverAddress: word(RECIPIENT),
+          refundAddress: word(engine.pot),
+          sendingAssetId: word(TOKEN),
+          receivingAssetId: word(OUTPUT_TOKEN),
+          outputAmount: 99n,
+          outputAmountMultiplier: 0n,
+          exclusiveRelayer: `0x${"00".repeat(32)}`,
+          quoteTimestamp: 1700000000,
+          fillDeadline: 1700003600,
+          exclusivityParameter: 0,
+          message: "0x",
+        },
+      ]);
+    };
+
+    it("LI.FI bridge refunds an unfilled Across V4 deposit to the Pot, not the receiver", async () => {
+      await lifiAcrossV4();
+    });
+
+    it("LI.FI bridge refunds to the Pot, not the submitter, in a signed cook", async () => {
+      await lifiAcrossV4(SUBMITTER);
+    });
+
     it("CCIP sendMessage delivers zero-length extraArgs alongside nonempty receiver and data", async () => {
       const data = await executeRecipe(
         sendMessage,
@@ -199,7 +294,7 @@ describeEvm(
       expect(decoded.args).toEqual([
         {
           dstEid: 30184,
-          to: RECIPIENT_WORD,
+          to: word(RECIPIENT),
           amountLD: 100n,
           minAmountLD: 99n,
           extraOptions: "0x",
@@ -222,7 +317,7 @@ describeEvm(
       expect(decoded.args).toEqual([
         {
           dstEid: 30184,
-          receiver: RECIPIENT_WORD,
+          receiver: word(RECIPIENT),
           message: "0x7061796c6f6164",
           options: "0x",
           payInLzToken: false,

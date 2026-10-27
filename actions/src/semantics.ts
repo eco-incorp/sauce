@@ -201,6 +201,26 @@ export function programIssues(actions: readonly Action[], chainId?: number): Pro
   return issues;
 }
 
+/**
+ * An `ambientSwap`'s amount is what it spends, so it must be denominated in the token the swap pays:
+ * the base token when buying (`isBuy`), the quote token otherwise. The other pairing is Ambient's
+ * exact-output swap, whose `qty` is what the Pot receives, and the dex then pulls whatever input it
+ * takes: more than `amount`, up to the allowance.
+ */
+export function ambientSwapIssues(action: Action, path: string): ProgramIssue[] {
+  if (action.type !== "ambientSwap" || action.inBaseQty === action.isBuy) return [];
+
+  return [
+    {
+      path: `${path}.inBaseQty`,
+      message:
+        `must be ${action.isBuy}: the amount is what the swap spends, so it is in the token paid — ` +
+        `the ${action.isBuy ? "base" : "quote"} token when isBuy is ${action.isBuy}. ` +
+        "The other pairing is an exact-output swap, which takes more than the amount",
+    },
+  ];
+}
+
 /** Batch value rules shared by program parsing, standalone actions and resolved-name callers. */
 export function balancerBatchIssues(
   action: Action,
