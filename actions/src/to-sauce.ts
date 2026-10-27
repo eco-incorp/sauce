@@ -577,7 +577,8 @@ export function lowerAction(
 // ---------------------------------------------------------------------------
 
 /**
- * Where a swap action's output goes: the Pot when a later action spends it, else its recipient.
+ * Where a realized output goes (a swap's, an Aave withdrawal's): the Pot when a later action spends
+ * it, else its recipient.
  * Every `@sauce/router` function returns what the recipient received, which is the action's output.
  */
 function swapRecipient(l: Lowering, action: { recipient: Recipient }, needsOutput: boolean): Expr {
@@ -1278,7 +1279,7 @@ function aaveV3Withdraw(
   const call = l.call("IAaveV3Pool", addr(action.pool), "withdraw", [
     addr(action.token),
     amount,
-    recipient(l, action.recipient),
+    swapRecipient(l, action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amount);

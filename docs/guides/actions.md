@@ -272,7 +272,7 @@ An action's output is one of:
 - **its amount** — the amount the action spent, unchanged: transfers, approvals, supplies, borrows, repayments, bridges, WETH wrapping.
 - **the value read** — for a source action.
 
-When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "pot"` to keep an unspent output in the Pot.
+When a later action spends or saves an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "pot"` to keep an unspent output in the Pot.
 
 ### Source actions
 

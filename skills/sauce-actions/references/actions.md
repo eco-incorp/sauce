@@ -601,7 +601,7 @@ Withdraws a token from Aave V3; the output is the amount withdrawn. Calls Pool.w
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `pool` | contract | yes | the Aave V3 Pool |
 | `token` | token | yes | the asset withdrawn |
-| `recipient` | address or `"pot"` | yes | receives the asset; `"pot"` is the Pot |
+| `recipient` | address or `"pot"` | yes | receives the output when no later action spends it; `"pot"` keeps it in the Pot |
 | `amountRef` | name | no | Spend the output an earlier action saved under this name. |
 | `saveOutputAs` | name | no | Save this action's output under a name later actions can reference. |
 
