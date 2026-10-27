@@ -104,7 +104,8 @@ nothing moves.
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
   control there (a contract or smart wallet deployed only on the destination). The refund now goes
-  to the Pot that paid the deposit (`ctx.self()`).
+  to the Pot that paid the deposit (`ctx.self()`). On a Shared Pot, which anyone may cook, a
+  refund that lands there is anyone's: bridge from a Private Pot.
 
 ### Actions documents
 
