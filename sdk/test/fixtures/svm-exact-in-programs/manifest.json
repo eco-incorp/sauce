@@ -1,5 +1,5 @@
 {
-  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07: the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
+  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07 (Denali's on 2026-10-27, after its upgrade at slot 454,575,418): the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
   "programs": [
     {
       "name": "raydium-cp-swap",
@@ -215,7 +215,8 @@
       "name": "denali",
       "programId": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
       "file": "denali.so.gz",
-      "sha256": "24036b8d6e53dce0a756ef10ae64c4ed645a8733eadc5942eeb3fab9f036fac5"
+      "redeploySlot": 454575418,
+      "sha256": "a27dd365372b0603c623fd8b034c22ad39107fe0ffbba4e3546095460e7bb271"
     },
     {
       "name": "gavel",

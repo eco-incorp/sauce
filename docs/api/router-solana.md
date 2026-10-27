@@ -482,6 +482,13 @@ venue's order below. Where a pool keeps an account per token, such as its two va
 carries both in the **pool's** order. The function works out which one is paid from `payMint`, so
 one slot serves both directions. Each token's program is the one that owns its mint.
 
+Denali's slot ends with `eventAuthority`, exported as `DENALI_EVENT_AUTHORITY` from
+`@eco-incorp/sauce/svm`: the program's `["__event_authority"]` PDA. Its instruction keeps the
+original twelve swap accounts, then appends that PDA and the Denali program itself, both read-only
+and nonsigner. `routerSvmAccountOrder("denali", { aToB })` includes both, so lists passed to
+`denaliCpi` or sent with `denaliData` must include them too. The instruction data remains 25 bytes:
+the discriminator, direction byte, input amount and minimum output.
+
 | Functions              | Venue                 | Program                                        | Slot after `[program, pool]`                                                                                                         |
 | ---------------------- | --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `raydiumCpSwap`        | Raydium CP-Swap       | `CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C` | `authority, ammConfig, vault0, vault1, observation`                                                                                  |
@@ -510,7 +517,7 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `hadron`               | Hadron                | `HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8` | `assetConfigA, assetConfigB, growingA, vaultA, vaultB, globalConfig, feeVaultA, feeVaultB, clock, metadataA`                         |
 | `taurusfi`             | TaurusFi              | `9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc` | `vault0, vault1, vaultAuthority, globalConfig, globalAuthority, instructionsSysvar` (the price account as the pool)                  |
 | `riptide`              | Riptide               | `riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j`  | `vaultA, vaultB, instructionsSysvar, dontFront`                                                                                      |
-| `denali`               | Denali                | `DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4` | `vaultA, vaultB, oracle, globalConfig`                                                                                               |
+| `denali`               | Denali                | `DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4` | `vaultA, vaultB, oracle, globalConfig, eventAuthority`                                                                               |
 | `gavel`                | Gavel                 | `srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi`  | `logAuthority, baseVault, quoteVault`                                                                                                |
 | `tesserav`             | Tessera V             | `TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH`  | `authority, vaultA, vaultB, instructionsSysvar, config, oracle`                                                                      |
 | `flint`                | Flint                 | `FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z`  | `marketB, vaultA, vaultB, instructionsSysvar` (market A as the pool)                                                                 |

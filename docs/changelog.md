@@ -314,6 +314,16 @@ WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, 
   quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
   switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
   the transaction fee.
+- **Fixed** (Solana): Denali's swap passes the event authority and the program, which its upgraded
+  program requires. Denali's program was upgraded at slot 454,575,418 to take Anchor's event-CPI
+  accounts after the swap's twelve: the event authority (`3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd`,
+  the program's `["__event_authority"]` PDA), then the program itself, both read-only. With only the
+  twelve, the program fails before it moves anything (`AccountNotEnoughKeys`). `@sauce/router`'s
+  `denali` now takes a slot of seven, `[program, pool, vaultA, vaultB, oracle, globalConfig,
+eventAuthority]`, and passes both. `routerSvmAccountOrder("denali", …)` ends with
+  `eventAuthority` and `program`, which a list for `denaliCpi` or `denaliData` must carry. The
+  address is exported as `DENALI_EVENT_AUTHORITY` from `@eco-incorp/sauce/svm`. The instruction data
+  is unchanged.
 
 - **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
   swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
