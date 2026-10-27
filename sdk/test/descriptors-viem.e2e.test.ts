@@ -16,6 +16,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  custom,
   hexToBytes,
   http,
   type Address,
@@ -128,6 +129,69 @@ describeAnvil("ContractCall viem helpers, against a local Base", () => {
     const bare = createPublicClient({ transport });
     const pool = await Base.UniswapV3.Factory.at(deployed).getPool(USDC, WETH, 500).read(bare);
     expect(pool).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  });
+
+  it("a chain id lookup that fails is asked again on the next call, not remembered as the answer", async () => {
+    let chainIdRequests = 0;
+    const flaky = createPublicClient({
+      transport: custom(
+        {
+          async request({ method, params }) {
+            if (method === "eth_chainId" && ++chainIdRequests === 1) throw new Error("blip");
+            const response = await fetch(`http://127.0.0.1:${PORT}`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+            });
+
+            return ((await response.json()) as { result: unknown }).result;
+          },
+        },
+        { retryCount: 0 },
+      ),
+    });
+    const call = Base.UniswapV3.Factory.at(deployed).getPool(USDC, WETH, 500);
+    // Two calls racing the failing lookup share it: both reject on its one request.
+    const raced = await Promise.allSettled([call.read(flaky), call.read(flaky)]);
+    expect(raced.map(({ status }) => status)).toEqual(["rejected", "rejected"]);
+    expect(chainIdRequests).toBe(1);
+    expect(await call.read(flaky)).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    // A lookup that succeeded is kept: a third call does not ask the node again.
+    expect(await call.read(flaky)).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(chainIdRequests).toBe(2);
+  });
+
+  it("a write asks a chainless wallet for its chain id every time, so a network switch is caught", async () => {
+    const reported: { chain?: Hex } = {};
+    const sent: string[] = [];
+    const wallet = createWalletClient({
+      account: DEPLOYER,
+      transport: custom(
+        {
+          async request({ method, params }) {
+            if (method.startsWith("eth_send")) sent.push(method);
+            if (method === "eth_chainId" && reported.chain !== undefined) return reported.chain;
+            const response = await fetch(`http://127.0.0.1:${PORT}`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+            });
+
+            return ((await response.json()) as { result: unknown }).result;
+          },
+        },
+        { retryCount: 0 },
+      ),
+    });
+    const factory = Base.UniswapV3.Factory.at(deployed);
+    const hash = await factory.createPool(USDC, WETH, 10000).write(wallet);
+    expect((await publicClient.waitForTransactionReceipt({ hash })).status).toBe("success");
+    // The wallet switches to Ethereum; viem does not check a chainless client's chain on send.
+    reported.chain = "0x1";
+    await expect(factory.createPool(WETH, USDC, 3000).write(wallet)).rejects.toThrow(
+      /the client is on chain 1, but this call is base's \(chain 8453\)/,
+    );
+    expect(sent).toHaveLength(1);
   });
 
   it("a client on another chain is refused before anything is sent", async () => {

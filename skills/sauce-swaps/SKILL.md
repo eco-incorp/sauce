@@ -519,8 +519,13 @@ against the deployed program before sending it.
 
 ## Pitfalls
 
-- **No price limit** (`0`) leaves `minOut` the only bound, and an empty pool then costs a full tick
-  walk. Set a real limit near the price.
+- **No price limit.** On an EVM chain a `sqrtPriceLimitX96` of `0` is none: `minOut` is then the
+  only bound, and an empty pool costs a full tick walk. Set a real limit near the price.
+- **A `priceLimit` of `0` on Solana is not "none".** Paying the lower-key token of the pair (WSOL
+  before USDC: the mints in the order of their 32-byte keys; on Phoenix, the market's base) the cook
+  fails, dividing by zero; paying the other, the pool is skipped and the function returns `0` having
+  moved nothing, which `minOut` does not catch. Give every swap at a price a real `priceLimit`, from
+  `sauce pools`. Only the `…AtLimit` forms take `0` as the pool's own bound.
 - **A limit on the wrong side** reverts `SPL` (EVM) or fails the whole cook (Solana): take it from
   the `sauce price` block of the direction you trade.
 - **The pair reversed in `sauce price`.** The first token is the one priced.

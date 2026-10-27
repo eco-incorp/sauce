@@ -2,7 +2,7 @@
 
 # Ethereum Sepolia
 
-**Supported testnet.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Ethereum Sepolia a program compiles
+**Supported testnet.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet. On Ethereum Sepolia a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them. Ethereum Sepolia is a test network: its coin and tokens have no value.
 

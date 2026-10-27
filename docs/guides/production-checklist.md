@@ -61,7 +61,7 @@ section in order. Each item is a check you can do with the `sauce` command; the
 - **With `eth_simulateV1`.** A full simulation report, and a wallet policy's limits, need an
   endpoint that serves it. Without it, a send whose limits cannot be measured is refused.
 - **On a supported chain.** The command sends on Ethereum, Base, Arc and Solana, and the testnets
-  Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet, only. On a preview
+  Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet, only. On a preview
   chain it is refused before anything is sent.
 
 ## Check the transaction you sign
@@ -87,7 +87,10 @@ section in order. Each item is a check you can do with the `sauce` command; the
 
 - **Your wallet pays.** It pays the gas and the Kitchen's fee in the chain's coin, and the first
   run pays for your Pot's creation too. On Solana it also pays rent for new accounts.
-- **Fund the Pot first, or with the cook.** Send tokens to the Pot's address, or pass `--fund`.
+- **Deploy the Pot, then fund it, or fund it with the cook.** Deploy it with `sauce pot --deploy`,
+  or pass `--fund`, which plans the transfer after the Pot's deployment. Do not send tokens to a
+  Pot's address before it is deployed: a Kitchen upgrade that changes the Pot's code moves the
+  address.
 - [Costs](../concepts/costs.md) lists every part.
 
 ## Pin the versions

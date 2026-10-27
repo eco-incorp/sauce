@@ -159,6 +159,7 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     expect(issuers).toEqual({
       "mainnet-beta": ["backed", "ondo", "backpack", "prestocks"],
       devnet: [],
+      testnet: [],
     });
     expect(registryTokenAddress(requireChain("solana"), "TSLAx")).toBe(
       BigInt("0x07e83582411fea1482f0994b80aa512a97c94f25df283bec5a67a381fc862b4a"),
@@ -291,6 +292,9 @@ describe("SVM_TOKEN_REGISTRY: the Solana mints", () => {
       ],
       devnet: [
         "USDC 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "WSOL So11111111111111111111111111111111111111112 9 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      ],
+      testnet: [
         "WSOL So11111111111111111111111111111111111111112 9 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       ],
     });
