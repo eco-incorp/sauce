@@ -105,6 +105,14 @@ nothing moves.
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
   `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
 
+### Solana venues in TypeScript
+
+- **Fixed** (Solana): a Crema swap built from a slot (`Crema.CLMM.swap(Crema.CLMM.pool(…), …)`) on a
+  pool with one or two readable tick arrays carried three, so the router sent three and Crema
+  refused the unmarked ones: the transaction failed and its fee was lost. The slot now ends its
+  tick arrays with the System program after the last readable one, which the router reads as "pass
+  no more". Pools with three readable arrays are unchanged.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
