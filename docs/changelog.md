@@ -255,6 +255,11 @@ nothing moves.
   `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
+- **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
+  `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
+  quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
+  switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
+  the transaction fee.
 
 - **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
   swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
