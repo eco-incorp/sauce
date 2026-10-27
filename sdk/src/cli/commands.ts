@@ -49,11 +49,13 @@ import {
   awaitPot,
   connect,
   requireCookContracts,
+  requirePlanSendable,
   requirePot,
   POT_UNCHECKED,
   potState,
   releasedContracts,
   sendAndWait,
+  type PlanStep,
   type Released,
   type Sent,
   type TxRequest,
@@ -540,6 +542,9 @@ export interface CookInput extends ProgramInput {
       readonly plan?: boolean;
       /** The salt the run deploys the Pot at first, or the rehearsal does, when it has no code. */
       readonly deploySalt?: Hex;
+      /** Called before each transaction the funding sends first (`run`): what holds the rest of
+       *  the run to the guard again, so none is sent once the cook would be refused. */
+      readonly beforeSend?: () => Promise<void>;
     },
   ) => Promise<Funding>;
 }
@@ -1107,15 +1112,38 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     if (needs.length > 0) throw unapproved(needs, input.approver.why);
   }
   await approveAll(input.approver, setup);
+  // Before each transaction the run sends first — the Pot's deployment, a setup step, an approval
+  // or a transfer its funding makes — what is left of its plan on the cook's chain is held to the
+  // guard again (`chain.ts#requirePlanSendable`), so none goes out once the cook would be refused:
+  // an answer at the terminal can take a while. The cook's own send holds it once more.
+  const cookStep: PlanStep = {
+    tx: { to: cook.pot, data: cook.data, value: 0n },
+    what: `cook on Pot ${cook.pot}`,
+  };
+  const unsent = new Set(setup);
+  const holdPlan = (): Promise<void> =>
+    requirePlanSendable(client, [
+      ...setup
+        .filter((step) => unsent.has(step) && step.planned.chainId === input.chain.id)
+        .map((step) => ({
+          tx: { to: step.planned.to, data: step.planned.data, value: BigInt(step.planned.value) },
+          what: step.action,
+        })),
+      cookStep,
+    ]);
   const sentFirst: Array<readonly [SetupStep, Sent]> = [];
-  for (const step of setup) sentFirst.push([step, await step.send()]);
+  for (const step of setup) {
+    await holdPlan();
+    sentFirst.push([step, await step.send()]);
+    unsent.delete(step);
+  }
   const deployed = sentFirst.find(([step]) => step.planned.deploysPot === cook.pot)?.[1];
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
   const funding =
     input.fund === undefined
       ? undefined
-      : await input.fund(client, cook.pot, signer, { deploySalt });
+      : await input.fund(client, cook.pot, signer, { deploySalt, beforeSend: holdPlan });
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);

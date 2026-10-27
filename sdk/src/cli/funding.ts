@@ -199,6 +199,9 @@ export interface FundingInput {
   readonly send: boolean;
   /** Who approves the approvals a send makes first. */
   readonly approver: Approver;
+  /** Called before each transaction it sends (`run`): what holds the rest of the run to the
+   *  guard again (`chain.ts#requirePlanSendable`), so none is sent once the cook would be refused. */
+  readonly beforeSend?: () => Promise<void>;
 }
 
 /** A transaction `sauce run` sends from the owner before the cook, unsent: what a rehearsal runs
@@ -425,6 +428,7 @@ async function forceApprove(
       }),
     );
     refuseFalse(funded.request.label, "approve", answer.data);
+    await input.beforeSend?.();
     const result = await sendAndWait(input.client, input.rpcUrl, input.account!, {
       to: funded.token,
       data: encodeApprove(spender, value),
@@ -817,6 +821,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
         input.client.call({ account: owner, to: funded.token, data }),
       );
       refuseFalse(funded.request.label, "transfer", answer.data);
+      await input.beforeSend?.();
       const result = await sendAndWait(input.client, input.rpcUrl, input.account!, {
         to: funded.token,
         data,

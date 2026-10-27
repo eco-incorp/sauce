@@ -245,7 +245,7 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
   }
   const account = given.account;
 
-  return async (client, pot, owner, { plan = false, deploySalt } = {}) => {
+  return async (client, pot, owner, { plan = false, deploySalt, beforeSend } = {}) => {
     if (account !== undefined && account.address !== owner) {
       throw new UsageError(
         `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
@@ -264,6 +264,7 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
       sweep,
       ...(account === undefined ? {} : { account }),
       ...(deploySalt === undefined ? {} : { deploySalt }),
+      ...(beforeSend === undefined ? {} : { beforeSend }),
       send: given.send && !plan,
       approver: given.approver,
     });

@@ -18,11 +18,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { getAddress, type Address } from "viem";
+import { encodeFunctionData, getAddress, parseEther, type Address, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { PotStore } from "../../sdk/dist/cli/pot-store.js";
+import { v12EngineAddress } from "../../sdk/dist/deployments/index.js";
 import { potSalt, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../sdk/test/cli-anvil.js";
+import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
+import {
+  laggingEndpoint,
+  RUNTIME_HEX_PATH,
+  startChain,
+  type LocalChain,
+} from "../../sdk/test/cli-anvil.js";
 import {
   ELSEWHERE,
   mintOldReleasePot,
@@ -32,7 +40,7 @@ import {
   withKitchenImplementation,
 } from "../../sdk/test/evm/kitchen-releases.js";
 import { createRpcGuard } from "../src/guard.js";
-import { connect, endpointsFor, failed, ok, type Connected } from "./harness.js";
+import { connect, endpointsFor, failed, ok, walletsAt, type Connected } from "./harness.js";
 
 /** An owner with no Pot of this release. */
 const NOBODY: Address = "0x5a0Ce0000000000000000000000000000000Beef";
@@ -139,6 +147,79 @@ describe(
         assert.equal(tx.pot, pot);
         const simulated = ok(await mcp.call("sauce_simulate", cook));
         assert.equal(simulated.ok, true);
+      }
+    });
+
+    /** A server with a wallet of its own, `name`, funded, reaching the chain through `url`. */
+    async function walletServer(name: string, url: string) {
+      const server = await connect(
+        endpointsFor({ [String(local.chain.id)]: url }),
+        undefined,
+        walletsAt(join(dir, `wallets-${name}`), { start: `throwaway-${process.pid}-${name}` }),
+        false,
+        { pots: store },
+      );
+      const wallet = getAddress(
+        String(ok(await server.call("sauce_wallet_create", { name })).address),
+      );
+      await local.send(local.deployer, wallet, "0x", parseEther("1"));
+
+      return { server, wallet };
+    }
+
+    it("sauce_wallet_send refuses a plan whose later cook the guard refuses, before the first is sent", async () => {
+      const { server, wallet } = await walletServer("whole-plan", local.rpcUrl);
+      try {
+        const recipient = privateKeyToAccount(generatePrivateKey()).address;
+        const noPot = getAddress(v12PredictPot(wallet, potSalt("never deployed")) as Address);
+        const cookData = encodeFunctionData({
+          abi: v12PotAbi,
+          functionName: "cook",
+          args: [getAddress(v12EngineAddress()), "0x00"],
+        });
+        const said = failed(
+          await server.call("sauce_wallet_send", {
+            wallet: "whole-plan",
+            transaction: [
+              { chainId: local.chain.id, to: recipient, data: "0x", value: "1000" },
+              { chainId: local.chain.id, to: noPot, data: cookData as Hex, value: "0" },
+            ],
+          }),
+        );
+        assert.ok(said.includes("(2 of 2)"), said);
+        assert.ok(said.includes(`the cook goes to ${noPot}, which has no code on ethereum`), said);
+        assert.equal(await local.publicClient.getTransactionCount({ address: wallet }), 0);
+        assert.equal(await local.publicClient.getBalance({ address: recipient }), 0n);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("sauce_wallet_send waits for the Pot its plan's deployment made, on an endpoint that lags", async () => {
+      // Its first answers to eth_getCode after a transaction are a node's that has not seen the block.
+      const lagging = await laggingEndpoint(local.rpcUrl, 2);
+      const { server, wallet } = await walletServer("lagging", lagging.url);
+      try {
+        const plan = ok(
+          await server.call("sauce_tx", {
+            source: PROGRAM,
+            chain: "ethereum",
+            owner: wallet,
+            args: ["41"],
+          }),
+        );
+        const sent = ok(
+          await server.call("sauce_wallet_send", { wallet: "lagging", transaction: plan }),
+        ) as { ok: boolean; sent: Array<{ status: string; reason?: string }> };
+        assert.equal(sent.ok, true, JSON.stringify(sent.sent));
+        assert.deepEqual(
+          sent.sent.map((entry) => entry.status),
+          ["success", "success"],
+        );
+        assert.ok(lagging.served() > 0);
+      } finally {
+        await server.close();
+        await lagging.stop();
       }
     });
   },

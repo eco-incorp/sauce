@@ -27,17 +27,39 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeFunctionData, getAddress, parseEther, type Address, type Hex } from "viem";
+import {
+  encodeFunctionData,
+  getAddress,
+  parseEther,
+  toFunctionSelector,
+  type Address,
+  type Hex,
+} from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
-import { requireReleasePot, sendAndWait } from "../src/cli/chain.js";
+import type { Approver } from "../src/cli/approvals.js";
+import { CliError } from "../src/cli/args.js";
+import { requireKitchenPredicts, requireReleasePot, sendAndWait } from "../src/cli/chain.js";
+import { runCommand, type RunInput } from "../src/cli/commands.js";
+import { fundingFor } from "../src/cli/inputs.js";
 import { keeping } from "../src/cli/keep.js";
 import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
-import type { CliIo } from "../src/cli/run.js";
-import { v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
+import { nodeIo, type CliIo } from "../src/cli/run.js";
+import { v12EngineAddress, v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
-import { describeEvm, jsonOf, sauce, sauceWith, startChain, type LocalChain } from "./cli-anvil.js";
+import {
+  describeEvm,
+  erc20,
+  fixture,
+  jsonOf,
+  laggingEndpoint,
+  registered,
+  sauce,
+  sauceWith,
+  startChain,
+  type LocalChain,
+} from "./cli-anvil.js";
 import {
   ELSEWHERE,
   mintOldReleasePot,
@@ -75,6 +97,8 @@ describeEvm("the Pot is checked against the chain", () => {
   /** Kitchen implementations that put every Pot elsewhere: one newer than this SDK, one older. */
   let newer: Address;
   let older: Address;
+  /** USDC at its registry address, which `--fund` moves. */
+  let usdc: Address;
   const kitchen = getAddress(v12KitchenAddress());
 
   beforeAll(async () => {
@@ -87,6 +111,7 @@ describeEvm("the Pot is checked against the chain", () => {
       local,
       OLD_RELEASE["kitchen-evm"].potInitCodeHash as Hex,
     );
+    usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
   }, 120_000);
   afterAll(async () => {
     await local?.stop();
@@ -163,7 +188,10 @@ describeEvm("the Pot is checked against the chain", () => {
   /** Nothing was sent from `who`, it holds what it held, and nothing was deployed where it says. */
   async function nothingSent(who: Owner, balance: bigint, potCode: Hex | undefined) {
     expect(await local.publicClient.getTransactionCount({ address: who.address })).toBe(0);
-    expect(await local.publicClient.getBalance({ address: who.address })).toBe(balance);
+    // As strings: a jest worker cannot report a bigint a failing expectation holds.
+    expect(String(await local.publicClient.getBalance({ address: who.address }))).toBe(
+      String(balance),
+    );
     expect(await local.publicClient.getCode({ address: who.pot })).toBe(potCode);
     expect(await local.publicClient.getCode({ address: ELSEWHERE })).toBeUndefined();
   }
@@ -414,7 +442,9 @@ describeEvm("the Pot is checked against the chain", () => {
     const lines = said.split("\n");
     expect(lines.find((line) => line.startsWith(`  ${currentPot} `))).toContain("private");
     expect(lines.some((line) => line.startsWith(`  ${old} `))).toBe(false);
-    expect(await local.publicClient.getBalance({ address: lister.address })).toBe(balance);
+    expect(String(await local.publicClient.getBalance({ address: lister.address }))).toBe(
+      String(balance),
+    );
     expect(await local.publicClient.getTransactionCount({ address: lister.address })).toBe(nonce);
   }, 180_000);
 
@@ -469,6 +499,279 @@ describeEvm("the Pot is checked against the chain", () => {
     expect(sent.code).toBe(1);
     expect(sent.stdout + sent.stderr).toContain(noPot);
     await nothingSent(fresh, balance, undefined);
+  }, 120_000);
+
+  /** `who`'s transaction, signed at `nonce` as a signer elsewhere would sign it for `sauce send`. */
+  const signedBy = (who: Owner, tx: { to: Address; data: Hex; value: bigint }, nonce: number) =>
+    privateKeyToAccount(who.key).signTransaction({
+      ...tx,
+      chainId: local.chain.id,
+      nonce,
+      gas: 1_000_000n,
+      maxFeePerGas: 100_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+    });
+
+  /** A cook on `pot`, as `sauce tx` builds one: what is under test is where it goes. */
+  const cookOn = (pot: Address) => ({
+    to: pot,
+    data: encodeFunctionData({
+      abi: v12PotAbi,
+      functionName: "cook",
+      args: [getAddress(v12EngineAddress()), "0x00"],
+    }),
+    value: 0n,
+  });
+
+  /** `Kitchen.deployPot` with calldata too short to carry its owner and salt. */
+  const MALFORMED_DEPLOY = {
+    to: kitchen,
+    data: `${toFunctionSelector("function deployPot(address owner, bytes32 salt)")}${"00".repeat(8)}` as Hex,
+    value: 0n,
+  };
+
+  /** `send` while the Kitchen puts every Pot elsewhere, returning what it returned. */
+  async function whileMispredictingSend<T>(send: () => Promise<T>): Promise<T> {
+    let result: T | undefined;
+    await whileMispredicting(newer, async () => {
+      result = await send();
+    });
+
+    return result!;
+  }
+
+  it("says the release is not deployed where the Kitchen has no code, not that the SDK mismatches it", async () => {
+    const fresh = await owner("no-kitchen");
+    const balance = await local.publicClient.getBalance({ address: fresh.address });
+    const deploy = {
+      to: kitchen,
+      data: encodeFunctionData({
+        abi: v12KitchenAbi,
+        functionName: "deployPot",
+        args: [fresh.address, fresh.salt],
+      }),
+      value: 0n,
+    };
+    const notDeployed = `the released Kitchen ${kitchen} is not deployed on ethereum`;
+    const code = await local.publicClient.getCode({ address: kitchen });
+    await local.testClient.setCode({ address: kitchen, bytecode: "0x" });
+    try {
+      await expect(
+        requireKitchenPredicts(local.publicClient, local.chain, fresh.address, fresh.salt),
+      ).rejects.toThrow(notDeployed);
+      await expect(
+        sendAndWait(local.publicClient, local.rpcUrl, privateKeyToAccount(fresh.key), deploy),
+      ).rejects.toThrow(notDeployed);
+      // `sauce send` of the deployment, and `sauce sign`, which reach the guard before the fee.
+      const sent = await sauceWith(
+        NO_TERMINAL,
+        ...["send", await signedBy(fresh, deploy, 0), "--chain", "ethereum"],
+        ...["--rpc-url", local.rpcUrl],
+      );
+      const signed = await command("sign", fresh, {});
+      for (const run of [sent, signed]) {
+        expect(run.code).toBe(1);
+        expect(run.stdout + run.stderr).toContain(notDeployed);
+        expect(run.stdout + run.stderr).not.toMatch(MISMATCH);
+      }
+    } finally {
+      await local.testClient.setCode({ address: kitchen, bytecode: code! });
+    }
+    await nothingSent(fresh, balance, undefined);
+  }, 120_000);
+
+  it.each([
+    ["a cook on a Pot of another release", "old"],
+    ["a cook on an address with no code", "empty"],
+    ["a deployment the Kitchen puts elsewhere", "mispredicted"],
+    ["a deployPot whose calldata carries no owner and salt", "malformed"],
+  ] as const)(
+    "sauce send refuses a batch whose later transaction is %s, before the first is sent",
+    async (_, refused) => {
+      const fresh = await owner(`batch-${refused}`);
+      const recipient = privateKeyToAccount(generatePrivateKey()).address;
+      const balance = await local.publicClient.getBalance({ address: fresh.address });
+      const old =
+        refused === "old"
+          ? await mintOldReleasePot(local, fresh.address, potSalt(`batch-${refused} old`))
+          : undefined;
+      const [step, reason] =
+        refused === "old"
+          ? [cookOn(old!), `${old} on ethereum is a Pot of ${OLD}`]
+          : refused === "empty"
+            ? [cookOn(fresh.pot), `the cook goes to ${fresh.pot}, which has no code on ethereum`]
+            : refused === "mispredicted"
+              ? [
+                  {
+                    to: kitchen,
+                    data: encodeFunctionData({
+                      abi: v12KitchenAbi,
+                      functionName: "deployPot",
+                      args: [fresh.address, fresh.salt],
+                    }),
+                    value: 0n,
+                  },
+                  "this SDK does not match the deployed Kitchen",
+                ]
+              : [MALFORMED_DEPLOY, "carries no owner and salt"];
+      // The plan's first transaction pays a recipient; its second is the one the guard refuses.
+      const signed = [
+        await signedBy(fresh, { to: recipient, data: "0x", value: 1_000n }, 0),
+        await signedBy(fresh, step, 1),
+      ];
+      const send = () =>
+        sauceWith(NO_TERMINAL, "send", ...signed, "--chain", "ethereum", "--rpc-url", local.rpcUrl);
+      const sent = refused === "mispredicted" ? await whileMispredictingSend(send) : await send();
+      const said = sent.stdout + sent.stderr;
+      expect(sent.code).toBe(1);
+      expect(said).toContain("nothing was sent — transaction 2 of 2 (");
+      expect(said).toContain(reason);
+      expect(said).not.toMatch(/AbiDecoding|Data size/);
+      expect(String(await local.publicClient.getBalance({ address: recipient }))).toBe("0");
+      await nothingSent(fresh, balance, undefined);
+    },
+    120_000,
+  );
+
+  it("refuses a Kitchen.deployPot with no owner and salt in its calldata, not with the decoder's error", async () => {
+    const fresh = await owner("malformed-alone");
+    const balance = await local.publicClient.getBalance({ address: fresh.address });
+    const refused = sendAndWait(
+      local.publicClient,
+      local.rpcUrl,
+      privateKeyToAccount(fresh.key),
+      MALFORMED_DEPLOY,
+    );
+    await expect(refused).rejects.toBeInstanceOf(CliError);
+    await expect(refused).rejects.toThrow("carries no owner and salt");
+    await nothingSent(fresh, balance, undefined);
+  }, 60_000);
+
+  it("sauce run --fund holds the cook to the guard before each transaction it sends first", async () => {
+    const fresh = await owner("fund-then-gone");
+    await deployPot(fresh);
+    await local.mint(usdc, fresh.address, 10_000_000n);
+    const code = await local.publicClient.getCode({ address: fresh.pot });
+    const balance = await local.publicClient.getBalance({ address: fresh.address });
+    // The Pot passes the guard when the run starts; by the time the funding approval is agreed
+    // to, its code is gone: a plan gone stale while its user answered.
+    const asked: string[] = [];
+    const approver: Approver = {
+      auto: true,
+      canAsk: false,
+      approve: async (action) => {
+        asked.push(action);
+        await local.testClient.setCode({ address: fresh.pot, bytecode: "0x" });
+
+        return true;
+      },
+    };
+    const account = privateKeyToAccount(fresh.key);
+    const input: RunInput = {
+      file: program,
+      text: PROGRAM,
+      chain: local.chain,
+      defines: {},
+      target: { owner: fresh.address, salt: fresh.salt },
+      args: { from: "--args", values: ["41"] },
+      rpcUrl: local.rpcUrl,
+      account,
+      approver,
+      fund: fundingFor({
+        chain: local.chain,
+        rpcUrl: local.rpcUrl,
+        fund: ["USDC:1"],
+        mode: "allowance",
+        sweep: false,
+        send: true,
+        account,
+        approver,
+      }),
+    };
+    try {
+      await expect(runCommand(input, nodeIo())).rejects.toThrow(
+        `the cook goes to ${fresh.pot}, which has no code on ethereum`,
+      );
+      expect(asked).toEqual(["approve the Pot for 1000000 USDC"]);
+      // The approval it agreed to was never sent: the cook it was for would have been refused.
+      expect(
+        String(
+          await local.publicClient.readContract({
+            address: usdc,
+            abi: erc20,
+            functionName: "allowance",
+            args: [fresh.address, fresh.pot],
+          }),
+        ),
+      ).toBe("0");
+      expect(await local.publicClient.getTransactionCount({ address: fresh.address })).toBe(0);
+      expect(String(await local.publicClient.getBalance({ address: fresh.address }))).toBe(
+        String(balance),
+      );
+    } finally {
+      await local.testClient.setCode({ address: fresh.pot, bytecode: code! });
+    }
+  }, 120_000);
+
+  it("sauce send waits for the Pot its plan's deployment made before holding the cook to the guard, on an endpoint that lags", async () => {
+    const fresh = await owner("lagging-send");
+    const plan = jsonOf(
+      await sauce(
+        ...["tx", program, "--chain", "ethereum", "--rpc-url", local.rpcUrl],
+        ...["--owner", fresh.address, "--salt", fresh.label, "--args", "41"],
+      ),
+    ) as { transactions: Array<{ to: Address; data: Hex; value: string }> };
+    expect(plan.transactions).toHaveLength(2);
+    const signed = await Promise.all(
+      plan.transactions.map((tx, nonce) =>
+        signedBy(fresh, { to: tx.to, data: tx.data, value: BigInt(tx.value) }, nonce),
+      ),
+    );
+    // Its first answers to eth_getCode after a transaction are a node's that has not seen the block.
+    const lagging = await laggingEndpoint(local.rpcUrl, 2);
+    try {
+      const sent = await sauceWith(
+        NO_TERMINAL,
+        ...["send", ...signed, "--chain", "ethereum", "--rpc-url", lagging.url, "--json"],
+      );
+      expect(jsonOf(sent)).toMatchObject({
+        ok: true,
+        sent: [{ status: "success" }, { status: "success" }],
+      });
+      expect(lagging.served()).toBeGreaterThan(0);
+    } finally {
+      await lagging.stop();
+    }
+  }, 120_000);
+
+  it("sauce send keeps what the chain already has when a later Kitchen.deployPot carries no owner and salt", async () => {
+    const fresh = await owner("malformed-after");
+    const recipient = privateKeyToAccount(generatePrivateKey()).address;
+    const first = await signedBy(fresh, { to: recipient, data: "0x", value: 1_000n }, 0);
+    const landed = jsonOf(
+      await sauceWith(
+        NO_TERMINAL,
+        ...["send", first, "--chain", "ethereum", "--rpc-url", local.rpcUrl, "--json"],
+      ),
+    ) as { sent: Array<{ hash: string }> };
+    // The batch again, with a deployment the guard cannot read after the transaction that landed.
+    const again = await sauceWith(
+      NO_TERMINAL,
+      ...["send", first, await signedBy(fresh, MALFORMED_DEPLOY, 1), "--chain", "ethereum"],
+      ...["--rpc-url", local.rpcUrl, "--json"],
+    );
+    expect(again.code).toBe(1);
+    const out = JSON.parse(again.stdout) as {
+      ok: boolean;
+      sent: Array<{ hash: string; status: string; reason?: string }>;
+    };
+    expect(out.ok).toBe(false);
+    expect(out.sent).toHaveLength(2);
+    expect(out.sent[0]).toMatchObject({ status: "success", hash: landed.sent[0]!.hash });
+    expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
+    expect(out.sent[1]!.reason).toContain("transaction 2 of 2 (Kitchen.deployPot at");
+    expect(out.sent[1]!.reason).toContain("carries no owner and salt");
+    expect(await local.publicClient.getTransactionCount({ address: fresh.address })).toBe(1);
   }, 120_000);
 
   it("takes a Pot of every kind the release deploys, whatever the Kitchen mints now, and no Pot of another", async () => {

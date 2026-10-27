@@ -9,7 +9,10 @@
  * alone may fall back to `eth_call`), the plan refused if any would revert, and the policy checked
  * over all of them; then each is sent through `chain.ts#sendAndWait` — the path `sauce run` sends
  * through, which simulates it again, reserves what it spends in the wallet's ledger, signs, sends
- * and waits — stopping at the first that does not succeed. On Solana each is signed by the wallet
+ * and waits — stopping at the first that does not succeed. Every cook and Pot deployment of an EVM
+ * plan is held to the Pot guard first, together (`chain.ts#requirePlanSendable`), so none of it is
+ * sent when a later step would be refused; after a deployment, the next step waits until the
+ * endpoint shows the Pot's code. On Solana each is signed by the wallet
  * as its fee payer and sent through `solana.ts#sendPlannedSvm`, which rehearses it as signed and
  * refuses it if it would fail, as `sauce run` does.
  */
@@ -36,7 +39,15 @@ import { v12PotAbi } from "../evm/engine.js";
 import { decodeReturned } from "../routes/returned.js";
 import { fetchExecutionFee, MAX_POT_LEN } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { connect, revertReason, sendAndWait, simulate, type TxRequest } from "./chain.js";
+import {
+  awaitPot,
+  connect,
+  requirePlanSendable,
+  revertReason,
+  sendAndWait,
+  simulate,
+  type TxRequest,
+} from "./chain.js";
 import { txLinks } from "./links.js";
 import { measureEvm, noPolicyNote, rehearsePlan, type Measured, type SendGuard } from "./policy.js";
 import type { PotRecord } from "./pot-store.js";
@@ -332,6 +343,20 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
     return { to: tx.to, data: tx.data, value: tx.value };
   });
   input.guard.gate(input.chain);
+  // Every cook and Pot deployment of the plan held to the guard before anything is rehearsed or
+  // sent (`chain.ts#requirePlanSendable`): a later step it refuses leaves every one before it unsent.
+  try {
+    await requirePlanSendable(
+      client,
+      requests.map((tx, index) => ({
+        tx,
+        what: `${input.transactions[index]!.what} (${index + 1} of ${requests.length})`,
+      })),
+    );
+  } catch (error) {
+    if (!(error instanceof CliError) || requests.length === 1) throw error;
+    throw new CliError(`not sent — ${error.message}`);
+  }
   // Rehearsed together first: a plan's later transactions run on what its earlier ones leave.
   const rehearsed = await rehearsePlan(client, account.address, requests);
   if (rehearsed === undefined && requests.length > 1) {
@@ -402,6 +427,25 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
           }),
     });
     if (result.status !== "success") break;
+    // A Pot it deployed, once the endpoint shows its code: a receipt is no proof that the node
+    // answering next has its block, and the transaction after it is checked and rehearsed there.
+    const next = input.transactions[index + 1];
+    if (next !== undefined) {
+      try {
+        for (const pot of result.pots ?? []) {
+          await awaitPot(client, getAddress(pot.pot), result.blockNumber);
+        }
+      } catch (error) {
+        if (!(error instanceof CliError)) throw error;
+        sent.push({
+          what: next.what,
+          hash: "",
+          status: "failed",
+          reason: `not sent — ${error.message}`,
+        });
+        break;
+      }
+    }
   }
 
   return sent;
