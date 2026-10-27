@@ -1633,7 +1633,7 @@
         "token": { "$ref": "#/$defs/token", "description": "the asset withdrawn" },
         "recipient": {
           "$ref": "#/$defs/recipient",
-          "description": "receives the asset; `\"pot\"` is the Pot"
+          "description": "receives the output when no later action spends it; `\"pot\"` keeps it in the Pot"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",

@@ -642,7 +642,7 @@ const SPECS: readonly ActionSpec[] = [
     {
       pool: f(contract, "the Aave V3 Pool"),
       token: f(token, "the asset withdrawn"),
-      recipient: f(recipient, 'receives the asset; `"pot"` is the Pot'),
+      recipient: RECIPIENT,
     },
     { output: "realized" },
   ),
