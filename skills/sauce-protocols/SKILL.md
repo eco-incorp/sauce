@@ -100,48 +100,14 @@ contract's part: it holds the tokens, receives what the protocol pays its caller
 the protocol mints it, a Uniswap V3 position's NFT included. A Pot is cooked by its owner alone, so
 the records and checks a contract keeps of who may call it fall away. Each Solidity function becomes
 a function of the program and `main` picks one; `msg.sender`'s tokens are already in the Pot, and
-an address the example hardcodes is the registry's name for it. Each ported example's header names
-the file it ports, pinned to a commit, and says what changed and why. One encoding differs:
+an address the example hardcodes is the registry's name for it. One encoding differs:
 Solidity's `abi.encode(s)` of a struct that holds a dynamic field (`bytes`, an array) is that struct
 as one value, behind an offset, while `abi.encode` encodes a record as its fields; write
 `abi.encode({ s: record })` for the Solidity bytes.
 
-[examples/uniswap-v3-liquidity-examples.sauce.ts](examples/uniswap-v3-liquidity-examples.sauce.ts)
-ports Uniswap's `LiquidityExamples`: a full-range DAI/USDC position minted to the Pot, its fees
-collected, half its liquidity taken out, liquidity added and its NFT handed back.
-
-[examples/aave-v3-credit-delegation.sauce.ts](examples/aave-v3-credit-delegation.sauce.ts) ports
-Aave's own credit delegation example onto `AaveV3.Pool`: the Pot supplies collateral, lets a
-borrower borrow against it (the debt token's `approveDelegation`, with the Pool's reserve reads, in
-[examples/AaveV3Delegation.json](examples/AaveV3Delegation.json)), repays that debt and withdraws.
 Aave's flash loan does not port: its Pool pays the receiver and then calls it back
 (`executeOperation`) to be repaid, and a Pot cannot be called back by a program. The flash a program
 has is a flash swap through the Pot's Router (`sauce-swaps`).
-
-[examples/compound-v3-my-contract.sauce.ts](examples/compound-v3-my-contract.sauce.ts) ports
-Compound's `MyContract`, its Compound III developer FAQ's example: supply, withdraw (a borrow past
-what is supplied), a whole borrow repaid and rewards claimed by `step`, each cook returning the
-contract's views for the Pot, and step 0 changing nothing, so `sauce simulate` is the read. The
-Comet and CometRewards functions are in [examples/Comet.json](examples/Comet.json). Its signed
-principal, an `Int256`, shows signed arithmetic beside unsigned: the sign is read with `>= 0`, each
-part converted with `Uint256(…)`, and the debt kept apart from the collateral until `Int256(…)`
-takes one from the other.
-
-[examples/morpho-blue-snippets.sauce.ts](examples/morpho-blue-snippets.sauce.ts) ports Morpho's
-own snippets for a Morpho Blue market, the market named by its id: supply, collateral in and out,
-withdrawals and repayments by an amount, half or all (by shares, their cost worked out as Morpho
-rounds it and approved exactly), a borrow, and the views a position needs, with Morpho's reads,
-the IRM's rate and the oracle's price in
-[examples/MorphoBlueReads.json](examples/MorphoBlueReads.json). A Solidity view that computes
-interest accrued since the market was last touched becomes `accrueInterest` and a read: a program
-runs as a transaction, even under `sauce simulate`.
-
-[examples/pendle-router-sample.sauce.ts](examples/pendle-router-sample.sauce.ts) ports Pendle's own
-router samples: PT and YT bought and sold back, a zap into a market's liquidity and out, SY and PT
-with YT minted and redeemed, and a zap that keeps its YT, each a `step` on one market, with the
-router's approximation, token and limit-order arguments built as Pendle's StructGen builds them
-and the functions the registry's ABI leaves out in
-[examples/PendleRouterSample.json](examples/PendleRouterSample.json).
 
 ## Pitfalls
 
@@ -165,8 +131,5 @@ and the functions the registry's ABI leaves out in
 - [examples/protocols.mts](examples/protocols.mts) compiles it for Base, Arbitrum and Optimism (the
   last two preview chains, compiled only), loads a protocol document, and compiles a protocol
   template.
-- [examples/uniswap-v3-liquidity-examples.sauce.ts](examples/uniswap-v3-liquidity-examples.sauce.ts)
-  ports Uniswap's `LiquidityExamples` (above), with the position reads the registry's ABI leaves
-  out in [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
 - [references/index.md](references/index.md), `references/registry/<slug>.md` (generated) and
   `references/<slug>.md` (one document per protocol).

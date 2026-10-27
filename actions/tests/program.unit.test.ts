@@ -161,6 +161,43 @@ describe("action programs — an output a later action spends is delivered to th
   });
 });
 
+describe("action programs — an ambientSwap spends its amount", () => {
+  const ambient = (isBuy: boolean, inBaseQty: boolean) => ({
+    ...SAMPLES.ambientSwap,
+    isBuy,
+    inBaseQty,
+  });
+  const parse = (action: unknown) => parseProgram({ version: 1, chainId: 1, actions: [action] });
+
+  it("accepts the amount denominated in the token paid, in both directions", () => {
+    for (const [isBuy, inBaseQty] of [
+      [true, true],
+      [false, false],
+    ] as const) {
+      assert.doesNotThrow(() => parse(ambient(isBuy, inBaseQty)), `${isBuy}/${inBaseQty}`);
+    }
+  });
+
+  it("refuses an exact-output pairing, whose qty is what the Pot receives", () => {
+    for (const [isBuy, inBaseQty, wanted] of [
+      [true, false, "true"],
+      [false, true, "false"],
+    ] as const) {
+      assert.throws(
+        () => parse(ambient(isBuy, inBaseQty)),
+        (error: unknown) =>
+          error instanceof ProgramError &&
+          error.issues.some(
+            (issue) =>
+              issue.path === "actions[0].inBaseQty" &&
+              issue.message.startsWith(`must be ${wanted}: the amount is what the swap spends`),
+          ),
+        `${isBuy}/${inBaseQty}`,
+      );
+    }
+  });
+});
+
 describe("action programs — errors are precise and complete", () => {
   const cases: Array<[string, unknown, RegExp]> = [
     [

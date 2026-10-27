@@ -50,7 +50,7 @@ A sequence of protocol actions that compiles to one Sauce program executing on o
 | [`carbonSwap`](#carbonswap) | Trades against Carbon strategies by source amount; the controller pays the Pot. |
 | [`fraxswapSwap`](#fraxswapswap) | Swaps an exact input along a Fraxswap path; the output is a balance delta. |
 | [`fluidDexT1Swap`](#fluiddext1swap) | Swaps an exact ERC-20 input through a Fluid DEX T1 pool. |
-| [`acrossBridge`](#acrossbridge) | Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. |
+| [`acrossBridge`](#acrossbridge) | Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. |
 | [`stargateBridge`](#stargatebridge) | Sends through a Stargate V2 ERC-20 pool (taxi), paying the LayerZero fee it quotes. |
 | [`cctpBridge`](#cctpbridge) | Burns USDC through Circle's CCTP V2 TokenMessenger for minting on the destination. |
 | [`hyperlaneBridge`](#hyperlanebridge) | Transfers through a Hyperlane ERC-20 warp route, paying the interchain gas it quotes. |
@@ -319,7 +319,7 @@ Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output i
 | `quote` | token | yes | the pool's quote token |
 | `poolIdx` | integer ≥ 0 | yes | the pool type index (420 is the standard pool) |
 | `isBuy` | true or false | yes | true pays base and receives quote |
-| `inBaseQty` | true or false | yes | true when the amount is denominated in the base token |
+| `inBaseQty` | true or false | yes | true when the amount is denominated in the base token; it must equal `isBuy`, so the amount is what the swap spends |
 | `tip` | integer 0–65535 | yes | 0 accepts the pool's default fee |
 | `limitPrice` | base-10 integer string, uint128 | yes | the worst acceptable price, as a Q64.64 square-root price |
 | `amountOutMin` | base-10 integer string, uint128 | yes | the least output accepted; the dex reverts below it |
@@ -400,14 +400,15 @@ Swaps an exact ERC-20 input through a Fluid DEX T1 pool. Calls FluidDexT1.swapIn
 
 ### acrossBridge
 
-Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. Calls SpokePool.depositV3.
+Deposits into an Across SpokePool for the destination chain's token, less the relayer fee. Calls SpokePool.depositV3.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |
 | `type` | `"acrossBridge"` | yes | the action |
 | `amount` | base-10 integer string, uint256 | no | The amount this action spends. Omit it (and amountRef) to spend the previous action's output. |
 | `spokePool` | contract | yes | the origin SpokePool; it pulls the token, so approve it first |
-| `token` | token | yes | the token bridged (input and output) |
+| `token` | token | yes | the token deposited, on this chain |
+| `outputToken` | address | no | the token received on the destination; the registry must list it there, and the deposited token here, with the same decimals, or the action is refused; default: the registry's token of the same symbol on `destChainId` |
 | `destChainId` | integer ≥ 1 | yes | the destination chain id |
 | `recipient` | address | yes | receives on the destination |
 | `relayerFee` | base-10 integer string, uint256 | yes | kept by the relayer: the destination receives `amount - relayerFee` |
