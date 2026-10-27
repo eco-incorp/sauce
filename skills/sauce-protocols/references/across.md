@@ -33,7 +33,7 @@ function main(
 ): Uint256 {
   const spokePool = ISpokePool.at(spokePoolAddress);
   spokePool.depositV3(
-    ctx.msgSender(),
+    ctx.self(),
     recipient,
     token,
     outputToken,
