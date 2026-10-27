@@ -214,26 +214,35 @@ function renderSauceArg(value: unknown, methodName: string): string {
 /** The chain id each client reports, asked once per client that does not carry its chain. */
 const reportedChainIds = new WeakMap<Client, Promise<number>>();
 
+/** The chain id a client without a chain reports, kept per client while the lookup is in flight or has succeeded. */
+function reportedChainId(client: Client, fresh: boolean): Promise<number> {
+  const kept = fresh ? undefined : reportedChainIds.get(client);
+  if (kept !== undefined) return kept;
+  const lookup = import("viem/actions").then(({ getChainId }) => getChainId(client));
+  // A lookup that fails must not be remembered as the client's answer: drop it, so the next call
+  // asks again instead of failing for as long as the client lives. Only this lookup's own entry:
+  // a newer one may have replaced it.
+  const reported: Promise<number> = lookup.catch((error: unknown) => {
+    if (reportedChainIds.get(client) === reported) reportedChainIds.delete(client);
+    throw error;
+  });
+  reportedChainIds.set(client, reported);
+
+  return reported;
+}
+
+/**
+ * Refuses a client on another chain. A client with no `chain` is asked for its chain id, once and
+ * then from memory — unless `fresh`: a wallet can switch network between calls, and viem does not
+ * check a chainless client's chain when it sends, so a `write` asks again.
+ */
 async function assertClientChain(
   client: Client,
   chain: CanonicalChain,
   what: string,
+  fresh = false,
 ): Promise<void> {
-  let id = client.chain?.id;
-  if (id === undefined) {
-    let reported = reportedChainIds.get(client);
-    if (reported === undefined) {
-      const lookup = import("viem/actions").then(({ getChainId }) => getChainId(client));
-      // A lookup that fails must not be remembered as the client's answer: drop it, so the next
-      // call asks again instead of failing for as long as the client lives.
-      reported = lookup.catch((error: unknown) => {
-        reportedChainIds.delete(client);
-        throw error;
-      });
-      reportedChainIds.set(client, reported);
-    }
-    id = await reported;
-  }
+  const id = client.chain?.id ?? (await reportedChainId(client, fresh));
   if (id !== chain.id) {
     throw new Error(
       `${what}: the client is on chain ${id}, but this call is ${chain.slug}'s (chain ${chain.id}) — ` +
@@ -334,7 +343,7 @@ export function makeContractCall(
     if (account === undefined) {
       throw new Error(`${label}.write: the client has no account — pass one, or { account }`);
     }
-    await assertClientChain(client, chain, `${label}.write`);
+    await assertClientChain(client, chain, `${label}.write`, true);
     const { writeContract } = await import("viem/actions");
     return writeContract(client, {
       ...request(),
