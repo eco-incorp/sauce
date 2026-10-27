@@ -824,7 +824,7 @@ export async function requirePlanSendable(
       reason,
       // A deployment the chain already has is said to have landed, as it did, and where it left
       // no Pot; the refusal itself then ends with nothing after it being sent.
-      step.sent === true && typeof deployment === "object"
+      step.sent === true && typeof deployment === "object" && reason.endsWith(NOTHING_AFTER)
         ? `${step.what} landed and left no Pot at ${deployment.pot}, where this SDK expects one: ` +
             reason
         : steps.length === 1

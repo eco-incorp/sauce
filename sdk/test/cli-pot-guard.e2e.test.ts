@@ -837,6 +837,21 @@ describeEvm("the Pot is checked against the chain", () => {
     120_000,
   );
 
+  it("does not report a missing Pot when a sent deployment's code read fails", async () => {
+    const fresh = await owner("landed-read-fails");
+    const { tx } = await deploymentOfKind("private", fresh);
+    const down = {
+      ...local.publicClient,
+      getCode: () => Promise.reject(new Error("endpoint down")),
+    };
+    const refusal = requirePlanSendable(down as never, [
+      { tx, what: "transaction 1 of 2 (Kitchen.deployPot)", sent: true },
+      { tx: { to: fresh.pot, data: "0x", value: 1_000n }, what: "transaction 2 of 2 (transfer)" },
+    ]);
+    await expect(refusal).rejects.toThrow("reading the Pot's code failed");
+    await expect(refusal).rejects.not.toThrow("landed and left no Pot");
+  }, 120_000);
+
   it.each([
     ["deployPot(owner, salt)", false],
     ["deployPot(owner, salt, routerFixed)", true],
