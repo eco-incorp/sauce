@@ -105,6 +105,14 @@ nothing moves.
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
   `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
 
+### Solana venues
+
+- **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
+  `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
+  quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
+  switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
+  the transaction fee.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

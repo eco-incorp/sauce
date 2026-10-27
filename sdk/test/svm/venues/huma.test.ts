@@ -109,15 +109,32 @@ describe("huma fetchPoolConfig", () => {
     expect(cfg.feeTiers[cfg.feeTiers.length - 1]).toEqual({ ltBps: 10000n, feeBps: 5n });
   });
 
-  it("throws when the pool is not On", async () => {
+  it("refuses a pool that is not On", async () => {
     const doctoredFixtures = doctored(POOL_STATE, (data) => {
       data[9] = 0; // PoolStatus::Off
     });
-    const cfg = await fetchConfig("withdraw", doctoredFixtures);
+    await expect(fetchConfig("deposit", doctoredFixtures)).rejects.toThrow(/is not On/);
+  });
+
+  it("referenceQuote throws when the pool turned Off after prepare", async () => {
+    const cfg = await fetchConfig("withdraw");
+    const doctoredFixtures = doctored(POOL_STATE, (data) => {
+      data[9] = 0; // PoolStatus::Off
+    });
     expect(() =>
       huma.referenceQuote(cfg, fixtureBytesMap(doctoredFixtures), 100_000_000n, 0n),
     ).toThrow(/is not On/);
   });
+
+  it.each(["deposit", "withdraw"] as const)(
+    "emitQuote (%s) quotes 0 unless the live status byte is On",
+    async (direction) => {
+      const cfg = await fetchConfig(direction);
+      const fragment = huma.emitQuote(cfg, 0, 100_000_000n);
+      expect(fragment).toContain("const humaStatus0 = svm.sload(acc0, 9, 1).toLe();");
+      expect(fragment).toContain("if (humaStatus0 === 1) {");
+    },
+  );
 });
 
 describe("huma referenceQuote — deposit direction (worked examples)", () => {

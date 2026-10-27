@@ -339,6 +339,14 @@ export function humaFeeBpsFor(liquidRatioBps: bigint, feeTiers: readonly HumaFee
   return 0n;
 }
 
+/** PoolStatus::On — the only state in which the program accepts deposit/instant_withdraw. */
+const POOL_STATUS_ON = 1;
+
+function assertPoolOn(status: number | undefined, poolConfigAccount: Address): void {
+  if (status !== POOL_STATUS_ON)
+    throw new Error(`${SLUG} pool ${poolConfigAccount} is not On (status byte ${status})`);
+}
+
 export const huma: SvmVenueAdapter = {
   slug: SLUG,
   kind: "constant-product", // no curve concept fits better; gates only rung defaults/helper inclusion (see types.ts).
@@ -367,6 +375,7 @@ export const huma: SvmVenueAdapter = {
     if (poolStateData === null)
       throw new Error(`${SLUG} pool_state account ${poolState} not found`);
     const decodedState = decodePoolState(poolStateData, modeConfig);
+    assertPoolOn(decodedState.status, poolConfigAccount);
 
     const poolAuthority = await derivePda(HUMA_PROGRAM_ID, [
       utf8.encode("pool_authority") as Uint8Array,
@@ -490,16 +499,19 @@ export const huma: SvmVenueAdapter = {
       return [
         `const humaAssets${i} = svm.sload(${poolState}, ${c.modeAssetsOffset}, 16).toLe();`,
         `const humaSupply${i} = svm.sload(${modeMint}, 36, 8).toLe();`,
+        `const humaStatus${i} = svm.sload(${poolState}, 9, 1).toLe();`,
         `let humaRoom${i} = 0;`,
         `if (${c.liquidityCap} > humaAssets${i}) { humaRoom${i} = ${c.liquidityCap} - humaAssets${i} }`,
         `let humaIn${i} = ${amountIn};`,
         `if (humaIn${i} > humaRoom${i}) { humaIn${i} = humaRoom${i} }`,
         `let q${i} = 0;`,
-        `if (humaIn${i} >= ${c.minDepositAmount}) {`,
-        `  q${i} = humaIn${i};`,
-        `  if (humaSupply${i} !== 0) {`,
-        `    if (humaAssets${i} !== 0) {`,
-        `      q${i} = humaIn${i} * humaSupply${i} / humaAssets${i};`,
+        `if (humaStatus${i} === 1) {`,
+        `  if (humaIn${i} >= ${c.minDepositAmount}) {`,
+        `    q${i} = humaIn${i};`,
+        `    if (humaSupply${i} !== 0) {`,
+        `      if (humaAssets${i} !== 0) {`,
+        `        q${i} = humaIn${i} * humaSupply${i} / humaAssets${i};`,
+        `      }`,
         `    }`,
         `  }`,
         `}`,
@@ -512,6 +524,7 @@ export const huma: SvmVenueAdapter = {
       `const humaLiquid${i} = svm.sload(${poolUnderlying}, 64, 8).toLe();`,
       `const humaDeployed${i} = svm.sload(${poolState}, ${c.liquidAssetsDeployedOffset}, 8).toLe();`,
       `const humaDisbursed${i} = svm.sload(${poolState}, ${c.disbursementReserveOffset}, 16).toLe();`,
+      `const humaStatus${i} = svm.sload(${poolState}, 9, 1).toLe();`,
       `const humaAvailRaw${i} = humaLiquid${i} + humaDeployed${i};`,
       `let humaAvail${i} = 0;`,
       `if (humaAvailRaw${i} > humaDisbursed${i}) { humaAvail${i} = humaAvailRaw${i} - humaDisbursed${i} }`,
@@ -519,10 +532,12 @@ export const huma: SvmVenueAdapter = {
       `if (humaAssets${i} !== 0) { humaRatio${i} = humaAvail${i} * 10000 / humaAssets${i} }`,
       ...humaFeeAssignLines(c, `humaRatio${i}`, `humaFee${i}`),
       `let q${i} = 0;`,
-      `if (humaSupply${i} !== 0) {`,
-      `  const humaGross${i} = ${amountIn} * humaAssets${i} / humaSupply${i};`,
-      `  q${i} = humaGross${i} - humaGross${i} * humaFee${i} / 10000;`,
-      `  if (q${i} > ${c.reserveLimit}) { q${i} = ${c.reserveLimit} }`,
+      `if (humaStatus${i} === 1) {`,
+      `  if (humaSupply${i} !== 0) {`,
+      `    const humaGross${i} = ${amountIn} * humaAssets${i} / humaSupply${i};`,
+      `    q${i} = humaGross${i} - humaGross${i} * humaFee${i} / 10000;`,
+      `    if (q${i} > ${c.reserveLimit}) { q${i} = ${c.reserveLimit} }`,
+      `  }`,
       `}`,
     ].join("\n");
   },
@@ -556,10 +571,7 @@ export const huma: SvmVenueAdapter = {
         `${SLUG} referenceQuote state is missing pool_underlying_token ${c.poolUnderlyingToken}`,
       );
 
-    if (poolState[9] !== 1)
-      throw new Error(
-        `${SLUG} pool ${c.poolConfigAccount} is not On (status byte ${poolState[9]})`,
-      );
+    assertPoolOn(poolState[9]!, c.poolConfigAccount);
 
     const modeAssets = readUintLE(poolState, c.modeAssetsOffset, 16);
     const modeSupply = readUintLE(modeMintData, 36, 8);
