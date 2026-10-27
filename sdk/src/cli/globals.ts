@@ -7,7 +7,7 @@
  */
 import { getAddress, numberToHex } from "viem";
 
-import type { CanonicalChain } from "../chains/canonical.js";
+import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import {
   sourceGlobals,
   type SourceInterface,
@@ -15,7 +15,7 @@ import {
   type SourceToken,
 } from "../routes/source-globals.js";
 import { STOCK_ISSUERS } from "../routes/stock-tokens.js";
-import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { SVM_TOKEN_REGISTRY, svmClusterOf, TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { TOKEN_2022_PROGRAM_ID } from "../svm/token-program.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
@@ -145,6 +145,10 @@ function namespaceLines(ns: SourceNamespace, methods: boolean): string[] {
   ];
 }
 
+/** The SVM chain of Solana's devnet, to which another SVM chain's tokens point a devnet program:
+ *  its symbols are devnet's mints. */
+const DEVNET = CANONICAL_CHAINS.find((one) => svmClusterOf(one) === "devnet");
+
 /** `sauce globals`: the chain's tokens, protocol namespaces, chain names and ambient functions. */
 export function globalsCommand(input: GlobalsInput): CommandOutput {
   const globals = sourceGlobals(input.chain);
@@ -173,17 +177,12 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
   if (one !== undefined) text.push("", ...namespaceLines(one, true));
   for (const bound of named?.interfaces ?? []) text.push("", ...interfaceLines(bound, true));
   const svm = chain.kind === "svm";
-  // A devnet program compiles for the same chain, so its mints are not what a symbol resolves to:
-  // they are listed for it to pass as defines, which override the registry's. It has no stocks.
-  const devnet = !svm || input.stocks === true ? [] : SVM_TOKEN_REGISTRY.devnet;
   if (showTokens && svm) {
-    const devnetListed = search === undefined ? devnet : devnet.filter(searcher(search));
-    const rows = [...listed, ...devnetListed];
-    const width = Math.max(0, ...rows.map((token) => token.symbol.length));
-    const mintWidth = Math.max(0, ...rows.map((token) => (token.mint ?? "").length));
+    const width = Math.max(0, ...listed.map((token) => token.symbol.length));
+    const mintWidth = Math.max(0, ...listed.map((token) => (token.mint ?? "").length));
     // A Token-2022 mint says so: its writes are the checked ones, and its accounts derive under it.
     // A stock with what it is, so a search for the company finds its token.
-    const line = (token: (typeof rows)[number]): string =>
+    const line = (token: SourceToken): string =>
       `${token.symbol.padEnd(width)}  ${(token.mint ?? "").padEnd(mintWidth)}  ${token.address}  ` +
       `${token.decimals} decimals${token.tokenProgram === TOKEN_2022_PROGRAM_ID ? ", Token-2022" : ""}` +
       (token.stock === undefined
@@ -206,12 +205,9 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
               "--search <text> finds one by symbol, name or ticker",
           ]
         : []),
-      ...(devnetListed.length === 0
+      ...(DEVNET === undefined || DEVNET.id === chain.id || input.stocks === true
         ? []
-        : [
-            "  On devnet a mint differs: take it as an Address argument of main, and pass its key:",
-            ...devnetListed.map((token) => `    ${line(token)}`),
-          ]),
+        : [`  On devnet: --chain ${DEVNET.slug}, whose symbols are devnet's mints.`]),
       "  Any other mint: Token(mint), with mint an Address argument of main, passed as its base58",
       "  key. A token method's accounts are added to main and derived when the cook is built, so",
       "  its holders are known then: pot (the Pot), an Address argument of main, or a key.",
@@ -310,9 +306,6 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       chain,
       ...(one === undefined ? {} : { protocol: one }),
       ...(showTokens ? { tokens: listed.map(tokenJson) } : {}),
-      ...(showTokens && svm && input.stocks !== true
-        ? { devnetTokens: search === undefined ? devnet : devnet.filter(searcher(search)) }
-        : {}),
       // The interfaces asked for: every one beside the namespaces, or --protocol's own.
       ...(showProtocols
         ? {

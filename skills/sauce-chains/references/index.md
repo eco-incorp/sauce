@@ -7,7 +7,7 @@ coin, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
 [deployments.json](deployments.json) lists them once.
 
-Sauce supports transactions on Ethereum, Base, Arc and Solana (`ethereum`, `base`, `arc`, `solana`). Every other chain is a preview chain:
+Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet (`ethereum`, `base`, `arc`, `solana`, `arc-testnet`, `base-sepolia`, `sepolia`, `solana-devnet`). Every other chain is a preview chain:
 a program compiles and the reads work there, and `sauce simulate` runs wherever the release is
 deployed on the chain, but the `sauce` command and the MCP server build and
 send no transaction, and say so with the supported chains and how to request that chain. To
@@ -54,7 +54,11 @@ preview chain's file links its own.
 | [Linea](linea.md) | `linea` | 59144 | EVM | preview | 11 | 0 | 8 |
 | [Berachain](berachain.md) | `berachain` | 80094 | EVM | preview | — | 1 | 0 |
 | [Blast](blast.md) | `blast` | 81457 | EVM | preview | — | 0 | 5 |
+| [Base Sepolia](base-sepolia.md) | `base-sepolia` | 84532 | EVM | supported (testnet) | — | 1 | 0 |
 | [Scroll](scroll.md) | `scroll` | 534352 | EVM | preview | — | 0 | 8 |
+| [Arc Testnet](arc-testnet.md) | `arc-testnet` | 5042002 | EVM | supported (testnet) | — | 2 | 0 |
 | [Zora](zora.md) | `zora` | 7777777 | EVM | preview | — | 0 | 2 |
+| [Ethereum Sepolia](sepolia.md) | `sepolia` | 11155111 | EVM | supported (testnet) | — | 1 | 0 |
 | [Aurora](aurora.md) | `aurora` | 1313161554 | EVM | preview | — | 0 | 0 |
 | [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | — | 1803 | 0 |
+| [Solana Devnet](solana-devnet.md) | `solana-devnet` | 1399811150 | Solana (SVM) | supported (testnet) | — | 2 | 0 |

@@ -178,9 +178,35 @@ an effect, with no error. Two of the fixes refuse code that used to compile:
   in another order, and it is not a literal written here, so there is nothing left to reorder …".
   Write the fields in the declared order where the value is built. A list written in the call
   itself is still reordered.
+- **Fixed** (Solana): a venue name supplied by the caller, such as `Orca` in `defines` or an ambient
+  module, stays the caller's value through venue lowering and pool-loop handling. An active member
+  call on a scalar is refused instead of silently becoming an SDK swap, on mainnet and devnet.
 
 The settlement program compiles to the same 410 bytes and hash as under 2.6.0, so its pin is
 unchanged.
+
+### Testnets: Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet
+
+- **Added** (EVM): three testnets, where the release is deployed at its published addresses:
+  **Arc Testnet** (`arc-testnet`, chain id 5042002), with Arc's model (USDC the native coin,
+  behind the ERC-20 `USDC`, and the 20 gwei minimum base fee), **Base Sepolia**
+  (`base-sepolia`, 84532), and **Ethereum Sepolia** (`sepolia`, 11155111). The `sauce` command
+  and the MCP server build and send transactions on all three. Each has Circle's stablecoins by
+  symbol (`USDC` on all three, `EURC` on Arc Testnet), and no protocol: a program there names
+  tokens and the Sauce stack. Built-in public endpoints are included.
+- **Added** (Solana): **Solana Devnet** (`solana-devnet`, 1399811150), a supported chain of its
+  own, with the released engine and Kitchen deployed. A program compiled for it reads `chainId`
+  as 1399811150, which the devnet engine reports, and its symbols are devnet's mints (`USDC`,
+  `WSOL`). The Solana venues are mainnet's, so a venue name is refused on it.
+- The released Solana engine and Kitchen are also deployed on **Solana testnet**, with zero
+  execution fees on devnet and testnet. Testnet uses the same engine build and chain id
+  1399811150 as devnet. Use `--chain solana --rpc-url <testnet-rpc-url>` and explicit
+  testnet mint addresses. The endpoint does not change `solana`'s compile-time chain identity or
+  mainnet token symbols; `ctx.chainId()` reads the running cluster's chain id. Local simulation
+  selects the released engine build from the endpoint's cluster. There is no `solana-testnet` chain
+  or testnet venue registry.
+- The chain pages and the agent skills mark each testnet, and every message naming the supported
+  chains names the testnets after the mainnets.
 
 ### The registry
 

@@ -178,7 +178,7 @@ export function rewriteSvmTokenSyntax(
     collectAccountExpressions(lowering);
     return lowering;
   };
-  let lowering = lower(unrollPoolKeyLoops(source));
+  let lowering = lower(unrollPoolKeyLoops(source, bound));
   // A script runs as `main(): void`, which has no signature to add the accounts to: give it one.
   const script = lowering.needsMain() ? scriptAsMain(lowering.program, lowering.source) : undefined;
   if (script !== undefined) lowering = lower(script);

@@ -203,6 +203,56 @@ describe("--fund signs and sends only for the wallet's own Pot", () => {
   });
 });
 
+// Native value is sent with the cook, and needs no token approval: a chain with no Permit2 entry
+// (the release's testnets have none) funds it in the default mode, with a key or without one, and
+// still refuses a token pull.
+describe("--fund of the native coin alone, on a chain whose registry records no Permit2", () => {
+  const fundOn = (slug: string, raw: string, account?: PrivateKeyAccount): FundingInput => {
+    const chain = requireChain(slug);
+    const owner = account?.address ?? RECIPIENT;
+    const { pot, contract } = own(owner);
+
+    return {
+      chain,
+      // The owner holds plenty of the coin, as `sauce simulate` assumes no less.
+      client: { ...client(contract), getBalance: async () => 10n ** 21n } as PublicClient,
+      rpcUrl: "http://127.0.0.1:1",
+      owner,
+      pot,
+      mode: "permit2",
+      requests: [parseFund(raw, chain)],
+      sweep: false,
+      ...(account === undefined ? {} : { account }),
+      send: false,
+      approver: { auto: true, canAsk: false, approve: async () => true },
+    };
+  };
+
+  it.each([
+    ["base-sepolia", "ETH:0.01", 10n ** 16n],
+    ["arc-testnet", "native:1", 10n ** 18n],
+  ])(
+    "plans --fund %s %s as value, with a key or without one, asking Permit2 nothing",
+    async (slug, raw, value) => {
+      const { account, calls } = recording();
+      for (const signer of [account, undefined]) {
+        const planned = await planFunding(fundOn(slug, raw, signer));
+        expect(planned.value).toBe(value);
+        expect(planned.signed).toBe(false);
+      }
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it("still refuses a token pull there, naming the chain", async () => {
+    const { account, calls } = recording();
+    await expect(planFunding(fundOn("base-sepolia", "USDC:1", account))).rejects.toThrow(
+      "Permit2 is not registered on base-sepolia",
+    );
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("--fund is held to the wallet's policy before it signs", () => {
   let dir: string;
   beforeEach(() => {

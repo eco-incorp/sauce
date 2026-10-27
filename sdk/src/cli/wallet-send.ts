@@ -192,15 +192,19 @@ export function plannedTransactions(value: unknown, where = "transaction"): Plan
   return out;
 }
 
-/** The one chain a plan is sent on: each transaction's, `given`'s, and all the same. */
+/**
+ * The one chain a plan is sent on: each transaction's, `given`'s, and all the same. A Solana
+ * transaction that names no chain is on the SVM chain `given` names, else Solana's.
+ */
 export function planChain(
   transactions: readonly PlannedTx[],
   given?: CanonicalChain,
 ): CanonicalChain {
+  const svm = given?.kind === "svm" ? given : requireChain("solana");
   const ids = new Set<number>();
   for (const tx of transactions) {
     if (tx.chainId !== undefined) ids.add(tx.chainId);
-    else if (tx.kind === "svm") ids.add(requireChain("solana").id);
+    else if (tx.kind === "svm") ids.add(svm.id);
   }
   if (given !== undefined) {
     const other = [...ids].find((id) => id !== given.id);
@@ -493,7 +497,7 @@ async function planOutflows(
   owner: KeyPairSigner,
   chain: CanonicalChain,
 ): Promise<Measured[]> {
-  const step = { ...ctx, signer: owner };
+  const step = { ...ctx, chain, signer: owner };
   const ahead = await transactionsAhead(plan, step);
   const [base, one] = await Promise.all([
     ctx.rpc.getMinimumBalanceForRentExemption(0n).send(),
@@ -591,11 +595,20 @@ export async function sendSvmPlan(input: {
     throw new UsageError(`wallet ${wallet.info.name} is an EVM wallet, and the plan is Solana's`);
   }
   let plan = planFor(input.cursor, wallet.info);
+  // A plan goes on on the chain it was made for: its cluster, its tokens, its chain's gate.
+  if (plan.chain.id !== chain.id) {
+    throw new UsageError(`the plan is ${plan.chain.slug}'s, not ${chain.slug}'s`);
+  }
   guard.gate(chain);
-  const ctx = { rpc: createSolanaRpc(input.rpcUrl), url: input.rpcUrl, signer: wallet.signer };
+  const ctx = {
+    rpc: createSolanaRpc(input.rpcUrl),
+    url: input.rpcUrl,
+    chain,
+    signer: wallet.signer,
+  };
   // The cluster the plan carries on against, checked before anything of it is signed: the plan
   // may have been made against another endpoint, or before an upgrade.
-  await requireReleased(ctx.rpc, ctx.url, planPrograms(plan));
+  await requireReleased(ctx.rpc, ctx.url, chain, planPrograms(plan));
   // The whole plan held to the wallet's policy before any of it is sent, as far as it can be
   // measured now; each transaction is measured again, and reserved in the ledger, as it is sent.
   if (guard.policy !== undefined) {
@@ -635,7 +648,7 @@ export async function sendSvmPlan(input: {
     for (const tx of handed) {
       let result: SvmSent;
       try {
-        result = await sendPlannedSvm(input.rpcUrl, wallet.signer, {
+        result = await sendPlannedSvm(input.rpcUrl, chain, wallet.signer, {
           feePayer: wallet.signer.address,
           transaction: tx.transaction,
           what: tx.what,
@@ -781,7 +794,7 @@ async function sendSvm(input: PlanInput): Promise<SentEntry[]> {
     }
     let result;
     try {
-      result = await sendPlannedSvm(input.rpcUrl, signer, {
+      result = await sendPlannedSvm(input.rpcUrl, input.chain, signer, {
         feePayer,
         transaction: tx.transaction,
         what: tx.what,

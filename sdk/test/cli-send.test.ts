@@ -26,7 +26,7 @@ import {
 import { parseTransaction, serializeTransaction, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { requireChain } from "../src/chains/canonical.js";
+import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { sendAndWait, simulate, type SignedCall } from "../src/cli/chain.js";
 import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
 import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
@@ -91,6 +91,65 @@ describe("the chain a send is for", () => {
       }),
     ).not.toThrow();
     expect(() => signedChain({ transactions: [] })).toThrow(/missing the signed transactions/);
+  });
+
+  it("is the SVM chain given, else the plan's, else Solana's, for what names no cluster", async () => {
+    const [solana, devnet] = [requireChain("solana"), requireChain("solana-devnet")];
+    const cursorOn = (chain: CanonicalChain): string =>
+      encodeCursor({
+        chain,
+        owner: getBase58Decoder().decode(new Uint8Array(32).fill(7)) as SvmAddress,
+        salt: `0x${"11".repeat(32)}`,
+        via: "kitchen",
+        tail: [],
+        lookupTables: [],
+        pot: "there",
+        tokenAccounts: [],
+        payload: new Uint8Array([1]),
+        labels: [],
+      });
+    const signature = getBase58Decoder().decode(new Uint8Array(64).fill(5));
+    // A Solana transaction or a signature names no cluster: the SVM chain given, else Solana's.
+    expect(signedChain({ transactions: ["AQABAgM="] }, devnet).slug).toBe("solana-devnet");
+    expect(signedChain({ transactions: [], signatures: [signature] }, devnet).slug).toBe(
+      "solana-devnet",
+    );
+    expect(signedChain({ transactions: [], signatures: [signature] }).slug).toBe("solana");
+    // A plan's cursor names the chain it was made for, and what is sent with it is on that chain.
+    expect(signedChain({ transactions: ["AQABAgM="], cursor: cursorOn(devnet) }).slug).toBe(
+      "solana-devnet",
+    );
+    expect(signedChain({ transactions: [], cursor: cursorOn(solana) }).slug).toBe("solana");
+    expect(() => signedChain({ transactions: [], cursor: cursorOn(devnet) }, solana)).toThrow(
+      "the plan's cursor is solana-devnet's, not solana's",
+    );
+    expect(() =>
+      signedChain({ transactions: ["AQABAgM="], cursor: cursorOn(solana) }, devnet),
+    ).toThrow("the plan's cursor is solana's, not solana-devnet's");
+    expect(() =>
+      signedChain({ transactions: [], cursor: cursorOn(solana) }, requireChain("base")),
+    ).toThrow("a plan's cursor and a signature are Solana's, not base's");
+    // Sent on another chain than its own, a plan is refused before any endpoint is reached.
+    await expect(
+      sendCommand({
+        chain: solana,
+        rpcUrl: "http://127.0.0.1:9/",
+        transactions: [],
+        cursor: cursorOn(devnet),
+      }),
+    ).rejects.toThrow("the plan's cursor is solana-devnet's, not solana's");
+  });
+
+  // solana-devnet is a supported chain: a signed Solana transaction sent there passes the support
+  // gate and goes on to the endpoint, where (nothing listening) it fails, sending nothing.
+  it("lets a signed send on solana-devnet past the support gate", async () => {
+    const sent = sendCommand({
+      chain: requireChain("solana-devnet"),
+      rpcUrl: "http://127.0.0.1:9/",
+      transactions: [solanaWire([1], 1, 2)],
+    });
+    await expect(sent).rejects.toThrow();
+    await expect(sent).rejects.not.toThrow(/preview chain|is refused/);
   });
 });
 
@@ -264,6 +323,7 @@ describe("a plan's next step that cannot be built once something was sent", () =
   const SIGNATURE = key(5, 64);
   /** A plan whose cook was handed out: its next step reads the block height first. */
   const plan: SvmPlan = {
+    chain: requireChain("solana"),
     owner: OWNER,
     salt: `0x${"11".repeat(32)}`,
     via: "kitchen",

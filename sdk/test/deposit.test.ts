@@ -154,6 +154,25 @@ describe("toDeposit guards", () => {
     }
   });
 
+  // Arc Testnet has the same native ERC-20 address: a target names every chain it is that coin on.
+  it("names both Arc and Arc Testnet for the native USDC ERC-20 they share, and each one's own EURC", () => {
+    const refusal = (target: `0x${string}`): string => {
+      try {
+        toDeposit({ protocol: "weth", action: "wrap", target, amount: 1n });
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`${target} was not refused`);
+    };
+    const shared = refusal("0x3600000000000000000000000000000000000000");
+    expect(shared).toMatch(/the native USDC ERC-20 on Arc \(chain 5042\)/);
+    expect(shared).toMatch(/the native USDC ERC-20 on Arc Testnet \(chain 5042002\)/);
+    expect(shared).toMatch(/Arc Testnet has no canonical wrapped native/);
+    const testnetEurc = refusal("0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a");
+    expect(testnetEurc).toMatch(/EURC on Arc Testnet \(chain 5042002\)/);
+    expect(testnetEurc).not.toMatch(/on Arc \(chain 5042\)/);
+  });
+
   it("still accepts a real WETH9 target, and Arc's USDC for a typed template", () => {
     const WETH9 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     expect(() =>

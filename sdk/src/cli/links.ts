@@ -5,10 +5,12 @@
  * nothing here reaches the network, and the command never reads these pages.
  *
  * Phalcon names each chain by a slug of its own (its explorer's chain list): Ethereum is `eth`,
- * Base `base`, Solana `solana`. A chain it does not list gets no trace link.
+ * Base `base`, Solana `solana`. A chain it does not list gets no trace link: Solana's devnet among
+ * them, whose transactions Solscan shows under its `cluster` parameter.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { chains } from "../chains/index.js";
+import { svmClusterOf } from "../routes/token-registry.js";
 
 /** Phalcon's slug for each chain it traces, by chain id; Solana by its canonical id. */
 const PHALCON: Readonly<Record<number, string>> = {
@@ -39,6 +41,13 @@ const PHALCON: Readonly<Record<number, string>> = {
 /** Solana's explorer: Solscan, which Phalcon links to as well. */
 const SOLSCAN = "https://solscan.io";
 
+/** Solscan's page of a transaction on an SVM chain: a cluster other than mainnet's by its name. */
+function solscan(chain: CanonicalChain, hash: string): string {
+  const cluster = svmClusterOf(chain);
+
+  return `${SOLSCAN}/tx/${hash}${cluster === undefined || cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`}`;
+}
+
 /** A transaction's pages. Either may be missing, for a chain with no explorer or no trace. */
 export interface TxLinks {
   readonly explorer?: string;
@@ -48,11 +57,17 @@ export interface TxLinks {
 
 /** The pages of `hash` (a Solana signature on Solana) on `chain`. */
 export function txLinks(chain: CanonicalChain, hash: string): TxLinks {
-  const site = chain.kind === "svm" ? SOLSCAN : chains[chain.id]?.blockExplorerUrls[0];
+  const site = chains[chain.id]?.blockExplorerUrls[0];
+  const explorer =
+    chain.kind === "svm"
+      ? solscan(chain, hash)
+      : site === undefined
+        ? undefined
+        : `${site.replace(/\/$/, "")}/tx/${hash}`;
   const slug = PHALCON[chain.id];
 
   return {
-    ...(site === undefined ? {} : { explorer: `${site.replace(/\/$/, "")}/tx/${hash}` }),
+    ...(explorer === undefined ? {} : { explorer }),
     ...(slug === undefined
       ? {}
       : { trace: `https://app.blocksec.com/phalcon/explorer/tx/${slug}/${hash}` }),

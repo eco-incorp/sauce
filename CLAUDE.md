@@ -1451,7 +1451,10 @@ what it cannot measure. MCP: `sauce_signed_cook` (pure, stdio and HTTP) and the 
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
-builds transactions on — Ethereum, Base, Arc and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
+builds transactions on — Ethereum, Base, Arc and Solana, then the testnets Arc Testnet, Base
+Sepolia, Ethereum Sepolia and Solana Devnet, kept in their own `SUPPORTED_TESTNET_SLUGS` so one
+line takes them out
+(`SUPPORTED_CHAIN_SLUGS`, and `supportedChainNames()` names the testnets apart); every other
 canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
 search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,
 `requireSupported`. The MCP server imports them from there (`mcp/src/sdk.ts`), and the skills'
@@ -1468,7 +1471,15 @@ beside `refused`, because a client validates an error's structured content too. 
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
 chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
 the README, the manual's pages and the skills that name the four (`git grep "Ethereum, Base"`). A
-test that builds or sends a transaction through the CLI or MCP uses a supported chain.
+testnet is added only where the release's stack is live at its addresses: EVM checks the engine,
+Router, Kitchen proxy, its EIP-1967 implementation slot and `router()`; Solana checks the engine
+and Kitchen release builds. Ethereum Sepolia (`sepolia`) and Solana Devnet (`solana-devnet`) are
+supported in `SUPPORTED_TESTNET_SLUGS`. Devnet is a canonical chain of its own (1399811150): its
+symbols are devnet's mints (`token-registry.ts#svmClusterOf`), it has no venue
+(`svm-venue-methods.ts#svmVenuesOn`), and a cook there is still held to the release's builds by
+`solana-release.ts#requireSolanaRelease`; its Pot records share `1399811149-devnet` with those a
+`--chain solana` against a devnet endpoint wrote. A test that builds or sends a transaction
+through the CLI or MCP uses a supported chain.
 
 ## Agent skills
 

@@ -33,7 +33,7 @@ import {
   getDeactivateLookupTableInstruction,
 } from "@solana-program/address-lookup-table";
 
-import { requireChain } from "../chains/canonical.js";
+import type { CanonicalChain } from "../chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
   buildCloseCodeBufferInstruction,
@@ -43,7 +43,7 @@ import {
 import { CliError, UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
-import { sendPlanTx, type SvmSent } from "./solana.js";
+import { requireCluster, sendPlanTx, type SvmSent } from "./solana.js";
 import { requireSupported } from "./support.js";
 import {
   decodeCursor,
@@ -501,6 +501,8 @@ const sol = (lamports: bigint): string => {
 };
 
 export interface ReclaimInput {
+  /** The SVM chain the owner's accounts are on, as the command was given it. */
+  readonly chain: CanonicalChain;
   readonly owner: Address;
   readonly rpcUrl: string;
   /** Lookup tables to close, named: else the owner's Sauce tables, scanned for. */
@@ -518,7 +520,7 @@ export interface ReclaimInput {
 /** `sauce reclaim`: what the owner has open, and the transactions that close it — or, with the
  *  owner's key, those transactions sent. */
 export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput> {
-  const chain = requireChain("solana");
+  const { chain } = input;
   const rpc = createSolanaRpc(input.rpcUrl);
   const kept = new Set<Address>();
   const plans = (input.keep ?? []).map((cursor) => {
@@ -541,6 +543,8 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
       if (at !== undefined) kept.add(at);
     }
   }
+  // The endpoint serves the cluster the chain names, before anything is read from it.
+  await requireCluster(rpc, input.rpcUrl, chain);
   const found = await reclaimable(rpc, input.rpcUrl, input.owner, input.lookupTables ?? [], kept);
   const signer = input.signer ?? unsignedSigner(input.owner);
   const transactions = await closing(found, signer, input.keepTables === true);
@@ -664,7 +668,12 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
     ),
   ];
   if (input.signer === undefined || transactions.length === 0) {
-    const built = await signableTransactions(transactions, { rpc, url: input.rpcUrl, signer });
+    const built = await signableTransactions(transactions, {
+      rpc,
+      url: input.rpcUrl,
+      chain,
+      signer,
+    });
     const json = {
       ...listing,
       transactions: built.transactions,
@@ -692,7 +701,7 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
     };
   }
   await input.approve?.(transactions.map((tx) => tx.what));
-  const ctx = { rpc, url: input.rpcUrl, signer: input.signer };
+  const ctx = { rpc, url: input.rpcUrl, chain, signer: input.signer };
   // Each closes something of its own: one that fails, or is refused, leaves the others to go.
   const sent: Array<{ tx: PlanTx; sent?: SvmSent; refused?: string }> = [];
   for (const tx of transactions) {

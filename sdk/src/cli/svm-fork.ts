@@ -24,7 +24,7 @@ import type { Clock as ClockType, LiteSVM as LiteSVMType } from "litesvm";
 
 import type { SimulatedAccount } from "../svm/index.js";
 
-import { svmEnginePath, svmKitchenPath } from "../svm/engine-artifacts.js";
+import { svmEnginePath, svmKitchenPath, type EngineCluster } from "../svm/engine-artifacts.js";
 import { CliError } from "./args.js";
 import { LITESVM_EXTRA, provide } from "./optional.js";
 
@@ -206,7 +206,8 @@ async function read(
 
 /**
  * Opens a local copy of `keys` as the cluster holds them, with the engine and the Kitchen at their
- * program ids. `ask` makes each request, naming what it reads when it fails.
+ * program ids. `build` selects the engine for the endpoint's cluster; devnet and testnet share a
+ * build. `ask` makes each request, naming what it reads when it fails.
  */
 export async function openFork(
   rpc: Rpc,
@@ -214,6 +215,7 @@ export async function openFork(
   keys: readonly Address[],
   engine: Address,
   kitchen: Address,
+  build: EngineCluster,
   snapshot: ForkSnapshot = forkSnapshot(),
 ): Promise<Fork> {
   await provide(LITESVM_EXTRA);
@@ -239,7 +241,7 @@ export async function openFork(
     .withDefaultPrograms()
     .withSigverify(false)
     .withBlockhashCheck(false);
-  svm.addProgramFromFile(engine, svmEnginePath("mainnet"));
+  svm.addProgramFromFile(engine, svmEnginePath(build));
   svm.addProgramFromFile(kitchen, svmKitchenPath());
 
   // The cluster's rent, which is not LiteSVM's default: an account the cluster holds rent-exempt

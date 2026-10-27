@@ -347,6 +347,46 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       source: "probe:berachain@2026-10-02; usdt0:deployments",
     },
   ],
+  // base-sepolia (84532), a testnet -- Circle's testnet USDC
+  // (developers.circle.com/stablecoins/usdc-contract-addresses, "Testnet"), probe-verified
+  // 2026-10-26. No WETH: the stack's testnets carry Circle's stablecoins only.
+  84532: [
+    {
+      symbol: "USDC",
+      address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      decimals: 6,
+      source: "probe:base-sepolia@2026-10-26; circle:usdc-contract-addresses",
+    },
+  ],
+  // arc-testnet (5042002), a testnet -- docs.arc.io/arc/references/contract-addresses, "Testnet",
+  // probe-verified 2026-10-26. USDC is the same 6-decimal ERC-20 interface to the native coin as on
+  // Arc. EURC is Circle's. The testnet's USYC (allowlisted holders only), cirBTC (whose symbol()
+  // no ticker key takes) and bridged WETH are not registered.
+  5042002: [
+    {
+      symbol: "USDC",
+      address: "0x3600000000000000000000000000000000000000",
+      decimals: 6,
+      source: "probe:arc-testnet@2026-10-26; arc:contract-addresses",
+    },
+    {
+      symbol: "EURC",
+      address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+      decimals: 6,
+      source: "probe:arc-testnet@2026-10-26; arc:contract-addresses",
+    },
+  ],
+  // sepolia (11155111), a testnet -- Circle's testnet USDC
+  // (developers.circle.com/stablecoins/usdc-contract-addresses, "Testnet"), probe-verified
+  // 2026-10-26.
+  11155111: [
+    {
+      symbol: "USDC",
+      address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      decimals: 6,
+      source: "probe:sepolia@2026-10-26; circle:usdc-contract-addresses",
+    },
+  ],
 };
 
 /** Keyed by canonical EVM chain id (`CanonicalChain.id`). */
@@ -488,20 +528,27 @@ function svmRows(cluster: SvmTokenCluster): readonly SvmTokenRow[] {
   ];
 }
 
-/** Registered SPL mints, per Solana cluster. A canonical `solana` program compiles against
- *  `mainnet-beta`'s; a devnet program passes its mint as a define, which overrides the registry. */
+/** Registered SPL mints, per Solana cluster: a program compiled for `solana` resolves its symbols
+ *  to `mainnet-beta`'s, one compiled for `solana-devnet` to `devnet`'s. */
 export const SVM_TOKEN_REGISTRY: Readonly<Record<SvmTokenCluster, readonly SvmTokenRow[]>> = {
   "mainnet-beta": svmRows("mainnet-beta"),
   devnet: svmRows("devnet"),
 };
 
 /** The cluster each canonical SVM chain is. */
-const SVM_CLUSTER_OF: Readonly<Record<number, SvmTokenCluster>> = { 1399811149: "mainnet-beta" };
+const SVM_CLUSTER_OF: Readonly<Record<number, SvmTokenCluster>> = {
+  1399811149: "mainnet-beta",
+  1399811150: "devnet",
+};
+
+/** The Solana cluster `chain` is, or `undefined` off SVM. */
+export function svmClusterOf(chain: CanonicalChain): SvmTokenCluster | undefined {
+  return chain.kind === "svm" ? SVM_CLUSTER_OF[chain.id] : undefined;
+}
 
 /** The registered mints a program compiled for `chain` resolves its symbols to: none off SVM. */
 export function svmTokenRows(chain: CanonicalChain): readonly SvmTokenRow[] {
-  if (chain.kind !== "svm") return [];
-  const cluster = SVM_CLUSTER_OF[chain.id];
+  const cluster = svmClusterOf(chain);
 
   return cluster === undefined ? [] : SVM_TOKEN_REGISTRY[cluster];
 }
