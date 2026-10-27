@@ -1,11 +1,13 @@
 /**
  * What the testing kit's Solana suites share. NOT a `.test.ts`.
  */
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { gunzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { address, getAddressEncoder, type Address } from "@solana/kit";
 
 import {
@@ -14,6 +16,7 @@ import {
   svmKitchenPath,
   v12SvmKitchenProgramId,
 } from "../../src/testing/sdk.js";
+import type { ReplayedState } from "./support.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SDK_TEST = resolve(HERE, "../../../sdk/test");
@@ -70,6 +73,7 @@ interface VenueManifest {
     readonly programId: string;
     readonly programData: string;
     readonly lastDeploySlot: string;
+    readonly sha256: string;
     readonly file: string;
   }[];
   readonly pools: readonly { readonly name: string; readonly pool: string }[];
@@ -95,6 +99,71 @@ export function pinnedPool(name: string): Address {
 
 /** The slot and time the pinned venue dump was read at: the pinned cluster's clock. */
 export const PINNED = { slot: BigInt(venues.slot), unixTimestamp: BigInt(venues.unixTimestamp) };
+
+interface SolanaStateFile {
+  programs: Record<string, string | { sha256: string }>;
+}
+
+/** The pinned venue dump's program `programId` at `sha256`, its ELF; or why it cannot be had. */
+function venueProgram(programId: string, sha256: string): Buffer | string {
+  const pinned = venues.programs.find((one) => one.programId === programId);
+  if (pinned?.sha256 !== sha256) {
+    return `the venue dump does not pin ${programId} at sha256 ${sha256}`;
+  }
+  let elf: Buffer;
+  try {
+    elf = gunzipSync(readFileSync(join(VENUE_PROGRAMS, pinned.file)));
+  } catch {
+    return `${pinned.file} is not in ${relative(process.cwd(), VENUE_PROGRAMS)}`;
+  }
+  const actual = createHash("sha256").update(elf).digest("hex");
+
+  return actual === sha256 ? elf : `${pinned.file} hashes to ${actual}, not its pin ${sha256}`;
+}
+
+/**
+ * A committed Solana state file pins each third-party program by its sha256 (`{ sha256 }`) instead of
+ * holding its ELF, which is the venue dump's (`sdk/test/fixtures/svm-venue-programs`), fetched from
+ * mainnet by `pnpm --filter './sdk' fetch-program-fixtures`. This writes the file the kit replays:
+ * `state`'s, with each program's ELF put back, in a directory of its own.
+ */
+export function replaySolanaState(state: string): ReplayedState {
+  const file = JSON.parse(gunzipSync(readFileSync(state)).toString("utf8")) as SolanaStateFile;
+  const missing: string[] = [];
+  for (const [programId, program] of Object.entries(file.programs)) {
+    if (typeof program === "string") continue;
+    const elf = venueProgram(programId, program.sha256);
+    if (typeof elf === "string") missing.push(elf);
+    else file.programs[programId] = elf.toString("base64");
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `${relative(process.cwd(), state)} pins programs that cannot be put back: ` +
+        `${missing.join("; ")}. Run \`pnpm --filter './sdk' fetch-program-fixtures\``,
+    );
+  }
+  const dir = mkdtempSync(join(tmpdir(), "sauce-testing-solana-state-"));
+  const path = join(dir, "state.json.gz");
+  writeFileSync(path, gzipSync(JSON.stringify(file)));
+
+  return { path, remove: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/**
+ * After recording `state`: each program's ELF replaced by its sha256, the form the file is committed
+ * in. A program the venue dump does not pin at that hash is refused: nothing would put it back.
+ */
+export function pinSolanaPrograms(state: string): void {
+  const file = JSON.parse(gunzipSync(readFileSync(state)).toString("utf8")) as SolanaStateFile;
+  for (const [programId, program] of Object.entries(file.programs)) {
+    if (typeof program !== "string") continue;
+    const sha256 = createHash("sha256").update(Buffer.from(program, "base64")).digest("hex");
+    const elf = venueProgram(programId, sha256);
+    if (typeof elf === "string") throw new Error(`cannot pin ${programId} in ${state}: ${elf}`);
+    file.programs[programId] = { sha256 };
+  }
+  writeFileSync(state, gzipSync(JSON.stringify(file), { level: 9 }));
+}
 
 const UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111";
 const SYSVAR = "Sysvar1111111111111111111111111111111111111";
