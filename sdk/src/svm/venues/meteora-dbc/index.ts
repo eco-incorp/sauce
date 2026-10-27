@@ -9,10 +9,11 @@
  * — and the fee schedule (a base-fee scheduler, linear or exponential decay
  * over time, plus an optional volatility-based dynamic fee).
  *
- * MATH (verified against the program source, github.com/MeteoraAg/
- * dynamic-bonding-curve, and cross-checked lamport-for-lamport against the
- * official `@meteora-ag/dynamic-bonding-curve-sdk`'s `swapQuoteExactIn` on
- * REAL mainnet pool state — see the venue test for the worked examples):
+ * MATH (source: Meteora's TypeScript SDK, github.com/MeteoraAg/
+ * dynamic-bonding-curve-sdk, Copyright (c) 2026 Meteora, licensed under the
+ * MIT License, see THIRD_PARTY_NOTICES.md; cross-checked lamport-for-lamport
+ * against its `swapQuoteExactIn` on REAL mainnet pool state — see the venue
+ * test for the worked examples):
  * each curve point is a Uniswap-v3-style constant-product BAND in Q64.64
  * sqrt-price space (`x*y = L^2`), walked from the live `sqrt_price` toward
  * the next boundary. `get_next_sqrt_price_from_{base,quote}_amount_in` and

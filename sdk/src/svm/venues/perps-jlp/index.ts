@@ -27,7 +27,9 @@
  *   perpetuals = findProgramAddress(["perpetuals"], PROGRAM_ID)
  *   transfer_authority = findProgramAddress(["transfer_authority"], PROGRAM_ID)
  *   __event_authority  = findProgramAddress(["__event_authority"], PROGRAM_ID)
- * (the Solana Labs `perpetuals` program template's canonical seeds — Jupiter
+ * (the Solana Labs `perpetuals` program template's canonical seeds,
+ * github.com/solana-labs/perpetuals, Copyright 2023 Solana Labs, Inc., licensed
+ * under Apache-2.0, see THIRD_PARTY_NOTICES.md — Jupiter
  * Perps is a fork of it). `custody` was independently re-derived from the
  * JLP pool address + the well-known SOL mint and matched the real SOL
  * custody address (7xS2gz2bTp3fwCC7knJvUWTEU9Tycczu6VhJYKgi1wdz) byte-for-byte;
@@ -52,7 +54,8 @@
  *       AND a separate `priceImpactFeeUsd` — the program itself only
  *       computes/reports a price-impact fee for position trades;
  *   (3) the community-maintained swap-fee reference
- *       (github.com/julianfssen/jupiter-perps-anchor-idl-parsing,
+ *       (github.com/julianfssen/jupiter-perps-anchor-idl-parsing, licensed
+ *       under ISC as declared in its package.json, see THIRD_PARTY_NOTICES.md;
  *       calculate-swap-amount-and-fee.ts) implements swap fees via
  *       `getSwapFeeBps`/`getFeeBps` (the target-ratio tax model) and never
  *       touches `priceImpactBuffer` or `tradeImpactFeeScalar`.

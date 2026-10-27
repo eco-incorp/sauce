@@ -2,10 +2,11 @@
  * Meteora DAMM v2 (cp-amm) venue adapter — sqrt-price quoting from the Pool
  * account ONLY. Vault balances must never enter the quote: they overstate
  * reserves by unclaimed LP/protocol fees, and for concentrated pools the
- * virtual reserves differ from real reserves. All byte offsets, formulas and
- * rounding rules follow the historical venue investigation, source-verified against the
- * cp-amm program (github.com/MeteoraAg/damm-v2, Pool = 8-byte discriminator +
- * 1104-byte zero-copy struct).
+ * virtual reserves differ from real reserves. Byte offsets, formulas and
+ * rounding rules follow Meteora's TypeScript SDK (github.com/MeteoraAg/damm-v2-sdk,
+ * Copyright (c) 2026 Meteora, licensed under the MIT License, see
+ * THIRD_PARTY_NOTICES.md) and the historical venue investigation (Pool =
+ * 8-byte discriminator + 1104-byte zero-copy struct).
  *
  * Accepted pools (everything else is gated with a named error):
  * - pool_status == 0 (enabled), collect_fee_mode in {0, 1} — compounding

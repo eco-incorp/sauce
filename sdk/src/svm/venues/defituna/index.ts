@@ -1,10 +1,10 @@
 /**
  * DefiTuna Fusion Pools (FusionAMM) — a Whirlpool-LINEAGE CLMM on Solana.
- * DefiTuna's own docs describe FusionAMM as "a hybrid (CLMM + OrderBook) AMM
- * contract... Modification based on Orca Whirlpools" (source headers in
- * github.com/DefiTuna/fusionamm-sdk, FusionAMM SDK Source-Available License;
- * the on-chain program itself is closed-source — only the client SDK + IDL
- * are public). Program id fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9,
+ * FusionAMM pairs a concentrated-liquidity pool derived from Orca's Whirlpool
+ * design with resting orders. Its client SDK and IDL are public
+ * (github.com/DefiTuna/fusionamm-sdk, under DefiTuna's own source-available
+ * license); the on-chain program is closed-source. Program id
+ * fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9,
  * 906 live pools measured (dataSize 423) at integration time.
  *
  * Layout source: target/idl/fusionamm.json (FusionPool/TickArray account

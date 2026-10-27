@@ -11,7 +11,8 @@
  *
  * GROUND TRUTH: no official IDL/program source is public. Layout, instruction
  * discriminators, and the account list are taken from the reverse-engineered
- * `carrot-sdk` crate (github.com/hogyzen12/carrot-sdk, MIT, matches an
+ * `carrot-sdk` crate (github.com/hogyzen12/carrot-sdk, licensed under MIT as
+ * declared in its Cargo.toml, see THIRD_PARTY_NOTICES.md; matches an
  * observed 4,872-byte Anchor IDL blob) and INDEPENDENTLY CONFIRMED against
  * the real deployed program:
  *   - the byte layout below was decoded against the REAL vault account
