@@ -166,13 +166,18 @@ That is your `require` doing its job: the cook would fail whole, and nothing wou
 
 This step spends real money: about 0.001 ETH covers the fees, and the program pays 1 USDC.
 
-Your Pot's address is known before the Pot exists, so you can send it tokens now. Print it:
+From an exchange or another wallet, send 0.001 ETH on Base to your wallet's address
+(`sauce wallet address me`).
+
+Then create your Pot, before you put tokens in it. Its address is known before it exists, but
+tokens sent there early stay at that address if a Kitchen release with new Pot code moves your Pot
+elsewhere. Deploy it:
 
 ```sh
-sauce pot --chain base --wallet me
+sauce pot --chain base --wallet me --deploy
 ```
 
-It prints the address as `"pot"`:
+It asks for your password, sends the deployment and waits for it. It prints the address as `"pot"`:
 
 ```text
 {
@@ -181,16 +186,14 @@ It prints the address as `"pot"`:
 …
 ```
 
-From an exchange or another wallet, send 1 USDC on Base to that address, and 0.001 ETH on Base to
-your wallet's address (`sauce wallet address me`). Then run:
+Send 1 USDC on Base to that address. Then run:
 
 ```sh
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 
-It asks for your password. The first time, it also asks to deploy your Pot, which is one extra
-transaction, and says what it costs in gas: answer `deploy`. Then it simulates the cook again,
-sends it, waits for it, and prints what happened:
+It asks for your password. Then it simulates the cook again, sends it, waits for it, and prints
+what happened:
 
 ```text
 cook 0x5f…: success, gas used 184211, block 21004500

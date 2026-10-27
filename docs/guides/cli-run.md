@@ -30,7 +30,7 @@ sauce globals --chain base
 # 2. Check that the program compiles.
 sauce compile pay.sauce.ts --chain base
 
-# 3. Your Pot's address. It is known before the Pot exists, so you can send it tokens now.
+# 3. Your Pot's address. It is known before the Pot exists; send it tokens once it is deployed.
 sauce pot --chain base --wallet me
 
 # 4. Try it: no password, no money, nothing sent.
@@ -223,8 +223,10 @@ refused, since the cook would revert.
 
 A program spends what your Pot holds. There are two ways to get tokens there.
 
-**Send them to the Pot's address**, from any wallet or exchange, like any other address.
-`sauce pot --chain base --wallet me` prints the address. The Pot does not need to exist yet.
+**Send them to the Pot's address** once the Pot is deployed, from any wallet or exchange, like any
+other address. `sauce pot --chain base --wallet me` prints the address, and with `--deploy` creates
+the Pot first. Do not send tokens to it before it exists: a Kitchen release with new Pot code
+derives another address, and what was sent to the old one stays where no Pot is deployed.
 
 **Or let the run pull them in.** `--fund` moves tokens from your wallet into the Pot in the same
 transaction as the cook:
