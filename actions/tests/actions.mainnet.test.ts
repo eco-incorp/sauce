@@ -77,6 +77,8 @@ const FRAXSWAP_ROUTER = "0xC14d550632db8592D1243Edc8B95b0Ad06703867";
 const FLUID_WSTETH_ETH = "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7";
 
 const ACROSS_SPOKE_POOL = "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5";
+/** USDC on Optimism, the destination the Across deposit asks for: not Ethereum's address. */
+const USDC_OPTIMISM = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85";
 const STARGATE_POOL_USDC = "0xc026395860Db2d07ee33e05fE50ed7bD583189C7";
 /** Arbitrum's LayerZero endpoint id. */
 const LZ_ARBITRUM = 30110;
@@ -942,7 +944,7 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
   // ---- bridges ------------------------------------------------------------------------------
 
   describe("bridges", () => {
-    it("acrossBridge deposits USDC for the destination, less the relayer fee", async () => {
+    it("acrossBridge deposits USDC for Optimism's USDC, less the relayer fee", async () => {
       await fund(USDC, USDC_100);
       const receipt = await run([
         { type: "approve", amount: `${USDC_100}`, token: USDC, spender: ACROSS_SPOKE_POOL },
@@ -970,6 +972,8 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         })
         .find((event) => event?.eventName === "FundsDeposited");
       assert.ok(deposit, "no FundsDeposited event");
+      assert.equal(deposit.args.inputToken, pad(USDC.toLowerCase() as Address));
+      assert.equal(deposit.args.outputToken, pad(USDC_OPTIMISM.toLowerCase() as Address));
       assert.equal(deposit.args.inputAmount, USDC_100);
       assert.equal(deposit.args.outputAmount, USDC_100 - 250_000n);
       assert.equal(deposit.args.destinationChainId, 10n);

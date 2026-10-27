@@ -138,22 +138,52 @@ nothing moves.
 
 ### Actions documents
 
+- **Fixed** (EVM): a split swap from `compileSplitSwap` starts its counters at zero in every cook.
+  The program keeps each venue's slice count and running output in the Pot's transient storage,
+  which lasts the whole transaction, not the cook, and it reset only the venues' marginal quotes. A
+  second split cooked on the same Pot in the same transaction (a contract wallet's batch, or an
+  owner's two signed cooks that someone else submits together) took the first one's counts as its
+  own: it swapped more than its `amount` where the Pot held more, paying the extra output to its own
+  sweep recipient, or reverted the transaction. Each cook now starts from zero and spends its own
+  `amount`. The program costs about 850 gas more per candidate. A cook that finds more slices than
+  its buckets reverts.
 - **Fixed** (EVM): `compileSplitSwap` refuses a malformed `sweep.recipient`. The sweep was lowered
   as a transfer but never checked as one, so `"0x1"`, `"1"` or `"0"` was padded to an address
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
   `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
+- **Fixed** (EVM): `acrossBridge` asks Across for the destination chain's token. The deposit's
+  `outputToken`, the token a relayer sends on the destination, was the deposited token's own
+  address, which is the destination's copy only where both chains share it: a USDC deposit from
+  Ethereum to Optimism asked for a token at Ethereum's USDC address on Optimism rather than
+  Optimism's USDC, so no relayer filled it and it was refunded after `fillDeadline`. The default is
+  now the registry's token of the same symbol on `destChainId`, and a new optional `outputToken`
+  gives another token's address there (Arbitrum's `USDT0` for Ethereum's `USDT`). The zero address,
+  Across's old "equivalent token", is not an option: the SpokePool refuses it with
+  `InvalidOutputToken`.
 - **Fixed** (EVM): `balancerV3Swap` with `wethIsEth: true` pays a WETH input in native ETH. It
   called the Router with no value, so the Router, which takes the router's own WETH as ETH under
   that flag, reverted every such swap, whatever the Pot held. The program now asks the Router for
   its WETH (`getWeth()`) and sends the amount as the call's value when `tokenIn` is that token, and
   no value otherwise; the Router wraps exactly the amount. A WETH output is still paid to the Pot as
   ETH, and is the action's output. `wethIsEth: false` compiles to the same program as before.
-
 - **Fixed** (EVM): an `aaveV3Withdraw` whose output a later action spends, or that saves it with
   `saveOutputAs`, withdraws to the Pot whatever its `recipient` says, as every swap, wrap and stake
   already did. Before, it paid its own `recipient` while the next action spent the same amount again
   from the Pot: a Pot holding that amount paid out twice, and one without it reverted. Recompile
   such documents; an `aaveV3Withdraw` nothing spends still pays its `recipient`.
+
+**Also breaking:**
+
+- An `acrossBridge` is refused at its `outputToken` unless the registry lists its token on the
+  program's chain and its output on `destChainId`, with the same decimals: the deposit asks for
+  `amount - relayerFee` of the output in the input's units, which a token of other decimals would
+  fill for dust (USDC to BNB Chain's 18-decimal USDC, which the registry does not list). With no
+  `outputToken`, the output is the registry's token of the input's symbol on `destChainId`; a
+  given `outputToken` is held to the same rule.
+- An `acrossBridge` is also refused at its `outputToken` when `destChainId` is the program's own
+  chain or a chain of the other kind (a mainnet deposit to a testnet, or the reverse), and when
+  `outputToken` is the zero address: Across does not bridge between those, and its SpokePool
+  refuses a zero output token with `InvalidOutputToken`.
 
 ### The SDK in TypeScript
 
@@ -201,11 +231,23 @@ nothing moves.
   refused the unmarked ones: the transaction failed and its fee was lost. The slot now ends its
   tick arrays with the System program after the last readable one, which the router reads as "pass
   no more". Pools with three readable arrays are unchanged.
+- **Fixed** (Solana): the Orca legacy token swap and SPL Token Swap fork adapters' quote fragment
+  returns 0 for a pool whose floor quotient `rsIn * rsOut / (rsIn + netIn)` is 0. The program's
+  `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
+  from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
+  already refused it.
 - **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
   `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
   quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
   switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
   the transaction fee.
+
+### SauceScript
+
+- **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
+  parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
+  unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
+  variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
 
 ## SDK 0.99.17 — 2026-10-27
 
@@ -424,6 +466,11 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   each, forgetting the least recently used first, and `fetchPoolConfig` forgets a pair it refuses.
   Before, each key minted stayed in memory for the life of the process. A key that is no longer
   held fails with `unknown discovery key`; minting it again restores it.
+
+### The agent skills and the manual
+
+- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
+  them.
 
 **Also breaking:**
 
@@ -865,7 +912,7 @@ upgrade authority, which can replace them after the check.
 - **Added**: ten of the protocols' own Solidity examples, ported to Sauce (Uniswap V3's swap,
   flash and liquidity examples, Uniswap V4's swap guide, Balancer V2's batch and flash swaps, Aave
   V3 credit delegation, Compound III, Morpho Blue and Pendle), each beside the file it ports, in
-  `sauce-swaps` and `sauce-protocols` and in [From Solidity examples to Sauce](guides/solidity-examples.md).
+  `sauce-swaps` and `sauce-protocols` and in From Solidity examples to Sauce.
   The swaps, the liquidity examples and the flash swaps execute on Ethereum's state at a fixed
   block; the PairFlash port runs once a trade has moved one of its two pools.
 

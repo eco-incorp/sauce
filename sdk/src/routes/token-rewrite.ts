@@ -473,7 +473,7 @@ function registryRoot(name: string, shadowed: ReadonlySet<string>): boolean {
 }
 
 /** `pot` or `self` as `node` reads it where neither the program (in scope there) nor the compile
- *  binds it: the Pot, or its retired name. Decided before any holder shape: a helper's own `pot`
+ *  binds it: the Pot, or `self`, which is refused. Decided before any holder shape: a helper's own `pot`
  *  record is not this one. */
 function freePotName(
   node: AstNode,
@@ -965,7 +965,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
  * parser ranges — never a re-print of the AST, so everything else (formatting, comments, unrelated
  * code) survives byte-for-byte. Prepend `tokenImportLines(result)` before compiling the result.
  * `bound` names what the compile binds beside the source (a define, a contract binding, an ambient
- * module's export): a `pot` or `self` among them is an ordinary holder, never the Pot.
+ * module's export): a `pot` or `self` among them is the caller's own holder, never the Pot.
  */
 export function rewriteTokenMembers(
   source: string,
