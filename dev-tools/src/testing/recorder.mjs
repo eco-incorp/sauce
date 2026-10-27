@@ -1,15 +1,17 @@
 /**
- * The recording proxy behind `fork(..., { mode: "record" })`, as its OWN process, so nothing a test
+ * The proxy every network fork reaches its endpoint through, as its OWN process, so nothing a test
  * does on its event loop (a compile is synchronous) can stall anvil, which — mid-transaction — waits
  * on this proxy for state it has not fetched yet.
  *
- * Reads `{ upstream, block, out, deadline? }` as JSON on stdin — never the environment, and never
- * the command line, where the upstream URL (which may carry a key) would show in the process list.
- * Forwards every JSON-RPC request to `upstream` and records each account and storage slot it
- * answers. A read at any block but `block` is refused, so one recording cannot mix two blocks. One
- * request may take `deadline` ms upstream, retries included (60 s by default), so an endpoint that
- * has gone away fails the recording in a minute rather than stalling it. On SIGTERM it writes the
- * records to `out` and exits. Prints its port on stdout once listening.
+ * Reads `{ upstream, block?, out?, deadline? }` as JSON on stdin — never the environment, and never
+ * the command line, where the upstream URL (which may carry a key) would show in the process list;
+ * anvil is given only this proxy's loopback URL. Forwards every JSON-RPC request to `upstream`. With
+ * `out` (`fork(..., { mode: "record" })`) it also records each account and storage slot `upstream`
+ * answers, and a read at any block but `block` is refused, so one recording cannot mix two blocks;
+ * on SIGTERM it writes the records to `out` and exits. Without `out` (a live fork) it records
+ * nothing and SIGTERM only stops it. One request may take `deadline` ms upstream, retries included
+ * (60 s by default), so an endpoint that has gone away fails in a minute rather than stalling.
+ * Prints its port on stdout once listening.
  */
 import { writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -17,7 +19,8 @@ import { createServer } from "node:http";
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const { upstream, block, out, deadline = 60_000 } = JSON.parse(input);
-if (!upstream || !block || !out) throw new Error("recorder: missing its configuration");
+const recording = out !== undefined;
+if (!upstream || (recording && !block)) throw new Error("recorder: missing its configuration");
 const pinned = String(block).toLowerCase();
 
 /** address -> { balance, nonce, code, storage: { slot: value } } */
@@ -120,11 +123,13 @@ const server = createServer(async (req, res) => {
   let status = 502;
   try {
     ({ status, text } = await forward(body));
-    const requests = [JSON.parse(body)].flat();
-    const responses = [JSON.parse(text)].flat();
-    for (const request of requests) {
-      const response = responses.find((r) => r.id === request.id);
-      if (response && "result" in response) record(request, response.result);
+    if (recording) {
+      const requests = [JSON.parse(body)].flat();
+      const responses = [JSON.parse(text)].flat();
+      for (const request of requests) {
+        const response = responses.find((r) => r.id === request.id);
+        if (response && "result" in response) record(request, response.result);
+      }
     }
   } catch (error) {
     // Never echo the upstream error: it can carry the RPC URL.
@@ -148,6 +153,6 @@ server.listen(0, "127.0.0.1", () => {
 });
 
 process.on("SIGTERM", () => {
-  writeFileSync(out, JSON.stringify({ accounts, errors }));
+  if (recording) writeFileSync(out, JSON.stringify({ accounts, errors }));
   process.exit(0);
 });

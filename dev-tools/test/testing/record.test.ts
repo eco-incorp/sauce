@@ -3,7 +3,7 @@
  * standing in for a chain's endpoint, and the file it writes replays with no RPC at all.
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -353,6 +353,34 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
     } finally {
       await upstream.stop();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a live fork's endpoint off every command line", async () => {
+    const upstream = await local();
+    // A key in the URL, as hosted endpoints carry one; anvil ignores the query.
+    const key = `sauce-key-${process.pid}-${Date.now()}`;
+    const before = new Set(children().map(({ pid }) => pid));
+    try {
+      const block = Number(await upstream.client.getBlockNumber());
+      const live = await fork("base", { block, rpcUrl: `${upstream.rpcUrl}/?key=${key}` });
+      try {
+        const started = children().filter(({ pid }) => !before.has(pid));
+        assert.ok(
+          started.some(({ command }) => command.includes("anvil")),
+          "no anvil started",
+        );
+        const everyone = execFileSync("ps", ["-A", "-o", "command="], { encoding: "utf8" });
+        assert.equal(everyone.includes(key), false, "the endpoint's key is in the process list");
+        assert.equal((await live.run(program("multiply"), { args: [6n, 7n, 100n] })).returned, 42n);
+      } finally {
+        await live.stop();
+      }
+      for (const { pid } of children().filter(({ pid }) => !before.has(pid))) {
+        assert.ok(await gone(pid), `pid ${pid} still runs`);
+      }
+    } finally {
+      await upstream.stop();
     }
   });
 

@@ -1691,7 +1691,9 @@ beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY
 `PATH` for an EVM chain, and reads no environment: the RPC, block and state file are arguments.
 `fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
 live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
-recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
+recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv;
+a live fork reaches its RPC through the same proxy, recording nothing, so no mode puts the URL, or a
+key in it, on anvil's command line or in the stderr a failed start quotes),
 `--no-storage-caching` for anvil (no RPC cache, read or written), dev accounts' code cleared, the
 genesis written
 with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
