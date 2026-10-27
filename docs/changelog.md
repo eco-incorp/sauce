@@ -206,6 +206,13 @@ nothing moves.
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
 
+### SauceScript
+
+- **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
+  parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
+  unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
+  variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
