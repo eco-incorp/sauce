@@ -1,8 +1,8 @@
 // Compiles swap-leg.sauce.ts for Base and Arbitrum the way `sauce compile` does, and pins the facts
 // the sauce-swaps skill states: the functions `@sauce/router` exports and their argument order, the
 // Router entry points that take a sqrt-price limit, which pool callbacks the Router services, what a
-// callback is held to, and, on Solana, the library's functions, their arguments and what a program
-// calling one or all of them weighs. Offline: nothing is sent.
+// callback is held to, and, on Solana, the library's functions, their arguments, what a program
+// calling one or all of them weighs, and what a zero price limit does. Offline: nothing is sent.
 //
 //   node swaps.mts
 import { readFileSync } from "node:fs";
@@ -317,6 +317,41 @@ check(
 check(
   example.entryParams.map((param) => param.name).join() === "to,amountIn,priceLimit,minOut",
   "the example's arguments are its own; the pool and the accounts are none of them",
+);
+// A zero limit, as the Pitfalls state it per target. On an EVM chain it is none. On Solana the
+// functions at a price divide by `priceLimit` for the lower-key token's direction (a concentrated-
+// liquidity pool's sqrt price, Phoenix's ticks selling its base) and skip a pool already past it,
+// returning 0 before the floor is checked; the example the bullet names, WSOL, is the lower-key one.
+const pitfalls = section("Pitfalls");
+check(
+  /On an EVM chain a `sqrtPriceLimitX96` of `0` is none: `minOut` is then the\s+only bound/.test(
+    pitfalls,
+  ),
+  "the Pitfalls scope `0` as no limit to an EVM chain",
+);
+check(
+  /A `priceLimit` of `0` on Solana is not "none"\.\*\* Paying the lower-key token of the pair \(WSOL\s+before USDC/.test(
+    pitfalls,
+  ) && /the cook fails, dividing by zero/.test(pitfalls),
+  "the Pitfalls say a zero priceLimit on Solana fails the cook paying the lower-key token",
+);
+check(
+  svmText.includes("Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, priceLimit))") &&
+    svmText.includes("Math.mulDiv(10 ** 36, 10000, priceLimit * (10000 - fee) * tick)"),
+  "at a price the SVM arm divides by priceLimit paying the lower-key token (Phoenix: its base)",
+);
+check(
+  /if \(svm\.sload\(source, 64, 8\)\.toLe\(\) == held\) \{\s+return 0;\s+\}\s+const received[^]*?"below minOut"/.test(
+    svmText,
+  ),
+  "a skipped swap returns 0 before minOut is checked",
+);
+const mintKeys = new Map(
+  routes.sourceGlobals("solana").tokens.map((token) => [token.symbol, BigInt(token.address)]),
+);
+check(
+  mintKeys.get("WSOL")! < mintKeys.get("USDC")!,
+  "WSOL's mint is the lower key of WSOL and USDC",
 );
 // Each venue that finds pools by key has its `pool`, the key the skill says: a tick spacing or a
 // fee, with a whirlpool's fee tier after its spacing and a config's spacing after its fee.
