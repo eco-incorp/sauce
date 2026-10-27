@@ -647,7 +647,9 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
   const latest = await read("the latest block", () => input.client.getBlock());
   const deadline = input.deadline ?? latest.timestamp + 600n;
 
-  if (input.mode === "permit2") {
+  // Only a token pull needs Permit2: native value rides on the cook, so a chain with no Permit2
+  // entry funds it in the default mode, as the early gate (`inputs.ts#fundingFor`) lets it.
+  if (input.mode === "permit2" && tokens.length > 0) {
     const permit2 = permit2On(input.chain);
     for (const funded of tokens) {
       const allowed = await read(`${funded.request.label}'s allowance to Permit2`, () =>
