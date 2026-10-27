@@ -124,8 +124,11 @@ in it, not ETH.
 
 A testnet's coin and tokens have no value: try a program there before mainnet. Solana's devnet is a
 chain of its own: its chain id is 1399811150 and its symbols are devnet's mints. The released engine
-and Kitchen are deployed on devnet and testnet, with zero execution fees. This does not deploy
-mainnet venues on those clusters.
+and Kitchen are deployed on devnet and testnet, with zero execution fees. Venues are deployed per
+cluster, not with the engine: devnet has seven of the Solana venues, each at its devnet program
+(`sauce globals --chain solana-devnet` lists them). It refuses `Byreal.CLMM` and
+`Cropper.Whirlpool`, which have no program there, and `Pancakeswap.CLMM`, whose devnet pools lack
+the tick arrays a swap at a price needs. The SDK records no venue on testnet.
 
 Solana testnet has no chain alias or token registry. Use an explicit endpoint:
 

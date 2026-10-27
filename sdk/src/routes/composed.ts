@@ -16,13 +16,12 @@ import { chainAccessors } from "./accessors.js";
 // (`Base.Uniswap.UniversalRouter.method(...)`) -- see composeChainGlobal below.
 import { chainContracts } from "../descriptors/accessors.js";
 // The SVM twin of the above: composes the svm venue accessor tree
-// (`Solana.RaydiumCpSwap.swap(...)`) onto Solana's mainnet only, where the venues' pools are --
-// see composeChainGlobal's `svmVenuesOn` branch below.
+// (`Solana.RaydiumCpSwap.swap(...)`) onto Solana's mainnet only, whose programs those adapters
+// quote -- see composeChainGlobal's cluster branch below.
 import { venues as svmVenueAccessors } from "../svm/accessors.js";
 // The chain's registry tokens (`Base.USDC` -> `{ address, decimals, symbol, chain }`), the rows a
 // compiled program's `USDC` resolves to on the same chain.
-import { registryTokens } from "./token-registry.js";
-import { svmVenuesOn } from "./svm-venue-methods.js";
+import { registryTokens, svmClusterOf } from "./token-registry.js";
 
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
 type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain };
@@ -50,10 +49,11 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
  * spread would invoke every one of them eagerly at composition time. `origin` itself is never
  * mutated. Throws on a name collision — a protocol, family, token or venue name literally "chain" or
  * an intrinsic like "call"/"bind", or two of them sharing a name (a token symbol that is also a
- * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The
- * `svmVenuesOn` gate is registry-derived (the chain's cluster, `token-registry.ts#svmClusterOf`),
- * not a hardcoded chain name -- every EVM chain, and Solana's devnet, whose pools are none of
- * these, provably cannot get the venue namespaces.
+ * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The venue
+ * accessor tree is gated on the chain's cluster (`token-registry.ts#svmClusterOf`), not a
+ * hardcoded chain name: its adapters quote their venues' mainnet programs (`svm/accessors.ts`), so
+ * every EVM chain, and Solana's devnet, provably cannot get it. A program's venue namespaces
+ * (`Orca.Whirlpool`) are another surface, per cluster (`routes/svm-venue-methods.ts`).
  */
 function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
@@ -66,7 +66,7 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
       ]),
     ),
   ];
-  if (svmVenuesOn(origin.chain)) {
+  if (svmClusterOf(origin.chain) === "mainnet-beta") {
     const svmVenues = svmVenueAccessors() as unknown as Record<string, unknown>;
     sources.push(Object.getOwnPropertyDescriptors(svmVenues));
   }

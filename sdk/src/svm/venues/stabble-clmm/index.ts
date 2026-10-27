@@ -68,6 +68,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import {
   AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR,
   POOL_DISCRIMINATOR as RAYDIUM_CLMM_POOL_DISCRIMINATOR,
@@ -89,7 +90,7 @@ import { parseMintExtensions } from "../../token-extensions.js";
 const SLUG = "stabble-clmm";
 
 /** Stabble's CLMM program (a Raydium-CLMM-shaped Anchor fork). */
-export const STABBLE_CLMM_PROGRAM_ID = address("6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6");
+export const STABBLE_CLMM_PROGRAM_ID = svmMainnetProgram("stabble-clmm");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");

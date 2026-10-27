@@ -33,6 +33,7 @@ import {
   PHOENIX_PROGRAM_ID,
   RAYDIUM_CLMM_PROGRAM_ID,
   STABBLE_CLMM_PROGRAM_ID,
+  svmRouterDefines,
 } from "@eco-incorp/sauce/svm";
 
 function check(condition: unknown, message: string): asserts condition {
@@ -99,12 +100,16 @@ const params = (name: string) =>
     .filter(Boolean)
     .join(", ");
 
-// Each venue the library swaps at is the SDK's program id: its 32-byte key, the base58 id written
-// above its own function, and a row of the skill's table naming the venue's name in a program (the
+// Each venue the library swaps at is the SDK's program id: its guard reads the define a compile
+// supplies, which a compile for mainnet gives that program's 32-byte key; the base58 id is written
+// above its own function; and a row of the skill's table names the venue's name in a program (the
 // SDK's, for that program), the key it finds a pool by (the SDK's `pool` method) and that function,
 // which takes the arguments the skill gives.
 const key = (id: string) =>
   `0x${Buffer.from(getAddressEncoder().encode(id as never)).toString("hex")}`;
+const MAINNET = svmRouterDefines("mainnet-beta");
+const defineOf = (id: string) =>
+  Object.keys(MAINNET).find((name) => MAINNET[name] === BigInt(key(id)));
 const VENUES: [string, string, string, string][] = [
   ["Raydium.CLMM", "raydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, "Raydium CLMM"],
   ["Pancakeswap.CLMM", "pancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, "PancakeSwap CLMM"],
@@ -128,10 +133,13 @@ check(
   "the SDK names the nine venues as the skill does, each for its program",
 );
 for (const [namespace, fn, id, venue] of VENUES) {
+  const define = defineOf(id);
   check(
     new RegExp(`// ${venue}, ${id}[^\\n]*\\n(?://[^\\n]*\\n)*export function ${fn}\\(`).test(
       library,
-    ) && body(fn).includes(key(id)),
+    ) &&
+      define !== undefined &&
+      body(fn).includes(define),
     `${fn} takes ${venue}'s pools, ${id}`,
   );
   check(params(fn) === ARGS, `${fn} takes (${ARGS})`);

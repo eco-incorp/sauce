@@ -205,6 +205,7 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import { accountDataLoader } from "../../loader.js";
 import type { AccountBytesMap, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { makeTreeWalkBudget } from "../tree-walk.js";
@@ -214,7 +215,8 @@ import { parseMintExtensions } from "../../token-extensions.js";
 
 const SLUG = "phoenix";
 
-export const PHOENIX_PROGRAM_ID = address("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY");
+/** Phoenix's program on Solana's mainnet, which this adapter quotes. */
+export const PHOENIX_PROGRAM_ID = svmMainnetProgram("phoenix");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** MarketHeader — accounts.rs. Fixed 576-byte header preceding the FIFOMarket body. */

@@ -406,7 +406,9 @@ async function slotOf({ venue, pool, only }) {
       const cfg = await fetchConfig(load, at);
       // The tick arrays each way, as the cook names them: the pool's bitmap read for the arrays
       // holding liquidity nearest its price, each array the program address of its start.
-      const clmm = slots.SVM_PRICE_LIMIT_VENUES.find((one) => one.program === programId);
+      const clmm = slots
+        .svmPriceLimitVenues("mainnet-beta")
+        .find((one) => one.program === programId);
       const ticks = async (paysA) =>
         (await slots.svmClmmSlot(clmm, at, read.get(pool).data, paysA, loader)).ticks;
       const [payA, payB] = [await ticks(true), await ticks(false)];

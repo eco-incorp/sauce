@@ -74,6 +74,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import { readUintLE } from "../math.js";
 import { accountDataLoader } from "../../loader.js";
 import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
@@ -84,7 +85,8 @@ import { MAX_TICK, MIN_TICK, raydiumSqrtPriceAtTick } from "./tick-math.js";
 
 const SLUG = "raydium-clmm";
 
-export const RAYDIUM_CLMM_PROGRAM_ID = address("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+/** Raydium CLMM's program on Solana's mainnet, which this adapter quotes. */
+export const RAYDIUM_CLMM_PROGRAM_ID = svmMainnetProgram("raydium-clmm");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");

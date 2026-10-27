@@ -342,7 +342,12 @@ it is. A Token-2022 account has the same first 165 bytes, then its extensions:
 `balanceOf(USDC, account)` takes it as it is. Devnet is a chain of its own, `solana-devnet` (chain
 id 1399811150): compiled for it, `USDC` is devnet's mint, `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`,
 and `chainId` is 1399811150, what the engine reports there. Its file in `sauce-chains` lists its
-mints. The venues are mainnet's: on `solana-devnet` a venue name is refused.
+mints and its venues. Seven venues are on devnet, each at its devnet program: `Raydium.CLMM`,
+`Stabble.CLMM`, `Orca.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and
+`Meteora.DLMM`. A pool by key there is derived from devnet's own configs: the key is a fee or tick
+spacing devnet keeps for the venue, and they are not all mainnet's. On `solana-devnet`,
+`Byreal.CLMM` and `Cropper.Whirlpool` are refused because neither has a program there, and
+`Pancakeswap.CLMM` because its devnet pools lack the tick arrays a swap at a price needs.
 
 `--account <name>=pot` attaches **the Pot's own account**, not its USDC. The Pot's USDC is a token
 account of its own, so a program reading it takes that account and checks whose it is:

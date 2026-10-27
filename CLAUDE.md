@@ -1475,11 +1475,17 @@ testnet is added only where the release's stack is live at its addresses: EVM ch
 Router, Kitchen proxy, its EIP-1967 implementation slot and `router()`; Solana checks the engine
 and Kitchen release builds. Ethereum Sepolia (`sepolia`) and Solana Devnet (`solana-devnet`) are
 supported in `SUPPORTED_TESTNET_SLUGS`. Devnet is a canonical chain of its own (1399811150): its
-symbols are devnet's mints (`token-registry.ts#svmClusterOf`), it has no venue
-(`svm-venue-methods.ts#svmVenuesOn`), and a cook there is still held to the release's builds by
+symbols are devnet's mints (`token-registry.ts#svmClusterOf`), its venues are the rows the
+per-cluster table `svm/venue-table.ts` keeps for devnet (`svm-venue-methods.ts#svmVenueProgramOn`;
+Byreal and Cropper have no devnet program; PancakeSwap's is withheld, `svmVenueWithheld` giving the
+reason, since no devnet pool has the tick arrays a swap at a price walks; each name is refused with
+its reason), and a cook there is still held to the release's builds by
 `solana-release.ts#requireSolanaRelease`; its Pot records share `1399811149-devnet` with those a
-`--chain solana` against a devnet endpoint wrote. A test that builds or sends a transaction
-through the CLI or MCP uses a supported chain.
+`--chain solana` against a devnet endpoint wrote. `@sauce/router`'s Solana arm writes no venue
+program: its guards read the defines `__SAUCE_<VENUE>_PROGRAM`, which every SDK compile for a
+Solana chain supplies from `svmRouterDefines(cluster)` (`/svm`), so a raw `compile()` of the arm
+passes them or fails closed. A test that builds or sends a transaction through the CLI or MCP uses
+a supported chain.
 
 ## Agent skills
 

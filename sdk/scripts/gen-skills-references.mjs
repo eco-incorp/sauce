@@ -704,14 +704,19 @@ const CHAIN_NOTES = {
     "mint addresses: there is no testnet chain alias or token registry. The endpoint does not change",
     "`solana`'s compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the",
     "running cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees.",
-    "Local simulation selects the released engine build from the endpoint's cluster. The SDK's",
-    "venues are mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.",
+    "Local simulation selects the released engine build from the endpoint's cluster. A venue name",
+    "is resolved for the chain the program is compiled for: this chain's venues are mainnet's, and",
+    "`--chain solana-devnet` has seven, each at its devnet program. The engine and Kitchen being",
+    "on a test cluster does not deploy venues, and the SDK records none for testnet.",
   ],
   "solana-devnet": [
     "Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as",
     "1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's",
-    "engine and Kitchen are deployed on devnet, with zero execution fees. The Solana venues are",
-    "mainnet's programs and pools, so a venue name is refused here.",
+    "engine and Kitchen are deployed on devnet, with zero execution fees. Seven venues run here,",
+    "each at its devnet program (under Venues below), and a pool by key is derived from devnet's",
+    "own configs, not mainnet's. Byreal and Cropper have no program on devnet, so their names are",
+    "refused here. PancakeSwap's program is on devnet, but its devnet pools lack the tick arrays a",
+    "swap at a price needs, so its name is refused too.",
   ],
 };
 
@@ -797,7 +802,11 @@ const DOCS_FOR_SKILL = {
 const DOCS_FOR_SKILL_ON_SOLANA = {
   "sauce-swaps": ["`@sauce/router` on Solana", "api/router-solana.md"],
 };
-const SOLANA_PAGES = new Set(["chains/solana.md", SOLANA_DISTRIBUTED_SWAP_GUIDE]);
+const SOLANA_PAGES = new Set([
+  "chains/solana.md",
+  "chains/solana-devnet.md",
+  SOLANA_DISTRIBUTED_SWAP_GUIDE,
+]);
 
 /**
  * Prose written for the skills, as the manual page at `from` (relative to `docs/reference/`) says
@@ -1452,7 +1461,8 @@ function renderDeploymentsPage(data) {
     "and explicit testnet mint addresses. The endpoint does not change compile-time chain identity;",
     "`ctx.chainId()` reads the running cluster's chain id. The",
     "[endpoint guide](../guides/cli.md#pick-a-chain-and-an-endpoint) explains the limits. Engine",
-    "deployment does not establish venue deployments: the SDK's Solana venues remain mainnet-only.",
+    "deployment does not establish venue deployments: the SDK records its Solana venues per",
+    "cluster, on mainnet and seven of them on devnet, and none on testnet.",
     "",
     "## The release",
     "",

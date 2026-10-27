@@ -22,7 +22,8 @@ chain alias or token registry. Use `--chain solana --rpc-url <testnet-rpc-url>`
 and explicit testnet mint addresses. The endpoint does not change compile-time chain identity;
 `ctx.chainId()` reads the running cluster's chain id. The
 [endpoint guide](../guides/cli.md#pick-a-chain-and-an-endpoint) explains the limits. Engine
-deployment does not establish venue deployments: the SDK's Solana venues remain mainnet-only.
+deployment does not establish venue deployments: the SDK records its Solana venues per
+cluster, on mainnet and seven of them on devnet, and none on testnet.
 
 ## The release
 

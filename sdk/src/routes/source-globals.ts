@@ -40,7 +40,7 @@ import { resolveProtocolContract } from "./protocol-rewrite.js";
 import type { StockToken } from "./token-registry.js";
 import { svmTokenRows, TOKEN_REGISTRY } from "./token-registry.js";
 import { SVM_ACCOUNT_EXPRESSIONS, type SvmAccountExpression } from "./svm-account-expressions.js";
-import { svmVenueMethods, SVM_VENUE_NAMESPACES, svmVenuesOn } from "./svm-venue-methods.js";
+import { svmVenueMethods, SVM_VENUE_NAMESPACES, svmVenueProgramOn } from "./svm-venue-methods.js";
 
 export interface SourceToken {
   readonly symbol: string;
@@ -314,14 +314,13 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
       ),
     ].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),
     protocols: namespacesOn(resolved),
-    venues: svmVenuesOn(resolved)
-      ? Object.entries(SVM_VENUE_NAMESPACES).map(([namespace, venue]) => ({
-          namespace,
-          name: venue.name,
-          program: venue.program,
-          methods: svmVenueMethods(namespace),
-        }))
-      : [],
+    // The venues the chain's cluster has, each with its program there.
+    venues: Object.entries(SVM_VENUE_NAMESPACES).flatMap(([namespace, venue]) => {
+      const program = svmVenueProgramOn(resolved, namespace);
+      return program === undefined
+        ? []
+        : [{ namespace, name: venue.name, program, methods: svmVenueMethods(namespace) }];
+    }),
     accounts: resolved.kind === "svm" ? SVM_ACCOUNT_EXPRESSIONS : [],
     interfaces: interfacesOn(resolved),
     chains: CANONICAL_CHAINS.map((other) => chainName(other as CanonicalChain)),

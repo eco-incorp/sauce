@@ -15,6 +15,9 @@ import { fileURLToPath } from "node:url";
 
 import type { CompileOptions, CompileResult, SauceTarget } from "sauce-compiler";
 
+import type { SvmTokenCluster } from "../../../src/routes/token-registry.js";
+import { svmRouterDefines } from "../../../src/svm/venue-table.js";
+
 // Required, not imported, for the reason `../token/harness.ts` gives: the `node` build is CommonJS
 // and reads its sibling `.wasm` off disk at load.
 const { compile } = createRequire(import.meta.url)("sauce-compiler") as {
@@ -60,9 +63,50 @@ const resolvePackage = (specifier: string): string | undefined => {
   return `node_modules/${specifier}/${main}`;
 };
 
-/** Compile `entry`, which imports `@sauce/router`, against the library's files on disk. */
-export const compileStdRouter = (entry: string, target: SauceTarget = "evm"): CompileResult =>
-  compile({ target, entry: ENTRY, resolve: resolveModule(entry), resolvePackage });
+/**
+ * Compile `entry`, which imports `@sauce/router`, against the library's files on disk. The Solana
+ * arm reads each venue's program from the defines a compile for a cluster supplies
+ * (`svmRouterDefines`): mainnet's unless `cluster` names another.
+ */
+export const compileStdRouter = (
+  entry: string,
+  target: SauceTarget = "evm",
+  cluster: SvmTokenCluster = "mainnet-beta",
+): CompileResult =>
+  compile({
+    target,
+    entry: ENTRY,
+    resolve: resolveModule(entry),
+    resolvePackage,
+    ...(target === "svm" ? { defines: routerDefines(cluster) } : {}),
+  });
+
+/** `svmRouterDefines(cluster)` as a raw compile takes defines: name, then the value's text. */
+export const routerDefines = (cluster: SvmTokenCluster): [string, string][] =>
+  Object.entries(svmRouterDefines(cluster)).map(([name, value]) => [
+    name,
+    `0x${value.toString(16)}`,
+  ]);
+
+/**
+ * Compile `entry` against `arm` served as the Solana arm's file, with `defines` (mainnet's unless
+ * given): what a toolchain serving its own copy of the library compiles.
+ */
+export const compileStdRouterArm = (
+  entry: string,
+  arm: string,
+  defines: [string, string][] = routerDefines("mainnet-beta"),
+): CompileResult =>
+  compile({
+    target: "svm",
+    entry: ENTRY,
+    resolve: (path) =>
+      path.replace(/^\.\//, "") === "node_modules/@sauce/router/router.svm.js"
+        ? Buffer.from(arm)
+        : resolveModule(entry)(path),
+    resolvePackage,
+    defines,
+  });
 
 /** An arm's source, for reading what it exports. */
 export const routerSource = (target: SauceTarget = "evm"): string =>

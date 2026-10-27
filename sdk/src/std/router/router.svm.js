@@ -117,6 +117,17 @@
 // takes at its own limit for a pool of two SPL Token mints (`swap_v2`, which names each mint and its
 // token program, for the rest, and at a price for every pool).
 //
+// A venue's program is the cluster's, so this file writes none of the ten whose pools a program
+// names by namespace: each guard reads its venue's program from a define the compile supplies,
+// `__SAUCE_RAYDIUM_CLMM_PROGRAM`, `__SAUCE_PANCAKESWAP_CLMM_PROGRAM`, `__SAUCE_BYREAL_PROGRAM`,
+// `__SAUCE_STABBLE_CLMM_PROGRAM`, `__SAUCE_ORCA_WHIRLPOOL_PROGRAM`, `__SAUCE_CROPPER_PROGRAM`,
+// `__SAUCE_DEFITUNA_PROGRAM`, `__SAUCE_CREMA_PROGRAM`, `__SAUCE_PHOENIX_PROGRAM` and
+// `__SAUCE_METEORA_DLMM_PROGRAM`, each the program's 32-byte key on the cluster the program runs on.
+// The SDK's compiles for a Solana chain supply them from its venue table; a raw `compile()` passes
+// `svmRouterDefines(cluster)` from `@eco-incorp/sauce/svm`. A compile that supplies none fails,
+// naming the first, and never guards by another cluster's program. A venue the cluster lacks is given
+// an address no program can be deployed at, so its guard admits no pool there.
+//
 // SKIPS. A failed call into another program aborts the whole Solana transaction and cannot be
 // caught, so a Solana swap here checks before anything moves: it returns 0 having moved nothing for
 // a missing slot (the System program as its pool), no input, a pool whose swaps are switched off, a
@@ -1488,7 +1499,7 @@ export function raydiumClmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
+  const owned = pool.owner == __SAUCE_RAYDIUM_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1509,7 +1520,7 @@ export function pancakeswapClmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
+  const owned = pool.owner == __SAUCE_PANCAKESWAP_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1530,7 +1541,7 @@ export function byreal(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
+  const owned = pool.owner == __SAUCE_BYREAL_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Byreal pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1551,7 +1562,7 @@ export function stabbleClmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
+  const owned = pool.owner == __SAUCE_STABBLE_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1572,7 +1583,7 @@ export function orcaWhirlpool(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
+  const owned = pool.owner == __SAUCE_ORCA_WHIRLPOOL_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1594,7 +1605,7 @@ export function cropper(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
+  const owned = pool.owner == __SAUCE_CROPPER_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Cropper pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1615,7 +1626,7 @@ export function defituna(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
+  const owned = pool.owner == __SAUCE_DEFITUNA_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1636,7 +1647,7 @@ export function crema(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
+  const owned = pool.owner == __SAUCE_CREMA_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Crema pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1658,7 +1669,7 @@ export function phoenix(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb;
+  const owned = pool.owner == __SAUCE_PHOENIX_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Phoenix market");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
@@ -1835,7 +1846,7 @@ export function raydiumClmmStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
+  const owned = pool.owner == __SAUCE_RAYDIUM_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -1873,7 +1884,7 @@ export function pancakeswapClmmStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
+  const owned = pool.owner == __SAUCE_PANCAKESWAP_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -1911,7 +1922,7 @@ export function byrealStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
+  const owned = pool.owner == __SAUCE_BYREAL_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Byreal pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -1949,7 +1960,7 @@ export function stabbleClmmStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
+  const owned = pool.owner == __SAUCE_STABBLE_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -1987,7 +1998,7 @@ export function orcaWhirlpoolStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
+  const owned = pool.owner == __SAUCE_ORCA_WHIRLPOOL_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -2025,7 +2036,7 @@ export function cropperStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
+  const owned = pool.owner == __SAUCE_CROPPER_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Cropper pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -2063,7 +2074,7 @@ export function defitunaStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
+  const owned = pool.owner == __SAUCE_DEFITUNA_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -2101,7 +2112,7 @@ export function cremaStopped(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
+  const owned = pool.owner == __SAUCE_CREMA_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Crema pool");
   // Its walk was priced from a price no further from the stop than the tick in bits 192 to 223 (0,
   // none): one that has moved further since is skipped, so the swap crosses no more than its stop
@@ -2205,7 +2216,7 @@ export function raydiumClmmAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
+  const owned = pool.owner == __SAUCE_RAYDIUM_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2231,8 +2242,7 @@ export function raydiumClmmCpi(
   limit: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  require(program.address ==
-    0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e, "not a Raydium CLMM pool");
+  require(program.address == __SAUCE_RAYDIUM_CLMM_PROGRAM, "not a Raydium CLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2261,7 +2271,7 @@ export function pancakeswapClmmAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
+  const owned = pool.owner == __SAUCE_PANCAKESWAP_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2284,8 +2294,7 @@ export function pancakeswapClmmCpi(
   limit: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  require(program.address ==
-    0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8, "not a PancakeSwap CLMM pool");
+  require(program.address == __SAUCE_PANCAKESWAP_CLMM_PROGRAM, "not a PancakeSwap CLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2315,7 +2324,7 @@ export function byrealAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
+  const owned = pool.owner == __SAUCE_BYREAL_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Byreal pool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2338,8 +2347,7 @@ export function byrealCpi(
   limit: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  require(program.address ==
-    0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb, "not a Byreal pool");
+  require(program.address == __SAUCE_BYREAL_PROGRAM, "not a Byreal pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2368,7 +2376,7 @@ export function stabbleClmmAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
+  const owned = pool.owner == __SAUCE_STABBLE_CLMM_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2391,8 +2399,7 @@ export function stabbleClmmCpi(
   limit: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  require(program.address ==
-    0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3, "not a Stabble CLMM pool");
+  require(program.address == __SAUCE_STABBLE_CLMM_PROGRAM, "not a Stabble CLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2425,7 +2432,7 @@ export function orcaWhirlpoolAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
+  const owned = pool.owner == __SAUCE_ORCA_WHIRLPOOL_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2452,8 +2459,7 @@ export function orcaWhirlpoolCpi(
   minOut: Uint256,
   aToB: bool,
 ): Uint256 {
-  require(program.address ==
-    0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9, "not an Orca whirlpool");
+  require(program.address == __SAUCE_ORCA_WHIRLPOOL_PROGRAM, "not an Orca whirlpool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2490,7 +2496,7 @@ export function cropperAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
+  const owned = pool.owner == __SAUCE_CROPPER_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Cropper pool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2514,8 +2520,7 @@ export function cropperCpi(
   minOut: Uint256,
   aToB: bool,
 ): Uint256 {
-  require(program.address ==
-    0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f, "not a Cropper pool");
+  require(program.address == __SAUCE_CROPPER_PROGRAM, "not a Cropper pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2545,7 +2550,7 @@ export function defitunaAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
+  const owned = pool.owner == __SAUCE_DEFITUNA_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -2582,8 +2587,7 @@ export function defitunaCpi(
   minOut: Uint256,
   aToB: bool,
 ): Uint256 {
-  require(program.address ==
-    0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6, "not a DefiTuna pool");
+  require(program.address == __SAUCE_DEFITUNA_PROGRAM, "not a DefiTuna pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2613,7 +2617,7 @@ export function cremaAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
+  const owned = pool.owner == __SAUCE_CREMA_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Crema pool");
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return 0; // paused
@@ -2653,8 +2657,7 @@ export function cremaCpi(
   minOut: Uint256,
   aToB: bool,
 ): Uint256 {
-  require(program.address ==
-    0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6, "not a Crema pool");
+  require(program.address == __SAUCE_CREMA_PROGRAM, "not a Crema pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
@@ -2686,7 +2689,7 @@ export function phoenixAtLimit(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const owned = pool.owner == 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb;
+  const owned = pool.owner == __SAUCE_PHOENIX_PROGRAM;
   require(owned && slot[0].address == pool.owner, "not a Phoenix market");
   require(ticks <= 0xffffffffffffffff, "limit past 64 bits");
   if (svm.sload(pool, 8, 8).toLe() != 1) {
@@ -2717,8 +2720,7 @@ export function phoenixCpi(
   ticks: Uint256,
   paysBase: bool,
 ): Uint256 {
-  require(program.address ==
-    0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb, "not a Phoenix market");
+  require(program.address == __SAUCE_PHOENIX_PROGRAM, "not a Phoenix market");
   // The market's lot size of the token paid: the market is the instruction's third account. Under one
   // lot, no order.
   const lot = svm.sload(accounts[2], paysBase ? 112 : 192, 8).toLe();
@@ -5065,7 +5067,7 @@ export function meteoraDlmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const id = 0x04e9e12fbc84e826c932cce9e2640cce15590c1c6273b0925708ba3b8520b0bc;
+  const id = __SAUCE_METEORA_DLMM_PROGRAM;
   require(pool.owner == id && slot[0].address == id, "not a Meteora DLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   // Paying token X, the pool's first (not key order): a pair the pool does not hold the venue
@@ -5153,8 +5155,7 @@ export function meteoraDlmmCpi(
   amountIn: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  require(program.address ==
-    0x04e9e12fbc84e826c932cce9e2640cce15590c1c6273b0925708ba3b8520b0bc, "not a Meteora DLMM pool");
+  require(program.address == __SAUCE_METEORA_DLMM_PROGRAM, "not a Meteora DLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
   const swap = hex`f8c69e91e17587c8`;

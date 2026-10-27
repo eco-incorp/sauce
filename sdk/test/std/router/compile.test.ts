@@ -29,10 +29,16 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { address, getAddressCodec } from "@solana/kit";
+import { address, getAddressCodec, isOffCurveAddress } from "@solana/kit";
 import { toFunctionSelector, type AbiFunction } from "viem";
 
 import { compileWithRs } from "../../../src/routes/rs-compile.js";
+import {
+  SVM_NO_PROGRAM,
+  SVM_VENUE_TABLE,
+  svmRouterDefines,
+  type SvmNamespaceVenue,
+} from "../../../src/svm/venue-table.js";
 import {
   aldrin,
   bonkswap,
@@ -109,6 +115,7 @@ import {
 import {
   SVM_STOPPED,
   compileStdRouter,
+  compileStdRouterArm,
   FUNCTIONS,
   programCalling,
   routerAbi,
@@ -325,12 +332,14 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
 const cpiAccounts = (name: string): number => (svmInstructionForm(name) ? 16 : 0);
 /** A Solana venue's function name, from the name its venue carries. */
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
+/** The programs a compile for Solana's mainnet hands the arm's guards. */
+const MAINNET = svmRouterDefines("mainnet-beta");
 
 describe("@sauce/router (SVM): every function compiles from run-time arguments", () => {
   it.each(SVM_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name) => {
     const source = svmProgramCalling(name, cpiAccounts(name));
     const fromDisk = compileStdRouter(source, "svm");
-    const embedded = compileWithRs({ source, target: "svm" });
+    const embedded = compileWithRs({ source, target: "svm", defines: MAINNET });
     expect(fromDisk.bytecode.length).toBeGreaterThan(0);
     expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
   });
@@ -353,7 +362,7 @@ describe("@sauce/router (SVM): every exact-input function compiles from run-time
   it.each(SVM_EXACT_IN_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name, slot) => {
     const source = svmExactInProgramCalling(name, slot);
     const fromDisk = compileStdRouter(source, "svm");
-    const embedded = compileWithRs({ source, target: "svm" });
+    const embedded = compileWithRs({ source, target: "svm", defines: MAINNET });
     expect(fromDisk.bytecode.length).toBeGreaterThan(0);
     expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
   });
@@ -374,7 +383,7 @@ describe("@sauce/router (SVM): every exact-input function compiles from run-time
     (name) => {
       const source = svmProgramCalling(name, 3);
       const fromDisk = compileStdRouter(source, "svm");
-      const embedded = compileWithRs({ source, target: "svm" });
+      const embedded = compileWithRs({ source, target: "svm", defines: MAINNET });
       expect(fromDisk.bytecode.length).toBeGreaterThan(0);
       expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
     },
@@ -569,6 +578,91 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     const code = bytecode(fn);
     for (const [, id] of VENUES) expect(count(code, key(id))).toBe(0);
     for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
+  });
+});
+
+describe("@sauce/router (SVM): each venue's guard reads its cluster's program", () => {
+  // A program carries a constant without its leading zero bytes.
+  const key = (base58: string): string =>
+    Buffer.from(getAddressCodec().encode(address(base58)))
+      .toString("hex")
+      .replace(/^(00)+/, "");
+  const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+  /** Each function whose guard names a venue's program, by the venue's name in the table. */
+  const GUARDED: [string, SvmNamespaceVenue][] = [
+    ...(
+      [
+        ["RaydiumClmm", "raydium-clmm"],
+        ["PancakeswapClmm", "pancakeswap-clmm"],
+        ["Byreal", "byreal"],
+        ["StabbleClmm", "stabble-clmm"],
+        ["OrcaWhirlpool", "orca-whirlpool"],
+        ["Cropper", "cropper"],
+        ["Defituna", "defituna"],
+        ["Crema", "crema"],
+        ["Phoenix", "phoenix"],
+      ] as const
+    ).flatMap(([venue, slug]) =>
+      [lower(venue), `${lower(venue)}AtLimit`, `${lower(venue)}Cpi`]
+        .concat(SVM_STOPPED.test(`${lower(venue)}Stopped`) ? [`${lower(venue)}Stopped`] : [])
+        .map((fn) => [fn, slug] as [string, SvmNamespaceVenue]),
+    ),
+    ["meteoraDlmm", "meteora-dlmm"],
+    ["meteoraDlmmCpi", "meteora-dlmm"],
+  ];
+  const source = (fn: string): string =>
+    fn === "meteoraDlmm"
+      ? svmExactInProgramCalling(fn, SVM_EXACT_IN[fn]!)
+      : fn === "meteoraDlmmCpi"
+        ? svmProgramCalling(fn, 3)
+        : svmProgramCalling(fn, cpiAccounts(fn));
+
+  it("covers every guarded function the arm exports", () => {
+    expect(
+      GUARDED.map(([fn]) => fn).every((fn) => routerSource("svm").includes(`function ${fn}(`)),
+    ).toBe(true);
+  });
+
+  it.each(GUARDED)(
+    "%s compiled for devnet guards by devnet's program, never mainnet's",
+    (fn, slug) => {
+      const mainnet = SVM_VENUE_TABLE[slug]["mainnet-beta"]!.program;
+      const devnet = SVM_VENUE_TABLE[slug].devnet?.program ?? SVM_NO_PROGRAM;
+      const onMainnet = hex(compileStdRouter(source(fn), "svm").bytecode);
+      const onDevnet = hex(compileStdRouter(source(fn), "svm", "devnet").bytecode);
+      expect(count(onMainnet, key(mainnet))).toBeGreaterThan(0);
+      expect(count(onDevnet, key(devnet))).toBe(count(onMainnet, key(mainnet)));
+      if (devnet !== mainnet) expect(count(onDevnet, key(mainnet))).toBe(0);
+      // Only the 32-byte constant differs: the same length, so the same cost.
+      expect(onDevnet.length).toBe(onMainnet.length);
+    },
+  );
+
+  it.each(GUARDED.map(([fn]) => fn))(
+    "%s compiles with the mainnet defines to the bytes of the arm with each program written in",
+    (fn) => {
+      const written = routerSource("svm").replace(
+        /__SAUCE_[A-Z_]+_PROGRAM/g,
+        (name) => `0x${MAINNET[name]!.toString(16).padStart(64, "0")}`,
+      );
+      expect(written).not.toMatch(/__SAUCE_/);
+      expect(hex(compileStdRouterArm(source(fn), written).bytecode)).toBe(
+        hex(compileStdRouter(source(fn), "svm").bytecode),
+      );
+    },
+  );
+
+  it("fails closed: a compile that names no cluster's programs is refused, naming the define", () => {
+    expect(() => compileStdRouterArm(source("orcaWhirlpool"), routerSource("svm"), [])).toThrow(
+      /`__SAUCE_[A-Z_]+_PROGRAM` is not a declared variable/,
+    );
+  });
+
+  it("gives a venue a cluster lacks an address no program can be deployed at", () => {
+    expect(isOffCurveAddress(SVM_NO_PROGRAM)).toBe(true);
+    expect(svmRouterDefines("devnet").__SAUCE_BYREAL_PROGRAM).toBe(
+      BigInt(`0x${key(SVM_NO_PROGRAM)}`),
+    );
   });
 });
 

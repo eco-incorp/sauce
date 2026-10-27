@@ -66,27 +66,28 @@ import {
   type SvmLowering,
   type TokenRef,
 } from "./svm-lowering.js";
-import { SVM_SLOT_PARTS, SVM_SLOT_VENUES } from "../svm/pool-slot.js";
+import { SVM_SLOT_PARTS } from "../svm/pool-slot.js";
 import {
   svmPoolKeyProblem,
-  SVM_KEYED_VENUES,
+  SVM_KEYED_NAMESPACES,
   type SvmPoolKind,
   type SvmPoolRefinement,
 } from "../svm/pool-keys.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
+import { svmVenueRow, type SvmNamespaceVenue } from "../svm/venue-table.js";
 import { svmClusterOf } from "./token-registry.js";
 
 const ROUTER = "@sauce/router";
 const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
 /**
- * A venue's namespace: its name for a person, its program, its `@sauce/router` function, whether
- * its swap is an exact input (no `priceLimit`) rather than at a price, and what its pools are found
- * by.
+ * A venue's namespace: its name for a person, its venue in `svm/venue-table.ts` (which holds its
+ * program on each cluster), its `@sauce/router` function, whether its swap is an exact input (no
+ * `priceLimit`) rather than at a price, and what its pools are found by.
  */
 export interface SvmVenueNamespace {
   readonly name: string;
-  readonly program: string;
+  readonly venue: SvmNamespaceVenue;
   readonly swap: string;
   readonly exact?: true;
   /** What its `pool(tokenA, tokenB, key)` takes as the key; none where pools are not found by key. */
@@ -95,13 +96,19 @@ export interface SvmVenueNamespace {
   readonly refinement?: SvmPoolRefinement;
 }
 
-const venue = (namespace: string, name: string, swap: string, exact?: true): SvmVenueNamespace => {
-  const key = SVM_KEYED_VENUES[namespace]?.key;
-  const refinement = SVM_KEYED_VENUES[namespace]?.refinement;
+const venue = (
+  namespace: string,
+  name: string,
+  slug: SvmNamespaceVenue,
+  swap: string,
+  exact?: true,
+): SvmVenueNamespace => {
+  const key = SVM_KEYED_NAMESPACES[namespace]?.key;
+  const refinement = SVM_KEYED_NAMESPACES[namespace]?.refinement;
 
   return {
     name,
-    program: SVM_SLOT_VENUES.find((one) => one.name === name)!.program,
+    venue: slug,
     swap,
     ...(exact ? { exact } : {}),
     ...(key === undefined ? {} : { key }),
@@ -123,24 +130,30 @@ export const SVM_STOPPED_VENUES: ReadonlySet<string> = new Set([
 
 /** Each venue's namespace, its protocol then its program, as a program writes it. */
 export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> = {
-  "Raydium.CLMM": venue("Raydium.CLMM", "Raydium CLMM", "raydiumClmm"),
-  "Pancakeswap.CLMM": venue("Pancakeswap.CLMM", "PancakeSwap CLMM", "pancakeswapClmm"),
-  "Byreal.CLMM": venue("Byreal.CLMM", "Byreal", "byreal"),
-  "Stabble.CLMM": venue("Stabble.CLMM", "Stabble CLMM", "stabbleClmm"),
-  "Orca.Whirlpool": venue("Orca.Whirlpool", "Orca Whirlpools", "orcaWhirlpool"),
-  "Cropper.Whirlpool": venue("Cropper.Whirlpool", "Cropper", "cropper"),
-  "Defituna.Fusion": venue("Defituna.Fusion", "DefiTuna", "defituna"),
-  "Crema.CLMM": venue("Crema.CLMM", "Crema", "crema"),
-  "Phoenix.Market": venue("Phoenix.Market", "Phoenix", "phoenix"),
-  "Meteora.DLMM": venue("Meteora.DLMM", "Meteora DLMM", "meteoraDlmm", true),
+  "Raydium.CLMM": venue("Raydium.CLMM", "Raydium CLMM", "raydium-clmm", "raydiumClmm"),
+  "Pancakeswap.CLMM": venue(
+    "Pancakeswap.CLMM",
+    "PancakeSwap CLMM",
+    "pancakeswap-clmm",
+    "pancakeswapClmm",
+  ),
+  "Byreal.CLMM": venue("Byreal.CLMM", "Byreal", "byreal", "byreal"),
+  "Stabble.CLMM": venue("Stabble.CLMM", "Stabble CLMM", "stabble-clmm", "stabbleClmm"),
+  "Orca.Whirlpool": venue("Orca.Whirlpool", "Orca Whirlpools", "orca-whirlpool", "orcaWhirlpool"),
+  "Cropper.Whirlpool": venue("Cropper.Whirlpool", "Cropper", "cropper", "cropper"),
+  "Defituna.Fusion": venue("Defituna.Fusion", "DefiTuna", "defituna", "defituna"),
+  "Crema.CLMM": venue("Crema.CLMM", "Crema", "crema", "crema"),
+  "Phoenix.Market": venue("Phoenix.Market", "Phoenix", "phoenix", "phoenix"),
+  "Meteora.DLMM": venue("Meteora.DLMM", "Meteora DLMM", "meteora-dlmm", "meteoraDlmm", true),
 };
 
 /**
- * Whether a program compiled for `chain` may swap at the venues above: on Solana's mainnet only,
- * where their programs and pools are. On devnet a venue name is refused.
+ * The program `namespace`'s venue has on `chain`'s cluster, where a program compiled for it may swap
+ * there; undefined off Solana and on a cluster the venue is not deployed on.
  */
-export function svmVenuesOn(chain: CanonicalChain): boolean {
-  return svmClusterOf(chain) === "mainnet-beta";
+export function svmVenueProgramOn(chain: CanonicalChain, namespace: string): string | undefined {
+  const venue = SVM_VENUE_NAMESPACES[namespace];
+  return venue === undefined ? undefined : svmVenueRow(venue.venue, svmClusterOf(chain))?.program;
 }
 
 const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "priceLimit", "minOut"];
@@ -560,7 +573,7 @@ export function collectVenueMethods(l: SvmLowering): void {
             "number written out.",
         );
       }
-      const problem = svmPoolKeyProblem(namespace, key, refinement);
+      const problem = svmPoolKeyProblem(l.cluster, namespace, key, refinement);
       if (problem !== undefined) throw new Error(`\`${text}\` on Solana: ${problem}`);
       const [protocol, program] = namespace.split(".") as [string, string];
       const tail = refinement === undefined ? "" : `,${refinement}`;

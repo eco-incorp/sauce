@@ -74,6 +74,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import {
   MAX_TICK_INDEX,
   MIN_TICK_INDEX,
@@ -106,7 +107,7 @@ import { parseMintExtensions } from "../../token-extensions.js";
 const SLUG = "cropper";
 
 /** Cropper's AMM (Whirlpool-lineage CLMM) program. */
-export const CROPPER_PROGRAM_ID = address("H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt");
+export const CROPPER_PROGRAM_ID = svmMainnetProgram("cropper");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export {
@@ -179,8 +180,12 @@ function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 
-async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
-  return memoizedGetProgramDerivedAddress(CROPPER_PROGRAM_ID, [
+async function deriveTickArrayPda(
+  program: Address,
+  pool: Address,
+  startTick: number,
+): Promise<Address> {
+  return memoizedGetProgramDerivedAddress(program, [
     new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     new TextEncoder().encode(String(startTick)),
@@ -196,6 +201,7 @@ async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Add
  * window.
  */
 async function resolveWindow(
+  program: Address,
   load: AccountLoader,
   pool: Address,
   tickCurrentIndex: number,
@@ -204,7 +210,7 @@ async function resolveWindow(
 ): Promise<CropperWindow> {
   const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB);
   const tickArrays = (await Promise.all(
-    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+    startTicks.map((start) => deriveTickArrayPda(program, pool, start)),
   )) as [Address, Address, Address];
 
   // allSettled (not all) keeps the break-on-first-invalid contract exact: a
@@ -270,11 +276,14 @@ async function resolveWindow(
 
 /**
  * Fetch + gate one Cropper pool (see the header for the gate list) and
- * freeze both directions' boundary windows. Read-only against the loader.
+ * freeze both directions' boundary windows. Read-only against the loader. Its
+ * tick arrays and oracle are derived under `program`: Cropper's on Solana's
+ * mainnet unless one is given.
  */
 export async function fetchCropperConfig(
   owned: OwnedAccountLoader,
   pool: Address,
+  program: Address = CROPPER_PROGRAM_ID,
 ): Promise<CropperPoolConfig> {
   const load = accountDataLoader(owned);
   const data = await load(pool);
@@ -333,9 +342,9 @@ export async function fetchCropperConfig(
 
   const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
   const [aToB, bToA, oracle] = await Promise.all([
-    resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
-    resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-    memoizedGetProgramDerivedAddress(CROPPER_PROGRAM_ID, [
+    resolveWindow(program, load, pool, tickCurrentIndex, tickSpacing, true),
+    resolveWindow(program, load, pool, tickCurrentIndex, tickSpacing, false),
+    memoizedGetProgramDerivedAddress(program, [
       new TextEncoder().encode("oracle"),
       getAddressEncoded(pool),
     ]),
