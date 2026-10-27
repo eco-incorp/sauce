@@ -49,7 +49,7 @@ import {
 import { fetchPhoenixConfig } from "../svm/venues/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
-import { svmReader } from "./solana.js";
+import { requireCluster, svmReader } from "./solana.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -164,6 +164,8 @@ interface Listed {
 export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutput> {
   const { chain } = input;
   const rpc = createSolanaRpc(input.rpcUrl);
+  // The endpoint serves the cluster the chain names, before anything is read from it.
+  await requireCluster(rpc, input.rpcUrl, chain);
   const ask = svmReader(input.rpcUrl);
   const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
   const mints = await Promise.all(input.tokens.map((token) => mintOf(chain, token, load)));

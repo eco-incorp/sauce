@@ -643,7 +643,7 @@ function fileOperand(args: ParsedArgs): string {
 
 /**
  * The chain a program runs on: `--chain`, else the file's `// @chain`, else — for `--target svm`
- * or `// @target svm` alone — the one SVM chain (`inputs.ts#programChain`).
+ * or `// @target svm` alone — Solana (`inputs.ts#programChain`).
  */
 function chainOf(
   args: ParsedArgs,
@@ -2457,6 +2457,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const approver = approverOf(args, io);
 
       return reclaimCommand({
+        chain,
         owner,
         rpcUrl: requiredEndpoint(args, io, chain),
         lookupTables: repeatedFlag(args, "lookup-table").map((at) =>
@@ -2569,7 +2570,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (args.values.deploy !== true) {
           const rpcUrl = endpoint(args, io, chain);
           const keyed = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
-          const target = { owner: svmOwner(args, keyed), ...saltOf(args) };
+          const target = { chain, owner: svmOwner(args, keyed), ...saltOf(args) };
 
           return rpcUrl === undefined
             ? svmPotCommand(target)
@@ -2578,6 +2579,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         const signer = await keypairOf(args, io);
 
         return svmPotDeployCommand({
+          chain,
           owner: svmOwner(
             args,
             signer.address,
@@ -3084,7 +3086,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const chainFlag = stringFlag(args, "chain");
-      if (chainFlag !== undefined && parseChain(chainFlag).kind === "svm") {
+      const named = chainFlag === undefined ? undefined : parseChain(chainFlag);
+      if (named?.kind === "svm") {
         const [signature, ...rest] = args.positionals;
         if (signature === undefined)
           throw new UsageError("missing <signature>: the cook's transaction");
@@ -3097,8 +3100,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         };
 
         return svmVerifyCommand({
+          chain: named,
           signature,
-          rpcUrl: requiredEndpoint(args, io, parseChain(chainFlag)),
+          rpcUrl: requiredEndpoint(args, io, named),
           minOut: amount("min-out"),
           splCount: amount("spl-count"),
         });

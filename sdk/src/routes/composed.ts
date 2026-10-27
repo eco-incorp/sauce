@@ -1,7 +1,7 @@
 /**
  * The composed chain accessor -- `Base` as the SDK hands it out: `.chain`, the lazy contract
- * namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`Base.USDC`) and, for
- * an `svm`-kind chain, the svm venue accessor tree.
+ * namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`Base.USDC`) and, on
+ * Solana's mainnet, the svm venue accessor tree.
  *
  * One shape, two delivery paths: the generated NAMED EXPORTS
  * (`./chain-exports.generated.ts`, what `import { Base }` resolves) and the
@@ -16,12 +16,13 @@ import { chainAccessors } from "./accessors.js";
 // (`Base.Uniswap.UniversalRouter.method(...)`) -- see composeChainGlobal below.
 import { chainContracts } from "../descriptors/accessors.js";
 // The SVM twin of the above: composes the svm venue accessor tree
-// (`Solana.RaydiumCpSwap.swap(...)`) onto an `svm`-kind chain only --
-// see composeChainGlobal's `origin.chain.kind === "svm"` branch below.
+// (`Solana.RaydiumCpSwap.swap(...)`) onto Solana's mainnet only, where the venues' pools are --
+// see composeChainGlobal's `svmVenuesOn` branch below.
 import { venues as svmVenueAccessors } from "../svm/accessors.js";
 // The chain's registry tokens (`Base.USDC` -> `{ address, decimals, symbol, chain }`), the rows a
 // compiled program's `USDC` resolves to on the same chain.
 import { registryTokens } from "./token-registry.js";
+import { svmVenuesOn } from "./svm-venue-methods.js";
 
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
 type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain };
@@ -43,16 +44,16 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
 
 /**
  * Composes one chain accessor: a FRESH object with `chain`, the lazy contract-namespace tree
- * (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an `svm`-kind
- * chain only, the svm venue accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
+ * (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, on Solana's
+ * mainnet only, the svm venue accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
  * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's memoising GETTERS stay lazy —
  * spread would invoke every one of them eagerly at composition time. `origin` itself is never
  * mutated. Throws on a name collision — a protocol, family, token or venue name literally "chain" or
  * an intrinsic like "call"/"bind", or two of them sharing a name (a token symbol that is also a
  * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The
- * `kind === "svm"` gate is registry-derived (from `../chains/canonical.js`'s own
- * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain added to
- * `CANONICAL_CHAINS` gets the venue namespaces automatically, and every EVM chain provably cannot.
+ * `svmVenuesOn` gate is registry-derived (the chain's cluster, `token-registry.ts#svmClusterOf`),
+ * not a hardcoded chain name -- every EVM chain, and Solana's devnet, whose pools are none of
+ * these, provably cannot get the venue namespaces.
  */
 function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
@@ -65,7 +66,7 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
       ]),
     ),
   ];
-  if (origin.chain.kind === "svm") {
+  if (svmVenuesOn(origin.chain)) {
     const svmVenues = svmVenueAccessors() as unknown as Record<string, unknown>;
     sources.push(Object.getOwnPropertyDescriptors(svmVenues));
   }

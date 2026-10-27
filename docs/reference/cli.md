@@ -90,10 +90,11 @@ registry once a day, in the background, never delaying a command. It is off with
 with --no-update-check (any command takes it, before the command too), and for a command
 whose --config file says "updateCheck": false.
 
-Transactions are built and sent only on Ethereum, Base, Arc and Solana. Every other chain is a
-preview chain: no cook, Pot deployment or send, but programs compile there and globals, price,
-pools and the Pot's prediction read. Simulate does not depend on the label: it runs wherever the
-release is deployed on the chain. Ask for a chain:
+Transactions are built and sent only on Ethereum, Base, Arc and Solana, and the testnets Arc
+Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. Every other chain is a preview chain:
+no cook, Pot deployment or send, but programs compile there and globals, price, pools and the
+Pot's prediction read. Simulate does not depend on the label: it runs wherever the release is
+deployed on the chain. Ask for a chain:
 https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml
 
 A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain
@@ -414,10 +415,11 @@ Both pay the same execution fee into the Kitchen's treasury. The cook signs the 
 as its max_execution_fee, so it pays that or fails; --max-execution-fee <lamports> refuses
 a fee above it before anything is sent.
 
-Runs only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
-it is refused before anything is read or signed, with the supported chains and the GitHub issue
-to ask for that chain with; compile and the reads work there, and simulate runs wherever the
-release is deployed on the chain.
+Runs only on a supported chain: Ethereum, Base, Arc and Solana, and the testnets Arc Testnet,
+Base Sepolia, Ethereum Sepolia and Solana Devnet. On any other (a preview chain) it is refused
+before anything is read or signed, with the supported chains and the GitHub issue to ask for
+that chain with; compile and the reads work there, and simulate runs wherever the release is
+deployed on the chain.
 
 Examples:
   sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json
@@ -652,10 +654,11 @@ same transaction, ahead of the cook (createsPot). It reads the cluster (for the 
 and the fee), and the --account flags simulate takes; --max-execution-fee refuses a fee
 above it.
 
-Prints the transaction only on a supported chain: Ethereum, Base, Arc and Solana. On any other
-(a preview chain) it is refused before anything is read or signed, with the supported chains and
-the GitHub issue to ask for that chain with; compile and the reads work there, and simulate runs
-wherever the release is deployed on the chain.
+Prints the transaction only on a supported chain: Ethereum, Base, Arc and Solana, and the
+testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On any other (a preview
+chain) it is refused before anything is read or signed, with the supported chains and the GitHub
+issue to ask for that chain with; compile and the reads work there, and simulate runs wherever
+the release is deployed on the chain.
 
 Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
@@ -746,10 +749,11 @@ apply, and a native or tokens limit refuses the signature: what a signed cook mo
 known only when it is submitted, which a limit cannot measure now. On Solana there is no
 signed cook: the owner signs the cook transaction, and any fee payer may sponsor it.
 
-Signs and cancels only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a
-preview chain) it is refused before anything is read or signed, with the supported chains and
-the GitHub issue to ask for that chain with; compile and the reads work there, and simulate runs
-wherever the release is deployed on the chain.
+Signs and cancels only on a supported chain: Ethereum, Base, Arc and Solana, and the testnets
+Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On any other (a preview chain) it
+is refused before anything is read or signed, with the supported chains and the GitHub issue to
+ask for that chain with; compile and the reads work there, and simulate runs wherever the
+release is deployed on the chain.
 
 Examples:
   sauce sign pay.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD \
@@ -822,10 +826,11 @@ printed as.
 
 What landed is kept as the other commands keep it: a Pot one deployed in the Pot store.
 
-Sends only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
-it is refused before anything is read or signed, with the supported chains and the GitHub issue
-to ask for that chain with; compile and the reads work there, and simulate runs wherever the
-release is deployed on the chain.
+Sends only on a supported chain: Ethereum, Base, Arc and Solana, and the testnets Arc Testnet,
+Base Sepolia, Ethereum Sepolia and Solana Devnet. On any other (a preview chain) it is refused
+before anything is read or signed, with the supported chains and the GitHub issue to ask for
+that chain with; compile and the reads work there, and simulate runs wherever the release is
+deployed on the chain.
 
 Examples:
   sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)
@@ -887,10 +892,11 @@ With the owner's key (--keypair, or --wallet), it asks, then sends each transact
 prints it; --yes sends without asking. With --owner alone it prints the transactions
 unsigned, as JSON, for the owner to sign anywhere and send with sauce send.
 
-Closes only on a supported chain: Ethereum, Base, Arc and Solana. On any other (a preview chain)
-it is refused before anything is read or signed, with the supported chains and the GitHub issue
-to ask for that chain with; compile and the reads work there, and simulate runs wherever the
-release is deployed on the chain.
+Closes only on a supported chain: Ethereum, Base, Arc and Solana, and the testnets Arc Testnet,
+Base Sepolia, Ethereum Sepolia and Solana Devnet. On any other (a preview chain) it is refused
+before anything is read or signed, with the supported chains and the GitHub issue to ask for
+that chain with; compile and the reads work there, and simulate runs wherever the release is
+deployed on the chain.
 
 Examples:
   sauce reclaim --chain solana --owner <pubkey>
@@ -962,10 +968,11 @@ Verbs (`sauce pot <verb> --help` for each):
   list      List the Pots you deployed or imported, each with the release it was minted under
   import    Record a Pot deployed elsewhere, read from the chain with the release that minted it
 
-Deploys (or prints the deployment) only on a supported chain: Ethereum, Base, Arc and Solana. On
-any other (a preview chain) it is refused before anything is read or signed, with the supported
-chains and the GitHub issue to ask for that chain with; compile and the reads work there, and
-simulate runs wherever the release is deployed on the chain.
+Deploys (or prints the deployment) only on a supported chain: Ethereum, Base, Arc and Solana,
+and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On any other (a
+preview chain) it is refused before anything is read or signed, with the supported chains and
+the GitHub issue to ask for that chain with; compile and the reads work there, and simulate runs
+wherever the release is deployed on the chain.
 
 Examples:
   sauce pot --owner 0x… --chain base

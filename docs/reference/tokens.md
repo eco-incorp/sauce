@@ -35,7 +35,11 @@ writes.
 | [Arbitrum One](chains/arbitrum.md) | `USDC`, `USDT0`, `WETH` | — |
 | [Ink](chains/ink.md) | `USDT0` | — |
 | [Berachain](chains/berachain.md) | `USDT0` | — |
+| [Base Sepolia](chains/base-sepolia.md) | `USDC` | — |
+| [Arc Testnet](chains/arc-testnet.md) | `EURC`, `USDC` | — |
+| [Ethereum Sepolia](chains/sepolia.md) | `USDC` | — |
 | [Solana](chains/solana.md) | `PYUSD`, `USDC`, `USDT`, `WSOL` | [1799](chains/solana-stocks.md) |
+| [Solana Devnet](chains/solana-devnet.md) | `USDC`, `WSOL` | — |
 
 Every other chain registers no token: a program there uses `Token(<address>)`.
 
@@ -208,6 +212,29 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | --- | --- | --- |
 | `USDT0` | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` | 6 |
 
+## Base Sepolia
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDC` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | 6 |
+
+## Arc Testnet
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `EURC` | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6 |
+| `USDC` | `0x3600000000000000000000000000000000000000` | 6 |
+
+The native coin is USDC (18 decimals), and `USDC`
+is its ERC-20 face (6 decimals): one balance, read at two scales.
+[Arc Testnet](chains/arc-testnet.md) has what that changes.
+
+## Ethereum Sepolia
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDC` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | 6 |
+
 ## Solana
 
 | Symbol | Mint | Key, the value a program holds | Decimals | Token program |
@@ -217,7 +244,12 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | `USDT` | `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB` | `0xce010e60afedb22717bd63192f54145a3f965a33bb82d2c7029eb2ce1e208264` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 | `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 
-Devnet's mints differ: [Solana](chains/solana.md) lists them.
+## Solana Devnet
+
+| Symbol | Mint | Key, the value a program holds | Decimals | Token program |
+| --- | --- | --- | --- | --- |
+| `USDC` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
+| `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 
 ## Tokenized stocks
 

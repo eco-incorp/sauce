@@ -9,7 +9,7 @@
  * `cli-send.e2e.test.ts` and `mcp/test/send.e2e.test.ts`.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { deflateRawSync } from "node:zlib";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 import {
   address,
@@ -27,6 +27,7 @@ import {
 } from "@solana/kit";
 import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
 
+import { requireChain } from "../src/chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { UsageError } from "../src/cli/args.js";
 import {
@@ -52,8 +53,10 @@ const BLOCKHASH = key(10);
 const OTHER_BLOCKHASH = key(11);
 const signature = (index: number): string => key((index % 250) + 1, 64);
 const URL = "http://endpoint.invalid/secret-key";
+const SOLANA = requireChain("solana");
 
 const plan = (fields: Partial<SvmPlan> = {}): SvmPlan => ({
+  chain: SOLANA,
   owner: OWNER,
   salt: `0x${"11".repeat(32)}`,
   via: "kitchen",
@@ -93,6 +96,7 @@ function endpoint(handlers: Record<string, Handler>, calls: string[] = []): Step
 const context = (rpc: StepContext["rpc"]): StepContext => ({
   rpc,
   url: URL,
+  chain: SOLANA,
   signer: unsignedSigner(OWNER),
   fee: 5_000n,
 });
@@ -145,6 +149,22 @@ describe("a plan's cursor", () => {
     });
     const { payload: _, ...expected } = made;
     expect(decodeCursor(encodeCursor(made))).toEqual(expected);
+  });
+
+  it("names its chain where it is not Solana's: Solana's cursor is the one it always was", () => {
+    const devnet = requireChain("solana-devnet");
+    const content = (cursor: string): Record<string, unknown> =>
+      JSON.parse(
+        inflateRawSync(Buffer.from(cursor.slice("sauce-plan-1.".length), "base64")).toString(),
+      ) as Record<string, unknown>;
+    const solanaCursor = encodeCursor(plan());
+    // No chain in it, as in every cursor made before another SVM chain existed: read as Solana's.
+    expect(content(solanaCursor)).not.toHaveProperty("chain");
+    expect(solanaCursor).toBe(cursorOf({ ...raw({ tail: [] }) }));
+    expect(decodeCursor(cursorOf(raw())).chain).toBe(SOLANA);
+    const devnetCursor = encodeCursor(plan({ chain: devnet }));
+    expect(content(devnetCursor)).toMatchObject({ chain: "solana-devnet" });
+    expect(decodeCursor(devnetCursor)).toEqual(plan({ chain: devnet }));
   });
 
   const LONG = Array.from({ length: 257 }, () => MINT);
@@ -300,6 +320,16 @@ describe("a plan's cursor", () => {
       () => cursorOf(raw({ maxExecutionFee: "-1" })),
       /maxExecutionFee is not an integer/,
     ],
+    [
+      "a chain that is no Solana chain",
+      () => cursorOf(raw({ chain: "base" })),
+      /chain is not a Solana chain/,
+    ],
+    [
+      "a chain named by its id, not its slug",
+      () => cursorOf(raw({ chain: 1399811150 })),
+      /chain is not a Solana chain/,
+    ],
   ])("refuses %s", (_, cursor, why) => {
     const read = () => decodeCursor(cursor());
     expect(read).toThrow(UsageError);
@@ -323,6 +353,7 @@ describe("a plan's cursor", () => {
   it("leaves out a return type too long to carry: what main returns is then shown as bytes", async () => {
     const long = `{ ${"a: Uint256, ".repeat(100)}}`;
     const made = await newSvmPlan({
+      chain: SOLANA,
       owner: OWNER,
       salt: `0x${"11".repeat(32)}`,
       via: "kitchen",

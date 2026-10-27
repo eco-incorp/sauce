@@ -8,7 +8,8 @@
 import { getAddressCodec } from "@solana/kit";
 
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
-import { SVM_VENUE_NAMESPACES } from "../src/routes/svm-venue-methods.js";
+import { rewriteSvmTokenSyntax } from "../src/routes/svm-token-rewrite.js";
+import { SVM_VENUE_NAMESPACES, unrollPoolKeyLoops } from "../src/routes/svm-venue-methods.js";
 
 const compile = (source: string) => compileSauceProgram("solana", source);
 const SWAP =
@@ -377,6 +378,82 @@ describe("Solana's venue namespaces", () => {
       'function main(): Uint256 {\n  const state = Account.pda(Account.systemProgram, ["s"]);\n  return state.dataLen;\n}\n',
     );
     expect(pda.derivedAccounts).toMatchObject({ statePda: expect.stringMatching(/^pda:/) });
+  });
+
+  describe("caller-owned venue names", () => {
+    const source =
+      "function main(pool: Address) { return Orca.Whirlpool.swap(pool, USDC, WSOL, 1, 0, 0); }";
+    const bound = new Set(["Orca"]);
+    const loop =
+      "function main() { for (const s of [1, 4]) { Orca.Whirlpool.pool(USDC, WSOL, s); } }";
+
+    it.each(["solana", "solana-devnet"])("refuses a scalar receiver on %s", (chain) => {
+      for (const Orca of [7n, 8n]) {
+        expect(() => compileSauceProgram(chain, source, { defines: { Orca } })).toThrow();
+      }
+    });
+
+    it.each(["solana", "solana-devnet"])(
+      "refuses an ambient scalar receiver on %s instead of emitting a swap",
+      (chain) => {
+        for (const value of [7, 8]) {
+          expect(() =>
+            compileSauceProgram(chain, source, {
+              ambient: ["./caller.js"],
+              resolve: (path) =>
+                path.replace(/^\.\//, "") === "caller.js"
+                  ? new TextEncoder().encode(`export const Orca = ${value};`)
+                  : undefined,
+            }),
+          ).toThrow(/Whirlpool/);
+        }
+      },
+    );
+
+    it("does not replace the caller's active call with an SDK swap", () => {
+      const result = rewriteSvmTokenSyntax(
+        source,
+        new Map(),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        bound,
+      );
+      expect(result.source).toBe(source);
+      expect(result.rewrote).toBe(false);
+      expect(result.derived).toEqual({});
+    });
+
+    it("keeps the caller's pool loop intact through both the prepass and token rewrite", () => {
+      expect(unrollPoolKeyLoops(loop, bound)).toBe(loop);
+      const result = rewriteSvmTokenSyntax(
+        loop,
+        new Map(),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        bound,
+      );
+      expect(result.source).toBe(loop);
+      expect(result.rewrote).toBe(false);
+      expect(result.derived).toEqual({});
+    });
+
+    it("does not unroll a pool loop whose receiver the source declares", () => {
+      const own = loop.replace("main()", "main(Orca: Uint256)");
+      expect(unrollPoolKeyLoops(own)).toBe(own);
+      expect(() => compile(own)).toThrow();
+    });
+
+    it("still lowers an ordinary mainnet swap when another name is caller-owned", () => {
+      const plain = compile(SWAP);
+      const bound = compileSauceProgram("solana", SWAP, { defines: { AMOUNT: 7n } });
+      expect(bound.bytecode).toEqual(plain.bytecode);
+      expect(bound.derivedAccounts).toEqual(plain.derivedAccounts);
+      expect(bound.source).toBe(plain.source);
+    });
   });
 
   it("leaves a program that declares the namespace itself as it is", () => {

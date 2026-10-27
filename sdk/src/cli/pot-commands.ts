@@ -11,7 +11,8 @@ import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import type { PotImportTarget } from "./inputs.js";
 import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
-import { importEvmOwnerPots, importEvmPot, importSvmPot, releaseText } from "./pots.js";
+import { importEvmOwnerPots, importEvmPot, importSvmPot, recordOn, releaseText } from "./pots.js";
+import { genesisOf } from "./solana.js";
 
 /** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
 const onChain = (record: PotRecord): string =>
@@ -34,7 +35,9 @@ const potLines = (record: PotRecord): string[] => [
 const sameAddress = (a: string, b: string): boolean =>
   a.startsWith("0x") ? a.toLowerCase() === b.toLowerCase() : a === b;
 
-/** `sauce pot list`: the store's Pots, those on `chain` or of `owner` when given. */
+/** `sauce pot list`: the store's Pots, those on `chain` or of `owner` when given. A Solana Pot is
+ *  recorded under Solana's chain and its cluster, so `solana-devnet` lists devnet's Solana records
+ *  (`pots.ts#recordOn`), whichever chain recorded them. */
 export function potListCommand(
   store: PotStore,
   filter: { readonly chain?: CanonicalChain; readonly owner?: string },
@@ -42,7 +45,7 @@ export function potListCommand(
   const listing = store.list();
   const pots = listing.pots.filter(
     (record) =>
-      (filter.chain === undefined || record.chainId === filter.chain.id) &&
+      (filter.chain === undefined || recordOn(record, filter.chain)) &&
       (filter.owner === undefined || sameAddress(record.owner, filter.owner)),
   );
   const which = [
@@ -80,7 +83,7 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
 
             return value === null ? undefined : value.owner;
           },
-          genesis: async () => String(await rpc.getGenesisHash().send()),
+          genesis: () => genesisOf(rpc, input.rpcUrl),
         },
         chain,
         input.owner as SvmAddress,

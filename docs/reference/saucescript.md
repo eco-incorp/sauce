@@ -330,7 +330,7 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
   - Example: `log(ctx.self().toBytesBe(32));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id
-  - On SVM: 1399811149 on mainnet, 1399811150 on devnet
+  - On SVM: 1399811149 on mainnet, 1399811150 on devnet and testnet
   - Example: `if (ctx.chainId() == 8453) { … }`
 - `ctx.blockNumber()` → number, **Both**
   - On EVM: the block number

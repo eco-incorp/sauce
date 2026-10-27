@@ -2213,12 +2213,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const unchecked = `There is no endpoint for ${chain.slug}, so whether the Pot exists was not checked: pass rpcUrl to check.`;
       const deployedNote = "The Pot is deployed already: do not send the deployment.";
       if (chain.kind === "svm") {
-        const target = { owner: parsePubkey("owner", args.owner), ...salt };
+        const target = { chain, owner: parsePubkey("owner", args.owner), ...salt };
         const output = await svmPotCommand(target);
         const deployed = rpcUrl === undefined ? null : await svmPotExists(target, rpcUrl);
-        const tokenAccounts = reading
-          ? await svmPotTokenAccounts(target, rpcUrl!, chain)
-          : undefined;
+        const tokenAccounts = reading ? await svmPotTokenAccounts(target, rpcUrl!) : undefined;
 
         return {
           json: {
@@ -2369,6 +2367,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
       return fromCommand(
         await reclaimCommand({
+          chain,
           owner: parsePubkey("owner", args.owner),
           rpcUrl,
           lookupTables: (args.lookupTables ?? []).map((at) => parsePubkey("lookupTables", at)),
@@ -2736,7 +2735,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const chain = args.chain === undefined ? undefined : parseChain(String(args.chain), "chain");
       if (chain?.kind === "svm") {
         if (args.signature === undefined) {
-          throw new UsageError("missing signature: the cook's transaction on solana");
+          throw new UsageError(`missing signature: the cook's transaction on ${chain.slug}`);
         }
         const amount = (name: "minOut" | "splCount"): bigint => {
           const raw = args[name];
@@ -2749,6 +2748,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
         return fromCommand(
           await svmVerifyCommand({
+            chain,
             signature: args.signature,
             rpcUrl: await reach.require(chain, args.rpcUrl, "Verifying a Solana cook"),
             minOut: amount("minOut"),

@@ -332,7 +332,7 @@ describe("measuring a Solana transaction whose programs' calls the endpoint does
         mode: 0o600,
       });
       const refusal = await guardWallet(wallet, readPolicy(wallet))
-        .svm(rpc, transaction)
+        .svm(rpc, requireChain("solana"), transaction)
         .then(
           () => undefined,
           (error: unknown) => error,
@@ -656,7 +656,7 @@ describeSvm("measuring the actual Pot a Kitchen cook signs for", () => {
         ]) {
           writeFileSync(wallet.policyPath, JSON.stringify(policy), { mode: 0o600 });
           await expect(
-            guardWallet(wallet, readPolicy(wallet)).svm(rpc, transaction),
+            guardWallet(wallet, readPolicy(wallet)).svm(rpc, requireChain("solana"), transaction),
           ).rejects.toBeInstanceOf(PolicyRefusal);
         }
         expect(readdirSync(dir).filter((file) => file.endsWith(".ledger.jsonl"))).toEqual([]);
@@ -807,7 +807,7 @@ describeSvm("measuring a Kitchen cook another program makes for the wallet", () 
         ]) {
           writeFileSync(wallet.policyPath, JSON.stringify(policy), { mode: 0o600 });
           await expect(
-            guardWallet(wallet, readPolicy(wallet)).svm(rpc, transaction),
+            guardWallet(wallet, readPolicy(wallet)).svm(rpc, requireChain("solana"), transaction),
           ).rejects.toBeInstanceOf(PolicyRefusal);
         }
         expect(readdirSync(dir).filter((file) => file.endsWith(".ledger.jsonl"))).toEqual([]);
@@ -852,7 +852,7 @@ describe("a wallet's policy, on a transaction it cannot measure", () => {
   ])("refuses it where %s is limited, and reserves nothing", async (limit, policy, why) => {
     for (const [, read] of UNREADABLE) {
       const refusal = await guarded(policy)
-        .svm(endpoint(read), throughTable())
+        .svm(endpoint(read), requireChain("solana"), throughTable())
         .then(
           () => undefined,
           (error: unknown) => error,
@@ -867,7 +867,7 @@ describe("a wallet's policy, on a transaction it cannot measure", () => {
   it("lets it through where nothing it cannot measure is limited", async () => {
     for (const [, read] of UNREADABLE) {
       await expect(
-        guarded({ chains: ["solana"] }).svm(endpoint(read), throughTable()),
+        guarded({ chains: ["solana"] }).svm(endpoint(read), requireChain("solana"), throughTable()),
       ).resolves.toBeDefined();
     }
   });
@@ -895,7 +895,7 @@ const verdictOf = async (
   try {
     writeFileSync(info.policyPath, JSON.stringify(policy), { mode: 0o600 });
     const refusal = await guardWallet(info, readPolicy(info))
-      .svm(rpc, transaction)
+      .svm(rpc, requireChain("solana"), transaction)
       .then(
         () => "none: the guard let it through",
         (error: unknown) =>
@@ -1870,7 +1870,7 @@ describeSvm(
       try {
         writeFileSync(info.policyPath, JSON.stringify(limited(mint)), { mode: 0o600 });
         guardWallet(info, readPolicy(info));
-        const outcome = await sendPlannedSvm(RPC_URL, harness.payer, {
+        const outcome = await sendPlannedSvm(RPC_URL, requireChain("solana"), harness.payer, {
           // Said to be the wallet's to pay: the transaction itself names another payer.
           feePayer: wallet,
           transaction: getBase64EncodedWireTransaction(built),
@@ -1941,7 +1941,7 @@ describeSvm(
         guardWallet(info, readPolicy(info));
         const send = async (instruction: Instruction) => {
           const from = shim.handed.length;
-          const outcome = await sendPlannedSvm(RPC_URL, harness.payer, {
+          const outcome = await sendPlannedSvm(RPC_URL, requireChain("solana"), harness.payer, {
             feePayer: wallet,
             transaction: planned(instruction),
             what: "a planned approval",
@@ -2820,8 +2820,10 @@ describeSvm(
           mode: 0o600,
         });
         const guard = guardWallet(info, readPolicy(info));
-        (await guard.svm(rpc, await approveOne())).sent("the first approval");
-        const refusal = await guard.svm(rpc, await approveOne()).then(
+        (await guard.svm(rpc, requireChain("solana"), await approveOne())).sent(
+          "the first approval",
+        );
+        const refusal = await guard.svm(rpc, requireChain("solana"), await approveOne()).then(
           () => "none: the guard let it through",
           (error: unknown) =>
             error instanceof PolicyRefusal
@@ -3008,8 +3010,8 @@ describeSvm(
           mode: 0o600,
         });
         const guard = guardWallet(info, readPolicy(info));
-        (await guard.svm(rpc, await handOff())).sent("the first handoff");
-        const refusal = await guard.svm(rpc, await handOff()).then(
+        (await guard.svm(rpc, requireChain("solana"), await handOff())).sent("the first handoff");
+        const refusal = await guard.svm(rpc, requireChain("solana"), await handOff()).then(
           () => "none: the guard let it through",
           (error: unknown) =>
             error instanceof PolicyRefusal

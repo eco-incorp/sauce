@@ -90,7 +90,7 @@ import {
   RETIRED_ACCOUNT_ROOT,
   retiredAccountRefusal,
 } from "./svm-account-expressions.js";
-import { SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
+import { SVM_VENUE_NAMESPACES, svmVenuesOn } from "./svm-venue-methods.js";
 import { TOKEN_FACTORY_NAME } from "./token-rewrite.js";
 import { locatedError, meant, notAToken, notTokenOrProtocol } from "./unknown-global.js";
 
@@ -269,6 +269,7 @@ const AVAILABLE = "available";
 export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
   return [
     ...NAMESPACE_KEYS,
+    ...Object.keys(SVM_VENUE_NAMESPACES).map((name) => name.slice(0, name.indexOf("."))),
     ...CHAIN_KEY_SET,
     ...[...everySymbol()].filter((symbol) => !tokens.has(symbol)),
     AVAILABLE,
@@ -631,11 +632,22 @@ export function checkNames(
     const name = nameOf(property);
     if (object.type === "Identifier") {
       // A Solana venue (`Orca.Whirlpool`, `Pancakeswap.CLMM`) is the Solana lowering's name: on a
-      // Solana chain, and in code a test rules out, which a Solana chain may take.
+      // Solana chain, and in code a test rules out, which a Solana chain may take, unless the
+      // program or its caller binds the name itself. Its pools are mainnet's: a live call on
+      // another cluster is refused.
       if (
         (chain.kind === "svm" || validating) &&
+        !shadowed(at, nameOf(object), object.start) &&
+        !defined.has(nameOf(object)) &&
         `${nameOf(object)}.${name}` in SVM_VENUE_NAMESPACES
       ) {
+        if (!validating && chain.kind === "svm" && !svmVenuesOn(chain)) {
+          fail(
+            target,
+            `\`${nameOf(object)}.${name}\` is not on ${chain.slug}: the Solana venues are ` +
+              "mainnet's programs and pools.",
+          );
+        }
         return undefined;
       }
       const namespace = namespaceOf(object, at);

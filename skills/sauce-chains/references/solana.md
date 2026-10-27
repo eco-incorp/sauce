@@ -2,7 +2,7 @@
 
 # Solana
 
-**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana. On Solana a program compiles
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Solana a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them.
 
@@ -15,6 +15,17 @@ them.
 | Name in a program | `Solana` |
 | Native coin | not recorded |
 | Sauce | the engine and Kitchen programs, the same ids on every cluster: [deployments.json](deployments.json) (`svm`) |
+
+## Notes
+
+The release's engine and Kitchen are deployed on mainnet, devnet and testnet. For devnet,
+use `--chain solana-devnet` to resolve the chain id and token symbols to devnet's.
+For testnet, use `--chain solana --rpc-url <testnet-rpc-url>` and explicit testnet
+mint addresses: there is no testnet chain alias or token registry. The endpoint does not change
+`solana`'s compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the
+running cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees.
+Local simulation selects the released engine build from the endpoint's cluster. The SDK's
+venues are mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.
 
 ## In a program
 
@@ -40,14 +51,6 @@ function main(account: Account): Uint256 {
 
 And 1799 tokenized stocks, each a Token-2022 mint named by its symbol in the same way:
 they are in [solana-stocks.md](solana-stocks.md), with their mints.
-
-On devnet these mints differ: a program for devnet takes its mint as an `Address` parameter
-of `main`, given to `--args` as the mint's base58 address:
-
-| Symbol | Mint | Key, the value a program holds | Decimals | Token program |
-| --- | --- | --- | --- | --- |
-| `USDC` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
-| `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 
 ## Venues
 

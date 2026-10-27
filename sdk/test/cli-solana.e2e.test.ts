@@ -229,6 +229,8 @@ interface Faults {
   nullReads?: number;
   /** This method fails the way a broken transport does: with the URL in its message. */
   throwOn?: string;
+  /** A public cluster identity for rehearsals that select its released engine build. */
+  genesisHash?: string;
 }
 
 function shim(harness: EngineHarness): {
@@ -283,7 +285,7 @@ function shim(harness: EngineHarness): {
         });
       // A local bank is no public cluster: a Pot created on it is recorded as this one's.
       case "getGenesisHash":
-        return answer(id, SHIM_GENESIS_HASH);
+        return answer(id, faults.genesisHash ?? SHIM_GENESIS_HASH);
       // The clock, which a rehearsal in a local copy sets its own to.
       case "getSlot":
         return answer(id, Number(harness.svm.getClock().slot));
@@ -1570,6 +1572,32 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       /\nIn all, \w+ \(the owner\) pays \d+ lamports \(0\.\d+ SOL\), \d+ of them/,
     );
   }, 120_000);
+
+  it.each([
+    ["devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"],
+    ["testnet", "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"],
+  ])(
+    "simulates a staged cook with %s's chain ID from an explicit endpoint",
+    async (cluster, genesis) => {
+      rpc.faults.genesisHash = genesis;
+      const path = join(work, `${cluster}-chain-id.sauce.ts`);
+      writeFileSync(path, blobSource(1500).replace("return value;", "return ctx.chainId();"));
+      const sent = [...rpc.sent];
+      const simulated = json(
+        await sauce(
+          ...["simulate", path, "--chain", "solana", "--owner", owner.signer.address],
+          ...["--rpc-url", `${RPC_URL}${cluster}`, "--json"],
+        ),
+      );
+      expect(simulated).toMatchObject({
+        ok: true,
+        path: "local copy (LiteSVM)",
+        returned: "1399811150",
+      });
+      expect(rpc.sent).toEqual(sent);
+    },
+    120_000,
+  );
 
   it("`sauce tx` prints the cook unsigned; signed by the owner as printed, it lands", async () => {
     const pot = await potOf(hexToBytes(potSalt("vault")));

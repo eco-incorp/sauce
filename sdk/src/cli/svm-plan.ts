@@ -59,6 +59,7 @@ import {
 } from "@solana-program/address-lookup-table";
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 
+import { chainBySlug, requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
   buildCloseCodeBufferInstruction,
@@ -128,6 +129,12 @@ export interface PlanTokenAccount {
 
 /** What every step of a plan is built from, and what was handed out since: the cursor's content. */
 export interface SvmPlan {
+  /**
+   * The SVM chain the plan is for: where its steps are sent, and the chain each step is held to (a
+   * preview chain's are refused). A cursor names it only where it is not `solana`, which every
+   * cursor made before another SVM chain existed is.
+   */
+  readonly chain: CanonicalChain;
   readonly owner: Address;
   readonly salt: Hex;
   readonly via: CookVia;
@@ -242,6 +249,8 @@ export interface PlanStep {
 export interface StepContext {
   readonly rpc: Rpc;
   readonly url: string;
+  /** The chain the cluster was named as: what its release check holds it to, and names. */
+  readonly chain: CanonicalChain;
   /** The owner: a real signer for a send of this process's, else one that signs nothing. */
   readonly signer: TransactionSigner;
   /** The Kitchen's execution fee, where the caller has just read it; else the cook reads it. */
@@ -302,6 +311,8 @@ export function encodeCursor(plan: SvmPlan): string {
     owner: plan.owner,
     salt: plan.salt,
     via: plan.via,
+    // Solana's is the cursor's own: every cursor made before another SVM chain names none.
+    ...(plan.chain.id === requireChain("solana").id ? {} : { chain: plan.chain.slug }),
     ...(plan.maxExecutionFee === undefined ? {} : { maxExecutionFee: `${plan.maxExecutionFee}` }),
     tail: plan.tail.map((meta) => [meta.address, meta.role]),
     lookupTables: plan.lookupTables,
@@ -379,6 +390,13 @@ export function decodeCursor(text: string): SvmPlan {
 
     return value;
   };
+  const chain =
+    raw.chain === undefined
+      ? requireChain("solana")
+      : typeof raw.chain === "string"
+        ? chainBySlug(raw.chain)
+        : undefined;
+  if (chain?.kind !== "svm") throw bad("chain is not a Solana chain");
   const via = raw.via === "engine" ? "engine" : raw.via === "kitchen" ? "kitchen" : undefined;
   if (via === undefined) throw bad("via is neither kitchen nor engine");
   if (typeof raw.salt !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(raw.salt)) {
@@ -476,6 +494,7 @@ export function decodeCursor(text: string): SvmPlan {
   }
 
   return {
+    chain,
     owner: key(raw.owner, "owner"),
     salt: raw.salt as Hex,
     via,
@@ -666,6 +685,8 @@ async function sizeOf(
 }
 
 export interface NewPlanInput {
+  /** The SVM chain the cook was compiled for. */
+  readonly chain: CanonicalChain;
   readonly owner: Address;
   readonly salt: Hex;
   readonly via: CookVia;
@@ -690,6 +711,7 @@ export interface NewPlanInput {
  */
 export async function newSvmPlan(input: NewPlanInput): Promise<SvmPlan> {
   const base: SvmPlan = {
+    chain: input.chain,
     owner: input.owner,
     salt: input.salt,
     via: input.via,
@@ -1712,6 +1734,7 @@ export async function signableTransactions(
   await requireReleased(
     ctx.rpc,
     ctx.url,
+    ctx.chain,
     releasedProgramsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions))),
   );
   const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>

@@ -14,7 +14,7 @@ import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
 
 import { shippedSkills, SKILLS_INDEX, WRITE_IT_YOURSELF, type Skill } from "./resources.js";
-import { PACKAGED_SKILLS, supportedChainNames } from "./sdk.js";
+import { PACKAGED_SKILLS, resolveChain, supportedChainNames } from "./sdk.js";
 
 export const PROMPT_NAMES = ["sauce_write_program"] as const;
 
@@ -38,9 +38,16 @@ function embedded(skills: readonly Skill[], dir: string, root: string) {
   ];
 }
 
-/** Whether a prompt's `chain` argument names Solana. */
-const solana = (chain: string | undefined): boolean =>
-  chain !== undefined && /^(solana|sol|svm|mainnet-beta|1399811149)$/i.test(chain.trim());
+/** Whether a prompt's `chain` argument names a Solana chain: an SVM chain by slug, alias or id
+ *  (`solana`, `devnet`, `1399811149`), or `svm`. */
+const solana = (chain: string | undefined): boolean => {
+  const name = chain?.trim() ?? "";
+
+  return (
+    /^svm$/i.test(name) ||
+    (name !== "" && resolveChain(/^\d+$/.test(name) ? Number(name) : name)?.kind === "svm")
+  );
+};
 
 /** `dirs` as the skill resources to read, those the package ships. */
 const readList = (skills: readonly Skill[], dirs: readonly string[]): string =>

@@ -1,5 +1,6 @@
 # A request for a chain the release does not support yet. Sauce's initial release builds and sends
-# transactions on Ethereum, Base, Arc and Solana; every other chain is a preview chain (no
+# transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia,
+# Ethereum Sepolia and Solana Devnet; every other registered chain is a preview chain (no
 # transaction built or sent). The `sauce` command and its MCP server link here, prefilled, when they refuse a
 # preview chain (`sdk/src/cli/support.ts#chainSupportRequest`), so the field ids below are query
 # parameters of that link: `sdk/test/cli-chain-support.test.ts` holds the two to each other.
@@ -11,7 +12,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Sauce's initial release supports transactions on **Ethereum, Base, Arc and Solana**. Every
+        Sauce's initial release supports transactions on **Ethereum, Base, Arc and Solana**, and
+        the testnets **Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet**. Every
         other chain in the registry is a preview chain: programs compile there, and globals,
         price, pools and pot's prediction read, and simulate runs wherever the release is
         deployed, but the `sauce` command and its MCP server build and send no transaction.

@@ -686,11 +686,10 @@ export function registerWalletTools(
       const cursor = plannedCursor(args.transaction);
       if (cursor !== undefined) {
         // The plan's owner, held to the wallet before the wallet is unlocked or anything is read.
-        planFor(cursor, store.info(walletName(args.wallet)));
+        const plan = planFor(cursor, store.info(walletName(args.wallet)));
+        // The chain the plan was made for, which a `chain` given must be (`sendSvmPlan`).
         const chain =
-          args.chain === undefined
-            ? parseChain("solana", "chain")
-            : parseChain(String(args.chain), "chain");
+          args.chain === undefined ? plan.chain : parseChain(String(args.chain), "chain");
         const password = session.password("Sending");
         const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
         guard.gate(chain);

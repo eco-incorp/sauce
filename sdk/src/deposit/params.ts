@@ -26,11 +26,13 @@ function toAddressBigint(value: AddressInput, _label: string): bigint {
  * (`0x3600…0000`) or to a registry token there — `WETH` included, which on Arc is bridged ETH —
  * wraps nothing. Reject those by address instead of emitting the call.
  *
- * Built once from the static chain and token registries: address -> why it is not a WETH9.
+ * Built once from the static chain and token registries: address -> why it is not a WETH9. An
+ * address that is such a token on more than one chain (Arc's and Arc Testnet's native USDC share
+ * `0x3600…0000`) gives each chain's reason, the lowest chain id first.
  */
 const NOT_A_WRAPPER: ReadonlyMap<bigint, string> = (() => {
-  const reasons = new Map<bigint, string>();
-  for (const chainId of getAllChainIds()) {
+  const reasons = new Map<bigint, string[]>();
+  for (const chainId of getAllChainIds().sort((a, b) => a - b)) {
     const erc20 = nativeErc20(chainId);
     if (erc20 === undefined) continue;
     const { name, nativeCurrency } = chains[chainId]!;
@@ -38,12 +40,15 @@ const NOT_A_WRAPPER: ReadonlyMap<bigint, string> = (() => {
       `${what} on ${name} (chain ${chainId}), which is not a WETH9. ${name} has no canonical ` +
       `wrapped native: its native ${nativeCurrency.symbol} is already the ERC-20 at ` +
       `${erc20.address}, so there is nothing to wrap or unwrap there`;
+    const onChain = new Map<bigint, string>();
     for (const row of TOKEN_REGISTRY[chainId] ?? [])
-      reasons.set(BigInt(row.address), why(row.symbol));
+      onChain.set(BigInt(row.address), why(row.symbol));
     // Set last: the native ERC-20 is also a registry row (`USDC`), and this names it better.
-    reasons.set(BigInt(erc20.address), why(`the native ${nativeCurrency.symbol} ERC-20`));
+    onChain.set(BigInt(erc20.address), why(`the native ${nativeCurrency.symbol} ERC-20`));
+    for (const [address, reason] of onChain)
+      reasons.set(address, [...(reasons.get(address) ?? []), reason]);
   }
-  return reasons;
+  return new Map([...reasons].map(([address, each]) => [address, each.join("; and ")]));
 })();
 
 function rejectNonWrapperTarget(action: string, target: bigint): void {

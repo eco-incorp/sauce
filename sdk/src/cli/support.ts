@@ -6,7 +6,8 @@
  * skills' generator and checker read the built module.
  *
  * For the initial release the command supports transactions on four chains: Ethereum, Base, Arc
- * and Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
+ * and Solana, and on Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet
+ * ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a
  * program for it compiles, and the command's reads work there (`globals`, `price`, `pools`, `pot`'s
  * prediction), but it builds no transaction for it to sign and sends none. Simulation is not
  * gated by the label: `simulate` runs wherever the release's engine and Kitchen are deployed on the
@@ -40,8 +41,26 @@ import { CliError } from "./args.js";
 /** `supported`: the release builds and sends transactions there. `preview`: compile and read only. */
 export type ChainSupport = "supported" | "preview";
 
-/** The chains the release supports, by slug, in the order the docs name them. */
-export const SUPPORTED_CHAIN_SLUGS = ["ethereum", "base", "arc", "solana"] as const;
+/**
+ * The testnets the release supports, by slug: those where its stack is deployed, at the release's
+ * addresses with the matching released build. No value is at risk on them. Emptying this list stops
+ * the command building and sending there, and every message then names the mainnets alone.
+ */
+export const SUPPORTED_TESTNET_SLUGS = [
+  "arc-testnet",
+  "base-sepolia",
+  "sepolia",
+  "solana-devnet",
+] as const;
+
+/** The chains the release supports, by slug, in the order the docs name them: the testnets last. */
+export const SUPPORTED_CHAIN_SLUGS = [
+  "ethereum",
+  "base",
+  "arc",
+  "solana",
+  ...SUPPORTED_TESTNET_SLUGS,
+] as const;
 
 const SUPPORTED = new Set<number>(
   SUPPORTED_CHAIN_SLUGS.map((slug) => {
@@ -259,8 +278,18 @@ const summary = (chain: CanonicalChain): ChainSummary => ({
 const listed = (words: readonly string[]): string =>
   words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 
-/** The supported chains by name, as every message says them: "Ethereum, Base, Arc and Solana". */
-export const supportedChainNames = (): string => listed(supportedChains().map((c) => c.name));
+/** The supported chains by name, as every message says them: the mainnets, then the testnets apart. */
+export function supportedChainNames(): string {
+  const testnets: readonly string[] = SUPPORTED_TESTNET_SLUGS;
+  const names = (testnet: boolean): string[] =>
+    supportedChains()
+      .filter((chain) => testnets.includes(chain.slug) === testnet)
+      .map((chain) => chain.name);
+  const mainnets = listed(names(false));
+  if (testnets.length === 0) return mainnets;
+
+  return `${mainnets}, and the testnet${testnets.length === 1 ? "" : "s"} ${listed(names(true))}`;
+}
 
 /** One sentence of what a preview chain still does, for a help text or a note. */
 export const previewChainsNote = (): string =>

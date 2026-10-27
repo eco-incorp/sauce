@@ -71,6 +71,7 @@ import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import {
   failureReason,
   transactionAddresses,
+  requireCluster,
   requireReleased,
   sendAndConfirm,
   svmLanded,
@@ -126,8 +127,10 @@ const SIGNED_SHAPES =
   "a signed transaction: an EVM chain's raw 0x… hex, or Solana's base64 wire transaction";
 
 /**
- * The chain a send is for: an EVM transaction's own chain id, Solana for a base64 one, a plan's
- * cursor or a signature — all the same, and `given`'s where it is given.
+ * The chain a send is for: an EVM transaction's own chain id; for a Solana transaction (base64) or
+ * a signature, which name no cluster, the SVM chain `given` names, else the plan's, else Solana's;
+ * for a plan's cursor, the chain the plan was made for — all the same, and `given`'s where it is
+ * given.
  */
 export function signedChain(
   input: Pick<SendInput, "transactions" | "signatures" | "cursor">,
@@ -137,6 +140,8 @@ export function signedChain(
   if (input.transactions.length === 0 && !solana) {
     throw new UsageError("missing the signed transactions to send");
   }
+  const planned = input.cursor === undefined ? undefined : decodeCursor(input.cursor).chain;
+  const svm = (given?.kind === "svm" ? given : undefined) ?? planned ?? requireChain("solana");
   const chains = input.transactions.map((raw, index) => {
     const where = `transaction ${index + 1}`;
     if (HEX.test(raw)) {
@@ -158,16 +163,19 @@ export function signedChain(
 
       return requireChain(chainId);
     }
-    if (BASE64.test(raw)) return requireChain("solana");
+    if (BASE64.test(raw)) return svm;
     throw new UsageError(`${where} is not ${SIGNED_SHAPES}`);
   });
-  if (solana) chains.push(requireChain("solana"));
+  if ((input.signatures ?? []).length > 0) chains.push(svm);
+  if (planned !== undefined) chains.push(planned);
   const chain = given ?? chains[0]!;
   const other = chains.find((one) => one.id !== chain.id);
   if (other !== undefined) {
     throw new UsageError(
       solana && other.kind === "svm"
-        ? `a plan's cursor and a signature are Solana's, not ${chain.slug}'s`
+        ? chain.kind === "svm"
+          ? `the plan's cursor is ${other.slug}'s, not ${chain.slug}'s`
+          : `a plan's cursor and a signature are Solana's, not ${chain.slug}'s`
         : `the transactions are for ${other.slug}, not ${chain.slug}: send each chain's in a call of its own`,
     );
   }
@@ -200,6 +208,10 @@ export async function sendCommand(input: SendInput): Promise<CommandOutput> {
     throw new UsageError("close gives up on a plan's cook: give the plan's cursor");
   }
   const plan = input.cursor === undefined ? undefined : decodeCursor(input.cursor);
+  // A plan goes on on the chain it was made for: its cluster, its tokens, its chain's gate.
+  if (plan !== undefined && plan.chain.id !== chain.id) {
+    throw new UsageError(`the plan's cursor is ${plan.chain.slug}'s, not ${chain.slug}'s`);
+  }
   const done = chain.kind === "svm" ? await sendSvm(input, plan) : { sent: await sendEvm(input) };
   const { sent } = done;
   const failed = sent.find((entry) => entry.status !== "success");
@@ -280,6 +292,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
   const ctx = {
     rpc: createSolanaRpc(input.rpcUrl),
     url: input.rpcUrl,
+    chain: input.chain,
     signer: unsignedSigner(plan.owner),
   };
   // The cluster the plan carries on against, checked again: its cursor may have been made against
@@ -287,6 +300,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
   await requireReleased(
     ctx.rpc,
     ctx.url,
+    ctx.chain,
     planPrograms(input.close === true ? { ...plan, closing: true } : plan),
   );
   const step = await nextStep(plan, ctx, { close: input.close === true });
@@ -792,12 +806,15 @@ async function sendSvm(
     input.transactions.map((raw, index) => signedSvm(raw, `transaction ${index + 1}`)),
   );
   const rpc = createSolanaRpc(input.rpcUrl);
+  // The endpoint serves the cluster the chain names, before anything is read from it.
+  await requireCluster(rpc, input.rpcUrl, input.chain);
   // What goes to the engine or the Kitchen goes only to a cluster running the release's: checked
   // before any of it is sent.
   for (const tx of signed) {
     await requireReleased(
       rpc,
       input.rpcUrl,
+      input.chain,
       releasedProgramsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction)),
     );
   }
@@ -921,7 +938,7 @@ async function sendSvm(
     // What it moves: every account it may write, read before it is sent and once it lands.
     const tracked = writableAccounts(tx.transaction, tables);
     const before = await accountsNow(rpc, tracked).catch(() => undefined);
-    const result = await sendAndConfirm(rpc, input.rpcUrl, tx.transaction);
+    const result = await sendAndConfirm(rpc, input.rpcUrl, input.chain, tx.transaction);
     const after =
       result.ok && before !== undefined
         ? await accountsNow(rpc, tracked).catch(() => undefined)

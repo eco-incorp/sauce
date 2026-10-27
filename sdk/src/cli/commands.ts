@@ -311,6 +311,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
   const cook =
     input.chain.kind === "svm" && payload !== undefined
       ? await svmCookSize(
+          input.chain,
           payload,
           program.manifest ?? { accounts: [] },
           input.accounts ?? {},
@@ -1234,7 +1235,7 @@ export interface PotCommandInput extends SaltChoice {
 }
 
 /** What refuses the Pot's deployment on a preview chain: `sauce pot` predicts it there, and no more. */
-const POT_DEPLOYMENT = "building the Pot's deployment";
+export const POT_DEPLOYMENT = "building the Pot's deployment";
 
 /**
  * `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. On a

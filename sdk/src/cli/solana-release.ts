@@ -155,12 +155,13 @@ export function releasedProgramsCalled(programs: Iterable<string>): ProgramName[
 
 /**
  * Refuses unless each of `needs` is on the cluster as the release's program: the engine first, as
- * the EVM path does. Run before anything is simulated, built or sent.
+ * the EVM path does. Run before anything is simulated, built or sent. `slug` is the chain the
+ * cluster was named as, which the refusal names.
  */
 export async function requireSolanaRelease(
   read: ReadProgram,
   needs: readonly ProgramName[],
-  slug = "solana",
+  slug: string,
   released: ReleasedPrograms = packagedRelease(),
 ): Promise<void> {
   for (const name of ["engine", "Kitchen"] as const) {

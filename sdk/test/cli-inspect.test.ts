@@ -256,7 +256,7 @@ describe("sauce globals", () => {
     expect((await sauce("globals", "--chain", "base", "--search", " ")).code).toBe(2);
   });
 
-  it("prints Solana's mints, base58 and as the key a program holds, and devnet's", async () => {
+  it("prints Solana's mints, base58 and as the key a program holds, and points devnet to solana-devnet", async () => {
     const usdc = SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "USDC")!;
     const devnet = SVM_TOKEN_REGISTRY.devnet.find((row) => row.symbol === "USDC")!;
     const run = await sauce("globals", "--chain", "solana", "--tokens");
@@ -265,8 +265,10 @@ describe("sauce globals", () => {
     expect(run.stdout).toMatch(
       new RegExp(`^ {2}USDC +${usdc.mint} {2}${usdc.address} {2}6 decimals$`, "m"),
     );
-    expect(run.stdout).toMatch(
-      new RegExp(`^ {4}USDC +${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+    // Devnet's mints are solana-devnet's own symbols, which Solana's listing names, not lists.
+    expect(run.stdout).not.toContain(devnet.mint);
+    expect(run.stdout).toContain(
+      "\n  On devnet: --chain solana-devnet, whose symbols are devnet's mints.\n",
     );
     // A Token-2022 mint is named as one.
     expect(run.stdout).toMatch(
@@ -280,8 +282,31 @@ describe("sauce globals", () => {
       mint: usdc.mint,
       tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
     });
-    expect(out.devnetTokens).toContainEqual(devnet);
+    expect(out).not.toHaveProperty("devnetTokens");
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
+  });
+
+  it("prints solana-devnet's own mints, devnet's, under the symbols a program for it resolves", async () => {
+    const devnet = SVM_TOKEN_REGISTRY.devnet.find((row) => row.symbol === "USDC")!;
+    const mainnet = SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "USDC")!;
+    const run = await sauce("globals", "--chain", "solana-devnet", "--tokens");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(
+      new RegExp(`^ {2}USDC +${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+    );
+    expect(run.stdout).not.toContain(mainnet.mint);
+    expect(run.stdout).not.toContain("On devnet:");
+    const out = json(await sauce("globals", "--chain", "devnet", "--json"));
+    expect(out.chain).toMatchObject({ slug: "solana-devnet", id: 1399811150, kind: "svm" });
+    expect(out.tokens).toContainEqual({
+      symbol: "USDC",
+      address: devnet.address,
+      decimals: 6,
+      mint: devnet.mint,
+      tokenProgram: devnet.tokenProgram,
+    });
+    expect(out).not.toHaveProperty("devnetTokens");
+    expect((out.defines as Record<string, unknown>).USDC).toBe(devnet.address);
   });
 
   it("lists the accounts a program on Solana writes where it uses them, and none on Base", async () => {
@@ -366,7 +391,7 @@ describe("sauce globals", () => {
       issuerName: "PreStocks",
       source: "https://prestocks.com/products",
     });
-    expect(out.devnetTokens).toEqual([]);
+    expect(out).not.toHaveProperty("devnetTokens");
   });
 
   it("lists the interfaces a program calls with its own address, and their methods", async () => {

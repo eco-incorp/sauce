@@ -96,7 +96,16 @@ function refused(result: CallToolResult, slug: string): Refusal {
   assert.equal(refusal.code, "preview-chain");
   assert.deepEqual(
     refusal.supportedChains.map((chain) => chain.slug),
-    ["ethereum", "base", "arc", "solana"],
+    [
+      "ethereum",
+      "base",
+      "arc",
+      "solana",
+      "arc-testnet",
+      "base-sepolia",
+      "sepolia",
+      "solana-devnet",
+    ],
   );
   const chain = requireChain(slug);
   assert.deepEqual(
@@ -198,7 +207,17 @@ describe("still runs on a preview chain", () => {
       supported: string[];
       requestChain: string;
     };
-    assert.deepEqual(supported, ["ethereum", "base", "arc", "solana"]);
+    // In the order sauce_chains lists every chain: the canonical one, testnets beside their mainnets.
+    assert.deepEqual(supported, [
+      "ethereum",
+      "base",
+      "arc",
+      "base-sepolia",
+      "arc-testnet",
+      "sepolia",
+      "solana",
+      "solana-devnet",
+    ]);
     for (const chain of chains) {
       assert.equal(chain.support, supported.includes(chain.slug) ? "supported" : "preview");
     }
@@ -207,12 +226,19 @@ describe("still runs on a preview chain", () => {
       "https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml",
     );
     const instructions = mcp.client.getInstructions() ?? "";
-    assert.match(instructions, /builds transactions only on Ethereum, Base, Arc and Solana/);
+    assert.match(
+      instructions,
+      /builds transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet\. Every other/,
+    );
     assert.match(instructions, /returns `refused` instead/);
     const { tools } = await mcp.client.listTools();
     for (const name of ["sauce_tx", "sauce_pot", "sauce_actions"]) {
       const tool = tools.find((each) => each.name === name);
-      assert.match(tool?.description ?? "", /only on Ethereum, Base, Arc and Solana/, name);
+      assert.match(
+        tool?.description ?? "",
+        /only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet, the chains this release supports\./,
+        name,
+      );
     }
   });
 

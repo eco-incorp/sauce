@@ -270,6 +270,39 @@ export const chains: Record<number, Chain> = {
     // "max fee per gas less than block base fee".
     minBaseFeePerGas: 20_000_000_000n,
   },
+  // Testnets, only where the release is deployed (see canonical.ts). Arc Testnet is Arc's model
+  // exactly (docs.arc.io/arc/references/contract-addresses, testnet tables): native USDC, 18
+  // decimals, behind the same 6-decimal ERC-20 at 0x3600…0000, read 2026-10-26 (symbol() "USDC",
+  // decimals() 6; a validator's eth_getBalance 89705326799661990168595 against balanceOf
+  // 89705326799). Its base fee was 20 gwei at every block sampled from 50000000 to 69241549, and an
+  // eth_call with maxFeePerGas 18999999232 is refused "max fee per gas less than block base fee".
+  5042002: {
+    id: 5042002,
+    name: "Arc Testnet",
+    nativeCurrency: {
+      name: "USDC",
+      symbol: "USDC",
+      decimals: 18,
+      erc20: { address: "0x3600000000000000000000000000000000000000", decimals: 6 },
+    },
+    blockExplorerUrls: ["https://explorer.testnet.arc.io"],
+    testnet: true,
+    minBaseFeePerGas: 20_000_000_000n,
+  },
+  84532: {
+    id: 84532,
+    name: "Base Sepolia",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.basescan.org"],
+    testnet: true,
+  },
+  11155111: {
+    id: 11155111,
+    name: "Ethereum Sepolia",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.etherscan.io"],
+    testnet: true,
+  },
 };
 
 export function getChain(chainId: number): Chain | undefined {
@@ -285,7 +318,16 @@ const NATIVE_SYMBOLS: Readonly<Record<string, string>> = {
   plasma: "XPL",
   ink: "ETH",
   solana: "SOL",
+  "solana-devnet": "SOL",
 };
+
+/** The Solana chains that are test clusters; `chains`, which is EVM-only, flags its own testnets. */
+const SVM_TESTNETS: Readonly<Record<string, true>> = { "solana-devnet": true };
+
+/** Whether `chain` is a test network, whose coin and tokens have no value. */
+export function isTestnet(chain: CanonicalChain): boolean {
+  return chains[chain.id]?.testnet ?? SVM_TESTNETS[chain.slug] === true;
+}
 
 /**
  * The symbol of `chain`'s native coin — ETH, SOL, AVAX, … — as `chains` records it, or for a

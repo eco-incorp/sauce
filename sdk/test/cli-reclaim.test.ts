@@ -21,6 +21,7 @@ import {
   getAddressLookupTableEncoder,
 } from "@solana-program/address-lookup-table";
 
+import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
 import { reclaimable, reclaimCommand } from "../src/cli/reclaim.js";
 import { encodeCursor } from "../src/cli/svm-plan.js";
@@ -35,6 +36,7 @@ const OWNER = key(7);
 const OTHER = key(8);
 const TABLE = key(9);
 const URL = "http://endpoint.invalid/secret-key";
+const SOLANA = requireChain("solana");
 const SLOT_HASHES = "SysvarS1otHashes111111111111111111111111111";
 const ACTIVE = 2n ** 64n - 1n;
 
@@ -243,6 +245,7 @@ describe("the slot and the recent slot hashes", () => {
 /** A plan's cursor: `owner`'s, through `lookupTables`. */
 const cursorFor = (owner: Address, lookupTables: readonly Address[] = []) =>
   encodeCursor({
+    chain: SOLANA,
     owner,
     salt: `0x${"11".repeat(32)}`,
     via: "kitchen",
@@ -257,7 +260,12 @@ const cursorFor = (owner: Address, lookupTables: readonly Address[] = []) =>
 describe("a plan to keep", () => {
   it("is refused when it is another owner's, before any endpoint is asked", async () => {
     const cursor = cursorFor(OTHER);
-    const asked = reclaimCommand({ owner: OWNER, rpcUrl: "http://127.0.0.1:9/", keep: [cursor] });
+    const asked = reclaimCommand({
+      chain: SOLANA,
+      owner: OWNER,
+      rpcUrl: "http://127.0.0.1:9/",
+      keep: [cursor],
+    });
     await expect(asked).rejects.toThrow(UsageError);
     await expect(asked).rejects.toThrow(`a plan to keep is ${OTHER}'s, not ${OWNER}'s`);
   });
@@ -444,7 +452,7 @@ describe("an owner with more open than one run handles", () => {
     });
 
     it("closes a run's share, and says how many remain for the next", async () => {
-      const output = await reclaimCommand({ owner: OWNER, rpcUrl: URL });
+      const output = await reclaimCommand({ chain: SOLANA, owner: OWNER, rpcUrl: URL });
       const json = output.json as {
         buffers: unknown[];
         remaining?: { buffers: number; lookupTables: number };
@@ -514,6 +522,7 @@ describe("lookup tables a plan given to keep holds, past their activity", () => 
 
   it("keeps them, deactivated or closable: nothing is built for them, and each is said kept", async () => {
     const output = await reclaimCommand({
+      chain: SOLANA,
       owner: OWNER,
       rpcUrl: URL,
       keep: [cursorFor(OWNER, [DEACTIVATING, CLOSABLE])],
@@ -598,7 +607,7 @@ describe("transaction histories the endpoint cannot read", () => {
   });
 
   it("keeps what they make up as in use, closes none of it, and says so once", async () => {
-    const output = await reclaimCommand({ owner: OWNER, rpcUrl: URL });
+    const output = await reclaimCommand({ chain: SOLANA, owner: OWNER, rpcUrl: URL });
     const json = output.json as {
       buffers: Array<{ inUse?: boolean; historyUnread?: boolean }>;
       lookupTables: Array<{ inUse?: boolean; historyUnread?: boolean }>;

@@ -1949,9 +1949,9 @@ export class SendGuard {
     return this.reserve(this.policy, measured!);
   }
 
-  /** Measures and reserves one signed Solana transaction, just before it is sent. */
-  async svm(rpc: Rpc, transaction: Transaction): Promise<Reservation> {
-    const chain = requireChain("solana");
+  /** Measures and reserves one signed Solana transaction on `chain` (an SVM chain), just before it
+   *  is sent. */
+  async svm(rpc: Rpc, chain: CanonicalChain, transaction: Transaction): Promise<Reservation> {
     this.gate(chain);
     if (this.policy === undefined) return NOTHING;
     const measured = await measureSvm(rpc, chain, solanaAddress(this.wallet.address), transaction);

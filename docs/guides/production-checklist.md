@@ -60,7 +60,8 @@ section in order. Each item is a check you can do with the `sauce` command; the
   things, and can be slow or rate-limited.
 - **With `eth_simulateV1`.** A full simulation report, and a wallet policy's limits, need an
   endpoint that serves it. Without it, a send whose limits cannot be measured is refused.
-- **On a supported chain.** The command sends on Ethereum, Base, Arc and Solana only. On a preview
+- **On a supported chain.** The command sends on Ethereum, Base, Arc and Solana, and the testnets
+  Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet, only. On a preview
   chain it is refused before anything is sent.
 
 ## Check the transaction you sign

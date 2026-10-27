@@ -15,6 +15,15 @@ relying on one, confirm it has code on the chain (`eth_getCode` returns more tha
 Solana, `getAccountInfo` returns an executable account). In TypeScript each value comes from
 `@eco-incorp/sauce/deployments`, by the function its table names.
 
+The released EVM engine and Kitchen are deployed on Ethereum Sepolia, Base Sepolia and Arc
+Testnet. The released Solana engine and Kitchen are deployed on devnet and testnet, with zero
+execution fees. Testnet uses devnet's engine build and chain id 1399811150; it has no separate
+chain alias or token registry. Use `--chain solana --rpc-url <testnet-rpc-url>`
+and explicit testnet mint addresses. The endpoint does not change compile-time chain identity;
+`ctx.chainId()` reads the running cluster's chain id. The
+[endpoint guide](../guides/cli.md#pick-a-chain-and-an-endpoint) explains the limits. Engine
+deployment does not establish venue deployments: the SDK's Solana venues remain mainnet-only.
+
 ## The release
 
 The compiler this package pins, and the four components its programs run on. They pair by exact

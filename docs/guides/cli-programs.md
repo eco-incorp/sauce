@@ -120,7 +120,8 @@ A name the chain does not have is refused the same way, naming the chain: a prog
 ## Choose the chain
 
 `--chain` takes a slug, an alias or a chain id: `base`, `eth`, `8453`, `solana`. Every chain Sauce
-knows compiles. The `sauce` command sends only on Ethereum, Base, Arc and Solana; `simulate` runs
+knows compiles. The `sauce` command sends only on Ethereum, Base, Arc and Solana, and the testnets
+Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet; `simulate` runs
 wherever the release is deployed on the chain, and stops, naming the missing contract, where it is
 not ([Supported and preview chains](cli.md#supported-and-preview-chains)).
 
