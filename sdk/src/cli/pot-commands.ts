@@ -11,18 +11,8 @@ import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import type { PotImportTarget } from "./inputs.js";
 import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
-import { importEvmOwnerPots, importEvmPot, importSvmPot, recordOn } from "./pots.js";
+import { importEvmOwnerPots, importEvmPot, importSvmPot, recordOn, releaseText } from "./pots.js";
 import { genesisOf } from "./solana.js";
-
-/** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
-const releaseText = (record: PotRecord): string => {
-  if (record.release === undefined) return "release unknown";
-  const { compiler, ...components } = record.release;
-
-  return `compiler ${compiler} (${Object.entries(components)
-    .map(([component, version]) => `${component} ${version}`)
-    .join(", ")})`;
-};
 
 /** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
 const onChain = (record: PotRecord): string =>
@@ -34,7 +24,7 @@ const onChain = (record: PotRecord): string =>
 const potLines = (record: PotRecord): string[] => [
   `${onChain(record)}  ${record.pot}  ${record.kind}`,
   `  owner ${record.owner}, salt ${record.salt}`,
-  `  ${releaseText(record)}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
+  `  ${releaseText(record.release)}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
   record.deployment === undefined
     ? `  ${record.origin} ${record.recordedAt}`
     : `  ${record.origin} in ${record.deployment.tx} (${record.chain === "solana" ? "slot" : "block"} ` +

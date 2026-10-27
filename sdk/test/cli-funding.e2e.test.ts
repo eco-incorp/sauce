@@ -1021,7 +1021,9 @@ describeEvm(
       // Answers every call with the owner's address: owner() is the signer, and the salt and the
       // Kitchen it names put no Pot here.
       const spoof = getAddress("0x5900000000000000000000000000000000000001");
-      const refusal = `Pot ${spoof} is not ${OWNER.address}'s own Pot of a release this sauce records`;
+      // The Pot guard (`chain.ts#requirePot`) refuses it before funding reads it: no release this
+      // SDK knows minted a Pot there, whatever its owner() says.
+      const refusal = `${spoof} on ethereum has code, but no release this SDK knows minted a Pot there`;
       const AUTO: Approver = { auto: true, canAsk: false, approve: async () => true };
       const MODES = ["permit2", "permit", "allowance", "transfer"] as const;
       /** The token each mode funds (`permit` needs EIP-2612), once the suite has planted them. */

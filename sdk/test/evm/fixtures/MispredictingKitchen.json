@@ -1,0 +1,147 @@
+{
+  "source": "sdk/test/evm/fixtures/MispredictingKitchen.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "released_",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "elsewhere_",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "potInitCodeHash_",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "fallback"
+    },
+    {
+      "inputs": [],
+      "name": "elsewhere",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "potInitCodeHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "name": "predictPot",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "predictPot",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "predictSharedPot",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "released",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "receive"
+    }
+  ],
+  "creationCode": "0x60e060405234801561000f575f5ffd5b506040516103d43803806103d483398101604081905261002e91610064565b6001600160a01b03928316608052911660a05260c05261009d565b80516001600160a01b038116811461005f575f5ffd5b919050565b5f5f5f60608486031215610076575f5ffd5b61007f84610049565b925061008d60208501610049565b9150604084015190509250925092565b60805160a05160c0516102f46100e05f395f60ae01525f818160ff0152818161014e015281816101bf015261020101525f81816061015261018101526102f45ff3fe608060405260043610610058575f3560e01c806302161a881461009d5780632cc0c1e4146100e357806335986e221461013d57806396132521146101705780639c8a5796146101a3578063b1a6cc05146101e45761005f565b3661005f57005b7f0000000000000000000000000000000000000000000000000000000000000000365f80375f5f365f845af43d5f5f3e80610098573d5ffd5b503d5ff35b3480156100a8575f5ffd5b506100d07f000000000000000000000000000000000000000000000000000000000000000081565b6040519081526020015b60405180910390f35b3480156100ee575f5ffd5b506101256100fd36600461023e565b7f00000000000000000000000000000000000000000000000000000000000000009392505050565b6040516001600160a01b0390911681526020016100da565b348015610148575f5ffd5b506101257f000000000000000000000000000000000000000000000000000000000000000081565b34801561017b575f5ffd5b506101257f000000000000000000000000000000000000000000000000000000000000000081565b3480156101ae575f5ffd5b506101256101bd36600461027f565b7f000000000000000000000000000000000000000000000000000000000000000092915050565b3480156101ef575f5ffd5b506101256101fe3660046102a7565b507f000000000000000000000000000000000000000000000000000000000000000090565b80356001600160a01b0381168114610239575f5ffd5b919050565b5f5f5f60608486031215610250575f5ffd5b61025984610223565b92506020840135915060408401358015158114610274575f5ffd5b809150509250925092565b5f5f60408385031215610290575f5ffd5b61029983610223565b946020939093013593505050565b5f602082840312156102b7575f5ffd5b503591905056fea264697066735822122091a801813827c421594f8273bb507dcd3ca4b1951f5a9d9c0456b3b6cb2dccdf64736f6c63430008240033"
+}

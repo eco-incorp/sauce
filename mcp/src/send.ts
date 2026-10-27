@@ -59,11 +59,16 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "land, and reports what it did. It takes no key and never signs. `transactions` are the " +
         "SIGNED bytes, in the order to send them: on an EVM chain the raw 0x… hex a signer " +
         "returns (chain and sender read from it), on Solana the base64 wire transaction (every " +
-        "signature checked). Each is simulated as signed first — EVM an eth_call from its sender " +
+        "signature checked). Every cook and Pot deployment among them is held to the Pot guard " +
+        "first, together: one it refuses (a cook on no Pot, or on a Pot of another release; a " +
+        "deployment the Kitchen puts elsewhere, or whose calldata names no owner and salt) " +
+        "fails the call before any is sent, naming which. Each is simulated as signed first — " +
+        "EVM an eth_call from its sender " +
         "with its gas limit held to what that used, Solana a simulation that checks the " +
         "signatures — and one that would fail is not sent: the call fails with the reason, or, " +
         "once an earlier one landed, stops there with ok false. Each lands before the next is " +
-        "simulated, so a cook after its Pot's deployment runs on the Pot. One already on chain is " +
+        "simulated, so a cook after its Pot's deployment runs on the Pot (waiting, after a " +
+        "deployment, until the endpoint shows the Pot's code). One already on chain is " +
         "read back, not sent again; one the chain had, pending, then lost (dropped or reorged " +
         "out) is reported gone, to sign anew. A Solana transaction missing a signature (its fee " +
         "payer's, or any its message names) is refused by name. Returns `sent`: each one's hash (a Solana signature), " +

@@ -622,6 +622,31 @@ put at a terminal (a password, a yes or no) is not here: pass the flags that ans
   `--value <wei>`, or an endpoint.
 - **The endpoint is another chain's** (exit 1). `the RPC endpoint serves chain …`: use the chain's
   own endpoint, or a `--config` file with each chain's under its id.
+- **The package is not the deployed Kitchen's** (exit 1, EVM). `the Kitchen … puts the Pot of
+owner … and salt … at …, but this SDK has it at …` (`the Shared Pot of salt …` for a Shared Pot's
+  deployment): the chain's Kitchen puts a Pot not deployed yet at another address than this copy
+  of the package does, so a cook it built would reach no Pot.
+  `… is a Pot of compiler …` or `… has code, but no release this SDK knows minted a Pot there`: the
+  Pot named was minted by another release, and its engine runs no program this package compiles.
+  The message names the release the chain's Kitchen mints and the package versions that pair with
+  it, or says `the Kitchen is newer than this SDK`. It names where this package deploys the owner's
+  Pot, and lists the owner's other Pots from the Pot store, each with its release. Nothing was
+  simulated, built or sent: when the Kitchen is newer, the user upgrades the package
+  (`sauce update`); a listed Pot of the package's own release still cooks, named with
+  `--pot <address>`. A batch (`sauce send`'s transactions, a wallet's send, the approvals and
+  transfers `sauce run --fund` sends first) is checked whole before any of it is sent:
+  `nothing was sent — transaction 2 of 2 (…): …` names the step refused. A deployment the chain
+  already has that left no Pot where the package expects one stops the rest of the batch:
+  `not sent — because transaction 1 of 2 (…) landed and left no Pot at …`. `the released Kitchen …
+is not deployed on <chain>`: there is no Pot to cook on there. The checks trust the endpoint, as
+  every read does: a contract at a Pot's address that answers as a Pot would needs a dishonest
+  endpoint (a fork, or an RPC that lies). Offline the deployed release cannot be checked, and the
+  notes say `The Pot's address is NOT checked against the deployed Kitchen`.
+- **A Pot with no owner** (exit 2, EVM). `Kitchen.deployPot reverts for the owner …`: the owner
+  given is the zero address, and no Kitchen call deploys a private Pot for it, so nothing was built,
+  online or offline. Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may
+  cook on and which `Kitchen.deploySharedPot(salt)` deploys. `sauce send` refuses a signed
+  deployment of it the same way, with exit 1.
 - **No signer** (exit 2). `missing a signer…`: the command sends and was given no key. Pass
   `--wallet <name>` (a Solana wallet on Solana), `--keystore <path>` or, on Solana,
   `--keypair <path>`, with a password source; or build the transaction with `sauce tx` for another

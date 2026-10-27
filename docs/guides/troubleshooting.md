@@ -80,12 +80,96 @@ new one. No flag lifts the refusal ([Supported and preview chains](cli.md#suppor
 sauce simulate: the released engine 0x0F50… is not deployed on gnosis: this SDK's cook cannot run there
 ```
 
-**Cause.** `sauce simulate` runs the cook on the release's engine and Kitchen, and they are not
-deployed on that chain, so there is nothing for the cook to run on. This is not the preview label:
-a preview chain simulates wherever the release is deployed on it.
+**Cause.** The cook runs on the release's engine and Kitchen, and one of them is not deployed on
+that chain, so there is nothing for the cook to run on. `the released Kitchen … is not deployed` is
+the same for the Kitchen: `sign`, `send` and a Pot's deployment say it too. This is not the preview
+label: a preview chain simulates wherever the release is deployed on it.
 
 **Fix.** Simulate on a chain where the release is deployed. `compile`, `globals`, `price`, `pools`
 and `pot` still work on this one.
+
+### `nothing was sent — transaction … of … (…)`
+
+```text
+sauce send: nothing was sent — transaction 2 of 2 (cook on Pot 0x2eC7…): the cook goes to 0x2eC7…, which has no code on base: no Pot is there to run it, and the value it carries would stay at that address. Nothing was sent
+```
+
+**Cause.** Before it sends the first transaction of a batch, `sauce send` checks every cook and Pot
+deployment in it against the chain, together, as a wallet's send and `sauce run` do for theirs. One
+of them fails the check, so none of the batch is sent: the transaction named, and the reason after
+it, are one of the refusals on this page.
+
+**Fix.** Fix what the named transaction's reason says, then sign and send the batch again. A cook
+on a Pot that an earlier transaction of the same batch deploys is fine: that deployment is checked
+in its place, against where the Kitchen puts its Pot.
+
+A transaction the chain already has is read back, not sent again. When it is a Pot deployment that
+landed and left no Pot where the SDK expects one, the transaction after it is reported instead, and
+nothing after it is sent:
+
+```text
+not sent — because transaction 1 of 2 (Kitchen.deployPot at 0x1984…) landed and left no Pot at 0x3c…, where this SDK expects one: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: … Nothing after it was sent.
+```
+
+The reason after the colon is the Kitchen's, as in the next section. Fix that, and sign the
+transactions after the deployment again.
+
+### `Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000`
+
+```text
+sauce pot: Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000: a Pot with no owner is a Shared Pot, which Kitchen.deploySharedPot(salt) deploys. Nothing was simulated, built or sent.
+```
+
+**Cause.** The owner given (`--owner`, or a tool's `owner`) is the zero address. A private Pot needs
+an owner: the Kitchen's `deployPot` reverts for that one, and no call puts a Pot where the SDK would
+have it, so a transfer into that address would stay there. The command refuses it before it builds
+anything, with or without an RPC endpoint.
+
+**Fix.** Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may cook on and
+which `Kitchen.deploySharedPot(salt)` deploys: see
+[Pots and cooks in code](../api/README.md#pots-and-cooks-in-code).
+
+### `this SDK does not match the deployed Kitchen`
+
+```text
+sauce tx: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: this SDK does not match the deployed Kitchen, and a cook it sends goes where the Kitchen puts no Pot. The Kitchen 0x1984… on base mints Pots under init-code hash 0x5d…, which no release this SDK knows records: the Kitchen is newer than this SDK. Upgrade @eco-incorp/sauce (sauce update). Under its release, compiler … (v12-evm …, kitchen-evm …), this SDK deploys the Pot of owner 0xYou and salt 0x00…00 at 0x3c…. Nothing was simulated, built or sent.
+The Pot store /home/you/.sauce/pots holds 1 other Pot of 0xYou on base:
+  0x7e…  private, salt 0x00…01: compiler … (v12-evm …, kitchen-evm …), @eco-incorp/sauce …
+```
+
+**Cause.** The Kitchen on the chain mints Pots of another release than your copy of the SDK pins,
+and it derives Pot addresses differently. Before the command simulates, builds or sends a cook, a
+Pot deployment or a signed cook on a Pot not deployed yet, it asks the Kitchen where it puts your
+Pot (`predictPot`, or `predictSharedPot` for the deployment of a Shared Pot that `sauce send` is
+given). A cook sent to the SDK's address would land on an address with no code: it
+would succeed, run nothing, and leave its value at that address. The message says which release
+the Kitchen mints, from its `potInitCodeHash()`. Where the command keeps the Pot store, it lists
+your other Pots on the chain, each with its release.
+
+**Fix.** When the Kitchen is newer than the SDK, upgrade the package (`sauce update`, or
+`npm i @eco-incorp/sauce@latest` in a project), then run the command again. When the message names
+an older release instead (`mints Pots of compiler …, which @eco-incorp/sauce … pair with`), the
+chain's Kitchen has not been upgraded yet: use one of the SDK versions it names on that chain. A
+listed Pot of your SDK's release still cooks: name it with `--pot <address>`.
+
+### `… is a Pot of compiler …, which @eco-incorp/sauce … pair with`
+
+**Cause.** The Pot you named was minted by another release. Its release is told from the chain:
+its owner, salt and Kitchen are read off it, and its address is that Kitchen's under the release's
+Pot init-code hash. Its engine runs only that release's compiler output, never this SDK's.
+
+**Fix.** Cook on it with an SDK version the message names, or cook on a Pot of your SDK's release:
+the message says where the SDK deploys the owner's Pot.
+
+### `… has code, but no release this SDK knows minted a Pot there`
+
+**Cause.** The contract at the Pot's address reports an owner, salt and Kitchen that no release the
+SDK records derives this address from. It is a Pot of a release newer than the SDK, or not a Pot.
+A contract that does not answer a Pot's `owner()`, `userSalt()` and `kitchen()` is refused as `…
+has code, but is not a Pot`.
+
+**Fix.** If the message says the Kitchen is newer than this SDK, upgrade the package. Otherwise
+check the Pot you named with `--pot`, or the `--owner` and `--salt` that give it.
 
 ## The command cannot reach the chain
 

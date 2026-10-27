@@ -43,7 +43,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, connectAt, endpointFor } from "./chain.js";
+import { chainServedBy, connect, connectAt, endpointFor, POT_UNCHECKED } from "./chain.js";
 import {
   type Approver,
   type ArgsInput,
@@ -2295,18 +2295,23 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "wire transaction, every signature checked against its message. `-` reads them from stdin,",
       "separated by whitespace.",
       "",
-      "They go out in the order given. Each is simulated as it was signed first — on an EVM chain",
-      "an eth_call from its sender, its gas limit held to what that used; on Solana a simulation",
-      "that checks the signatures — and one that would fail is not sent: the reason is printed",
-      "(exit 1), and nothing after it is sent. Each is confirmed before the next is simulated, so",
-      "a cook after its Pot's deployment runs on the Pot. Prints, for each, the hash (a Solana",
-      "signature), status and what it cost, the explorer and trace pages, the decoded reason a",
-      "failure gives, and for a cook what moved and what it left in the Pot; on Solana what main",
-      "returned. A Solana transaction lands within about a minute of being built, or never: one",
-      "whose blockhash has expired is refused, to build and sign again. One the chain already",
-      "has is read back, not sent again; one it had, pending, then lost (dropped or reorged out)",
-      "is reported gone, to sign anew. A Solana transaction missing a signature (its fee payer's,",
-      "or any its message names) is refused by name.",
+      "They go out in the order given. On an EVM chain, every cook and Pot deployment among them",
+      "is held to the Pot guard first, together: a cook must go to a Pot of this SDK's release, or",
+      "one a transaction before it deploys, and each deployment must put its Pot where the",
+      "Kitchen says (its predictPot, or predictSharedPot for a Shared Pot), one the chain already",
+      "has too while its Pot has no code. One that does not stops the batch before anything is",
+      "sent, naming it. Each is simulated as it was signed first — on an EVM chain an eth_call",
+      "from its sender, its gas limit held to what that used; on Solana a simulation that checks",
+      "the signatures — and one that would fail is not sent: the reason is printed (exit 1), and",
+      "nothing after it is sent. Each is confirmed before the next is simulated, so a cook after",
+      "its Pot's deployment runs on the Pot, once the endpoint shows its code. Prints, for each,",
+      "the hash (a Solana signature), status and what it cost, the explorer and trace pages, the",
+      "decoded reason a failure gives, and for a cook what moved and what it left in the Pot; on",
+      "Solana what main returned. A Solana transaction lands within about a minute of being",
+      "built, or never: one whose blockhash has expired is refused, to build and sign again. One",
+      "the chain already has is read back, not sent again; one it had, pending, then lost (dropped",
+      "or reorged out) is reported gone, to sign anew. A Solana transaction missing a signature",
+      "(its fee payer's, or any its message names) is refused by name.",
       "",
       "A Solana cook too large for one transaction is a plan of steps (sauce tx prints the first,",
       "and its cursor): the setup (the Pot, token accounts, the program staged in a code buffer, a",
@@ -2607,7 +2612,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...saltOf(args),
         };
 
-        return rpcUrl === undefined ? potCommand(target) : potStatusCommand({ ...target, rpcUrl });
+        if (rpcUrl !== undefined) return potStatusCommand({ ...target, rpcUrl });
+        const predicted = potCommand(target);
+
+        // A preview chain's prediction carries no deployment, so nothing is taken on trust.
+        return predicted.cast === undefined
+          ? predicted
+          : { ...predicted, notes: [...(predicted.notes ?? []), POT_UNCHECKED] };
       }
       if (stringFlag(args, "format") === "cast") {
         throw new UsageError("--format cast prints the unsigned transaction; --deploy sends it");

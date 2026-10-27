@@ -348,9 +348,16 @@ sauce send AQAB… --chain solana
 Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns, on
 Solana the base64 wire transaction. `-` reads them from stdin. They go out in the order given:
 
+- Every cook and Pot deployment among them is checked against the chain first, all together: the
+  Pot each cook goes to must be one of your SDK's release, or one an earlier transaction deploys,
+  and each deployment must put its Pot where your SDK has it, as the Kitchen's own `predictPot`
+  (`predictSharedPot` for a Shared Pot) says, one the chain already has too while its Pot has no
+  code. One that fails the check stops the batch before anything goes out, and the message names
+  it: `nothing was sent — transaction 2 of 2 (cook on Pot 0x…): …`.
 - Each is simulated as it was signed first. One that would fail is not sent: the reason is printed,
   the command exits 1, and nothing after it goes out.
 - Each lands before the next is simulated, so the cook after its Pot's creation runs on the Pot.
+  After a deployment, the next waits until the endpoint shows the Pot's code.
 - A cook signed with less gas than its simulation uses is refused, unsent.
 - A transaction already on chain is read back, not sent again. One the chain had, pending, then
   lost is reported as gone, to sign anew.

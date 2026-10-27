@@ -196,7 +196,7 @@ describeEvm("a command deploys the Pot it needs", () => {
     await nothingSent(fresh.address, fresh.pot);
   }, 120_000);
 
-  it("rejects a different Kitchen's new-Pot derivation but still cooks on an existing explicit Pot", async () => {
+  it("refuses a new Pot once the Kitchen derives Pots another way, but still cooks on an existing Pot of this release", async () => {
     const existing = await owner("existing-before-factory-change");
     await local.send(
       local.deployer,
@@ -272,9 +272,29 @@ describeEvm("a command deploys the Pot it needs", () => {
           ...["--salt", "new-after-factory-change", "--args", "41"],
         );
         expect(refused.code).toBe(1);
-        expect(refused.stdout + refused.stderr).toContain("potInitCodeHash");
+        expect(refused.stdout + refused.stderr).toContain(
+          `puts the Pot of owner ${fresh.address} and salt ${fresh.salt} at ${actualPot}, but ` +
+            `this SDK has it at ${fresh.pot}: this SDK does not match the deployed Kitchen`,
+        );
+        // The Kitchen's own Pot init-code hash is no release's this SDK records.
+        expect(refused.stdout + refused.stderr).toContain(
+          `mints Pots under init-code hash ${afterHash}, which no release this SDK knows records: ` +
+            "the Kitchen is newer than this SDK. Upgrade @eco-incorp/sauce (sauce update)",
+        );
       }
       await nothingSent(fresh.address, fresh.pot);
+      // The Pot the upgraded Kitchen deployed is of a release this SDK does not know: refused too.
+      const newer = await sauceWith(
+        NO_TERMINAL,
+        ...["tx", program, "--chain", "ethereum", "--rpc-url", local.rpcUrl],
+        ...["--pot", actualPot, "--args", "41"],
+      );
+      expect(newer.code).toBe(1);
+      expect(newer.stdout + newer.stderr).toContain(
+        `${actualPot} on ethereum has code, but no release this SDK knows minted a Pot there`,
+      );
+      expect(newer.stdout + newer.stderr).toContain("the Kitchen is newer than this SDK");
+      // A Pot of this release, told from its address, still pairs with this SDK: it cooks.
       for (const command of ["tx", "simulate", "run"]) {
         const result = await sauceWith(
           NO_TERMINAL,

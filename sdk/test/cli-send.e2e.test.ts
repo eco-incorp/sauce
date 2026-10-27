@@ -303,7 +303,12 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       .slice(0, sentAt)
       .filter((request) => request.method === "eth_call")
       .map((request) => request.params[0] as Record<string, string | undefined>)
-      .filter((call) => call.to?.toLowerCase() === cook.to.toLowerCase())
+      // The cook itself: the Pot guard's reads before it ask the same Pot other questions.
+      .filter(
+        (call) =>
+          call.to?.toLowerCase() === cook.to.toLowerCase() &&
+          call.data?.toLowerCase() === cook.data.toLowerCase(),
+      )
       .map((call) => `${call.gas}/${call.maxFeePerGas}/${call.maxPriorityFeePerGas}`);
     const asSigned = parseTransaction(signed);
     expect({ sentAt: sentAt > 0, simulated }).toEqual({

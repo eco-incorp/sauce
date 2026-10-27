@@ -78,6 +78,7 @@ import {
   poolsCommand,
   potCommand,
   potState,
+  POT_UNCHECKED,
   potTarget,
   PreviewChainError,
   type PreviewChainRefusal,
@@ -92,6 +93,7 @@ import {
   refuseSignInput,
   TABLES_PER_RUN,
   registeredBalances,
+  requirePot,
   requireSupported,
   resolvePriceTokens,
   signCommand,
@@ -2228,11 +2230,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ],
         };
       }
-      const output = potCommand({ chain, owner: parseAddress("owner", args.owner), ...salt });
+      const owner = parseAddress("owner", args.owner);
+      const output = potCommand({ chain, owner, ...salt });
       const pot = output.json.pot as Address;
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
-      const deployed = client === undefined ? null : (await potState(client, pot)).deployed;
+      const state = client === undefined ? undefined : await potState(client, pot);
+      const deployed = state === undefined ? null : state.deployed;
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
+      // The deployment returned is refused where the Kitchen would put the Pot elsewhere.
+      if (client !== undefined && state !== undefined) {
+        await requirePot(client, chain, { owner, ...salt, pot, deployed: state.deployed });
+      }
       const held =
         reading && client !== undefined ? await registeredBalances(client, chain, pot) : undefined;
       const native = nativeSymbol(chain);
@@ -2269,7 +2277,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         },
         notes: [
           ...(output.notes ?? []),
-          ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+          ...(deployed === null ? [unchecked, POT_UNCHECKED] : deployed ? [deployedNote] : []),
           ...(held === undefined || nativeToken === undefined
             ? []
             : [

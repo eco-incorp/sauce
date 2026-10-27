@@ -8,7 +8,10 @@
  * sender, and its gas limit held to what the rehearsal used; on Solana a simulation that checks
  * the signatures — and one that would fail is refused with its reason, so nothing is spent on it.
  * They go out in the order given, each confirmed before the next is rehearsed (a cook after the
- * Pot's deployment runs on the Pot it deployed), stopping at the first that does not succeed.
+ * Pot's deployment runs on the Pot it deployed, once the endpoint shows its code), stopping at the
+ * first that does not succeed. On an EVM chain every cook and Pot deployment among them is held to
+ * the Pot guard first, together (`chain.ts#requirePlanSendable`), so none is sent when a later one
+ * would be refused.
  * What landed is reported from the chain: the status, the fee, the reason a failure gives, and for
  * a cook what moved and what it left in the Pot, and what `main` returned on Solana.
  */
@@ -50,9 +53,13 @@ import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import {
+  awaitPot,
   broadcastRefusal,
   connect,
   landed,
+  PlanRefusal,
+  requirePlanSendable,
+  requireSendable,
   simulate,
   type Sent,
   type SignedCall,
@@ -503,6 +510,31 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
     }
   }
   const client = await connect(input.rpcUrl, input.chain);
+  // The whole plan held to the guard before anything is sent (`chain.ts#requirePlanSendable`): a
+  // step it refuses stops the plan at the first transaction the chain does not have yet, so nothing
+  // goes out before it, and what the chain already has is still read back.
+  const onChain = await Promise.all(
+    signed.map((tx) =>
+      client.getTransaction({ hash: tx.hash }).then(
+        () => true,
+        () => false,
+      ),
+    ),
+  );
+  let refusal: PlanRefusal | undefined;
+  try {
+    await requirePlanSendable(
+      client,
+      signed.map((tx, index) => ({
+        tx: { to: tx.to, data: tx.data, value: tx.value },
+        what: `transaction ${index + 1} of ${signed.length} (${evmWhat(tx, index)})`,
+        ...(onChain[index] === true ? { sent: true } : {}),
+      })),
+    );
+  } catch (error) {
+    if (!(error instanceof PlanRefusal)) throw error;
+    refusal = error;
+  }
   const sent: SentEntry[] = [];
   for (const [index, tx] of signed.entries()) {
     const what = evmWhat(tx, index);
@@ -533,6 +565,30 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
     );
     let reservation: Reservation | undefined;
     if (!known) {
+      if (refusal !== undefined) {
+        if (sent.length === 0) {
+          throw new CliError(
+            signed.length === 1
+              ? `${what}: not sent — ${refusal.reason}`
+              : `nothing was sent — ${refusal.message}`,
+          );
+        }
+        // Refused for a step the chain already has (a deployment that landed and left no Pot where
+        // this SDK expects one), this one is not sent because of it; else for what it, or a step
+        // after it, would do.
+        sent.push(
+          refused(onChain[refusal.step] === true ? `because ${refusal.message}` : refusal.message),
+        );
+        break;
+      }
+      // A cook or a Pot's deployment, held to the deployed Kitchen again, on the state it is sent on.
+      try {
+        await requireSendable(client, request);
+      } catch (error) {
+        if (!(error instanceof CliError)) throw error;
+        sent.push(refused(error.message));
+        break;
+      }
       // Rehearsed as it was signed, on what the transactions before it left.
       const rehearsal = await simulate(client, tx.from, request);
       if (!rehearsal.ok) {
@@ -588,6 +644,27 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
     );
     sent.push(await evmEntry(client, input.chain, tx, what, result));
     if (result.status !== "success") break;
+    // A Pot it deployed, once the endpoint shows its code: a receipt is no proof that the node
+    // answering next has its block, and the transaction after it is checked and rehearsed there.
+    const next = signed[index + 1];
+    if (next !== undefined) {
+      try {
+        for (const pot of result.pots ?? []) {
+          await awaitPot(client, getAddress(pot.pot), result.blockNumber);
+        }
+      } catch (error) {
+        if (!(error instanceof CliError)) throw error;
+        sent.push({
+          what: evmWhat(next, index + 1),
+          hash: "",
+          status: "failed",
+          reason: `not sent — ${error.message}`,
+          lines: [],
+          json: {},
+        });
+        break;
+      }
+    }
   }
 
   return sent;

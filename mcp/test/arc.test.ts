@@ -10,12 +10,16 @@ import { after, before, describe, it } from "node:test";
 
 import { encodeAbiParameters, toFunctionSelector } from "viem";
 
+import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
+import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { connect, ok, type Connected } from "./harness.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
 const EXECUTION_FEE = toFunctionSelector("function executionFee()");
 const word = (value: bigint): string => encodeAbiParameters([{ type: "uint256" }], [value]);
+const PREDICT_POT = toFunctionSelector("function predictPot(address,bytes32)");
+const POT = v12PredictPot(OWNER) as `0x${string}`;
 
 describe("sauce_pot on Arc", () => {
   let server: Server;
@@ -34,17 +38,23 @@ describe("sauce_pot on Arc", () => {
           params?: Array<{ data?: string }>;
         }>;
         const answers = calls.map((call) => {
-          // Every address has code: the released contracts, and the Pot.
+          const data = call.params?.[0]?.data;
+          const to = (call.params?.[0] as { to?: string } | undefined)?.to?.toLowerCase();
           const result = {
             eth_chainId: "0x13b2",
             eth_blockNumber: "0x1",
-            eth_getCode: "0x00",
+            // Every address has code but the Pot, not deployed yet: the released contracts.
+            eth_getCode:
+              String(call.params?.[0]).toLowerCase() === POT.toLowerCase() ? "0x" : "0x00",
             // 2 USDC, as the native coin: 18 decimals.
             eth_getBalance: `0x${(2n * 10n ** 18n).toString(16)}`,
-            // The Kitchen's fee, 0.01 USDC, else the same 2 USDC through the ERC-20: 6 decimals.
-            eth_call: call.params?.[0]?.data?.startsWith(EXECUTION_FEE)
+            // The Kitchen's fee, 0.01 USDC; the Pot where the SDK predicts it, as the released
+            // Kitchen does; else the same 2 USDC through the ERC-20: 6 decimals.
+            eth_call: data?.startsWith(EXECUTION_FEE)
               ? word(10n ** 16n)
-              : word(2n * 10n ** 6n),
+              : data?.startsWith(PREDICT_POT) && to === v12KitchenAddress().toLowerCase()
+                ? encodeAbiParameters([{ type: "address" }], [POT])
+                : word(2n * 10n ** 6n),
           }[call.method];
 
           return result === undefined

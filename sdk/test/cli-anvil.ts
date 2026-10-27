@@ -267,6 +267,65 @@ export async function deployPot(
   return out.pot as Address;
 }
 
+/** A JSON-RPC request, as an endpoint in front of a chain reads it. */
+export interface RpcRequest {
+  readonly id: unknown;
+  readonly method: string;
+  readonly params?: unknown[];
+}
+
+/**
+ * An endpoint in front of `upstream` that answers each request with `answer`, which relays requests
+ * upstream (`forward`) as they are or changed. The CLI's clients send one request at a time (viem's
+ * http transport does not batch unless asked to), so a batch is refused rather than answered unseen.
+ */
+async function relayEndpoint(
+  upstream: string,
+  answer: (
+    request: RpcRequest,
+    forward: (request: unknown) => Promise<{ result?: unknown }>,
+  ) => Promise<unknown>,
+): Promise<{ readonly url: string; stop(): Promise<void> }> {
+  const forward = async (request: unknown): Promise<{ result?: unknown }> =>
+    (await (
+      await fetch(upstream, {
+        method: "POST",
+        headers: { "content-type": "application/json", connection: "close" },
+        body: JSON.stringify(request),
+      })
+    ).json()) as { result?: unknown };
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const parsed = JSON.parse(Buffer.concat(chunks).toString()) as RpcRequest | unknown[];
+      if (Array.isArray(parsed)) {
+        res.statusCode = 400;
+        res.end("this endpoint relays one request at a time");
+
+        return;
+      }
+      void answer(parsed, forward).then((out) => {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(out));
+      });
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const { port } = server.address() as AddressInfo;
+
+  return {
+    url: `http://127.0.0.1:${port}`,
+    stop: async () => {
+      server.closeAllConnections();
+      const closed = once(server, "close");
+      server.close();
+      await closed;
+    },
+  };
+}
+
 /**
  * An endpoint in front of `upstream` that lags behind the chain the way a load-balanced provider
  * can: after it has relayed a transaction, its next `stale` answers to `eth_getCode` are empty, as
@@ -280,19 +339,7 @@ export async function laggingEndpoint(
   let served = 0;
   // The block it lags at: the one before the transaction it last relayed.
   let behind = "latest";
-  const forward = async (request: unknown): Promise<{ result?: unknown }> =>
-    (await (
-      await fetch(upstream, {
-        method: "POST",
-        headers: { "content-type": "application/json", connection: "close" },
-        body: JSON.stringify(request),
-      })
-    ).json()) as { result?: unknown };
-  const answer = async (request: {
-    id: unknown;
-    method: string;
-    params?: unknown[];
-  }): Promise<unknown> => {
+  const relay = await relayEndpoint(upstream, async (request, forward) => {
     if (request.method === "eth_getCode" && owed > 0) {
       owed--;
       // The code as it was before that transaction: an older contract is there, a new one is not.
@@ -308,39 +355,21 @@ export async function laggingEndpoint(
     }
 
     return forward(request);
-  };
-  // The CLI's clients send one request at a time (viem's http transport does not batch unless
-  // asked to), so a batch is refused rather than relayed unlagged.
-  const server = createServer((req, res) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => {
-      const parsed = JSON.parse(Buffer.concat(chunks).toString()) as
-        { id: unknown; method: string } | unknown[];
-      if (Array.isArray(parsed)) {
-        res.statusCode = 400;
-        res.end("laggingEndpoint relays one request at a time");
-
-        return;
-      }
-      void answer(parsed).then((out) => {
-        res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(out));
-      });
-    });
   });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const { port } = server.address() as AddressInfo;
 
-  return {
-    url: `http://127.0.0.1:${port}`,
-    served: () => served,
-    stop: async () => {
-      server.closeAllConnections();
-      const closed = once(server, "close");
-      server.close();
-      await closed;
-    },
-  };
+  return { url: relay.url, served: () => served, stop: relay.stop };
 }
+
+/**
+ * An endpoint in front of `upstream` that runs `before` on each request ahead of relaying it: where
+ * a test changes the chain at the moment a command reads or sends something.
+ */
+export const interceptingEndpoint = (
+  upstream: string,
+  before: (request: RpcRequest) => Promise<void>,
+): Promise<{ readonly url: string; stop(): Promise<void> }> =>
+  relayEndpoint(upstream, async (request, forward) => {
+    await before(request);
+
+    return forward(request);
+  });
