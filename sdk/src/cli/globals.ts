@@ -145,9 +145,13 @@ function namespaceLines(ns: SourceNamespace, methods: boolean): string[] {
   ];
 }
 
-/** The SVM chain of Solana's devnet, to which another SVM chain's tokens point a devnet program:
- *  its symbols are devnet's mints. */
-const DEVNET = CANONICAL_CHAINS.find((one) => svmClusterOf(one) === "devnet");
+/** The SVM chains of Solana's test clusters, to which another SVM chain's tokens point a program
+ *  for one of them: their symbols are that cluster's mints. */
+const TEST_CLUSTERS = CANONICAL_CHAINS.filter((one) => {
+  const cluster = svmClusterOf(one);
+
+  return cluster !== undefined && cluster !== "mainnet-beta";
+});
 
 /** `sauce globals`: the chain's tokens, protocol namespaces, chain names and ambient functions. */
 export function globalsCommand(input: GlobalsInput): CommandOutput {
@@ -205,9 +209,13 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
               "--search <text> finds one by symbol, name or ticker",
           ]
         : []),
-      ...(DEVNET === undefined || DEVNET.id === chain.id || input.stocks === true
+      ...(input.stocks === true
         ? []
-        : [`  On devnet: --chain ${DEVNET.slug}, whose symbols are devnet's mints.`]),
+        : TEST_CLUSTERS.filter((test) => test.id !== chain.id).map(
+            (test) =>
+              `  On ${svmClusterOf(test)}: --chain ${test.slug}, whose symbols are ` +
+              `${svmClusterOf(test)}'s mints.`,
+          )),
       "  Any other mint: Token(mint), with mint an Address argument of main, passed as its base58",
       "  key. A token method's accounts are added to main and derived when the cook is built, so",
       "  its holders are known then: pot (the Pot), an Address argument of main, or a key.",

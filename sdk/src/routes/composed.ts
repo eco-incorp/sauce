@@ -52,8 +52,8 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
  * an intrinsic like "call"/"bind", or two of them sharing a name (a token symbol that is also a
  * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The
  * `svmVenuesOn` gate is registry-derived (the chain's cluster, `token-registry.ts#svmClusterOf`),
- * not a hardcoded chain name -- every EVM chain, and Solana's devnet, whose pools are none of
- * these, provably cannot get the venue namespaces.
+ * not a hardcoded chain name -- every EVM chain, and Solana's devnet and testnet, whose pools are
+ * none of these, provably cannot get the venue namespaces.
  */
 function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;

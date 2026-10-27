@@ -706,8 +706,9 @@ export function genesisOf(rpc: Rpc, url: string): Promise<string> {
 
 /**
  * Refuses `url` for `chain` where it serves another cluster than the one the chain names
- * (`pots.ts#requireChainCluster`): `solana-devnet` is devnet's alone. Asked once per endpoint, and
- * never for `solana`, which takes an endpoint of any cluster, as it always has.
+ * (`pots.ts#requireChainCluster`): `solana-devnet` is devnet's alone, `solana-testnet` testnet's.
+ * Asked once per endpoint, and never for `solana`, which takes an endpoint of any cluster, as it
+ * always has.
  */
 export async function requireCluster(rpc: Rpc, url: string, chain: CanonicalChain): Promise<void> {
   if (clusterNamed(chain) !== undefined) requireChainCluster(chain, await genesisOf(rpc, url));

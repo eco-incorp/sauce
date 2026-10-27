@@ -40,6 +40,7 @@ writes.
 | [Ethereum Sepolia](chains/sepolia.md) | `USDC` | — |
 | [Solana](chains/solana.md) | `PYUSD`, `USDC`, `USDT`, `WSOL` | [1799](chains/solana-stocks.md) |
 | [Solana Devnet](chains/solana-devnet.md) | `USDC`, `WSOL` | — |
+| [Solana Testnet](chains/solana-testnet.md) | `WSOL` | — |
 
 Every other chain registers no token: a program there uses `Token(<address>)`.
 
@@ -249,6 +250,12 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | Symbol | Mint | Key, the value a program holds | Decimals | Token program |
 | --- | --- | --- | --- | --- |
 | `USDC` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
+| `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
+
+## Solana Testnet
+
+| Symbol | Mint | Key, the value a program holds | Decimals | Token program |
+| --- | --- | --- | --- | --- |
 | `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 
 ## Tokenized stocks

@@ -130,6 +130,25 @@ nothing moves.
   chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
   extra `eth_chainId` request per write.
 
+### Solana Testnet
+
+- **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
+  its own, with the released engine and Kitchen deployed and zero execution fees, as on devnet.
+  0.99.17 reached testnet only as `--chain solana` with a testnet endpoint; that still works.
+  Testnet runs devnet's engine build, so a program compiled for it reads `chainId` as 1399811150,
+  the same value `ctx.chainId()` returns there; 1399811151 is the SDK's key for the chain, which
+  the command, the MCP server and the Pot store name it by and no program reads. Its one symbol is
+  `WSOL`: Circle publishes no testnet USDC. Its endpoint must serve testnet, so a devnet endpoint
+  given for it is refused, and a testnet endpoint for `solana-devnet`; `--chain solana` still takes
+  an endpoint of any cluster. A Pot recorded under `solana` on testnet lists under
+  `solana-testnet`. Solscan links name the cluster, and the Solana venues are mainnet's, so a venue
+  name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
+  accounts (up to a minute for one request), so the command waits up to 120 s for each of its
+  answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
+  two there.
+- The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
+  the supported chains names it after the mainnets.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

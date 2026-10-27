@@ -78,7 +78,7 @@ issuer.
   `sauce price spcxc USDC 150`, `--account source=pot:tslax` on Solana). In a program they are
   case-sensitive.
 - On Solana each stock is a Token-2022 mint, listed with its mint and the 32-byte key a program
-  holds. `solana-devnet` has no stocks.
+  holds. `solana-devnet` and `solana-testnet` have no stocks.
 
 ## Prices for a swap: `sauce price`
 
