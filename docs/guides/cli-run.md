@@ -18,8 +18,9 @@ You will need:
   the wallet's address ([Wallets and signing](cli-wallets.md) says more);
 - `pay.sauce.ts`, the quick start's program, which pays a recipient USDC from your Pot.
 
-Simulating needs no money. A real run needs a little ETH in your wallet for gas and the Kitchen's
-fee, and the USDC the program pays, in your Pot. [Costs](../concepts/costs.md) explains each.
+Simulating needs no money. Creating your Pot (step 3) and a real run need a little ETH in your
+wallet for gas and the Kitchen's fee, and the run needs the USDC the program pays, in your Pot.
+[Costs](../concepts/costs.md) explains each.
 
 ## The steps
 
@@ -30,14 +31,14 @@ sauce globals --chain base
 # 2. Check that the program compiles.
 sauce compile pay.sauce.ts --chain base
 
-# 3. Your Pot's address. It is known before the Pot exists; send it tokens once it is deployed.
-sauce pot --chain base --wallet me
+# 3. Create your Pot and print its address. Send it tokens only once it is deployed.
+sauce pot --chain base --wallet me --deploy
 
 # 4. Try it: no password, no money, nothing sent.
 sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args <recipient> 1000000
 
-# 5. Run it. The first time, it asks to create your Pot.
+# 5. Run it, with the USDC it pays in your Pot: sent there after step 3, or add --fund USDC:1.
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 

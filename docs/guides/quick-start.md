@@ -150,8 +150,8 @@ Your addresses and numbers will differ. Read it from the bottom:
 - **[2]** your Pot paid the Kitchen its fee;
 - **[1]** your wallet sent the fee to the Pot, as the cook's value;
 - **gas used** is the network's charge for the cook, paid by your wallet in ETH;
-- **after the Pot's deploy**: your Pot does not exist yet, so the simulation creates it first, as
-  the real run will;
+- **after the Pot's deploy**: your Pot does not exist yet, so the simulation creates it first, in
+  the copy only; in step 5 you create it for real, before you put tokens in it;
 - **Left in the Pot**: 4 of the 5 assumed USDC stay in the Pot, not in your wallet.
 
 Now ask for more than the Pot holds. Run the same command with `--assume-balance USDC:0.5`:
