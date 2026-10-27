@@ -130,6 +130,8 @@ describe("descriptors: hole representation (E2.4 seam)", () => {
       "arbitrum",
       "celo",
       "avalanche",
+      "base-sepolia",
+      "sepolia",
     ]);
     expect(describeContract("base", "uniswap-v3", "QuoterV2")).toBeDefined();
     // A genuine hole: the legacy SwapRouter was never deployed on Base, whose entry carries the

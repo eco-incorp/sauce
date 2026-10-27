@@ -118,7 +118,7 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     expect(knownTokenSymbols(requireChain("ronin"))).toEqual([]);
   });
 
-  it("registers the stablecoins Circle publishes on the testnets", () => {
+  it("registers the stablecoins Circle publishes on the testnets, and each one's WETH", () => {
     const testnets = Object.fromEntries(
       ["arc-testnet", "base-sepolia", "sepolia"].map((slug) => [
         slug,
@@ -133,9 +133,17 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
       "arc-testnet": [
         ["USDC", "0x3600000000000000000000000000000000000000", 6],
         ["EURC", "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", 6],
+        // Bridged ETH, as on Arc: not a wrapped native.
+        ["WETH", "0x2c4047028a72803939b6fb674D01bC059B5C4961", 18],
       ],
-      "base-sepolia": [["USDC", "0x036CbD53842c5426634e7929541eC2318f3dCF7e", 6]],
-      sepolia: [["USDC", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", 6]],
+      "base-sepolia": [
+        ["USDC", "0x036CbD53842c5426634e7929541eC2318f3dCF7e", 6],
+        ["WETH", "0x4200000000000000000000000000000000000006", 18],
+      ],
+      sepolia: [
+        ["USDC", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", 6],
+        ["WETH", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", 18],
+      ],
     });
   });
 
