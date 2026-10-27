@@ -640,12 +640,13 @@ owner … and salt … at …, but this SDK has it at …` (`the Shared Pot of s
   `not sent — because transaction 1 of 2 (…) landed and left no Pot at …`. `the released Kitchen …
 is not deployed on <chain>`: there is no Pot to cook on there. The checks trust the endpoint, as
   every read does: a contract at a Pot's address that answers as a Pot would needs a dishonest
-  endpoint (a fork, or an RPC that lies). Offline nothing is checked, and the notes say
-  `The Pot's address is NOT checked against the deployed Kitchen`.
-- **A Pot with no owner** (exit 1, EVM). `Kitchen.deployPot reverts for the owner …`: the owner
+  endpoint (a fork, or an RPC that lies). Offline the deployed release cannot be checked, and the
+  notes say `The Pot's address is NOT checked against the deployed Kitchen`.
+- **A Pot with no owner** (exit 2, EVM). `Kitchen.deployPot reverts for the owner …`: the owner
   given is the zero address, and no Kitchen call deploys a private Pot for it, so nothing was built,
   online or offline. Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may
-  cook on and which `Kitchen.deploySharedPot(salt)` deploys.
+  cook on and which `Kitchen.deploySharedPot(salt)` deploys. `sauce send` refuses a signed
+  deployment of it the same way, with exit 1.
 - **No signer** (exit 2). `missing a signer…`: the command sends and was given no key. Pass
   `--wallet <name>` (a Solana wallet on Solana), `--keystore <path>` or, on Solana,
   `--keypair <path>`, with a password source; or build the transaction with `sauce tx` for another

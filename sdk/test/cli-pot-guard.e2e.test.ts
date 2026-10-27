@@ -1235,7 +1235,8 @@ describe("offline, the Pot's address cannot be checked", () => {
         const control = await run(OWNER);
         if (control.code !== 0) throw new Error(`exited ${control.code}: ${control.stderr}`);
         const refused = await run(zeroAddress);
-        expect(refused.code).toBe(1);
+        // A value --owner cannot take: the invocation's error (exit 2), as for any other.
+        expect(refused.code).toBe(2);
         expect(refused.stderr).toContain(
           "Kitchen.deployPot reverts for the owner 0x0000000000000000000000000000000000000000: a " +
             "Pot with no owner is a Shared Pot, which Kitchen.deploySharedPot(salt) deploys",

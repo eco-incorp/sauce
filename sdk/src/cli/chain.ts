@@ -423,19 +423,21 @@ const NOTHING_SENT = "Nothing was simulated, built or sent.";
  *  comes after it is not. */
 const NOTHING_AFTER = "Nothing after it was sent.";
 
+/** Why no private Pot of the zero address can be: what every refusal of one says. */
+const NO_OWNER =
+  `Kitchen.deployPot reverts for the owner ${zeroAddress}: a Pot with no owner is a Shared Pot, ` +
+  "which Kitchen.deploySharedPot(salt) deploys.";
+
 /**
- * Refuses a private Pot of the zero address, before anything about it is read or built:
- * `Kitchen.deployPot` reverts for that owner, and no other call puts code where this SDK has the
- * Pot (`deploySharedPot` derives another address), so its deployment, a transfer into it and a cook
- * on it all reach no Pot. A Pot with no owner is a Shared Pot. It reads no chain, so it holds
- * offline as well; `closing` is what it says last.
+ * Refuses a private Pot of the zero address given as its owner (`--owner`, a tool's `owner`),
+ * before anything about it is read or built: `Kitchen.deployPot` reverts for that owner, and no
+ * other call puts code where this SDK has the Pot (`deploySharedPot` derives another address), so its
+ * deployment, a transfer into it and a cook on it all reach no Pot. A Pot with no owner is a Shared
+ * Pot. It reads no chain, so it holds offline as well; and as a value the owner cannot take, it is a
+ * {@link UsageError}. A signed deployment of that Pot is refused by {@link requireKitchenPredicts}.
  */
-export function requirePotOwner(owner: Address, closing: string = NOTHING_SENT): void {
-  if (getAddress(owner) !== zeroAddress) return;
-  throw new CliError(
-    `Kitchen.deployPot reverts for the owner ${zeroAddress}: a Pot with no owner is a Shared ` +
-      `Pot, which Kitchen.deploySharedPot(salt) deploys. ${closing}`,
-  );
+export function requirePotOwner(owner: Address): void {
+  if (getAddress(owner) === zeroAddress) throw new UsageError(`${NO_OWNER} ${NOTHING_SENT}`);
 }
 
 /** `paired` SDK releases (`pots.ts#pairedSdkReleases`) pair with a release: one, or several. */
@@ -529,8 +531,9 @@ async function potRefusal(
  * Pot, `predictSharedPot(salt)` for a Shared one) must be where this SDK has the Pot. A Kitchen
  * upgraded to other Pot code derives another address; an SDK that still predicts the old one would
  * send its cook to an address with no code, which "succeeds", runs nothing, and keeps the cook's
- * value. A private Pot of the zero address is refused first ({@link requirePotOwner}). A refusal
- * ends with `closing`.
+ * value. A private Pot of the zero address is refused first, as {@link requirePotOwner} refuses it
+ * given as an owner: here it is a deployment's, a refusal of the chain's and not of the invocation.
+ * A refusal ends with `closing`.
  */
 export async function requireKitchenPredicts(
   client: PublicClient,
@@ -541,7 +544,9 @@ export async function requireKitchenPredicts(
   closing: string = NOTHING_SENT,
 ): Promise<void> {
   const kitchen = getAddress(v12KitchenAddress());
-  if (kind !== "shared") requirePotOwner(owner, closing);
+  if (kind !== "shared" && getAddress(owner) === zeroAddress) {
+    throw new CliError(`${NO_OWNER} ${closing}`);
+  }
   const sdk = ownReleasePot(owner, salt, kind);
   const of = { owner: getAddress(owner), salt, kind, pot: sdk } as const;
   const at = { address: kitchen, abi: v12KitchenAbi } as const;

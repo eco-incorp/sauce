@@ -189,7 +189,8 @@ calldata carries no owner and salt it can be read from …`), where the decoder'
   refuse it before anything is built, offline too, where 0.99.16 printed the deployment and a
   transfer into that address. The refusal names `deploySharedPot(salt)` for deploying an ownerless
   Shared Pot (`Kitchen.deployPot reverts for the owner 0x0…0: a Pot with no owner is a Shared Pot,
-which Kitchen.deploySharedPot(salt) deploys …`), rather than reporting a release mismatch.
+which Kitchen.deploySharedPot(salt) deploys …`), rather than reporting a release mismatch or
+  letting funding land before the deployment reverts. Importing a Shared Pot is unchanged.
 - **Changed** (EVM): on a chain where the released Kitchen has no code, `sign`, `send`, a wallet's
   send and the MCP `sauce_pot` say `the released Kitchen … is not deployed on <chain>: this SDK's
 cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than that the SDK does
@@ -199,8 +200,8 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   transaction after it is checked and sent. An endpoint behind the chain had the cook refused as
   going to an address with no code.
 - **Changed** (EVM): `simulate` refuses rather than warns, because a simulation on the wrong
-  address would report a cook that runs nothing. Offline, nothing can be checked: `tx`, `sign` and
-  `pot` say so in their notes (`The Pot's address is NOT checked against the deployed Kitchen`).
+  address would report a cook that runs nothing. Offline, the deployed release cannot be checked:
+  `tx`, `sign` and `pot` say so (`The Pot's address is NOT checked against the deployed Kitchen`).
 
 ### The registry
 
