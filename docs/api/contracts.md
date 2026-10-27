@@ -118,7 +118,8 @@ A `ContractCall` is built synchronously and reads nothing.
 and `write` exist on a state-changing method's call only, and throw on a view or pure one. All three
 take a viem client the caller creates; no import of the package carries an RPC endpoint. Each first
 checks that the client is on the call's chain — from `client.chain`, or by asking a client that has
-none for its chain id once — and refuses one on another chain. viem's actions are imported on the
+none for its chain id, once for `read` and `simulate` and again before every `write`, since a
+wallet can switch network between calls — and refuses one on another chain. viem's actions are imported on the
 first call.
 
 ## Programs

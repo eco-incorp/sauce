@@ -1080,6 +1080,36 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     );
   });
 
+  // A `priceLimit` of 0 is no limit only in the `…AtLimit` forms. At a price it is a price of
+  // nothing: paying the token it is upside down for (the lower-key one on a concentrated-liquidity
+  // pool, the base on Phoenix) the limit divides by it and the cook fails; paying the other, the pool
+  // is already past it and is skipped, returning 0 having moved nothing, which `minOut` does not catch.
+  describe("a priceLimit of 0 fails one way and skips the other", () => {
+    it.each(VENUES)(
+      "$venue",
+      async (entry) => {
+        const order = { ...(await orderFor(entry)), priceLimit: 0n, minOut: 1n };
+        const back: Order = { ...order, pay: order.buy, buy: order.pay, amountIn: 10n * 10n ** 9n };
+        const program = compiled(lower(entry.venue));
+        // Phoenix's SOL/USDC market's base, SOL, is its lower-key token too.
+        for (const one of [order, back]) {
+          const outcome = await cook(program, one);
+          if (key(one.pay) < key(one.buy)) {
+            if (outcome.ok) throw new Error("the cook succeeded; expected it to fail");
+            // The engine's DivisionByZero.
+            expect(outcome.logs).toContainEqual(
+              expect.stringMatching(/ failed: custom program error: 0x32$/),
+            );
+          } else {
+            const skip = succeeded(outcome);
+            expect([skip.returned, skip.received, skip.paid]).toEqual([0n, 0n, 0n]);
+          }
+        }
+      },
+      120_000,
+    );
+  });
+
   // The estimate lets through the smallest input that buys one unit at the pool's price, and the
   // pool delivers it.
   it.each(VENUES.filter((v) => v.venue !== "Phoenix"))(

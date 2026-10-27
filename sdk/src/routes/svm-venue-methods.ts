@@ -137,7 +137,7 @@ export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> =
 
 /**
  * Whether a program compiled for `chain` may swap at the venues above: on Solana's mainnet only,
- * where their programs and pools are. On devnet a venue name is refused.
+ * where their programs and pools are. On devnet and testnet a venue name is refused.
  */
 export function svmVenuesOn(chain: CanonicalChain): boolean {
   return svmClusterOf(chain) === "mainnet-beta";

@@ -133,7 +133,7 @@ function expectRefused(
   );
   if (action !== undefined) expect(run.stderr).toMatch(action);
   expect(run.stderr).toContain(
-    "only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet.",
+    "only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet.",
   );
   expect(run.stderr).toContain(chainSupportRequest(chain).newIssueUrl);
   expect(run.stderr).toContain(chainSupportRequest(chain).searchUrl);
@@ -165,6 +165,7 @@ describe("the gate", () => {
       { slug: "base-sepolia", id: 84532, name: "Base Sepolia" },
       { slug: "sepolia", id: 11155111, name: "Ethereum Sepolia" },
       { slug: "solana-devnet", id: 1399811150, name: "Solana Devnet" },
+      { slug: "solana-testnet", id: 1399811151, name: "Solana Testnet" },
     ]);
     expect(refusal.previewChains.map((chain) => chain.slug)).toEqual(["arbitrum", "optimism"]);
     expect(refusal.previewChains[0]!.request).toEqual(chainSupportRequest("arbitrum"));

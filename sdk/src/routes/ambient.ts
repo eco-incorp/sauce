@@ -19,8 +19,23 @@
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { loadPlugin, loadPluginData } from "../plugin/index.js";
+import { SOLANA_CLUSTERS } from "../svm/clusters.js";
 import { pascalOfSlug } from "./builder.js";
+import { svmClusterOf } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
+
+/**
+ * The chain id a program compiled for `chain` reads as `chainId`/`CHAIN_ID`: what `ctx.chainId()`
+ * returns where it runs. On an EVM chain, its id. On a Solana chain, what the engine reports on the
+ * chain's cluster (`svm/clusters.ts`): 1399811149 on mainnet, 1399811150 on devnet and on testnet,
+ * which runs the devnet build. `solana` and `solana-devnet` are registered under those ids;
+ * `solana-testnet` is registered under a key of its own, 1399811151, which no program reads.
+ */
+export function programChainId(chain: CanonicalChain): bigint {
+  const cluster = svmClusterOf(chain);
+
+  return cluster === undefined ? BigInt(chain.id) : SOLANA_CLUSTERS[cluster].engineChainId;
+}
 
 export interface AmbientDefinesOptions {
   /** Caller-supplied token symbol -> address map, e.g. `{ USDC: "0x..." }`. */
@@ -74,8 +89,8 @@ function buildChainDefines(
   opts: AmbientDefinesOptions,
 ): Record<string, bigint | boolean | number> {
   const defines: Record<string, bigint | boolean | number> = {
-    chainId: BigInt(chain.id),
-    CHAIN_ID: BigInt(chain.id),
+    chainId: programChainId(chain),
+    CHAIN_ID: programChainId(chain),
   };
 
   const plugin = loadPluginData();

@@ -319,10 +319,14 @@ const NATIVE_SYMBOLS: Readonly<Record<string, string>> = {
   ink: "ETH",
   solana: "SOL",
   "solana-devnet": "SOL",
+  "solana-testnet": "SOL",
 };
 
 /** The Solana chains that are test clusters; `chains`, which is EVM-only, flags its own testnets. */
-const SVM_TESTNETS: Readonly<Record<string, true>> = { "solana-devnet": true };
+const SVM_TESTNETS: Readonly<Record<string, true>> = {
+  "solana-devnet": true,
+  "solana-testnet": true,
+};
 
 /** Whether `chain` is a test network, whose coin and tokens have no value. */
 export function isTestnet(chain: CanonicalChain): boolean {
