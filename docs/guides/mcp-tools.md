@@ -325,7 +325,7 @@ blockhash and fee), and reading the Kitchen's fee or whether a Pot exists.
 ## Supported and preview chains
 
 The server builds transactions only on the chains Sauce supports: Ethereum, Base, Arc and Solana,
-and the testnets Arc Testnet and Base Sepolia.
+and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet.
 Every other chain is a preview chain; [Chains](../reference/chains.md) has the policy and every
 chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
 

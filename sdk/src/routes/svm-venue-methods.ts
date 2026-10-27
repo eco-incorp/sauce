@@ -177,11 +177,12 @@ const PROTOCOLS: ReadonlyMap<string, readonly string[]> = Object.keys(SVM_VENUE_
 /** Whether `name` is a venue protocol's, the first name of a venue's namespace (`Orca`). */
 export const isVenueProtocol = (name: string): boolean => PROTOCOLS.has(name);
 
-/** A venue namespace's method call, `<Protocol>.<Program>.<method>(…)`, unless the program owns
- *  the protocol's name. */
+/** A venue namespace's method call, `<Protocol>.<Program>.<method>(…)`, unless the source or
+ *  caller owns the protocol's name. */
 function venueCall(
   node: AstNode,
   declared: ReadonlySet<string>,
+  bound: ReadonlySet<string>,
 ): { readonly site: MethodCall; readonly protocol: string; readonly program: string } | undefined {
   const site = methodCall(node);
   if (site === undefined) return undefined;
@@ -195,7 +196,7 @@ function venueCall(
     return undefined;
   }
   const protocol = nameOf(object.object);
-  if (!PROTOCOLS.has(protocol) || declared.has(protocol)) return undefined;
+  if (!PROTOCOLS.has(protocol) || declared.has(protocol) || bound.has(protocol)) return undefined;
 
   return { site, protocol, program: nameOf(object.property) };
 }
@@ -215,7 +216,7 @@ function integerLiteral(node: AstNode, source: string): bigint | undefined {
  * a slot of its own. A loop whose body takes `continue` stays a loop of one key each; one whose body
  * `break`s out of it, or that is labelled, is refused: written out, a `break` would end one key.
  */
-export function unrollPoolKeyLoops(source: string): string {
+export function unrollPoolKeyLoops(source: string, bound: ReadonlySet<string> = new Set()): string {
   // Before parsing: a program that finds no pool by key has no such loop.
   if (!source.includes(".pool(")) return source;
   let declared: ReadonlySet<string> = new Set();
@@ -274,7 +275,7 @@ export function unrollPoolKeyLoops(source: string): string {
   function poolKeySites(body: AstNode, name: string): AstNode[] {
     const sites: AstNode[] = [];
     walk(body, (node) => {
-      const call = venueCall(node, declared);
+      const call = venueCall(node, declared, bound);
       if (call?.site.method !== "pool") return;
       const key = ((call.site.call as { arguments?: AstNode[] }).arguments ?? [])[2];
       if (key?.type === "Identifier" && nameOf(key) === name) sites.push(key);
@@ -372,7 +373,7 @@ export function collectVenueMethods(l: SvmLowering): void {
   /** The `pool(…)` calls a swap names as its pool: lowered with it. */
   const named = new Set<AstNode>();
   walk(l.program, (n) => {
-    const call = venueCall(n, l.declared);
+    const call = venueCall(n, l.declared, l.bound);
     if (call === undefined) return;
     const { site, protocol, program } = call;
     const programs = PROTOCOLS.get(protocol)!;
@@ -398,7 +399,7 @@ export function collectVenueMethods(l: SvmLowering): void {
       );
     }
     const first = ((site.call as { arguments?: AstNode[] }).arguments ?? [])[0];
-    if (first !== undefined && venueCall(first, l.declared)?.site.method === "pool") {
+    if (first !== undefined && venueCall(first, l.declared, l.bound)?.site.method === "pool") {
       named.add(first);
     }
     l.site(n, () => lowerSwap(site, namespace, spelled));
@@ -501,7 +502,7 @@ export function collectVenueMethods(l: SvmLowering): void {
     spelled: string,
     pair: readonly [TokenRef, TokenRef],
   ): { readonly name: string; readonly stem: string } {
-    const call = venueCall(node, l.declared);
+    const call = venueCall(node, l.declared, l.bound);
     if (call?.site.method === "pool") {
       const by = `${call.protocol}.${call.program}`;
       const text = l.source.slice(node.start, node.end);

@@ -1467,11 +1467,10 @@ beside `refused`, because a client validates an error's structured content too. 
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
 chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
 the README, the manual's pages and the skills that name the four (`git grep "Ethereum, Base"`). A
-testnet is added only where the release's stack is live at its addresses (the engine, Router,
-Kitchen proxy, its EIP-1967 implementation slot and `router()`), checked with `eth_getCode` and
-calls: Ethereum Sepolia (`sepolia`) and Solana's devnet are in the registry as preview chains, and
-supporting one once the stack is there is its slug in `SUPPORTED_TESTNET_SLUGS`. Solana's devnet is
-a canonical chain of its own, `solana-devnet` (1399811150, the devnet engine's CHAIN_ID): its
+testnet is added only where the release's stack is live at its addresses: EVM checks the engine,
+Router, Kitchen proxy, its EIP-1967 implementation slot and `router()`; Solana checks the engine
+and Kitchen release builds. Ethereum Sepolia (`sepolia`) and Solana Devnet (`solana-devnet`) are
+supported in `SUPPORTED_TESTNET_SLUGS`. Devnet is a canonical chain of its own (1399811150): its
 symbols are devnet's mints (`token-registry.ts#svmClusterOf`), it has no venue
 (`svm-venue-methods.ts#svmVenuesOn`), and a cook there is still held to the release's builds by
 `solana-release.ts#requireSolanaRelease`; its Pot records share `1399811149-devnet` with those a

@@ -133,7 +133,7 @@ function expectRefused(
   );
   if (action !== undefined) expect(run.stderr).toMatch(action);
   expect(run.stderr).toContain(
-    "only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia.",
+    "only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet.",
   );
   expect(run.stderr).toContain(chainSupportRequest(chain).newIssueUrl);
   expect(run.stderr).toContain(chainSupportRequest(chain).searchUrl);
@@ -163,6 +163,8 @@ describe("the gate", () => {
       { slug: "solana", id: 1399811149, name: "Solana" },
       { slug: "arc-testnet", id: 5042002, name: "Arc Testnet" },
       { slug: "base-sepolia", id: 84532, name: "Base Sepolia" },
+      { slug: "sepolia", id: 11155111, name: "Ethereum Sepolia" },
+      { slug: "solana-devnet", id: 1399811150, name: "Solana Devnet" },
     ]);
     expect(refusal.previewChains.map((chain) => chain.slug)).toEqual(["arbitrum", "optimism"]);
     expect(refusal.previewChains[0]!.request).toEqual(chainSupportRequest("arbitrum"));
@@ -214,12 +216,13 @@ describe("refused on a preview chain, before any network call", () => {
     expect(JSON.parse(base.stdout)).toMatchObject({ chainId: 8453 });
   });
 
-  it("builds a cook on each testnet the release is deployed on", async () => {
+  it("builds a cook on each EVM testnet the release is deployed on", async () => {
     const pay = file("pay.sauce.ts", PAY);
     const flags = ["--owner", OWNER, "--define", `RECIPIENT=${RECIPIENT}`, "--value", "0"];
     for (const [slug, chainId] of [
       ["arc-testnet", 5042002],
       ["base-sepolia", 84532],
+      ["sepolia", 11155111],
     ] as const) {
       const run = await sauce("tx", pay, "--chain", slug, ...flags);
       expect([slug, run.stderr]).not.toEqual([slug, expect.stringMatching(/is refused/)]);

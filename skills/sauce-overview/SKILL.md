@@ -1,6 +1,6 @@
 ---
 name: sauce-overview
-description: Start here for any Sauce task, before any other Sauce skill. What Sauce is (SauceScript programs, .sauce.ts files, run atomically inside one transaction on EVM chains and Solana), the Pot, the cook, the Kitchen and the engine, the protocol for working with a user (write the program yourself, ask where its results end, show the program, its arguments and its simulation before anything is sent, report the links after), the rules every program keeps, which chains take transactions (Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia; the rest are preview chains) and how to request another, the path from a file to a transaction, and the skill map that names the one skill owning each topic. Use when the user mentions Sauce, SauceScript, a .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, or asks to do something atomically on chain, and whenever it is unclear which Sauce skill covers a topic.
+description: Start here for any Sauce task, before any other Sauce skill. What Sauce is (SauceScript programs, .sauce.ts files, run atomically inside one transaction on EVM chains and Solana), the Pot, the cook, the Kitchen and the engine, the protocol for working with a user (write the program yourself, ask where its results end, show the program, its arguments and its simulation before anything is sent, report the links after), the rules every program keeps, which chains take transactions and how to request another, the path from a file to a transaction, and the skill map that names the one skill owning each topic. Use when the user mentions Sauce, SauceScript, a .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, or asks to do something atomically on chain, and whenever it is unclear which Sauce skill covers a topic.
 ---
 
 # Sauce
@@ -82,10 +82,10 @@ bridge protocol (`sauce-protocols`).
 ## Supported and preview chains
 
 Transactions are built and sent on **Ethereum, Base, Arc and Solana** (`ethereum`, `base`, `arc`,
-`solana`), and on the testnets **Arc Testnet and Base Sepolia** (`arc-testnet`, `base-sepolia`),
-whose coin and tokens have no value, only. Every other chain the SDK knows is a **preview chain**
-(Ethereum Sepolia, `sepolia`, and Solana's devnet, `solana-devnet`, among them): a program compiles for it
-and reads work there, and a simulation runs wherever the release is deployed on the chain, but
+`solana`), and on the testnets **Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet**
+(`arc-testnet`, `base-sepolia`, `sepolia`, `solana-devnet`), whose coin and tokens have no value,
+only. Every other chain the SDK knows is a **preview chain**: a program compiles for it and reads
+work there, and a simulation runs wherever the release is deployed on the chain, but
 the `sauce` command and the MCP server build and send no transaction on it. The refusal comes
 before any key or endpoint is read, names the
 supported chains, and links that chain's request; no flag lifts it. Each chain's file in

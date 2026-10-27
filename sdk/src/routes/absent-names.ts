@@ -254,6 +254,7 @@ const AVAILABLE = "available";
 export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
   return [
     ...NAMESPACE_KEYS,
+    ...Object.keys(SVM_VENUE_NAMESPACES).map((name) => name.slice(0, name.indexOf("."))),
     ...CHAIN_KEY_SET,
     ...[...everySymbol()].filter((symbol) => !tokens.has(symbol)),
     AVAILABLE,

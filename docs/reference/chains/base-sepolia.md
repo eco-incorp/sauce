@@ -8,7 +8,7 @@
 > the name a program writes for each contract. The `sauce` command builds and sends transactions on
 > Base Sepolia.
 
-**Supported testnet.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia. On Base Sepolia a program compiles
+**Supported testnet.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Base Sepolia a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them. Base Sepolia is a test network: its coin and tokens have no value.
 

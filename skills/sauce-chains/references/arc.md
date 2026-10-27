@@ -2,7 +2,7 @@
 
 # Arc
 
-**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia. On Arc a program compiles
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Arc a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them.
 

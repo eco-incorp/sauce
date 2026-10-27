@@ -712,10 +712,10 @@ export class SvmLowering {
     readonly native?: string,
     /** The swaps at a price to hold to a stop, by their stop's derivation (`stop:…`). */
     readonly stopped: ReadonlySet<string> = new Set(),
-    /** The names the caller binds (its defines, its contract bindings, and a `pot` or `self` an
-     *  ambient module exports): a `pot` or `self` among them is the caller's, and the accounts this
-     *  adds are named apart from them. */
-    bound: ReadonlySet<string> = new Set(),
+    /** The names the caller binds (its defines, its contract bindings, and ambient exports),
+     *  separately from source declarations: SDK namespaces never replace them, and the accounts
+     *  this adds are named apart from them. */
+    readonly bound: ReadonlySet<string> = new Set(),
   ) {
     this.program = parseSauce(source);
     this.declarations = countDeclarations(this.program);

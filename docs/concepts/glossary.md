@@ -116,7 +116,7 @@ should.
 | **Shared Pot**           | A public workbench      | A Pot with no owner: anyone may cook on it and spend what it holds, so it is filled and emptied within one transaction.                                                                           |
 | **Router**               | A helper for swaps      | A contract on chain that answers when a pool calls back in the middle of a swap, on behalf of your Pot. You rarely see it.                                                                        |
 | **Settle program**       | An audited payout       | Sauce's own program that pays everything a Pot holds of each listed token to one recipient, above a floor. `sauce verify` checks that a payload runs exactly it.                                  |
-| **Supported chain**      | Where Sauce sends       | A chain the `sauce` command builds and sends transactions on: Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia.                                                      |
+| **Supported chain**      | Where Sauce sends       | A chain the `sauce` command builds and sends transactions on: Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet.                     |
 | **Preview chain**        | Look, but don't send    | Every other chain Sauce knows. Programs compile there and simulate where the release is deployed, but the command builds and sends nothing.                                                       |
 
 ## Swaps

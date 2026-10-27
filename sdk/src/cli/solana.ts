@@ -52,7 +52,7 @@ import {
   type EntryType,
   type EntryValue,
 } from "../routes/entry.js";
-import { svmClusterOf, svmTokenRows } from "../routes/token-registry.js";
+import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import {
@@ -144,6 +144,7 @@ import { keepLanded, sayKept } from "./keep.js";
 import type { PotRecord } from "./pot-store.js";
 import {
   clusterNamed,
+  clusterOf,
   requireChainCluster,
   svmPotsCreated,
   type InnerInstructions,
@@ -2515,6 +2516,7 @@ async function stagedRehearsal(
         tail,
       });
   const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
+  const cluster = clusterOf(await genesisOf(prepared.rpc, input.rpcUrl));
   const fork = await openFork(
     prepared.rpc,
     (what, request) => ask(input.rpcUrl, what, request),
@@ -2526,8 +2528,8 @@ async function stagedRehearsal(
     ],
     engine(),
     kitchen(),
-    // The engine as the chain's cluster runs it: its `CHAIN_ID` is the chain the program reads.
-    svmClusterOf(input.chain) === "devnet" ? "devnet" : "mainnet",
+    // Devnet and testnet use the same released build; an explicit endpoint decides the cluster.
+    cluster === "devnet" || cluster === "testnet" ? "devnet" : "mainnet",
     input.snapshot,
   );
   // The owner signs and pays every transaction of the rehearsal: an account a program owns, or one

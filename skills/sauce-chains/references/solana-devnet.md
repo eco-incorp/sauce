@@ -2,19 +2,13 @@
 
 # Solana Devnet
 
-**Preview chain.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia only. On Solana Devnet a program
-compiles (`sauce compile`) and the reads work (`sauce globals`, `sauce price`, `sauce pools`),
-and `sauce simulate` runs wherever the release is deployed on the chain, but the `sauce`
-command and the MCP server build and send no transaction: `sauce tx`, `sauce run` and
-`sauce pot --deploy` are refused,
-naming the supported chains and how to request this one.
-
-To request Solana Devnet, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Solana+Devnet%22) and add your
-use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Solana+Devnet+%281399811150%29&chain=Solana+Devnet&chain-id=1399811150) with the chain-support issue form.
+**Supported testnet.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Solana Devnet a program compiles
+and simulates, and the `sauce` command and the MCP server build its transactions and send
+them. Solana Devnet is a test network: its coin and tokens have no value.
 
 | Fact | Value |
 | --- | --- |
-| Support | preview: compile and read; no transaction is built or sent |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `solana-devnet`; also `devnet` |
 | Chain id | 1399811150 |
 | Kind | Solana (SVM) |
@@ -27,8 +21,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 
 Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as
 1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's
-engine and Kitchen have the same program ids on every cluster; a cook needs the release's own
-builds there, and `sauce simulate` names the one that is missing. The Solana venues are
+engine and Kitchen are deployed on devnet, with zero execution fees. The Solana venues are
 mainnet's programs and pools, so a venue name is refused here.
 
 ## In a program

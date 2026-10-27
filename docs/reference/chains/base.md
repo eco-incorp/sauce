@@ -7,7 +7,7 @@
 > Everything a program can name on Base: its tokens, and every protocol deployed there with the name
 > a program writes for each contract. The `sauce` command builds and sends transactions on Base.
 
-**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia. On Base a program compiles
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Base a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them.
 

@@ -2,7 +2,7 @@
 
 # Solana
 
-**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia. On Solana a program compiles
+**Supported.** Sauce supports transactions on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet. On Solana a program compiles
 and simulates, and the `sauce` command and the MCP server build its transactions and send
 them.
 
@@ -15,6 +15,17 @@ them.
 | Name in a program | `Solana` |
 | Native coin | not recorded |
 | Sauce | the engine and Kitchen programs, the same ids on every cluster: [deployments.json](deployments.json) (`svm`) |
+
+## Notes
+
+The release's engine and Kitchen are deployed on mainnet, devnet and testnet. For devnet,
+use `--chain solana-devnet` to resolve the chain id and token symbols to devnet's.
+For testnet, use `--chain solana --rpc-url <testnet-rpc-url>` and explicit testnet
+mint addresses: there is no testnet chain alias or token registry. The endpoint does not change
+`solana`'s compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the
+running cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees.
+Local simulation selects the released engine build from the endpoint's cluster. The SDK's
+venues are mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.
 
 ## In a program
 

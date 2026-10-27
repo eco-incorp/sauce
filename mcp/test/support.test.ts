@@ -96,7 +96,16 @@ function refused(result: CallToolResult, slug: string): Refusal {
   assert.equal(refusal.code, "preview-chain");
   assert.deepEqual(
     refusal.supportedChains.map((chain) => chain.slug),
-    ["ethereum", "base", "arc", "solana", "arc-testnet", "base-sepolia"],
+    [
+      "ethereum",
+      "base",
+      "arc",
+      "solana",
+      "arc-testnet",
+      "base-sepolia",
+      "sepolia",
+      "solana-devnet",
+    ],
   );
   const chain = requireChain(slug);
   assert.deepEqual(
@@ -205,7 +214,9 @@ describe("still runs on a preview chain", () => {
       "arc",
       "base-sepolia",
       "arc-testnet",
+      "sepolia",
       "solana",
+      "solana-devnet",
     ]);
     for (const chain of chains) {
       assert.equal(chain.support, supported.includes(chain.slug) ? "supported" : "preview");
@@ -217,7 +228,7 @@ describe("still runs on a preview chain", () => {
     const instructions = mcp.client.getInstructions() ?? "";
     assert.match(
       instructions,
-      /builds transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia\. Every other/,
+      /builds transactions only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet\. Every other/,
     );
     assert.match(instructions, /returns `refused` instead/);
     const { tools } = await mcp.client.listTools();
@@ -225,7 +236,7 @@ describe("still runs on a preview chain", () => {
       const tool = tools.find((each) => each.name === name);
       assert.match(
         tool?.description ?? "",
-        /only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia, the chains this release supports\./,
+        /only on Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet, the chains this release supports\./,
         name,
       );
     }

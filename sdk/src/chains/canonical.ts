@@ -100,12 +100,8 @@ export const CANONICAL_CHAINS = [
   { id: 1313161554, slug: "aurora", name: "Aurora", kind: "evm", aliases: [] },
 
   // --- EVM testnets, present in `chains` (`testnet: true`) ---
-  // A testnet is here where the release is deployed or is to be. Measured 2026-10-26: Base Sepolia
-  // (block 50656897) and Arc Testnet (block 69241283) hold the engine, Router, Kitchen proxy and its
-  // implementation at V12Deployments.json's addresses, each with mainnet's code (keccak of the
-  // runtime equal to Base's), the proxy's EIP-1967 slot naming the implementation and `router()`
-  // the Router. Ethereum Sepolia (block 12000992) holds none of them yet, only CreateX: it is a
-  // preview chain until they are there. Arbitrum Sepolia has no engine and is not here.
+  // The release is deployed on Base Sepolia, Arc Testnet and Ethereum Sepolia, at its published
+  // engine, Router and Kitchen addresses. Arbitrum Sepolia has no engine and is not here.
   { id: 84532, slug: "base-sepolia", name: "Base Sepolia", kind: "evm", aliases: [] },
   { id: 5042002, slug: "arc-testnet", name: "Arc Testnet", kind: "evm", aliases: [] },
   {

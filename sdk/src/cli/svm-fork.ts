@@ -206,8 +206,8 @@ async function read(
 
 /**
  * Opens a local copy of `keys` as the cluster holds them, with the engine and the Kitchen at their
- * program ids: the engine as `build` builds it, the build whose `CHAIN_ID` is the chain the cook was
- * compiled for. `ask` makes each request, naming what it reads when it fails.
+ * program ids. `build` selects the engine for the endpoint's cluster; devnet and testnet share a
+ * build. `ask` makes each request, naming what it reads when it fails.
  */
 export async function openFork(
   rpc: Rpc,

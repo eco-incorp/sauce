@@ -49,7 +49,7 @@ preview chain.
 - `Scroll`: `scroll`, 534352, EVM, preview
 - `ArcTestnet`: `arc-testnet`, 5042002, EVM, supported, testnet
 - `Zora`: `zora`, 7777777, EVM, preview
-- `Sepolia`: `sepolia`, 11155111, EVM, preview, testnet
+- `Sepolia`: `sepolia`, 11155111, EVM, supported, testnet
 - `Aurora`: `aurora`, 1313161554, EVM, preview
 - `Solana`: `solana`, 1399811149, SVM, supported
-- `SolanaDevnet`: `solana-devnet`, 1399811150, SVM, preview, testnet
+- `SolanaDevnet`: `solana-devnet`, 1399811150, SVM, supported, testnet

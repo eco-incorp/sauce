@@ -1,6 +1,6 @@
 /**
  * The chains the `sauce` command supports (`src/cli/support.ts`) and the chain-support request it
- * links to: the four supported chains, every other one a preview chain, the request's URLs held
+ * links to: the four mainnets and four testnets, every other chain a preview chain, the request's URLs held
  * to the issue form they open (`.github/ISSUE_TEMPLATE/chain-support.yml`), field by field — and
  * none of it in the package's API, which keeps every chain.
  */
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalChains, requireChain } from "../src/chains/canonical.js";
 import * as chains from "../src/chains/index.js";
-import { getChain } from "../src/chains/index.js";
+import { isTestnet } from "../src/chains/index.js";
 import * as root from "../src/index.js";
 import {
   CHAIN_SUPPORT_FIELDS,
@@ -52,7 +52,7 @@ const query = (url: string): Record<string, string> =>
   Object.fromEntries(new URL(url).searchParams.entries());
 
 describe("support levels", () => {
-  it("supports Ethereum, Base, Arc and Solana and two testnets, and previews every other chain", () => {
+  it("supports Ethereum, Base, Arc and Solana and four testnets, and previews every other chain", () => {
     expect([...SUPPORTED_CHAIN_SLUGS]).toEqual([
       "ethereum",
       "base",
@@ -60,9 +60,11 @@ describe("support levels", () => {
       "solana",
       "arc-testnet",
       "base-sepolia",
+      "sepolia",
+      "solana-devnet",
     ]);
     expect(supportedChains().map((chain) => chain.id)).toEqual([
-      1, 8453, 5042, 1399811149, 5042002, 84532,
+      1, 8453, 5042, 1399811149, 5042002, 84532, 11155111, 1399811150,
     ]);
     for (const chain of canonicalChains) {
       const supported = (SUPPORTED_CHAIN_SLUGS as readonly string[]).includes(chain.slug);
@@ -72,7 +74,7 @@ describe("support levels", () => {
       ]);
       expect(isSupportedChain(chain)).toBe(supported);
     }
-    expect(previewChains()).toHaveLength(canonicalChains.length - 6);
+    expect(previewChains()).toHaveLength(canonicalChains.length - 8);
     expect(previewChains().map((chain) => chain.id)).toEqual(
       canonicalChains
         .filter((chain) => !SUPPORTED_CHAIN_SLUGS.includes(chain.slug as never))
@@ -82,18 +84,23 @@ describe("support levels", () => {
   });
 
   it("holds the testnets in one constant, and names them apart from the mainnets", () => {
-    expect([...SUPPORTED_TESTNET_SLUGS]).toEqual(["arc-testnet", "base-sepolia"]);
+    expect([...SUPPORTED_TESTNET_SLUGS]).toEqual([
+      "arc-testnet",
+      "base-sepolia",
+      "sepolia",
+      "solana-devnet",
+    ]);
     expect(SUPPORTED_CHAIN_SLUGS.slice(-SUPPORTED_TESTNET_SLUGS.length)).toEqual([
       ...SUPPORTED_TESTNET_SLUGS,
     ]);
     for (const chain of supportedChains()) {
-      expect([chain.slug, getChain(chain.id)?.testnet ?? false]).toEqual([
+      expect([chain.slug, isTestnet(chain)]).toEqual([
         chain.slug,
         (SUPPORTED_TESTNET_SLUGS as readonly string[]).includes(chain.slug),
       ]);
     }
     expect(supportedChainNames()).toBe(
-      "Ethereum, Base, Arc and Solana, and the testnets Arc Testnet and Base Sepolia",
+      "Ethereum, Base, Arc and Solana, and the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia and Solana Devnet",
     );
   });
 
@@ -105,6 +112,12 @@ describe("support levels", () => {
       "base-sepolia",
       "Base Sepolia",
       84532,
+      "sepolia",
+      "Ethereum Sepolia",
+      11155111,
+      "solana-devnet",
+      "devnet",
+      1399811150,
     ]) {
       expect([ref, chainSupport(ref)]).toEqual([ref, "supported"]);
     }

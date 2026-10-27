@@ -1,8 +1,8 @@
 /**
  * Solana devnet as a chain of its own, `solana-devnet` (1399811150, the CHAIN_ID the devnet engine
  * reports): a program compiled for it reads its own chain id, resolves symbols to devnet's mints,
- * and has no Solana venue, whose pools are mainnet's. It is a preview chain until the release is
- * on devnet; the live release check (`requireSolanaRelease`) stays the gate of what is sent there.
+ * and has no Solana venue, whose pools are mainnet's. The release is deployed on devnet;
+ * the live release check (`requireSolanaRelease`) stays the gate of what is sent there.
  */
 import { requireChain, svmChains } from "../src/chains/canonical.js";
 import { isTestnet, nativeCoinSymbol } from "../src/chains/index.js";
@@ -96,8 +96,8 @@ describe("solana-devnet", () => {
     ).toThrow(/`Orca\.Whirlpool` is not on solana-devnet/);
   });
 
-  it("is a preview chain until the release is on devnet", () => {
-    expect(chainSupport(devnet)).toBe("preview");
+  it("supports devnet transactions where the release is deployed", () => {
+    expect(chainSupport(devnet)).toBe("supported");
     expect(chainSupport("solana")).toBe("supported");
   });
 });

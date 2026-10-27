@@ -12,8 +12,8 @@ transaction, a token) and have never used Sauce. You need nothing else to start.
 ## What Sauce is, and is not
 
 You write the program in a small, safe slice of TypeScript called SauceScript. Sauce turns it into
-one transaction on Ethereum, Base, Arc or Solana (or the testnets Arc Testnet and Base Sepolia),
-and an engine already on chain runs every step of
+one transaction on Ethereum, Base, Arc or Solana (or the testnets Arc Testnet, Base Sepolia,
+Ethereum Sepolia and Solana Devnet), and an engine already on chain runs every step of
 it inside that transaction. Here is a whole program, the one the quick start runs:
 
 ```js

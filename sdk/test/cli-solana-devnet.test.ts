@@ -1,8 +1,8 @@
 /**
  * `solana-devnet` through the `sauce` command, in process: every Solana path acts for the chain the
- * user named. It is a PREVIEW chain, so what builds or sends a transaction there is refused before
- * any request (an endpoint that records each request it gets stays untouched); `compile` and the
- * reads still run, and say `solana-devnet`. Its endpoint must serve devnet: `solana-devnet` against
+ * user named. It is a supported chain, so transaction commands reach the endpoint and check its
+ * released programs before building or sending; `compile` and reads say `solana-devnet`.
+ * Its endpoint must serve devnet: `solana-devnet` against
  * another cluster's is refused, naming the cluster it serves, while `solana` against a devnet
  * endpoint works as it always did. A devnet Pot is one record in the Pot store, under Solana's chain
  * and devnet's cluster, whichever of the two chains recorded it or reads it back.
@@ -18,7 +18,6 @@ import { getAddressDecoder, type Address } from "@solana/kit";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { chainSupportRequest } from "../src/cli/support.js";
 import { planChain } from "../src/cli/wallet-send.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { derivePotPda } from "../src/svm/kitchen.js";
@@ -154,51 +153,30 @@ async function sauce(...argv: string[]): Promise<{ code: number; stdout: string;
 const json = (run: { stdout: string }): Record<string, unknown> =>
   JSON.parse(run.stdout) as Record<string, unknown>;
 
-/** Exits 1, refusing `solana-devnet` as a preview chain, with that chain's request. */
-function expectRefused(
-  run: { code: number; stdout: string; stderr: string },
-  action: RegExp,
-): void {
-  const chain = requireChain("solana-devnet");
-  expect(run.stdout).toBe("");
-  expect(run.code).toBe(1);
-  expect(run.stderr).toMatch(action);
-  expect(run.stderr).toContain(
-    `is refused: it involves ${chain.slug} (${chain.name}, chain id ${chain.id}), a preview chain.`,
-  );
-  expect(run.stderr).toContain(chainSupportRequest(chain).newIssueUrl);
-}
-
-describe("solana-devnet is a preview chain: refused before any request", () => {
-  it("sauce tx, sauce run and sauce pot --deploy", async () => {
+describe("solana-devnet supports transactions but still requires the released programs", () => {
+  it("sauce tx, sauce run and sauce pot --deploy reach the cluster and refuse a missing engine", async () => {
     const devnet = await serving(DEVNET_GENESIS);
     const program = file("main.sauce.ts", PROGRAM);
     const signer = keypair("owner.json");
     const reach = ["--rpc-url", devnet.url];
-
-    expectRefused(
+    const runs = [
       await sauce("tx", program, "--chain", "solana-devnet", "--owner", OWNER, ...reach),
-      /^sauce tx: building the cook transaction is refused/,
-    );
-    expectRefused(
       await sauce(
         ...["run", program, "--chain", "solana-devnet", "--keypair", signer, "--yes"],
         ...reach,
       ),
-      /^sauce run: sending the cook is refused/,
-    );
-    expectRefused(
       await sauce("pot", "--deploy", "--chain", "devnet", "--keypair", signer, ...reach),
-      /^sauce pot: deploying a Pot is refused/,
-    );
-    expect(devnet.methods).toEqual([]);
-  });
-
-  it("sauce send, on the chain it is given for a Solana transaction", async () => {
-    const devnet = await serving(DEVNET_GENESIS);
-    const run = await sauce("send", "AQAB", "--chain", "solana-devnet", "--rpc-url", devnet.url);
-    expectRefused(run, /^sauce send: sending is refused/);
-    expect(devnet.methods).toEqual([]);
+    ];
+    for (const run of runs) {
+      expect(run.code).toBe(1);
+      expect(run.stderr).not.toMatch(/preview chain|is refused/);
+      expect(run.stderr).toContain(
+        `the released engine ${v12SvmEngineProgramId()} is not deployed on solana-devnet`,
+      );
+    }
+    expect(devnet.methods).toContain("getGenesisHash");
+    expect(devnet.methods).toContain("getAccountInfo");
+    expect(devnet.methods).not.toContain("sendTransaction");
   });
 });
 
@@ -217,7 +195,7 @@ describe("still runs on solana-devnet", () => {
     expect(json(targeted)).toMatchObject({ chain: "solana" });
   });
 
-  it("predicts a Pot as solana-devnet's, leaving out the create_pot a preview chain is refused", async () => {
+  it("predicts a Pot as solana-devnet's, with its deployment instruction", async () => {
     const mainnet = json(await sauce("pot", "--chain", "solana", "--owner", OWNER));
     const pot = await sauce("pot", "--chain", "solana-devnet", "--owner", OWNER);
     expect(pot.code).toBe(0);
@@ -225,16 +203,13 @@ describe("still runs on solana-devnet", () => {
     expect(predicted).toMatchObject({
       chain: "solana-devnet",
       owner: OWNER,
-      refused: { code: "preview-chain" },
     });
     // The Kitchen's id is the same on every cluster, and so is the Pot's address.
     expect(predicted.pot).toBe(mainnet.pot);
-    expect(predicted).not.toHaveProperty("instruction");
-    expect(pot.stderr).toContain("building the Pot's deployment is refused");
-    // Solana's is as it was: the instruction, and no refusal.
+    expect(predicted).toHaveProperty("instruction");
+    expect(predicted).not.toHaveProperty("refused");
     expect(mainnet).toMatchObject({ chain: "solana" });
-    expect(mainnet).toHaveProperty("instruction");
-    expect(mainnet).not.toHaveProperty("refused");
+    expect(predicted.instruction).toEqual(mainnet.instruction);
   });
 
   it("reads a Pot's status through a devnet endpoint", async () => {
