@@ -318,17 +318,17 @@ describe("sauce globals", () => {
         "that role",
     );
     expect(run.stdout).toMatch(
-      /^ {2}Solana\.pda\(program, \[seeds\]\) +the address program derives for the seeds: pda:<program>:<seeds>$/m,
+      /^ {2}Account\.pda\(program, \[seeds\]\) +the address program derives for the seeds: pda:<program>:<seeds>$/m,
     );
     expect(run.stdout).toMatch(
-      /^ {2}Solana\.systemProgram +the System Program: 11111111111111111111111111111111$/m,
+      /^ {2}Account\.systemProgram +the System Program: 11111111111111111111111111111111$/m,
     );
     expect(run.stdout).toMatch(
       /^ {2}<Sym>\.accountOf\(holder\) +the holder's associated account for the token: <holder>:<Sym>$/m,
     );
     const out = json(await sauce("globals", "--chain", "solana", "--json"));
     expect(out.accounts).toContainEqual({
-      expression: "Solana.owner",
+      expression: "pot.owner",
       account: "the Pot's owner, who signs the cook",
       derive: "owner",
     });

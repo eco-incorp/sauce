@@ -373,9 +373,9 @@ describe("Solana's venue namespaces", () => {
     });
   });
 
-  it("keeps the chain's own members to the account expressions", () => {
+  it("keeps Account's members to the account expressions", () => {
     const pda = compile(
-      'function main(): Uint256 {\n  const state = Solana.pda(Solana.systemProgram, ["s"]);\n  return state.dataLen;\n}\n',
+      'function main(): Uint256 {\n  const state = Account.pda(Account.systemProgram, ["s"]);\n  return state.dataLen;\n}\n',
     );
     expect(pda.derivedAccounts).toMatchObject({ statePda: expect.stringMatching(/^pda:/) });
   });

@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Everything Solana changes about a Sauce program. The token methods as on an EVM chain (USDC.transfer(to, amount), pot.USDC, Token(mint)) with every account derived and checked on chain; any other account written where it is used (Solana.pda(program, seeds), USDC.accountOf(holder), .writable()) or taken as an Account parameter with Writable/Signer roles; the account manifest and every --account name; binding a slot to the Pot; token accounts; @sauce/token for SPL Token and Token-2022 and its extensions (fees, pauses, frozen accounts, hooks); svm.call and svm.sload; transaction size; running on the owner's Pot or the engine (--via engine), simulating in a local copy, staging, plans for other signers, lookup tables, rent left open. Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or a Solana cook that does not fit one transaction.
+description: Everything Solana changes about a Sauce program. The token methods as on an EVM chain (USDC.transfer(to, amount), pot.USDC, Token(mint)) with every account derived and checked on chain; any other account written where it is used (Account.pda(program, seeds), Account(key), pot.owner, USDC.accountOf(holder), .writable()) or taken as an Account parameter with Writable/Signer roles; the account manifest and every --account name; binding a slot to the Pot; token accounts; @sauce/token for SPL Token and Token-2022 and its extensions (fees, pauses, frozen accounts, hooks); svm.call and svm.sload; transaction size; running on the owner's Pot or the engine (--via engine), simulating in a local copy, staging, plans for other signers, lookup tables, rent left open. Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or a Solana cook that does not fit one transaction.
 ---
 
 # Sauce on Solana
@@ -26,9 +26,9 @@ is `sauce-solana-distributed-swap`'s.
 
 - **Every account is known before the transaction runs.** A program gets an account three ways:
   compiling **derives** it for a token method; compiling **adds** it where an expression names it
-  (`Solana.pda(...)`, `USDC.accountOf(...)`); or the program declares it as an **`Account`
-  parameter** of `main`, attached with `--account`. Compiling returns them all, in order with their
-  roles, as the **account manifest**.
+  (`Account.pda(...)`, `pot.owner`, `USDC.accountOf(...)`); or the program declares it as an
+  **`Account` parameter** of `main`, attached with `--account`. Compiling returns them all, in
+  order with their roles, as the **account manifest**.
 - **Every holder and seed must be known when the cook is built**: `ctx.self()`, an `Address`
   argument of `main`, a key written out, or a program account. One computed as the program runs is
   refused.
@@ -53,11 +53,11 @@ is `sauce-solana-distributed-swap`'s.
   (`Orca.Whirlpool.pool(USDC, WSOL, 4)`, `sauce-swaps`). `sauce globals --chain solana` lists the
   mints, the venues and the account expressions.
 
-| The account                                                                           | Write                                                                                                             |
-| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| A token account a token method moves through                                          | nothing: `USDC.transfer(to, amount)` derives it                                                                   |
-| An account derivable from known values (a PDA, an ATA, a program, the Pot, the owner) | the expression where it is used: `Solana.pda(program, [seeds])`, `USDC.accountOf(holder)`, `Solana.systemProgram` |
-| An account computed as the program runs, or whose identity the caller supplies        | an `Account` parameter, attached with `--account NAME=<value>`                                                    |
+| The account                                                                           | Write                                                                                                                            |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| A token account a token method moves through                                          | nothing: `USDC.transfer(to, amount)` derives it                                                                                  |
+| An account derivable from known values (a PDA, an ATA, a program, the Pot, the owner) | the expression where it is used: `Account.pda(program, [seeds])`, `USDC.accountOf(holder)`, `Account.systemProgram`, `pot.owner` |
+| An account computed as the program runs, or whose identity the caller supplies        | an `Account` parameter, attached with `--account NAME=<value>`                                                                   |
 
 ## The token methods
 
@@ -91,8 +91,8 @@ comes from.
   derived from the Pot, the owner or the authority (their token accounts, and an address one of
   them seeds): that slot takes only the account its derivation gives, by role or by key, and any
   other is refused before anything is built.
-- **A holder** is `pot`, the Pot; `ctx.self()`, the account that signs the engine call;
-  `Solana.owner`; a parameter of `main` declared `Address`; a token's mint (`USDC.WSOL`, the USDC
+- **A holder** is `pot`, the Pot; `ctx.self()`, the account that signs the engine call; `pot.owner`,
+  the Pot's owner; a parameter of `main` declared `Address`; a token's mint (`USDC.WSOL`, the USDC
   mint's own WSOL account); or a 32-byte key written out. Its balance is `<holder>.<TOKEN>`
   (`pot.USDC`, `to.USDC`), the same read as `USDC.balanceOf(to)`, and its lamports
   `<holder>.balance` (`pot.balance`), read with `ctx.balance` from its account, which is added to
@@ -128,7 +128,8 @@ comes from.
   them from `authority` (`authority:USDC`), so it runs either way, and cooked directly
   (`--via engine`) the signer's own token accounts pay. Adding `require(to != pot)` to that program
   makes it the first kind, and `--via engine` refuses it at that mention: for a direct cook, write
-  the signer's own account there (`Solana.owner`, or `ctx.self()` as a token holder).
+  the signer's own account there (`pot.owner`, which names no Pot, or `ctx.self()` as a token
+  holder).
 
 The methods lower to the `@sauce/token` functions (below), which a program can also call with the
 accounts written out.
@@ -145,11 +146,11 @@ function main(lamports: Uint256): Uint256 {
   const potWsol = WSOL.accountOf(pot).writable();
   let transfer = hex`02000000`;
   svm.call(
-    Solana.systemProgram,
-    [Solana.owner.writable().signer(), potWsol],
+    Account.systemProgram,
+    [pot.owner.writable().signer(), potWsol],
     transfer.concat(lamports.toBytesLe(8)),
   );
-  svm.call(Solana.tokenProgram, [potWsol], hex`11`);
+  svm.call(Account.tokenProgram, [potWsol], hex`11`);
   return pot.WSOL;
 }
 ```
@@ -158,36 +159,46 @@ function main(lamports: Uint256): Uint256 {
 sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000
 ```
 
-| Expression                      | The account                                 | `derive`                             |
-| ------------------------------- | ------------------------------------------- | ------------------------------------ |
-| `Solana.pda(program, [seeds])`  | the address `program` derives for the seeds | `pda:<program>:<seeds>`              |
-| `Solana.account(key)`           | the account at a key                        | the key, or `@<parameter>`           |
-| `pot`                           | the Pot                                     | `pot`                                |
-| `Solana.owner`                  | the Pot's owner, who signs the cook         | `owner`                              |
-| `Solana.systemProgram`          | the System Program                          | its id                               |
-| `Solana.tokenProgram`           | SPL Token                                   | its id                               |
-| `Solana.token2022Program`       | Token-2022                                  | its id                               |
-| `Solana.associatedTokenProgram` | the Associated Token Account program        | its id                               |
-| `Solana.memoProgram`            | the Memo program                            | its id                               |
-| `USDC.accountOf(holder)`        | the holder's associated USDC account        | `pot:USDC`, `owner:USDC`, `@to:USDC` |
-| `USDC.mint`                     | USDC's mint                                 | `mint:USDC`                          |
-| `USDC.tokenProgram`             | the token program that owns the mint        | its id                               |
+| Expression                       | The account                                 | `derive`                             |
+| -------------------------------- | ------------------------------------------- | ------------------------------------ |
+| `Account(key)`                   | the account at a key                        | the key, or `@<parameter>`           |
+| `Account.pda(program, [seeds])`  | the address `program` derives for the seeds | `pda:<program>:<seeds>`              |
+| `Account.systemProgram`          | the System Program                          | its id                               |
+| `Account.tokenProgram`           | SPL Token                                   | its id                               |
+| `Account.token2022Program`       | Token-2022                                  | its id                               |
+| `Account.associatedTokenProgram` | the Associated Token Account program        | its id                               |
+| `Account.memoProgram`            | the Memo program                            | its id                               |
+| `pot`                            | the Pot                                     | `pot`                                |
+| `pot.owner`                      | the Pot's owner, who signs the cook         | `owner`                              |
+| `USDC.accountOf(holder)`         | the holder's associated USDC account        | `pot:USDC`, `owner:USDC`, `@to:USDC` |
+| `USDC.mint`                      | USDC's mint                                 | `mint:USDC`                          |
+| `USDC.tokenProgram`              | the token program that owns the mint        | its id                               |
 
+- **`Account` and `pot.owner`.** `Account` is the type of an account `main` takes
+  (`Account<Writable>`), and as a value the account a program writes where it uses it: called with a
+  key, `.pda(…)`, or a program. `pot.owner` is the Pot's owner's account wherever it stands
+  (`pot.owner.address` its key, `pot.owner.USDC` its balance), and names no Pot. Any other
+  account's `.owner` is the program that owns it: the Pot's is `Account(pot.address).owner`. A
+  program that declares its own `Account` or `pot` (a parameter, a local) owns the name, `pot.owner`
+  with `pot`. `Solana` is the chain's name and holds no account: `Solana.pda(…)`,
+  `Solana.account(…)`, `Solana.owner` and `Solana.systemProgram` are refused, each naming what to
+  write. On an EVM chain `Account(…)` is refused, accounts being Solana's, and `pot.owner` is the
+  Pot's owner's address.
 - **Roles.** Each account is read-only. `.writable()` and `.signer()` give it the role a call needs,
-  and they chain: `Solana.owner.writable().signer()`. An account written more than once is one slot,
+  and they chain: `pot.owner.writable().signer()`. An account written more than once is one slot,
   with every role any of its uses gives it.
 - **Known when the transaction is built.** A program, key or holder is a parameter of `main`
-  declared `Address`, a 32-byte key written out, `ctx.self()`, `pot` or `Solana.owner`, or a
-  program account such as `Solana.tokenProgram`. A seed can be any of those, and also a token symbol
-  or `USDC.mint` (the mint's key), a string of 32 bytes at most, `.toBytesLe(n)` of an integer
+  declared `Address`, a 32-byte key written out, `ctx.self()`, `pot` or `pot.owner`, or a program
+  account such as `Account.tokenProgram`. A seed can be any of those, and also a token symbol or
+  `USDC.mint` (the mint's key), a string of 32 bytes at most, `.toBytesLe(n)` of an integer
   parameter or literal (`n` 1, 2, 4, 8 or 16), or ``hex`…` ``. A seed computed as the program runs
   is refused: take that account as an `Account` parameter instead.
 - **Each slot's name** says what it holds: `systemProgram`, `potWSOL`, `toUSDC`. An address
-  `Solana.pda` derives is named for the constant it initializes (`destPda` for `const dest`), else
+  `Account.pda` derives is named for the constant it initializes (`destPda` for `const dest`), else
   for its first string seed (`statePda` for `"state"`).
 - **Each is checked on chain**, at the top of `main` before the program's own code, refusing an
-  account in the wrong slot with `wrong account` (`Solana.account(key)` is not at `key`),
-  `wrong program-derived address` (the engine derives `Solana.pda(program, [seeds])` again, at the
+  account in the wrong slot with `wrong account` (`Account(key)` is not at `key`),
+  `wrong program-derived address` (the engine derives `Account.pda(program, [seeds])` again, at the
   canonical bump, and it is not that address), `wrong holder account` (`USDC.accountOf(holder)` is
   not a token account of USDC's mint, owned by a token program and held by `holder`), `wrong mint`,
   or `wrong program`. The Pot and the owner are pinned by their signatures: a holder or seed made of
@@ -199,7 +210,7 @@ sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000
   `sauce run` creates a missing one before the cook (asking first, or with `--yes`). For an account
   the program creates itself, use the address the Associated Token Account program derives, which
   that program checks when it creates it:
-  `Solana.pda(Solana.associatedTokenProgram, [holder, Solana.tokenProgram, USDC])`.
+  `Account.pda(Account.associatedTokenProgram, [holder, Account.tokenProgram, USDC])`.
 
 ## Account parameters
 

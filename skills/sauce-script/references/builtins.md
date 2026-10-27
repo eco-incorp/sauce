@@ -315,9 +315,9 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `ctx.self()` → number, **Both**
   - On EVM: the executing contract: the Pot, which holds the program's balances and allowances; a
     program compiled for a chain names it `pot`
-  - On SVM: the engine's program id, which owns every Pot account: `pot.owner == ctx.self()`
-    holds for a Pot, and for any other account assigned to the engine, so it does not prove an
-    account is the Pot; re-deriving the Pot's address does
+  - On SVM: the engine's program id, which owns every Pot account:
+    `Account(pot.address).owner == ctx.self()` holds for a Pot, and for any other account assigned
+    to the engine, so it does not prove an account is the Pot; re-deriving the Pot's address does
   - Example: `log(ctx.self().toBytesBe(32));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id

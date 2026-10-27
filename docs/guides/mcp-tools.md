@@ -173,7 +173,7 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
   (`slot:@pool:USDC.vaultA`) or by the seeds a program derives it from (`pda:<program>:<seeds>`).
   The accounts the token methods and the venue namespaces add to `main` (`USDC.transfer(to,
 amount)`, `Orca.Whirlpool.swap(pool, …)`), and those a program writes where it uses them
-  (`Solana.pda(program, [seeds])`, `USDC.accountOf(holder)`; `sauce_globals` lists them as
+  (`Account.pda(program, [seeds])`, `USDC.accountOf(holder)`; `sauce_globals` lists them as
   `accounts`), are derived from the cook, so a call names them only to replace one;
   `sauce_compile`'s manifest shows each one's `derive`.
 - `via`, on Solana: `kitchen` (the default), the Kitchen's cook on the owner's Pot, or `engine`,

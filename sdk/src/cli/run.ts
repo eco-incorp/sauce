@@ -440,7 +440,7 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused",
+    help: "An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Account.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused",
     only: "svm",
   },
   accounts: {

@@ -144,8 +144,8 @@ sauce run payout-solana.sauce.ts --chain solana --keypair <keypair> \
   --args <recipient> 1000000 50000000
 ```
 
-Protocol namespaces do not exist on Solana. Its accounts, token programs, transaction size and
-running are `sauce-solana`'s.
+Solana has no registry protocol namespaces; its price-limit venues are namespaces of their own
+(`sauce-swaps`). Its accounts, token programs, transaction size and running are `sauce-solana`'s.
 
 ## `chainId` and `ctx.chainId()`
 

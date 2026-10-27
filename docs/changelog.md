@@ -96,9 +96,59 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 ## SDK Unreleased
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines
-and Kitchens are 0.99.16's; only the compiler moves. Recompile programs.
+and Kitchens are 0.99.16's; only the compiler moves. Recompile programs. The
+[upgrade guide](guides/upgrading.md#solanas-accounts-are-account-and-potowner) walks through
+Solana's new account spellings.
 
 ### SauceScript
+
+- **Breaking (Solana): an account a program writes where it uses it is `Account`'s, and the Pot's
+  owner is `pot.owner`.** One spelling each, with no alias:
+
+  | Before                                                                                                  | Now                                    | The account                                 |
+  | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------- |
+  | `Solana.account(key)`                                                                                   | `Account(key)`                         | the account at a key                        |
+  | `Solana.pda(program, [seeds])`                                                                          | `Account.pda(program, [seeds])`        | the address `program` derives for the seeds |
+  | `Solana.systemProgram`, `.tokenProgram`, `.token2022Program`, `.associatedTokenProgram`, `.memoProgram` | `Account.systemProgram` and the others | the program                                 |
+  | `Solana.owner`                                                                                          | `pot.owner`                            | the Pot's owner, who signs the cook         |
+
+  Each new spelling compiles to the accounts, checks and bytes its old one did. The old spellings
+  no longer compile, on any chain and in code a test rules out too, and each error names the new
+  one:
+  `` `Solana.owner`: the Pot's owner is `pot.owner` (`pot.owner.address`, its key; `pot.owner.signer()`) ``.
+  `Solana` names the chain and holds no account. `Account` stays the type of an account `main`
+  takes (`Account<Writable>`). `pot.owner` names no Pot: a program that reads it and not `pot`
+  derives its accounts from `authority`, as one that read `Solana.owner` did. A program that
+  declares its own `Account` or `pot` owns the name where its declaration is in scope, `pot.owner`
+  with `pot`, and so does a compile whose `defines` or `contracts` give one. `USDC.accountOf(holder)`,
+  `USDC.mint`, `USDC.tokenProgram`, `.writable()`, `.signer()`, `pot` and every `--account` value
+  are unchanged.
+
+- **Changed (both): `pot.owner` is the Pot's owner.** 0.99.16 refused it on Solana, and a compile for
+  an EVM chain failed on it. On Solana it is the owner's account, above; on an EVM chain it is the
+  address the Pot's `owner()` returns (the zero address on a Shared Pot, which has no owner), read
+  where the program reads it, `pot.owner.balance` its native coin and `pot.owner.USDC` its USDC.
+  Any other account's `.owner` is still the program that owns it: on Solana the Pot's is
+  `Account(pot.address).owner`, and `Account(pot)` and `Account(pot.address)` compile to the Pot's
+  own account.
+  On EVM, using a native symbol instead of `.balance` names `pot.owner.balance` in the error,
+  including through TypeScript type wrappers.
+- **Now refused (EVM): `Account(…)`.** Accounts are Solana's: a program compiled for an EVM chain
+  that writes `Account(key)`, `Account.pda(…)` or `Account.<program>` is refused at the name. Code a
+  test of a name rules out may write them, for a Solana chain to compile. `Account` as a type is
+  unchanged.
+- **Now refused (both): a write to a member of the Pot** (`pot.owner = x`, `pot.balance += 1`,
+  `pot[0] = 1`): a member of the Pot is read, never written. A program's own `pot` is its own to
+  write.
+- **Now refused (Solana): an `Account` only an `ambient` module exports**, read with no import, as
+  such a `pot` is: the module's value would stand in for the account factory. On an EVM chain it is
+  the caller's value.
+- **Changed (both): a retired spelling's refusal names a binding in the way.** Where the program
+  declares its own `pot` or `Account` there, or the compile binds one, the refusal says that what it
+  names would read that binding, and to rename it first.
+- **Changed (both): the editor types.** `Account` is declared as a value beside the type, and
+  `pot.owner` as the Pot's owner's account; `Solana`, like every chain, has no account member, so
+  an editor shows a retired spelling as an error.
 
 Compiler 2.6.1 fixes five cases where a program compiled, ran, and gave a wrong value or skipped
 an effect, with no error. Two of the fixes refuse code that used to compile:
@@ -206,6 +256,9 @@ unchanged.
     Pot's balance; `owner: "self"` is refused, naming `"pot"`.
   - `deposit.toDeposit` gives a defaulted beneficiary as `"pot"`: `NormalizedDeposit.beneficiary`
     is `bigint | "pot" | null`.
+- `sauce globals --chain solana`, `sauce_globals` and `routes.sourceGlobals("solana").accounts`
+  list `Account(key)`, `Account.pda(program, [seeds])`, the five programs as `Account.<program>`,
+  `pot` and `pot.owner`, where they listed the `Solana.*` spellings.
 - `fetchPoolConfig` on every Solana venue adapter (`@eco-incorp/sauce/svm`: each adapter, the
   `fetch…Config` functions, and `poolConfig` on `venue(...)` and `Solana.<Venue>`) takes an
   `OwnedAccountLoader`, which returns each account's data and owner, instead of an

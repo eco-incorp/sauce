@@ -75,8 +75,21 @@ import { lexicalBindings } from "./lexical-bindings.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { BALANCE_MEMBER, POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
-import { ACCOUNT_MEMBERS } from "./svm-account-expressions.js";
+import {
+  BALANCE_MEMBER,
+  OWNER_MEMBER,
+  POT_NAME,
+  potWriteRefusal,
+  RETIRED_POT_NAME,
+  selfRefusal,
+} from "./pot-sugar.js";
+import {
+  ACCOUNT_FACTORY,
+  ACCOUNT_MEMBERS,
+  evmAccountRefusal,
+  RETIRED_ACCOUNT_ROOT,
+  retiredAccountRefusal,
+} from "./svm-account-expressions.js";
 import { SVM_VENUE_NAMESPACES, svmVenuesOn } from "./svm-venue-methods.js";
 import { TOKEN_FACTORY_NAME } from "./token-rewrite.js";
 import { locatedError, meant, notAToken, notTokenOrProtocol } from "./unknown-global.js";
@@ -142,14 +155,15 @@ export function unknownNameError(
 /**
  * The names the language gives meaning to with no declaration: each builtin's root, generated from
  * the SauceScript reference's `builtins.json` (`BUILTIN_GLOBALS`); `undefined`, which the reference
- * gives a missing static member (`{ a: 1, b: undefined }`) and no builtin is; and the SDK's Pot and
- * `Token(addr)`.
+ * gives a missing static member (`{ a: 1, b: undefined }`) and no builtin is; the SDK's Pot and
+ * `Token(addr)`; and Solana's `Account(…)`.
  */
 export const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
   ...BUILTIN_GLOBALS,
   "undefined",
   POT_NAME,
   TOKEN_FACTORY_NAME,
+  ACCOUNT_FACTORY,
 ]);
 
 /** The protocols a Solana venue is written under (`Orca` of `Orca.Whirlpool`): the Solana lowering's. */
@@ -246,10 +260,11 @@ const BINDING_CONSTRUCTORS: ReadonlySet<string> = new Set(["at", "view", "lib"])
 const AVAILABLE = "available";
 
 /**
- * Every name the check reads as the registry's that a caller may bind instead, by a define, a
- * contract binding or an ambient module's export: each namespace, chain key and token symbol some
- * chain registers and `tokens` does not (one it has is a define, which no export replaces), and
- * `available`. A name the caller binds is the caller's, never the registry's (`defined`).
+ * Every name the check reads as the registry's or the SDK's that a caller may bind instead, by a
+ * define, a contract binding or an ambient module's export: each namespace, chain key and token
+ * symbol some chain registers and `tokens` does not (one it has is a define, which no export
+ * replaces), `available`, and Solana's `Account`. A name the caller binds is the caller's, never the
+ * registry's (`defined`).
  */
 export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
   return [
@@ -258,6 +273,7 @@ export function bindableNames(tokens: ReadonlyMap<string, bigint>): string[] {
     ...CHAIN_KEY_SET,
     ...[...everySymbol()].filter((symbol) => !tokens.has(symbol)),
     AVAILABLE,
+    ACCOUNT_FACTORY,
   ];
 }
 
@@ -380,8 +396,8 @@ export function checkNames(
   };
 
   /** The chain `node`, an identifier, names in `at`, when it is a chain key there. On a Solana
-   *  chain, and in code a test rules out, a Solana chain's own name (`Solana.pda(…)`) is the
-   *  Solana lowering's. */
+   *  chain, and in code a test rules out, a Solana chain's own name (`Solana.self`) is the Solana
+   *  lowering's. */
   const chainKeyOf = (node: AstNode, at: Scope | undefined): CanonicalChain | undefined => {
     const key = nameOf(node);
     if (shadowed(at, key, node.start) || defined.has(key)) return undefined;
@@ -538,6 +554,39 @@ export function checkNames(
   };
 
   /**
+   * The refusal of `node`, a member, where it spells an account the way `Account` and `pot.owner`
+   * replaced (`Solana.pda`, `Solana.owner`) and the program declares no `Solana` there. Where what
+   * it says to write would read the program's own `pot` or `Account` there, or the caller's, it
+   * says so.
+   */
+  const retiredAccount = (node: AstNode, at: Scope | undefined): string | undefined => {
+    if (node.type !== "MemberExpression" || prop<boolean>(node, "computed")) return undefined;
+    const object = unwrap(prop(node, "object"));
+    const property = prop<AstNode>(node, "property");
+    if (
+      object.type !== "Identifier" ||
+      property.type !== "Identifier" ||
+      nameOf(object) !== RETIRED_ACCOUNT_ROOT ||
+      shadowed(at, RETIRED_ACCOUNT_ROOT, object.start) ||
+      defined.has(RETIRED_ACCOUNT_ROOT)
+    ) {
+      return undefined;
+    }
+    const refusal = retiredAccountRefusal(nameOf(property));
+    if (refusal === undefined) return undefined;
+    const replacement = nameOf(property) === OWNER_MEMBER ? POT_NAME : ACCOUNT_FACTORY;
+    if (shadowed(at, replacement, object.start)) {
+      return (
+        `${refusal}. This program declares its own \`${replacement}\` here, which that would ` +
+        "read: rename it first"
+      );
+    }
+    return defined.has(replacement)
+      ? `${refusal}. The compile binds its own \`${replacement}\`, which that would read: rename ` +
+          "that first"
+      : refusal;
+  };
+  /**
    * The registry name `node` reads in `at`, with `role`: a contract (`UniswapV3.Factory`,
    * `Base.UniswapV3.Factory`, `Lido` of `Lido.submit`), a token (`USDT`), or undefined. A protocol or
    * chain read whole, and `available(...)`, are refused here.
@@ -571,6 +620,12 @@ export function checkNames(
       return undefined;
     }
     if (target.type !== "MemberExpression" || prop<boolean>(target, "computed")) return undefined;
+    // An account spelled on Solana's name, whether the program runs it or a test rules it out, on
+    // every chain: refused before a chain's name claims the member (`Solana.owner.dataLen`).
+    for (const member of [target, unwrap(prop(target, "object"))]) {
+      const refusal = retiredAccount(member, at);
+      if (refusal !== undefined) fail(member, refusal);
+    }
     const object = unwrap(prop(target, "object"));
     const property = prop<AstNode>(target, "property");
     if (property.type !== "Identifier") return undefined;
@@ -1334,9 +1389,27 @@ export function checkNames(
           if (validating && isRetiredPot(node, at)) {
             fail(node, selfRefusal(RETIRED_POT_NAME, POT_NAME).message);
           }
+          const name = nameOf(node);
+          // Where a program for an EVM chain runs it, an account is Solana's (`Account(…)`): code a
+          // test rules out may name one, which a Solana chain compiles.
+          if (
+            !validating &&
+            chain.kind === "evm" &&
+            name === ACCOUNT_FACTORY &&
+            !shadowed(at, name, node.start) &&
+            !defined.has(name) &&
+            !Object.hasOwn(options.scalars ?? {}, name)
+          ) {
+            const spelled =
+              role === "callee"
+                ? `${name}(…)`
+                : role.startsWith(".")
+                  ? `${name}${role}${role === ".pda" ? "(…)" : ""}`
+                  : name;
+            fail(node, evmAccountRefusal(spelled, chain.slug));
+          }
           // In code a test rules out, which the compile here never reads, a name is what the
           // program, the caller, a chain's registry or the language makes it, or reported.
-          const name = nameOf(node);
           if (
             validating &&
             !shadowed(at, name, node.start) &&
@@ -1433,6 +1506,25 @@ export function checkNames(
       case "TSSatisfiesExpression":
         visit(prop(node, "expression"), mode, role, at, wrap);
         return;
+      case "AssignmentExpression":
+      case "UpdateExpression": {
+        // A member of the Pot is read, never written: `pot.owner = x` would make the owner the
+        // program reads another account, and `pot.USDC = x` a balance.
+        const target = unwrap(
+          prop<AstNode>(node, node.type === "UpdateExpression" ? "argument" : "left"),
+        );
+        const object = target.type === "MemberExpression" ? unwrap(prop(target, "object")) : target;
+        if (
+          object !== target &&
+          object.type === "Identifier" &&
+          nameOf(object) === POT_NAME &&
+          !shadowed(at, POT_NAME, object.start) &&
+          !defined.has(POT_NAME)
+        ) {
+          fail(target, potWriteRefusal(source.slice(target.start, target.end)).message);
+        }
+        break;
+      }
       default:
         break;
     }
