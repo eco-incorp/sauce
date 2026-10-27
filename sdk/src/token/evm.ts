@@ -4,8 +4,7 @@
  * engine-vendored `IERC20` artifact, the shape `deposit/source.ts` already emits.
  */
 import { formatAddressField } from "../deposit/format.js";
-import { refuseSelfOwner } from "./owner.js";
-import { toAddressBigint, toAmountBigint } from "./params.js";
+import { refuseRetiredOwner, toAddressBigint, toAmountBigint } from "./params.js";
 import { safeApproveStatements, safeTransferStatements } from "./safe.js";
 import type { TokenApproveSpec, TokenBalanceSpec, TokenTransferSpec } from "./types.js";
 
@@ -13,7 +12,7 @@ export const ERC20_IMPORT_LINE = `import { IERC20 } from "./artifacts/IERC20.jso
 
 function formatOwner(owner: TokenBalanceSpec["owner"]): string {
   if (owner === undefined) throw new Error("Token.balanceOf: owner is required on an EVM target");
-  refuseSelfOwner(owner);
+  refuseRetiredOwner(owner);
   if (owner === "pot") return "ctx.self()";
   return formatAddressField(toAddressBigint(owner, "owner"));
 }

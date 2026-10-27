@@ -3,7 +3,6 @@
  * throws (never emits a program that would revert on-chain) rather than guessing.
  */
 import { toExactBigInt } from "../numeric.js";
-import { refuseSelfOwner } from "./owner.js";
 import type {
   AddressInput,
   SvmTokenRefs,
@@ -103,11 +102,18 @@ export function validateApproveSpec(spec: TokenApproveSpec, target: TokenTarget)
   assertAmountInput(spec.amount, "Token.approve amount", target);
 }
 
+/** Refuses `self` as a balance's owner; the Pot's name is `"pot"`. */
+export function refuseRetiredOwner(owner: unknown): void {
+  if (owner === "self") {
+    throw new Error('Token.balanceOf: the Pot is "pot", not "self": write owner: "pot"');
+  }
+}
+
 export function validateBalanceSpec(spec: TokenBalanceSpec, target: TokenTarget): void {
   if (isEvmTarget(target)) {
     requireEvmField(spec.token, "token");
     requireEvmField(spec.owner, "owner");
-    refuseSelfOwner(spec.owner);
+    refuseRetiredOwner(spec.owner);
     return;
   }
   requireSvmRefs(spec, "Token.balanceOf");
