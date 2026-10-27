@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: webiny/action-conventional-commits@v1.3.1
         with:
           # WITHOUT this the gate cannot fail. The repo is private, so the action's unauthenticated

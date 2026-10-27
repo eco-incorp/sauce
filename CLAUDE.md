@@ -316,9 +316,14 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   fallback: a fork's workflow has a `GITHUB_TOKEN` (only without the grant), so "no credential"
   cannot select it, and a failure of the private path names this mode and stays a failure. The two
   never mix: this mode never reads the credential and caches under
-  `node_modules/.cache/sauce-engine-releases/npm/`, apart from the per-tag cache. CI selects it for
-  a fork's pull request and for a workflow in a fork's own repository (`.github/actions/setup`);
-  `publish.yml` pins the private source. A row with no `npm` (a compiler bump not published yet)
+  `node_modules/.cache/sauce-engine-releases/npm/`, apart from the per-tag cache. In CI the source
+  is `ci.yml`'s choice, passed to `ci-jobs.yml` (which holds every job) and on to
+  `.github/actions/setup`: its `fork` caller, for a pull request from a fork, runs with
+  `contents: read` alone and `artifact-source: npm`; its `internal` caller, for everything else,
+  grants `packages: read` and takes the private source. `ci-jobs.yml` declares no `permissions`, so
+  its jobs hold exactly the caller's (a called workflow can narrow them, never widen), and a
+  workflow in a fork's own repository takes `npm` whatever it is asked. `publish.yml` leaves the
+  variable unset, which is the private source. A row with no `npm` (a compiler bump not published yet)
   has no public source. The tarball carries no release manifest, so the manifests' cross-check —
   corroboration, never the guarantee — is the one check this mode cannot repeat. In either mode
   every failure stops the sync: nothing a previous sync left on disk stands in for a refused read

@@ -1,15 +1,23 @@
 name: CI
 
-# ONE WORKFLOW, SEVERAL JOBS. This used to be a single job running every step in sequence, about 30
-# minutes on one 2-vCPU runner, and almost none of it depended on the rest: after the install, the
-# engine sync and the builds (under a minute together) the suites are independent. Each job below
-# sets up the same way (`.github/actions/setup`, `.github/actions/build`) and runs a slice of what
-# the single job ran, with the same commands. Nothing was added or dropped: `Build & Test`, the last
-# job, passes only when every one of them passed.
+# TWO CALLERS OF ONE SET OF JOBS. Every job lives in ci-jobs.yml; this file decides, per run, with
+# what token they run and where they take the v12 engine artifacts from:
 #
-# `ci` is named `Build & Test` on purpose. It is the check's name from before the split, so a
-# required-check rule, a merge queue or a script that waits for it keeps working, and it is the one
-# result `publish.yml` gates on through `workflow_call`.
+#   internal  a push (main, a `v*` tag), a call from publish.yml, or a pull request from a branch of
+#             THIS repository: `packages: read`, and the artifacts from the private v12 release
+#             packages this repository is granted read on.
+#   fork      a pull request from a fork: `contents: read` and nothing else, and the same artifacts,
+#             held to the same digests, from the public @eco-incorp/sauce tarball.
+#
+# Why. A fork's pull request runs the fork's own code (its tests, its build scripts) with a
+# GITHUB_TOKEN of this repository. GitHub caps that token at read, but read on everything the
+# workflow names: with `packages: read` it could read the private v12 packages. So the fork caller
+# names no `packages` permission, a called workflow cannot widen what its caller grants, and
+# ci-jobs.yml names none of its own. Exactly one caller runs: the two `if`s are complements.
+#
+# `Build & Test` aggregates the two under the check's name from before the split, the name the
+# branch ruleset requires and publish.yml's gate reads. A caller's own checks report under its name
+# (`internal / Checks`, `fork / SDK engine e2e`, …).
 
 on:
   pull_request:
@@ -22,275 +30,46 @@ on:
   # drift, and a gate that has drifted is the thing being fixed here.
   workflow_call:
 
-# `packages: read` is what lets the built-in GITHUB_TOKEN pull the v12 engine artifacts from
-# GHCR. It is not a default worth relying on: an org that sets restricted default permissions
-# would otherwise fail the sync with a 403 that reads like a missing grant.
-permissions:
-  contents: read
-  packages: read
+# Nothing workflow-wide: each caller grants its own, and the aggregate needs no token.
+permissions: {}
 
 jobs:
-  # Typecheck, the generated files, the other workspaces' typechecks, the browser, the manual and the
-  # skills, and the unit tests that need no engine suite: the cheap checks, so a mistake there fails
-  # in a few minutes instead of behind half an hour of suites.
-  checks:
-    name: Checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+  internal:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # `packages: read` is what lets the built-in GITHUB_TOKEN pull the v12 engine artifacts from
+    # GitHub Packages. It is not a default worth relying on: an org that sets restricted default
+    # permissions would otherwise fail the sync with a 403 that reads like a missing grant.
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/ci-jobs.yml
+    with:
+      artifact-source: private
 
-      # The tests too: `typecheck` also checks sdk/tsconfig.test.json. sdk/tsconfig.json's `include`
-      # is src-only and ts-jest runs with diagnostics off, which is how a test file that did not
-      # parse once shipped through three green runs.
-      - name: SDK — typecheck
-        run: pnpm --filter './sdk' typecheck
+  fork:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci-jobs.yml
+    with:
+      artifact-source: npm
 
-      - name: SDK — build
-        run: pnpm --filter './sdk' build
-
-      # The build regenerates the agent skills' references and the manual's reference from the SDK's
-      # registries (`gen-skills-references.mjs`: the globals index, the chains, the protocols and
-      # the tokens, for each audience). They are committed, so a registry change that did not commit
-      # the regenerated files leaves the tree dirty here.
-      - name: Agent skills and the manual's reference — the committed generated files are current
-        run: |
-          set -euo pipefail
-          if [ -n "$(git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md docs/guides/solana-distributed-swap.md)" ]; then
-            git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md docs/guides/solana-distributed-swap.md
-            git diff -- skills docs/reference docs/guides/distributed-swap.md docs/guides/solana-distributed-swap.md
-            echo "::error::the SDK build changed skills/ or the manual's generated pages: rebuild the SDK and commit the regenerated files"
-            exit 1
-          fi
-
-      # The SDK's suites run in the `sdk-*` jobs below: the engine e2e suites, one process each, and
-      # everything else. The split must not silently drop a suite: assert the two halves still add
-      # up to every file jest can see.
-      - name: SDK — the split covers every suite
-        run: |
-          set -euo pipefail
-          cd sdk
-          all=$(node_modules/.bin/jest --config jest.config.cjs --listTests | wc -l)
-          e2e=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathPattern '\.e2e\.test\.ts$' | wc -l)
-          rest=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathIgnorePatterns '\.e2e\.test\.ts$' | wc -l)
-          echo "all=$all e2e=$e2e rest=$rest"
-          [ "$all" -eq "$((e2e + rest))" ] || { echo "::error::the test split covers $((e2e + rest)) of $all suites"; exit 1; }
-
-      - name: Actions — typecheck
-        run: pnpm --filter './actions' typecheck
-
-      - name: Actions — build
-        run: pnpm --filter './actions' build
-
-      - name: MCP — typecheck
-        run: pnpm --filter './mcp' typecheck
-
-      - name: MCP — build
-        run: pnpm --filter './mcp' build
-
-      # dev-tools reads the SDK's dist/ too. Its tests run under tsx, which strips types without
-      # checking them; this is where they are checked.
-      - name: Dev Tools — typecheck
-        run: pnpm --filter './dev-tools' typecheck
-
-      - name: Dev Tools — build
-        run: pnpm --filter './dev-tools' build
-
-      # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
-      # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
-      # the README's route example, a raw ABI-entry compile, the settle recipe, two builders and an
-      # actions program run in headless Chromium and must produce the bytes Node does. The packed
-      # check repeats both against the installed tarball.
-      - name: Browser — no Node in any browser-facing export
-        run: node sdk/scripts/check-browser-bundles.mjs
-
-      - name: Browser — install headless Chromium
-        run: pnpm exec playwright-core install --with-deps --only-shell chromium
-
-      - name: Browser — compile in headless Chromium, byte-identical to Node
-        run: node sdk/scripts/check-browser-compile.mjs
-
-      - name: Documentation — links and executable examples
-        run: pnpm docs:check
-
-      # The agent skills `sauce skills install` ships: every program compiled through the `sauce`
-      # bin on each chain its index names and its command line run offline, every command line's
-      # flags held to the CLI, every runner executed with the network disabled, the SauceScript
-      # reference held to the compiler, and the wording rules (no versions, agent names, engine
-      # internals or invented addresses). It needs the SDK and actions builds above.
-      - name: Agent skills — examples, commands and wording
-        run: pnpm skills:check
-
-      # `test:unit` needs no RPC: its `*.exec.test.ts` suites execute on a local anvil through the
-      # released engine (Foundry and SAUCE_V12_RUNTIME_CREATION_HEX are set up by the setup action,
-      # and they throw under CI rather than skip).
-      - name: Actions — unit tests
-        run: pnpm --filter './actions' test:unit
-
-  # The SDK's engine e2e suites, one process per suite, all of them in this job.
-  sdk-e2e:
-    name: SDK engine e2e
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/build
-
-      # SAUCE_RUST_ENGINE_SO / SAUCE_V12_RUNTIME_CREATION_HEX come from $GITHUB_ENV, exported by the
-      # setup action. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
-      # broken export is loud rather than a silent skip.
-      - name: SDK — test (engine e2e)
-        # Set here because these steps invoke jest directly rather than through the package's
-        # `test` script, which is where NODE_OPTIONS normally comes from.
-        env:
-          NODE_OPTIONS: --experimental-vm-modules
-          # Names each test on unbuffered stderr as it starts. A native abort kills the process
-          # before jest flushes, so without this a crashing suite reports no test at all.
-          SAUCE_TRACE_TESTS: "1"
-        run: |
-          set -euo pipefail
-          cd sdk
-          # ONE PROCESS PER SUITE, and the engine suites separated from the rest.
-          #
-          # Running all ~181 suites in one jest process aborts with a native std::bad_alloc after
-          # every test has PASSED — at the end, during teardown, with GBs free and no ulimit, so it
-          # is not exhaustion. It was measured: the engine suites peak between 495 and 785 MB, and
-          # the one that aborted was the LOWEST of them. Reverting this split reproduced the abort
-          # immediately, which is why it is here rather than a tidier single command.
-          #
-          # Each suite in its own short-lived process avoids it, and makes a crash name the suite.
-          # (Distinct from the aborts fixed in the suites themselves — calling litesvm accessors on
-          # a failed transaction or a closed account; see `kitchen-bench.ts`.)
-          node_modules/.bin/jest --config jest.config.cjs --listTests \
-            --testPathPattern '\.e2e\.test\.ts$' > "$RUNNER_TEMP/e2e-suites.txt"
-          [ -s "$RUNNER_TEMP/e2e-suites.txt" ] || { echo "::error::no engine e2e suites matched"; exit 1; }
-          failed=""
-          while IFS= read -r suite; do
-            name=$(basename "$suite")
-            echo "::group::$name"
-            log="$RUNNER_TEMP/$name.log"
-            # `|| failed=...` rather than letting -e stop the loop: one run then reports EVERY suite,
-            # which is what distinguishes "this suite is broken" from "the box gave out".
-            set +e
-            node_modules/.bin/jest --config jest.config.cjs --runInBand --forceExit --runTestsByPath "$suite" 2>&1 | tee "$log"
-            status=${PIPESTATUS[0]}
-            set -e
-            # `--forceExit`: jest calls process.exit() once the run is reported, which skips the
-            # native finalizers. Measured: on a retry the suite printed `Tests: 4 passed` and
-            # `Ran all test suites`, and only THEN aborted — every test had passed and the abort
-            # poisoned nothing but the exit status. That case this converts to a true green, and it
-            # cannot hide a failure, because jest derives the code from the results before exiting.
-            #
-            # TODO(litesvm-abort): remove BOTH the flag above and this retry once the abort itself is
-            # fixed. Not tracked in Linear yet — the condition for deleting them is that a suite can
-            # run this step 20 times without a ::warning:: firing. Until then the warning below is
-            # the only signal that the root cause is still there, so do not silence it.
-            #
-            # RETRY ONCE, and only for the litesvm native abort.
-            #
-            # The other case, which --forceExit cannot reach: the abort sometimes lands mid-teardown
-            # BEFORE jest reports, so the suite prints no test at all. That is what this retries.
-            #
-            # `terminate called ... std::bad_alloc` fires in litesvm's native teardown AFTER every
-            # test in the suite has passed, killing node before jest flushes — so the suite reports
-            # no test at all. It is runner-only (never reproduces on darwin/arm64 or in linux
-            # containers), it moves between the three kitchen suites run to run, and it survived the
-            # fix that removed the VM reference-clear. Left alone it failed most runs that reached
-            # this step, which is a gate that reports noise rather than signal.
-            #
-            # Deliberately narrow: gated on that exact string, so a real test failure, a crash with
-            # any other message, or a second bad_alloc all still fail the job.
-            if [ "$status" -ne 0 ] && grep -q 'std::bad_alloc' "$log"; then
-              echo "::warning::$name aborted with std::bad_alloc (litesvm native teardown) — retrying once"
-              set +e
-              node_modules/.bin/jest --config jest.config.cjs --runInBand --forceExit --runTestsByPath "$suite" 2>&1 | tee "$log.retry"
-              status=${PIPESTATUS[0]}
-              set -e
-            fi
-            [ "$status" -eq 0 ] || failed="$failed $name"
-            echo "::endgroup::"
-          done < "$RUNNER_TEMP/e2e-suites.txt"
-          [ -z "$failed" ] || { echo "::error::engine e2e suites failed:$failed"; exit 1; }
-
-  # Every other SDK suite, in one jest process, exactly as before.
-  sdk-unit:
-    name: SDK tests (everything else)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/build
-
-      - name: SDK — test (everything else)
-        env:
-          NODE_OPTIONS: --experimental-vm-modules
-        run: pnpm --filter './sdk' exec jest --config jest.config.cjs --testPathIgnorePatterns '\.e2e\.test\.ts$'
-
-  # The prod-like suites — every action, every quote, the split swap — run against real mainnet
-  # contracts on a LOCAL anvil booted from state captured at a pinned block and checked in
-  # (`actions/tests/state/*.genesis.json.gz`, see `actions/tests/mainnet.ts`). No secret and no
-  # network: a replayed suite refuses to fork and fails on any non-local request. Recapturing is a
-  # maintainer step (CLAUDE.md), never part of CI.
-  actions-mainnet:
-    name: Actions mainnet-state suites
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/build
-
-      - name: Actions — mainnet-state suites
-        run: pnpm --filter './actions' test:mainnet
-
-  # Every MCP tool in process, the bin over stdio and Streamable HTTP, and the tools against a
-  # local anvil with the released gated stack (the CLI suites' harness, which throws under CI
-  # without SAUCE_V12_RUNTIME_CREATION_HEX rather than skip). No live RPC.
-  mcp-and-dev-tools:
-    name: MCP and Dev Tools tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/build
-
-      - name: Dev Tools — test
-        run: pnpm --filter './dev-tools' test
-
-      - name: MCP — test
-        run: pnpm --filter './mcp' test
-
-  # A consumer install, from the packed tarball into an empty directory — which is the only way
-  # to catch a workspace dependency that every in-repo test resolves for free.
-  packed:
-    name: Packed SDK, clean consumer install
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/build
-
-      # The packed check repeats the browser bundle and compile checks against the installed
-      # tarball, which needs the same headless Chromium `checks` installs.
-      - name: Browser — install headless Chromium
-        run: pnpm exec playwright-core install --with-deps --only-shell chromium
-
-      - name: Verify a clean consumer install of the packed SDK
-        run: node sdk/scripts/check-packed-package.mjs
-
-  # The one result that stands for all of the above, under the name this check always had.
-  # `if: always()` so a failed or cancelled job makes THIS fail, rather than leaving it skipped,
-  # which a `needs` consumer can read as passing.
+  # Passes only when exactly one caller ran and succeeded and the other was skipped. `if: always()`
+  # so a failed or cancelled caller makes THIS fail, rather than leaving it skipped, which a
+  # required check or a `needs` consumer can read as passing.
   ci:
     name: Build & Test
     if: always()
-    needs: [checks, sdk-e2e, sdk-unit, actions-mainnet, mcp-and-dev-tools, packed]
+    needs: [internal, fork]
     runs-on: ubuntu-latest
     steps:
-      - name: Every job passed
+      - name: One caller ran, and every job of it passed
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          INTERNAL: ${{ needs.internal.result }}
+          FORK: ${{ needs.fork.result }}
         run: |
-          echo "results: $RESULTS"
-          for result in $RESULTS; do
-            [ "$result" = "success" ] || { echo "::error::a CI job did not succeed ($RESULTS)"; exit 1; }
-          done
+          echo "internal: $INTERNAL, fork: $FORK"
+          case "$INTERNAL/$FORK" in
+            success/skipped | skipped/success) ;;
+            *) echo "::error::CI did not pass (internal: $INTERNAL, fork: $FORK)"; exit 1 ;;
+          esac

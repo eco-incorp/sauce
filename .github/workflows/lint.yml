@@ -7,12 +7,19 @@ on:
     tags: ["v*"]
   workflow_call:
 
+# Format and lint read the tree and nothing else: no package, no API. Explicit so the job does not
+# take the repository's default token permissions, which are write.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Format & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # No credential here, and none needed: `pnpm install` has no private source left to
       # authenticate for (the engine git dep is gone), and every v12 artifact is fetched by the sync

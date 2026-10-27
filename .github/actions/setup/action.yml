@@ -1,8 +1,15 @@
 name: Set up the workspace
 description: >
   Foundry, pnpm, Node, the install, and the v12 engine artifacts — everything a CI job needs before
-  it builds or tests. A composite action so every job of ci.yml sets up identically; checkout comes
-  first, in the job, because a local action is read from the checked-out tree.
+  it builds or tests. A composite action so every job of ci-jobs.yml sets up identically; checkout
+  comes first, in the job, because a local action is read from the checked-out tree.
+
+inputs:
+  artifact-source:
+    description: >
+      Where the v12 engine artifacts come from: `private` (the release packages; the job needs
+      `packages: read`) or `npm` (the public @eco-incorp/sauce tarball, digest-checked; no grant).
+    required: true
 
 runs:
   using: composite
@@ -26,16 +33,31 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
-    # Two kinds of run take the same artifacts from the public @eco-incorp/sauce package releases.json
-    # names for the installed compiler, held to the same digests (SAUCE_ARTIFACT_SOURCE=npm; see
-    # sync-engine-artifacts.mjs): a fork's pull request, so code from outside never runs where the
-    # private packages are read, and a workflow in a fork's own repository, whose GITHUB_TOKEN exists
-    # but carries no grant. Exported job-wide, because the build step's sync must read the same source
-    # as this one. Everything else stays on the private packages and fails, never falls back.
-    - name: Take the engine artifacts from the public package (forks)
-      if: github.event.pull_request.head.repo.fork == true || github.repository_owner != 'eco-incorp'
+    # SAUCE_ARTIFACT_SOURCE for the whole job, because the build step's sync must read the same
+    # source as this one (sync-engine-artifacts.mjs). `private` reads the v12 release packages, which
+    # needs the caller's `packages: read`; `npm` takes the same artifacts, held to the same digests,
+    # from the public @eco-incorp/sauce package releases.json names for the installed compiler. Which
+    # one is ci.yml's decision (a fork's pull request runs with no `packages` permission), with one
+    # override: a workflow in a repository outside eco-incorp (a fork's own pushes) has a
+    # GITHUB_TOKEN but no grant, so it takes `npm` whatever it was asked. Neither source ever falls
+    # back to the other.
+    - name: Choose the engine artifacts' source
       shell: bash
-      run: echo "SAUCE_ARTIFACT_SOURCE=npm" >> "$GITHUB_ENV"
+      env:
+        REQUESTED: ${{ inputs.artifact-source }}
+        OWNER: ${{ github.repository_owner }}
+      run: |
+        set -euo pipefail
+        case "$REQUESTED" in
+          private) source=github-packages ;;
+          npm) source=npm ;;
+          *) echo "::error::artifact-source is '$REQUESTED': expected private or npm"; exit 1 ;;
+        esac
+        if [ "$OWNER" != "eco-incorp" ] && [ "$source" != npm ]; then
+          echo "::notice::$OWNER is not granted the v12 packages: taking the artifacts from npm"
+          source=npm
+        fi
+        echo "SAUCE_ARTIFACT_SOURCE=$source" | tee -a "$GITHUB_ENV"
 
     # ---- engine artifacts + the v12 releases --------------------------------
     # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
@@ -49,9 +71,9 @@ runs:
     # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
     # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
     # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
-    # been silently absent. The artifacts come from GHCR, where the packages are private and this
-    # repository is granted read on each, so the built-in GITHUB_TOKEN is the whole credential —
-    # no PAT, and nothing published publicly.
+    # been silently absent. Under `private` the artifacts come from GitHub Packages, where the
+    # packages are private and this repository is granted read on each, so the built-in
+    # GITHUB_TOKEN is the whole credential — no PAT. Under `npm` the token is never read.
     #
     # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
     # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
