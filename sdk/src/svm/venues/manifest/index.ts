@@ -169,8 +169,35 @@ const nodeBase = (dataIndex: number): number => MARKET_FIXED_SIZE + dataIndex;
  * through the order visits orders best-first. Every pointer hop draws from the
  * caller's whole-walk budget (`spendHop`); unaffordable in-VM.
  */
-function nextLower(_data: Uint8Array, _idx: number, _spendHop: SpendHop): number {
-  throw new Error("clean-room rewrite pending");
+function nextLower(data: Uint8Array, idx: number, spendHop: SpendHop): number {
+  if (idx === NIL) return NIL;
+  const link = (node: number, offset: number): number =>
+    Number(readUintLE(data, nodeBase(node) + offset, 4));
+
+  // With a left subtree, the predecessor is that subtree's largest node: step
+  // to the left child, then follow right children to the end.
+  let node = link(idx, OFF_NODE_LEFT);
+  if (node !== NIL) {
+    let right = link(node, OFF_NODE_RIGHT);
+    while (right !== NIL) {
+      spendHop();
+      node = right;
+      right = link(node, OFF_NODE_RIGHT);
+    }
+    return node;
+  }
+
+  // Without one, go up while the current node is its parent's left child; the
+  // first parent reached from its right side is the predecessor. Running out of
+  // parents means `idx` was the smallest node.
+  node = idx;
+  let parent = link(node, OFF_NODE_PARENT);
+  while (parent !== NIL && link(parent, OFF_NODE_LEFT) === node) {
+    spendHop();
+    node = parent;
+    parent = link(node, OFF_NODE_PARENT);
+  }
+  return parent;
 }
 
 /**
