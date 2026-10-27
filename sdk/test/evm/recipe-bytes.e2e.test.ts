@@ -147,8 +147,11 @@ describeEvm("exported recipes preserve empty bytes at the callee", () => {
     const decoded = decodeFunctionData({ abi: lifiAbi, data });
     expect(decoded.functionName).toBe("startBridgeTokensViaAcrossV4");
     // Across refunds a deposit no relayer fills by `fillDeadline` on the source chain, so the
-    // refund address must be the Pot that paid it; the receiver is a destination-chain address.
-    expect(RECIPIENT.toLowerCase()).not.toBe(engine.pot.toLowerCase());
+    // refund address must be the Pot that paid it: not the receiver, a destination-chain address,
+    // and not the cook's submitter (here the owner; a relayer under `cookSigned`).
+    expect(new Set([RECIPIENT, OWNER.address, engine.pot].map((a) => a.toLowerCase())).size).toBe(
+      3,
+    );
     expect(decoded.args[1].refundAddress).toBe(word(engine.pot));
     expect(decoded.args[1].receiverAddress).toBe(word(RECIPIENT));
     expect(decoded.args).toEqual([
