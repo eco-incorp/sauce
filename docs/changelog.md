@@ -105,7 +105,7 @@ nothing moves.
   (`0x…01`) that nobody holds a key to, and the swept output was burned. It now fails with
   `sweep.recipient: expected an address (0x + 40 hex digits) or "pot"`, as a `transfer` action does.
 
-### Solana venues
+### Solana venues in TypeScript
 
 - **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
   `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
