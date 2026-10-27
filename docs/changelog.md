@@ -133,8 +133,11 @@ nothing moves.
   to send the deployment, fund the Pot, then send the cook (or plan with `--fund`). `sauce sign`'s
   warning that a Pot with no code cannot pay the Kitchen's fee now says to send `deployPot` before
   funding it. The README, the quick start (which now deploys the Pot with `sauce pot --deploy`
-  before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
-  Pot's address before it exists.
+  before sending it USDC), the guides, `sauce run --help` and the `sauce-cli` skill no longer say to
+  send tokens to a Pot's address before it exists, or that a Pot is never deployed by hand.
+- **Fixed: `sauce tx --fund ETH:<amount>` with no token to fund carries the amount in the cook's
+  value.** A plan that was the cook alone (no transfer and no deployment to plan) took the Kitchen's
+  fee as its value and dropped the native amount, so the cook ran without it.
 
 ### Actions documents
 
