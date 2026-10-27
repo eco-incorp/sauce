@@ -23,6 +23,7 @@
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Address } from "@solana/kit";
 import { AccountRole, getAddressEncoder, getProgramDerivedAddress, lamports } from "@solana/kit";
@@ -1166,6 +1167,7 @@ const VENUES: Venue[] = [
         w(c.vaultB!),
         r(c.oracle!),
         r(a[9]!.address!),
+        r(a[12]!.address!),
       ];
     },
     cases: () => {
@@ -2038,6 +2040,10 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         );
         freeze(harness, venue.fabricate?.(harness) ?? []);
         slot = venue.slot(harness);
+        if (venue.name === "Denali")
+          expect(createHash("sha256").update(venueProgram("denali.so.gz")).digest("hex")).toBe(
+            "a27dd365372b0603c623fd8b034c22ad39107fe0ffbba4e3546095460e7bb271",
+          );
       }, 120_000);
 
       it("swaps both ways, every form alike: the recipes' instruction, their pins", async () => {
@@ -2112,6 +2118,34 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
               returned: name === base ? String(received) : paid,
             });
             expect(outcome.received > 0n).toBe(true);
+            if (venue.name === "Denali") {
+              // Read the actual invoked data independently of the fixture's prefix/suffix and
+              // the SDK encoder, so changing both cannot silently change the wire contract.
+              const data = Buffer.from(outcome.call!.data, "hex");
+              expect(data).toHaveLength(25);
+              expect(data.subarray(0, 8)).toEqual(
+                createHash("sha256").update("global:swap_exact_in").digest().subarray(0, 8),
+              );
+              expect(data[8]).toBe(trade.dir ? 0 : 1);
+              expect(data.readBigUInt64LE(9)).toBe(trade.amountIn);
+              expect(data.readBigUInt64LE(17)).toBe(0n);
+              expect(outcome.call!.accounts).toEqual([
+                harness.pot,
+                "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+                "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+                USDC,
+                "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+                "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+                TOKEN,
+                TOKEN,
+                "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F",
+                "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ",
+                trade.dir ? outcome.source : outcome.recipient,
+                trade.dir ? outcome.recipient : outcome.source,
+                "3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd",
+                program,
+              ]);
+            }
             const user = { owner: harness.pot, in: outcome.source, out: outcome.recipient };
             if (vector !== undefined)
               expect(outcome.call).toEqual({
@@ -2165,6 +2199,44 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           await cook(harness, compiled(base, slot.length), { ...at, minOut: received }, program),
         );
       }, 300_000);
+
+      if (venue.name === "Denali")
+        it("the instruction forms reject an impossible floor, not missing event accounts", async () => {
+          const program = slot[0]!.address;
+          for (const trade of venue.cases(harness)) {
+            const vector = VECTORS[trade.vector!]!;
+            const list = cpiFromVector(vector);
+            const { received } = succeeded(
+              await cook(harness, compiled(base, slot.length), { ...trade, slot }, program),
+            );
+            for (const minOut of [received, received + 1n]) {
+              const template = routerSvmDataTemplate("denali", { aToB: trade.dir!, minOut });
+              for (const form of ["Cpi", "Data", "hand"] as const) {
+                const baked =
+                  form === "hand"
+                    ? {
+                        prefix: Buffer.from(template.prefix).toString("hex"),
+                        suffix: Buffer.from(template.suffix).toString("hex"),
+                      }
+                    : bakedFor(base, trade, vector);
+                const outcome = await cook(
+                  harness,
+                  instruction(form, base, list.length, baked),
+                  { ...trade, slot: [], minOut, cpi: { program, accounts: list } },
+                  program,
+                );
+                if (minOut === received) expect(succeeded(outcome).received).toBe(received);
+                else {
+                  expect(outcome.ok).toBe(false);
+                  if (!outcome.ok) {
+                    expect(outcome.logs.join("\n")).not.toMatch(/AccountNotEnoughKeys/);
+                    expect(outcome.logs.join("\n")).toMatch(/slippage|minimum|amount.?out/i);
+                  }
+                }
+              }
+            }
+          }
+        }, 300_000);
 
       it("skips, having moved nothing", async () => {
         const trade = venue.cases(harness)[0]!;

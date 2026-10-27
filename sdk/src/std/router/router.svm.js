@@ -5640,7 +5640,9 @@ export function riptideCpi(
 }
 
 // Denali, DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4: `swap`, priced off its oracle. The slot is
-// `[program, pool, vaultA, vaultB, oracle, globalConfig]`.
+// `[program, pool, vaultA, vaultB, oracle, globalConfig, eventAuthority]`; the event authority is
+// the program's `["__event_authority"]` PDA, which its Anchor event CPI takes after the swap's 12
+// accounts, with the program itself.
 function swapDenali(
   slot: Account[],
   trader: Account[],
@@ -5673,6 +5675,8 @@ function swapDenali(
       slot[5],
       paysA ? trader[1] : recipient,
       paysA ? recipient : trader[1],
+      slot[6],
+      program,
     ],
     denaliData(amountIn, minOut, paysA),
   );
@@ -5713,8 +5717,8 @@ export function denali(
 }
 
 // `accounts`: the authority, the pool, mints A and B, the pool's A and B vaults, their token
-// programs, the oracle, the global config, and the authority's A and B token accounts (the
-// paying one among them). It pays A when `aToB`.
+// programs, the oracle, the global config, the authority's A and B token accounts (the paying one
+// among them), the event authority and the program. It pays A when `aToB`.
 export function denaliCpi(
   program: Account,
   accounts: Account[],

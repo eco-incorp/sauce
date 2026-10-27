@@ -1,5 +1,5 @@
 {
-  "$comment": "Each venue's swap instruction as eco-incorp/sauce-recipes 0d72f826b90a0f69383590da3b62de94aeaf2e8b builds it: resolveSvmSpecSlot then the ladder's buildSwapV2, from that repository's test/svm/fixtures, with the user's accounts named owner, in and out. The amount goes between prefix and suffix as a u64 LE.",
+  "$comment": "Each venue's swap instruction as eco-incorp/sauce-recipes 0d72f826b90a0f69383590da3b62de94aeaf2e8b builds it: resolveSvmSpecSlot then the ladder's buildSwapV2, from that repository's test/svm/fixtures, with the user's accounts named owner, in and out. The amount goes between prefix and suffix as a u64 LE. Denali's two event-CPI accounts were appended from successful mainnet swaps after its upgrade at slot 454575418; its original twelve accounts and data are unchanged.",
   "vectors": {
     "raydium-cp-swap:7Juw:0to1": {
       "venue": "raydium-cp-swap",
@@ -5783,6 +5783,14 @@
         {
           "user": "out",
           "writable": true
+        },
+        {
+          "address": "3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd",
+          "role": "s0:eventAuthority"
+        },
+        {
+          "address": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
+          "role": "s0:program"
         }
       ]
     },
@@ -5857,6 +5865,14 @@
         {
           "user": "in",
           "writable": true
+        },
+        {
+          "address": "3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd",
+          "role": "s0:eventAuthority"
+        },
+        {
+          "address": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
+          "role": "s0:program"
         }
       ]
     },
