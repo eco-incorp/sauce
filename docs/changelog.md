@@ -166,7 +166,6 @@ nothing moves.
   its WETH (`getWeth()`) and sends the amount as the call's value when `tokenIn` is that token, and
   no value otherwise; the Router wraps exactly the amount. A WETH output is still paid to the Pot as
   ETH, and is the action's output. `wethIsEth: false` compiles to the same program as before.
-
 - **Fixed** (EVM): an `aaveV3Withdraw` whose output a later action spends, or that saves it with
   `saveOutputAs`, withdraws to the Pot whatever its `recipient` says, as every swap, wrap and stake
   already did. Before, it paid its own `recipient` while the next action spent the same amount again
@@ -232,6 +231,11 @@ nothing moves.
   refused the unmarked ones: the transaction failed and its fee was lost. The slot now ends its
   tick arrays with the System program after the last readable one, which the router reads as "pass
   no more". Pools with three readable arrays are unchanged.
+- **Fixed** (Solana): the Orca legacy token swap and SPL Token Swap fork adapters' quote fragment
+  returns 0 for a pool whose floor quotient `rsIn * rsOut / (rsIn + netIn)` is 0. The program's
+  `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
+  from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
+  already refused it.
 
 ### SauceScript
 

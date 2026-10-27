@@ -66,4 +66,16 @@ describe("spl-token-swap-forks emitQuote — Account model (svm.sload) via RS", 
     );
     expect(boundAddresses).toEqual([VAULT_IN, VAULT_OUT]);
   });
+
+  it("guards the zero floor-quotient the program rejects, as referenceQuote does", () => {
+    // netIn = 1e9 - 2500000 - 500000 = 997000000. The fragment quotes 0 unless
+    // rIn * rOut >= rIn + netIn (floor(rIn * rOut / (rIn + netIn)) > 0), where the
+    // bare ceiling formula would give rOut - 1 and the swap would fail on-chain.
+    const fragment = tokenSwapV1.emitQuote(cfg, 0, 1_000_000_000n);
+    expect(fragment).toContain("let q0 = 0;");
+    expect(fragment).toContain("if (rIn0 * rOut0 >= rIn0 + 997000000) {");
+    expect(fragment).toContain(
+      "  q0 = rOut0 - (rIn0 * rOut0 + rIn0 + 996999999) / (rIn0 + 997000000);",
+    );
+  });
 });
