@@ -147,7 +147,9 @@ the deployed Kitchen …`.
   SDK's programs: `… is a Pot of compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0), which
 @eco-incorp/sauce 0.99.9 to 0.99.15 pair with …`. Code that no release the SDK records minted there
   is refused too. A Pot of the SDK's own release still cooks after the Kitchen moves on to other
-  Pots, as in 0.99.16.
+  Pots, as in 0.99.16. Its code is not compared with the release's: a contract at a Pot's address
+  that answers as the Pot would needs a dishonest endpoint (a fork, or an RPC that lies), and the
+  guard trusts the endpoint as every read the command makes does.
 - **Changed** (EVM): a refusal of a Pot says which release the deployed Kitchen mints, read from its
   `potInitCodeHash()`: the compiler, engine and Kitchen versions, and the SDK releases that pinned
   them in the table above; for a hash no release the SDK records, `the Kitchen is newer than this
@@ -158,6 +160,25 @@ SDK. Upgrade @eco-incorp/sauce (sauce update)`. It says where the SDK deploys th
 - **Now refused** (EVM): the same checks run again at every send, for a cook and for
   `Kitchen.deployPot` (`sauce run`, `sauce pot --deploy`, a wallet's send of what another step
   built). A cook to an address with no code is refused there outright.
+- **Now refused** (EVM): a plan with a step the checks refuse, before any of its steps is sent:
+  `sauce send`'s transactions, a wallet's send of a plan (MCP `sauce_wallet_send`), and the
+  transactions `sauce run` sends before its cook (the Pot's deployment, the approvals and transfers
+  of `--fund`). Before, a transfer into the Pot could land and the cook after it be refused. The
+  refusal names the transaction: `nothing was sent — transaction 2 of 2 (cook on Pot 0x…): …`. A cook
+  on a Pot an earlier step deploys is taken. `run` checks the rest of its plan again before each
+  transaction it sends first, since an answer at the terminal can take a while.
+- **Now refused** (EVM): a `Kitchen.deployPot` whose calldata carries no owner and salt, before
+  anything is sent and naming the transaction (`Kitchen.deployPot's calldata carries no owner and
+salt it can be read from …`), where the decoder's own error escaped. `sauce send` still reports
+  what the chain already has of the batch.
+- **Changed** (EVM): on a chain where the released Kitchen has no code, `sign`, `send`, a wallet's
+  send and the MCP `sauce_pot` say `the released Kitchen … is not deployed on <chain>: this SDK's
+cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than that the SDK does
+  not match the Kitchen.
+- **Changed** (EVM): `sauce send` and a wallet's send wait, after a transaction that deploys a Pot,
+  until the endpoint shows the Pot's code, as `sauce run` and `sauce pot --deploy` do, before the
+  transaction after it is checked and sent. An endpoint behind the chain had the cook refused as
+  going to an address with no code.
 - **Changed** (EVM): `simulate` refuses rather than warns, because a simulation on the wrong
   address would report a cook that runs nothing. Offline, nothing can be checked: `tx`, `sign` and
   `pot` say so in their notes (`The Pot's address is NOT checked against the deployed Kitchen`).

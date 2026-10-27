@@ -632,7 +632,12 @@ owner … and salt … at …, but this SDK has it at …`: the chain's Kitchen 
   Pot, and lists the owner's other Pots from the Pot store, each with its release. Nothing was
   simulated, built or sent: when the Kitchen is newer, the user upgrades the package
   (`sauce update`); a listed Pot of the package's own release still cooks, named with
-  `--pot <address>`. Offline nothing is checked, and the notes say
+  `--pot <address>`. A batch (`sauce send`'s transactions, a wallet's send, the approvals and
+  transfers `sauce run --fund` sends first) is checked whole before any of it is sent:
+  `nothing was sent — transaction 2 of 2 (…): …` names the step refused. `the released Kitchen … is
+not deployed on <chain>`: there is no Pot to cook on there. The checks trust the endpoint, as every
+  read does: a contract at a Pot's address that answers as a Pot would needs a dishonest endpoint (a
+  fork, or an RPC that lies). Offline nothing is checked, and the notes say
   `The Pot's address is NOT checked against the deployed Kitchen`.
 - **No signer** (exit 2). `missing a signer…`: the command sends and was given no key. Pass
   `--wallet <name>` (a Solana wallet on Solana), `--keystore <path>` or, on Solana,

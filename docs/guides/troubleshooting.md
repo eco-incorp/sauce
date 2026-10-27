@@ -79,12 +79,27 @@ new one. No flag lifts the refusal ([Supported and preview chains](cli.md#suppor
 sauce simulate: the released engine 0x0F50… is not deployed on gnosis: this SDK's cook cannot run there
 ```
 
-**Cause.** `sauce simulate` runs the cook on the release's engine and Kitchen, and they are not
-deployed on that chain, so there is nothing for the cook to run on. This is not the preview label:
-a preview chain simulates wherever the release is deployed on it.
+**Cause.** The cook runs on the release's engine and Kitchen, and one of them is not deployed on
+that chain, so there is nothing for the cook to run on. `the released Kitchen … is not deployed` is
+the same for the Kitchen: `sign`, `send` and a Pot's deployment say it too. This is not the preview
+label: a preview chain simulates wherever the release is deployed on it.
 
 **Fix.** Simulate on a chain where the release is deployed. `compile`, `globals`, `price`, `pools`
 and `pot` still work on this one.
+
+### `nothing was sent — transaction … of … (…)`
+
+```text
+sauce send: nothing was sent — transaction 2 of 2 (cook on Pot 0x2eC7…): the cook goes to 0x2eC7…, which has no code on base: no Pot is there to run it, and the value it carries would stay at that address. Nothing was sent
+```
+
+**Cause.** Before it sends the first transaction of a batch, `sauce send` checks every cook and Pot
+deployment in it against the chain, together, as a wallet's send and `sauce run` do for theirs. One
+of them fails the check, so none of the batch is sent: the transaction named, and the reason after
+it, are one of the refusals on this page.
+
+**Fix.** Fix what the named transaction's reason says, then sign and send the batch again. A cook
+on a Pot that an earlier transaction of the same batch deploys is fine.
 
 ### `this SDK does not match the deployed Kitchen`
 
