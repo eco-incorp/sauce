@@ -970,10 +970,11 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...(deployFirst
           ? [
               `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account ` +
-                "may send it; the Pot is the owner's either way), and the cook comes last. Send " +
+                "may send it; the Pot is the owner's either way), and the cook comes last. " +
                 (transfers.length === 0
-                  ? "them in order, then fund the Pot with what the program spends."
-                  : "them in order."),
+                  ? "Send the deployment, fund the Pot with what the program spends, then send " +
+                    "the cook (or plan with `--fund`)."
+                  : "Send them in order."),
             ]
           : []),
         ...setup

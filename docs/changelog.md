@@ -123,13 +123,17 @@ nothing moves.
 - **Fixed: the note on a plan whose cook would revert no longer says to fund the Pot's address
   before it is deployed.** `sauce tx` and `sauce_tx` said "Fund the Pot first (its address takes
   tokens before it is deployed)". A Kitchen upgrade that changes the Pot's code moves the Pot's
-  address, and what was sent to the old one stays where no Pot is ever deployed. The note now says
-  to deploy the Pot first, with `sauce pot --deploy` or `sauce run --fund`, which deploys before it
-  funds. With an endpoint, `--fund` plans the transfer after the Pot's deployment; offline, the plan
-  has no deployment step. `sauce sign`'s warning that a Pot with no code cannot pay the Kitchen's
-  fee now says to send `deployPot` before funding it. The README, the quick start (which now
-  deploys the Pot with `sauce pot --deploy` before sending it USDC), the guides and the `sauce-cli`
-  skill no longer say to send tokens to a Pot's address before it exists.
+  address, and what was sent to the old one stays where no Pot is ever deployed. When the plan
+  deploys the Pot and moves nothing into it, the note now says to deploy it first, with
+  `sauce pot --deploy` or `sauce run --fund`, which deploys before it funds; when the plan funds it
+  too, to fund the Pot and build the plan again. With an endpoint, `--fund` plans the transfer after
+  the Pot's deployment; offline, the plan has no deployment step. A plan that deploys the Pot with
+  no `--fund` said to send its transactions in order, then fund the Pot: after the cook. It now says
+  to send the deployment, fund the Pot, then send the cook (or plan with `--fund`). `sauce sign`'s
+  warning that a Pot with no code cannot pay the Kitchen's fee now says to send `deployPot` before
+  funding it. The README, the quick start (which now deploys the Pot with `sauce pot --deploy`
+  before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
+  Pot's address before it exists.
 
 ### Skills
 
