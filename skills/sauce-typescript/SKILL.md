@@ -272,7 +272,7 @@ address in `deployments` is recorded, not proof of live code.
     them. With nothing binding, the plain program is the one to cook. `SVM_SWAP_COSTS` is the cost
     table.
   - Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build pool configs,
-    quote source and swap CPIs over an account loader you supply; a venue swap they build uses a
+    quote source and swap CPIs over an owned-account loader you supply; a venue swap they build uses a
     minimum output of one, so enforce the real minimum with a balance delta in the program.
   - For a local validator or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and
     `svmKitchenIdlPath()` from `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the
