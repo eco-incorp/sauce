@@ -623,8 +623,9 @@ put at a terminal (a password, a yes or no) is not here: pass the flags that ans
 - **The endpoint is another chain's** (exit 1). `the RPC endpoint serves chain …`: use the chain's
   own endpoint, or a `--config` file with each chain's under its id.
 - **The package is not the deployed Kitchen's** (exit 1, EVM). `the Kitchen … puts the Pot of
-owner … and salt … at …, but this SDK has it at …`: the chain's Kitchen puts a Pot not deployed yet
-  at another address than this copy of the package does, so a cook it built would reach no Pot.
+owner … and salt … at …, but this SDK has it at …` (`the Shared Pot of salt …` for a Shared Pot's
+  deployment): the chain's Kitchen puts a Pot not deployed yet at another address than this copy
+  of the package does, so a cook it built would reach no Pot.
   `… is a Pot of compiler …` or `… has code, but no release this SDK knows minted a Pot there`: the
   Pot named was minted by another release, and its engine runs no program this package compiles.
   The message names the release the chain's Kitchen mints and the package versions that pair with

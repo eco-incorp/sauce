@@ -60,7 +60,8 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "SIGNED bytes, in the order to send them: on an EVM chain the raw 0x… hex a signer " +
         "returns (chain and sender read from it), on Solana the base64 wire transaction (every " +
         "signature checked). Every cook and Pot deployment among them is held to the Pot guard " +
-        "first, together: one it refuses (a cook on no Pot, or on a Pot of another release) " +
+        "first, together: one it refuses (a cook on no Pot, or on a Pot of another release; a " +
+        "deployment the Kitchen puts elsewhere, or whose calldata names no owner and salt) " +
         "fails the call before any is sent, naming which. Each is simulated as signed first — " +
         "EVM an eth_call from its sender " +
         "with its gas limit held to what that used, Solana a simulation that checks the " +

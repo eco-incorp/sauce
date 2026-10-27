@@ -99,7 +99,8 @@ of them fails the check, so none of the batch is sent: the transaction named, an
 it, are one of the refusals on this page.
 
 **Fix.** Fix what the named transaction's reason says, then sign and send the batch again. A cook
-on a Pot that an earlier transaction of the same batch deploys is fine.
+on a Pot that an earlier transaction of the same batch deploys is fine: that deployment is checked
+in its place, against where the Kitchen puts its Pot.
 
 ### `this SDK does not match the deployed Kitchen`
 
@@ -112,7 +113,8 @@ The Pot store /home/you/.sauce/pots holds 1 other Pot of 0xYou on base:
 **Cause.** The Kitchen on the chain mints Pots of another release than your copy of the SDK pins,
 and it derives Pot addresses differently. Before the command simulates, builds or sends a cook, a
 Pot deployment or a signed cook on a Pot not deployed yet, it asks the Kitchen where it puts your
-Pot (`predictPot`). A cook sent to the SDK's address would land on an address with no code: it
+Pot (`predictPot`, or `predictSharedPot` for the deployment of a Shared Pot that `sauce send` is
+given). A cook sent to the SDK's address would land on an address with no code: it
 would succeed, run nothing, and leave its value at that address. The message says which release
 the Kitchen mints, from its `potInitCodeHash()`. Where the command keeps the Pot store, it lists
 your other Pots on the chain, each with its release.
