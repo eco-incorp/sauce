@@ -10,7 +10,8 @@
 // release workflow stamps it only after the build.
 //
 // A table this cannot read throws, naming what is wrong, so the build fails rather than ship a
-// refusal that names no SDK release.
+// refusal that names no SDK release; so does a line of it that is not a row, rather than drop the
+// release it was.
 
 const SECTION = /^## Which versions work together\s*$([^]*?)(?=^## |(?![^]))/m;
 const COLUMNS = ["SDK", "Compiler", "v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
@@ -32,10 +33,30 @@ export function sdkReleasesOf(changelog) {
   if (section === undefined) {
     throw new Error(`${WHERE}: no "## Which versions work together" section`);
   }
-  const [header, separator, ...rows] = section
-    .split("\n")
-    .filter((line) => line.trim().startsWith("|"))
-    .map(cellsOf);
+  // The table is its header and every line after it up to the first blank line, as Markdown reads
+  // it: each of those is a row, written between pipes. A line there that is not one, or a row after
+  // that blank line, which Markdown shows as text, is refused rather than left out.
+  const lines = section.split("\n").map((line) => line.trim());
+  const start = lines.findIndex((line) => line.startsWith("|"));
+  const end = start < 0 ? -1 : lines.indexOf("", start);
+  const table = start < 0 ? [] : lines.slice(start, end < 0 ? undefined : end);
+  for (const line of table) {
+    if (!line.startsWith("|") || !line.endsWith("|")) {
+      throw new Error(
+        `${WHERE}: the line "${line}" in the version table is not a row: a row starts and ends ` +
+          'with "|"',
+      );
+    }
+  }
+  const stray =
+    start < 0 ? undefined : lines.slice(start + table.length).find((line) => line.startsWith("|"));
+  if (stray !== undefined) {
+    throw new Error(
+      `${WHERE}: the row "${stray}" follows a blank line, which ends the version table, so it is ` +
+        "not read as one of its rows",
+    );
+  }
+  const [header, separator, ...rows] = table.map(cellsOf);
   if (
     header === undefined ||
     separator === undefined ||

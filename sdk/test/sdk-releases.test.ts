@@ -95,4 +95,23 @@ describe("the SDK releases a refusal names", () => {
       /0\.99\.9: 3 cells, and the table has 6 columns/,
     );
   });
+
+  it("refuse a table row they would skip, rather than drop a released SDK without saying so", () => {
+    const row = (sdk: string, lead = "| ") =>
+      `${lead}${sdk} | 2.5.0 | 1.2.0 | 1.2.0 | 1.3.0 | 1.0.0 |`;
+    const notARow = /the line "0\.99\.9 \| 2\.5\.0[^"]*" in the version table is not a row/;
+    // A released row that lost its leading pipe, between rows that kept theirs, and as the last.
+    expect(() =>
+      sdkReleasesOf(
+        withTable([HEADER, row("0.99.10"), row("0.99.9", ""), row("0.99.8")].join("\n")),
+      ),
+    ).toThrow(notARow);
+    expect(() =>
+      sdkReleasesOf(withTable([HEADER, row("0.99.10"), row("0.99.9", "")].join("\n"))),
+    ).toThrow(notARow);
+    // A row a blank line cuts off from the table, which a renderer shows as text.
+    expect(() =>
+      sdkReleasesOf(withTable([HEADER, row("0.99.10"), "", row("0.99.9")].join("\n"))),
+    ).toThrow(/the row "\| 0\.99\.9 \| 2\.5\.0[^"]*" follows a blank line/);
+  });
 });
