@@ -818,6 +818,15 @@ describe("the Pot's old name and the native coin's old spelling are refused, nam
     },
   );
 
+  it.each(["(pot.owner as Address).ETH", "pot.owner!.ETH", "(pot.owner satisfies Address).ETH"])(
+    "keeps the native-coin advice on the public owner expression in %s",
+    (expression) => {
+      const message = refusal("base", `return ${expression};`);
+      expect(message).toContain("write `pot.owner.balance`");
+      expect(message).not.toContain("__sauce_Pot");
+    },
+  );
+
   it("on Arc, whose native coin is the token USDC, pot.owner.USDC is the token and pot.owner.balance the coin", () => {
     const owner = { contracts: { PotOwner: { abi: [...POT_OWNER_ABI] } } };
     const hex = (body: string, options = {}) =>

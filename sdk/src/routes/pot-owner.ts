@@ -82,7 +82,17 @@ export function rewritePotOwner(
       return;
     }
     if (property.name === BALANCE_MEMBER) balances.set(n.object as AstNode, n);
-    if (property.name === native?.symbol) symbols.set(n.object as AstNode, n);
+    if (property.name === native?.symbol) {
+      let holder = n.object as AstNode;
+      while (
+        holder.type === "TSAsExpression" ||
+        holder.type === "TSNonNullExpression" ||
+        holder.type === "TSSatisfiesExpression"
+      ) {
+        holder = holder.expression as AstNode;
+      }
+      symbols.set(holder, n);
+    }
   });
   const splices = reads.map((read): Splice => {
     if (native !== undefined && symbols.has(read) && !called.has(symbols.get(read)!)) {
