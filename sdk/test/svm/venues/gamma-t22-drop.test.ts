@@ -15,7 +15,8 @@
 import { getAddressCodec, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { fetchGammaPoolConfig } from "../../../src/svm/venues/gamma/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   makeLegacyMint,
   makeT22Mint,
@@ -102,7 +103,7 @@ interface Opts {
   p1?: Address;
   epoch?: bigint;
 }
-function loaderWith(o: Opts): AccountLoader {
+function loaderWith(o: Opts): OwnedAccountLoader {
   const map: Record<string, Uint8Array> = {
     [POOL]: poolBytes(o.p0, o.p1 ?? TOKENKEG),
     [AMM_CONFIG]: cfgBytes(),
@@ -112,7 +113,7 @@ function loaderWith(o: Opts): AccountLoader {
     [MINT1]: o.mint1 ?? makeLegacyMint(),
     [CLOCK]: clockBytes(o.epoch ?? 0n),
   };
-  return (async (a: string) => map[a] ?? null) as unknown as AccountLoader;
+  return ownedByShape((async (a: string) => map[a] ?? null) as unknown as AccountLoader);
 }
 
 describe("gamma Token-2022 handling", () => {

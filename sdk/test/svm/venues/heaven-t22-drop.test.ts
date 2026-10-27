@@ -15,7 +15,8 @@
 import { getAddressCodec, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { heaven, type HeavenPoolConfig } from "../../../src/svm/venues/heaven/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../../src/svm/venues/types.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   makeLegacyMint,
   makeT22Mint,
@@ -24,8 +25,10 @@ import {
 } from "../fixtures/token-2022/synth.js";
 
 // fetchHeavenPoolConfig is module-local; drive it through the venue facade.
-const fetchHeavenPoolConfig = (load: AccountLoader, pool: Address): Promise<HeavenPoolConfig> =>
-  heaven.fetchPoolConfig(load, pool) as Promise<HeavenPoolConfig>;
+const fetchHeavenPoolConfig = (
+  load: OwnedAccountLoader,
+  pool: Address,
+): Promise<HeavenPoolConfig> => heaven.fetchPoolConfig(load, pool) as Promise<HeavenPoolConfig>;
 
 const codec = getAddressCodec();
 const decoder = getAddressDecoder();
@@ -107,7 +110,11 @@ function chainlinkBytes(): Uint8Array {
   return d;
 }
 
-function loaderWith(tokenAMint: Uint8Array, tokenAProgram: Address, epoch = 100n): AccountLoader {
+function loaderWith(
+  tokenAMint: Uint8Array,
+  tokenAProgram: Address,
+  epoch = 100n,
+): OwnedAccountLoader {
   const map: Record<string, Uint8Array> = {
     [POOL]: poolBytes(tokenAProgram),
     [PROTOCOL_CONFIG]: protocolConfigBytes(),
@@ -116,7 +123,8 @@ function loaderWith(tokenAMint: Uint8Array, tokenAProgram: Address, epoch = 100n
     [WSOL]: makeLegacyMint(),
     [CHAINLINK]: chainlinkBytes(),
   };
-  return (async (a: string) => map[a] ?? null) as unknown as AccountLoader;
+  // Each mint owned as its bytes say, which is the program the pool records for it here.
+  return ownedByShape((async (a: string) => map[a] ?? null) as unknown as AccountLoader);
 }
 
 describe("heaven Token-2022 handling", () => {

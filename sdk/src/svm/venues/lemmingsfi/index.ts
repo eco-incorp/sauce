@@ -147,7 +147,8 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { readUintLE } from "../math.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -240,9 +241,10 @@ function mintDecimalsFrom(mint: Address, data: Uint8Array | null): number {
 }
 
 export async function fetchLemmingsFiPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<LemmingsFiPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -256,14 +258,19 @@ export async function fetchLemmingsFiPoolConfig(
   // decimals read below. The `Swap` ix is legacy-SPL only (Tokenkeg account[7]),
   // so SELF-DROP a Token-2022 mint (or one carrying an un-routable extension) by
   // throwing — the SvmRoute orchestrator catches a fetchPoolConfig throw and
-  // drops the venue. An unreadable mint would fail the decimals read below anyway.
-  const [mintAData, mintBData] = await Promise.all([load(mintA), load(mintB)]);
-  for (const [mint, mintData] of [
-    [mintA, mintAData],
-    [mintB, mintBData],
+  // drops the venue. The mint's token program is its OWNER (an extensionless
+  // Token-2022 mint is byte-identical to a legacy one). An unreadable mint would
+  // fail the decimals read below anyway.
+  const [mintAAccount, mintBAccount] = await Promise.all([owned(mintA), owned(mintB)]);
+  const mintAData = mintAAccount?.data ?? null;
+  const mintBData = mintBAccount?.data ?? null;
+  for (const [mint, account] of [
+    [mintA, mintAAccount],
+    [mintB, mintBAccount],
   ] as const) {
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    if (account === null) continue;
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

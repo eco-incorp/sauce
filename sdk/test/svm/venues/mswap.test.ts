@@ -23,7 +23,7 @@ import {
   MSWAP_PROGRAM_ID,
   SWAP_GLOBAL_ID,
 } from "../../../src/svm/venues/mswap/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 
 const codec = getAddressCodec();
 const TOKENKEG = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -93,22 +93,24 @@ async function globalPda(extProgramId: Address): Promise<Address> {
   return pda;
 }
 
-/** A loader serving SwapGlobal + both legs' ExtGlobalV2; null otherwise. */
-async function buildLoader(entries: Entry[]): Promise<AccountLoader> {
+/** A loader serving SwapGlobal + both legs' ExtGlobalV2, each owned by its program; null otherwise. */
+async function buildLoader(entries: Entry[]): Promise<OwnedAccountLoader> {
   const swapGlobal = buildSwapGlobal(entries);
   const [globalA, globalB] = await Promise.all([
     globalPda(EXT_PROGRAM_A),
     globalPda(EXT_PROGRAM_B),
   ]);
   const extGlobal = buildExtGlobal();
-  const byAddr = new Map<string, Uint8Array>([
-    [SWAP_GLOBAL_ID as string, swapGlobal],
-    [globalA as string, extGlobal],
-    [globalB as string, extGlobal],
+  const byAddr = new Map<string, { data: Uint8Array; owner: Address }>([
+    [SWAP_GLOBAL_ID as string, { data: swapGlobal, owner: MSWAP_PROGRAM_ID }],
+    [globalA as string, { data: extGlobal, owner: EXT_PROGRAM_A }],
+    [globalB as string, { data: extGlobal, owner: EXT_PROGRAM_B }],
   ]);
   return async (addr) => {
-    const data = byAddr.get(addr as string);
-    return data === undefined ? null : new Uint8Array(data);
+    const account = byAddr.get(addr as string);
+    return account === undefined
+      ? null
+      : { data: new Uint8Array(account.data), owner: account.owner };
   };
 }
 

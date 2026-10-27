@@ -71,4 +71,13 @@ describe("pumpswap Token-2022 handling", () => {
     expect(cfg.baseTokenProgram).toBe(TOKENKEG);
     expect(cfg.quoteTokenProgram).toBe(TOKENKEG);
   });
+
+  it("an extensionless (82-byte) Token-2022-owned base mint routes as Token-2022, by its owner", async () => {
+    const cfg = await pumpswapAdapter.fetchPoolConfig(
+      fixtureLoader(withBaseMint(makeLegacyMint(), TOKEN_2022)),
+      POOL,
+    );
+    expect(cfg.baseTokenProgram).toBe(TOKEN_2022);
+    expect(cfg.quoteTokenProgram).toBe(TOKENKEG);
+  });
 });

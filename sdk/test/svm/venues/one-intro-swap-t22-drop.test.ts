@@ -6,7 +6,8 @@
  * legacy path is byte-identical.
  */
 import { address, getAddressCodec } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import { fetchOneIntroSwapPoolConfig } from "../../../src/svm/venues/one-intro-swap/index.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
@@ -27,14 +28,17 @@ function makePoolState(): Uint8Array {
   return buf;
 }
 
-function loaderWith(mint0Data: Uint8Array | null, mint1Data: Uint8Array | null): AccountLoader {
+function loaderWith(
+  mint0Data: Uint8Array | null,
+  mint1Data: Uint8Array | null,
+): OwnedAccountLoader {
   const pool = makePoolState();
-  return async (addr) => {
+  return ownedByShape(async (addr) => {
     if (addr === POOL) return new Uint8Array(pool);
     if (addr === MINT0) return mint0Data === null ? null : new Uint8Array(mint0Data);
     if (addr === MINT1) return mint1Data === null ? null : new Uint8Array(mint1Data);
     return null;
-  };
+  });
 }
 
 describe("one-intro-swap Token-2022 self-drop", () => {
@@ -48,6 +52,13 @@ describe("one-intro-swap Token-2022 self-drop", () => {
     await expect(
       fetchOneIntroSwapPoolConfig(loaderWith(makeLegacyMint(), makeT22Mint()), POOL),
     ).rejects.toThrow(/is Token-2022/);
+  });
+
+  it("drops the pool when mint0 is an 82-byte mint owned by Token-2022 (extensionless Token-2022)", async () => {
+    const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT0 ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
+    await expect(fetchOneIntroSwapPoolConfig(load, POOL)).rejects.toThrow(/is Token-2022/);
   });
 
   it("still resolves with two legacy mints — byte-identical legacy path", async () => {

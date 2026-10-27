@@ -108,7 +108,8 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "humidifi";
 
@@ -232,9 +233,10 @@ export interface HumidiFiPoolConfig extends PoolConfig {
  * dropped like any other vanished pool, never silently misquoted.
  */
 export async function fetchHumidifiConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<HumidiFiPoolConfig> {
+  const load = accountDataLoader(owned);
   const entry = HUMIDIFI_POOL_REGISTRY[pool as unknown as string];
   if (entry === undefined) {
     throw new Error(

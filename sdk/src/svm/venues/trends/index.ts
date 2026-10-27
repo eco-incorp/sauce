@@ -156,8 +156,10 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { classifyMintProgram } from "../../token-program.js";
 
 const SLUG = "trends";
 export const TRENDS_PROGRAM_ID = address("CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz");
@@ -184,14 +186,16 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 }
 
 /**
- * Mirrors pumpswap's `detectTokenProgram` convention: a classic Tokenkeg mint
- * is always exactly 82 bytes; anything longer is Token-2022, whose TLV
- * extension tail (starting at byte 166) is scanned for a `TransferFeeConfig`
- * extension (type 1) — REJECTED, since a transfer fee would make vault
- * deltas diverge from the quoted/user amount.
+ * The base mint's token program is its OWNER (an extensionless Token-2022 mint
+ * is exactly 82 bytes, byte-identical to a classic Tokenkeg mint). A
+ * Token-2022 mint with extensions must carry the Mint account-type byte, and
+ * its TLV extension tail (starting at byte 166) is scanned for a
+ * `TransferFeeConfig` extension (type 1) — REJECTED, since a transfer fee
+ * would make vault deltas diverge from the quoted/user amount.
  */
-function detectBaseTokenProgram(mint: Address, data: Uint8Array): Address {
-  if (data.length === 82) return TOKEN_PROGRAM;
+function detectBaseTokenProgram(mint: Address, data: Uint8Array, owner: Address): Address {
+  const program = classifyMintProgram(mint, data, owner);
+  if (program === TOKEN_PROGRAM || data.length === 82) return program;
   if (data.length < 166) {
     throw new Error(
       `${SLUG}: base mint ${mint} data is ${data.length} bytes, not a recognizable mint layout`,
@@ -245,9 +249,10 @@ export interface TrendsPoolConfig extends PoolConfig {
 /** Fetch + decode one Pool account. Read-only against the loader; reserves are read LIVE on-chain
  *  at swap time (see emitSetup) — nothing about the curve state is baked here. */
 export async function fetchTrendsPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<TrendsPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -271,10 +276,10 @@ export async function fetchTrendsPoolConfig(
   const baseVault = codec.decode(data.subarray(OFF_BASE_VAULT, OFF_BASE_VAULT + 32)) as Address;
   const quoteVault = codec.decode(data.subarray(OFF_QUOTE_VAULT, OFF_QUOTE_VAULT + 32)) as Address;
 
-  const mintData = await load(baseMint);
-  if (mintData === null)
+  const mintAccount = await owned(baseMint);
+  if (mintAccount === null)
     throw new Error(`${SLUG}: base mint ${baseMint} of pool ${pool} not found`);
-  const baseTokenProgram = detectBaseTokenProgram(baseMint, mintData);
+  const baseTokenProgram = detectBaseTokenProgram(baseMint, mintAccount.data, mintAccount.owner);
 
   return {
     venue: SLUG,

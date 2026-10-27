@@ -3,12 +3,18 @@
  * PAIR account whose mintA is a Token-2022 mint must make fetchHadronConfig
  * REJECT (the graceful self-drop signal). The Token-2022 check runs before the
  * ATA vault derivation, so the drop needs no vault fixtures; the legacy path
- * (mints classic, vaults present) is unaffected.
+ * (mints classic, vaults present) is unaffected. A mint is classified by its
+ * OWNER: an extensionless Token-2022 mint is 82 bytes, byte for byte a legacy
+ * one, so only the owner can tell them apart.
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  type AccountLoader,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import {
   fetchHadronConfig,
   HADRON_PAIR_ACCOUNT_SIZE,
@@ -16,6 +22,7 @@ import {
   HADRON_SPL_TOKEN_ACCOUNT_SIZE,
 } from "../../../src/svm/venues/hadron/index.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
+import { ownedByShape } from "../fixtures.js";
 
 const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
 // mintA MUST be a HADRON_ASSET_REGISTRY key, mintB its registered quote.
@@ -35,17 +42,42 @@ function buildPair(): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
-  return async (addr: Address) => map[addr] ?? null;
+/** Owners by data shape, with `owners` naming the ones a test sets explicitly. */
+function loaderFrom(
+  map: Record<string, Uint8Array>,
+  owners: Record<string, Address> = {},
+): OwnedAccountLoader {
+  const data: AccountLoader = async (addr: Address) => map[addr] ?? null;
+  const byShape = ownedByShape(data);
+  return async (addr: Address) => {
+    const account = await byShape(addr);
+    const owner = owners[addr];
+    return account === null || owner === undefined ? account : { data: account.data, owner };
+  };
 }
 
 describe("hadron Token-2022 self-drop", () => {
   it("REJECTS a pool whose mintA is a Token-2022 mint", async () => {
-    const load = loaderFrom({
-      [POOL]: buildPair(),
-      [MINT_A]: makeT22Mint(),
-      [MINT_B]: makeLegacyMint(),
-    });
+    const load = loaderFrom(
+      {
+        [POOL]: buildPair(),
+        [MINT_A]: makeT22Mint(),
+        [MINT_B]: makeLegacyMint(),
+      },
+      { [MINT_A]: TOKEN_2022_PROGRAM_ID },
+    );
+    await expect(fetchHadronConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("REJECTS a pool whose mintA is an extensionless (82-byte) Token-2022 mint", async () => {
+    const load = loaderFrom(
+      {
+        [POOL]: buildPair(),
+        [MINT_A]: makeLegacyMint(),
+        [MINT_B]: makeLegacyMint(),
+      },
+      { [MINT_A]: TOKEN_2022_PROGRAM_ID },
+    );
     await expect(fetchHadronConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 

@@ -7,8 +7,10 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
 import { fetchHeliumTreasuryPoolConfig } from "../../../src/svm/venues/helium-treasury/index.js";
+import { ownedByShape } from "../fixtures.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
@@ -49,8 +51,8 @@ function buildTreasuryTokenAccount(): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
-  return async (addr: Address) => map[addr] ?? null;
+function loaderFrom(map: Record<string, Uint8Array>): OwnedAccountLoader {
+  return ownedByShape(async (addr: Address) => map[addr] ?? null);
 }
 
 describe("helium-treasury Token-2022 self-drop", () => {
@@ -61,6 +63,18 @@ describe("helium-treasury Token-2022 self-drop", () => {
       [SUPPLY_MINT]: makeT22Mint(),
       // TREASURY_MINT (as a mint account) intentionally unreadable -> continue
     });
+    await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("REJECTS a treasury whose supplyMint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const shaped = loaderFrom({
+      [POOL]: buildMgmt(),
+      [TREASURY]: buildTreasuryTokenAccount(),
+    });
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === SUPPLY_MINT
+        ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID }
+        : shaped(addr);
     await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 

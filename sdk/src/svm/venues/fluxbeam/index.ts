@@ -64,24 +64,13 @@
  * requested pair is the reverse of its stored A/B order — exactly like
  * orca-legacy-token-swap today.
  *
- * TOKEN-2022 MINT DETECTION: `AccountLoader` returns only account BYTES (no
- * owner), and unlike raydium-cp-swap's `PoolState` (which stores each leg's
- * owning program explicitly, added specifically for Token-2022 support),
- * FluxBeam's pool account carries no per-leg program field at all. The
- * classic Tokenkeg program's `Mint::unpack` requires EXACTLY 82 bytes — it
- * cannot create or read an account of any other length — so any mint account
- * longer than 82 bytes MUST be owned by Token-2022 (that program is the only
- * one supporting the longer, extension-carrying layout); `scanMint` uses this
- * as a SOUND (not merely heuristic) direction. The one residual gap runs the
- * other way: a Token-2022 mint deployed with ZERO extensions is also exactly
- * 82 bytes and is indistinguishable from a classic mint by data alone, so it
- * would be mis-tagged Tokenkeg here. This is a disclosed, narrow residual —
- * no extension means no different transfer behavior either way except the
- * CPI's target program id, and a bare-extensionless Token-2022 mint actively
- * trading on a permissionless AMM is vanishingly unlikely (the entire reason
- * to mint under Token-2022 over classic is to use an extension) — a
- * misclassification there fails the swap CPI loudly (wrong owning program),
- * never silently mis-quotes.
+ * TOKEN-2022 MINT DETECTION: unlike raydium-cp-swap's `PoolState` (which
+ * stores each leg's owning program explicitly, added specifically for
+ * Token-2022 support), FluxBeam's pool account carries no per-leg program
+ * field at all, so each leg's token program is its mint's OWNER, read with
+ * the mint through the `OwnedAccountLoader`. Data shape alone cannot decide
+ * it: a Token-2022 mint deployed with ZERO extensions is exactly 82 bytes,
+ * byte-identical to a classic mint, and only its owner tells the two apart.
  *
  * TRANSFER-FEE TIER SELECTION: a Token-2022 `TransferFeeConfig` extension
  * carries an `older`/`newer` double-buffered fee (the newer only takes effect
@@ -107,7 +96,9 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { memoizedCreateProgramAddress } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import { classifyMintProgram } from "../../token-program.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "fluxbeam";
 export const FLUXBEAM_PROGRAM_ID = address("FLUXubRmkEi2q6K3Y9kBPg9248ggaZVsoSFhtJHSrm1X");
@@ -196,16 +187,16 @@ function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
 }
 
 /**
- * Decodes one leg's mint: the owning token program (SOUND for >82 bytes — see
- * the file header) plus its TransferFeeConfig tiers, if any. Throws on a
+ * Decodes one leg's mint: the owning token program (its OWNER — see the file
+ * header) plus its TransferFeeConfig tiers, if any. Throws on a
  * TransferHook/NonTransferable extension (unsupported — self-drops the pool).
  */
-function scanMint(mint: Address, data: Uint8Array): MintInfo {
+function scanMint(mint: Address, data: Uint8Array, owner: Address): MintInfo {
   if (data.length < 82) {
     throw new Error(`fluxbeam: mint ${mint} is ${data.length} bytes, too short to be an SPL mint`);
   }
-  if (data.length === 82) return { tokenProgram: TOKENKEG_PROGRAM, tiers: null };
-  // > 82 bytes is possible ONLY under Token-2022 (Tokenkeg's Mint::unpack requires exactly 82).
+  const tokenProgram = classifyMintProgram(mint, data, owner);
+  if (tokenProgram !== TOKEN_2022_PROGRAM) return { tokenProgram: TOKENKEG_PROGRAM, tiers: null };
   if (data.length <= TOKEN_2022_BASE_LEN || data[TOKEN_2022_BASE_LEN] !== 1) {
     // Extended allocation with no parseable extension tail (or an account-type byte other than
     // Mint=1, which should not happen for a real mint) — no fee we can see either way.
@@ -251,9 +242,10 @@ const activeTier = (tiers: MintTiers, epoch: bigint): FluxBeamFeeTier =>
   epoch >= tiers.newer.epoch ? tiers.newer : tiers.older;
 
 export async function fetchFluxBeamPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<FluxBeamPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool ${pool} account not found`);
   if (data.length !== FLUXBEAM_POOL_SIZE) {
@@ -293,11 +285,11 @@ export async function fetchFluxBeamPoolConfig(
     }
   }
 
-  const [mintAData, mintBData] = await Promise.all([load(mintA), load(mintB)]);
-  if (mintAData === null) throw new Error(`${SLUG}: mint ${mintA} of pool ${pool} not found`);
-  if (mintBData === null) throw new Error(`${SLUG}: mint ${mintB} of pool ${pool} not found`);
-  const infoA = scanMint(mintA, mintAData);
-  const infoB = scanMint(mintB, mintBData);
+  const [mintAAccount, mintBAccount] = await Promise.all([owned(mintA), owned(mintB)]);
+  if (mintAAccount === null) throw new Error(`${SLUG}: mint ${mintA} of pool ${pool} not found`);
+  if (mintBAccount === null) throw new Error(`${SLUG}: mint ${mintB} of pool ${pool} not found`);
+  const infoA = scanMint(mintA, mintAAccount.data, mintAAccount.owner);
+  const infoB = scanMint(mintB, mintBAccount.data, mintBAccount.owner);
 
   let epoch = 0n;
   if (infoA.tiers !== null || infoB.tiers !== null) {

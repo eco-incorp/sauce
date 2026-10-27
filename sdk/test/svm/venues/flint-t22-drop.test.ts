@@ -9,14 +9,21 @@
  * legacy pair is unchanged.
  */
 import type { Address } from "@solana/kit";
-import { flint, FLINT_PAIR_REGISTRY } from "../../../src/svm/venues/flint/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  flint,
+  FLINT_PAIR_REGISTRY,
+  FLINT_PROGRAM_ID,
+} from "../../../src/svm/venues/flint/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 
 const TOKENKEG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 /** flint.fetchPoolConfig only requires the pool account to exist. */
-const okLoader: AccountLoader = (async () => new Uint8Array(2368)) as unknown as AccountLoader;
+const okLoader: OwnedAccountLoader = async () => ({
+  data: new Uint8Array(2368),
+  owner: FLINT_PROGRAM_ID,
+});
 
 /** The registry key whose entry carries a Token-2022 side (has a checkedMint). */
 const t22Pool = Object.keys(FLINT_PAIR_REGISTRY).find(

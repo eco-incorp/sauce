@@ -40,7 +40,14 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { assertOracleExponent } from "../oracle-exponent.js";
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type {
+  OwnedAccountLoader,
+  PoolConfig,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 import { INSTRUCTIONS_SYSVAR } from "../../cpi-probe.js";
@@ -173,9 +180,9 @@ interface DecodedFeed {
 
 /**
  * Classify + decode a feed by its documented Pyth-v2 magic (0xa1b2c3d4 @0) —
- * the bare AccountLoader gives bytes, not owner, so the magic (a stable
- * discriminator) is the layout anchor. Doves (0x17fc67bd) / Minimox
- * (0xcab93a6d) fail the magic and are treated as P-B (unpinned layout).
+ * the magic (a stable discriminator), not the feed's owner, is the layout
+ * anchor. Doves (0x17fc67bd) / Minimox (0xcab93a6d) fail the magic and are
+ * treated as P-B (unpinned layout).
  */
 function decodeFeed(data: Uint8Array): DecodedFeed {
   if (data.length < FEED_STATUS_OFF + 4) return { expo: 0, known: false };
@@ -258,7 +265,8 @@ export const obricV2 = {
    * instructions sysvar (the introspecting P-C pools) or a feed whose layout
    * is not the documented Pyth-v2 relay (Doves/Minimox — P-B, unpinned layout).
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<ObricV2PoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<ObricV2PoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`obric-v2 pool ${pool} account not found`);
     const d = decodePool(pool, data);
@@ -272,8 +280,8 @@ export const obricV2 = {
     }
 
     // Both mints must be classic Tokenkeg (the swap carries one token program).
-    const [mintXData, mintYData] = await Promise.all([load(d.mintX), load(d.mintY)]);
-    if (mintXData === null || mintYData === null) {
+    const [mintXAccount, mintYAccount] = await Promise.all([owned(d.mintX), owned(d.mintY)]);
+    if (mintXAccount === null || mintYAccount === null) {
       throw new Error(`obric-v2 pool ${pool} mint account(s) not found`);
     }
     const [feedXData, feedYData] = await Promise.all([load(d.feedX), load(d.feedY)]);
@@ -289,26 +297,29 @@ export const obricV2 = {
         );
       return mintData[44];
     };
-    const xDecimals = dec(d.mintX, mintXData);
-    const yDecimals = dec(d.mintY, mintYData);
+    const xDecimals = dec(d.mintX, mintXAccount.data);
+    const yDecimals = dec(d.mintY, mintYAccount.data);
 
     // Token-2022 safety: the swap carries one token program (Tokenkeg), so a
     // Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS the
     // pool via a thrown, clearly-described error — the SvmRoute orchestrator
-    // catches a fetchPoolConfig throw and drops the venue. The legacy path stays
-    // byte-identical: a classic 82-byte mint classifies as legacy → no throw. We
-    // reuse the mint bytes already loaded above for the decimals decode.
-    for (const [mint, mintData] of [
-      [d.mintX, mintXData],
-      [d.mintY, mintYData],
+    // catches a fetchPoolConfig throw and drops the venue. The mint's token
+    // program is its OWNER (an extensionless Token-2022 mint is byte-identical
+    // to a legacy one). The legacy path stays byte-identical: a Tokenkeg-owned
+    // mint → no throw. We reuse the mint accounts already loaded above for the
+    // decimals decode.
+    for (const [mint, mintAccount] of [
+      [d.mintX, mintXAccount],
+      [d.mintY, mintYAccount],
     ] as const) {
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      if (
+        classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID
+      ) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );
       }
-      const { blocking } = parseMintExtensions(mintData);
+      const { blocking } = parseMintExtensions(mintAccount.data);
       if (blocking.length > 0) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

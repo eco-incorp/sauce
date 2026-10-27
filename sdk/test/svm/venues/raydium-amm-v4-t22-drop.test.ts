@@ -13,21 +13,21 @@ import { raydiumAmmV4 } from "../../../src/svm/venues/raydium-amm-v4/index.js";
 import type { RaydiumAmmV4PoolConfig } from "../../../src/svm/venues/raydium-amm-v4/index.js";
 import { loadFixtures, fixtureLoader } from "../fixtures.js";
 import type { AccountFixture } from "../fixtures.js";
-import { makeT22Mint } from "../fixtures/token-2022/synth.js";
+import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
 const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/raydium-amm-v4");
 const POOL = address("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2");
 const COIN_MINT = "So11111111111111111111111111111111111111112"; // WSOL (coin mint)
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // pc mint
 
-/** The vault-only fixtures plus a synthetic Token-2022 account at `mint`. */
-function withT22Mint(mint: string): AccountFixture[] {
+/** The vault-only fixtures plus a synthetic Token-2022-owned mint (`data`, by default extended) at `mint`. */
+function withT22Mint(mint: string, data: Uint8Array = makeT22Mint()): AccountFixture[] {
   return [
     ...loadFixtures(FIXTURES),
     {
       address: mint,
       owner: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-      base64Data: Buffer.from(makeT22Mint()).toString("base64"),
+      base64Data: Buffer.from(data).toString("base64"),
     },
   ];
 }
@@ -40,6 +40,11 @@ describe("raydium-amm-v4 Token-2022 self-drop", () => {
 
   it("drops the pool when the pc mint is Token-2022", async () => {
     const load = fixtureLoader(withT22Mint(USDC_MINT));
+    await expect(raydiumAmmV4.fetchPoolConfig(load, POOL)).rejects.toThrow(/is Token-2022/);
+  });
+
+  it("drops the pool when the coin mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const load = fixtureLoader(withT22Mint(COIN_MINT, makeLegacyMint()));
     await expect(raydiumAmmV4.fetchPoolConfig(load, POOL)).rejects.toThrow(/is Token-2022/);
   });
 

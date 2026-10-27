@@ -14,7 +14,8 @@ import {
   OFF_MINT_B,
   POOL_ACCOUNT_SIZE,
 } from "../../../src/svm/venues/riptide/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci");
@@ -29,13 +30,13 @@ function synthPool(): Uint8Array {
   return data;
 }
 
-function loader(mintOverrides: Record<string, Uint8Array>): AccountLoader {
+function loader(mintOverrides: Record<string, Uint8Array>): OwnedAccountLoader {
   const pool = synthPool();
-  return async (addr) => {
+  return ownedByShape(async (addr) => {
     if (addr === POOL) return pool;
     if (addr in mintOverrides) return mintOverrides[addr];
     return null;
-  };
+  });
 }
 
 describe("riptide Token-2022 self-drop", () => {
@@ -59,5 +60,12 @@ describe("riptide Token-2022 self-drop", () => {
     await expect(fetchPoolConfig(loader({ [MINT_B]: makeT22Mint() }), POOL)).rejects.toThrow(
       /Token-2022/,
     );
+  });
+
+  it("drops when mintA is an 82-byte mint owned by Token-2022 (extensionless Token-2022)", async () => {
+    const shaped = loader({ [MINT_B]: makeLegacyMint() });
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT_A ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
+    await expect(fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 });

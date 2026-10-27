@@ -11,7 +11,7 @@ import type { MeteoraDammV1StablePoolConfig } from "../../../src/svm/venues/mete
 import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
 import type { AccountFixture } from "../fixtures.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/meteora-damm-v1-stable/", import.meta.url));
 const POOL = address("32D4zRxNc1EssbJieVHfPhZM3rH6CzfUPrWUuWxD9prG");
@@ -34,6 +34,11 @@ function withMintFixture(data: Uint8Array): AccountFixture[] {
 describe("meteora-damm-v1-stable Token-2022 self-drop", () => {
   it("drops the pool when tokenAMint is a Token-2022 mint", async () => {
     const load = fixtureLoader(withMintFixture(makeT22Mint()));
+    await expect(meteoraDammV1Stable.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("drops the pool when tokenAMint is an 82-byte mint owned by Token-2022 (extensionless Token-2022)", async () => {
+    const load = fixtureLoader(withMintFixture(makeLegacyMint()));
     await expect(meteoraDammV1Stable.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 

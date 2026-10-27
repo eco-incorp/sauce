@@ -91,7 +91,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -429,9 +430,10 @@ async function resolveWindowFromBitmap(
 
 /** Fetch + decode one Invariant Pool and freeze both directions' boundary windows. Read-only against the loader. */
 export async function fetchInvariantPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<InvariantPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE)
@@ -458,12 +460,13 @@ export async function fetchInvariantPoolConfig(
   // throw and drops the venue. An unreadable mint falls back to the legacy
   // assumption, keeping every existing fixture-driven test green.
   const _mints = [tokenXMint, tokenYMint];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const account = _mintAccounts[_i]!;
+    if (account === null) continue;
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

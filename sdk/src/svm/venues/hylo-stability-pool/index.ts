@@ -95,7 +95,8 @@
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 /** The Earn Pool program — this family's discovered-pool owner. */
 export const HYLO_STABILITY_POOL_PROGRAM_ID = address(
@@ -152,9 +153,10 @@ export interface HyloStabilityPoolConfig extends PoolConfig {
 }
 
 async function fetchHyloStabilityPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<HyloStabilityPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`hylo-stability-pool ${pool} account not found`);
   if (data.length !== POOL_CONFIG_SIZE) {
@@ -210,6 +212,6 @@ async function fetchHyloStabilityPoolConfig(
 export const hyloStabilityPool = {
   slug: "hylo-stability-pool" as const,
   programId: HYLO_STABILITY_POOL_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<HyloStabilityPoolConfig> =>
-    fetchHyloStabilityPoolConfig(load, pool),
+  fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<HyloStabilityPoolConfig> =>
+    fetchHyloStabilityPoolConfig(owned, pool),
 };

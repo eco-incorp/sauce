@@ -165,7 +165,8 @@
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { base64Bytes } from "../../../bytes.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "alphaq";
 export const ALPHAQ_PROGRAM_ID = address("ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA");
@@ -495,10 +496,11 @@ export interface AlphaqPoolConfig extends PoolConfig {
  * dropped, never crashed on.
  */
 export async function fetchAlphaqPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   now?: bigint,
 ): Promise<AlphaqPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`alphaq market ${pool} not found`);
   if (data.length !== MARKET_SIZE) {

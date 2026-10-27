@@ -7,7 +7,8 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   fetchPerpsJlpConfig,
   JLP_POOL_ADDRESS,
@@ -57,8 +58,8 @@ function buildPool(custodyIn: Address, custodyOut: Address): Uint8Array {
   return data;
 }
 
-function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
-  return async (addr: Address) => map[addr] ?? null;
+function loaderFrom(map: Record<string, Uint8Array>): OwnedAccountLoader {
+  return ownedByShape(async (addr: Address) => map[addr] ?? null);
 }
 
 describe("perps-jlp Token-2022 self-drop", () => {
@@ -72,6 +73,20 @@ describe("perps-jlp Token-2022 self-drop", () => {
       [MINT_IN]: makeLegacyMint(),
       [MINT_OUT]: makeT22Mint(),
     });
+    await expect(fetchPerpsJlpConfig(load, custodyIn, MINT_OUT)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("REJECTS a pair whose mintOut is an 82-byte mint owned by Token-2022 (extensionless Token-2022)", async () => {
+    const custodyIn = await custodyPda(JLP_POOL_ADDRESS, MINT_IN);
+    const custodyOut = await custodyPda(JLP_POOL_ADDRESS, MINT_OUT);
+    const shaped = loaderFrom({
+      [custodyIn]: buildCustody(MINT_IN),
+      [custodyOut]: buildCustody(MINT_OUT),
+      [JLP_POOL_ADDRESS]: buildPool(custodyIn, custodyOut),
+      [MINT_IN]: makeLegacyMint(),
+    });
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === MINT_OUT ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
     await expect(fetchPerpsJlpConfig(load, custodyIn, MINT_OUT)).rejects.toThrow(/Token-2022/);
   });
 

@@ -17,7 +17,7 @@ import {
   sanctumInfinityPoolKey,
 } from "../../../src/svm/venues/sanctum-infinity/index.js";
 import { MAX_PAIR_KEYS, pairKeyRegistry } from "../../../src/svm/venues/pair-keys.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
 import { makeT22Mint } from "../fixtures/token-2022/synth.js";
 
 const MANY = 10_000;
@@ -31,7 +31,7 @@ function mintAt(index: number): Address {
   return getAddressDecoder().decode(bytes);
 }
 
-const nothing: AccountLoader = async () => null;
+const nothing: OwnedAccountLoader = async () => null;
 
 describe("pairKeyRegistry", () => {
   it("holds at most its capacity, evicting the least recently used key", async () => {
@@ -84,7 +84,8 @@ describe("sanctum-infinity discovery keys", () => {
     const inMint = mintAt(1);
     const key = sanctumInfinityPoolKey(inMint, OUT);
     expect(sanctumInfinityLookupPair(key)).toEqual({ inMint, outMint: OUT });
-    const t22: AccountLoader = async (at) => (at === inMint ? makeT22Mint() : null);
+    const t22: OwnedAccountLoader = async (at) =>
+      at === inMint ? { data: makeT22Mint(), owner: TOKEN_2022_PROGRAM_ID } : null;
     await expect(sanctumInfinity.fetchPoolConfig(t22, key)).rejects.toThrow(/Token-2022/);
     expect(sanctumInfinityLookupPair(key)).toBeUndefined();
   });

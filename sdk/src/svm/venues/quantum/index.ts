@@ -92,7 +92,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -226,9 +227,10 @@ function resolveWindow(data: Uint8Array, side: number, count: number): QuantumWi
  * prefixes. Read-only against the loader.
  */
 export async function fetchQuantumConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<QuantumPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== QUANTUM_POOL_SIZE) {
@@ -240,19 +242,21 @@ export async function fetchQuantumConfig(
   const mint0 = codec.decode(data.subarray(OFF_MINT0, OFF_MINT0 + 32));
   const mint1 = codec.decode(data.subarray(OFF_MINT1, OFF_MINT1 + 32));
   // The swap ix is Tokenkeg-only here. Detect the real token program per mint
-  // via the shared data-shape resolver and SELF-DROP a Token-2022 mint or one
-  // carrying an un-routable extension (the thrown error IS the graceful drop —
-  // SvmRoute catches a fetchPoolConfig throw and drops the venue). LEGACY path
-  // byte-identical: a classic 82-byte mint classifies Tokenkeg, parses no
-  // extensions, config built unchanged. An unreadable mint falls back to the
-  // legacy assumption (keeps fixture-only tests green).
+  // by its OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+  // one) and SELF-DROP a Token-2022 mint or one carrying an un-routable
+  // extension (the thrown error IS the graceful drop — SvmRoute catches a
+  // fetchPoolConfig throw and drops the venue). LEGACY path byte-identical: a
+  // Tokenkeg-owned mint parses no extensions, config built unchanged. An
+  // unreadable mint falls back to the legacy assumption (keeps fixture-only
+  // tests green).
   const mints = [mint0, mint1];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const account = mintAccounts[mi]!;
+    if (account === null) continue;
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

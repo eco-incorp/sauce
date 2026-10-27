@@ -54,6 +54,7 @@ import {
   RAYDIUM_CLMM_PROGRAM_ID,
   STABBLE_CLMM_PROGRAM_ID,
 } from "./venues/index.js";
+import { accountDataLoader } from "./loader.js";
 import { WHIRLPOOL_DISCRIMINATOR } from "./venues/orca-whirlpool/index.js";
 import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
@@ -226,7 +227,7 @@ export async function svmClmmSlot(
   pool: Address,
   data: Uint8Array,
   paysLower: boolean,
-  load: AccountLoader,
+  load: OwnedAccountLoader,
 ): Promise<SvmSlot> {
   const program = venue.program;
   if (venue.layout === "raydium") {
@@ -237,7 +238,7 @@ export async function svmClmmSlot(
       vaultA: keyAt(data, 137),
       vaultB: keyAt(data, 169),
       extra: keyAt(data, 201),
-      ticks: await raydiumTickArrays(program, pool, data, paysLower, load),
+      ticks: await raydiumTickArrays(program, pool, data, paysLower, accountDataLoader(load)),
     };
   }
   const window = (windows: { aToB: { tickArrays: Address[] }; bToA: { tickArrays: Address[] } }) =>
@@ -250,8 +251,8 @@ export async function svmClmmSlot(
       : [];
   const shown = new Uint8Array(data);
   if (venue.layout === "whirlpool") shown.set(data.subarray(41, 43), 43); // fee tier := tick spacing
-  const adapted: AccountLoader = async (at) =>
-    at === pool ? shown : unread.includes(at) ? null : load(at);
+  const adapted: OwnedAccountLoader = async (at) =>
+    at === pool ? { data: shown, owner: program } : unread.includes(at) ? null : load(at);
   if (venue.layout === "whirlpool") {
     const cfg =
       program === CROPPER_PROGRAM_ID
@@ -400,7 +401,7 @@ async function raydiumTickArrays(
 }
 
 /** A Phoenix market's slot, the same paying either token. */
-export async function svmPhoenixSlot(market: Address, load: AccountLoader): Promise<SvmSlot> {
+export async function svmPhoenixSlot(market: Address, load: OwnedAccountLoader): Promise<SvmSlot> {
   const cfg = await fetchPhoenixConfig(load, market);
   const log = await memoizedGetProgramDerivedAddress(PHOENIX_PROGRAM_ID, [
     new TextEncoder().encode("log"),
@@ -498,7 +499,6 @@ export async function svmPoolSlot(
     );
   }
   const data = account.data;
-  const loadData: AccountLoader = async (key) => (await load(key))?.data ?? null;
   // The account's own kind, before a byte of it is read as a pool's: an account of the venue's
   // program that is not a pool is refused here rather than read at a pool's offsets.
   const notAPool = (what: string) =>
@@ -512,7 +512,7 @@ export async function svmPoolSlot(
     if (pay !== base && pay !== quote) {
       throw new Error(`${venue.name} market ${pool} trades ${base} for ${quote}, not ${pay}`);
     }
-    return svmPhoenixSlot(pool, loadData);
+    return svmPhoenixSlot(pool, load);
   }
   if (venue.layout === "dlmm") {
     if (data.length !== SVM_DLMM_LAYOUT.size) {
@@ -539,5 +539,5 @@ export async function svmPoolSlot(
     throw new Error(`${venue.name} pool ${pool} trades ${lower} and ${higher}, not ${pay}`);
   }
 
-  return svmClmmSlot(venue, pool, data, pay === lower, loadData);
+  return svmClmmSlot(venue, pool, data, pay === lower, load);
 }

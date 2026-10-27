@@ -104,7 +104,8 @@
 import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 
 export const ALDRIN_V1_PROGRAM_ID = address("AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6");
 export const ALDRIN_V2_PROGRAM_ID = address("CURVGoZn8zycx6FXwwevgBTB2gVvdbGTEpvMJDbgs2t4");
@@ -155,10 +156,11 @@ export interface AldrinPoolConfig extends PoolConfig {
 }
 
 async function fetchAldrinPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   version: 1 | 2,
 ): Promise<AldrinPoolConfig> {
+  const load = accountDataLoader(owned);
   const slug = version === 1 ? "aldrin" : "aldrin-v2";
   const data = await load(pool);
   if (data === null) throw new Error(`${slug} pool ${pool} account not found`);
@@ -222,13 +224,13 @@ async function fetchAldrinPoolConfig(
 export const aldrin = {
   slug: "aldrin" as const,
   programId: ALDRIN_V1_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<AldrinPoolConfig> =>
-    fetchAldrinPoolConfig(load, pool, 1),
+  fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<AldrinPoolConfig> =>
+    fetchAldrinPoolConfig(owned, pool, 1),
 };
 
 export const aldrinV2 = {
   slug: "aldrin-v2" as const,
   programId: ALDRIN_V2_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<AldrinPoolConfig> =>
-    fetchAldrinPoolConfig(load, pool, 2),
+  fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<AldrinPoolConfig> =>
+    fetchAldrinPoolConfig(owned, pool, 2),
 };

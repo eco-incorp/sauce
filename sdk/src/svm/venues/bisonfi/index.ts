@@ -112,7 +112,8 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -184,10 +185,11 @@ export function bisonfiConfig(cfg: PoolConfig): BisonfiPoolConfig {
 const MINT_DECIMALS_OFFSET = 44;
 
 async function fetchPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   direction: 0 | 1 = 0,
 ): Promise<BisonfiPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -197,23 +199,27 @@ async function fetchPoolConfig(
   }
   const mintA = pubkeyAt(data, OFF_MINT_A);
   const mintB = pubkeyAt(data, OFF_MINT_B);
-  const [mintAData, mintBData] = await Promise.all([load(mintA), load(mintB)]);
-  if (mintAData === null || mintBData === null) {
+  const [mintAAccount, mintBAccount] = await Promise.all([owned(mintA), owned(mintB)]);
+  if (mintAAccount === null || mintBAccount === null) {
     throw new Error(`${SLUG} pool ${pool} mint account(s) not found`);
   }
+  const mintAData = mintAAccount.data;
+  const mintBData = mintBAccount.data;
   if (mintAData.length < MINT_DECIMALS_OFFSET + 1 || mintBData.length < MINT_DECIMALS_OFFSET + 1) {
     throw new Error(`${SLUG} pool ${pool} mint account(s) too short to be an SPL mint`);
   }
   // This venue's on-chain swap ix is legacy-SPL (Tokenkeg) only, so a
   // Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS the
   // pool via a thrown error (the SvmRoute orchestrator catches it and drops the
-  // venue). Reuses the already-fetched mint bytes; a classic 82-byte mint
-  // classifies legacy → no throw → config built byte-identically to before.
-  for (const [mint, mintData] of [
-    [mintA, mintAData],
-    [mintB, mintBData],
+  // venue). The mint's token program is its OWNER (an extensionless Token-2022
+  // mint is byte-identical to a legacy one); a Tokenkeg-owned mint classifies
+  // legacy → no throw → config built byte-identically to before.
+  for (const [mint, account] of [
+    [mintA, mintAAccount],
+    [mintB, mintBAccount],
   ] as const) {
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintData = account.data;
+    if (classifyMintProgram(mint, mintData, account.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

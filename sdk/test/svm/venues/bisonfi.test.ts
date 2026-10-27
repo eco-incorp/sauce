@@ -14,7 +14,7 @@
 import { resolve } from "path";
 import { address } from "@solana/kit";
 import { bisonfi } from "../../../src/svm/venues/bisonfi/index.js";
-import { fixtureBytesMap, fixtureLoader, loadFixtures } from "../fixtures.js";
+import { fixtureBytesMap, fixtureLoader, loadFixtures, ownedByShape } from "../fixtures.js";
 
 const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/bisonfi");
 const POOL = address("8FnX3xo2yYw3EUE6w3nQA4GfXGS9wpK6oj3veJpbFzLo");
@@ -37,8 +37,8 @@ describe("bisonfi.fetchPoolConfig", () => {
   });
 
   it("rejects an account whose size is not the fixed 2048-byte pool layout", async () => {
-    const loader = async (a: typeof POOL) => (a === POOL ? new Uint8Array(2047) : null);
-    await expect(bisonfi.fetchPoolConfig(loader as never, POOL, 0)).rejects.toThrow(
+    const loader = ownedByShape(async (a) => (a === POOL ? new Uint8Array(2047) : null));
+    await expect(bisonfi.fetchPoolConfig(loader, POOL, 0)).rejects.toThrow(
       /2047 bytes, expected 2048/,
     );
   });

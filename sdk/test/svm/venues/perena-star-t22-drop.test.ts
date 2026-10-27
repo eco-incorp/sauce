@@ -4,11 +4,17 @@
  * must make fetchPoolConfig THROW. No mainnet fixture is vendored, so this
  * builds a minimal synthetic 448-byte TrancheState. With legacy mints the gate
  * is passed and the flow reaches the (unprovided) bank load — proving the legacy
- * path is byte-identical.
+ * path is byte-identical. The mint is classified by its OWNER: an extensionless
+ * Token-2022 mint is 82 bytes, byte for byte a legacy one.
  */
 import { address, getAddressCodec } from "@solana/kit";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { perenaStar } from "../../../src/svm/venues/perena-star/index.js";
+import type { Address } from "@solana/kit";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
+import { PERENA_STAR_PROGRAM_ID, perenaStar } from "../../../src/svm/venues/perena-star/index.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("hXfEYpB5FB3ZWjGNc5C5JqLixmGdmZFyjXKJB2xFPgc");
@@ -28,16 +34,18 @@ function makeTranche(): Uint8Array {
   return buf;
 }
 
-function loaderWith(
-  bankMintData: Uint8Array | null,
-  juniorMintData: Uint8Array | null,
-): AccountLoader {
+type Account = { data: Uint8Array; owner: Address };
+const t22 = (data: Uint8Array): Account => ({ data, owner: TOKEN_2022_PROGRAM_ID });
+const legacy = (data: Uint8Array): Account => ({ data, owner: TOKEN_PROGRAM_ID });
+
+function loaderWith(bankMint: Account | null, juniorMint: Account | null): OwnedAccountLoader {
   const tranche = makeTranche();
+  const copy = (account: Account | null): Account | null =>
+    account === null ? null : { data: new Uint8Array(account.data), owner: account.owner };
   return async (addr) => {
-    if (addr === POOL) return new Uint8Array(tranche);
-    if (addr === BANK_MINT) return bankMintData === null ? null : new Uint8Array(bankMintData);
-    if (addr === JUNIOR_MINT)
-      return juniorMintData === null ? null : new Uint8Array(juniorMintData);
+    if (addr === POOL) return { data: new Uint8Array(tranche), owner: PERENA_STAR_PROGRAM_ID };
+    if (addr === BANK_MINT) return copy(bankMint);
+    if (addr === JUNIOR_MINT) return copy(juniorMint);
     return null; // BANK is intentionally not provided
   };
 }
@@ -45,14 +53,20 @@ function loaderWith(
 describe("perena-star Token-2022 self-drop", () => {
   it("drops the pool when the bank mint is Token-2022", async () => {
     await expect(
-      perenaStar.fetchPoolConfig(loaderWith(makeT22Mint(), makeLegacyMint()), POOL),
+      perenaStar.fetchPoolConfig(loaderWith(t22(makeT22Mint()), legacy(makeLegacyMint())), POOL),
     ).rejects.toThrow(/is Token-2022/);
   });
 
   it("drops the pool when the junior mint is Token-2022", async () => {
     await expect(
-      perenaStar.fetchPoolConfig(loaderWith(makeLegacyMint(), makeT22Mint()), POOL),
+      perenaStar.fetchPoolConfig(loaderWith(legacy(makeLegacyMint()), t22(makeT22Mint())), POOL),
     ).rejects.toThrow(/is Token-2022/);
+  });
+
+  it("drops the pool when the bank mint is 82 bytes but owned by Token-2022 (extensionless)", async () => {
+    await expect(
+      perenaStar.fetchPoolConfig(loaderWith(t22(makeLegacyMint()), legacy(makeLegacyMint())), POOL),
+    ).rejects.toThrow(/Token-2022/);
   });
 
   it("passes the Token-2022 gate for two legacy mints (reaches the bank load)", async () => {
@@ -60,7 +74,10 @@ describe("perena-star Token-2022 self-drop", () => {
     // surfaces the bank-not-found error — proof the legacy mints got past the
     // Token-2022 safety block unchanged.
     await expect(
-      perenaStar.fetchPoolConfig(loaderWith(makeLegacyMint(), makeLegacyMint()), POOL),
+      perenaStar.fetchPoolConfig(
+        loaderWith(legacy(makeLegacyMint()), legacy(makeLegacyMint())),
+        POOL,
+      ),
     ).rejects.toThrow(`perena-star bank ${BANK} not found`);
   });
 });

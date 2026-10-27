@@ -121,7 +121,8 @@ import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -180,7 +181,8 @@ export const boopFun = {
   slug: SLUG,
   kind: "constant-product" as const,
   programId: BOOP_FUN_PROGRAM_ID,
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<BoopFunPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<BoopFunPoolConfig> {
+    const load = accountDataLoader(owned);
     const bcData = await loadAccount(load, pool, "bonding curve");
     if (!hasDiscriminator(bcData, BONDING_CURVE_DISCRIMINATOR)) {
       throw new Error(`boop-fun pool ${pool} discriminator mismatch (not a BondingCurve account)`);
@@ -218,9 +220,9 @@ export const boopFun = {
     const virtualSolReserves = readUintLE(bcData, 72, 8);
     const swapFeeBasisPoints = BigInt(bcData[121]!);
 
-    const [mintData, configData, bondingCurveVault, bondingCurveSolVault, tradingFeesVault] =
+    const [mintAccount, configData, bondingCurveVault, bondingCurveSolVault, tradingFeesVault] =
       await Promise.all([
-        loadAccount(load, mint, "base mint"),
+        owned(mint),
         loadAccount(load, CONFIG, "config"),
         pda([SEED("bonding_curve_vault"), mint], BOOP_FUN_PROGRAM_ID),
         pda([SEED("bonding_curve_sol_vault"), mint], BOOP_FUN_PROGRAM_ID),
@@ -229,10 +231,13 @@ export const boopFun = {
     // The CPI supplies exactly ONE token_program account (no separate base/quote
     // token-program slot), so the base mint's swap is legacy-SPL only: a
     // Token-2022 base mint (or one carrying an un-routable extension) SELF-DROPS
-    // this pool. The thrown error is the graceful-drop signal the SvmRoute
-    // orchestrator catches. A classic 82-byte mint classifies legacy → no throw →
-    // config built byte-identically to before.
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    // this pool. The mint's token program is its OWNER (an extensionless
+    // Token-2022 mint is byte-identical to a legacy one). The thrown error is the
+    // graceful-drop signal the SvmRoute orchestrator catches. A Tokenkeg-owned
+    // mint classifies legacy → no throw → config built byte-identically to before.
+    if (mintAccount === null) throw new Error(`boop-fun base mint ${mint} not found`);
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `boop-fun: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

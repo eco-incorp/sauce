@@ -6,11 +6,12 @@
 import { getAddressDecoder } from "@solana/kit";
 import {
   defituna,
+  DEFITUNA_PROGRAM_ID,
   FUSION_POOL_ACCOUNT_SIZE,
   FUSION_POOL_DISCRIMINATOR,
 } from "../../../src/svm/venues/defituna/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const POOL = getAddressDecoder().decode(
   Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1),
@@ -32,12 +33,12 @@ function poolBytes(): Uint8Array {
   return data;
 }
 
-function loaderWith(mint: Uint8Array | null): AccountLoader {
-  return (async (a: string) => {
-    if (a === POOL) return poolBytes();
-    if (a === T22_MINT) return mint;
+function loaderWith(mint: Uint8Array | null): OwnedAccountLoader {
+  return async (a) => {
+    if (a === POOL) return { data: poolBytes(), owner: DEFITUNA_PROGRAM_ID };
+    if (a === T22_MINT && mint !== null) return { data: mint, owner: TOKEN_2022_PROGRAM_ID };
     return null;
-  }) as unknown as AccountLoader;
+  };
 }
 
 describe("defituna Token-2022 self-drop", () => {
@@ -51,6 +52,12 @@ describe("defituna Token-2022 self-drop", () => {
     await expect(
       defituna.fetchPoolConfig(loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/Token-2022/);
+  });
+
+  it("drops a pool whose mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    await expect(defituna.fetchPoolConfig(loaderWith(makeLegacyMint()), POOL)).rejects.toThrow(
+      /Token-2022/,
+    );
   });
 
   it("does NOT drop for an unreadable mint (falls back to the legacy assumption)", async () => {

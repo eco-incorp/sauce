@@ -9,9 +9,17 @@
  */
 import { address, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { goonfiV2 } from "../../../src/svm/venues/goonfi-v2/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import { GOONFI_V2_PROGRAM_ID, goonfiV2 } from "../../../src/svm/venues/goonfi-v2/index.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  type OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
+
+type Owned = { data: Uint8Array; owner: Address };
+const t22 = (data: Uint8Array = makeT22Mint()): Owned => ({ data, owner: TOKEN_2022_PROGRAM_ID });
+const legacy = (): Owned => ({ data: makeLegacyMint(), owner: TOKEN_PROGRAM_ID });
 
 const POOL = address("BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV");
 const MINT_A = address("So11111111111111111111111111111111111111112"); // wSOL
@@ -31,28 +39,33 @@ function synthPool(): Uint8Array {
   return data;
 }
 
-function loaderWith(mintBytes: Record<string, Uint8Array>): AccountLoader {
+function loaderWith(mints: Record<string, Owned>): OwnedAccountLoader {
   const pool = synthPool();
   return async (addr: Address) => {
-    if (addr === POOL) return new Uint8Array(pool);
-    const m = mintBytes[addr as string];
-    return m === undefined ? null : new Uint8Array(m);
+    if (addr === POOL) return { data: new Uint8Array(pool), owner: GOONFI_V2_PROGRAM_ID };
+    const m = mints[addr as string];
+    return m === undefined ? null : { data: new Uint8Array(m.data), owner: m.owner };
   };
 }
 
 describe("goonfi-v2 Token-2022 self-drop", () => {
   it("drops the pool when mintA is a Token-2022 mint", async () => {
-    const load = loaderWith({ [MINT_A]: makeT22Mint(), [MINT_B]: makeLegacyMint() });
+    const load = loaderWith({ [MINT_A]: t22(), [MINT_B]: legacy() });
     await expect(goonfiV2.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
   it("drops the pool when mintB is a Token-2022 mint", async () => {
-    const load = loaderWith({ [MINT_A]: makeLegacyMint(), [MINT_B]: makeT22Mint() });
+    const load = loaderWith({ [MINT_A]: legacy(), [MINT_B]: t22() });
+    await expect(goonfiV2.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("drops the pool when a mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const load = loaderWith({ [MINT_A]: legacy(), [MINT_B]: t22(makeLegacyMint()) });
     await expect(goonfiV2.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
   it("passes the mint gate for two classic legacy mints (fails later, never on Token-2022)", async () => {
-    const load = loaderWith({ [MINT_A]: makeLegacyMint(), [MINT_B]: makeLegacyMint() });
+    const load = loaderWith({ [MINT_A]: legacy(), [MINT_B]: legacy() });
     let message = "";
     try {
       await goonfiV2.fetchPoolConfig(load, POOL);

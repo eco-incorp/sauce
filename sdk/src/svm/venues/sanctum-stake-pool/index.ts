@@ -145,7 +145,8 @@ import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { utf8Bytes } from "../../../bytes.js";
 import { memoizedCreateProgramAddress } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -240,11 +241,12 @@ function withdrawAuthorityAddress(programId: Address, pool: Address, bump: numbe
 }
 
 async function fetchSanctumStakePoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
   programId: Address,
   slug: SanctumStakePoolConfig["venue"],
 ): Promise<SanctumStakePoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${slug} pool ${pool} account not found`);
 
@@ -267,20 +269,24 @@ async function fetchSanctumStakePoolConfig(
 
   // DepositSol mints the LST to the user via the classic Tokenkeg program, so a
   // Token-2022 pool mint (or one carrying an un-routable extension) must
-  // SELF-DROP. Detect the real token program from the mint's own account via the
-  // shared data-shape resolver, replacing the old stored-token_program_id guard;
-  // the thrown error IS the graceful drop (SvmRoute catches a fetchPoolConfig
-  // throw and drops the venue). LEGACY path unchanged: a classic 82-byte mint
-  // classifies Tokenkeg, parses no extensions, config built as before. An
-  // unreadable mint falls back to the legacy assumption (keeps existing tests green).
-  const poolMintData = await load(poolMint);
-  if (poolMintData !== null) {
-    if (classifyMintProgram(poolMint, poolMintData) === TOKEN_2022_PROGRAM_ID) {
+  // SELF-DROP. Detect the real token program from the mint's OWNER (an
+  // extensionless Token-2022 mint is byte-identical to a legacy one), replacing
+  // the old stored-token_program_id guard; the thrown error IS the graceful drop
+  // (SvmRoute catches a fetchPoolConfig throw and drops the venue). LEGACY path
+  // unchanged: a Tokenkeg-owned mint parses no extensions, config built as
+  // before. An unreadable mint falls back to the legacy assumption (keeps
+  // existing tests green).
+  const poolMintAccount = await owned(poolMint);
+  if (poolMintAccount !== null) {
+    if (
+      classifyMintProgram(poolMint, poolMintAccount.data, poolMintAccount.owner) ===
+      TOKEN_2022_PROGRAM_ID
+    ) {
       throw new Error(
         `${slug}: dropping pool ${pool} — mint ${poolMint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(poolMintData);
+    const { blocking } = parseMintExtensions(poolMintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${slug}: dropping pool ${pool} — mint ${poolMint} is un-routable: ${blocking.join("; ")}`,
@@ -363,8 +369,8 @@ function makeSanctumStakePool(slug: SanctumStakePoolConfig["venue"], programId: 
   return {
     slug,
     programId,
-    fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<SanctumStakePoolConfig> =>
-      fetchSanctumStakePoolConfig(load, pool, programId, slug),
+    fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<SanctumStakePoolConfig> =>
+      fetchSanctumStakePoolConfig(owned, pool, programId, slug),
   };
 }
 

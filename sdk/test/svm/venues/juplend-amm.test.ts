@@ -29,9 +29,10 @@ import {
   juplendAmm,
   JUPLEND_LIQUIDITY_PROGRAM_ID,
 } from "../../../src/svm/venues/juplend-amm/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
 import {
+  makeLegacyMint,
   makeT22Mint,
   NON_TRANSFERABLE_TLV,
   PERMANENT_DELEGATE_TLV,
@@ -80,11 +81,13 @@ describe("juplend-amm.fetchPoolConfig (real mainnet dump)", () => {
 
 describe("juplend-amm.fetchPoolConfig Token-2022 handling", () => {
   // Wrap the real fixture loader so token0 (USDC) resolves to synthetic
-  // Token-2022 mint bytes; every other account (reserves, positions — all keyed
-  // on the mint ADDRESS, not its data) is served unchanged from the fixture.
-  const wrapToken0 = (mintBytes: Uint8Array): AccountLoader => {
+  // Token-2022 mint bytes, owned by the Token-2022 program; every other account
+  // (reserves, positions — all keyed on the mint ADDRESS, not its data) is
+  // served unchanged from the fixture.
+  const wrapToken0 = (mintBytes: Uint8Array): OwnedAccountLoader => {
     const load = fixtureLoader(loadFixtures(FIXTURES));
-    return async (addr) => (addr === MINT_USDC ? new Uint8Array(mintBytes) : load(addr));
+    return async (addr) =>
+      addr === MINT_USDC ? { data: new Uint8Array(mintBytes), owner: TOKEN_2022 } : load(addr);
   };
 
   it("routes a zero-fee Token-2022 token0 (advisory-only) and threads the program per side", async () => {
@@ -99,6 +102,12 @@ describe("juplend-amm.fetchPoolConfig Token-2022 handling", () => {
 
   it("routes a plain (extensionless-TLV) Token-2022 token0", async () => {
     const cfg = await juplendAmm.fetchPoolConfig(wrapToken0(makeT22Mint()), POOL, true);
+    expect(cfg.tokenProgram0).toBe(TOKEN_2022);
+    expect(cfg.tokenProgram1).toBe(TOKENKEG);
+  });
+
+  it("routes an extensionless (82-byte) Token-2022 token0 as Token-2022, by its owner", async () => {
+    const cfg = await juplendAmm.fetchPoolConfig(wrapToken0(makeLegacyMint()), POOL, true);
     expect(cfg.tokenProgram0).toBe(TOKEN_2022);
     expect(cfg.tokenProgram1).toBe(TOKENKEG);
   });

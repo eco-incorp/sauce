@@ -161,7 +161,9 @@ import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { parseMintExtensions } from "../../token-extensions.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "raydium-launchlab" as const;
 
@@ -198,10 +200,12 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
  * flag===0 -> classic Tokenkeg (structurally cannot carry any extension, so
  * this never reads the mint at all); flag===1 -> Token-2022, and the mint IS
  * fetched to reject a TransferFeeConfig extension (type 1) — same convention
- * pumpswap/pumpfun-bonding-curve use for their own base-mint gate.
+ * pumpswap/pumpfun-bonding-curve use for their own base-mint gate. An 82-byte
+ * mint has no extension room, and its program is its OWNER: an extensionless
+ * Token-2022 mint is byte-identical to a legacy one.
  */
 async function resolveBaseTokenProgram(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   mint: Address,
   flag: number,
 ): Promise<Address> {
@@ -210,8 +214,15 @@ async function resolveBaseTokenProgram(
     throw new Error(
       `${SLUG} pool base mint ${mint} has unknown token_program_flag ${flag} (expected 0 or 1)`,
     );
-  const data = await loadAccount(load, mint, "base mint");
-  if (data.length === 82) return TOKEN_PROGRAM; // no extension room possible
+  const account = await owned(mint);
+  if (account === null) throw new Error(`${SLUG} base mint ${mint} not found`);
+  const data = account.data;
+  if (data.length === 82) {
+    // No extension room possible: nothing to gate, the owner names the program.
+    return classifyMintProgram(mint, data, account.owner) === TOKEN_2022_PROGRAM_ID
+      ? TOKEN_2022_PROGRAM
+      : TOKEN_PROGRAM;
+  }
   if (data.length < 166) {
     throw new Error(
       `${SLUG} base mint ${mint} data is ${data.length} bytes, not a token-2022 mint layout`,
@@ -270,7 +281,11 @@ export const raydiumLaunchlab = {
   slug: SLUG,
   kind: "constant-product" as const,
   programId: RAYDIUM_LAUNCHLAB_PROGRAM_ID,
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RaydiumLaunchlabPoolConfig> {
+  async fetchPoolConfig(
+    owned: OwnedAccountLoader,
+    pool: Address,
+  ): Promise<RaydiumLaunchlabPoolConfig> {
+    const load = accountDataLoader(owned);
     const poolData = await loadAccount(load, pool, "pool");
     if (!hasDiscriminator(poolData, POOL_STATE_DISCRIMINATOR)) {
       throw new Error(`${SLUG} pool ${pool} discriminator mismatch (not a PoolState account)`);
@@ -298,7 +313,7 @@ export const raydiumLaunchlab = {
     const [globalData, platformData, baseTokenProgram] = await Promise.all([
       loadAccount(load, globalConfig, "global config"),
       loadAccount(load, platformConfig, "platform config"),
-      resolveBaseTokenProgram(load, baseMint, tokenProgramFlag),
+      resolveBaseTokenProgram(owned, baseMint, tokenProgramFlag),
     ]);
     if (!hasDiscriminator(globalData, GLOBAL_CONFIG_DISCRIMINATOR)) {
       throw new Error(`${SLUG} global config ${globalConfig} discriminator mismatch`);

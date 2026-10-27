@@ -97,17 +97,17 @@ test("bytes entrypoints keep live pool gates after PDA memo priming", async () =
   await pump.fetchPumpswapConfigBytes(pumpLoad, poolBytes(pool));
   await expect(
     pump.fetchPumpswapConfigBytes(async (key) => {
-      const data = await pumpLoad(key);
-      if (key === pool && data) data[243] = 1;
-      return data;
+      const account = await pumpLoad(key);
+      if (key === pool && account) account.data[243] = 1;
+      return account;
     }, poolBytes(pool)),
   ).rejects.toThrow("is_mayhem_mode");
   await dlmm.fetchMeteoraDlmmConfigBytes(dlmmLoad, poolBytes(pair));
   await expect(
     dlmm.fetchMeteoraDlmmConfigBytes(async (key) => {
-      const data = await dlmmLoad(key);
-      if (key === pair && data) data[dlmm.OFF_STATUS] = 1;
-      return data;
+      const account = await dlmmLoad(key);
+      if (key === pair && account) account.data[dlmm.OFF_STATUS] = 1;
+      return account;
     }, poolBytes(pair)),
   ).rejects.toThrow("not Enabled");
 });
@@ -116,15 +116,16 @@ test("DLMM live active-id changes derive the new window despite a warm PDA memo"
   const bytes = poolBytes(pair);
   const original = await dlmm.fetchMeteoraDlmmConfigBytes(dlmmLoad, bytes);
   const movedLoad = async (key: Address) => {
-    const data = await dlmmLoad(key);
-    if (key === pair && data) {
+    const account = await dlmmLoad(key);
+    if (key === pair && account) {
+      const { data } = account;
       new DataView(data.buffer, data.byteOffset, data.byteLength).setInt32(
         dlmm.OFF_ACTIVE_ID,
         original.activeId + dlmm.BINS_PER_ARRAY,
         true,
       );
     }
-    return data;
+    return account;
   };
   const moved = await dlmm.fetchMeteoraDlmmConfigBytes(movedLoad, bytes);
   expect(moved).toEqual(await dlmm.fetchMeteoraDlmmConfig(movedLoad, pair));
@@ -136,10 +137,10 @@ for (const length of [8, 88, 674])
   test(`Pumpswap bytes fetch refuses truncated global config (${length} bytes)`, async () => {
     const pool = kit.address("2uF4Xh61rDwxnG9woyxsVQP7zuA6kLFpb3NvnRQeoiSd");
     const load = async (key: Address) => {
-      const data = await pumpLoad(key);
-      return key === "ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw" && data
-        ? data.slice(0, length)
-        : data;
+      const account = await pumpLoad(key);
+      return key === "ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw" && account
+        ? { ...account, data: account.data.slice(0, length) }
+        : account;
     };
     await expect(pump.fetchPumpswapConfigBytes(load, poolBytes(pool))).rejects.toThrow();
   });

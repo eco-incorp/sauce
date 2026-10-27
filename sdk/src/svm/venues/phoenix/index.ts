@@ -205,7 +205,8 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountBytesMap, AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountBytesMap, OwnedAccountLoader, PoolConfig } from "../types.js";
 import { makeTreeWalkBudget } from "../tree-walk.js";
 import type { SpendHop } from "../tree-walk.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -408,9 +409,10 @@ function resolveWindow(
  * order windows. Read-only against the loader.
  */
 export async function fetchPhoenixConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<PhoenixPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: market ${pool} not found`);
   if (data.length < HEADER_SIZE + 256 + 48) {
@@ -438,21 +440,22 @@ export async function fetchPhoenixConfig(
   const baseMint = decodeAddress(data, OFF_BASE_MINT);
   const quoteMint = decodeAddress(data, OFF_QUOTE_MINT);
   // The Swap ix carries no mint account (no transfer_checked plumbing) — it is
-  // Tokenkeg-only. Detect the real token program per mint via the shared
-  // data-shape resolver instead of a fragile size check, and SELF-DROP a
-  // Token-2022 mint or one carrying an un-routable extension. The thrown,
-  // clearly-described error IS the graceful drop (SvmRoute catches a
+  // Tokenkeg-only. Detect the real token program per mint by its OWNER (an
+  // extensionless Token-2022 mint is byte-identical to a legacy one), and
+  // SELF-DROP a Token-2022 mint or one carrying an un-routable extension. The
+  // thrown, clearly-described error IS the graceful drop (SvmRoute catches a
   // fetchPoolConfig throw and drops the venue). The LEGACY path is
-  // byte-identical to before: a classic 82-byte mint classifies as Tokenkeg,
-  // parses no extensions, and the config is built unchanged. An unreadable mint
-  // falls back to the legacy assumption (keeps fixture-only tests green).
+  // byte-identical to before: a Tokenkeg-owned mint parses no extensions, and
+  // the config is built unchanged. An unreadable mint falls back to the legacy
+  // assumption (keeps fixture-only tests green).
   const mints = [baseMint, quoteMint];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue;
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

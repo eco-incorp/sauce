@@ -16,7 +16,8 @@ import {
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
 } from "../../../src/svm/venues/scale-common.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   makeLegacyMint,
   makeT22Mint,
@@ -75,20 +76,31 @@ function config(): Uint8Array {
   return data;
 }
 
-function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
-  const map = new Map(entries.map(([a, d]) => [a as string, d]));
+/** Each entry is [address, data] (owned as its shape implies) or [address, data, owner]. */
+function loaderOf(
+  entries: Array<[Address, Uint8Array] | [Address, Uint8Array, Address]>,
+): OwnedAccountLoader {
+  const map = new Map(entries.map(([a, d, o]) => [a as string, { d, o }]));
+  const shaped = ownedByShape(async (addr) => {
+    const e = map.get(addr as string);
+    return e === undefined ? null : new Uint8Array(e.d);
+  });
   return async (addr) => {
-    const d = map.get(addr as string);
-    return d === undefined ? null : new Uint8Array(d);
+    const e = map.get(addr as string);
+    return e?.o !== undefined ? { data: new Uint8Array(e.d), owner: e.o } : shaped(addr);
   };
 }
 
-async function makeLoader(mintA: Uint8Array, mintB: Uint8Array): Promise<AccountLoader> {
+async function makeLoader(
+  mintA: Uint8Array,
+  mintB: Uint8Array,
+  ownerA?: Address,
+): Promise<OwnedAccountLoader> {
   const configPda = await pda([CONFIG_SEED], SCALE_AMM_PROGRAM_ID);
   return loaderOf([
     [POOL, pool()],
     [configPda, config()],
-    [MINT_A, mintA],
+    ownerA === undefined ? [MINT_A, mintA] : [MINT_A, mintA, ownerA],
     [MINT_B, mintB],
   ]);
 }
@@ -126,6 +138,14 @@ describe("scale-amm Token-2022 handling", () => {
     const cfg = await scaleAmm.fetchPoolConfig(load, POOL);
     expect(cfg.tokenProgramA).toBe(TOKEN_PROGRAM);
     expect(cfg.tokenProgramB).toBe(TOKEN_2022_PROGRAM);
+  });
+
+  it("resolves an 82-byte mint_a owned by Token-2022 (extensionless Token-2022) to Token-2022", async () => {
+    const load = await makeLoader(makeLegacyMint(), makeLegacyMint(), TOKEN_2022_PROGRAM);
+    const cfg = await scaleAmm.fetchPoolConfig(load, POOL);
+    expect(cfg.tokenProgramA).toBe(TOKEN_2022_PROGRAM);
+    expect(cfg.tokenProgramB).toBe(TOKEN_PROGRAM);
+    expect(cfg.platformFeeTaA).toBe(await ata(FEE_WALLET, MINT_A, TOKEN_2022_PROGRAM));
   });
 
   it("self-drops a NonTransferable mint_a", async () => {

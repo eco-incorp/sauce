@@ -28,11 +28,9 @@ import {
   TESSERAV_KNOWN_VAULTS,
   TOKEN_PROGRAM,
 } from "../../../src/svm/index.js";
-import type {
-  AccountLoader,
-  TesseraVOwnedTokenAccount,
-  TesseraVVaultResolver,
-} from "../../../src/svm/index.js";
+import type { TesseraVOwnedTokenAccount, TesseraVVaultResolver } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
+import { TESSERAV_PROGRAM_ID } from "../../../src/svm/venues/tesserav/index.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
 
 const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/tesserav");
@@ -169,8 +167,10 @@ describe("tesserav general auth/vault derivation", () => {
 
   test("the cbBTC/USDC pool now DERIVES a valid trio instead of throwing (cache path, no resolver)", async () => {
     const pool = address("9NkuAWB4LgCVFV77omEkJEjXqgV5PGupwMTu3B3pBRhc");
-    const load: AccountLoader = async (addr) =>
-      String(addr) === String(pool) ? synthPool(address(CBBTC), address(USDC)) : null;
+    const load: OwnedAccountLoader = async (addr) =>
+      String(addr) === String(pool)
+        ? { data: synthPool(address(CBBTC), address(USDC)), owner: TESSERAV_PROGRAM_ID }
+        : null;
     const cfg = await fetchTesseraVConfig(load, pool, "aToB");
     expect(cfg.mintA).toBe(CBBTC);
     expect(cfg.mintB).toBe(USDC);
@@ -204,8 +204,10 @@ describe("tesserav general auth/vault derivation", () => {
       return pickTesseraVVault(owner, mint, owned);
     };
 
-    const load: AccountLoader = async (addr) =>
-      String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null;
+    const load: OwnedAccountLoader = async (addr) =>
+      String(addr) === String(pool)
+        ? { data: synthPool(novelMint, address(USDC)), owner: TESSERAV_PROGRAM_ID }
+        : null;
     const cfg = await fetchTesseraVConfig(load, pool, "aToB", resolveVault);
 
     expect(String(cfg.auth)).toBe("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
@@ -220,8 +222,10 @@ describe("tesserav general auth/vault derivation", () => {
   test('an uncached mint with NO resolver self-drops the pool (graceful "dropping pool"), never throws a hard mapping error', async () => {
     const novelMint = fabricatedAddress(0x44);
     const pool = fabricatedAddress(0x55);
-    const load: AccountLoader = async (addr) =>
-      String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null;
+    const load: OwnedAccountLoader = async (addr) =>
+      String(addr) === String(pool)
+        ? { data: synthPool(novelMint, address(USDC)), owner: TESSERAV_PROGRAM_ID }
+        : null;
     await expect(fetchTesseraVConfig(load, pool, "aToB")).rejects.toThrow(/dropping pool/);
   });
 
@@ -229,8 +233,10 @@ describe("tesserav general auth/vault derivation", () => {
     const novelMint = fabricatedAddress(0x66);
     const pool = fabricatedAddress(0x77);
     const resolveVault: TesseraVVaultResolver = async () => null;
-    const load: AccountLoader = async (addr) =>
-      String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null;
+    const load: OwnedAccountLoader = async (addr) =>
+      String(addr) === String(pool)
+        ? { data: synthPool(novelMint, address(USDC)), owner: TESSERAV_PROGRAM_ID }
+        : null;
     await expect(fetchTesseraVConfig(load, pool, "aToB", resolveVault)).rejects.toThrow(
       /dropping pool/,
     );

@@ -200,7 +200,8 @@ import type { Address } from "@solana/kit";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
 import { pairKeyRegistry, type DirectedPair } from "../pair-keys.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "mswap";
 
@@ -349,9 +350,10 @@ async function findAta(owner: Address, mint: Address, tokenProgram: Address): Pr
  * a hardcoded mint exclusion. A refused pair's discovery key is forgotten.
  */
 export async function fetchMSwapPoolConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<MSwapPoolConfig> {
+  const load = accountDataLoader(owned);
   return PAIR_KEYS.resolve(pool, (pair) => fetchMSwapPair(load, pool, pair));
 }
 

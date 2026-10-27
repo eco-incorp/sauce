@@ -9,7 +9,8 @@
 import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { fetchTrendsPoolConfig } from "../../../src/svm/venues/trends/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   makeLegacyMint,
   makeT22Mint,
@@ -51,11 +52,18 @@ function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
   };
 }
 
-const loaderFor = (baseMint: Uint8Array): AccountLoader =>
-  loaderOf([
-    [POOL, pool()],
-    [BASE_MINT, baseMint],
-  ]);
+/** The pool's accounts, each owned as its bytes would be; `mintOwner` overrides the base mint's. */
+function loaderFor(baseMint: Uint8Array, mintOwner?: Address): OwnedAccountLoader {
+  const shaped = ownedByShape(
+    loaderOf([
+      [POOL, pool()],
+      [BASE_MINT, baseMint],
+    ]),
+  );
+  if (mintOwner === undefined) return shaped;
+  return async (a) =>
+    a === BASE_MINT ? { data: new Uint8Array(baseMint), owner: mintOwner } : shaped(a);
+}
 
 describe("trends Token-2022 handling", () => {
   it("decodes a legacy base mint (baseline)", async () => {
@@ -66,6 +74,11 @@ describe("trends Token-2022 handling", () => {
 
   it("ROUTES a zero-fee Token-2022 base mint (not dropped)", async () => {
     const cfg = await fetchTrendsPoolConfig(loaderFor(makeT22Mint()), POOL);
+    expect(cfg.baseTokenProgram).toBe(TOKEN_2022_PROGRAM);
+  });
+
+  it("resolves an extensionless (82-byte) Token-2022 base mint to Token-2022 by its owner", async () => {
+    const cfg = await fetchTrendsPoolConfig(loaderFor(makeLegacyMint(), TOKEN_2022_PROGRAM), POOL);
     expect(cfg.baseTokenProgram).toBe(TOKEN_2022_PROGRAM);
   });
 

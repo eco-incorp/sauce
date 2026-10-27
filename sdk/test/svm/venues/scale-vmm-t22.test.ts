@@ -17,7 +17,8 @@ import {
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
 } from "../../../src/svm/venues/scale-common.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   makeLegacyMint,
   makeT22Mint,
@@ -77,14 +78,24 @@ function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
   };
 }
 
-async function makeLoader(mintA: Uint8Array, mintB: Uint8Array): Promise<AccountLoader> {
+/** The pair's accounts, each owned as its bytes would be; `mintAOwner` overrides mint_a's. */
+async function makeLoader(
+  mintA: Uint8Array,
+  mintB: Uint8Array,
+  mintAOwner?: Address,
+): Promise<OwnedAccountLoader> {
   const configPda = await pda([CONFIG_SEED], SCALE_VMM_PROGRAM_ID);
-  return loaderOf([
-    [PAIR, pair()],
-    [configPda, config()],
-    [MINT_A, mintA],
-    [MINT_B, mintB],
-  ]);
+  const shaped = ownedByShape(
+    loaderOf([
+      [PAIR, pair()],
+      [configPda, config()],
+      [MINT_A, mintA],
+      [MINT_B, mintB],
+    ]),
+  );
+  if (mintAOwner === undefined) return shaped;
+  return async (addr) =>
+    addr === MINT_A ? { data: new Uint8Array(mintA), owner: mintAOwner } : shaped(addr);
 }
 
 describe("scale-vmm Token-2022 handling", () => {
@@ -98,6 +109,14 @@ describe("scale-vmm Token-2022 handling", () => {
 
   it("ROUTES a zero-fee Token-2022 mint_a (not dropped) and threads T22 into the ATA", async () => {
     const load = await makeLoader(makeT22Mint(), makeLegacyMint());
+    const cfg = await scaleVmm.fetchPoolConfig(load, PAIR);
+    expect(cfg.tokenProgramA).toBe(TOKEN_2022_PROGRAM);
+    expect(cfg.tokenProgramB).toBe(TOKEN_PROGRAM);
+    expect(cfg.platformFeeTaA).toBe(await ata(FEE_WALLET, MINT_A, TOKEN_2022_PROGRAM));
+  });
+
+  it("threads Token-2022 for an extensionless (82-byte) mint_a by its owner", async () => {
+    const load = await makeLoader(makeLegacyMint(), makeLegacyMint(), TOKEN_2022_PROGRAM);
     const cfg = await scaleVmm.fetchPoolConfig(load, PAIR);
     expect(cfg.tokenProgramA).toBe(TOKEN_2022_PROGRAM);
     expect(cfg.tokenProgramB).toBe(TOKEN_PROGRAM);

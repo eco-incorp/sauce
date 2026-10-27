@@ -10,7 +10,9 @@ import {
   fetchMercurialPoolConfig,
   MERCURIAL_PROGRAM_ID,
 } from "../../../src/svm/venues/mercurial/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/index.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { ownedByShape } from "../fixtures.js";
 import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const enc = getAddressEncoder();
@@ -68,12 +70,12 @@ function buildVault(mint: Address, owner: Address): Uint8Array {
   return data;
 }
 
-function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
+function loaderOf(entries: Array<[Address, Uint8Array]>): OwnedAccountLoader {
   const map = new Map(entries.map(([a, d]) => [a as string, d]));
-  return async (addr) => {
+  return ownedByShape(async (addr) => {
     const d = map.get(addr as string);
     return d === undefined ? null : new Uint8Array(d);
-  };
+  });
 }
 
 describe("mercurial Token-2022 self-drop", () => {
@@ -89,6 +91,18 @@ describe("mercurial Token-2022 self-drop", () => {
       [mintA, makeT22Mint()],
       [mintB, makeLegacyMint()],
     ]);
+    await expect(fetchMercurialPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
+  });
+
+  it("drops a pool whose vault-A mint is an extensionless (82-byte) Token-2022 mint", async () => {
+    const shaped = loaderOf([
+      [POOL, buildPool(nonce)],
+      [VAULT_A, buildVault(mintA, authority)],
+      [VAULT_B, buildVault(mintB, authority)],
+      [mintB, makeLegacyMint()],
+    ]);
+    const load: OwnedAccountLoader = async (addr) =>
+      addr === mintA ? { data: makeLegacyMint(), owner: TOKEN_2022_PROGRAM_ID } : shaped(addr);
     await expect(fetchMercurialPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 

@@ -21,9 +21,10 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { ceilDiv, readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -176,7 +177,11 @@ export const raydiumCpSwap = {
   kind: "constant-product",
   programId: address(PROGRAM_ID),
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RaydiumCpSwapPoolConfig> {
+  async fetchPoolConfig(
+    owned: OwnedAccountLoader,
+    pool: Address,
+  ): Promise<RaydiumCpSwapPoolConfig> {
+    const load = accountDataLoader(owned);
     const codec = getAddressCodec();
     const pubkey = (data: Uint8Array, offset: number): Address =>
       codec.decode(data.subarray(offset, offset + 32));

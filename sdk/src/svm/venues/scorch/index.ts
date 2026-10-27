@@ -79,7 +79,8 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { SCORCH_ASSET_CONFIGS } from "./asset-configs.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -163,7 +164,8 @@ export const scorch = {
    * non-classic (likely token-2022) vault; any of those drops just this ONE
    * pool from discovery, per the venue-robustness convention.
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<ScorchPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<ScorchPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`scorch pool ${pool} does not exist`);
     if (data.length !== PAIR_CONFIG_SIZE) {
@@ -181,24 +183,27 @@ export const scorch = {
 
     // The ROUTER's swap CPI moves both sides through the classic Tokenkeg
     // program, so a Token-2022 mint (or one carrying an un-routable extension)
-    // must SELF-DROP. Detect the real token program per mint via the shared
-    // data-shape resolver (replacing the old vault-size T22 proxy); the thrown
-    // error IS the graceful drop (this ONE pool leaves discovery, per the
-    // venue-robustness convention). LEGACY path unchanged: a classic 82-byte
-    // mint classifies Tokenkeg, parses no extensions, config built as before. An
-    // unreadable mint falls back to the legacy assumption.
+    // must SELF-DROP. Detect the real token program per mint by its OWNER (an
+    // extensionless Token-2022 mint is byte-identical to a legacy one; this
+    // replaced the old vault-size T22 proxy); the thrown error IS the graceful
+    // drop (this ONE pool leaves discovery, per the venue-robustness
+    // convention). LEGACY path unchanged: a Tokenkeg-owned mint classifies
+    // Tokenkeg, parses no extensions, config built as before. An unreadable
+    // mint falls back to the legacy assumption.
     const mints = [mintA, mintB];
-    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
     for (let mi = 0; mi < mints.length; mi++) {
       const mint = mints[mi]!;
-      const mintData = mintDatas[mi]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintAccount = mintAccounts[mi]!;
+      if (mintAccount === null) continue;
+      if (
+        classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID
+      ) {
         throw new Error(
           `scorch: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );
       }
-      const { blocking } = parseMintExtensions(mintData);
+      const { blocking } = parseMintExtensions(mintAccount.data);
       if (blocking.length > 0) {
         throw new Error(
           `scorch: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

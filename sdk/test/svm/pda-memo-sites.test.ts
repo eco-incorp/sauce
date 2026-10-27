@@ -30,7 +30,7 @@ import {
   getCreateLookupTableInstructionAsync,
 } from "@solana-program/address-lookup-table";
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
-import type { AccountLoader } from "../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../src/svm/index.js";
 import { createAltWithAddresses } from "../../src/svm/alt.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
 import { __pdaMemoStats, __resetPdaMemoForTest } from "../../src/svm/venues/pda-memo.js";
@@ -67,7 +67,7 @@ import {
   tokenSwapV1,
 } from "../../src/svm/venues/spl-token-swap-forks/index.js";
 import { orcaLegacyTokenSwap } from "../../src/svm/venues/orca-legacy-token-swap/index.js";
-import { fixtureData, loadFixtures } from "./fixtures.js";
+import { fixtureData, loadFixtures, ownedByShape } from "./fixtures.js";
 import { makeLegacyMint } from "./fixtures/token-2022/synth.js";
 
 const enc = getAddressEncoder();
@@ -147,7 +147,7 @@ describe("find-style sites use the shared PDA memo", () => {
       [MINT, makeLegacyMint()],
       [lpMint, makeLegacyMint()],
     ]);
-    const load: AccountLoader = async (a) => accounts.get(a) ?? null;
+    const load = ownedByShape(async (a) => accounts.get(a) ?? null);
 
     await expectMemoized(
       () => fetchVoltrConfig(load, pool),
@@ -243,10 +243,8 @@ const VAULT_A = key(8);
 const VAULT_B = key(9);
 const MINT_A = key(10);
 const MINT_B = key(11);
-const loaderOf =
-  (accounts: [Address, Uint8Array][]): AccountLoader =>
-  async (a) =>
-    new Map<string, Uint8Array>(accounts).get(a) ?? null;
+const loaderOf = (accounts: [Address, Uint8Array][]): OwnedAccountLoader =>
+  ownedByShape(async (a) => new Map<string, Uint8Array>(accounts).get(a) ?? null);
 const saberFixtures = loadFixtures(resolve(process.cwd(), "test/svm/fixtures/saber-stableswap"));
 const SABER_POOL = address("YAkoNb6HKmSxQN9L8hiBE5tPJRsniSSMzND1boHmZxe");
 
@@ -273,12 +271,12 @@ const KNOWN_BUMP_SITES: KnownBumpSite[] = [
     program: SABER_STABLESWAP_PROGRAM_ID,
     seeds: (bump) => [enc.encode(SABER_POOL) as Uint8Array, Uint8Array.of(bump)],
     run: async (bump) => {
-      const load: AccountLoader = async (a) => {
+      const load: OwnedAccountLoader = async (a) => {
         const fixture = saberFixtures.find((f) => f.address === a);
         if (fixture === undefined) return null;
         const data = fixtureData(fixture);
         if (a === SABER_POOL) data[2] = bump;
-        return data;
+        return { data, owner: address(fixture.owner) };
       };
       const cfg = (await saberStableswap.fetchPoolConfig(load, SABER_POOL)) as SaberPoolConfig;
       return cfg.swapAuthority;

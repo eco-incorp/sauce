@@ -6,9 +6,11 @@
  * so the pool bytes are a minimal synthesized VirtualsPool account.
  */
 import { address, getAddressEncoder } from "@solana/kit";
-import { virtuals } from "../../../src/svm/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import type { Address } from "@solana/kit";
+import { virtuals, VIRTUALS_PROGRAM_ID } from "../../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
+import { TOKEN_2022_PROGRAM_ID } from "../../../src/svm/token-program.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const POOL = address("135Q44ShcCmWzaHZDJY25GejVQ4xwcgX9MzAEqE1eaFY");
 const BASE_MINT = address("CYShT7m7JGrbfMu6XAmt2XDz4zjsV8i9LnHisihjvirt");
@@ -24,11 +26,15 @@ function poolBytes(): Uint8Array {
   return out;
 }
 
-function loader(mintData: Uint8Array | null): AccountLoader {
+function loader(
+  mintData: Uint8Array | null,
+  mintOwner: Address = TOKEN_2022_PROGRAM_ID,
+): OwnedAccountLoader {
   const pool = poolBytes();
   return async (addr) => {
-    if (String(addr) === String(POOL)) return pool;
-    if (String(addr) === String(BASE_MINT)) return mintData;
+    if (String(addr) === String(POOL)) return { data: pool, owner: VIRTUALS_PROGRAM_ID };
+    if (String(addr) === String(BASE_MINT))
+      return mintData === null ? null : { data: mintData, owner: mintOwner };
     return null;
   };
 }
@@ -50,5 +56,11 @@ describe("virtuals Token-2022 self-drop", () => {
     await expect(
       virtuals.fetchPoolConfig(loader(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/dropping pool/);
+  });
+
+  test("an extensionless 82-byte base mint owned by Token-2022 self-drops", async () => {
+    await expect(
+      virtuals.fetchPoolConfig(loader(makeLegacyMint(), TOKEN_2022_PROGRAM_ID), POOL),
+    ).rejects.toThrow(/Token-2022/);
   });
 });
