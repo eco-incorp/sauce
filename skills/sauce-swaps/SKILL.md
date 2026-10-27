@@ -139,18 +139,13 @@ serves (`import { ISauceRouter } from "./artifacts/ISauceRouter.json"`, then
 | `swapInfinityCL(vault, key, tokenIn, zeroForOne, amountIn, sqrtPriceLimitX96, recipient)` | `sqrtPriceLimitX96` |
 | `swapInfinityBin(vault, key, tokenIn, swapForY, amountIn, recipient)`                     | none                |
 
-## A protocol's router, as its own examples call it
+## A protocol's router
 
-A protocol's router works in a program too, called as the protocol's Solidity examples call it:
-approve it for the input (`USDC.approve(router, amount)`, or `approve(token, router, amount)` for a
-token the registry names only as a contract), then call it through its namespace. Its exact-output
-forms are the one thing the library has no function for: Uniswap V3's SwapRouter buys an exact
-amount for at most a maximum. [examples/uniswap-v4-swap.sauce.ts](examples/uniswap-v4-swap.sauce.ts)
-ports Uniswap's V4 swap guide: the Universal Router approved through `Permit2.Permit2` for exactly
-the input, then one `V4_SWAP` command whose actions swap in one pool, settle the input and take the
-output, its inputs built with `abi.encode` and checked against what arrived. To swap on V4 inside a
-program, the library's `uniswapV4` is shorter; this is how a program speaks to a router that takes
-commands.
+A protocol's router works in a program too: approve it for the input
+(`USDC.approve(router, amount)`, or `approve(token, router, amount)` for a token the registry names
+only as a contract), then call it through its namespace. Its exact-output forms are the one thing
+the library has no function for: Uniswap V3's SwapRouter buys an exact amount for at most a
+maximum.
 
 ## Flash swaps
 

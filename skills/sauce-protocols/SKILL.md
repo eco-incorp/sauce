@@ -100,8 +100,7 @@ contract's part: it holds the tokens, receives what the protocol pays its caller
 the protocol mints it, a Uniswap V3 position's NFT included. A Pot is cooked by its owner alone, so
 the records and checks a contract keeps of who may call it fall away. Each Solidity function becomes
 a function of the program and `main` picks one; `msg.sender`'s tokens are already in the Pot, and
-an address the example hardcodes is the registry's name for it. Each ported example's header names
-the file it ports, pinned to a commit, and says what changed and why. One encoding differs:
+an address the example hardcodes is the registry's name for it. One encoding differs:
 Solidity's `abi.encode(s)` of a struct that holds a dynamic field (`bytes`, an array) is that struct
 as one value, behind an offset, while `abi.encode` encodes a record as its fields; write
 `abi.encode({ s: record })` for the Solidity bytes.
@@ -109,24 +108,6 @@ as one value, behind an offset, while `abi.encode` encodes a record as its field
 Aave's flash loan does not port: its Pool pays the receiver and then calls it back
 (`executeOperation`) to be repaid, and a Pot cannot be called back by a program. The flash a program
 has is a flash swap through the Pot's Router (`sauce-swaps`).
-
-[examples/compound-v3-my-contract.sauce.ts](examples/compound-v3-my-contract.sauce.ts) ports
-Compound's `MyContract`, its Compound III developer FAQ's example: supply, withdraw (a borrow past
-what is supplied), a whole borrow repaid and rewards claimed by `step`, each cook returning the
-contract's views for the Pot, and step 0 changing nothing, so `sauce simulate` is the read. The
-Comet and CometRewards functions are in [examples/Comet.json](examples/Comet.json). Its signed
-principal, an `Int256`, shows signed arithmetic beside unsigned: the sign is read with `>= 0`, each
-part converted with `Uint256(…)`, and the debt kept apart from the collateral until `Int256(…)`
-takes one from the other.
-
-[examples/morpho-blue-snippets.sauce.ts](examples/morpho-blue-snippets.sauce.ts) ports Morpho's
-own snippets for a Morpho Blue market, the market named by its id: supply, collateral in and out,
-withdrawals and repayments by an amount, half or all (by shares, their cost worked out as Morpho
-rounds it and approved exactly), a borrow, and the views a position needs, with Morpho's reads,
-the IRM's rate and the oracle's price in
-[examples/MorphoBlueReads.json](examples/MorphoBlueReads.json). A Solidity view that computes
-interest accrued since the market was last touched becomes `accrueInterest` and a read: a program
-runs as a transaction, even under `sauce simulate`.
 
 ## Pitfalls
 

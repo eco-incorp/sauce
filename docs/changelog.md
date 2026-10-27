@@ -313,17 +313,8 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
 
 ### The agent skills and the manual
 
-- **Removed**: seven of the ported Solidity examples, because their upstream licences do not
-  permit redistribution under the package's licence: Uniswap V3's `SwapExamples`
-  (`uniswap-v3-swap-examples.sauce.ts`), `LiquidityExamples`
-  (`uniswap-v3-liquidity-examples.sauce.ts`) and `PairFlash` (`uniswap-v3-pair-flash.sauce.ts`),
-  all GPL-2.0-or-later; Aave's credit delegation example (`aave-v3-credit-delegation.sauce.ts`),
-  AGPL-3.0; Pendle's router samples (`pendle-router-sample.sauce.ts`), UNLICENSED; and Balancer's
-  batch and flash swaps (`balancer-v2-batch-swap.sauce.ts`, `balancer-v2-flash-swap.sauce.ts`),
-  published with no licence. The ABI files only they imported (`SauceRouterFlash.json`,
-  `UniswapV3Positions.json`, `AaveV3Delegation.json`, `PendleRouterSample.json`) are removed with
-  them. Uniswap V4's swap guide, Compound III and Morpho Blue stay, in `sauce-swaps`,
-  `sauce-protocols` and [From Solidity examples to Sauce](guides/solidity-examples.md).
+- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
+  them.
 
 **Also breaking:**
 
@@ -765,7 +756,7 @@ upgrade authority, which can replace them after the check.
 - **Added**: ten of the protocols' own Solidity examples, ported to Sauce (Uniswap V3's swap,
   flash and liquidity examples, Uniswap V4's swap guide, Balancer V2's batch and flash swaps, Aave
   V3 credit delegation, Compound III, Morpho Blue and Pendle), each beside the file it ports, in
-  `sauce-swaps` and `sauce-protocols` and in [From Solidity examples to Sauce](guides/solidity-examples.md).
+  `sauce-swaps` and `sauce-protocols` and in From Solidity examples to Sauce.
   The swaps, the liquidity examples and the flash swaps execute on Ethereum's state at a fixed
   block; the PairFlash port runs once a trade has moved one of its two pools.
 

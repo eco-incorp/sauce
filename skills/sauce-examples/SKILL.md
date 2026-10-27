@@ -1,6 +1,6 @@
 ---
 name: sauce-examples
-description: The cookbook of complete Sauce programs, each run against real contracts before it ships, and the index of every example in every skill. Buying a tokenized stock under a price cap, a dollar-cost-averaging tick, a stop-loss and take-profit on Chainlink's price, an Aave V3 health-factor guard, lending idle USDC above a reserve, a weighted USDC payroll, a two-token rebalance, a read-only price survey run with sauce simulate, and a Token-2022 stock payment on Solana, on Ethereum, Base and Solana; the protocols' own Solidity examples, ported to Sauce; and every program, actions document and runner in the other skills, with the chains it is checked on and the skill that explains it. Use when the user says "show me an example", "sample Sauce program", "how do I write X in Sauce", or wants a complete program for a task such as buying a stock, DCA, a limit or stop order, a lending position, payroll, rebalancing, reading prices or a Solana token payment.
+description: The cookbook of complete Sauce programs, each run against real contracts before it ships, and the index of every example in every skill. Buying a tokenized stock under a price cap, a dollar-cost-averaging tick, a stop-loss and take-profit on Chainlink's price, an Aave V3 health-factor guard, lending idle USDC above a reserve, a weighted USDC payroll, a two-token rebalance, a read-only price survey run with sauce simulate, and a Token-2022 stock payment on Solana, on Ethereum, Base and Solana; and every program, actions document and runner in the other skills, with the chains it is checked on and the skill that explains it. Use when the user says "show me an example", "sample Sauce program", "how do I write X in Sauce", or wants a complete program for a task such as buying a stock, DCA, a limit or stop order, a lending position, payroll, rebalancing, reading prices or a Solana token payment.
 ---
 
 # Sauce examples
@@ -56,19 +56,6 @@ correct program does a thing, and is not a template to fill in.
 | [`../sauce-examples/examples/pay-stock.sauce.ts`](examples/pay-stock.sauce.ts)     | `solana`           | Pay a tokenized stock on Solana                                       | Token-2022 `transferChecked` for `TSLAx`, the source bound to the Pot and the destination to the payee, a floor the Pot keeps, what arrived measured, staged by `sauce run`                                                                                           |
 
 ## Examples in other skills
-
-### The protocols' own examples, ported
-
-Each program here is a protocol's own Solidity example ported to Sauce: its header names the file it
-ports, with a link pinned to a commit, and says what changed and why. Each is run on Ethereum's
-state against the protocol's deployed contracts, its results held to the protocol's own quotes and
-accounts.
-
-| Program                                                                                                                        | Chains     | Ported from                                                                                                                                                                                                                                                                                                                                        | Skill             |
-| ------------------------------------------------------------------------------------------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| [`../sauce-swaps/examples/uniswap-v4-swap.sauce.ts`](../sauce-swaps/examples/uniswap-v4-swap.sauce.ts)                         | `ethereum` | Uniswap's V4 swap guide: the Universal Router approved through Permit2 for exactly the input, one `V4_SWAP` command with its actions and their inputs built with `abi.encode`, a pool key as a record argument, the output measured                                                                                                                | `sauce-swaps`     |
-| [`../sauce-protocols/examples/compound-v3-my-contract.sauce.ts`](../sauce-protocols/examples/compound-v3-my-contract.sauce.ts) | `ethereum` | Compound's `MyContract` (the Compound III developer FAQ): supply, borrow, repay in full and claim by `step`, every cook returning the views (APRs, reward APRs, what can be borrowed, factors, price, rewards owed, TVL), a signed principal in unsigned arithmetic; the Comet functions in [`Comet.json`](../sauce-protocols/examples/Comet.json) | `sauce-protocols` |
-| [`../sauce-protocols/examples/morpho-blue-snippets.sauce.ts`](../sauce-protocols/examples/morpho-blue-snippets.sauce.ts)       | `ethereum` | Morpho's `MorphoBlueSnippets`: every snippet by `step` on one market named by its id (supply, collateral, withdraw and repay by amount, half or all, borrow), the views after `accrueInterest`, the reads in [`MorphoBlueReads.json`](../sauce-protocols/examples/MorphoBlueReads.json)                                                            | `sauce-protocols` |
 
 ### SauceScript programs
 
