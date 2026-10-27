@@ -346,6 +346,12 @@ WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, 
   texts. The Hylo venue's quote module, a transliteration of Hylo's SDK, carries the Mozilla
   Public License 2.0 notice that license requires, and the package ships its source,
   `sdk/src/svm/venues/hylo/index.ts`.
+- **Changed: the Solana venue modules' third-party sources are attributed, and DLMM, HumidiFi
+  and Manifest helpers are rewritten from specifications.** `THIRD_PARTY_NOTICES.md` adds the
+  sources of the Meteora DBC and DAMM v2, Crema, Jupiter Perps, Bonkswap, Carrot and Mercurial
+  modules, each under its license, and the venue files' comments name them. The DLMM bin math
+  (shared by Meteora DLMM and Saros DLMM), HumidiFi's swap-data encoding and Manifest's order-book
+  walk are new implementations written from specifications, with the same results.
 
 ## SDK 0.99.17 — 2026-10-27
 

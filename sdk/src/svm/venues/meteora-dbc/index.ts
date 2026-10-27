@@ -12,7 +12,11 @@
  * MATH (verified against the program source, github.com/MeteoraAg/
  * dynamic-bonding-curve, and cross-checked lamport-for-lamport against the
  * official `@meteora-ag/dynamic-bonding-curve-sdk`'s `swapQuoteExactIn` on
- * REAL mainnet pool state — see the venue test for the worked examples):
+ * REAL mainnet pool state — see the venue test for the worked examples;
+ * every constant and field used here is in that SDK,
+ * github.com/MeteoraAg/dynamic-bonding-curve-sdk at commit 44420de8,
+ * Copyright (c) 2026 Meteora, licensed under the MIT License, see
+ * THIRD_PARTY_NOTICES.md):
  * each curve point is a Uniswap-v3-style constant-product BAND in Q64.64
  * sqrt-price space (`x*y = L^2`), walked from the live `sqrt_price` toward
  * the next boundary. `get_next_sqrt_price_from_{base,quote}_amount_in` and

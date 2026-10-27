@@ -70,10 +70,11 @@
  * HIGHEST-price resting bid; for an Ask entry the comparison is the
  * ordinary ascending one, so `get_min()` on `asks` returns the LOWEST-price
  * resting ask. Both are exactly "best resting order" for a taker on that
- * side. The in-order SUCCESSOR of the tree's min (climb via the Parent
- * register exactly like `manifest`'s off-chain `nextLower` walk — standard
- * BST successor, mathematically identical to sokoban's own stack-based
- * forward iterator) visits every further resting order best-first, which is
+ * side. Stepping from the tree's min to its in-order SUCCESSOR, over and
+ * over (go to the leftmost node of the right subtree when there is one, else
+ * climb the Parent register until arriving from a left child), visits every
+ * further resting order best-first, the same order sokoban's own forward
+ * iterator yields, which is
  * exactly the taker's match order (`match_order`, fifo.rs, always reads
  * `book.get_min()` first and would continue via the same successor chain
  * were the walk not IOC-bounded).
