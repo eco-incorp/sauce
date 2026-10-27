@@ -349,7 +349,9 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
   ],
   // base-sepolia (84532), a testnet -- Circle's testnet USDC
   // (developers.circle.com/stablecoins/usdc-contract-addresses, "Testnet"), probe-verified
-  // 2026-10-26. No WETH: the stack's testnets carry Circle's stablecoins only.
+  // 2026-10-26. WETH is the WETH9 predeploy (docs.base.org/base-chain/network-information/
+  // base-contracts, Base Testnet (Sepolia)), the WETH9() of Uniswap's Base Sepolia periphery,
+  // probe-verified 2026-10-27.
   84532: [
     {
       symbol: "USDC",
@@ -357,11 +359,18 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       decimals: 6,
       source: "probe:base-sepolia@2026-10-26; circle:usdc-contract-addresses",
     },
+    {
+      symbol: "WETH",
+      address: "0x4200000000000000000000000000000000000006",
+      decimals: 18,
+      source: "probe:base-sepolia@2026-10-27; base:base-contracts",
+    },
   ],
   // arc-testnet (5042002), a testnet -- docs.arc.io/arc/references/contract-addresses, "Testnet",
-  // probe-verified 2026-10-26. USDC is the same 6-decimal ERC-20 interface to the native coin as on
-  // Arc. EURC is Circle's. The testnet's USYC (allowlisted holders only), cirBTC (whose symbol()
-  // no ticker key takes) and bridged WETH are not registered.
+  // probe-verified 2026-10-26 (WETH 2026-10-27). USDC is the same 6-decimal ERC-20 interface to the
+  // native coin as on Arc. EURC is Circle's. WETH is bridged ETH, as on Arc: not a wrapped native,
+  // which Arc Testnet has none of. The testnet's USYC (allowlisted holders only) and cirBTC (whose
+  // symbol() no ticker key takes) are not registered.
   5042002: [
     {
       symbol: "USDC",
@@ -375,16 +384,31 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       decimals: 6,
       source: "probe:arc-testnet@2026-10-26; arc:contract-addresses",
     },
+    {
+      symbol: "WETH",
+      address: "0x2c4047028a72803939b6fb674D01bC059B5C4961",
+      decimals: 18,
+      source: "probe:arc-testnet@2026-10-27; arc:contract-addresses",
+    },
   ],
   // sepolia (11155111), a testnet -- Circle's testnet USDC
   // (developers.circle.com/stablecoins/usdc-contract-addresses, "Testnet"), probe-verified
-  // 2026-10-26.
+  // 2026-10-26. WETH is the WETH9 Uniswap lists as Sepolia's wrapped native
+  // (developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments) and its Sepolia
+  // periphery's WETH9(), probe-verified 2026-10-27. Aave's Sepolia market lists its own test WETH,
+  // another token, which is not registered.
   11155111: [
     {
       symbol: "USDC",
       address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
       decimals: 6,
       source: "probe:sepolia@2026-10-26; circle:usdc-contract-addresses",
+    },
+    {
+      symbol: "WETH",
+      address: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+      decimals: 18,
+      source: "probe:sepolia@2026-10-27; uniswap:v3-ethereum-deployments",
     },
   ],
 };

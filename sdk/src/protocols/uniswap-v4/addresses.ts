@@ -144,4 +144,29 @@ export const deployments: ChainDeployment[] = [
       stateView: "0xbc21f8720BABf4b20d195eE5C6e99c52b76F2bfb",
     },
   },
+  // Ethereum Sepolia (11155111) and Base Sepolia (84532) — developers.uniswap.org/docs/protocols/v4/
+  // deployments ("Sepolia: 11155111", "Base Sepolia: 84532"; also developers.uniswap.org/
+  // deployments.json). Verified on-chain 2026-10-27: code at each address, and poolManager() ==
+  // poolManager on the position manager, the Universal Router and StateView. universalRouter is the
+  // page's "Universal Router 2.1.2" on both chains. Uniswap documents no V4 on Arc Testnet.
+  {
+    chainId: 11155111,
+    chainName: "Ethereum Sepolia",
+    addresses: {
+      poolManager: "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+      universalRouter: "0x7E4f6c5e954Da5c61B3423D81E2277431Ac043f3",
+      positionManager: "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4",
+      stateView: "0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C",
+    },
+  },
+  {
+    chainId: 84532,
+    chainName: "Base Sepolia",
+    addresses: {
+      poolManager: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408",
+      universalRouter: "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
+      positionManager: "0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80",
+      stateView: "0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4",
+    },
+  },
 ];

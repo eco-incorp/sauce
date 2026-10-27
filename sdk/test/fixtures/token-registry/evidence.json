@@ -1893,22 +1893,25 @@
       }
     },
     "84532": {
-      "block": 50664107,
+      "block": 51052075,
       "tokens": {
-        "0x036CbD53842c5426634e7929541eC2318f3dCF7e": {"code":1798,"symbol":"USDC","decimals":6}
+        "0x036CbD53842c5426634e7929541eC2318f3dCF7e": {"code":1798,"symbol":"USDC","decimals":6},
+        "0x4200000000000000000000000000000000000006": {"code":2041,"symbol":"WETH","decimals":18}
       }
     },
     "5042002": {
-      "block": 69243397,
+      "block": 69386060,
       "tokens": {
         "0x3600000000000000000000000000000000000000": {"code":1798,"symbol":"USDC","decimals":6},
-        "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a": {"code":1798,"symbol":"EURC","decimals":6}
+        "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a": {"code":1798,"symbol":"EURC","decimals":6},
+        "0x2c4047028a72803939b6fb674D01bC059B5C4961": {"code":735,"symbol":"WETH","decimals":18}
       }
     },
     "11155111": {
-      "block": 12001055,
+      "block": 12007471,
       "tokens": {
-        "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238": {"code":1798,"symbol":"USDC","decimals":6}
+        "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238": {"code":1798,"symbol":"USDC","decimals":6},
+        "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14": {"code":3124,"symbol":"WETH","decimals":18}
       }
     },
     "1399811149": {

@@ -112,11 +112,11 @@ export const Zora = composedChainGlobal("Zora") as Composed<"Zora">;
 /** The chain accessor for Aurora (chain id 1313161554). */
 export const Aurora = composedChainGlobal("Aurora") as Composed<"Aurora">;
 /** The chain accessor for Base Sepolia (chain id 84532). */
-export const BaseSepolia = composedChainGlobal("BaseSepolia") as Composed<"BaseSepolia"> & Tokens<"USDC">;
+export const BaseSepolia = composedChainGlobal("BaseSepolia") as Composed<"BaseSepolia"> & Tokens<"USDC" | "WETH">;
 /** The chain accessor for Arc Testnet (chain id 5042002). */
-export const ArcTestnet = composedChainGlobal("ArcTestnet") as Composed<"ArcTestnet"> & Tokens<"USDC" | "EURC">;
+export const ArcTestnet = composedChainGlobal("ArcTestnet") as Composed<"ArcTestnet"> & Tokens<"USDC" | "EURC" | "WETH">;
 /** The chain accessor for Ethereum Sepolia (chain id 11155111). */
-export const Sepolia = composedChainGlobal("Sepolia") as Composed<"Sepolia"> & Tokens<"USDC">;
+export const Sepolia = composedChainGlobal("Sepolia") as Composed<"Sepolia"> & Tokens<"USDC" | "WETH">;
 /** The chain accessor for Unichain (chain id 130). */
 export const Unichain = composedChainGlobal("Unichain") as Composed<"Unichain"> & Tokens<"USDT0">;
 /** The chain accessor for Monad (chain id 143). */

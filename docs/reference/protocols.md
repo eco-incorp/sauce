@@ -60,9 +60,9 @@ forks: PancakeSwap V3, Aerodrome Slipstream, Algebra pools, Synthra, UnitFlow), 
 | [Thena](protocols/thena.md) | — | `Thena`: bsc | bsc |
 | [Thruster](protocols/thruster.md) | — | `Thruster`: blast | blast |
 | [Trader Joe](protocols/trader-joe.md) | — | `TraderJoe`: bsc, arbitrum, avalanche | bsc, arbitrum, avalanche |
-| [Uniswap V2](protocols/uniswap-v2.md) | `Uniswap` | `UniswapV2`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
-| [Uniswap V3](protocols/uniswap-v3.md) | `Uniswap` | `UniswapV3`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| [Uniswap V4](protocols/uniswap-v4.md) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
+| [Uniswap V2](protocols/uniswap-v2.md) | `Uniswap` | `UniswapV2`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia |
+| [Uniswap V3](protocols/uniswap-v3.md) | `Uniswap` | `UniswapV3`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
+| [Uniswap V4](protocols/uniswap-v4.md) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia |
 | [UnitFlow V3](protocols/unitflow-v3.md) | `Unitflow` | `UnitflowV3`: arc | arc |
 | [Velodrome](protocols/velodrome.md) | — | `Velodrome`: optimism | optimism |
 
@@ -107,7 +107,7 @@ prices, and a position below its liquidation threshold can be liquidated by anyo
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Aave V2](protocols/aave-v2.md) | `Aave` | `AaveV2`: ethereum, polygon, avalanche | ethereum, polygon, avalanche |
-| [Aave V3](protocols/aave-v3.md) | `Aave` | `AaveV3`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
+| [Aave V3](protocols/aave-v3.md) | `Aave` | `AaveV3`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia |
 | [Aave V4](protocols/aave-v4.md) | `Aave` | `AaveV4`: ethereum, arc, base, avalanche | ethereum, arc, base, avalanche |
 | [Benqi](protocols/benqi.md) | — | `Benqi`: avalanche | avalanche |
 | [Compound V2](protocols/compound-v2.md) | `Compound` | `CompoundV2`: ethereum | ethereum |
@@ -386,8 +386,8 @@ ambiguous, and a program names the versioned namespace instead.
 | `Aave.MainSpoke` | `AaveV4.MainSpoke` | ethereum, arc, avalanche |
 | `Aave.PaxgGoldSpoke` | `AaveV4.PaxgGoldSpoke` | ethereum |
 | `Aave.PlusHub` | `AaveV4.PlusHub` | ethereum |
-| `Aave.Pool` | `AaveV3.Pool` | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
-| `Aave.PoolAddressesProvider` | `AaveV3.PoolAddressesProvider` | ethereum, optimism, polygon, monad, base, arbitrum, avalanche |
+| `Aave.Pool` | `AaveV3.Pool` | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia |
+| `Aave.PoolAddressesProvider` | `AaveV3.PoolAddressesProvider` | ethereum, optimism, polygon, monad, base, arbitrum, avalanche, base-sepolia, sepolia |
 | `Aave.PrimeHub` | `AaveV4.PrimeHub` | ethereum |
 | `Aave.UsdgMapleESpoke` | `AaveV4.UsdgMapleESpoke` | ethereum |
 | `Aave.UsdgPendleSpoke` | `AaveV4.UsdgPendleSpoke` | ethereum |
@@ -419,15 +419,15 @@ ambiguous, and a program names the versioned namespace instead.
 | `Synthra.NonfungiblePositionManager` | `SynthraV3.NonfungiblePositionManager` | arc |
 | `Synthra.QuoterV2` | `SynthraV3.QuoterV2` | arc |
 | `Synthra.SwapRouter02` | `SynthraV3.SwapRouter02` | arc |
-| `Uniswap.NonfungiblePositionManager` | `UniswapV3.NonfungiblePositionManager` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| `Uniswap.PoolManager` | `UniswapV4.PoolManager` | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
-| `Uniswap.PositionManager` | `UniswapV4.PositionManager` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
-| `Uniswap.QuoterV2` | `UniswapV3.QuoterV2` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| `Uniswap.Router` | `UniswapV2.Router` | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
-| `Uniswap.StateView` | `UniswapV4.StateView` | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
+| `Uniswap.NonfungiblePositionManager` | `UniswapV3.NonfungiblePositionManager` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
+| `Uniswap.PoolManager` | `UniswapV4.PoolManager` | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia |
+| `Uniswap.PositionManager` | `UniswapV4.PositionManager` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche, base-sepolia, sepolia |
+| `Uniswap.QuoterV2` | `UniswapV3.QuoterV2` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
+| `Uniswap.Router` | `UniswapV2.Router` | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia |
+| `Uniswap.StateView` | `UniswapV4.StateView` | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia |
 | `Uniswap.SwapRouter` | `UniswapV3.SwapRouter` | ethereum, optimism, polygon, arbitrum |
-| `Uniswap.SwapRouter02` | `UniswapV3.SwapRouter02` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| `Uniswap.UniversalRouter` | `UniswapV4.UniversalRouter` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
+| `Uniswap.SwapRouter02` | `UniswapV3.SwapRouter02` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
+| `Uniswap.UniversalRouter` | `UniswapV4.UniversalRouter` | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche, base-sepolia, sepolia |
 | `Unitflow.Factory` | `UnitflowV3.Factory` | arc |
 | `Unitflow.Quoter` | `UnitflowV3.Quoter` | arc |
 | `Unitflow.Router` | `UnitflowV3.Router` | arc |

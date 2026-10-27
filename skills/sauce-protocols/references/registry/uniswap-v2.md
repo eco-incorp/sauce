@@ -8,8 +8,8 @@ Constant product AMM (x*y=k) with permissionless pair creation. The most forked 
 | --- | --- |
 | Category | DEX |
 | Family | `Uniswap`: `uniswap-v2`, `uniswap-v3`, `uniswap-v4` |
-| Namespace | `UniswapV2` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
-| Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
+| Namespace | `UniswapV2` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia |
+| Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia |
 | Document | [uniswap-v2.md](../uniswap-v2.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
@@ -47,6 +47,8 @@ function main() {
 | [Blast](../../../sauce-chains/references/blast.md) | router | `0xBB66Eb1c5e875933D44DAe661dbD80e5D9B03035` | `UniswapV2.Router` |
 | [Zora](../../../sauce-chains/references/zora.md) | factory | `0x0F797dC7efaEA995bB916f268D919d0a1950eE3C` | `UniswapV2.Factory` |
 | [Zora](../../../sauce-chains/references/zora.md) | router | `0xa00F34A632630EFd15223B1968358bA4845bEEC7` | `UniswapV2.Router` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | factory | `0xF62c03E08ada871A0bEb309762E260a7a6a880E6` | `UniswapV2.Factory` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | router | `0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3` | `UniswapV2.Router` |
 
 ## ABI
 

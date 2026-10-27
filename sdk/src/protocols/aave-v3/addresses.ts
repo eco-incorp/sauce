@@ -94,4 +94,30 @@ export const deployments: ChainDeployment[] = [
       pool: "0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57",
     },
   },
+  // Ethereum Sepolia (11155111) — Aave's "Ethereum Sepolia V3 Market" (aave.com/docs/resources/addresses,
+  // V3 > Testnet; bgd-labs/aave-address-book AaveV3Sepolia.sol). Verified on-chain 2026-10-27:
+  // pool.ADDRESSES_PROVIDER() == poolAddressesProvider, poolAddressesProvider.getPool() == pool, and
+  // getMarketId() == "Ethereum Aave Market". Its reserves are Aave's own test tokens (its USDC and
+  // WETH are not the registry's), so a program names them by address.
+  {
+    chainId: 11155111,
+    chainName: "Ethereum Sepolia",
+    addresses: {
+      pool: "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
+      poolAddressesProvider: "0x012bAC54348C0E635dCAc9D5FB99f06F24136C9A",
+    },
+  },
+  // Base Sepolia (84532) — Aave's address book, bgd-labs/aave-address-book AaveV3BaseSepolia.sol
+  // (aave.com/docs/resources/addresses lists only the Sepolia testnet market). Verified on-chain
+  // 2026-10-27: pool.ADDRESSES_PROVIDER() == poolAddressesProvider, poolAddressesProvider.getPool()
+  // == pool, and getMarketId() == "Aave V3 Base Testnet Market". Its WETH reserve is Base Sepolia's
+  // WETH9 predeploy; its USDC is Aave's own test token, not the registry's.
+  {
+    chainId: 84532,
+    chainName: "Base Sepolia",
+    addresses: {
+      pool: "0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27",
+      poolAddressesProvider: "0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00",
+    },
+  },
 ];

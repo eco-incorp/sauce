@@ -118,4 +118,31 @@ export const deployments: ChainDeployment[] = [
       nonfungiblePositionManager: "0x3d79EdAaBC0EaB6F08ED885C05Fc0B014290D95A",
     },
   },
+  // The two testnets Uniswap documents V3 on (developers.uniswap.org/docs/protocols/v3/deployments:
+  // v3-ethereum-deployments "Ethereum Sepolia", v3-base-deployments "Base Sepolia"; also
+  // developers.uniswap.org/deployments.json, Uniswap/contracts@cd2e8a8). Each verified on-chain
+  // 2026-10-27 over the public RPCs: code at the address, factory.feeAmountTickSpacing(500) == 10,
+  // and factory() == the factory here on SwapRouter02, QuoterV2 and the position manager. WETH9()
+  // is Sepolia's WETH9 and Base Sepolia's predeploy. Only SwapRouter02 is deployed (no legacy
+  // SwapRouter), and its factoryV2() is zero. Uniswap lists no V3 on Arc Testnet.
+  {
+    chainId: 11155111,
+    chainName: "Ethereum Sepolia",
+    addresses: {
+      factory: "0x0227628f3F023bb0B980b67D528571c95c6DaC1c",
+      swapRouter02: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+      quoterV2: "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3",
+      nonfungiblePositionManager: "0x1238536071E1c677A632429e3655c799b22cDA52",
+    },
+  },
+  {
+    chainId: 84532,
+    chainName: "Base Sepolia",
+    addresses: {
+      factory: "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+      swapRouter02: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4",
+      quoterV2: "0xC5290058841028F1614F3A6F0F5816cAd0df5E27",
+      nonfungiblePositionManager: "0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2",
+    },
+  },
 ];

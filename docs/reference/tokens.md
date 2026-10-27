@@ -35,9 +35,9 @@ writes.
 | [Arbitrum One](chains/arbitrum.md) | `USDC`, `USDT0`, `WETH` | — |
 | [Ink](chains/ink.md) | `USDT0` | — |
 | [Berachain](chains/berachain.md) | `USDT0` | — |
-| [Base Sepolia](chains/base-sepolia.md) | `USDC` | — |
-| [Arc Testnet](chains/arc-testnet.md) | `EURC`, `USDC` | — |
-| [Ethereum Sepolia](chains/sepolia.md) | `USDC` | — |
+| [Base Sepolia](chains/base-sepolia.md) | `USDC`, `WETH` | — |
+| [Arc Testnet](chains/arc-testnet.md) | `EURC`, `USDC`, `WETH` | — |
+| [Ethereum Sepolia](chains/sepolia.md) | `USDC`, `WETH` | — |
 | [Solana](chains/solana.md) | `PYUSD`, `USDC`, `USDT`, `WSOL` | [1799](chains/solana-stocks.md) |
 | [Solana Devnet](chains/solana-devnet.md) | `USDC`, `WSOL` | — |
 | [Solana Testnet](chains/solana-testnet.md) | `WSOL` | — |
@@ -218,6 +218,7 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | 6 |
+| `WETH` | `0x4200000000000000000000000000000000000006` | 18 |
 
 ## Arc Testnet
 
@@ -225,6 +226,7 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | --- | --- | --- |
 | `EURC` | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6 |
 | `USDC` | `0x3600000000000000000000000000000000000000` | 6 |
+| `WETH` | `0x2c4047028a72803939b6fb674D01bC059B5C4961` | 18 |
 
 The native coin is USDC (18 decimals), and `USDC`
 is its ERC-20 face (6 decimals): one balance, read at two scales.
@@ -235,6 +237,7 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | 6 |
+| `WETH` | `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14` | 18 |
 
 ## Solana
 

@@ -83,4 +83,17 @@ export const deployments: ChainDeployment[] = [
       router: "0xa00F34A632630EFd15223B1968358bA4845bEEC7",
     },
   },
+  // Ethereum Sepolia (11155111) — developers.uniswap.org/docs/protocols/v2/deployments ("Sepolia").
+  // Verified on-chain 2026-10-27: router.factory() == this factory, router.WETH() is Sepolia's
+  // WETH9, and factory.allPairsLength() > 0. developers.uniswap.org/deployments.json names another
+  // factory (0xB7f9…98A0) that this router does not use; the docs page's pair is the one registered.
+  // Uniswap documents no V2 on Base Sepolia or Arc Testnet.
+  {
+    chainId: 11155111,
+    chainName: "Ethereum Sepolia",
+    addresses: {
+      factory: "0xF62c03E08ada871A0bEb309762E260a7a6a880E6",
+      router: "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3",
+    },
+  },
 ];

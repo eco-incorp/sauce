@@ -55,9 +55,9 @@ forks: PancakeSwap V3, Aerodrome Slipstream, Algebra pools, Synthra, UnitFlow), 
 | [Thena](thena.md) ([registry](registry/thena.md)) | — | `Thena`: bsc | bsc |
 | [Thruster](thruster.md) ([registry](registry/thruster.md)) | — | `Thruster`: blast | blast |
 | [Trader Joe](trader-joe.md) ([registry](registry/trader-joe.md)) | — | `TraderJoe`: bsc, arbitrum, avalanche | bsc, arbitrum, avalanche |
-| [Uniswap V2](uniswap-v2.md) ([registry](registry/uniswap-v2.md)) | `Uniswap` | `UniswapV2`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
-| [Uniswap V3](uniswap-v3.md) ([registry](registry/uniswap-v3.md)) | `Uniswap` | `UniswapV3`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| [Uniswap V4](uniswap-v4.md) ([registry](registry/uniswap-v4.md)) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
+| [Uniswap V2](uniswap-v2.md) ([registry](registry/uniswap-v2.md)) | `Uniswap` | `UniswapV2`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora, sepolia |
+| [Uniswap V3](uniswap-v3.md) ([registry](registry/uniswap-v3.md)) | `Uniswap` | `UniswapV3`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
+| [Uniswap V4](uniswap-v4.md) ([registry](registry/uniswap-v4.md)) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia |
 | [UnitFlow V3](unitflow-v3.md) ([registry](registry/unitflow-v3.md)) | `Unitflow` | `UnitflowV3`: arc | arc |
 | [Velodrome](velodrome.md) ([registry](registry/velodrome.md)) | — | `Velodrome`: optimism | optimism |
 
@@ -102,7 +102,7 @@ prices, and a position below its liquidation threshold can be liquidated by anyo
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Aave V2](aave-v2.md) ([registry](registry/aave-v2.md)) | `Aave` | `AaveV2`: ethereum, polygon, avalanche | ethereum, polygon, avalanche |
-| [Aave V3](aave-v3.md) ([registry](registry/aave-v3.md)) | `Aave` | `AaveV3`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
+| [Aave V3](aave-v3.md) ([registry](registry/aave-v3.md)) | `Aave` | `AaveV3`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia |
 | [Aave V4](aave-v4.md) ([registry](registry/aave-v4.md)) | `Aave` | `AaveV4`: ethereum, arc, base, avalanche | ethereum, arc, base, avalanche |
 | [Benqi](benqi.md) ([registry](registry/benqi.md)) | — | `Benqi`: avalanche | avalanche |
 | [Compound V2](compound-v2.md) ([registry](registry/compound-v2.md)) | `Compound` | `CompoundV2`: ethereum | ethereum |

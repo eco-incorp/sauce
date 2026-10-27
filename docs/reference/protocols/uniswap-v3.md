@@ -16,8 +16,8 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
 | --- | --- |
 | Category | DEX |
 | Family | `Uniswap`: `uniswap-v2`, `uniswap-v3`, `uniswap-v4` |
-| Namespace | `UniswapV3` on ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| Chains | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
+| Namespace | `UniswapV3` on ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
+| Chains | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche, base-sepolia, sepolia |
 
 ## When to use it
 
@@ -139,6 +139,14 @@ function main() {
 | [Avalanche C-Chain](../chains/avalanche.md) | nonfungiblePositionManager | `0x655C406EBFa14EE2006250925e54ec43AD184f8B` | `UniswapV3.NonfungiblePositionManager` |
 | [Avalanche C-Chain](../chains/avalanche.md) | quoterV2 | `0xbe0F5544EC67e9B3b2D979aaA43f18Fd87E6257F` | `UniswapV3.QuoterV2` |
 | [Avalanche C-Chain](../chains/avalanche.md) | swapRouter02 | `0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE` | `UniswapV3.SwapRouter02` |
+| [Base Sepolia](../chains/base-sepolia.md) | factory | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | `UniswapV3.Factory` |
+| [Base Sepolia](../chains/base-sepolia.md) | nonfungiblePositionManager | `0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2` | `UniswapV3.NonfungiblePositionManager` |
+| [Base Sepolia](../chains/base-sepolia.md) | quoterV2 | `0xC5290058841028F1614F3A6F0F5816cAd0df5E27` | `UniswapV3.QuoterV2` |
+| [Base Sepolia](../chains/base-sepolia.md) | swapRouter02 | `0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4` | `UniswapV3.SwapRouter02` |
+| [Ethereum Sepolia](../chains/sepolia.md) | factory | `0x0227628f3F023bb0B980b67D528571c95c6DaC1c` | `UniswapV3.Factory` |
+| [Ethereum Sepolia](../chains/sepolia.md) | nonfungiblePositionManager | `0x1238536071E1c677A632429e3655c799b22cDA52` | `UniswapV3.NonfungiblePositionManager` |
+| [Ethereum Sepolia](../chains/sepolia.md) | quoterV2 | `0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3` | `UniswapV3.QuoterV2` |
+| [Ethereum Sepolia](../chains/sepolia.md) | swapRouter02 | `0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E` | `UniswapV3.SwapRouter02` |
 
 ## ABI
 

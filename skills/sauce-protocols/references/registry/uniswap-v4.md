@@ -8,8 +8,8 @@ Singleton AMM with hooks architecture enabling custom pool logic, flash accounti
 | --- | --- |
 | Category | DEX |
 | Family | `Uniswap`: `uniswap-v2`, `uniswap-v3`, `uniswap-v4` |
-| Namespace | `UniswapV4` on ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
-| Chains | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
+| Namespace | `UniswapV4` on ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia |
+| Chains | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, base-sepolia, zora, sepolia |
 | Document | [uniswap-v4.md](../uniswap-v4.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
@@ -71,8 +71,16 @@ function main() {
 | [Ink](../../../sauce-chains/references/ink.md) | stateView | `0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990` | `UniswapV4.StateView` |
 | [Blast](../../../sauce-chains/references/blast.md) | poolManager | `0x1631559198A9e474033433b2958daBC135ab6446` | `UniswapV4.PoolManager` |
 | [Blast](../../../sauce-chains/references/blast.md) | stateView | `0x12a88AE16F46DCe4e8B15368008Ab3380885df30` | `UniswapV4.StateView` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | poolManager | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` | `UniswapV4.PoolManager` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | positionManager | `0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80` | `UniswapV4.PositionManager` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | stateView | `0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4` | `UniswapV4.StateView` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | universalRouter | `0x8702463e73f74d0b6765aBceb314Ef07aCb92650` | `UniswapV4.UniversalRouter` |
 | [Zora](../../../sauce-chains/references/zora.md) | poolManager | `0x0575338e4C17006aE181B47900A84404247CA30f` | `UniswapV4.PoolManager` |
 | [Zora](../../../sauce-chains/references/zora.md) | stateView | `0x385785Af07d63b50d0a0ea57C4FF89D06adf7328` | `UniswapV4.StateView` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | poolManager | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` | `UniswapV4.PoolManager` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | positionManager | `0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4` | `UniswapV4.PositionManager` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | stateView | `0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C` | `UniswapV4.StateView` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | universalRouter | `0x7E4f6c5e954Da5c61B3423D81E2277431Ac043f3` | `UniswapV4.UniversalRouter` |
 
 ## ABI
 

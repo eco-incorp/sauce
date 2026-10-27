@@ -8,8 +8,8 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 | --- | --- |
 | Category | Lending |
 | Family | `Aave`: `aave-v2`, `aave-v3`, `aave-v4` |
-| Namespace | `AaveV3` on ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
-| Chains | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
+| Namespace | `AaveV3` on ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia |
+| Chains | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, base-sepolia, scroll, sepolia |
 | Document | [aave-v3.md](../aave-v3.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
@@ -45,7 +45,11 @@ function main() {
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | pool | `0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27` | `AaveV3.Pool` |
+| [Base Sepolia](../../../sauce-chains/references/base-sepolia.md) | poolAddressesProvider | `0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00` | `AaveV3.PoolAddressesProvider` |
 | [Scroll](../../../sauce-chains/references/scroll.md) | pool | `0x11fCfe756c05AD438e312a7fd934381537D3cFfe` | `AaveV3.Pool` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | pool | `0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951` | `AaveV3.Pool` |
+| [Ethereum Sepolia](../../../sauce-chains/references/sepolia.md) | poolAddressesProvider | `0x012bAC54348C0E635dCAc9D5FB99f06F24136C9A` | `AaveV3.PoolAddressesProvider` |
 
 ## ABI
 
