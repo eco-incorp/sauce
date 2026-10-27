@@ -275,6 +275,22 @@ describe("Solana's venue namespaces", () => {
     );
   });
 
+  it("writes a loop out whatever sits between `pool` and its parenthesis", () => {
+    const loopOf = (call: string) =>
+      "function main(priceLimit: Uint256): Uint256 {\n" +
+      "  let bought = 0;\n" +
+      "  for (const spacing of [1, 4]) {\n" +
+      `    bought += Orca.Whirlpool.swap(Orca.Whirlpool.${call}(USDC, WSOL, spacing), USDC, WSOL, pot.USDC, priceLimit, 0);\n` +
+      "  }\n" +
+      "  return bought;\n}\n";
+    const plain = compile(loopOf("pool"));
+    for (const call of ["pool ", "pool\n  ", "pool/* a comment */", "pool // a comment\n  "]) {
+      const program = compile(loopOf(call));
+      expect(program.source).not.toContain("for (");
+      expect(program.derivedAccounts).toEqual(plain.derivedAccounts);
+    }
+  });
+
   describe("refusals of a pool by key", () => {
     const swapAt = (pool: string, body = "") =>
       compile(

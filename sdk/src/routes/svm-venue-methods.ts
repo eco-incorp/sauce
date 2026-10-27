@@ -217,8 +217,9 @@ function integerLiteral(node: AstNode, source: string): bigint | undefined {
  * `break`s out of it, or that is labelled, is refused: written out, a `break` would end one key.
  */
 export function unrollPoolKeyLoops(source: string, bound: ReadonlySet<string> = new Set()): string {
-  // Before parsing: a program that finds no pool by key has no such loop.
-  if (!source.includes(".pool(")) return source;
+  // Before parsing: a program that never says `pool` finds no pool by key, so has no such loop. The
+  // word alone, not `.pool(`: a space, a newline or a comment may sit before the parenthesis.
+  if (!/\bpool\b/.test(source)) return source;
   let declared: ReadonlySet<string> = new Set();
   // One parse a level: every outermost loop over keys written out at once, then the loops nested in
   // them, which the copies hold.
