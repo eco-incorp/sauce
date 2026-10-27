@@ -1,9 +1,12 @@
 /**
  * Solana devnet as a chain of its own, `solana-devnet` (1399811150, the CHAIN_ID the devnet engine
  * reports): a program compiled for it reads its own chain id, resolves symbols to devnet's mints,
- * and has no Solana venue, whose pools are mainnet's. The release is deployed on devnet;
- * the live release check (`requireSolanaRelease`) stays the gate of what is sent there.
+ * and swaps at the venues deployed on devnet, each at its devnet program; a venue devnet lacks is
+ * refused by name. The release is deployed on devnet; the live release check
+ * (`requireSolanaRelease`) stays the gate of what is sent there.
  */
+import { getAddressEncoder } from "@solana/kit";
+
 import { requireChain, svmChains } from "../src/chains/canonical.js";
 import { isTestnet, nativeCoinSymbol } from "../src/chains/index.js";
 import { chainSupport } from "../src/cli/support.js";
@@ -57,15 +60,54 @@ describe("solana-devnet", () => {
     );
   });
 
-  it("has no Solana venue: their pools are mainnet's", () => {
-    expect(sourceGlobals(devnet).venues ?? []).toEqual([]);
-    expect(sourceGlobals("solana").venues?.length).toBeGreaterThan(0);
-    expect(() =>
-      compileSauceProgram(
-        "solana-devnet",
-        "function main(pool: Address) { return Orca.Whirlpool.swap(pool, USDC, WSOL, 1, 0, 0); }",
-      ),
-    ).toThrow(/`Orca\.Whirlpool` is not on solana-devnet/);
+  it("lists the venues deployed on devnet, each at its devnet program", () => {
+    const venues = sourceGlobals(devnet).venues ?? [];
+    expect(venues.map((venue) => [venue.namespace, venue.program])).toEqual([
+      ["Raydium.CLMM", "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"],
+      ["Stabble.CLMM", "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6"],
+      ["Orca.Whirlpool", "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"],
+      ["Defituna.Fusion", "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9"],
+      ["Crema.CLMM", "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR"],
+      ["Phoenix.Market", "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY"],
+      ["Meteora.DLMM", "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"],
+    ]);
+    expect(sourceGlobals("solana").venues).toHaveLength(10);
+  });
+
+  it("compiles a swap for devnet against devnet's program: Raydium CLMM's guard names DRayAUg…", () => {
+    const key = (base58: string) =>
+      Buffer.from(getAddressEncoder().encode(base58 as never)).toString("hex");
+    const source =
+      "function main(pool: Address) { return Raydium.CLMM.swap(pool, USDC, WSOL, 1, 10, 0); }";
+    const onDevnet = Buffer.from(compileSauceProgram("solana-devnet", source).bytecode).toString(
+      "hex",
+    );
+    const onMainnet = Buffer.from(compileSauceProgram("solana", source).bytecode).toString("hex");
+    expect(onDevnet).toContain(key("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"));
+    expect(onDevnet).not.toContain(key("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"));
+    expect(onMainnet).toContain(key("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"));
+    expect(onMainnet).not.toContain(key("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"));
+  });
+
+  it.each([
+    ["Byreal.CLMM", "Byreal"],
+    ["Cropper.Whirlpool", "Cropper"],
+  ])("refuses %s, which devnet lacks, naming the venue and the cluster", (namespace, name) => {
+    const source = `function main(pool: Address) { return ${namespace}.swap(pool, USDC, WSOL, 1, 0, 0); }`;
+    expect(() => compileSauceProgram("solana-devnet", source)).toThrow(
+      `\`${namespace}\` is not on solana-devnet: ${name} has no program on Solana's devnet.`,
+    );
+    expect(() => compileSauceProgram("solana", source)).not.toThrow();
+  });
+
+  it("refuses Pancakeswap.CLMM, whose devnet program is there, with the reason it is withheld", () => {
+    const source =
+      "function main(pool: Address) { return Pancakeswap.CLMM.swap(pool, USDC, WSOL, 1, 0, 0); }";
+    expect(() => compileSauceProgram("solana-devnet", source)).toThrow(
+      "`Pancakeswap.CLMM` is not supported on solana-devnet: its devnet pools lack the tick arrays " +
+        "a swap at a price needs.",
+    );
+    expect(() => compileSauceProgram("solana", source)).not.toThrow();
   });
 
   // The refusal is for a venue a program would call: not in code a test rules out, which any chain
@@ -73,8 +115,8 @@ describe("solana-devnet", () => {
   it("refuses only a live, unbound venue name", () => {
     const seven = compileSauceProgram("solana-devnet", "function main() { return 7; }").bytecode;
     const programs = [
-      "function main() { if (false) { Orca.Whirlpool.swap(0, USDC, WSOL, 1, 0, 0); } return 7; }",
-      "function main() { const Orca = { Whirlpool: 7 }; return Orca.Whirlpool; }",
+      "function main() { if (false) { Byreal.CLMM.swap(0, USDC, WSOL, 1, 0, 0); } return 7; }",
+      "function main() { const Byreal = { CLMM: 7 }; return Byreal.CLMM; }",
     ];
     for (const source of programs) {
       expect([source, compileSauceProgram("solana-devnet", source).bytecode]).toEqual([
@@ -85,23 +127,81 @@ describe("solana-devnet", () => {
       expect(() => compileSauceProgram("solana", source)).not.toThrow();
     }
     // A name the caller defines is the caller's, not the venue: a live use of it is not refused as
-    // one (the compiler, not this check, has the last word on what `Orca.Whirlpool` is then).
+    // one (the compiler, not this check, has the last word on what `Byreal.CLMM` is then).
     expect(() =>
-      compileSauceProgram("solana-devnet", "function main() { return Orca.Whirlpool; }", {
-        defines: { Orca: 7n },
+      compileSauceProgram("solana-devnet", "function main() { return Byreal.CLMM; }", {
+        defines: { Byreal: 7n },
       }),
     ).not.toThrow(/is not on solana-devnet/);
     // And a live, unbound venue call is still refused.
     expect(() =>
       compileSauceProgram(
         "solana-devnet",
-        "function main() { return Orca.Whirlpool.swap(0, USDC, WSOL, 1, 0, 0); }",
+        "function main() { return Byreal.CLMM.swap(0, USDC, WSOL, 1, 0, 0); }",
       ),
-    ).toThrow(/`Orca\.Whirlpool` is not on solana-devnet/);
+    ).toThrow(/`Byreal\.CLMM` is not on solana-devnet/);
   });
 
   it("supports devnet transactions where the release is deployed", () => {
     expect(chainSupport(devnet)).toBe("supported");
     expect(chainSupport("solana")).toBe("supported");
+  });
+});
+
+// `@sauce/router`'s Solana guards read each venue's program from a `__SAUCE_<VENUE>_PROGRAM` define
+// the SDK supplies per cluster. A define reaches every module the compile loads, so a caller's value
+// of that name would make a guard accept its program: the name is the SDK's alone.
+describe("the SDK's reserved `__SAUCE_` names", () => {
+  const key = (base58: string) =>
+    Buffer.from(getAddressEncoder().encode(base58 as never)).toString("hex");
+  const RAYDIUM: Record<string, string> = {
+    solana: key("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"),
+    "solana-devnet": key("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"),
+  };
+  const ATTACKER = "ab".repeat(32);
+  const swap =
+    "function main(pool: Address) { return Raydium.CLMM.swap(pool, USDC, WSOL, 1, 10, 0); }";
+  const bytecode = (chain: string, source: string) =>
+    Buffer.from(compileSauceProgram(chain, source).bytecode).toString("hex");
+
+  it.each(["solana", "solana-devnet", "base"])(
+    "refuses a caller's define or token named with one, on %s",
+    (chain) => {
+      const source = chain === "base" ? "function main() { return 1; }" : swap;
+      const reserved = /`__SAUCE_RAYDIUM_CLMM_PROGRAM` is reserved/;
+      expect(() =>
+        compileSauceProgram(chain, source, {
+          defines: { __SAUCE_RAYDIUM_CLMM_PROGRAM: BigInt(`0x${ATTACKER}`) },
+        }),
+      ).toThrow(reserved);
+      expect(() =>
+        compileSauceProgram(chain, source, {
+          tokens: { __SAUCE_RAYDIUM_CLMM_PROGRAM: `0x${ATTACKER}` },
+        }),
+      ).toThrow(reserved);
+    },
+  );
+
+  it.each(["solana", "solana-devnet"])(
+    "keeps %s's program in the guard when the program declares the name itself",
+    (chain) => {
+      const own = bytecode(chain, `const __SAUCE_RAYDIUM_CLMM_PROGRAM = 0x${ATTACKER};\n${swap}`);
+      expect(own).toContain(RAYDIUM[chain]);
+      expect(own).not.toContain(ATTACKER);
+      expect(own).toBe(bytecode(chain, swap));
+    },
+  );
+
+  it("gives mainnet and devnet each its own program, compiled one after another", () => {
+    const runs = ["solana", "solana-devnet", "solana", "solana-devnet"].map(
+      (chain) => [chain, bytecode(chain, swap)] as const,
+    );
+    for (const [chain, hex] of runs) {
+      const other = chain === "solana" ? "solana-devnet" : "solana";
+      expect(hex).toContain(RAYDIUM[chain]);
+      expect(hex).not.toContain(RAYDIUM[other]);
+    }
+    expect(runs[2]![1]).toBe(runs[0]![1]);
+    expect(runs[3]![1]).toBe(runs[1]![1]);
   });
 });

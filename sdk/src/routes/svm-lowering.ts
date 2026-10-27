@@ -41,7 +41,7 @@ import {
   type Splice,
 } from "./token-rewrite.js";
 import { blankLiterals } from "./rs-compile.js";
-import type { SvmTokenRow } from "./token-registry.js";
+import type { SvmTokenCluster, SvmTokenRow } from "./token-registry.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { STD_SOURCES } from "../embedded/sources.generated.js";
 
@@ -710,6 +710,8 @@ export class SvmLowering {
     readonly source: string,
     readonly tokens: ReadonlyMap<string, bigint>,
     rows: readonly SvmTokenRow[],
+    /** The cluster the program runs on, whose venues' pools its swaps are found among. */
+    readonly cluster: SvmTokenCluster,
     /** Compile-time values a holder may name, by name: a key bound before the program compiles —
      *  main's `Address` argument, bound into the program (`args`) — which the cook attaches by
      *  value. */

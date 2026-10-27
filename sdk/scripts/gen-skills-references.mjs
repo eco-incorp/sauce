@@ -679,14 +679,19 @@ const CHAIN_NOTES = {
     "chain id and token symbols to that cluster's. An endpoint does not change `solana`'s",
     "compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the running",
     "cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees. Local",
-    "simulation selects the released engine build from the endpoint's cluster. The SDK's venues are",
-    "mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.",
+    "simulation selects the released engine build from the endpoint's cluster. A venue name is",
+    "resolved for the chain the program is compiled for: this chain's venues are mainnet's, and",
+    "`--chain solana-devnet` has seven, each at its devnet program. The engine and Kitchen being",
+    "on a test cluster does not deploy venues, and the SDK records none for testnet.",
   ],
   "solana-devnet": [
     "Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as",
     "1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's",
-    "engine and Kitchen are deployed on devnet, with zero execution fees. The Solana venues are",
-    "mainnet's programs and pools, so a venue name is refused here.",
+    "engine and Kitchen are deployed on devnet, with zero execution fees. Seven venues run here,",
+    "each at its devnet program (under Venues below), and a pool by key is derived from devnet's",
+    "own configs, not mainnet's. Byreal and Cropper have no program on devnet, so their names are",
+    "refused here. PancakeSwap's program is on devnet, but its devnet pools lack the tick arrays a",
+    "swap at a price needs, so its name is refused too.",
   ],
   "solana-testnet": [
     "Solana's testnet cluster, a chain of its own. Testnet runs devnet's engine build, so a program",
@@ -694,8 +699,8 @@ const CHAIN_NOTES = {
     "the chain, which names it to the command and the Pot store and which no program reads. Its",
     "symbols are testnet's mints: the wrapped native alone, as Circle publishes no testnet USDC. The",
     "release's engine and Kitchen are deployed on testnet, with zero execution fees. Its endpoint",
-    "must serve testnet: one of another cluster is refused. The Solana venues are mainnet's",
-    "programs and pools, so a venue name is refused here.",
+    "must serve testnet: one of another cluster is refused. No Solana venue has a program on",
+    "testnet, so a venue name is refused here.",
   ],
 };
 
@@ -781,7 +786,11 @@ const DOCS_FOR_SKILL = {
 const DOCS_FOR_SKILL_ON_SOLANA = {
   "sauce-swaps": ["`@sauce/router` on Solana", "api/router-solana.md"],
 };
-const SOLANA_PAGES = new Set(["chains/solana.md", SOLANA_DISTRIBUTED_SWAP_GUIDE]);
+const SOLANA_PAGES = new Set([
+  "chains/solana.md",
+  "chains/solana-devnet.md",
+  SOLANA_DISTRIBUTED_SWAP_GUIDE,
+]);
 
 /**
  * Prose written for the skills, as the manual page at `from` (relative to `docs/reference/`) says
@@ -1435,7 +1444,8 @@ function renderDeploymentsPage(data) {
     "execution fees: `--chain solana-devnet` and `--chain solana-testnet`. Testnet runs devnet's",
     "engine build, so a program compiled for either reads chain id 1399811150; `solana-testnet`'s",
     "own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue",
-    "deployments: the SDK's Solana venues remain mainnet-only.",
+    "deployments: the SDK records its Solana venues per cluster, on mainnet and seven of them on",
+    "devnet, and none on testnet.",
     "",
     "## The release",
     "",

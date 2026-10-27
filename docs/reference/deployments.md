@@ -20,7 +20,8 @@ Testnet. The released Solana engine and Kitchen are deployed on devnet and testn
 execution fees: `--chain solana-devnet` and `--chain solana-testnet`. Testnet runs devnet's
 engine build, so a program compiled for either reads chain id 1399811150; `solana-testnet`'s
 own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue
-deployments: the SDK's Solana venues remain mainnet-only.
+deployments: the SDK records its Solana venues per cluster, on mainnet and seven of them on
+devnet, and none on testnet.
 
 ## The release
 

@@ -101,6 +101,25 @@ nothing moves.
 
 ### SauceScript
 
+- **Added** (Solana): venue namespaces on `solana-devnet`. Seven venues are deployed on Solana's
+  devnet, and a program compiled for it swaps at each through its devnet program: `Raydium.CLMM`,
+  `Stabble.CLMM`, `Orca.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and
+  `Meteora.DLMM`. A pool by key, as in `Orca.Whirlpool.pool(USDC, WSOL, 4)`, is derived from
+  devnet's own configs, not mainnet's: Raydium CLMM's and Stabble CLMM's AmmConfigs, Orca's devnet
+  WhirlpoolsConfig and its fee tiers, and Crema's config. `sauce globals --chain solana-devnet`
+  lists the venues, and [Solana Devnet](reference/chains/solana-devnet.md) gives each one's
+  program.
+- **Changed** (Solana): on `solana-devnet` each of the three other venues is refused with its own
+  reason, naming the venue and the cluster, where every venue name was refused there with one
+  message before. Byreal and Cropper have no program on devnet:
+  `` `Byreal.CLMM` is not on solana-devnet: Byreal has no program on Solana's devnet. ``
+  PancakeSwap's program is on devnet, but none of its pools there has the tick arrays a swap at a
+  price walks:
+  `` `Pancakeswap.CLMM` is not supported on solana-devnet: its devnet pools lack the tick arrays a swap at a price needs. ``
+- **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
+  parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
+  unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
+  variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
 - **Fixed (Solana): the refusal of `Solana.self.<member>` names a spelling that compiles.** It
   suggested `pot.<member>` whatever the member, so `Solana.self.lamports` suggested `pot.lamports`,
   which does not compile, and `Solana.self.owner` suggested `pot.owner`, the Pot's owner rather than
@@ -262,12 +281,35 @@ nothing moves.
   one was skipped (ticks 1, 2 and 3 gave the window 1 and 3). A Y→X swap that crossed the skipped
   tick lacked its account, and Invariant's program failed it. The X→Y window was right.
 
-### SauceScript
+- **Added**: `@eco-incorp/sauce/svm` exports the venue table by cluster: `SVM_VENUE_TABLE`, each
+  venue's program and pool configs on each cluster it is deployed on; `svmVenueRow(venue, cluster)`,
+  its row on one cluster; `svmVenueWithheld(venue, cluster)`, why a venue whose program is on a
+  cluster has no row there; and `svmRouterDefines(cluster)`, the defines `@sauce/router`'s Solana
+  arm reads each venue's program from.
 
-- **Fixed** (Solana): a loop over pool keys is written out whatever sits between `pool` and its
-  parenthesis. `Orca.Whirlpool.pool (USDC, WSOL, spacing)` or `pool/* … */(…)` skipped the
-  unrolling, because a text check looked for the exact characters `.pool(`, so the key stayed a
-  variable and the compile failed with a pool-key error. Writing `.pool(` unspaced still worked.
+**Also breaking:**
+
+- A raw `compile()` of `@sauce/router`'s Solana arm passes `svmRouterDefines(cluster)`, for
+  `"mainnet-beta"` or `"devnet"`, as its `defines`, each entry as the `[name, value]` text pair the
+  compiler takes:
+
+  ```ts
+  Object.entries(svmRouterDefines(cluster)).map(([name, value]): [string, string] => [
+    name,
+    value.toString(),
+  ]);
+  ```
+
+  The library no longer writes a venue's program, and a compile without them fails, naming the
+  define. The SDK's own compiles for a Solana chain supply them.
+
+- Caller defines and tokens may not use the reserved `__SAUCE_` names: every compile, the
+  `sauce` command's and the MCP server's included, refuses one, naming it.
+- The SDK's Solana pool helpers, which no package entry exports, change with it:
+  `svmPoolKeyProblem` and `svmPoolCandidates` take the cluster first, `svmPoolSlot` takes it last,
+  and `svmPhoenixSlot` and `svmDlmmSlot` take the venue's program first. `SVM_KEYED_VENUES`,
+  `SVM_PRICE_LIMIT_VENUES` and `SVM_SLOT_VENUES` are replaced by
+  `svmKeyedVenue(namespace, cluster)`, `svmPriceLimitVenues(cluster)` and `svmSlotVenues(cluster)`.
 
 ## SDK 0.99.17 — 2026-10-27
 

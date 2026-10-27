@@ -71,7 +71,7 @@ import {
   TOKEN_FACTORY_NAME,
   type MethodCall,
 } from "./token-rewrite.js";
-import type { SvmTokenRow } from "./token-registry.js";
+import type { SvmTokenCluster, SvmTokenRow } from "./token-registry.js";
 import {
   isCtxSelf,
   namesAny,
@@ -136,13 +136,15 @@ export type SvmTokenRewriteResult = SvmLoweringResult;
 /**
  * Lowers a program's token syntax, venue namespaces and account expressions for Solana, adding the
  * accounts they need to `main`. `tokens` is the chain's symbol to mint key map (the registry's, with
- * any symbol the caller gave its own mint), and `rows` the registry's mints, whose programs and
- * decimals pick each write. A script with sites is lowered as the `main` it runs as.
+ * any symbol the caller gave its own mint), `rows` the registry's mints, whose programs and
+ * decimals pick each write, and `cluster` the cluster the program runs on, whose venues its swaps
+ * trade at. A script with sites is lowered as the `main` it runs as.
  */
 export function rewriteSvmTokenSyntax(
   source: string,
   tokens: ReadonlyMap<string, bigint>,
   rows: readonly SvmTokenRow[],
+  cluster: SvmTokenCluster,
   /** Compile-time values a holder may name, as a key (`SvmLowering`'s `keys`). */
   keys?: ReadonlyMap<string, bigint>,
   /** The chain's native coin, SOL, which `<holder>.SOL` is refused naming `<holder>.balance` for. */
@@ -172,7 +174,7 @@ export function rewriteSvmTokenSyntax(
     return { source, rewrote: false, derived: {} };
   }
   const lower = (text: string): SvmLowering => {
-    const lowering = new SvmLowering(text, tokens, rows, keys, native, stopped, bound);
+    const lowering = new SvmLowering(text, tokens, rows, cluster, keys, native, stopped, bound);
     refuseRetiredPot(lowering);
     collectTokenMethods(lowering);
     collectVenueMethods(lowering);

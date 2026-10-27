@@ -1475,16 +1475,23 @@ and Kitchen release builds. Ethereum Sepolia (`sepolia`), Solana Devnet (`solana
 Solana Testnet (`solana-testnet`) are supported in `SUPPORTED_TESTNET_SLUGS`. Devnet and testnet
 are canonical chains of their own: their symbols are their cluster's mints
 (`token-registry.ts#svmClusterOf`; testnet registers only WSOL, as Circle publishes no testnet
-USDC), they have no venue (`svm-venue-methods.ts#svmVenuesOn`), an endpoint must serve the chain's
-cluster by genesis hash (`pots.ts#requireChainCluster`), and a cook there is still held to the
-release's builds by `solana-release.ts#requireSolanaRelease`; their Pot records share
-`1399811149-devnet`/`1399811149-testnet` with those a `--chain solana` against that cluster's
+USDC), their venues are the rows the per-cluster table `svm/venue-table.ts` keeps for the cluster
+(`svm-venue-methods.ts#svmVenueProgramOn`; testnet has none; on devnet Byreal and Cropper have no
+program and PancakeSwap's is withheld, `svmVenueWithheld` giving the reason, since no devnet pool
+has the tick arrays a swap at a price walks; each name is refused with its reason), an endpoint
+must serve the chain's cluster by genesis hash (`pots.ts#requireChainCluster`), and a cook there is
+still held to the release's builds by `solana-release.ts#requireSolanaRelease`; their Pot records
+share `1399811149-devnet`/`1399811149-testnet` with those a `--chain solana` against that cluster's
 endpoint wrote. Devnet's registry id, 1399811150, is its engine's CHAIN_ID. Testnet runs the
 devnet build, so its engine reports 1399811150 too, while its registry key is 1399811151:
 `routes/ambient.ts#programChainId` is the one place a chain's compiled `chainId` is chosen (the
 engine's id for the chain's cluster, from `svm/clusters.ts`), and nothing hands a program
-`chain.id` directly. A test that builds or sends a transaction
-through the CLI or MCP uses a supported chain.
+`chain.id` directly. `@sauce/router`'s Solana arm writes no venue program: its guards read the
+defines `__SAUCE_<VENUE>_PROGRAM`, which every SDK compile for a Solana chain supplies from
+`svmRouterDefines(cluster)` (`/svm`), so a raw `compile()` of the arm passes them, as
+`[name, value.toString()]` pairs, or fails closed. Caller defines and tokens named `__SAUCE_…` are
+refused at `sauce-route.ts#readCompileInputs`, and the program defines are merged last.
+A test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills
 

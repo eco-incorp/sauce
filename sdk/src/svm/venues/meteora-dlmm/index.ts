@@ -58,6 +58,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import { readUintLE } from "../math.js";
 import { accountDataLoader } from "../../loader.js";
 import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
@@ -68,7 +69,8 @@ import { MAX_BIN_ID, MIN_BIN_ID, binArrayIndex, priceFromId } from "./bin-math.j
 
 const SLUG = "meteora-dlmm";
 
-export const METEORA_DLMM_PROGRAM_ID = address("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
+/** Meteora DLMM's program on Solana's mainnet, which this adapter quotes. */
+export const METEORA_DLMM_PROGRAM_ID = svmMainnetProgram("meteora-dlmm");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const LB_PAIR_ACCOUNT_SIZE = 904;

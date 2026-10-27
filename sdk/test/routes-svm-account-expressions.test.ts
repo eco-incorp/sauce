@@ -519,6 +519,7 @@ describe("pot.owner, the Pot's owner", () => {
         free,
         new Map(),
         svmTokenRows(solana),
+        "mainnet-beta",
         undefined,
         "SOL",
         undefined,

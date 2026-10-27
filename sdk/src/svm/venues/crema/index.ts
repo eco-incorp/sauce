@@ -134,6 +134,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import {
   MAX_TICK_INDEX,
   MIN_TICK_INDEX,
@@ -147,7 +148,8 @@ import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.
 import { parseMintExtensions } from "../../token-extensions.js";
 
 const SLUG = "crema";
-export const CREMA_PROGRAM_ID = address("CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR");
+/** Crema's CLMM program on Solana's mainnet, which this adapter quotes. */
+export const CREMA_PROGRAM_ID = svmMainnetProgram("crema");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const CLMMPOOL_ACCOUNT_SIZE = 748;
@@ -237,17 +239,21 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
-async function deriveTickArrayMapPda(pool: Address): Promise<Address> {
-  return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
+async function deriveTickArrayMapPda(program: Address, pool: Address): Promise<Address> {
+  return memoizedGetProgramDerivedAddress(program, [
     new TextEncoder().encode("tick_array_map"),
     getAddressEncoded(pool),
   ]);
 }
-async function deriveTickArrayPda(pool: Address, arrayIndex: number): Promise<Address> {
+async function deriveTickArrayPda(
+  program: Address,
+  pool: Address,
+  arrayIndex: number,
+): Promise<Address> {
   const idxBytes = new Uint8Array(2);
   idxBytes[0] = arrayIndex & 0xff;
   idxBytes[1] = (arrayIndex >> 8) & 0xff;
-  return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
+  return memoizedGetProgramDerivedAddress(program, [
     new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     idxBytes,
@@ -286,6 +292,7 @@ function bitmapBitSet(mapData: Uint8Array, index: number): boolean {
  * way.
  */
 async function resolveWindow(
+  program: Address,
   load: AccountLoader,
   pool: Address,
   tickArrayMapData: Uint8Array,
@@ -329,7 +336,7 @@ async function resolveWindow(
     arrayIndices.push(arrayIndices[arrayIndices.length - 1] ?? startArrayIndex);
 
   const tickArrays = (await Promise.all(
-    arrayIndices.map((idx) => deriveTickArrayPda(pool, idx)),
+    arrayIndices.map((idx) => deriveTickArrayPda(program, pool, idx)),
   )) as [Address, Address, Address];
   const startTicks = arrayIndices.map((idx) => startTickOf(idx, tickSpacing)) as [
     number,
@@ -414,10 +421,15 @@ async function resolveWindow(
   };
 }
 
-/** Fetch + decode one Clmmpool and freeze both directions' boundary windows. Read-only against the loader. */
+/**
+ * Fetch + decode one Clmmpool and freeze both directions' boundary windows. Read-only against the
+ * loader. Its tick-array map and tick arrays are derived under `program`: Crema's on Solana's
+ * mainnet unless given.
+ */
 export async function fetchCremaPoolConfig(
   owned: OwnedAccountLoader,
   pool: Address,
+  program: Address = CREMA_PROGRAM_ID,
 ): Promise<CremaPoolConfig> {
   const load = accountDataLoader(owned);
   const data = await load(pool);
@@ -467,7 +479,7 @@ export async function fetchCremaPoolConfig(
 
   const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
   const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
-  const tickArrayMap = await deriveTickArrayMapPda(pool);
+  const tickArrayMap = await deriveTickArrayMapPda(program, pool);
   const mapData = await load(tickArrayMap);
   if (mapData === null)
     throw new Error(`${SLUG}: tick array map ${tickArrayMap} of pool ${pool} not found`);
@@ -483,8 +495,8 @@ export async function fetchCremaPoolConfig(
   }
 
   const [aToB, bToA] = await Promise.all([
-    resolveWindow(load, pool, mapData as Uint8Array, tickCurrentIndex, tickSpacing, true),
-    resolveWindow(load, pool, mapData as Uint8Array, tickCurrentIndex, tickSpacing, false),
+    resolveWindow(program, load, pool, mapData as Uint8Array, tickCurrentIndex, tickSpacing, true),
+    resolveWindow(program, load, pool, mapData as Uint8Array, tickCurrentIndex, tickSpacing, false),
   ]);
 
   return {

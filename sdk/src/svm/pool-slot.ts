@@ -33,61 +33,73 @@
 import { address, getAddressDecoder, getAddressEncoder, type Address } from "@solana/kit";
 
 import {
-  BYREAL_PROGRAM_ID,
   CLMMPOOL_DISCRIMINATOR,
-  CREMA_PROGRAM_ID,
-  CROPPER_PROGRAM_ID,
-  DEFITUNA_PROGRAM_ID,
   FUSION_POOL_DISCRIMINATOR,
   LB_PAIR_DISCRIMINATOR,
-  METEORA_DLMM_PROGRAM_ID,
   fetchCremaPoolConfig,
   fetchCropperConfig,
   fetchDefiTunaPoolConfig,
   fetchOrcaWhirlpoolConfig,
   fetchPhoenixConfig,
-  ORCA_WHIRLPOOL_PROGRAM_ID,
-  PANCAKESWAP_CLMM_PROGRAM_ID,
   PHOENIX_MARKET_DISCRIMINANT,
-  PHOENIX_PROGRAM_ID,
   RAYDIUM_CLMM_POOL_DISCRIMINATOR,
-  RAYDIUM_CLMM_PROGRAM_ID,
-  STABBLE_CLMM_PROGRAM_ID,
 } from "./venues/index.js";
 import { accountDataLoader } from "./loader.js";
 import { WHIRLPOOL_DISCRIMINATOR } from "./venues/orca-whirlpool/index.js";
 import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
+import type { SvmTokenCluster } from "../routes/token-registry.js";
+import { svmVenueRow, type SvmNamespaceVenue } from "./venue-table.js";
 
 const SYSTEM = address("11111111111111111111111111111111");
 
 export type SvmPoolLayout = "raydium" | "whirlpool" | "defituna" | "crema" | "phoenix" | "dlmm";
 
-/** A venue whose pool's slot is read here: its name, program and pool layout. */
+/** A venue whose pool's slot is read here, on one cluster: its name, program and pool layout. */
 export interface SvmPriceLimitVenue {
+  readonly venue: SvmNamespaceVenue;
   readonly name: string;
   readonly program: Address;
   readonly layout: SvmPoolLayout;
 }
 
-/** Every venue, in the order the skills name them. */
-export const SVM_PRICE_LIMIT_VENUES: readonly SvmPriceLimitVenue[] = [
-  { name: "Raydium CLMM", program: RAYDIUM_CLMM_PROGRAM_ID, layout: "raydium" },
-  { name: "PancakeSwap CLMM", program: PANCAKESWAP_CLMM_PROGRAM_ID, layout: "raydium" },
-  { name: "Byreal", program: BYREAL_PROGRAM_ID, layout: "raydium" },
-  { name: "Stabble CLMM", program: STABBLE_CLMM_PROGRAM_ID, layout: "raydium" },
-  { name: "Orca Whirlpools", program: ORCA_WHIRLPOOL_PROGRAM_ID, layout: "whirlpool" },
-  { name: "Cropper", program: CROPPER_PROGRAM_ID, layout: "whirlpool" },
-  { name: "DefiTuna", program: DEFITUNA_PROGRAM_ID, layout: "defituna" },
-  { name: "Crema", program: CREMA_PROGRAM_ID, layout: "crema" },
-  { name: "Phoenix", program: PHOENIX_PROGRAM_ID, layout: "phoenix" },
+/** Every venue whose pool's slot is read here, in the order the skills name them: the price-limit
+ *  venues, then Meteora DLMM. */
+const SLOT_VENUES: readonly Omit<SvmPriceLimitVenue, "program">[] = [
+  { venue: "raydium-clmm", name: "Raydium CLMM", layout: "raydium" },
+  { venue: "pancakeswap-clmm", name: "PancakeSwap CLMM", layout: "raydium" },
+  { venue: "byreal", name: "Byreal", layout: "raydium" },
+  { venue: "stabble-clmm", name: "Stabble CLMM", layout: "raydium" },
+  { venue: "orca-whirlpool", name: "Orca Whirlpools", layout: "whirlpool" },
+  { venue: "cropper", name: "Cropper", layout: "whirlpool" },
+  { venue: "defituna", name: "DefiTuna", layout: "defituna" },
+  { venue: "crema", name: "Crema", layout: "crema" },
+  { venue: "phoenix", name: "Phoenix", layout: "phoenix" },
+  { venue: "meteora-dlmm", name: "Meteora DLMM", layout: "dlmm" },
 ];
 
-/** Every venue whose pool's slot is read here: the price-limit venues, then Meteora DLMM. */
-export const SVM_SLOT_VENUES: readonly SvmPriceLimitVenue[] = [
-  ...SVM_PRICE_LIMIT_VENUES,
-  { name: "Meteora DLMM", program: METEORA_DLMM_PROGRAM_ID, layout: "dlmm" },
-];
+const onCluster = new Map<SvmTokenCluster, readonly SvmPriceLimitVenue[]>();
+
+/**
+ * Every venue whose pool's slot is read here that `cluster` has, each with its program there: the
+ * price-limit venues, then Meteora DLMM.
+ */
+export function svmSlotVenues(cluster: SvmTokenCluster): readonly SvmPriceLimitVenue[] {
+  let venues = onCluster.get(cluster);
+  if (venues === undefined) {
+    venues = SLOT_VENUES.flatMap((one) => {
+      const row = svmVenueRow(one.venue, cluster);
+      return row === undefined ? [] : [{ ...one, program: row.program }];
+    });
+    onCluster.set(cluster, venues);
+  }
+
+  return venues;
+}
+
+/** The venues among {@link svmSlotVenues} whose swap a price limit stops: all but Meteora DLMM. */
+export const svmPriceLimitVenues = (cluster: SvmTokenCluster): readonly SvmPriceLimitVenue[] =>
+  svmSlotVenues(cluster).filter((one) => one.layout !== "dlmm");
 
 /**
  * A concentrated-liquidity layout: its pool account's size and discriminator (the first 8 bytes,
@@ -246,18 +258,19 @@ export async function svmClmmSlot(
   const { mintA, mintB } =
     SVM_CLMM_LAYOUT[venue.layout as Exclude<SvmPoolLayout, "phoenix" | "dlmm">];
   const unread =
-    program === ORCA_WHIRLPOOL_PROGRAM_ID || program === DEFITUNA_PROGRAM_ID
+    venue.venue === "orca-whirlpool" || venue.venue === "defituna"
       ? [keyAt(data, mintA), keyAt(data, mintB)]
       : [];
   const shown = new Uint8Array(data);
   if (venue.layout === "whirlpool") shown.set(data.subarray(41, 43), 43); // fee tier := tick spacing
   const adapted: OwnedAccountLoader = async (at) =>
     at === pool ? { data: shown, owner: program } : unread.includes(at) ? null : load(at);
+  // Each adapter derives the pool's tick arrays and oracle under the cluster's program.
   if (venue.layout === "whirlpool") {
     const cfg =
-      program === CROPPER_PROGRAM_ID
-        ? await fetchCropperConfig(adapted, pool)
-        : await fetchOrcaWhirlpoolConfig(adapted, pool);
+      venue.venue === "cropper"
+        ? await fetchCropperConfig(adapted, pool, program)
+        : await fetchOrcaWhirlpoolConfig(adapted, pool, program);
     return {
       program,
       pool,
@@ -269,7 +282,7 @@ export async function svmClmmSlot(
     };
   }
   if (venue.layout === "defituna") {
-    const cfg = await fetchDefiTunaPoolConfig(adapted, pool);
+    const cfg = await fetchDefiTunaPoolConfig(adapted, pool, program);
     return {
       program,
       pool,
@@ -281,7 +294,7 @@ export async function svmClmmSlot(
     };
   }
   if (venue.layout === "crema") {
-    const cfg = await fetchCremaPoolConfig(load, pool);
+    const cfg = await fetchCremaPoolConfig(load, pool, program);
     // Crema refuses a tick array its map does not mark, and `cpiCrema` passes the slot's leading
     // arrays up to the first System program: an array past the readable prefix is that sentinel.
     const { tickArrays, readable } = paysLower ? cfg.windows.aToB : cfg.windows.bToA;
@@ -408,15 +421,17 @@ async function raydiumTickArrays(
   return (outside ? [extension, ...chosen] : chosen) as [Address, Address, Address];
 }
 
-/** A Phoenix market's slot, the same paying either token. */
-export async function svmPhoenixSlot(market: Address, load: OwnedAccountLoader): Promise<SvmSlot> {
+/** A Phoenix market's slot under `program`, the cluster's Phoenix, the same paying either token. */
+export async function svmPhoenixSlot(
+  program: Address,
+  market: Address,
+  load: OwnedAccountLoader,
+): Promise<SvmSlot> {
   const cfg = await fetchPhoenixConfig(load, market);
-  const log = await memoizedGetProgramDerivedAddress(PHOENIX_PROGRAM_ID, [
-    new TextEncoder().encode("log"),
-  ]);
+  const log = await memoizedGetProgramDerivedAddress(program, [new TextEncoder().encode("log")]);
 
   return {
-    program: PHOENIX_PROGRAM_ID,
+    program,
     pool: market,
     config: log,
     vaultA: cfg.baseVault,
@@ -427,11 +442,13 @@ export async function svmPhoenixSlot(market: Address, load: OwnedAccountLoader):
 }
 
 /**
- * A Meteora DLMM pool's slot, paying its token X (the walk goes down) or its token Y (up). `data` is
- * the pool's own account. Throws when its active bin is past its own bitmap (in its bitmap
- * extension, which a swap here does not read) and when no bin array holds liquidity that way.
+ * A Meteora DLMM pool's slot under `program`, the cluster's Meteora DLMM, paying its token X (the
+ * walk goes down) or its token Y (up). `data` is the pool's own account. Throws when its active bin
+ * is past its own bitmap (in its bitmap extension, which a swap here does not read) and when no bin
+ * array holds liquidity that way.
  */
 export async function svmDlmmSlot(
+  program: Address,
   pool: Address,
   data: Uint8Array,
   paysX: boolean,
@@ -464,19 +481,19 @@ export async function svmDlmmSlot(
     indexes.map((index) => {
       const seed = new Uint8Array(8);
       new DataView(seed.buffer).setBigInt64(0, BigInt(index), true);
-      return memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+      return memoizedGetProgramDerivedAddress(program, [
         new TextEncoder().encode("bin_array"),
         pair,
         seed,
       ]);
     }),
   );
-  const events = await memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+  const events = await memoizedGetProgramDerivedAddress(program, [
     new TextEncoder().encode("__event_authority"),
   ]);
 
   return {
-    program: METEORA_DLMM_PROGRAM_ID,
+    program,
     pool,
     config: events,
     vaultA: keyAt(data, L.reserveX),
@@ -487,23 +504,26 @@ export async function svmDlmmSlot(
 }
 
 /**
- * The slot of `pool` paying `pay`, read through `load`: its venue from the pool's owner, its pair
- * from its own bytes, which must hold `pay`. Throws for a pool no venue here owns, one whose
- * pair does not hold `pay`, and one whose slot cannot be read (a Raydium-layout pool with fewer
- * than three tick arrays near its price, a Meteora DLMM pool with no liquidity that way).
+ * The slot of `pool` paying `pay` on `cluster`, read through `load`: its venue from the pool's
+ * owner, one of the cluster's venues, its pair from its own bytes, which must hold `pay`. Throws for
+ * a pool no venue on the cluster owns, one whose pair does not hold `pay`, and one whose slot cannot
+ * be read (a Raydium-layout pool with fewer than three tick arrays near its price, a Meteora DLMM
+ * pool with no liquidity that way).
  */
 export async function svmPoolSlot(
   load: OwnedAccountLoader,
   pool: Address,
   pay: Address,
+  cluster: SvmTokenCluster,
 ): Promise<SvmSlot> {
   const account = await load(pool);
   if (account === null) throw new Error(`pool ${pool} has no account`);
-  const venue = SVM_SLOT_VENUES.find((one) => one.program === account.owner);
+  const venues = svmSlotVenues(cluster);
+  const venue = venues.find((one) => one.program === account.owner);
   if (venue === undefined) {
     throw new Error(
-      `${pool} is owned by ${account.owner}, which is not a venue a namespace swaps at ` +
-        `(${SVM_SLOT_VENUES.map((one) => one.name).join(", ")})`,
+      `${pool} is owned by ${account.owner}, which is not a venue a namespace swaps at on ` +
+        `${cluster} (${venues.map((one) => one.name).join(", ")})`,
     );
   }
   const data = account.data;
@@ -520,7 +540,7 @@ export async function svmPoolSlot(
     if (pay !== base && pay !== quote) {
       throw new Error(`${venue.name} market ${pool} trades ${base} for ${quote}, not ${pay}`);
     }
-    return svmPhoenixSlot(pool, load);
+    return svmPhoenixSlot(venue.program, pool, load);
   }
   if (venue.layout === "dlmm") {
     if (data.length !== SVM_DLMM_LAYOUT.size) {
@@ -534,7 +554,7 @@ export async function svmPoolSlot(
     if (pay !== x && pay !== y) {
       throw new Error(`${venue.name} pool ${pool} trades ${x} and ${y}, not ${pay}`);
     }
-    return svmDlmmSlot(pool, data, pay === x);
+    return svmDlmmSlot(venue.program, pool, data, pay === x);
   }
   const layout = SVM_CLMM_LAYOUT[venue.layout];
   if (data.length !== layout.size) {

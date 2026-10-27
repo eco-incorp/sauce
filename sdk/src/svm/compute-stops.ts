@@ -32,18 +32,9 @@ import { getAddressDecoder, getAddressEncoder, type Address } from "@solana/kit"
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
-import { svmTokenRows } from "../routes/token-registry.js";
-import { SVM_CLMM_LAYOUT, SVM_PRICE_LIMIT_VENUES } from "./pool-slot.js";
-import {
-  BYREAL_PROGRAM_ID,
-  CREMA_PROGRAM_ID,
-  CROPPER_PROGRAM_ID,
-  DEFITUNA_PROGRAM_ID,
-  ORCA_WHIRLPOOL_PROGRAM_ID,
-  PANCAKESWAP_CLMM_PROGRAM_ID,
-  RAYDIUM_CLMM_PROGRAM_ID,
-  STABBLE_CLMM_PROGRAM_ID,
-} from "./venues/index.js";
+import { svmClusterOf, svmTokenRows } from "../routes/token-registry.js";
+import { SVM_CLMM_LAYOUT, svmPriceLimitVenues } from "./pool-slot.js";
+import { svmMainnetProgram } from "./venue-table.js";
 import { MAX_TICK, MIN_TICK, raydiumSqrtPriceAtTick } from "./venues/raydium-clmm/tick-math.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
 
@@ -60,7 +51,9 @@ export type SvmStopLayout = "raydium" | "whirlpool" | "defituna" | "crema";
  * two measured walks, on the venues' own programs as mainnet runs them; the router suite holds both
  * to those programs (`test/std/router/svm.e2e.test.ts`, "the cost table holds to its program"), so a
  * program upgrade that moves them fails it. A whirlpool with an adaptive fee, which pays per step of
- * its volatility too, is not priced here: the router skips it at a price.
+ * its volatility too, is not priced here: the router skips it at a price. The table holds mainnet's
+ * programs, by their ids: a program another cluster deploys at the same id is priced as mainnet's,
+ * and one at an id of its own, unmeasured, at the dearest.
  */
 export interface SvmSwapCost {
   readonly base: number;
@@ -68,14 +61,14 @@ export interface SvmSwapCost {
 }
 
 export const SVM_SWAP_COSTS: Readonly<Record<string, SvmSwapCost>> = {
-  [RAYDIUM_CLMM_PROGRAM_ID]: { base: 39_000, tick: 9_200 },
-  [PANCAKESWAP_CLMM_PROGRAM_ID]: { base: 56_000, tick: 15_800 },
-  [BYREAL_PROGRAM_ID]: { base: 60_000, tick: 15_900 },
-  [STABBLE_CLMM_PROGRAM_ID]: { base: 80_000, tick: 15_900 },
-  [ORCA_WHIRLPOOL_PROGRAM_ID]: { base: 30_500, tick: 7_300 },
-  [CROPPER_PROGRAM_ID]: { base: 40_500, tick: 14_400 },
-  [DEFITUNA_PROGRAM_ID]: { base: 35_000, tick: 13_500 },
-  [CREMA_PROGRAM_ID]: { base: 76_500, tick: 15_500 },
+  [svmMainnetProgram("raydium-clmm")]: { base: 39_000, tick: 9_200 },
+  [svmMainnetProgram("pancakeswap-clmm")]: { base: 56_000, tick: 15_800 },
+  [svmMainnetProgram("byreal")]: { base: 60_000, tick: 15_900 },
+  [svmMainnetProgram("stabble-clmm")]: { base: 80_000, tick: 15_900 },
+  [svmMainnetProgram("orca-whirlpool")]: { base: 30_500, tick: 7_300 },
+  [svmMainnetProgram("cropper")]: { base: 40_500, tick: 14_400 },
+  [svmMainnetProgram("defituna")]: { base: 35_000, tick: 13_500 },
+  [svmMainnetProgram("crema")]: { base: 76_500, tick: 15_500 },
 };
 
 /** A program the table does not hold is priced at the table's dearest: never at nothing. */
@@ -766,6 +759,8 @@ export async function svmProgramStops(
   const uncounted = values.find((value) => value.runs === null);
   if (uncounted !== undefined) return unbounded(uncounted);
   const rows = svmTokenRows(chain);
+  const cluster = svmClusterOf(chain);
+  const venues = cluster === undefined ? [] : svmPriceLimitVenues(cluster);
   const symbolOf = (mint: Address): string => rows.find((row) => row.mint === mint)?.symbol ?? mint;
   const data = async (key: string | undefined): Promise<Uint8Array | undefined> =>
     key === undefined || key === SYSTEM_PROGRAM
@@ -789,7 +784,7 @@ export async function svmProgramStops(
     const limit = written.replace(/#\d+$/, "");
     const program = part(pool, token, "program");
     const address = part(pool, token, "pool") as Address | undefined;
-    const venue = SVM_PRICE_LIMIT_VENUES.find((one) => one.program === program);
+    const venue = venues.find((one) => one.program === program);
     const account = await data(address);
     if (venue === undefined || address === undefined || account === undefined) continue;
     const layout = venue.layout as SvmStopLayout;

@@ -905,6 +905,22 @@ describe("sauce_compile", () => {
     );
   });
 
+  it("refuses a define named like the SDK's own, whose value a venue's guard reads", async () => {
+    for (const chain of ["solana", "solana-devnet"]) {
+      assert.match(
+        failed(
+          await mcp.call("sauce_compile", {
+            source:
+              "function main(pool: Address) { return Raydium.CLMM.swap(pool, USDC, WSOL, 1, 10, 0); }\n",
+            chain,
+            defines: { __SAUCE_RAYDIUM_CLMM_PROGRAM: `0x${"ab".repeat(32)}` },
+          }),
+        ),
+        /`__SAUCE_RAYDIUM_CLMM_PROGRAM` is reserved/,
+      );
+    }
+  });
+
   it("says its source's sha256, and with omitBytecode leaves the bytecode out", async () => {
     const full = ok(await mcp.call("sauce_compile", { source: PAY, chain: "base" }));
     assert.equal(full.sourceSha256, sha256(PAY));

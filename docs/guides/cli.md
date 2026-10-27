@@ -125,7 +125,10 @@ in it, not ETH.
 A testnet's coin and tokens have no value: try a program there before mainnet. Solana's devnet and
 testnet are chains of their own, each with its own symbols: devnet's mints, and on testnet the
 wrapped native alone (`WSOL`). The released engine and Kitchen are deployed on both, with zero
-execution fees. This does not deploy mainnet venues on those clusters.
+execution fees. Venues are deployed per cluster, not with the engine: devnet has seven of the Solana
+venues, each at its devnet program (`sauce globals --chain solana-devnet` lists them). It refuses
+`Byreal.CLMM` and `Cropper.Whirlpool`, which have no program there, and `Pancakeswap.CLMM`, whose
+devnet pools lack the tick arrays a swap at a price needs. The SDK records no venue on testnet.
 
 Both report chain id 1399811150 to a program, `ctx.chainId()` and the compiled `chainId` alike:
 testnet runs devnet's engine build. `solana-testnet`'s own id, 1399811151, is the key the SDK and
