@@ -112,10 +112,12 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
     }
   });
   let sweep = swap.sweep;
-  const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
+  // A retired recipient is the document's own mistake, not the chain's: refuse it before the chain
+  // is resolved, and name no chain, as the candidates' own fields are refused.
   if ((sweep?.recipient as string | undefined) === RETIRED_POT) {
-    throw new ProgramError([{ path: "sweep.recipient", message: RETIRED_POT_MESSAGE }], chain);
+    throw new ProgramError([{ path: "sweep.recipient", message: RETIRED_POT_MESSAGE }]);
   }
+  const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
   const sweepAction: Action[] =
     sweep === undefined ? [] : [{ type: "transfer", amount: "0", ...sweep }];
   if (usesNames([...candidates, ...approvals, ...sweepAction])) {

@@ -155,10 +155,13 @@ an effect, with no error. Two of the fixes refuse code that used to compile:
   it was computed once, before the loop, when optimizing (the default), so the optimized and
   unoptimized programs gave different answers. The read now runs on every iteration.
 - **Fixed** (both): Taking one element of an array literal on the spot, as in
-  `[chargeFee(), 7][1]`, skipped the calls in the other elements, and so their writes. Every
-  element now runs, in order. An element that can revert (a division by zero, an index out of
-  range) now runs too, and reverts, when a later element writes: `[1 / zero, 7, charge()][1]`
-  reverts where it gave 7.
+  `[chargeFee(), 7][1]`, skipped the calls in the other elements, and so their writes. When an
+  element writes, the elements taken away now run, in source order, so an earlier read cannot move
+  past a later write. A literal none of whose elements writes compiles as before, and an element
+  there that can only revert (a division by zero, an index out of range) is still skipped:
+  `[1 / zero, 7][1]` gives 7. An element that can revert now runs, and reverts, when an element
+  after it writes: `[1 / zero, 7, charge()][1]` reverts where it gave 7, while
+  `[7, 1 / zero][0]` still gives 7.
 - **Now refused** (EVM): A helper with no return-type annotation that returns an array or a signed
   integer from inside a `try`. It returned a raw word where the caller expected the value. The
   error is the one the same `return` gives outside a `try`: "returning an array of 3 × number from
