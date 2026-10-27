@@ -74,6 +74,12 @@ const V2_OUT = (AMOUNT * 997_000n * RESERVE) / (RESERVE * 1_000_000n + AMOUNT * 
 
 const SEND_PARAM = "(uint32,bytes32,uint256,uint256,bytes,bytes,bytes)";
 
+const DEPOSIT_V3 =
+  "function depositV3(address,address,address,address,uint256,uint256,uint256,address,uint32,uint32,uint32,bytes)";
+/** USDC on Ethereum, and on Optimism, where it has another address. */
+const USDC_ETHEREUM = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const USDC_OPTIMISM = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85";
+
 /** The swap actions whose call goes to the Pot's Router, which a recorder cannot stand in for. */
 type RouterVenue = "uniswapV3Swap" | "uniswapV4Swap" | "maverickV2Swap";
 
@@ -250,15 +256,25 @@ const EXPECT: Record<
       data: call("function swapIn(bool,uint256,uint256,address)", "swapIn", [true, AMOUNT, MIN, R]),
     },
   ],
-  // The Pot deposits (and is refunded), and the relayer keeps 10 of the 1000.
+  // The Pot deposits (and is refunded), asks for the sample's `outputToken` on the destination,
+  // and the relayer keeps 10 of the 1000.
   acrossBridge: (pot) => [
     {
       to: T,
-      data: call(
-        "function depositV3(address,address,address,address,uint256,uint256,uint256,address,uint32,uint32,uint32,bytes)",
-        "depositV3",
-        [pot, R, A, A, AMOUNT, AMOUNT - 10n, 10n, ZERO, 1, 2, 0, "0x"],
-      ),
+      data: call(DEPOSIT_V3, "depositV3", [
+        pot,
+        R,
+        A,
+        B,
+        AMOUNT,
+        AMOUNT - 10n,
+        10n,
+        ZERO,
+        1,
+        2,
+        0,
+        "0x",
+      ]),
     },
   ],
   // The quote is a silent static call answering (42, 42); the send pays the native fee, 42.
@@ -464,6 +480,43 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
       ],
     );
   });
+
+  // A relayer sends exactly the token a deposit names, and the SpokePool refuses the zero address,
+  // so with no `outputToken` the deposit asks for the registry's token of its symbol on the
+  // destination: Optimism's USDC, not Ethereum's address, which holds nothing there.
+  for (const [label, token] of [
+    ["by symbol", "USDC"],
+    ["by address", USDC_ETHEREUM],
+  ] as const) {
+    it(`acrossBridge asks for the destination chain's token, the input given ${label}`, async () => {
+      const receipt = await env.cook(
+        compiled({ ...SAMPLES.acrossBridge, token, outputToken: undefined }),
+      );
+      assert.equal(receipt.status, "success", "acrossBridge reverted");
+      assert.deepEqual(
+        recordedCalls(receipt, RECORDERS).map((c) => [c.to.toLowerCase(), c.data]),
+        [
+          [
+            T.toLowerCase(),
+            call(DEPOSIT_V3, "depositV3", [
+              env.pot,
+              R,
+              USDC_ETHEREUM,
+              USDC_OPTIMISM,
+              AMOUNT,
+              AMOUNT - 10n,
+              10n,
+              ZERO,
+              1,
+              2,
+              0,
+              "0x",
+            ]).toLowerCase(),
+          ],
+        ],
+      );
+    });
+  }
 
   for (const { name, assets, steps, limits } of [
     {

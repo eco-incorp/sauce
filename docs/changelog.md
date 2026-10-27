@@ -93,6 +93,30 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK Unreleased (after 0.99.17)
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
+nothing moves.
+
+### Actions documents
+
+- **Fixed** (EVM): `acrossBridge` asks Across for the destination chain's token. The deposit's
+  `outputToken`, the token a relayer sends on the destination, was the deposited token's own
+  address, which is the destination's copy only where both chains share it: a USDC deposit from
+  Ethereum to Optimism asked for a token at Ethereum's USDC address on Optimism rather than
+  Optimism's USDC, so no relayer filled it and it was refunded after `fillDeadline`. The default is
+  now the registry's token of the same symbol on `destChainId`, and a new optional `outputToken`
+  gives the token's address there. The zero address, Across's old "equivalent token", is not an
+  option: the SpokePool refuses it with `InvalidOutputToken`.
+
+**Also breaking:**
+
+- An `acrossBridge` with no `outputToken` is refused at its `outputToken` when the registry does
+  not list its token on the program's chain, that token's symbol on `destChainId`, or
+  `destChainId` as one of its chains: give `outputToken`. One whose output the registry lists with
+  other decimals than its input is refused too, since the deposit asks for `amount - relayerFee`
+  of the output in the input's units.
+
 ## SDK 0.99.17 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0. The engines

@@ -498,11 +498,15 @@ const SPECS: readonly ActionSpec[] = [
   // -- bridges --------------------------------------------------------------------------------
   bridge(
     "acrossBridge",
-    "Deposits into an Across SpokePool for the same token on the destination, less the relayer fee.",
+    "Deposits into an Across SpokePool for the destination chain's token, less the relayer fee.",
     "SpokePool.depositV3",
     {
       spokePool: f(contract, "the origin SpokePool; it pulls the token, so approve it first"),
-      token: f(token, "the token bridged (input and output)"),
+      token: f(token, "the token deposited, on this chain"),
+      outputToken: opt(
+        address,
+        "the token received on the destination, with the deposited token's decimals; default: the registry's token of the same symbol on `destChainId`",
+      ),
       destChainId: f(int(1, Number.MAX_SAFE_INTEGER), "the destination chain id"),
       recipient: f(address, "receives on the destination"),
       relayerFee: f(uint256, "kept by the relayer: the destination receives `amount - relayerFee`"),

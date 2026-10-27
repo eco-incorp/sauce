@@ -412,7 +412,7 @@ The venues the library does not cover, each through its own contract:
 
 | Action            | Calls                                                    | Output     |
 | ----------------- | -------------------------------------------------------- | ---------- |
-| `acrossBridge`    | SpokePool `depositV3`, the same token on the destination | its amount |
+| `acrossBridge`    | SpokePool `depositV3`, for the destination chain's token | its amount |
 | `stargateBridge`  | Stargate V2 pool `quoteSend`, then `send` (taxi)         | its amount |
 | `cctpBridge`      | CCTP V2 TokenMessenger `depositForBurn`                  | its amount |
 | `hyperlaneBridge` | Warp route `quoteGasPayment`, then `transferRemote`      | its amount |
@@ -465,7 +465,7 @@ The venues the library does not cover, each through its own contract:
   - The output and `amountOutMin` refer to the last step's `assetOutIndex`, wherever that asset appears in `assets`. The floor is on the Pot's balance of that asset: its net payout across the whole batch, not just the final step's proceeds.
   - Other assets have no output floor, including assets received by earlier independent legs; their limits let the Vault take any amount.
   - `"native"` and the zero address are the same asset; native ETH and WETH remain separate Pot balances. The batch sends no native value to the Vault, so a native-input batch reverts even when the Pot holds enough ETH.
-- **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
+- **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. The deposit names the token a relayer sends on the destination, its `outputToken`: by default the registry's token of `token`'s symbol on `destChainId` (Optimism's USDC for Ethereum's, at another address). For a token the registry does not list on both chains, give `outputToken`, its address on the destination; without one the deposit is refused. The output must have the input's decimals, since `amount - relayerFee` counts in the input's units. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
 - **Stargate** sends in taxi mode and refunds the Pot. **CCTP** lets anyone relay the mint (`destinationCaller` is zero); `maxFee` defaults to `"0"` and `minFinalityThreshold` to 2000, a standard transfer.
 - **Lido withdrawals** mint the withdrawal NFT to `owner`, which claims the ETH once Lido finalizes it.
 - **Rocket Pool** upgrades move the deposit pool: read the live address from RocketStorage. rETH refuses to move in the block it was minted in, so a program cannot stake and then transfer or burn the same rETH.

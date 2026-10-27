@@ -393,7 +393,7 @@ function argumentVar(name: string): string {
   return `a_${name}`;
 }
 
-/** Lowers a validated action list into `main`'s body. */
+/** Lowers a validated action list, each `acrossBridge` with its `outputToken`, into `main`'s body. */
 export function lowerActions(actions: readonly Action[]): Lowered {
   const emit = newEmitter();
   const body: Stmt[] = [];
@@ -1024,6 +1024,10 @@ function fluidDexT1Swap(
 function acrossBridge(l: Lowering, action: AcrossBridgeAction, amount: Expr): ActionResult {
   // The Pot deposits, so an expired deposit is refunded to it. The relayer keeps the difference
   // between the input and output amounts; a fee above the amount reverts the subtraction.
+  const output = action.outputToken;
+  if (output === undefined) {
+    throw new Error(`${l.where}: acrossBridge lowers once its chain has named its outputToken`);
+  }
   const message = l.bytes("msg", hexToBytes(action.message));
   const fee = BigInt(action.relayerFee);
   const outputAmount = fee === 0n ? amount : l.bind("out", `${amount} - ${word(fee)}`);
@@ -1031,7 +1035,7 @@ function acrossBridge(l: Lowering, action: AcrossBridgeAction, amount: Expr): Ac
     l.pot, // depositor
     addr(action.recipient),
     addr(action.token), // inputToken
-    addr(action.token), // outputToken: the same token on the destination
+    addr(output), // outputToken: what a relayer sends on the destination (`names.ts`)
     amount,
     outputAmount,
     word(action.destChainId),

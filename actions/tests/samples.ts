@@ -199,6 +199,7 @@ export const SAMPLES: Samples = {
     amount: "1000",
     spokePool: T,
     token: A,
+    outputToken: B,
     destChainId: 10,
     recipient: R,
     relayerFee: "10",

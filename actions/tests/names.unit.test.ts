@@ -361,6 +361,61 @@ describe("names — refused on the chain that lacks them", () => {
     assert.match(found[0]!, /no protocol namespace "UniswapV33" — did you mean UniswapV3\?/);
   });
 
+  describe("acrossBridge's outputToken, the token a relayer sends on the destination", () => {
+    const across = (fields: object): ActionProgram =>
+      doc({ ...SAMPLES.acrossBridge, outputToken: undefined, ...fields });
+    /** The `outputToken` argument of the program's `depositV3` call. */
+    const outputToken = (source: string): string | undefined =>
+      /depositV3\((.*)\);/.exec(source)?.[1]?.split(", ")[3];
+
+    it("defaults to the registry's token of the deposit's symbol on the destination", () => {
+      for (const token of ["USDC", addressOf("ethereum", "USDC")]) {
+        const { source } = compileProgram(across({ token, destChainId: 8453 }), {
+          chain: "ethereum",
+        });
+        assert.equal(outputToken(source), addressOf("base", "USDC").toLowerCase(), source);
+      }
+    });
+
+    it("takes an outputToken as given", () => {
+      const given = SAMPLES.acrossBridge.outputToken!;
+      const { source } = compileProgram(across({ token: "USDC", outputToken: given }), {
+        chain: "ethereum",
+      });
+      assert.equal(outputToken(source), given.toLowerCase(), source);
+    });
+
+    const refused: [string, object, RegExp][] = [
+      [
+        "a token the registry does not list on the program's chain",
+        {},
+        /^actions\[0\]\.outputToken: 0x1000000000000000000000000000000000000001 is not a registry token on Ethereum \(chain 1\), so the registry cannot find its counterpart on Optimism \(chain 10\): give `outputToken`/,
+      ],
+      [
+        "a symbol the destination lacks",
+        { token: "USDC", destChainId: 56 },
+        /^actions\[0\]\.outputToken: no token "USDC" on BNB Chain \(chain 56\) to receive: give `outputToken`/,
+      ],
+      [
+        "a destination that is not one of the SDK's chains",
+        { token: "USDC", destChainId: 999_999 },
+        /^actions\[0\]\.outputToken: chain 999999 is not one of the SDK's EVM chains.*: give `outputToken`/,
+      ],
+      [
+        "an outputToken whose decimals are not the deposit's",
+        { token: "USDC", outputToken: addressOf("optimism", "WETH") },
+        /^actions\[0\]\.outputToken: USDC has 6 decimals and WETH on Optimism \(chain 10\) has 18: the deposit asks for `amount - relayerFee` of the output, counted in the input's units$/,
+      ],
+    ];
+    for (const [label, fields, message] of refused) {
+      it(`refuses ${label}`, () => {
+        const found = problems(() => compileProgram(across(fields), { chain: "ethereum" }));
+        assert.equal(found.length, 1, found.join("\n"));
+        assert.match(found[0]!, message);
+      });
+    }
+  });
+
   it("refuses a factory of the wrong kind for the key, naming the ones that fit", () => {
     const found = problems(() =>
       compileProgram(doc({ ...V3_BY_KEY, factory: "UniswapV2.Factory" }), { chain: "base" }),
