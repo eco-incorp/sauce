@@ -69,3 +69,8 @@ sdk/test/fixtures/svm-exact-in-programs/*.so.gz
 !sdk/test/fixtures/svm-exact-in-programs/saber-stableswap.so.gz
 !sdk/test/fixtures/svm-exact-in-programs/saros.so.gz
 !sdk/test/fixtures/svm-exact-in-programs/token-swap-v1.so.gz
+
+# Canonical Permit2's runtime, which compiles in AGPL code. Only its pin is committed
+# (Permit2.pin.json: chain, address, keccak256); `sdk/scripts/fetch-contract-code.mjs` reads the code
+# from Ethereum, holds it to the pin and writes this file, the pin plus `runtime`.
+sdk/test/fixtures/cli/Permit2.json

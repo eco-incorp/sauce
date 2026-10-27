@@ -321,10 +321,20 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
-  `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
-  `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
+  `holdings-{ethereum,base}` ~1.2 KB each (code pinned, below), the docs examples suite's three
+  (`docs-examples`, `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
   (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which no suite reads
   at present.
+
+  **Contract code is pinned, not committed, in a blob captured since the pin form landed.** An
+  account with code carries `codeHash` (keccak256) where an anvil genesis has `code`; capture writes
+  the code to the content-addressed `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, and
+  `pnpm --filter './sdk' fetch-contract-code` (`sdk/scripts/fetch-contract-code.mjs`, run by CI's
+  setup action) fills that cache from each blob's chain (`eth_getCode` at `latest` through the
+  public endpoints, held to the hash; code at an address changes only by self-destruct or an
+  EIP-7702 delegation, which it names when it refuses). Replay puts each code back before anvil
+  boots and fails, naming the fetch, when one is missing. A blob that still carries `code` replays
+  as it always did; only `holdings-{ethereum,base}` are converted so far.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -1270,7 +1280,9 @@ wraps the file's source before that compile — a new `main` with the same signa
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
 statement — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
-mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
+mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`, gitignored: it compiles
+in AGPL code, so `fetch-contract-code` writes it from Ethereum, held to the committed
+`Permit2.pin.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
