@@ -67,7 +67,7 @@
  * - `token_program` — this adapter GATES to classic Tokenkeg only (Token-2022
  *   extensions — transfer fees, gating hooks — are not modeled, matching
  *   `sanctum-stake-pool`'s identical scope decision). Both mints (`mint` and
- *   `f_token_mint`) are classified via the shared data-shape resolver
+ *   `f_token_mint`) are classified by their OWNER through the shared resolver
  *   (`classifyMintProgram` / `parseMintExtensions`); a Token-2022 or
  *   un-routable mint SELF-DROPS this market with a thrown error (the
  *   graceful-drop signal the SvmRoute orchestrator catches).
@@ -156,7 +156,8 @@ import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { utf8Bytes } from "../../../bytes.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -195,9 +196,10 @@ export interface JupiterLendEarnPoolConfig extends PoolConfig {
 }
 
 async function fetchJupiterLendEarnConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<JupiterLendEarnPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`jupiter-lend-earn Lending ${pool} account not found`);
   if (data.length !== LENDING_ACCOUNT_SIZE) {
@@ -221,17 +223,19 @@ async function fetchJupiterLendEarnConfig(
 
   // Tokenkeg-only (Token-2022 extensions — transfer fees, gating hooks — are
   // not modeled, matching sanctum-stake-pool's identical scope decision), so
-  // detect a Token-2022 or un-routable mint via the shared data-shape resolver
-  // and SELF-DROP the market (the thrown error is the graceful-drop signal the
-  // SvmRoute orchestrator catches). The LEGACY path is byte-identical: a classic
-  // 82-byte mint classifies Tokenkeg with no extensions.
+  // detect a Token-2022 or un-routable mint by its OWNER (an extensionless
+  // Token-2022 mint is byte-identical to a legacy one) and SELF-DROP the market
+  // (the thrown error is the graceful-drop signal the SvmRoute orchestrator
+  // catches). The LEGACY path is byte-identical: a Tokenkeg-owned mint
+  // classifies Tokenkeg with no extensions.
   const _mints = [mint, fTokenMint];
-  const _mintDatas = await Promise.all(_mints.map((m) => load(m)));
+  const _mintAccounts = await Promise.all(_mints.map((m) => owned(m)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const m = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
-    if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) continue; // an unreadable mint falls back to the legacy assumption
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(m, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping market ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
@@ -278,13 +282,13 @@ async function deriveRateModel(mint: Address): Promise<Address> {
 function makeJupiterLendEarn(): {
   slug: typeof SLUG;
   programId: Address;
-  fetchPoolConfig: (load: AccountLoader, pool: Address) => Promise<PoolConfig>;
+  fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address) => Promise<PoolConfig>;
 } {
   return {
     slug: SLUG,
     programId: JUPITER_LEND_EARN_PROGRAM_ID,
-    fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<PoolConfig> =>
-      fetchJupiterLendEarnConfig(load, pool),
+    fetchPoolConfig: (owned: OwnedAccountLoader, pool: Address): Promise<PoolConfig> =>
+      fetchJupiterLendEarnConfig(owned, pool),
   };
 }
 

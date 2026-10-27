@@ -74,7 +74,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -207,9 +208,10 @@ export function hadronConfig(cfg: PoolConfig): HadronPoolConfig {
 }
 
 export async function fetchHadronConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<HadronPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== HADRON_PAIR_ACCOUNT_SIZE) {
@@ -235,22 +237,23 @@ export async function fetchHadronConfig(
   }
 
   // The swap CPI's token program is classic Tokenkeg, so detect a Token-2022
-  // or un-routable mint via the shared data-shape resolver and SELF-DROP the
+  // or un-routable mint (a mint's token program is its OWNER: an extensionless
+  // Token-2022 mint is byte-identical to a legacy one) and SELF-DROP the
   // pool (the thrown error is the graceful-drop signal the SvmRoute orchestrator
-  // catches). The LEGACY path is byte-identical: a classic 82-byte mint
+  // catches). The LEGACY path is byte-identical: a Tokenkeg-owned mint
   // classifies Tokenkeg with no extensions and this block is a no-op.
   const _mints = [mintA, mintB];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) continue; // an unreadable mint falls back to the legacy assumption
+    if (classifyMintProgram(mint, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );
     }
-    const { blocking } = parseMintExtensions(mintData);
+    const { blocking } = parseMintExtensions(mintAccount.data);
     if (blocking.length > 0) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,

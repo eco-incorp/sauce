@@ -31,7 +31,7 @@
  * accessor rather than an internal: `buildSwap` -> `swap`, `emitQuote` ->
  * `quoteSource` (it returns SauceScript SOURCE TEXT, a string, not a number).
  * `fetchPoolConfig` -> `poolConfig` for the same reason: the accessor fetches
- * nothing itself — it calls whatever `AccountLoader` the caller hands it (RPC
+ * nothing itself — it calls whatever `OwnedAccountLoader` the caller hands it (RPC
  * in production, `fixtureLoader` in tests); it constructs no RPC client,
  * reads no env, holds no connection. `poolConfig` is consequently the ONE
  * async member of this leaf; every other member is a synchronous, pure
@@ -52,7 +52,7 @@ import type { RegisteredVenueSlug } from "./venues/registry.js";
 import { listVenues, venueAdapter } from "./venues/registry.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -77,7 +77,7 @@ export interface SvmVenueAccessor {
   /** The real adapter object, by identity — the escape hatch for anything this leaf doesn't surface. */
   readonly adapter: SvmVenueAdapter;
   /** `adapter.fetchPoolConfig` — the ONE async member; `load` is caller-supplied, never constructed here. */
-  poolConfig(load: AccountLoader, pool: Address): Promise<PoolConfig>;
+  poolConfig(load: OwnedAccountLoader, pool: Address): Promise<PoolConfig>;
   /** `adapter.quoteAccounts` — the read-only accounts the quote fragment reads. */
   quoteAccounts(cfg: PoolConfig): VenueAccount[];
   /** `adapter.emitQuote` — a SauceScript fragment; `amountIn` is baked as a compile-time literal, not amount-parametric. */

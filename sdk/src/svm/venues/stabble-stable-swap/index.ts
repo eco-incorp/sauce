@@ -47,9 +47,10 @@ import {
   stableQuoteHelperSource,
   type StabbleTokenScale,
 } from "../stabble-common.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
-  AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -107,7 +108,11 @@ export const stabbleStableSwap: SvmVenueAdapter = {
   kind: "stable",
   programId: STABLE_SWAP_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<StabbleStableSwapPoolConfig> {
+  async fetchPoolConfig(
+    owned: OwnedAccountLoader,
+    pool: Address,
+  ): Promise<StabbleStableSwapPoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     const common = decodeStabblePoolCommon(
       pool,
@@ -140,14 +145,16 @@ export const stabbleStableSwap: SvmVenueAdapter = {
     // unreadable mint falls back to the legacy assumption, keeping the
     // byte-identical legacy path. (The previous "guard" cited in the module doc
     // was a dead no-op in stabble-common's decodeStabblePoolCommon; this is the
-    // real, data-shape-based detection.)
+    // real detection, by the mint's OWNER — an extensionless Token-2022 mint is
+    // byte-identical to a legacy one.)
     const _mints = [tokenA.mint, tokenB.mint];
-    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
     for (let _i = 0; _i < _mints.length; _i++) {
       const mint = _mints[_i]!;
-      const mintData = _mintDatas[_i]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintAccount = _mintAccounts[_i]!;
+      if (mintAccount === null) continue;
+      const mintData = mintAccount.data;
+      if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );

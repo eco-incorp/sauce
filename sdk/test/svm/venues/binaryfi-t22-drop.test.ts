@@ -2,12 +2,15 @@
  * binaryfi Token-2022 self-drop: a Market whose asset/quote mint is a
  * Token-2022 mint (or one carrying a blocking extension) must REJECT at
  * fetchPoolConfig. The on-chain swap ix (disc 0x08) is legacy-SPL only (a
- * single token_program slot, listed twice).
+ * single token_program slot, listed twice). The mint is classified by its
+ * OWNER: an extensionless Token-2022 mint is 82 bytes, byte for byte a legacy one.
  */
-import { getAddressDecoder } from "@solana/kit";
+import { address, getAddressDecoder } from "@solana/kit";
 import { binaryfi } from "../../../src/svm/venues/binaryfi/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+import { TOKEN_2022_PROGRAM_ID, type OwnedAccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
+
+const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
 
 const POOL = getAddressDecoder().decode(
   Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1),
@@ -31,12 +34,12 @@ function marketBytes(): Uint8Array {
   return data;
 }
 
-function loaderWith(mint: Uint8Array | null): AccountLoader {
-  return (async (a: string) => {
-    if (a === POOL) return marketBytes();
-    if (a === T22_MINT) return mint;
+function loaderWith(mint: Uint8Array | null): OwnedAccountLoader {
+  return async (a) => {
+    if (a === POOL) return { data: marketBytes(), owner: SYSTEM_PROGRAM };
+    if (a === T22_MINT && mint !== null) return { data: mint, owner: TOKEN_2022_PROGRAM_ID };
     return null;
-  }) as unknown as AccountLoader;
+  };
 }
 
 describe("binaryfi Token-2022 self-drop", () => {
@@ -52,11 +55,26 @@ describe("binaryfi Token-2022 self-drop", () => {
     ).rejects.toThrow(/Token-2022/);
   });
 
+  it("drops a market whose asset mint is 82 bytes but owned by Token-2022 (extensionless)", async () => {
+    await expect(binaryfi.fetchPoolConfig(loaderWith(makeLegacyMint()), POOL)).rejects.toThrow(
+      /Token-2022/,
+    );
+  });
+
   it("does NOT drop for an unreadable mint (falls back to the legacy assumption)", async () => {
     // mint load null -> continue -> no T22 drop; fetch fails LATER on the missing
     // calibrated floor rate, never with a T22/un-routable message.
     await binaryfi.fetchPoolConfig(loaderWith(null), POOL).catch((e: unknown) => {
       expect(String(e)).not.toMatch(/Token-2022|un-routable/);
     });
+  });
+
+  it("refuses a market whose asset mint is an 82-byte mint owned by neither token program", async () => {
+    const unreadable = loaderWith(null);
+    const owned: OwnedAccountLoader = async (a) =>
+      a === T22_MINT ? { data: makeLegacyMint(), owner: SYSTEM_PROGRAM } : unreadable(a);
+    await expect(binaryfi.fetchPoolConfig(owned, POOL)).rejects.toThrow(
+      `token-program: mint ${T22_MINT} is owned by ${SYSTEM_PROGRAM}, neither the legacy nor Token-2022 program`,
+    );
   });
 });

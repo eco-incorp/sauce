@@ -34,7 +34,8 @@ import {
   svmPoolKeyProblem,
   SVM_KEYED_VENUES,
 } from "../svm/pool-keys.js";
-import { coalescingAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
+import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
+import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
   PHOENIX_BASE_MINT_AT,
   SVM_CLMM_LAYOUT,
@@ -164,7 +165,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
   const { chain } = input;
   const rpc = createSolanaRpc(input.rpcUrl);
   const ask = svmReader(input.rpcUrl);
-  const load = coalescingAccountLoader(kitBatchAccountLoader(rpc));
+  const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc));
   const mints = await Promise.all(input.tokens.map((token) => mintOf(chain, token, load)));
   const [first, second] = mints as [Mint, Mint];
   if (first.mint === second.mint) throw new UsageError("the pair names one mint twice");
@@ -394,7 +395,7 @@ function choose(
 async function mintOf(
   chain: CanonicalChain,
   token: string,
-  load: (key: Address) => Promise<Uint8Array | null>,
+  load: OwnedAccountLoader,
 ): Promise<Mint> {
   // A pool holds SOL wrapped, so SOL names WSOL here.
   const symbol = token.toUpperCase() === "SOL" ? "WSOL" : token.toUpperCase();
@@ -408,7 +409,7 @@ async function mintOf(
         `${chain.slug}) or its address`,
     );
   }
-  const data = await load(mint);
+  const data = (await load(mint))?.data ?? null;
   if (data === null || data.length < 82)
     throw new CliError(`${token} is not a mint on ${chain.slug}`);
   return { symbol: mint, mint, decimals: data[44]! };
@@ -521,7 +522,7 @@ async function clmmPool(
   higher: Mint,
   first: Mint,
   second: Mint,
-  load: (key: Address) => Promise<Uint8Array | null>,
+  load: OwnedAccountLoader,
 ): Promise<Listed | { why: string }> {
   const layout = CLMM[venue.layout as Exclude<Layout, "phoenix" | "dlmm">];
   const liquidity = le(data, layout.liquidity, 16);
@@ -535,7 +536,7 @@ async function clmmPool(
       };
     const config = await load(keyAt(data, 9));
     if (config === null) return { why: "its config account is missing" };
-    fee = le(config, 47, 4);
+    fee = le(config.data, 47, 4);
   } else if (venue.layout === "whirlpool") {
     if (le(data, 41, 2) !== le(data, 43, 2))
       return { why: "an adaptive fee, which rises with volatility" };
@@ -620,7 +621,7 @@ async function phoenixPool(
   data: Uint8Array,
   first: Mint,
   second: Mint,
-  load: (key: Address) => Promise<Uint8Array | null>,
+  load: OwnedAccountLoader,
 ): Promise<Listed | { why: string }> {
   if (le(data, 8, 8) !== 1n) return { why: "not open for taking (post-only, paused or closed)" };
   const cfg = await fetchPhoenixConfig(load, market);

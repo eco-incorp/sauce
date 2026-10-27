@@ -16,7 +16,8 @@ import {
   fetchFluxBeamPoolConfig,
   FLUXBEAM_POOL_SIZE,
 } from "../../../src/svm/venues/fluxbeam/index.js";
-import type { AccountLoader } from "../../../src/svm/index.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../../src/svm/index.js";
+import { ownedByShape } from "../fixtures.js";
 import {
   makeLegacyMint,
   makeT22Mint,
@@ -83,14 +84,14 @@ function clockBytes(epoch: bigint): Uint8Array {
   return d;
 }
 
-function loaderWith(mintA: Uint8Array, mintB: Uint8Array, epoch = 0n): AccountLoader {
+function loaderWith(mintA: Uint8Array, mintB: Uint8Array, epoch = 0n): OwnedAccountLoader {
   const map: Record<string, Uint8Array> = {
     [POOL]: poolBytes(),
     [MINT_A]: mintA,
     [MINT_B]: mintB,
     [CLOCK]: clockBytes(epoch),
   };
-  return (async (a: string) => map[a] ?? null) as unknown as AccountLoader;
+  return ownedByShape((async (a: string) => map[a] ?? null) as unknown as AccountLoader);
 }
 
 describe("fluxbeam Token-2022 handling", () => {
@@ -104,6 +105,16 @@ describe("fluxbeam Token-2022 handling", () => {
 
   it("ROUTES a zero-fee Token-2022 leg (Token-2022 program, zero baked fee)", async () => {
     const cfg = await fetchFluxBeamPoolConfig(loaderWith(makeT22Mint(), makeLegacyMint()), POOL);
+    expect(cfg.tokenProgramA).toBe(TOKEN_2022);
+    expect(cfg.tokenProgramB).toBe(TOKENKEG);
+    expect(cfg.feeA).toEqual({ bps: 0n, max: 0n });
+  });
+
+  it("ROUTES an extensionless Token-2022 leg by its owner (82 bytes, legacy-shaped)", async () => {
+    const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+    const owned: OwnedAccountLoader = async (a) =>
+      a === MINT_A ? { data: makeLegacyMint(), owner: TOKEN_2022 } : shaped(a);
+    const cfg = await fetchFluxBeamPoolConfig(owned, POOL);
     expect(cfg.tokenProgramA).toBe(TOKEN_2022);
     expect(cfg.tokenProgramB).toBe(TOKENKEG);
     expect(cfg.feeA).toEqual({ bps: 0n, max: 0n });
@@ -135,5 +146,28 @@ describe("fluxbeam Token-2022 handling", () => {
         POOL,
       ),
     ).rejects.toThrow(/TransferHook/);
+  });
+
+  it("ROUTES an extensionless Token-2022 MINT_B by its owner (82 bytes, legacy-shaped); side A stays Tokenkeg", async () => {
+    const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+    const owned: OwnedAccountLoader = async (a) =>
+      a === MINT_B ? { data: makeLegacyMint(), owner: TOKEN_2022 } : shaped(a);
+    const cfg = await fetchFluxBeamPoolConfig(owned, POOL);
+    expect(cfg.tokenProgramA).toBe(TOKENKEG);
+    expect(cfg.tokenProgramB).toBe(TOKEN_2022);
+    expect(cfg.feeA).toEqual({ bps: 0n, max: 0n });
+    expect(cfg.feeB).toEqual({ bps: 0n, max: 0n });
+  });
+
+  it("SELF-DROPS a pool whose 82-byte mint is owned by neither token program", async () => {
+    const foreign = "11111111111111111111111111111111" as Address;
+    for (const mint of [MINT_A, MINT_B]) {
+      const shaped = loaderWith(makeLegacyMint(), makeLegacyMint());
+      const owned: OwnedAccountLoader = async (a) =>
+        a === mint ? { data: makeLegacyMint(), owner: foreign } : shaped(a);
+      await expect(fetchFluxBeamPoolConfig(owned, POOL)).rejects.toThrow(
+        `token-program: mint ${mint} is owned by ${foreign}, neither the legacy nor Token-2022 program`,
+      );
+    }
   });
 });

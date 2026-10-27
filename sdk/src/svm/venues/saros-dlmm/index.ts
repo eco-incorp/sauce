@@ -88,12 +88,12 @@
  * program rejects a SHORTER (omitted) account list with
  * `AccountNotEnoughKeys`.
  *
- * CLASSIC-SPL-ONLY (mirrors meteora-dlmm's identical, disclosed weakness):
- * gated via mint account length !== 82. The Pair account itself carries no
- * token-program flag (unlike meteora-dlmm's dedicated byte) — the swap ix's
- * `token_program_x`/`token_program_y` are caller-supplied generic accounts,
- * so a length-82 Token-2022 mint WITH NO extensions would misclassify as
- * classic (identical gap to meteora-dlmm's own).
+ * CLASSIC-SPL-ONLY (as meteora-dlmm): a Token-2022 mint self-drops. The Pair
+ * account itself carries no token-program flag (unlike meteora-dlmm's
+ * dedicated byte) — the swap ix's `token_program_x`/`token_program_y` are
+ * caller-supplied generic accounts — so each mint is classified by its OWNER,
+ * which also catches an extensionless Token-2022 mint (82 bytes, the same as
+ * a classic one).
  *
  * VALIDATED against the REAL saros-dlmm program (`solana program dump`,
  * executed via LiteSVM on real mainnet pool + bin-array state, pair
@@ -124,7 +124,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
@@ -339,9 +340,10 @@ function resolveBins(
  * and freeze both directions' bin windows. Read-only against the loader.
  */
 export async function fetchSarosDlmmConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pair: Address,
 ): Promise<SarosDlmmPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pair);
   if (data === null) throw new Error(`${SLUG}: pair account ${pair} not found`);
   if (data.length !== PAIR_ACCOUNT_SIZE) {
@@ -366,19 +368,21 @@ export async function fetchSarosDlmmConfig(
     data.subarray(OFF_TOKEN_Y_MINT, OFF_TOKEN_Y_MINT + 32),
   ) as Address;
   // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
-  // one carrying an un-routable extension) via the shared data-shape resolver
-  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
-  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
-  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+  // one carrying an un-routable extension) via the shared resolver, by the
+  // mint's OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+  // one), and SELF-DROP the pool. The thrown error is the graceful-drop signal —
+  // the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+  // The LEGACY path stays byte-identical: a Tokenkeg-owned mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged. An
   // unreadable mint falls back to the legacy assumption (keeps fixtures green).
   const mints = [tokenXMint, tokenYMint];
-  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  const mintAccounts = await Promise.all(mints.map((mint) => owned(mint)));
   for (let mi = 0; mi < mints.length; mi++) {
     const mint = mints[mi]!;
-    const mintData = mintDatas[mi]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = mintAccounts[mi]!;
+    if (mintAccount === null) continue;
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

@@ -23,13 +23,17 @@ import { resolve } from "path";
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import {
-  coalescingAccountLoader,
+  coalescingOwnedAccountLoader,
   fetchMeteoraDlmmConfig,
   fetchRaydiumClmmConfig,
   LB_PAIR_DISCRIMINATOR,
   RAYDIUM_CLMM_POOL_DISCRIMINATOR,
 } from "../../../src/svm/index.js";
-import type { BatchAccountLoader, LoadedAccount } from "../../../src/svm/index.js";
+import type {
+  BatchAccountLoader,
+  LoadedAccount,
+  OwnedAccountLoader,
+} from "../../../src/svm/index.js";
 import { fixtureData, loadFixtures } from "../fixtures.js";
 import type { AccountFixture } from "../fixtures.js";
 
@@ -41,12 +45,12 @@ function findPool(fixtures: AccountFixture[], discriminator: readonly number[]):
 }
 
 /**
- * A coalescing AccountLoader over the fixtures that counts how many underlying
+ * A coalescing OwnedAccountLoader over the fixtures that counts how many underlying
  * batch reads (getMultipleAccounts equivalents) actually happen — one per
  * microtask flush, i.e. one per dependency round.
  */
 function roundCountingLoader(fixtures: AccountFixture[]): {
-  load: ReturnType<typeof coalescingAccountLoader>;
+  load: OwnedAccountLoader;
   rounds: () => number;
 } {
   let rounds = 0;
@@ -60,7 +64,7 @@ function roundCountingLoader(fixtures: AccountFixture[]): {
       return hit ? { data: new Uint8Array(hit.data), owner: address(hit.owner) } : null;
     });
   };
-  return { load: coalescingAccountLoader(loadMany), rounds: () => rounds };
+  return { load: coalescingOwnedAccountLoader(loadMany), rounds: () => rounds };
 }
 
 describe("raydium-clmm window batch-load", () => {

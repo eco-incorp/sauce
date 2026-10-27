@@ -35,9 +35,11 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { ceilDiv, readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
   AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -298,7 +300,11 @@ export const meteoraDammV2 = {
   kind: "sqrt-price",
   programId: PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<MeteoraDammV2PoolConfig> {
+  async fetchPoolConfig(
+    owned: OwnedAccountLoader,
+    pool: Address,
+  ): Promise<MeteoraDammV2PoolConfig> {
+    const load = accountDataLoader(owned);
     const data = await load(pool);
     if (data === null) throw new Error(`meteora-damm-v2 pool ${pool} account not found`);
     const d = decodePool(pool, data);

@@ -1,5 +1,6 @@
 /**
- * coalescingAccountLoader — batching, chunk PARALLELISM, and error isolation.
+ * coalescingOwnedAccountLoader — batching, chunk PARALLELISM, and error isolation; and
+ * accountDataLoader, its data-only view.
  *
  * The parallelism test is the regression lock for the prod perf bug: `flush`
  * used to await each chunk sequentially (`for (…) { await loadMany(chunk) }`),
@@ -14,7 +15,8 @@
 import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import {
-  coalescingAccountLoader,
+  accountDataLoader,
+  coalescingOwnedAccountLoader,
   type BatchAccountLoader,
   type LoadedAccount,
 } from "../../src/svm/loader.js";
@@ -67,21 +69,22 @@ function inFlightTracker(): {
   return { loadMany, max: () => max, calls: () => calls };
 }
 
-describe("coalescingAccountLoader", () => {
+describe("coalescingOwnedAccountLoader", () => {
   it("coalesces same-tick loads into ONE sweep (deduped)", async () => {
     const calls: Address[][] = [];
     const loadMany: BatchAccountLoader = async (addrs) => {
       calls.push([...addrs]);
       return addrs.map(() => acct(1));
     };
-    const load = coalescingAccountLoader(loadMany);
+    const load = coalescingOwnedAccountLoader(loadMany);
 
     // Three loads in the same tick, one a duplicate.
     const [a, b, c] = await Promise.all([load(POOL[0]!), load(POOL[1]!), load(POOL[0]!)]);
 
     expect(calls.length).toBe(1); // one round-trip
     expect(calls[0]!.length).toBe(2); // deduped: POOL[0], POOL[1]
-    expect([a, b, c].every((r) => r !== null)).toBe(true);
+    // Each load gets the account's data, and its owner rides along.
+    for (const account of [a, b, c]) expect(account).toEqual(acct(1));
   });
 
   it("fires every chunk in PARALLEL, not one after another", async () => {
@@ -101,7 +104,7 @@ describe("coalescingAccountLoader", () => {
       });
     };
     // chunkSize 2 over 6 addresses => 3 chunks.
-    const load = coalescingAccountLoader(loadMany, { chunkSize: 2 });
+    const load = coalescingOwnedAccountLoader(loadMany, { chunkSize: 2 });
     const pending = Promise.all(POOL.map((p) => load(p)));
 
     // Let the flush microtask schedule all chunk round-trips.
@@ -111,12 +114,12 @@ describe("coalescingAccountLoader", () => {
     gates.forEach((release) => release());
     const results = await pending;
     expect(results.length).toBe(6);
-    expect(results.every((r) => r !== null)).toBe(true);
+    expect(results.every((r) => r?.data[0] === 2 && r.owner === OWNER)).toBe(true);
   });
 
   it("caps in-flight chunks at maxConcurrentChunks (default 16) over a 5,000-address batch", async () => {
     const { loadMany, max, calls } = inFlightTracker();
-    const load = coalescingAccountLoader(loadMany); // default chunkSize 100 => 50 chunks
+    const load = coalescingOwnedAccountLoader(loadMany); // default chunkSize 100 => 50 chunks
     const addresses = distinctAddresses(5_000);
 
     const results = await Promise.all(addresses.map((a) => load(a)));
@@ -124,25 +127,25 @@ describe("coalescingAccountLoader", () => {
     expect(calls()).toBe(50); // every chunk still swept
     expect(max()).toBe(16);
     expect(results.length).toBe(5_000);
-    expect(results.every((r) => r !== null)).toBe(true);
+    expect(results.every((r) => r?.data[0] === 4 && r.owner === OWNER)).toBe(true);
   });
 
   it("serializes chunks at maxConcurrentChunks 1 (the escape hatch)", async () => {
     const { loadMany, max, calls } = inFlightTracker();
-    const load = coalescingAccountLoader(loadMany, { chunkSize: 1, maxConcurrentChunks: 1 });
+    const load = coalescingOwnedAccountLoader(loadMany, { chunkSize: 1, maxConcurrentChunks: 1 });
 
     const results = await Promise.all(POOL.map((p) => load(p)));
 
     expect(calls()).toBe(6);
     expect(max()).toBe(1);
-    expect(results.every((r) => r !== null)).toBe(true);
+    expect(results.every((r) => r?.data[0] === 4 && r.owner === OWNER)).toBe(true);
   });
 
   it("rejects a non-positive maxConcurrentChunks", () => {
     const loadMany: BatchAccountLoader = async (addrs) => addrs.map(() => acct(5));
 
-    expect(() => coalescingAccountLoader(loadMany, { maxConcurrentChunks: 0 })).toThrow(
-      "coalescingAccountLoader maxConcurrentChunks must be a positive integer, got 0",
+    expect(() => coalescingOwnedAccountLoader(loadMany, { maxConcurrentChunks: 0 })).toThrow(
+      "maxConcurrentChunks must be a positive integer, got 0",
     );
   });
 
@@ -152,10 +155,20 @@ describe("coalescingAccountLoader", () => {
       return addrs.map(() => acct(3));
     };
     // chunkSize 1 => each address its own chunk; only POOL[0]'s chunk throws.
-    const load = coalescingAccountLoader(loadMany, { chunkSize: 1 });
+    const load = coalescingOwnedAccountLoader(loadMany, { chunkSize: 1 });
 
     const settled = await Promise.allSettled([load(POOL[0]!), load(POOL[1]!)]);
     expect(settled[0]!.status).toBe("rejected"); // failed chunk
-    expect(settled[1]!.status).toBe("fulfilled"); // sibling chunk unaffected
+    expect(settled[1]).toEqual({ status: "fulfilled", value: acct(3) }); // sibling chunk unaffected
+  });
+});
+
+describe("accountDataLoader", () => {
+  it("returns an account's data, and null for a missing account", async () => {
+    const present = acct(7);
+    const load = accountDataLoader(async (at) => (at === POOL[0] ? present : null));
+
+    expect(await load(POOL[0]!)).toBe(present.data);
+    expect(await load(POOL[1]!)).toBeNull();
   });
 });

@@ -75,9 +75,11 @@ import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { ceilDiv, readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { accountDataLoader } from "../../loader.js";
 import type {
   AccountBytesMap,
   AccountLoader,
+  OwnedAccountLoader,
   PoolConfig,
   SvmVenueAdapter,
   SwapUser,
@@ -356,7 +358,8 @@ export const meteoraDbc = {
    * Off-chain gate + segment selection (named errors on every out-of-scope
    * variant — see the file header "GATED OUT" list).
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<MeteoraDbcPoolConfig> {
+  async fetchPoolConfig(owned: OwnedAccountLoader, pool: Address): Promise<MeteoraDbcPoolConfig> {
+    const load = accountDataLoader(owned);
     const poolData = await load(pool);
     if (poolData === null) throw new Error(`meteora-dbc pool ${pool} account not found`);
     const p = decodePool(pool, poolData);

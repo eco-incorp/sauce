@@ -81,7 +81,8 @@ import {
 import { raydiumSqrtPriceAtTick } from "../raydium-clmm/tick-math.js";
 import { readUintLE } from "../math.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -297,9 +298,10 @@ async function resolveWindow(
  * freeze both directions' boundary windows. Read-only against the loader.
  */
 export async function fetchStabbleClmmConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<StabbleClmmPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
@@ -337,19 +339,21 @@ export async function fetchStabbleClmmConfig(
     data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32),
   ) as Address;
   // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
-  // one carrying an un-routable extension) via the shared data-shape resolver
-  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
-  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
-  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+  // one carrying an un-routable extension) via the shared resolver, by the
+  // mint's OWNER (an extensionless Token-2022 mint is byte-identical to a legacy
+  // one), and SELF-DROP the pool. The thrown error is the graceful-drop signal —
+  // the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+  // The LEGACY path stays byte-identical: a Tokenkeg-owned mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged. An
   // unreadable mint falls back to the legacy assumption (keeps fixtures green).
   const _mints = [tokenMint0, tokenMint1];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) continue;
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) continue;
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
       );

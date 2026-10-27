@@ -75,7 +75,8 @@ import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { makeTreeWalkBudget } from "../tree-walk.js";
 import type { SpendHop } from "../tree-walk.js";
-import type { AccountLoader, PoolConfig } from "../types.js";
+import type { OwnedAccountLoader, PoolConfig } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -236,9 +237,10 @@ function hasDiscriminant(data: Uint8Array): boolean {
  * account.
  */
 export async function fetchManifestConfig(
-  load: AccountLoader,
+  owned: OwnedAccountLoader,
   pool: Address,
 ): Promise<ManifestPoolConfig> {
+  const load = accountDataLoader(owned);
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: market account ${pool} not found`);
   if (data.length < MARKET_FIXED_SIZE) {
@@ -258,20 +260,22 @@ export async function fetchManifestConfig(
   // The on-chain Swap ix here is genuinely Tokenkeg-only (a Token-2022 market
   // needs the optional mint accounts + swap_v2-style plumbing — a per-venue
   // follow-up). So detect the real token program per mint via the shared
-  // resolver (data-shape based) instead of the old fragile size check, and
+  // resolver, by the mint's OWNER (an extensionless Token-2022 mint is
+  // byte-identical to a legacy one), instead of the old fragile size check, and
   // SELF-DROP a Token-2022 mint or one carrying an un-routable extension. The
   // drop is expressed as a thrown, clearly-described error — the SvmRoute
   // orchestrator catches a fetchPoolConfig throw and silently drops the venue
   // (the same graceful-degradation path an unsupported direction uses). The
-  // LEGACY path is byte-identical to before: a classic mint classifies as
+  // LEGACY path is byte-identical to before: a Tokenkeg-owned mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged.
   const _mints = [baseMint, quoteMint];
-  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  const _mintAccounts = await Promise.all(_mints.map((mint) => owned(mint)));
   for (let _i = 0; _i < _mints.length; _i++) {
     const mint = _mints[_i]!;
-    const mintData = _mintDatas[_i]!;
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of market ${pool} not found`);
-    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+    const mintAccount = _mintAccounts[_i]!;
+    if (mintAccount === null) throw new Error(`${SLUG}: mint ${mint} of market ${pool} not found`);
+    const mintData = mintAccount.data;
+    if (classifyMintProgram(mint, mintData, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(
         `${SLUG}: dropping market ${pool} — mint ${mint} is a Token-2022 mint (the Swap ix is Tokenkeg-only for now)`,
       );

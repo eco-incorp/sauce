@@ -72,6 +72,7 @@ import {
   MEMO,
   pool,
   restoreVenues,
+  SNAPSHOT,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -1056,7 +1057,12 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
      *  walks it from `data`: each resting order's node, sequence number and size in base lots. */
     const book = async (data: Uint8Array, baseIn: boolean) => {
       const cfg = await fetchPhoenixConfig(
-        async (at) => (at === MARKET ? data : (BYTES.get(at) ?? null)),
+        async (at) =>
+          at === MARKET
+            ? { data, owner: SNAPSHOT.get(MARKET)!.owner as Address }
+            : BYTES.has(at)
+              ? { data: BYTES.get(at)!, owner: SNAPSHOT.get(at)!.owner as Address }
+              : null,
         MARKET,
       );
       const nodes = baseIn ? BIDS_NODES_BASE : cfg.asksNodesBase;

@@ -17,7 +17,7 @@
  *  (c) WINDOW-SHIFT = FRESH MISS, CORRECT NEW ADDRESS — a live-spot window
  *      shift changes the seed (and therefore the memo key), producing a
  *      fresh miss that resolves to the correct new PDA, never a stale hit;
- *  (d) NO STATE CACHED — the AccountLoader is still invoked on every
+ *  (d) NO STATE CACHED — the account loader is still invoked on every
  *      fetchPoolConfig call regardless of memo hits; this module never
  *      caches account bytes, only the pure address computation.
  */
@@ -58,7 +58,7 @@ import {
   SAROS_DLMM_PROGRAM_ID,
   pairArrayIndexes as sarosPairArrayIndexes,
 } from "../../src/svm/venues/saros-dlmm/index.js";
-import type { AccountLoader } from "../../src/svm/index.js";
+import type { OwnedAccountLoader } from "../../src/svm/index.js";
 import { fixtureLoader, loadFixtures } from "./fixtures.js";
 
 const RAYDIUM_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/raydium-clmm");
@@ -265,12 +265,12 @@ describe("PDA-derivation memo", () => {
     });
   });
 
-  describe("no state cached: the AccountLoader still runs on every call", () => {
+  describe("no state cached: the account loader still runs on every call", () => {
     it("raydium-clmm: an all-memo-hit second fetchPoolConfig still re-reads every account", async () => {
       const fixtures = loadFixtures(RAYDIUM_FIXTURES);
       const base = fixtureLoader(fixtures);
       let calls = 0;
-      const counting: AccountLoader = async (addr) => {
+      const counting: OwnedAccountLoader = async (addr) => {
         calls += 1;
         return base(addr);
       };

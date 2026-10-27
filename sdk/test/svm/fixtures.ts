@@ -1,15 +1,25 @@
 /**
  * Venue fixture helpers: normalized mainnet account dumps
  * ({ address, owner, base64Data } JSON, one account per file, in
- * sdk/test/svm/fixtures/<slug>/) become an AccountLoader for fetchPoolConfig,
+ * sdk/test/svm/fixtures/<slug>/) become an OwnedAccountLoader for fetchPoolConfig,
  * an AccountBytesMap for referenceQuote, and litesvm setAccount arguments
  * (kit EncodedAccount) for the engine-gated suites.
  */
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { address, lamports } from "@solana/kit";
-import type { EncodedAccount } from "@solana/kit";
-import type { AccountBytesMap, AccountLoader } from "../../src/svm/index.js";
+import type { Address, EncodedAccount } from "@solana/kit";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  SPL_MINT_SIZE,
+  isToken2022Mint,
+} from "../../src/svm/token-program.js";
+import type {
+  AccountBytesMap,
+  AccountLoader,
+  OwnedAccountLoader,
+} from "../../src/svm/venues/types.js";
 
 export interface AccountFixture {
   /** Base58 account address. */
@@ -40,12 +50,42 @@ export function loadFixtures(dir: string): AccountFixture[] {
   });
 }
 
-/** AccountLoader over the fixtures: a fresh data copy for known addresses, null otherwise. */
-export function fixtureLoader(fixtures: AccountFixture[]): AccountLoader {
-  const byAddress = new Map(fixtures.map((fixture) => [fixture.address, fixtureData(fixture)]));
+/** OwnedAccountLoader over the fixtures: a fresh data copy and the captured owner for known
+ *  addresses, null otherwise. */
+export function fixtureLoader(fixtures: AccountFixture[]): OwnedAccountLoader {
+  const byAddress = new Map(
+    fixtures.map((fixture) => [
+      fixture.address,
+      { data: fixtureData(fixture), owner: address(fixture.owner) },
+    ]),
+  );
   return async (addr) => {
-    const data = byAddress.get(addr);
-    return data === undefined ? null : new Uint8Array(data);
+    const account = byAddress.get(addr);
+    return account === undefined
+      ? null
+      : { data: new Uint8Array(account.data), owner: account.owner };
+  };
+}
+
+/** The System Program: the owner {@link ownedByShape} gives an account that is not a mint. */
+const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
+
+/**
+ * A synthetic data-only loader as an OwnedAccountLoader, each account owned as its bytes would be on
+ * chain: a Token-2022-shaped mint (the account-type byte at 165) by Token-2022, an 82-byte account
+ * by the legacy token program, anything else by the System Program. For hand-built fixtures that
+ * carry no owner; a test about an extensionless Token-2022 mint gives the owner itself.
+ */
+export function ownedByShape(load: AccountLoader): OwnedAccountLoader {
+  return async (addr) => {
+    const data = await load(addr);
+    if (data === null) return null;
+    const owner: Address = isToken2022Mint(data)
+      ? TOKEN_2022_PROGRAM_ID
+      : data.length === SPL_MINT_SIZE
+        ? TOKEN_PROGRAM_ID
+        : SYSTEM_PROGRAM;
+    return { data, owner };
   };
 }
 

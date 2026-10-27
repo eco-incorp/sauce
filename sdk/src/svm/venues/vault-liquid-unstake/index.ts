@@ -46,8 +46,9 @@
  *     (rather than the vault's native lamports) is also the only way to
  *     get this value INSIDE a compiled SauceScript fragment: the SVM
  *     account-loader/ladder framework this repo's adapters share
- *     (`AccountLoader`/`BatchAccountLoader`/`accountUint`) is DATA-only —
- *     it has no lamports accessor anywhere in the pinned SDK surface
+ *     (`OwnedAccountLoader`/`BatchAccountLoader`/`accountUint`) carries only
+ *     account data and owner — it has no lamports accessor anywhere in the
+ *     pinned SDK surface
  *     — so every venue in this family reads reserves from account *data*,
  *     never from an account's native lamports; this venue's Pool struct
  *     conveniently keeps its own SOL-reserve accounting inside `.data` for
@@ -90,7 +91,8 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
-import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { accountDataLoader } from "../../loader.js";
+import type { OwnedAccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
@@ -199,7 +201,11 @@ export const vaultLiquidUnstake = {
    * doc), a missing/malformed global Pool singleton, or a stake-pool
    * account whose shape doesn't match the canonical SPL Stake Pool struct.
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<VaultLiquidUnstakePoolConfig> {
+  async fetchPoolConfig(
+    owned: OwnedAccountLoader,
+    pool: Address,
+  ): Promise<VaultLiquidUnstakePoolConfig> {
+    const load = accountDataLoader(owned);
     const lstData = await load(pool);
     if (lstData === null) throw new Error(`${SLUG} lstInfo ${pool} not found`);
     if (!discMatches(lstData, LST_INFO_DISCRIMINATOR)) {
@@ -237,22 +243,23 @@ export const vaultLiquidUnstake = {
 
     // This venue's `sell_lst` CPI is legacy-SPL (Tokenkeg) only (outMint is
     // always wrapped SOL, a classic mint). Detect a Token-2022 (or otherwise
-    // un-routable) LST mint and GRACEFULLY SELF-DROP the pool (the SvmRoute
-    // orchestrator catches a fetchPoolConfig throw and drops the venue). The
-    // LEGACY path is byte-identical; an unreadable mint falls back to the
-    // legacy assumption.
+    // un-routable) LST mint by its OWNER (an extensionless Token-2022 mint is
+    // byte-identical to a legacy one) and GRACEFULLY SELF-DROP the pool (the
+    // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
+    // venue). The LEGACY path is byte-identical; an unreadable mint falls back
+    // to the legacy assumption.
     const _mints = [mint];
-    const _mintDatas = await Promise.all(_mints.map((m) => load(m)));
+    const _mintAccounts = await Promise.all(_mints.map((m) => owned(m)));
     for (let _i = 0; _i < _mints.length; _i++) {
       const m = _mints[_i]!;
-      const mintData = _mintDatas[_i]!;
-      if (mintData === null) continue;
-      if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+      const mintAccount = _mintAccounts[_i]!;
+      if (mintAccount === null) continue;
+      if (classifyMintProgram(m, mintAccount.data, mintAccount.owner) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
         );
       }
-      const { blocking } = parseMintExtensions(mintData);
+      const { blocking } = parseMintExtensions(mintAccount.data);
       if (blocking.length > 0) {
         throw new Error(
           `${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,
