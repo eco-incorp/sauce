@@ -263,13 +263,19 @@ export function unsignedWire(transaction: Transaction): Base64EncodedWireTransac
 
 const bytesOf = (base64: string): Uint8Array => new Uint8Array(getBase64Encoder().encode(base64));
 
+/** How long a read made only to report what a transaction moved may take, before it is signed and sent: a blockhash lives about a minute. */
+export const BEFORE_READ_MS = 8_000;
+
 /** `addresses` as they are now, `null` where an account does not exist. */
 export async function accountsNow(
   rpc: Rpc,
   addresses: readonly Address[],
+  abortSignal?: AbortSignal,
 ): Promise<(SimulatedAccount | null)[]> {
   if (addresses.length === 0) return [];
-  const { value } = await rpc.getMultipleAccounts([...addresses], { encoding: "base64" }).send();
+  const { value } = await rpc
+    .getMultipleAccounts([...addresses], { encoding: "base64" })
+    .send(abortSignal === undefined ? undefined : { abortSignal });
 
   return value.map((account) =>
     account === null

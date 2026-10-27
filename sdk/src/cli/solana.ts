@@ -155,6 +155,7 @@ import { previewRefusal, requireSupported } from "./support.js";
 import { svmCookFixedUnits, svmRanOutOfUnits, svmStopLines, svmStopsJson } from "./svm-stops.js";
 import {
   accountsNow,
+  BEFORE_READ_MS,
   messageAccounts,
   movedBy,
   svmLeftInPot,
@@ -3279,7 +3280,11 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const built = buildPlanTx(cookTx, ctx, latestBlockhash);
   // What the cook moves: every account it may write, read before it is sent and once it lands.
   const tracked = writableAccounts(built.transaction, cookTx.lookupTables ?? {});
-  const before = await accountsNow(prepared.rpc, tracked).catch(() => undefined);
+  const before = await accountsNow(
+    prepared.rpc,
+    tracked,
+    AbortSignal.timeout(BEFORE_READ_MS),
+  ).catch(() => undefined);
   let cook: SvmSent;
   try {
     cook = await sendAndConfirm(

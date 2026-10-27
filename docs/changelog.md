@@ -185,7 +185,8 @@ nothing moves.
   name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
   accounts (up to a minute for one request), so the command waits up to 120 s for each of its
   answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
-  two there.
+  two there. A send still gives 8 s to the accounts it reads only to report what it moved, since
+  a blockhash lives about a minute; past that it sends without that report.
 - The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
   the supported chains names it after the mainnets.
 
