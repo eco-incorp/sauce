@@ -4,28 +4,47 @@
  * the suite starts reading state it did not read before, or the pinned block moves. The file is a
  * version 1 recording, which replays at its gas limit alone (`state.ts`): recording it again adds
  * the node's hardfork, next base fee and dev nonces.
+ *
+ * The committed file pins each contract's code by its keccak256 (`codeHash`) and holds no code:
+ * `pnpm --filter './sdk' fetch-contract-code` reads it from Base, and `replayState` puts it back
+ * into the file the kit replays. A recording writes the code inline, and `pinStateCode` moves it
+ * into the cache, leaving the committed form.
  */
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
 import { CookReverted, fork, type TestChain } from "../../src/testing/index.js";
-import { anvilMissing, program, recordRpc, recording, statePath } from "./support.js";
+import {
+  anvilMissing,
+  pinStateCode,
+  program,
+  recordRpc,
+  recording,
+  replayState,
+  statePath,
+  type ReplayedState,
+} from "./support.js";
 
 const BLOCK = 52_384_000;
 const STATE = statePath("base");
 
 describe("fork('base') replayed", { skip: anvilMissing() }, () => {
   let base: TestChain;
+  let replayed: ReplayedState | undefined;
   before(async () => {
+    replayed = recording ? undefined : replayState(STATE);
     base = await fork("base", {
       block: BLOCK,
-      state: STATE,
-      ...(recording
-        ? { mode: "record" as const, rpcUrl: recordRpc(8453) }
-        : { mode: "replay" as const }),
+      ...(replayed === undefined
+        ? { state: STATE, mode: "record" as const, rpcUrl: recordRpc(8453) }
+        : { state: replayed.path, mode: "replay" as const }),
     });
   });
-  after(() => base?.stop());
+  after(async () => {
+    await base?.stop();
+    replayed?.remove();
+    if (recording) pinStateCode(STATE);
+  });
   beforeEach(() => base.snapshot());
   afterEach(() => base.revert());
 

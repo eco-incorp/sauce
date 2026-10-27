@@ -8,6 +8,10 @@
 //     that form (`actions/tests/mainnet.ts#genesisFrom`), and a replay fills each `code` in from
 //     the cache below before anvil boots from the file. An entry that still carries `code` is not
 //     this script's: such a file replays as it always did.
+//   - the testing kit's recorded EVM states, `dev-tools/test/testing/state/*.json.gz` (`{ sauce,
+//     genesis }`, the chain in `sauce.chainId`): the same `codeHash` entries, which the kit's own
+//     suites put back (`dev-tools/test/testing/support.ts#replayState`) before replaying. A Solana
+//     state file there has no `genesis` and is not this script's.
 //   - canonical Permit2, `test/fixtures/cli/Permit2.pin.json` (chain, address, codeHash). From it
 //     this writes `test/fixtures/cli/Permit2.json`, the pin plus its `runtime`, where the CLI suites
 //     read it; `.gitignore` keeps that file out of git.
@@ -55,6 +59,7 @@ import { createTsLoader } from "./lib/load-ts.mjs";
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = resolve(SDK, "..");
 const STATE = join(REPO, "actions", "tests", "state");
+const TESTING_STATE = join(REPO, "dev-tools", "test", "testing", "state");
 const PERMIT2_PIN = join(SDK, "test", "fixtures", "cli", "Permit2.pin.json");
 const PERMIT2 = join(SDK, "test", "fixtures", "cli", "Permit2.json");
 const CACHE = join(REPO, "node_modules", ".cache", "sauce-contract-code");
@@ -85,29 +90,49 @@ function pin(chainId, address, codeHash, where) {
   pins.set(key, entry);
 }
 
-let converted = 0;
-for (const file of readdirSync(STATE)
-  .filter((name) => name.endsWith(".genesis.json.gz"))
-  .sort()) {
-  const where = relative(REPO, join(STATE, file));
-  let genesis;
-  try {
-    genesis = JSON.parse(gunzipSync(readFileSync(join(STATE, file))).toString("utf8"));
-  } catch (error) {
-    refuse(where, `not a gzipped genesis file (${error.message})`);
-    continue;
-  }
+/** Pins every `codeHash` entry of `alloc` on `chainId`; whether there was one. */
+function pinAlloc(alloc, chainId, where) {
   let pinsHere = 0;
-  for (const [address, entry] of Object.entries(genesis.alloc ?? {})) {
+  for (const [address, entry] of Object.entries(alloc ?? {})) {
     if (entry.codeHash === undefined) continue;
     if (entry.code !== undefined) {
       refuse(`${where} ${address}`, "carries both code and codeHash; a pinned entry has no code");
       continue;
     }
-    pin(genesis.config?.chainId, address, entry.codeHash, where);
+    pin(chainId, address, entry.codeHash, where);
     pinsHere++;
   }
-  if (pinsHere > 0) converted++;
+  return pinsHere > 0;
+}
+
+/** The gzipped JSON `file` in `dir`, or undefined having refused it. */
+function readGzipJson(dir, file) {
+  try {
+    return JSON.parse(gunzipSync(readFileSync(join(dir, file))).toString("utf8"));
+  } catch (error) {
+    refuse(relative(REPO, join(dir, file)), `not a gzipped JSON file (${error.message})`);
+    return undefined;
+  }
+}
+
+let converted = 0;
+for (const file of readdirSync(STATE)
+  .filter((name) => name.endsWith(".genesis.json.gz"))
+  .sort()) {
+  const genesis = readGzipJson(STATE, file);
+  if (genesis === undefined) continue;
+  if (pinAlloc(genesis.alloc, genesis.config?.chainId, relative(REPO, join(STATE, file))))
+    converted++;
+}
+for (const file of readdirSync(TESTING_STATE)
+  .filter((name) => name.endsWith(".json.gz"))
+  .sort()) {
+  const state = readGzipJson(TESTING_STATE, file);
+  if (state?.genesis === undefined) continue;
+  if (
+    pinAlloc(state.genesis.alloc, state.sauce?.chainId, relative(REPO, join(TESTING_STATE, file)))
+  )
+    converted++;
 }
 
 const permit2 = JSON.parse(readFileSync(PERMIT2_PIN, "utf8"));
