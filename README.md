@@ -174,3 +174,9 @@ that ahead of time, and is optional.
 [the MCP server](docs/guides/mcp.md) covers each agent and the wallets it can keep for one.
 `sauce skills install` copies the package's [agent skills](docs/guides/skills.md), instructions
 written for an agent, into your project.
+
+## License
+
+Sauce is licensed under the [Eco, Inc. Proprietary License 1.1](LICENSE.md), which is not an open
+source license. The third-party material in the package, and its licenses, are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

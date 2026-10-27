@@ -38,7 +38,8 @@ sauce pot --chain base --wallet me --deploy
 sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args <recipient> 1000000
 
-# 5. Run it, with the USDC it pays in your Pot: sent there after step 3, or add --fund USDC:1.
+# 5. Run it, with the USDC it pays in your Pot: sent there after step 3, or add --fund USDC:1
+#    (the first --fund asks you to approve Permit2 for USDC, a transaction of its own).
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
 ```
 
@@ -59,7 +60,9 @@ sends nothing and changes nothing. It needs no key, no Pot and no tokens:
 - **The fee.** Every cook pays the **Kitchen**, the contract that makes Pots, a small flat fee in
   the chain's coin. An owner short of it is given it, in the copy, and told.
 
-It prints what would happen:
+It prints what would happen. This is the output for an owner whose Pot is not deployed yet; after
+step 3 yours is, so its headline has no "after the Pot's deploy" and there is no
+`Kitchen.deployPot` step:
 
 ```text
 The cook succeeds from 0xYou: gas used 128999 for the cook, after the Pot's deploy (1. below), returns 0x

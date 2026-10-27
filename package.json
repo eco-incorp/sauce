@@ -89,6 +89,7 @@
   },
   "files": [
     "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md",
     "sdk/dist",
     "sdk/runtime",
     "actions/dist",
@@ -96,6 +97,7 @@
     "dev-tools/dist/testing",
     "actions/action-program.schema.json",
     "sdk/src/protocols",
+    "sdk/src/svm/venues/hylo",
     "skills",
     "docs/**/*.md",
     "docs/examples/*.ts"

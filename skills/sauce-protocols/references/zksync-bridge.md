@@ -29,7 +29,7 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
     l2GasLimit,
     800,
     [],
-    ctx.msgSender(),
+    recipient,
   );
 }
 ```
@@ -40,7 +40,7 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
 - `_l2GasLimit`: Gas limit for L2 execution (e.g. 300000)
 - `_l2GasPerPubdataByteLimit`: Gas per pubdata byte limit (800 is the standard value)
 - `_factoryDeps`: Array of contract bytecodes to deploy on L2. Empty `[]` for standard operations
-- `_refundRecipient`: Address to receive excess gas refund on L2: the user's wallet (in a Sauce program `msg.sender` is the Pot, whose address on L2 holds nothing the user can reach)
+- `_refundRecipient`: Address on L2 that receives the excess gas refund, and the L2 value if the L2 transaction fails. The template passes `recipient`, so a failed deposit refunds the party a successful one pays. Not the Pot and not whoever called the cook (under a signed cook, the account that sent it): zkSync's Mailbox applies the L1-to-L2 alias to a refund recipient that has code on L1, so the Pot's refund would land at an L2 address nobody controls. The same holds for `recipient`: if it has code on L1, the refund goes to its alias on L2
 - `msg.value` must cover: L2 value + L2 gas costs. Use `l2TransactionBaseCost()` to estimate
 
 ## Deployments and ABI

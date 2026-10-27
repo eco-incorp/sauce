@@ -218,7 +218,12 @@ function sqrtFloor(value: bigint): bigint {
 /** √1.01, times 1e18: the sqrt price's step for a 1% move. */
 const ROOT_101 = sqrtFloor(101n * 10n ** 34n);
 
-/** TickMath's factors: √1.0001^-(2^i), times 2^128, for i = 0 … 19. */
+/**
+ * TickMath's factors: √1.0001^-(2^i), times 2^128, for i = 0 … 19, as in `src/utils/tickMath.ts`
+ * of Uniswap/v3-sdk (https://github.com/Uniswap/v3-sdk) at commit
+ * 758da7b71f07bff8baa8c4e038064013b8ec74f8, Copyright (c) 2021 Uniswap Labs, licensed under the
+ * MIT License (see THIRD_PARTY_NOTICES.md).
+ */
 const TICK_FACTORS = [
   0xfffcb933bd6fad37aa2d162d1a594001n,
   0xfff97272373d413259a46990580e213an,
