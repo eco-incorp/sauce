@@ -52,12 +52,26 @@ function assertReady(): void {
 }
 
 /**
+ * The SGR escapes the compiler's report sets its headlines in bold with, whatever the terminal: not
+ * part of its words, and noise in a log, JSON or a tool's result.
+ */
+const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
+/**
  * Compile a SauceScript program to Sauce bytecode — the compiler's own `compile`, after a check
  * that its wasm is initialized. Synchronous in every environment once `ready()` has resolved, and
- * in Node without it.
+ * in Node without it. A failure is the compiler's own error, its `message` (and `stack`) plain
+ * text, its `diagnostics` as the compiler gave them.
  */
 export function compile(options: CompileOptions): CompileResult {
   assertReady();
-
-  return compileWasm(options);
+  try {
+    return compileWasm(options);
+  } catch (error) {
+    if (error instanceof Error) {
+      error.message = error.message.replace(SGR, "");
+      if (error.stack !== undefined) error.stack = error.stack.replace(SGR, "");
+    }
+    throw error;
+  }
 }

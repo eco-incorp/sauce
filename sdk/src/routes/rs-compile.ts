@@ -476,9 +476,7 @@ export function ambientNamesOf(
 /** The name the compiler refused for being exported by two ambient modules, if it refused one. */
 function exportedTwice(error: unknown): string | undefined {
   if (!(error instanceof Error)) return undefined;
-  // The rendered report sets the rule in bold: its escapes are not part of the words.
-  // eslint-disable-next-line no-control-regex
-  return EXPORTED_TWICE.exec(error.message.replace(/\u001b\[[0-9;]*m/g, ""))?.[1];
+  return EXPORTED_TWICE.exec(error.message)?.[1];
 }
 
 /**
