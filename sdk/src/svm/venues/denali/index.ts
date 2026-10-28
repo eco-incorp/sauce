@@ -63,8 +63,8 @@
  *                 the merge level is the real floor, same convention as
  *                 every other venue-min-out-rides-1 ladder in this repo)
  *
- * ── Accounts (12, FIXED order regardless of direction — confirmed: the SAME
- * 12-account order recovered a real mintA->mintB swap AND a real mintB->mintA
+ * ── Accounts (14, FIXED order regardless of direction — confirmed: the SAME
+ * order recovered a real mintA->mintB swap AND a real mintB->mintA
  * swap on a different pool; only the `direction` byte and which side of the
  * transferCheckeds Denali issues flips, never the account list) ──
  *   0  trader (signer, writable)          — token authority for the deposit side
@@ -84,6 +84,11 @@
  *   9  global config (readonly, protocol-wide constant — see above)
  *   10 userAtaA (writable)
  *   11 userAtaB (writable)
+ *   12 event authority (readonly, PDA(["__event_authority"], program))
+ *   13 the Denali program itself (readonly)
+ * 12 and 13 are Anchor's `#[event_cpi]` accounts, which the program's upgrade
+ * at slot 454,575,418 appended; with only the first 12 the program fails with
+ * `AccountNotEnoughKeys` on `event_authority`.
  *
  * There is NO extra required signer beyond the trader itself — accounts
  * 1/8/9 are all `signer:false` in every real transaction inspected (account
@@ -154,6 +159,8 @@ export const DENALI_ORACLE_PROGRAM_ID = address("DZNTS5ujuiyx1mazqCPdYPzEyE2VrTP
  * not a signer.
  */
 export const DENALI_GLOBAL_CONFIG = address("46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ");
+/** Constant PDA `["__event_authority"]` of the program (Anchor `#[event_cpi]`), read-only. */
+export const DENALI_EVENT_AUTHORITY = address("3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd");
 
 const POOL_ACCOUNT_SIZE = 517;
 export const OFF_MINT_A = 72;

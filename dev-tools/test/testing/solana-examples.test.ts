@@ -6,7 +6,12 @@
  * and mainnet's Kitchen fee. No RPC, and no funds: each program's inputs are funded on the copy.
  *
  * The state file was recorded from the SDK's pinned mainnet dumps served on loopback
- * (`solana-support.ts#pinnedCluster`); `RECAPTURE_SOLANA_STATE=1` records it again from there.
+ * (`solana-support.ts#pinnedCluster`); `RECAPTURE_SOLANA_STATE=1` records it again from there. It
+ * pins the Whirlpool program by its sha256 and holds no ELF: `replaySolanaState` puts back the venue
+ * dump's copy, which
+ * `pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`
+ * fetches from mainnet, and
+ * `pinSolanaPrograms` takes it out again after a recording.
  */
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
@@ -16,11 +21,14 @@ import { CookReverted, fork, type SolanaTestChain } from "../../src/testing/inde
 import {
   MAINNET_FEE,
   PINNED,
+  pinSolanaPrograms,
   pinnedCluster,
   recordingSolana,
+  replaySolanaState,
   solanaMissing,
   solanaState,
 } from "./solana-support.js";
+import type { ReplayedState } from "./support.js";
 
 const REPO = resolve(import.meta.dirname, "../../..");
 const example = (path: string): string => resolve(REPO, path);
@@ -33,10 +41,13 @@ describe(
   () => {
     let solana: SolanaTestChain;
     let cluster: Awaited<ReturnType<typeof pinnedCluster>> | undefined;
+    let replayed: ReplayedState | undefined;
+    const STATE = solanaState("solana-examples");
     before(async () => {
       cluster = recordingSolana ? await pinnedCluster() : undefined;
+      replayed = recordingSolana ? undefined : replaySolanaState(STATE);
       solana = await fork("solana", {
-        state: solanaState("solana-examples"),
+        state: replayed?.path ?? STATE,
         mode: recordingSolana ? "record" : "replay",
         ...(cluster === undefined ? {} : { rpcUrl: cluster.url }),
       });
@@ -44,6 +55,8 @@ describe(
     after(async () => {
       await solana?.stop();
       await cluster?.close();
+      replayed?.remove();
+      if (recordingSolana) pinSolanaPrograms(STATE);
     });
     beforeEach(() => solana.snapshot());
     afterEach(() => solana.revert());

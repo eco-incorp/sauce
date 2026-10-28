@@ -8,6 +8,7 @@
 //   node scripts/dump-svm-venues.mjs --redump --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --add --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --refresh <pool>[,<pool>…] --rpc-config rpc.config.json
+//   node scripts/dump-svm-venues.mjs --programs --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --check --rpc-config rpc.config.json
 //
 // Build first (`pnpm --filter './sdk' build`): the accounts a pool's swap takes (its config, vaults,
@@ -27,7 +28,9 @@
 // the `slot` and `unixTimestamp` it was read at. `--refresh` reads the pools it names (by their name
 // in `POOLS`) again, with every account of their slots but the mints and configs they share with
 // other pools, all at one slot, and rewrites them: for a pool whose slot the SDK now reads
-// differently.
+// differently. `--programs` reads the programs again and re-pins each whose code changed (its file
+// and manifest entry, and `programsSlot`, the slot they were read at), moving no account: for a
+// venue upgraded since the dump whose suites pass on its new code against the snapshot they hold.
 //
 // The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
 // 1399811149, as in `capture-token-registry.mjs`: no default, no fallback, nothing read from the
@@ -42,14 +45,15 @@ import { address, getAddressCodec, getAddressDecoder, getProgramDerivedAddress }
 import {
   addToVenueFixture,
   readAccountFile,
+  repinVenuePrograms,
   roots,
   sha256,
   writeVenueFixture,
 } from "./lib/svm-venue-fixture.mjs";
 
 const USAGE =
-  "usage: node scripts/dump-svm-venues.mjs (--redump | --add | --check | --refresh <pool,…>) " +
-  "--rpc-config <path>";
+  "usage: node scripts/dump-svm-venues.mjs (--redump | --add | --programs | --check | " +
+  "--refresh <pool,…>) --rpc-config <path>";
 const SOLANA = "1399811149";
 const LOADER = "BPFLoaderUpgradeab1e11111111111111111111111";
 /** `UpgradeableLoaderState::ProgramData`: a u32 tag, the deploy slot, an `Option<Pubkey>`. */
@@ -67,6 +71,7 @@ try {
     options: {
       redump: { type: "boolean", default: false },
       add: { type: "boolean", default: false },
+      programs: { type: "boolean", default: false },
       check: { type: "boolean", default: false },
       refresh: { type: "string" },
       "rpc-config": { type: "string" },
@@ -77,10 +82,15 @@ try {
 }
 const refresh = cli.values.refresh?.split(",").filter(Boolean);
 if (
-  [cli.values.redump, cli.values.add, cli.values.check, refresh !== undefined].filter(Boolean)
-    .length !== 1
+  [
+    cli.values.redump,
+    cli.values.add,
+    cli.values.programs,
+    cli.values.check,
+    refresh !== undefined,
+  ].filter(Boolean).length !== 1
 )
-  fail(`give one of --redump, --add, --check and --refresh\n${USAGE}`);
+  fail(`give one of --redump, --add, --programs, --check and --refresh\n${USAGE}`);
 if (cli.values["rpc-config"] === undefined) fail(`pass --rpc-config <path>\n${USAGE}`);
 let config;
 try {
@@ -240,10 +250,18 @@ async function rpc(method, params) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     }).catch(() => undefined);
-    // Never the request's own error: it names the URL, which may carry a key.
+    // Never the request's own error: it names the URL, which may carry a key. A public endpoint
+    // sheds load with 429 (honouring its Retry-After) or 5xx: back off and ask again.
     if (response === undefined || !response.ok) {
-      if (attempt < 4) {
-        await new Promise((done) => setTimeout(done, 1000 * attempt));
+      if (attempt < 8) {
+        const after = Number(response?.headers.get("retry-after"));
+        const wait = Math.min(30_000, 1000 * 2 ** (attempt - 1));
+        await new Promise((done) =>
+          setTimeout(
+            done,
+            Number.isFinite(after) && after > 0 ? Math.max(wait, after * 1000) : wait,
+          ),
+        );
         continue;
       }
       fail(`the endpoint did not answer ${method}`);
@@ -337,6 +355,24 @@ if (cli.values.check) {
   for (const file of broken) console.log(`does not hash to its pin: ${file}`);
   if (upgraded.length + broken.length > 0) process.exit(1);
   console.log(`dump-svm-venues: ${programs.length} programs as dumped at slot ${before.slot}`);
+  process.exit(0);
+}
+
+if (cli.values.programs) {
+  if (!existsSync(MANIFEST)) fail("no manifest.json to re-pin: --redump first");
+  const before = JSON.parse(readFileSync(MANIFEST, "utf8"));
+  const replaced = repinVenuePrograms(SDK, {
+    before,
+    programs,
+    slot,
+    date: new Date().toISOString().slice(0, 10),
+  });
+  for (const { held, entry } of replaced)
+    console.log(`re-pinned ${entry.name}: ${held.sha256} -> ${entry.sha256}`);
+  console.log(
+    `dump-svm-venues: ${replaced.length} of ${programs.length} programs re-pinned at slot ${slot}; ` +
+      `every account as dumped at slot ${before.slot}`,
+  );
   process.exit(0);
 }
 

@@ -2,7 +2,7 @@
 
 **Reference** · [Documentation](README.md) · [Deployments](reference/deployments.md)
 
-> What changed in each 0.99.x release of the SDK: in SauceScript, the language you write programs
+> What changed in each SDK release: in SauceScript, the language you write programs
 > in, and in the compiler, engines and Kitchens that release shipped. Newest first. A program that
 > compiled before can stop compiling, or behave differently, after an upgrade: the entries say
 > where.
@@ -47,34 +47,34 @@ the Pot address family. Derive addresses with the SDK rather than from a version
 Pots and programs retain their original pairing; an upgrade does not move their funds or migrate
 them. [Deployments](reference/deployments.md) lists the SDK's current release addresses.
 
-The SDK is still below 1.0, and it has made breaking changes in patch releases. Read each release's
+The SDK's 0.99.x releases included breaking changes in patch versions. Read each release's
 **Now refused**, **Removed** and **Also breaking** items before you upgrade, even for a patch.
 
 ## Which versions work together
 
 Each SDK release and the five releases it pins:
 
-| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ------- | -------- | ------- | ----------- | ------- | ----------- |
+| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -94,10 +94,19 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK Unreleased
+## SDK 0.99.18 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
 nothing moves.
+
+- **Maintenance only:** test fixture fetchers require an explicit public-only `--rpc-config` for
+  online setup; CI supplies it through the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`.
+  Offline replay and cache verification remain config-free; shipped runtime behavior is unchanged.
+  Invalid materialized program files are removed and repaired from a verified raw cache when
+  available, otherwise fetched and checked against the same pin. Offline setup refuses any missing
+  or invalid program without a verified cache entry; missing programs are never skipped.
+  Hylo and its stability-pool test programs were re-read after their mainnet upgrades and held
+  to the unchanged real-execution vectors before their fixture pins were refreshed.
 
 ### SauceScript
 
@@ -314,6 +323,16 @@ WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, 
   quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
   switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
   the transaction fee.
+- **Fixed** (Solana): Denali's swap passes the event authority and the program, which its upgraded
+  program requires. Denali's program was upgraded at slot 454,575,418 to take Anchor's event-CPI
+  accounts after the swap's twelve: the event authority (`3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd`,
+  the program's `["__event_authority"]` PDA), then the program itself, both read-only. With only the
+  twelve, the program fails before it moves anything (`AccountNotEnoughKeys`). `@sauce/router`'s
+  `denali` now takes a slot of seven, `[program, pool, vaultA, vaultB, oracle, globalConfig,
+eventAuthority]`, and passes both. `routerSvmAccountOrder("denali", …)` ends with
+  `eventAuthority` and `program`, which a list for `denaliCpi` or `denaliData` must carry. The
+  address is exported as `DENALI_EVENT_AUTHORITY` from `@eco-incorp/sauce/svm`. The instruction data
+  is unchanged.
 
 - **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
   swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and

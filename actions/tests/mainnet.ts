@@ -24,14 +24,34 @@
  * is cleared — the dev keys are public, and one carries an EIP-7702 delegation on Ethereum — so
  * capture and replay execute the same code. `stop()` checks the blob names no RPC before writing it.
  *
+ * CONTRACT CODE is not in the blob. An account with code carries `codeHash` (its keccak256) where
+ * an anvil genesis has `code`, and capture writes the code itself into the content-addressed cache
+ * `node_modules/.cache/sauce-contract-code/<codeHash>.hex`. `pnpm --filter './sdk'
+ * fetch-contract-code --rpc-config fixtures.rpc.config.json` fills that cache from the chain
+ * (`eth_getCode`, held to the hash); replay
+ * takes each code from it, hashes it again, and puts it in the genesis anvil boots from. Code
+ * beginning 0xef — an EIP-7702 delegation, a node's precompile marker — is no program and stays
+ * inline as `code`, and so does every code of a blob captured before this form: such a blob
+ * replays exactly as it was written.
+ *
  * The procedure, for maintainers, is in CLAUDE.md.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
+
+import { keccak256, type Hex } from "viem";
 
 import { freePort, spawnAnvil } from "../../sdk/test/anvil-process.js";
 
@@ -98,6 +118,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(HERE, "state");
 /** Where a capture reads its RPC URLs: chain id -> URL. Gitignored. */
 const RPC_CONFIG = resolve(HERE, "../../sdk/rpc.config.json");
+/** Contract code by its keccak256, `<codeHash>.hex`: what capture writes and `fetch-contract-code` fetches. */
+const CODE_CACHE = resolve(HERE, "../../node_modules/.cache/sauce-contract-code");
 
 export const capturing = process.env.RECAPTURE_ANVIL_STATE === "1";
 
@@ -149,6 +171,71 @@ function statePath(suite: string): string {
   return join(STATE_DIR, `${suite}.genesis.json.gz`);
 }
 
+/** An alloc entry of a captured genesis: `code`, or the `codeHash` that pins it. */
+interface GenesisAccount {
+  balance: string;
+  nonce: string;
+  code?: string;
+  codeHash?: string;
+  storage?: Record<string, string>;
+}
+
+/** The code `codeHash` names, from `CODE_CACHE`; undefined if it is not there or fails the hash. */
+function cachedCode(codeHash: string): string | undefined {
+  const path = join(CODE_CACHE, `${codeHash}.hex`);
+  if (!existsSync(path)) return undefined;
+  const code = readFileSync(path, "utf8").trim().toLowerCase();
+
+  return /^0x([0-9a-f]{2})+$/.test(code) && keccak256(code as Hex) === codeHash ? code : undefined;
+}
+
+/**
+ * The genesis anvil boots from: `blob`'s, with each `codeHash` entry's code put back from
+ * `CODE_CACHE`. A blob with no `codeHash` entry is returned as its bytes, unchanged.
+ */
+function replayGenesis(blob: string): Buffer {
+  const text = gunzipSync(readFileSync(blob));
+  const genesis = JSON.parse(text.toString("utf8")) as { alloc: Record<string, GenesisAccount> };
+  const pinned = Object.entries(genesis.alloc).filter(([, entry]) => entry.codeHash !== undefined);
+  if (pinned.length === 0) return text;
+  const missing: string[] = [];
+  for (const [address, entry] of pinned) {
+    const code = cachedCode(entry.codeHash!);
+    if (code === undefined) {
+      missing.push(`${address} (${entry.codeHash})`);
+      continue;
+    }
+    entry.code = code;
+    delete entry.codeHash;
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `${blob} pins the code of ${missing.length} account(s) that ${CODE_CACHE} does not hold (or ` +
+        `holds failing its hash): ${missing.slice(0, 3).join(", ")}` +
+        (missing.length > 3 ? `, and ${missing.length - 3} more` : "") +
+        ". Run `pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json`, " +
+        "which reads them from the chain and " +
+        "holds each to its hash",
+    );
+  }
+
+  return Buffer.from(JSON.stringify(genesis));
+}
+
+/** Puts `code` in `CODE_CACHE` under its keccak256, which it returns. */
+function cacheCode(code: string): string {
+  const codeHash = keccak256(code as Hex);
+  const path = join(CODE_CACHE, `${codeHash}.hex`);
+  if (cachedCode(codeHash) === undefined) {
+    mkdirSync(CODE_CACHE, { recursive: true });
+    const temporary = `${path}.${process.pid}.tmp`;
+    writeFileSync(temporary, code);
+    renameSync(temporary, path);
+  }
+
+  return codeHash;
+}
+
 /** The capture RPC for `chain`, from `sdk/rpc.config.json` — the only place a capture reads one. */
 function captureRpc(chain: CapturedChain): string {
   if (!existsSync(RPC_CONFIG)) {
@@ -194,7 +281,7 @@ export async function startMainnet(
     }
     const work = mkdtempSync(join(tmpdir(), `sauce-mainnet-${suite}-`));
     const genesis = join(work, "genesis.json");
-    writeFileSync(genesis, gunzipSync(readFileSync(blob)));
+    writeFileSync(genesis, replayGenesis(blob));
     const proc = await spawnAnvil(port, ["--init", genesis, ...common], 60_000);
     try {
       await pin(rpc, chain);
@@ -330,7 +417,12 @@ function genesisFrom(
       balance: recorded.balance ?? "0x0",
       nonce: recorded.nonce ?? "0x0",
     };
-    if (recorded.code && recorded.code !== "0x") entry.code = recorded.code;
+    if (recorded.code && recorded.code !== "0x") {
+      // 0xef-led code, which EIP-3541 keeps out of deployed code, is an EIP-7702 delegation or a
+      // node's marker, not a program: it stays inline. Any other code goes to the cache.
+      if (/^0xef/i.test(recorded.code)) entry.code = recorded.code;
+      else entry.codeHash = cacheCode(recorded.code.toLowerCase());
+    }
     const slots = Object.keys(recorded.storage).sort();
     if (slots.length > 0)
       entry.storage = Object.fromEntries(slots.map((k) => [k, recorded.storage[k]!]));

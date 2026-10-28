@@ -333,13 +333,30 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   block interval (12 s on Ethereum, 2 s elsewhere — WOOFi's oracle goes stale 120 s
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
-  network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
-  venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
-  `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
-  `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which
-  `examples.mainnet` alone reads and captures.
+  network. Every blob is committed with its contract code pinned (below), so each holds balances,
+  nonces and storage only: 185 KB for all 17, the largest `swap-base` ~75 KB, `actions` ~30 KB and
+  `official-ethereum` ~21 KB (which `examples.mainnet` alone reads and captures).
+
+  **Contract code is pinned, not committed.** An account with code carries `codeHash` (keccak256)
+  where an anvil genesis has `code`; capture writes the code to the content-addressed
+  `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, and `pnpm --filter './sdk'
+fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-contract-code.mjs`,
+  run by CI's setup action) fills that cache from each blob's chain (`eth_getCode` at `latest`
+  through the explicitly configured public endpoints, held to the
+  hash; code at an address changes only by self-destruct or an EIP-7702 delegation, which it names
+  when it refuses). Replay puts each code back before anvil boots and fails, naming the fetch, when
+  one is missing. The testing kit's `test/testing/state/base.json.gz` is pinned the same way (see
+  `dev-tools/` below). Never commit third-party program code in a blob; the non-program `0xef`
+  marker is the exception and stays inline as `code`.
+  Both fixture fetchers require `--rpc-config <path>` for online runs: a flat JSON object mapping
+  chain ids to public, keyless HTTPS URLs or nonempty lists of them in fallback order. Keep this
+  separate from credential-bearing capture configs in gitignored `sdk/fixtures.rpc.config.json`,
+  with ids `1`, `8453`, `43114`, `10` and `1399811149`. With `pnpm --filter './sdk'`, relative
+  paths resolve from `sdk`, hence `--rpc-config fixtures.rpc.config.json`. There is no default,
+  environment lookup or access to the CLI-only RPC roster. CI takes the public-only JSON from
+  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`, writes it to a runner temporary
+  file and passes its absolute path. `--offline` needs no config and uses verified local caches
+  without any network access.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -1197,12 +1214,36 @@ The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 (`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs from a pinned dump: the
 programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
 take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
-lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
+lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--programs|--check --rpc-config <file>`, the
 layout in `scripts/lib/svm-venue-fixture.mjs`). A redump refreshes a fixture file already holding
 an account rather than adding a second, so `raydium-clmm/` and `orca-whirlpool/`'s SOL/USDC pools
 are that snapshot's, read at one slot with every other venue's: the swap's split is only real
 when every pool's price is one moment's. The CLI suite runs its cluster at mainnet's rent and
 Kitchen fee, which a rehearsal's local copy must take from the cluster.
+**Only the programs whose licence allows it are committed** (MIT, Apache-2.0: the `!` lines in
+`.gitignore`). The rest of both program fixtures, this one's and `svm-exact-in-programs/`, are
+listed in `test/fixtures/fetched-programs.json`, and
+`pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`
+(`scripts/fetch-program-fixtures.mjs`, run by CI's setup action) writes them where the suites read
+them. It uses the explicit public-only config described above to read each from mainnet-beta
+(`getAccountInfo` of the program
+and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
+caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
+longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is
+never edited to fit. A local copy matching the pin is kept; an invalid one is removed and repaired
+from the verified raw cache, or fetched and held to the same pin when online. Offline setup refuses
+any missing or invalid program without a verified cache entry; the suites do not skip missing
+programs. For a
+venue program, `dump-svm-venues.mjs --programs` re-pins only the
+programs (`programsSlot` records when) and leaves every account at the dump's slot, so the suites'
+pool scenarios hold; it is for an upgrade whose instruction interface is unchanged, which the suites
+prove by passing on the new code. An exact-input program (a `solana program dump`, no script of
+its own) is re-pinned by its `manifest.json` entry once its suite passes on the re-read ELF, its
+pools' accounts kept: they are the state sauce-recipes' vectors and pins were taken at.
+An upgrade that changes a venue's accounts or data is a code change first. Run the fetch before a
+dump script's `--check`, which re-hashes every program file. A new
+dump is ignored by git until it is un-ignored in `.gitignore` (licence permitting) or listed in
+`fetched-programs.json`; the fetch refuses a program that is neither.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
@@ -1274,7 +1315,9 @@ wraps the file's source before that compile — a new `main` with the same signa
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
 statement — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
-mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
+mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`, gitignored: it compiles
+in AGPL code, so `fetch-contract-code` writes it from Ethereum, held to the committed
+`Permit2.pin.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
@@ -1749,7 +1792,11 @@ command's that start a process, which `no-embedded-rpc.test.ts` lists;
 (`test/testing/`, node:test) are `node.test.ts`, `program.test.ts` (no chain), `local.test.ts`,
 `record.test.ts` (records from an anvil on the machine, then replays with it stopped) and Base
 replayed from `test/testing/state/base.json.gz`; record that again as the actions suites do
-(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). The package script gives each test
+(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). That file pins each contract's code by
+its `codeHash`, as the actions blobs do: `fetch-contract-code` fetches it from Base, and the suite's
+`support.ts#replayState` puts it back into a temporary copy the kit replays (`pinStateCode` moves
+it out again after a recording); the shipped kit's own format is unchanged. The package script
+gives each test
 and hook `--test-timeout`, as the guide tells consumers to.
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
@@ -1780,8 +1827,11 @@ writes in place, as `sauce simulate`'s copy does. `simulate` is a snapshot, the 
 by `sdk/scripts/solana-rpc-stub.mjs` on loopback — `solana-support.ts#pinnedCluster` — then replays
 with it closed) and `solana-examples.test.ts`, which runs the skills' and the manual's Solana examples (listed in
 `skills-check/executed.json` and `docs/examples/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
-one CI runs) from `test/testing/state/solana-examples.json.gz`. Record that again with
-`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC; the packed check runs a Solana cook,
+one CI runs) from `test/testing/state/solana-examples.json.gz`. That file pins the Whirlpool
+program by its sha256 and holds no ELF: `solana-support.ts#replaySolanaState` puts back the venue
+dump's copy, which `fetch-program-fixtures` fetches. Record it again with
+`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC (`pinSolanaPrograms` then takes the
+ELF out); the packed check runs a Solana cook,
 staged too, from a clean install with LiteSVM beside it, and checks the error naming LiteSVM
 without it.
 

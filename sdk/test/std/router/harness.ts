@@ -315,7 +315,7 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   hadron: 12,
   taurusfi: 8,
   riptide: 6,
-  denali: 6,
+  denali: 7,
   gavel: 5,
   tesserav: 8,
   flint: 6,

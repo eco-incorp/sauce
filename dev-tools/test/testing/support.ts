@@ -2,15 +2,25 @@
  * What the testing kit's own suites share. NOT a `.test.ts`.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync, gzipSync } from "node:zlib";
 import {
   createWalletClient,
   getAddress,
   http,
+  keccak256,
   maxUint256,
   type Abi,
   type Address,
@@ -28,6 +38,92 @@ export const program = (name: string): string => resolve(HERE, "programs", `${na
 
 /** A recorded state file under `state/`. */
 export const statePath = (name: string): string => resolve(HERE, "state", `${name}.json.gz`);
+
+/** Contract code by its keccak256, `<codeHash>.hex`: what `fetch-contract-code` fetches from chain. */
+const CODE_CACHE = resolve(HERE, "../../../node_modules/.cache/sauce-contract-code");
+
+interface StateAccount {
+  code?: string;
+  codeHash?: string;
+}
+
+interface EvmStateFile {
+  genesis: { alloc: Record<string, StateAccount> };
+}
+
+/** The code `codeHash` names, from `CODE_CACHE`; undefined if it is not there or fails the hash. */
+function cachedCode(codeHash: string): string | undefined {
+  const path = join(CODE_CACHE, `${codeHash}.hex`);
+  if (!existsSync(path)) return undefined;
+  const code = readFileSync(path, "utf8").trim().toLowerCase();
+
+  return /^0x([0-9a-f]{2})+$/.test(code) && keccak256(code as Hex) === codeHash ? code : undefined;
+}
+
+/** A replayable copy of a committed state file, with its code put back. */
+export interface ReplayedState {
+  readonly path: string;
+  remove(): void;
+}
+
+/**
+ * A committed EVM state file pins third-party contract code by its keccak256 (`codeHash`) instead of
+ * holding it;
+ * `pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json`
+ * reads that code from the chain into
+ * `CODE_CACHE`. This writes the file the kit replays: `state`'s, with each `codeHash` entry's code
+ * put back from the cache, in a directory of its own. `remove()` deletes it.
+ */
+export function replayState(state: string): ReplayedState {
+  const file = JSON.parse(gunzipSync(readFileSync(state)).toString("utf8")) as EvmStateFile;
+  const missing: string[] = [];
+  for (const [address, entry] of Object.entries(file.genesis.alloc)) {
+    if (entry.codeHash === undefined) continue;
+    const code = cachedCode(entry.codeHash);
+    if (code === undefined) {
+      missing.push(`${address} (${entry.codeHash})`);
+      continue;
+    }
+    entry.code = code;
+    delete entry.codeHash;
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `${relative(process.cwd(), state)} pins the code of ${missing.length} account(s) that ` +
+        `${CODE_CACHE} does not hold (or holds failing its hash): ${missing.join(", ")}. Run ` +
+        "`pnpm --filter './sdk' fetch-contract-code --rpc-config fixtures.rpc.config.json`, " +
+        "which reads them from the chain and holds " +
+        "each to its hash",
+    );
+  }
+  const dir = mkdtempSync(join(tmpdir(), "sauce-testing-state-"));
+  const path = join(dir, "state.json.gz");
+  writeFileSync(path, gzipSync(JSON.stringify(file)));
+
+  return { path, remove: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/**
+ * After recording `state`: each account's code moved into `CODE_CACHE` and replaced by its
+ * `codeHash`, the form the file is committed in. 0xef-led code (an EIP-7702 delegation) stays.
+ */
+export function pinStateCode(state: string): void {
+  const file = JSON.parse(gunzipSync(readFileSync(state)).toString("utf8")) as EvmStateFile;
+  for (const entry of Object.values(file.genesis.alloc)) {
+    if (entry.code === undefined || /^0xef/i.test(entry.code)) continue;
+    const code = entry.code.toLowerCase();
+    const codeHash = keccak256(code as Hex);
+    if (cachedCode(codeHash) === undefined) {
+      mkdirSync(CODE_CACHE, { recursive: true });
+      const temporary = join(CODE_CACHE, `${codeHash}.hex.${process.pid}.tmp`);
+      writeFileSync(temporary, code);
+      renameSync(temporary, join(CODE_CACHE, `${codeHash}.hex`));
+    }
+    delete entry.code;
+    entry.codeHash = codeHash;
+  }
+  writeFileSync(state, gzipSync(JSON.stringify(file), { level: 9 }));
+}
 
 /**
  * Why a suite cannot run here (anvil missing), or false. Under CI it throws instead: a suite CI

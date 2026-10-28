@@ -2,7 +2,8 @@
  * `sauce run --fund` and `sauce simulate --fund` against a chain: the tokens a program spends pulled
  * into its Pot in the same cook, by each `--fund-mode`, on a local anvil running the released gated
  * stack (`cli-anvil.ts`) with canonical Permit2 installed at its address — its runtime read from
- * Ethereum once into `fixtures/cli/Permit2.json`, so nothing here reaches a network.
+ * Ethereum by `fetch-contract-code` into `fixtures/cli/Permit2.json` (gitignored), held to the
+ * committed pin `Permit2.pin.json`, so nothing here reaches a network.
  *
  * The tokens, each at the address the program names it by:
  *   - USDC: a standard OpenZeppelin ERC-20 (no EIP-2612), at the registry's USDC;
