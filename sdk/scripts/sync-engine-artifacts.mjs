@@ -29,6 +29,10 @@
 // Run: `pnpm --filter './sdk' sync-engine-artifacts` (after `pnpm install`).
 // `--fetch-v12-engines` additionally downloads the SVM engine binary and prints every cached path as
 // `NAME=<path>` lines — how CI gets SAUCE_RUST_ENGINE_SO / the runtime creation code.
+// `SAUCE_ARTIFACT_SOURCE=npm` takes the same artifacts, held to the same digests, from the PUBLIC
+// `@eco-incorp/sauce` tarball the row names instead of the private release packages: for a fork, or
+// anyone the packages' grant does not cover (see "THE PUBLIC SOURCE" below). Unset, the private
+// packages are the only source, and a failure there never switches to the public one.
 // NOTE: a `rm -rf sdk/dist` clean build drops these (tsc emits no JSON) — re-run this after such a
 // build. The normal `tsc` build leaves them in place.
 import {
@@ -45,6 +49,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { keccak256, toBytes } from "viem";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -119,6 +124,25 @@ if (!SET) {
   );
   process.exit(1);
 }
+
+// WHERE THE ARTIFACTS COME FROM, chosen by the caller and never by a failure: the private release
+// packages (the default), or `npm`, the public tarball of the `@eco-incorp/sauce` version this row
+// names. Not "no credential": a fork's workflow HAS a GITHUB_TOKEN, it only lacks the grant.
+const ARTIFACT_SOURCES = ["github-packages", "npm"];
+const SOURCE = process.env.SAUCE_ARTIFACT_SOURCE || "github-packages";
+if (!ARTIFACT_SOURCES.includes(SOURCE)) {
+  console.error(
+    `[sync-engine-artifacts] SAUCE_ARTIFACT_SOURCE is '${SOURCE}': expected one of ` +
+      `${ARTIFACT_SOURCES.join(", ")} (unset means github-packages).`,
+  );
+  process.exit(1);
+}
+
+// What every failure to read the private packages says, so nobody has to find the public mode.
+const PUBLIC_MODE_HINT =
+  "Without read access to these packages (a fork, or a checkout the grant does not cover), set " +
+  "SAUCE_ARTIFACT_SOURCE=npm: the same artifacts, held to the same digests, from the public " +
+  "@eco-incorp/sauce package releases.json names for this compiler.";
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
@@ -275,13 +299,18 @@ function download(tag, asset, dest) {
     );
   }
 
+  if (SOURCE === "npm") {
+    // Never reached by design; here so no path of the public mode can send the credential.
+    throw new Error("the private release packages are never read under SAUCE_ARTIFACT_SOURCE=npm");
+  }
   const name = `${NPM_SCOPE}/${parts.pkg}`;
   const credential = githubCredential();
   if (!credential) {
     throw new Error(
       `cannot download ${asset} from ${name}@${parts.version} — no GitHub credential found. These ` +
         "packages are private, so the read is authenticated: set GITHUB_TOKEN (CI supplies its own " +
-        "automatically) or run `gh auth login`. No personal access token needs to be minted.",
+        "automatically) or run `gh auth login`. No personal access token needs to be minted. " +
+        PUBLIC_MODE_HINT,
     );
   }
 
@@ -300,7 +329,7 @@ function download(tag, asset, dest) {
         "has not published its package yet, or this repository has not been granted read access to " +
         "it: the package's settings -> Manage Actions access -> add eco-incorp/sauce (Read). The " +
         "package is private by design and stays that way; the grant is what makes the read work, " +
-        "and no personal access token is involved.",
+        `and no personal access token is involved. ${PUBLIC_MODE_HINT}`,
     );
 
   let packument;
@@ -451,6 +480,13 @@ const POT_FAMILY = {
     (field) => report || (SET["kitchen-evm"][field] ?? null) === null,
   );
   if (unpinned.length > 0 || unnamed.length > 0 || unfamilied.length > 0) {
+    if (SOURCE === "npm") {
+      console.error(
+        `[sync-engine-artifacts] ${report ? "--report" : `releases.json's row for compiler ${COMPILER} is not pinned yet, and pinning it`} ` +
+          "reads the private release packages, which SAUCE_ARTIFACT_SOURCE=npm never does.",
+      );
+      process.exit(1);
+    }
     console.error(
       report
         ? `[sync-engine-artifacts] releases.json's row for compiler ${COMPILER}, read from its releases:`
@@ -510,20 +546,6 @@ const POT_FAMILY = {
     process.exit(report ? 0 : 1);
   }
 }
-
-// Whether artifacts a previous sync left on disk may stand in for a fetch that failed here. Only
-// when that sync was for THIS compiler: `V12Deployments.json` records which one, and artifacts from
-// another row pair with a compiler that is not the one installed.
-const onDiskIsThisRow = () =>
-  DESTS.every((d) => {
-    const path = resolve(d, "V12Deployments.json");
-    if (!existsSync(path)) return false;
-    try {
-      return JSON.parse(readFileSync(path, "utf8")).compiler === COMPILER;
-    } catch {
-      return false;
-    }
-  });
 
 // SDK artifact name -> where its ABI comes from.
 //
@@ -652,18 +674,244 @@ const write = (name, artifact) => {
   for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), json);
 };
 
-// The release-derived ABIs, with the same latitude V12RuntimeBytecode gets below: a developer who is
-// offline or unauthenticated keeps whatever a previous sync left and gets a warning. It is only
-// latitude when there IS something to keep — with nothing on disk this stops, because continuing
-// would write a partial artifact set, which is how 0.7.0 shipped broken. Either way CI is unaffected:
-// it has credentials, and asserts all seven files afterwards.
+// ---------------------------------------------------------------------------
+// THE PUBLIC SOURCE: `SAUCE_ARTIFACT_SOURCE=npm`.
+//
+// The release packages are private, so a fork of this repository, or anyone the grant does not
+// cover, cannot read them. Every artifact this script writes also ships inside the PUBLIC
+// `@eco-incorp/sauce` package on npmjs.com (`sdk/dist/artifacts`, written by this script in the
+// release build). A row names the published version that carries it — `npm: { version,
+// integrity }`, committed once that version is out — and this mode takes the artifacts from that
+// tarball. It never reads the GitHub credential and never touches the per-tag cache the private
+// path keeps, so the two sources never mix; the private path never falls back to it.
+//
+// The same guarantees, all checked before anything is written:
+//   - the tarball hashes to the integrity COMMITTED in the row, not merely the one the registry
+//     reports, so it is the exact package the row was pinned to;
+//   - its own releases.json carries this row unchanged, so it was built for this compiler;
+//   - every release asset it carries matches this row's digest, exactly as the private path checks
+//     it: both SVM engines, both wire files, the Kitchen and its IDL, the EVM creation code;
+//   - what it carries DERIVED rather than as the release asset — the ABIs out of the two abis.json
+//     and the addresses assembled from each addresses.json, neither of which the private path pins
+//     by digest either — is held by the integrity pin, and corroborated as the private path
+//     corroborates it: the compiler, each component's version, both engine identities, the Kitchen
+//     and the Pot init-code hash against the row and the gate, the generation-3 quote Router.
+// What it cannot repeat is the cross-check against each release's manifest, which the tarball does
+// not carry; the private path calls that corroboration, never the guarantee. Any mismatch stops
+// here with nothing written.
+const PUBLIC_PACKAGE = "@eco-incorp/sauce";
+const PUBLIC_REGISTRY = "https://registry.npmjs.org";
+
+/** The row's public tarball, held to its committed integrity and cached by version: a reader of
+ *  the files it carries, extracted afresh on every run. */
+function publicPackage() {
+  const { version, integrity } = SET.npm ?? {};
+  if (!version || !integrity) {
+    throw new Error(
+      `releases.json's ${COMPILER} row names no public ${PUBLIC_PACKAGE} version carrying its ` +
+        "artifacts (`npm`: { version, integrity }) — commit a published version built from " +
+        "this row, or read the private release packages (unset SAUCE_ARTIFACT_SOURCE)",
+    );
+  }
+  const split = integrity.indexOf("-");
+  const [algorithm, expected] = [integrity.slice(0, split), integrity.slice(split + 1)];
+  const dir = resolve(CACHE_ROOT, "npm", `sauce-${version}`);
+  const archive = resolve(dir, "package.tgz");
+  const pinned = (path) =>
+    existsSync(path) &&
+    createHash(algorithm).update(readFileSync(path)).digest("base64") === expected;
+  if (!pinned(archive)) {
+    mkdirSync(dir, { recursive: true });
+    const tmp = `${archive}.partial`;
+    rmSync(tmp, { force: true });
+    // The public registry, unauthenticated: nothing here carries a credential.
+    const url = `${PUBLIC_REGISTRY}/${PUBLIC_PACKAGE}/-/sauce-${version}.tgz`;
+    try {
+      execFileSync("curl", ["-sfL", "-o", tmp, url], { stdio: "ignore" });
+    } catch (err) {
+      // No credential on this command line, so the cause may ride along; only `message` prints.
+      throw new Error(`cannot download ${PUBLIC_PACKAGE}@${version} (${curlFailure(err)})`, {
+        cause: err,
+      });
+    }
+    if (!pinned(tmp)) {
+      rmSync(tmp, { force: true });
+      throw new Error(
+        `${PUBLIC_PACKAGE}@${version} does not hash to the ${integrity} releases.json pins`,
+      );
+    }
+    renameSync(tmp, archive);
+  }
+
+  const out = resolve(dir, "package");
+  rmSync(out, { recursive: true, force: true });
+  const members = ["package/sdk/dist/artifacts", "package/sdk/dist/deployments/releases.json"];
+  try {
+    execFileSync("tar", ["-xzf", archive, "-C", dir, ...members], { stdio: "ignore" });
+  } catch {
+    throw new Error(`${PUBLIC_PACKAGE}@${version} carries no ${members.join(" or no ")}`);
+  }
+  const files = new Map();
+  return (path) => {
+    if (!files.has(path)) {
+      const file = resolve(out, path);
+      if (!existsSync(file)) throw new Error(`${PUBLIC_PACKAGE}@${version} carries no ${path}`);
+      files.set(path, readFileSync(file));
+    }
+    return files.get(path);
+  };
+}
+
+function syncFromPublicPackage() {
+  const read = publicPackage();
+  const where = `${PUBLIC_PACKAGE}@${SET.npm.version}`;
+  const refuse = (what) => {
+    throw new Error(`${where} ${what}`);
+  };
+  const artifact = (name) => read(`sdk/dist/artifacts/${name}`);
+  const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
+
+  // Built from this row. A later package may carry an earlier one's `npm` pin, so that is left out.
+  const bare = (row) => {
+    const copy = { ...row };
+    delete copy.npm;
+    return copy;
+  };
+  const shipped = parse(read("sdk/dist/deployments/releases.json"));
+  const shippedRow = shipped.releases?.find((row) => row.compiler === COMPILER);
+  if (
+    !shippedRow ||
+    !isDeepStrictEqual(bare(shippedRow), bare(SET)) ||
+    !isDeepStrictEqual(shipped.quoteRouter, RELEASE_TABLE.quoteRouter)
+  ) {
+    refuse(`was not built from releases.json's ${COMPILER} row as committed here`);
+  }
+
+  // Every release asset it carries, by this row's digest. `abis.json` is the one it carries only
+  // derived (below); a pin added without a place here is refused rather than left unchecked.
+  const runtime = parse(artifact("V12RuntimeBytecode.json")).runtimeCreationCode;
+  const carried = new Map([
+    [V12_EVM, Buffer.from(`${runtime}\n`)],
+    ...[
+      V12_SVM,
+      V12_SVM_MAINNET,
+      V12_ENGINE_WIRE,
+      V12_ENGINE_WIRE_MAINNET,
+      V12_KITCHEN,
+      V12_KITCHEN_IDL,
+    ].map((p) => [p, artifact(`svm/${p.asset}`)]),
+  ]);
+  for (const p of PINS.filter((pin) => pin !== V12_EVM_ABIS)) {
+    if (!carried.has(p)) refuse(`is not read for ${p.tag}/${p.asset}: this script needs updating`);
+    const actual = p.hash(carried.get(p));
+    if (actual !== p.digest) {
+      refuse(`carries a ${p.asset} hashing to ${actual}, not the ${p.digest} pinned for ${p.tag}`);
+    }
+  }
+
+  // What it carries derived, held to the row as the private path holds addresses.json.
+  const names = [
+    ...Object.keys(RELEASE_ABIS),
+    "V12QuoteRouter",
+    "V12RuntimeBytecode",
+    "V12EngineGate",
+    "V12Deployments",
+  ];
+  const derived = Object.fromEntries(names.map((name) => [name, artifact(`${name}.json`)]));
+  const deployments = parse(derived.V12Deployments);
+  const gate = parse(derived.V12EngineGate);
+  const quote = parse(derived.V12QuoteRouter);
+  const contracts = deployments.evm?.contracts ?? {};
+  const kitchenPin = SET["kitchen-evm"];
+  const same = (a, b) =>
+    typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
+  const held = {
+    compiler: deployments.compiler === COMPILER,
+    ...Object.fromEntries(
+      ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].map((c) => [
+        `${c} version`,
+        deployments.releases?.[c]?.version === SET[c].version,
+      ]),
+    ),
+    "EVM engine": same(contracts.engine?.address, SET["v12-evm"].engine),
+    "SVM engine": deployments.svm?.programs?.engine?.programId === SET["v12-svm"].engine,
+    Kitchen:
+      same(contracts.kitchen?.address, kitchenPin.kitchen) &&
+      same(gate.kitchen, kitchenPin.kitchen),
+    "Pot init-code hash":
+      same(deployments.evm?.pot?.initCodeHash, kitchenPin.potInitCodeHash) &&
+      same(gate.potInitCodeHash, kitchenPin.potInitCodeHash),
+    "Router, Kitchen implementation, SVM Kitchen": Boolean(
+      contracts.router?.address &&
+      contracts.kitchenImplementation?.address &&
+      deployments.svm?.programs?.kitchen?.programId,
+    ),
+    "quote Router":
+      contracts.quoteRouter?.generation === 3 &&
+      same(quote.address, contracts.quoteRouter?.address) &&
+      Array.isArray(quote.abi) &&
+      quote.abi.some((item) => item.name === "quote"),
+    ABIs: Object.keys(RELEASE_ABIS).every((name) => Array.isArray(parse(derived[name]).abi)),
+  };
+  const disagree = Object.keys(held).filter((what) => !held[what]);
+  if (disagree.length > 0) {
+    refuse(`disagrees with releases.json's ${COMPILER} row on: ${disagree.join(", ")}`);
+  }
+
+  // Verified: only now is anything written, byte for byte what the private path writes.
+  for (const [name, bytes] of Object.entries(derived)) {
+    for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), bytes);
+  }
+  writeLocalAbis();
+  console.log(
+    `[sync-engine-artifacts] wrote ${names.length} release artifacts from ${where} ` +
+      `(SAUCE_ARTIFACT_SOURCE=npm), each held to releases.json's ${COMPILER} row, plus IERC20 ` +
+      "(declared) and IUniswapV3Pool (@uniswap/v3-core)",
+  );
+
+  if (process.argv.includes("--fetch-v12-engines")) {
+    const dir = resolve(CACHE_ROOT, "npm", `sauce-${SET.npm.version}`);
+    const place = (p) => {
+      const path = resolve(dir, p.asset);
+      writeFileSync(path, carried.get(p));
+      return path;
+    };
+    shipEngines({
+      engine: place(V12_SVM),
+      engineMainnet: place(V12_SVM_MAINNET),
+      wireMainnet: place(V12_ENGINE_WIRE_MAINNET),
+      kitchen: place(V12_KITCHEN),
+      wire: place(V12_ENGINE_WIRE),
+      kitchenIdl: place(V12_KITCHEN_IDL),
+      runtimeCreation: place(V12_EVM),
+    });
+  }
+}
+
+if (SOURCE === "npm") {
+  try {
+    syncFromPublicPackage();
+  } catch (e) {
+    console.error(`[sync-engine-artifacts] ${e.message} — refused, nothing written.`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+// From here on every failure stops the sync, and nothing a previous sync left on disk stands in: a
+// digest or manifest that does not match is a moved release, and a read the registry refuses is a
+// missing grant (`SAUCE_ARTIFACT_SOURCE=npm`'s case), so neither may pass behind older files. A warm
+// cache still needs no network and no credential.
+const stop = (what, e) => {
+  console.error(`[sync-engine-artifacts] ${what}: ${e.message}`);
+  process.exit(1);
+};
+
+// The release-derived ABIs.
 let releaseAbis;
-let fetched = false;
 try {
   const parsed = JSON.parse(readFileSync(fetchReleaseAsset(V12_EVM_ABIS), "utf8"));
-  // A parse that yields no `.contracts` is a SCHEMA CHANGE, not a fetch failure, and the two must
-  // not share a sentinel: `undefined` from a successful parse would otherwise take the
-  // keep-what-is-on-disk path below and skip all four ABIs behind a success log.
+  // A parse that yields no `.contracts` is a SCHEMA CHANGE, not a fetch failure: say so.
   if (parsed?.contracts === undefined) {
     console.error(
       `[sync-engine-artifacts] ${V12_EVM_ABIS.tag}/abis.json has no 'contracts' object — it carries: ` +
@@ -673,50 +921,35 @@ try {
     process.exit(1);
   }
   releaseAbis = parsed.contracts;
-  fetched = true;
 } catch (e) {
-  const present = Object.keys(RELEASE_ABIS).every((name) =>
-    DESTS.every((d) => existsSync(resolve(d, `${name}.json`))),
-  );
-  if (!present || !onDiskIsThisRow()) {
+  stop("the release ABIs", e);
+}
+
+for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
+  const found = releaseAbis[contract];
+  if (found === undefined) {
     console.error(
-      `[sync-engine-artifacts] ${e.message}` +
-        (present
-          ? ` — and the ABIs on disk were synced for another compiler than ${COMPILER}.`
-          : ""),
+      `[sync-engine-artifacts] ${V12_EVM_ABIS.tag}/abis.json has no contract '${contract}' (for ` +
+        `${name}.json). It carries: ${Object.keys(releaseAbis).join(", ")}.`,
     );
     process.exit(1);
   }
-  console.warn(
-    `[sync-engine-artifacts] ${e.message} — kept the ${Object.keys(RELEASE_ABIS).length} ABIs ` +
-      "already on disk.",
-  );
+  write(name, { abi: found.abi, bytecode: found.bytecode });
 }
 
-if (fetched) {
-  for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
-    const found = releaseAbis[contract];
-    if (found === undefined) {
-      console.error(
-        `[sync-engine-artifacts] ${V12_EVM_ABIS.tag}/abis.json has no contract '${contract}' (for ` +
-          `${name}.json). It carries: ${Object.keys(releaseAbis).join(", ")}.`,
-      );
-      process.exit(1);
-    }
-    write(name, { abi: found.abi, bytecode: found.bytecode });
+writeLocalAbis();
+
+/** The two ABIs no release publishes, written the same way whichever source the rest came from. */
+function writeLocalAbis() {
+  write("IERC20", { abi: IERC20_ABI, bytecode: { object: "0x" } });
+
+  if (!existsSync(IUNISWAP_V3_POOL)) {
+    console.error(
+      `[sync-engine-artifacts] ${IUNISWAP_V3_POOL} is missing — run \`pnpm install\` (@uniswap/v3-core ` +
+        "is a devDependency of the ROOT package.json).",
+    );
+    process.exit(1);
   }
-}
-
-write("IERC20", { abi: IERC20_ABI, bytecode: { object: "0x" } });
-
-if (!existsSync(IUNISWAP_V3_POOL)) {
-  console.error(
-    `[sync-engine-artifacts] ${IUNISWAP_V3_POOL} is missing — run \`pnpm install\` (@uniswap/v3-core ` +
-      "is a devDependency of the ROOT package.json).",
-  );
-  process.exit(1);
-}
-{
   const pool = JSON.parse(readFileSync(IUNISWAP_V3_POOL, "utf8"));
   write("IUniswapV3Pool", { abi: pool.abi, bytecode: { object: "0x" } });
 }
@@ -728,22 +961,9 @@ if (!existsSync(IUNISWAP_V3_POOL)) {
 // address as a trailing code word, so the deployed bytes are not known until the contract has one. A
 // harness that wants to `setCode` a runtime must deploy this once and read the code back (CI's
 // "Derive the deployed v12 runtime bytecode" step does exactly that).
-//
-// Non-fatal: a developer with no credentials and no cache keeps whatever copy is already there and
-// gets a warning, the same latitude the previous hnc-based generation had.
 const RUNTIME_DEST = "V12RuntimeBytecode.json";
 const GATE_DEST = "V12EngineGate.json";
 let runtimeCreationPath;
-
-/** A copy kept on disk after a failed fetch must be from this compiler's row; anything else stops. */
-const refuseAnotherRow = (present, name, e) => {
-  if (!present || onDiskIsThisRow()) return;
-  console.error(
-    `[sync-engine-artifacts] ${name}: ${e.message} — and the copy on disk was synced for another ` +
-      `compiler than ${COMPILER}, so it cannot stand in.`,
-  );
-  process.exit(1);
-};
 
 try {
   runtimeCreationPath = fetchReleaseAsset(V12_EVM);
@@ -751,12 +971,7 @@ try {
   const json = `${JSON.stringify({ runtimeCreationCode: creationCode }, null, 2)}\n`;
   for (const dest of DESTS) writeFileSync(resolve(dest, RUNTIME_DEST), json);
 } catch (e) {
-  const present = DESTS.every((d) => existsSync(resolve(d, RUNTIME_DEST)));
-  refuseAnotherRow(present, RUNTIME_DEST, e);
-  console.warn(
-    `[sync-engine-artifacts] V12RuntimeBytecode: ${e.message} — ` +
-      (present ? "kept the copy already on disk." : "NOT produced."),
-  );
+  stop("V12RuntimeBytecode", e);
 }
 
 // ---------------------------------------------------------------------------
@@ -785,12 +1000,7 @@ try {
   const json = `${JSON.stringify(gate, null, 2)}\n`;
   for (const dest of DESTS) writeFileSync(resolve(dest, GATE_DEST), json);
 } catch (e) {
-  const present = DESTS.every((d) => existsSync(resolve(d, GATE_DEST)));
-  refuseAnotherRow(present, GATE_DEST, e);
-  console.warn(
-    `[sync-engine-artifacts] V12EngineGate: ${e.message} — ` +
-      (present ? "kept the copy already on disk." : "NOT produced."),
-  );
+  stop("V12EngineGate", e);
 }
 
 // ---------------------------------------------------------------------------
@@ -944,20 +1154,12 @@ try {
     `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — compiler ${COMPILER}: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
   );
 } catch (e) {
-  const present = DESTS.every((d) => existsSync(resolve(d, DEPLOYMENTS_DEST)));
-  refuseAnotherRow(present, DEPLOYMENTS_DEST, e);
-  console.warn(
-    `[sync-engine-artifacts] V12Deployments: ${e.message} — ` +
-      (present ? "kept the copy already on disk." : "NOT produced."),
-  );
+  stop("V12Deployments", e);
 }
 
 console.log(
-  !fetched
-    ? "[sync-engine-artifacts] wrote IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core); the " +
-        "release ABIs were kept as they were"
-    : `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
-        `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
+  `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
+    `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
 );
 
 // `--fetch-v12-engines`: also place the SVM engine binary in the cache, and print every cached path
@@ -965,30 +1167,42 @@ console.log(
 // step read the same verified, cached bytes this script already fetched — one download, one digest
 // check, no second implementation in YAML.
 if (process.argv.includes("--fetch-v12-engines")) {
-  const enginePath = fetchReleaseAsset(V12_SVM);
-  const engineMainnetPath = fetchReleaseAsset(V12_SVM_MAINNET);
-  const wireMainnetPath = fetchReleaseAsset(V12_ENGINE_WIRE_MAINNET);
-  const kitchenPath = fetchReleaseAsset(V12_KITCHEN);
-  const wirePath = fetchReleaseAsset(V12_ENGINE_WIRE);
-  const kitchenIdlPath = fetchReleaseAsset(V12_KITCHEN_IDL);
-  if (!runtimeCreationPath)
-    throw new Error("--fetch-v12-engines: the v12 EVM runtime creation code was not fetched");
+  shipEngines({
+    engine: fetchReleaseAsset(V12_SVM),
+    engineMainnet: fetchReleaseAsset(V12_SVM_MAINNET),
+    wireMainnet: fetchReleaseAsset(V12_ENGINE_WIRE_MAINNET),
+    kitchen: fetchReleaseAsset(V12_KITCHEN),
+    wire: fetchReleaseAsset(V12_ENGINE_WIRE),
+    kitchenIdl: fetchReleaseAsset(V12_KITCHEN_IDL),
+    runtimeCreation: runtimeCreationPath,
+  });
+}
 
-  // Ship the digest-verified binaries so they ride in the package (see SVM_DESTS above). Both
-  // clusters plus the kitchen, plus the wire/IDL a local harness reads alongside them.
-  shipSvmBinary(enginePath, "engine-devnet.so");
-  shipSvmBinary(engineMainnetPath, "engine-mainnet.so");
-  shipSvmBinary(kitchenPath, "kitchen.so");
-  shipSvmBinary(wirePath, "engine-wire-devnet.json");
-  shipSvmBinary(wireMainnetPath, "engine-wire-mainnet.json");
-  shipSvmBinary(kitchenIdlPath, "kitchen-idl.json");
+/** Ship the digest-verified binaries so they ride in the package (see SVM_DESTS above) — both
+ *  clusters plus the kitchen, plus the wire/IDL a local harness reads alongside them — and print
+ *  every verified path as `NAME=<path>`. */
+function shipEngines({
+  engine,
+  engineMainnet,
+  wireMainnet,
+  kitchen,
+  wire,
+  kitchenIdl,
+  runtimeCreation,
+}) {
+  shipSvmBinary(engine, "engine-devnet.so");
+  shipSvmBinary(engineMainnet, "engine-mainnet.so");
+  shipSvmBinary(kitchen, "kitchen.so");
+  shipSvmBinary(wire, "engine-wire-devnet.json");
+  shipSvmBinary(wireMainnet, "engine-wire-mainnet.json");
+  shipSvmBinary(kitchenIdl, "kitchen-idl.json");
   console.log(`[sync-engine-artifacts] shipped SVM engine binaries into ${SVM_DESTS[0]}`);
 
-  console.log(`SAUCE_RUST_ENGINE_SO=${enginePath}`);
-  console.log(`SAUCE_RUST_ENGINE_MAINNET_SO=${engineMainnetPath}`);
-  console.log(`SAUCE_ENGINE_WIRE_MAINNET_JSON=${wireMainnetPath}`);
-  console.log(`SAUCE_KITCHEN_SO=${kitchenPath}`);
-  console.log(`SAUCE_ENGINE_WIRE_JSON=${wirePath}`);
-  console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdlPath}`);
-  console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreationPath}`);
+  console.log(`SAUCE_RUST_ENGINE_SO=${engine}`);
+  console.log(`SAUCE_RUST_ENGINE_MAINNET_SO=${engineMainnet}`);
+  console.log(`SAUCE_ENGINE_WIRE_MAINNET_JSON=${wireMainnet}`);
+  console.log(`SAUCE_KITCHEN_SO=${kitchen}`);
+  console.log(`SAUCE_ENGINE_WIRE_JSON=${wire}`);
+  console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdl}`);
+  console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreation}`);
 }

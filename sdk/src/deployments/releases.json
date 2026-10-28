@@ -4,7 +4,8 @@
     "Pairing is by EXACT package version, never by ISA revision: v12-svm 1.2.0 and 1.3.0 report the same `stack-compact-v2`, yet compiler 2.4.0 output fails on the first and 2.3.x output must not reach the second.",
     "`sync-engine-artifacts` takes the row whose `compiler` is the installed compiler and fetches exactly those releases, so the artifacts on disk always pair with the compiler that runs. `deployments/releases.ts` refuses, at call-build time, an engine a row names for a DIFFERENT compiler.",
     "To bump: add or edit the row (versions), run the sync, paste the digests, engine ids and the kitchen-evm release's Kitchen and Pot init-code hash it reports. A null digest, engine id, Kitchen or hash means the release is not out yet; the sync refuses a row that still has one.",
-    "A kitchen-evm pin's `kitchen` and `potInitCodeHash` are what every Pot it mints is CREATE2 under: the `sauce` command tells which release minted a Pot from them, so a row keeps its own even after a newer one moves the hash."
+    "A kitchen-evm pin's `kitchen` and `potInitCodeHash` are what every Pot it mints is CREATE2 under: the `sauce` command tells which release minted a Pot from them, so a row keeps its own even after a newer one moves the hash.",
+    "A row's `npm` names a PUBLIC @eco-incorp/sauce version built from it, by version and the tarball's own integrity, added once that version is published. `SAUCE_ARTIFACT_SOURCE=npm` makes the sync take the artifacts from that tarball instead of the private release packages, held to the integrity and to every digest above; a row without it has no public source."
   ],
   "releases": [
     {
@@ -149,6 +150,10 @@
     },
     {
       "compiler": "2.6.1",
+      "npm": {
+        "version": "1.0.0",
+        "integrity": "sha512-hcP1D9yWo7sFl02y+E8fpfR10XLjcbgdcoBbGfTqgymR4sL4sPETcd/oqGLjHw6h08A4aURRUsB8W0vur+j2Jg=="
+      },
       "v12-evm": {
         "version": "1.3.0",
         "engine": "0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67",
