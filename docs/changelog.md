@@ -56,6 +56,7 @@ Each SDK release and the five releases it pins:
 
 | SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ------- | -------- | ------- | ----------- | ------- | ----------- |
+| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
@@ -93,6 +94,13 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK 1.0.0 — 2026-10-27
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.18:
+nothing moves.
+
+The first public release. Its code is 0.99.18's; only the version number changes.
 
 ## SDK 0.99.18 — 2026-10-27
 
