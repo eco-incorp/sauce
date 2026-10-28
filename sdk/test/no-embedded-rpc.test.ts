@@ -7,7 +7,9 @@
  * The ONE exception is the `sauce` command's and its MCP server's list of public endpoints,
  * `sdk/src/cli/public-rpcs.ts`, which they read a chain through when given none: exactly that file
  * may hold RPC URLs, and nothing a browser loads may import it — no module outside `sdk/src/cli/`,
- * and no package export (`cli/` is in none).
+ * and no package export (`cli/` is in none). Beside it, CI's workflow may write the public test
+ * fixture endpoints on the one line a fork's run takes them from (`FORK_FIXTURE_RPCS`); nothing
+ * ships a workflow.
  *
  * This guard scans the TRACKED source that ships or that a developer copies from — `sdk/src` (the
  * `sauce` command in `sdk/src/cli` included), `sdk/scripts`, `actions/src`, `dev-tools/src`,
@@ -74,6 +76,16 @@ const CHILD_PROCESS =
 const SKIP = new Set(["pnpm-lock.yaml"]);
 /** The `sauce` command's public endpoints: the one file that may hold RPC URLs. */
 const PUBLIC_RPCS = "sdk/src/cli/public-rpcs.ts";
+/**
+ * CI's fixture endpoints for a fork's run, which GitHub gives no repository variable: the
+ * `CHAIN_FIXTURE_RPC_CONFIG` variable's public, keyless JSON as a literal, on the workflow's one line
+ * that resolves it, taken only under the condition `.github/actions/setup` takes the public engine
+ * artifacts on, and the variable everywhere else.
+ */
+const FORK_FIXTURE_RPCS = {
+  file: ".github/workflows/ci.yml",
+  line: /^ {2}CHAIN_FIXTURE_RPC_CONFIG: \$\{\{ \(github\.event\.pull_request\.head\.repo\.fork == true \|\| github\.repository_owner != 'eco-incorp'\) && '\{[^']*\}' \|\| vars\.CHAIN_FIXTURE_RPC_CONFIG \}\}$/,
+};
 /** Shipped code, the `sauce` command included: must not read the environment at all. */
 const SHIPPED_ROOTS = ["sdk/src", "actions/src", "dev-tools/src"];
 /** Where the registry may be named and read, and who may import the modules that read it. */
@@ -238,10 +250,18 @@ describe("the SDK ships no RPC endpoints", () => {
   });
 
   it("no scanned file embeds an RPC-shaped URL, but the command's list of public ones", () => {
+    // CI's fork-only fixture line is allowed where it is, and is what it claims to be.
+    const ci = sources.get(FORK_FIXTURE_RPCS.file)!.split("\n");
+    const forkLines = ci.flatMap((line, index) =>
+      FORK_FIXTURE_RPCS.line.test(line) ? [index + 1] : [],
+    );
+    expect(forkLines).toHaveLength(1);
+    const forkLine = `${FORK_FIXTURE_RPCS.file}:${forkLines[0]}: `;
     const found = [...sources]
       .filter(([file]) => file !== PUBLIC_RPCS)
       .flatMap(([file, text]) => rpcFindings(text).map((finding) => `${file}:${finding}`));
-    expect(found).toEqual([]);
+    expect(found.filter((finding) => !finding.startsWith(forkLine))).toEqual([]);
+    expect(found.some((finding) => finding.startsWith(forkLine))).toBe(true);
     // The exception is scanned, and is what it claims to be: not an empty file that moved.
     expect(rpcFindings(sources.get(PUBLIC_RPCS)!).length).toBeGreaterThan(30);
   });

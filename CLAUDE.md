@@ -368,7 +368,9 @@ fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-c
   with ids `1`, `8453`, `43114`, `10` and `1399811149`. With `pnpm --filter './sdk'`, relative
   paths resolve from `sdk`, hence `--rpc-config fixtures.rpc.config.json`. There is no default,
   environment lookup or access to the CLI-only RPC roster. CI takes the public-only JSON from
-  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`, writes it to a runner temporary
+  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG` — on a fork's run, which GitHub gives
+  no variable, from `ci.yml`'s literal of the same JSON (keep the two equal; it is the one line
+  `no-embedded-rpc.test.ts` allows outside the command's list) — writes it to a runner temporary
   file and passes its absolute path. `--offline` needs no config and uses verified local caches
   without any network access.
 

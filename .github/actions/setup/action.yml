@@ -78,7 +78,8 @@ runs:
     # The repository commits no third-party binary whose licence does not allow it. The Solana
     # programs (`sdk/test/fixtures/fetched-programs.json`) and the contract code of the captured
     # chain states are PINNED instead, by sha256 / keccak256 in the fixtures, and read here from the
-    # chains through the explicit public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable,
+    # chains through the explicit public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable
+    # (on a fork's run, ci.yml's literal of the same JSON: GitHub passes forks no variable),
     # retried with endpoint fallback. A read that does not hash to its pin is refused: it was upgraded
     # since the dump, and a suite run on other bytes proves nothing about the pinned ones. The cache
     # is content-addressed and re-hashed on every run, so a restored stale cache cannot pass for a pin;
