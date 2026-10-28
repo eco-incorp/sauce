@@ -27,6 +27,17 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
+    # Two kinds of run take the same artifacts from the public @eco-incorp/sauce package releases.json
+    # names for the installed compiler, held to the same digests (SAUCE_ARTIFACT_SOURCE=npm; see
+    # sync-engine-artifacts.mjs): a fork's pull request, so code from outside never runs where the
+    # private packages are read, and a workflow in a fork's own repository, whose GITHUB_TOKEN exists
+    # but carries no grant. Exported job-wide, because the build step's sync must read the same source
+    # as this one. Everything else stays on the private packages and fails, never falls back.
+    - name: Take the engine artifacts from the public package (forks)
+      if: github.event.pull_request.head.repo.fork == true || github.repository_owner != 'eco-incorp'
+      shell: bash
+      run: echo "SAUCE_ARTIFACT_SOURCE=npm" >> "$GITHUB_ENV"
+
     # ---- engine artifacts + the v12 releases --------------------------------
     # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
     # SDK consumers for their local tests/deploys, and are build output rather than committed, so
@@ -67,7 +78,8 @@ runs:
     # The repository commits no third-party binary whose licence does not allow it. The Solana
     # programs (`sdk/test/fixtures/fetched-programs.json`) and the contract code of the captured
     # chain states are PINNED instead, by sha256 / keccak256 in the fixtures, and read here from the
-    # chains through the explicit public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable,
+    # chains through the explicit public-only CHAIN_FIXTURE_RPC_CONFIG repository Actions variable
+    # (on a fork's run, ci.yml's literal of the same JSON: GitHub passes forks no variable),
     # retried with endpoint fallback. A read that does not hash to its pin is refused: it was upgraded
     # since the dump, and a suite run on other bytes proves nothing about the pinned ones. The cache
     # is content-addressed and re-hashed on every run, so a restored stale cache cannot pass for a pin;

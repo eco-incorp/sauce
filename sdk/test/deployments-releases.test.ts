@@ -129,6 +129,7 @@ describe("the release table", () => {
     // The sync checks the installed row's against its release; an older row's release is checked
     // here wherever a sync (or `--report`) left it in the cache.
     const cache = join(dirname(fileURLToPath(import.meta.url)), "../../node_modules/.cache");
+    const deployed = v12DeployedAddresses();
     let checked = 0;
     for (const row of V12_RELEASE_SETS) {
       const pin = row["kitchen-evm"];
@@ -136,12 +137,21 @@ describe("the release table", () => {
       const path = [join(tag, "addresses.json"), join(tag, ".report", "addresses.json")].find(
         (candidate) => existsSync(candidate),
       );
-      if (path === undefined) continue;
-      const published = JSON.parse(readFileSync(path, "utf8")) as {
-        version: string;
-        contracts: { kitchen: { address: string } };
-        pot: { initCodeHash: string };
-      };
+      // The public source (`SAUCE_ARTIFACT_SOURCE=npm`) caches no addresses.json: the installed
+      // row is then held to the V12Deployments.json the sync wrote, which carries the same three.
+      if (path === undefined && row.compiler !== sdkCompilerVersion()) continue;
+      const published =
+        path === undefined
+          ? {
+              version: deployed.releases["kitchen-evm"].version,
+              contracts: { kitchen: { address: deployed.evm.contracts.kitchen.address } },
+              pot: { initCodeHash: deployed.evm.pot.initCodeHash },
+            }
+          : (JSON.parse(readFileSync(path, "utf8")) as {
+              version: string;
+              contracts: { kitchen: { address: string } };
+              pot: { initCodeHash: string };
+            });
       expect([pin.version, published.version]).toEqual([pin.version, pin.version]);
       expect([pin.version, pin.kitchen?.toLowerCase()]).toEqual([
         pin.version,
@@ -153,7 +163,7 @@ describe("the release table", () => {
       ]);
       checked++;
     }
-    // The installed row's release is always there: the sync fetched it.
+    // The installed row is always checked: the sync fetched its release or wrote its addresses.
     expect(checked).toBeGreaterThan(0);
   });
 

@@ -123,10 +123,18 @@ describe("maintenance fetches use explicit public RPC configuration", () => {
     expect(JSON.parse(result.stdout)).toEqual([]);
   });
 
-  it("CI resolves repository variables outside the composite action", () => {
+  it("CI resolves repository variables outside the composite action, and a fork's run gets the same public JSON", () => {
     const workflow = readFileSync(join(SDK, "../.github/workflows/ci.yml"), "utf8");
     const action = readFileSync(join(SDK, "../.github/actions/setup/action.yml"), "utf8");
-    expect(workflow).toContain("CHAIN_FIXTURE_RPC_CONFIG: ${{ vars.CHAIN_FIXTURE_RPC_CONFIG }}");
+    const resolved = workflow.match(
+      /^ {2}CHAIN_FIXTURE_RPC_CONFIG: \$\{\{ \((.+)\) && '(\{[^']*\})' \|\| vars\.CHAIN_FIXTURE_RPC_CONFIG \}\}$/m,
+    );
+    expect(resolved).not.toBeNull();
+    const [, fork, literal] = resolved!;
+    // GitHub passes no repository variable to a fork's pull request: the literal is taken exactly
+    // where setup takes the public engine artifacts, and is a config the fetchers accept.
+    expect(action).toContain(`if: ${fork}\n`);
+    expect(readConfig(JSON.parse(literal)).status).toBe(0);
     expect(action).not.toMatch(/\$\{\{\s*vars\./);
     expect(action).toContain('"$CHAIN_FIXTURE_RPC_CONFIG"');
   });

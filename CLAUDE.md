@@ -302,8 +302,22 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   surfaced: `execFileSync` puts the command line in it and these commands carry the credential, which
   printed a live token into output before this was fixed.
 
-  **If this repository is ever made public**, note that granting a public repository access to a
-  private package lets FORKS of it read that package.
+  **This repository is public**, and granting a public repository access to a private package lets
+  FORKS of it read that package.
+
+  **Without the grant — a fork, an outside contributor — set `SAUCE_ARTIFACT_SOURCE=npm`**, read only
+  by the sync (a build script). It takes every artifact from the PUBLIC `@eco-incorp/sauce` tarball
+  the row's `npm` names (`{ version, integrity }`, a published version built from that row): the
+  tarball held to the committed integrity, its own `releases.json` carrying the row unchanged, every
+  release asset to the row's digest and the derived files to the row's versions, engines, Kitchen
+  and Pot hash; any mismatch refuses with nothing written. The release manifests' cross-check
+  (corroboration, never the guarantee) is the one check it cannot repeat. It is EXPLICIT, never a
+  fallback (a fork's workflow has a `GITHUB_TOKEN` too, so "no credential" cannot select it), never
+  reads the credential, and caches apart, under `node_modules/.cache/sauce-engine-releases/npm/`. CI
+  selects it where `.github/actions/setup` sees a fork's pull request or a fork's own repository;
+  `publish.yml` pins the private source. A compiler bump has no public source until a version built
+  from its row is published and pinned. In either mode every failure stops the sync: nothing a
+  previous sync left on disk stands in for a refused read or a digest that does not match.
 
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
@@ -354,7 +368,9 @@ fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-c
   with ids `1`, `8453`, `43114`, `10` and `1399811149`. With `pnpm --filter './sdk'`, relative
   paths resolve from `sdk`, hence `--rpc-config fixtures.rpc.config.json`. There is no default,
   environment lookup or access to the CLI-only RPC roster. CI takes the public-only JSON from
-  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`, writes it to a runner temporary
+  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG` — on a fork's run, which GitHub gives
+  no variable, from `ci.yml`'s literal of the same JSON (keep the two equal; it is the one line
+  `no-embedded-rpc.test.ts` allows outside the command's list) — writes it to a runner temporary
   file and passes its absolute path. `--offline` needs no config and uses verified local caches
   without any network access.
 

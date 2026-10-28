@@ -7,8 +7,9 @@ name: CI
 # the single job ran, with the same commands. Nothing was added or dropped: `Build & Test`, the last
 # job, passes only when every one of them passed.
 # Setup performs the maintenance fixture network reads using public-only JSON from the repository
-# Actions variable CHAIN_FIXTURE_RPC_CONFIG, written to a runner temporary file and passed with
-# --rpc-config. The suites then replay pinned local state offline; replay does not use that config.
+# Actions variable CHAIN_FIXTURE_RPC_CONFIG (on a fork's run, the same JSON written below), written
+# to a runner temporary file and passed with --rpc-config. The suites then replay pinned local state
+# offline; replay does not use that config.
 #
 # `ci` is named `Build & Test` on purpose. It is the check's name from before the split, so a
 # required-check rule, a merge queue or a script that waits for it keeps working, and it is the one
@@ -32,9 +33,12 @@ permissions:
   contents: read
   packages: read
 
-# Resolve repository variables in workflow scope; composite actions do not expose `vars`.
+# Resolve repository variables in workflow scope; composite actions do not expose `vars`. GitHub
+# passes no repository variable to a fork's pull request, so a fork's run (the condition
+# `.github/actions/setup` takes the public engine artifacts on) gets the variable's same public,
+# keyless JSON as this literal instead: change the two together. Nothing shipped carries it.
 env:
-  CHAIN_FIXTURE_RPC_CONFIG: ${{ vars.CHAIN_FIXTURE_RPC_CONFIG }}
+  CHAIN_FIXTURE_RPC_CONFIG: ${{ (github.event.pull_request.head.repo.fork == true || github.repository_owner != 'eco-incorp') && '{"1":"https://ethereum-rpc.publicnode.com","10":"https://optimism-rpc.publicnode.com","8453":"https://base-rpc.publicnode.com","43114":"https://avalanche-c-chain-rpc.publicnode.com","1399811149":"https://solana-rpc.publicnode.com"}' || vars.CHAIN_FIXTURE_RPC_CONFIG }}
 
 jobs:
   # Typecheck, the generated files, the other workspaces' typechecks, the browser, the manual and the
